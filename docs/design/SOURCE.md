@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst author source and centralized schema
 
-Status: **accepted-design-not-implemented**; see [REVIEW](REVIEW.md) §7 for independent global acceptance of the fixed technical baseline. [REQUIREMENTS](../REQUIREMENTS.md) defines outcomes and [REVIEW](REVIEW.md) records validation. This file owns author source, application roles and the single field type system. Representative schemas and examples are not a ceiling on business capabilities.
+Status: **design-refinement-not-implemented**. Independent acceptance of the fixed earlier baseline remains historical; current refinements and evidence limits are recorded in [REVIEW](REVIEW.md) §8.
 
 ## 1. Author source and application roles
 
@@ -82,6 +82,10 @@ Static reading does not compile the entire body. Direct recursive arrays/records
 ## 3. Closed centralized schema
 
 Schema is standard JSON non-executable configuration managed and versioned by Core, not an embedded .typ language. Notes do not repeat schema or internal FieldIds.
+
+Actual author configuration is [schema.authoring.json](examples/schema.authoring.json): providers select only `{id,implementation,data,limits}` and validators `{id,provider,operation}`. Fixed family, exports, inputs, parameter shapes and results come from the trusted builtin registry shipped with Core and cannot be overridden by author configuration. Closed shapes below and [schema.json](examples/schema.json) describe the resolved model. [resolve_builtin_schema.py](examples/resolve_builtin_schema.py) generates that rebuildable review/test projection; it is no longer a second manually maintained signature authority. Data, limits, actual constraint parameters and every business type remain configurable.
+
+During design, [builtin-abi.design.json](examples/builtin-abi.design.json) is the sole builtin signature input, not a compiled implementation. Production Rust generates actual exports and inspection descriptors from one trusted registration source, replacing the manual design mirror. Unknown operations/ABIs, signature overrides and missing required data still reject. ConfigRevision fixes the author configuration and registry version/data used to resolve it; historical baselines cannot silently change registry meaning on upgrade.
 
 Schema has exactly `version, definitions, fields, types, aliases, relations, validators, providers, series_policies`, with version 1. Unknown configuration members/versions and duplicate JSON keys reject installation. Only author Record values have an explicit unknown-member policy. IDs/keys/aliases are exactly unique without case/NFC rewriting. Core owns SchemaRef/RevisionId, installation authorization and byte fingerprints; no additional ledger, signature tree or self-reported birth is introduced.
 
@@ -209,6 +213,8 @@ Text edits retain their baseline by default and bind against it. New baseline-ab
 Each Core SourceRevision CommitManifest/admission record carries one SourceSchemaBasis: SchemaRef and ConfigRevisionId. Cold parsing resolves source keys/Type aliases to permanent IDs only against that basis; schema changes cannot change the meaning of unchanged source bytes. Creation/external admission freezes an authorized basis in the same transaction. Body-only edits and updates to existing Fields preserve it by default. Adding absent Fields/Types or changing semantic names requires explicit schema/source migration with identity rebinding and native spelling changes previewed. This is neither another Fields/AST mirror nor a schema authors must repeat manually in every note.
 
 Consumers combine the actual source basis with an explicitly registered compatible same-ID mapping to the current authorized schema. Equal IDs/use names alone do not establish compatibility. Expand definitions and compare member codecs/precision, requiredness/nullability, validator inputs/parameters/ABI, relationship targets/direction/maxima, temporal data versions and series policies. Display-name changes preserve semantics; optional additions can be explicitly compatible. Changes to meaning/read closure require new identities or accurate authorized migration previews, never silent reuse of retired IDs. Source and Query baselines retain their own facts: historical Query definitions read current authorized values, not a historical data snapshot. Core readConfigProjection supplies necessary authorized definitions. Missing dependencies produce unavailable without current-namesake decoding.
+
+Keep SourceSchemaBasis and exact saved-Query bindings in this revision: they protect cold reads/history under the existing mutable short-name/alias rules. Share/deduplicate immutable configurations internally; ordinary users do not fill baselines per note. Do not add a first-generation UI for arbitrary reuse of used technical keys/Type aliases; display labels remain editable. A non-reusable vocabulary may later reduce baseline machinery only after covering incompatible changes, old aliases, historical Query and cross-library mapping; never delete versions while retaining name drift.
 
 ## 4. Relationships, literal fallbacks and sources
 

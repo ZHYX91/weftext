@@ -1,0 +1,29 @@
+.writing-toolbar { display:flex; flex-wrap:wrap; gap:4px; padding:9px 16px; border-bottom:1px solid var(--border, #dfe3dc); background:var(--surface, #fffefb); }
+.writing-button { border:1px solid transparent; border-radius:6px; padding:6px 10px; background:transparent; color:inherit; font:inherit; font-size:13px; cursor:pointer; touch-action:manipulation; }
+.writing-button:hover { background:#eef3ee; border-color:#d4e2d8; }
+.writing-button:focus-visible { outline:2px solid #426f68; outline-offset:2px; }
+.writing-button:disabled { opacity:.5; cursor:default; }
+.writing-button.primary { color:white; background:#426f68; }
+.writing-structure-controls { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:2px 0 8px; color:#5e756d; }
+.writing-structure-controls .writing-button { font-size:12px; padding:3px 7px; border:1px solid #dce5dc; background:#f8faf6; }
+.writing-dialog { color:#283a33; background:#fffefb; width:min(560px, calc(100vw - 32px)); padding:0; border:1px solid #dae1d7; border-radius:12px; box-shadow:0 18px 80px #14251e30; max-height:calc(100vh - 32px); }
+.writing-dialog::backdrop { background:#18281f55; }
+.writing-form { padding:24px; display:flex; flex-direction:column; gap:16px; overflow:auto; }
+.writing-form h2 { margin:0; font-size:20px; }
+.writing-help { color:#6a756e; font-size:13px; line-height:1.6; margin:0; white-space:pre-wrap; }
+.writing-field { display:flex; flex-direction:column; gap:7px; font-size:13px; font-weight:500; }
+.writing-field[hidden], .writing-checkbox[hidden] { display:none; }
+.writing-input { width:100%; box-sizing:border-box; border:1px solid #d7dfd5; border-radius:6px; padding:9px 11px; color:inherit; background:#fff; font:inherit; line-height:1.6; resize:vertical; }
+.writing-input:focus { outline:2px solid #82a79b; outline-offset:1px; }
+.writing-input:disabled { background:#f2f3ef; color:#788179; }
+.writing-checkbox { display:flex; align-items:center; gap:8px; font-size:13px; }
+.writing-checkbox input { accent-color:#426f68; }
+.writing-actions { display:flex; justify-content:flex-end; gap:8px; }
+.writing-actions .writing-button { border-color:#d7dfd5; }
+.writing-error { color:#a03d32; border-left:3px solid #bc6559; padding-left:10px; font-size:13px; margin:0; white-space:pre-wrap; }
+.writing-math-source { font-family:'Noto Sans Mono CJK SC','Noto Sans Mono CJK TC','DejaVu Sans Mono',monospace; direction:ltr; }
+.cm-local-source .cm-content { padding:12px 0 20px!important; }
+.cm-local-source .cm-line { padding:0 16px!important; }
+.cm-local-source .cm-activeLine { background:#edf4ed80; }
+@media (max-width:600px) { .writing-toolbar { padding:7px; } .writing-button { min-height:36px; } .writing-form { padding:18px; } .writing-structure-controls .writing-button { min-height:30px; } }
+@media (prefers-reduced-motion:reduce) { .writing-dialog { scroll-behavior:auto; } }

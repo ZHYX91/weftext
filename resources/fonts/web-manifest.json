@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "fontSetVersion": "weftext-web-newcm-1.0",
+  "generator": {
+    "file": "derive_web.py",
+    "fontTools": "4.61.1",
+    "brotli": "1.2.0"
+  },
+  "fonts": [
+    {
+      "nativeFile": "NewCM10-Regular.otf",
+      "file": "WeftextWebSerif-Regular.woff2",
+      "url": "/fonts/WeftextWebSerif-Regular.woff2",
+      "family": "New Computer Modern",
+      "internalFamily": "Weftext Web Serif",
+      "role": "body",
+      "weight": 400,
+      "style": "normal",
+      "version": "Version: 8.1.1; Weftext Web 1.0",
+      "bytes": 289200,
+      "sha256": "df9bbd9db797b4bc45d50a79f846ee70a9e88f5feaaee84dc2912a6700a377db",
+      "license": "GPL-3.0-or-later WITH Font-Exception-and-Distribution-Exception",
+      "licenseFiles": [
+        "NOTICE-TypstAssets.txt",
+        "NOTICE-WeftextWebFonts.txt"
+      ],
+      "source": {
+        "file": "web-sources/NewCM10-Regular.otf",
+        "bytes": 717588,
+        "sha256": "328698d764ccdf7acf6bc1088aefd83a237f6a1d8b812de1e77ac5e4483bf3d1",
+        "package": "typst-assets 0.15.1",
+        "commit": "ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f",
+        "url": "https://raw.githubusercontent.com/typst/typst-assets/ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f/files/fonts/NewCM10-Regular.otf",
+        "completeUpstreamWork": "https://ctan.org/pkg/newcomputermodern"
+      },
+      "transformations": [
+        "CFF desubroutinization",
+        "CFF hint instruction removal",
+        "font/file renaming and modified-version notice",
+        "WOFF2 encoding"
+      ],
+      "equivalence": {
+        "glyphs": 4098,
+        "glyphOrderSha256": "f7a9e9fd2ce9bd17090eed6103d5f581eee904edd062464e1ca820c90e7d0754",
+        "outlinesSha256": "1a8e4a0401bde52c612ae4cdbbaa7ed1c91c2e0d84b86c5f5dfa4de251ad7c95",
+        "metricsSha256": "bc63aaf23a9a1db2abb8e57a7c073664310c633b9ab26757112ed179e0007853",
+        "cmapSha256": "170fbfd3c47f0e582b6ba922de2f30f4e7bdd71eea6fdf830640e8c378abb076",
+        "unitsPerEm": 1000
+      },
+      "unchangedSfntTables": [
+        "hhea",
+        "maxp",
+        "OS/2",
+        "cmap",
+        "post",
+        "FFTM",
+        "GDEF",
+        "GPOS",
+        "GSUB",
+        "MATH",
+        "PfEd",
+        "hmtx"
+      ]
+    },
+    {
+      "nativeFile": "NewCM10-Italic.otf",
+      "file": "WeftextWebSerif-Italic.woff2",
+      "url": "/fonts/WeftextWebSerif-Italic.woff2",
+      "family": "New Computer Modern",
+      "internalFamily": "Weftext Web Serif",
+      "role": "body",
+      "weight": 400,
+      "style": "italic",
+      "version": "Version: 8.1.1; Weftext Web 1.0",
+      "bytes": 300060,
+      "sha256": "8721096cca3989801edca68b2cb0f1753cabe0c998832df074b77bcbf1ae651d",
+      "license": "GUST-1.0",
+      "licenseFiles": [
+        "NOTICE-TypstAssets.txt",
+        "NOTICE-WeftextWebFonts.txt",
+        "LICENSE-LPPL-1.3c.txt"
+      ],
+      "source": {
+        "file": "web-sources/NewCM10-Italic.otf",
+        "bytes": 721176,
+        "sha256": "a55d07607eec48889b6e7e7d51d7703c3beb915a39690f34fe01b4e2a744a9d6",
+        "package": "typst-assets 0.15.1",
+        "commit": "ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f",
+        "url": "https://raw.githubusercontent.com/typst/typst-assets/ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f/files/fonts/NewCM10-Italic.otf",
+        "completeUpstreamWork": "https://ctan.org/pkg/newcomputermodern"
+      },
+      "transformations": [
+        "CFF desubroutinization",
+        "CFF hint instruction removal",
+        "font/file renaming and modified-version notice",
+        "WOFF2 encoding"
+      ],
+      "equivalence": {
+        "glyphs": 3924,
+        "glyphOrderSha256": "557bc55163358f18975d138fefa56ed74c8410887af2a9c02e6dc80e43c6c9a7",
+        "outlinesSha256": "2383da1a8703740e49568fa4d7ce2178de90c8e8d9aab403bd2ba178589a0b8e",
+        "metricsSha256": "a261d886d3e406b15aed12f18f700c975804e99c546761f2c62b464db7752a6c",
+        "cmapSha256": "93df09d87feba76d082704c88726682150819dd5362bcd6e2788c2d9fafd789f",
+        "unitsPerEm": 1000
+      },
+      "unchangedSfntTables": [
+        "hhea",
+        "maxp",
+        "OS/2",
+        "cmap",
+        "post",
+        "FFTM",
+        "GDEF",
+        "GPOS",
+        "GSUB",
+        "MATH",
+        "PfEd",
+        "hmtx"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "upstream": "https://github.com/typst/typst/tree/v0.15.1/crates/typst-html",
+  "package": "typst-html",
+  "version": "0.15.1",
+  "upstreamLicense": "Apache-2.0",
+  "profile": "weftext-flow-v2",
+  "runtimeToggle": false,
+  "changes": [
+    {
+      "file": "src/convert.rs",
+      "symbols": ["handle", "handle_html_elem", "handle_block", "Converter::push_text", "to_lone_element"],
+      "purpose": "Carry effective native text styles and private typed producer facts into final HTML nodes; mark actually converted subtitle blocks while preserving official whitespace and block grouping."
+    },
+    {
+      "file": "src/rules.rs",
+      "symbols": ["show_cell", "HEADING_RULE", "heading_counter_state", "REF_RULE", "EQUATION_RULE"],
+      "purpose": "Carry already-resolved cell styles, exact native heading levels/numbering/counter state, evaluated numbering prefix subtrees and native MathML provenance. Counter state reads the same compile at the actual native location without calling the numbering function. The bounded heading-reference branch mirrors official realization with one counter result marker and preserves the native supplement/link."
+    },
+    {
+      "file": "src/weftext_styles.rs",
+      "symbols": ["text_css", "controlled_run_in_producer"],
+      "purpose": "Serialize bounded native text styles and certify only the exact application's native run-in recipe and its producer spans, refusing uncertain bindings."
+    },
+    {
+      "file": "src/lib.rs",
+      "symbols": ["css", "weftext_styles", "HtmlElem::weftext"],
+      "purpose": "Expose typed CSS conversion and private internal semantic producer facts that author html.elem attributes cannot supply."
+    },
+    {
+      "file": "src/dom.rs",
+      "symbols": ["HtmlElement::weftext", "WeftextHtmlSemantics"],
+      "purpose": "Carry trusted semantic evidence separately from author HTML attributes, including actual native numbering pattern/function distinctions."
+    }
+  ],
+  "publicApiReplacements": {
+    "owner": "weftext-engine/src/style_adapter.rs",
+    "api": "Library.rules / NativeRuleMap::replace",
+    "elements": ["ParElem", "StrongElem", "EmphElem", "ListElem", "TitleElem"],
+    "titleEvidence": "TitleElem.resolve_body is captured once in private typed producer evidence; author DOM CSS and attributes cannot supply this fact.",
+    "runInEvidence": "Only an actually produced native Strong from the exact certified recipe gains a run-in candidate. Its actual Content sequence retains one exact evaluated numbering prefix subtree. Final native Heading start/end locations associate the candidate with the actual level, numbering and label. Arbitrary custom show output is not reinterpreted as a heading."
+  },
+  "support": {
+    "effectiveText": ["font-family", "font-size", "font-weight", "font-style", "solid-color", "literal-whitespace-preservation"],
+    "tableCells": ["solid-undashed-border", "solid-fill", "horizontal-alignment", "vertical-alignment", "original-header-span-topology"],
+    "lists": ["native-content-marker", "original-ordered-list-start-and-values"],
+    "paragraphLeading": "CSS calc(1em + resolved native leading); reflow line boxes are not identical to native paged font metrics.",
+    "semanticExport": ["native-title", "unique-displayed-title/subtitle-block-association", "exact-native-heading-depth", "native-numbering-pattern-or-function", "actual-native-heading-counter-state", "evaluated-heading-prefix-subtree", "certified-native-run-in", "native-heading-reference-number-subtree", "same-target-native-MathML"],
+    "unsupported": ["gradient-text-paint", "pattern-or-dashed-cell-stroke", "dynamic-list-marker", "arbitrary-native-paged-layout-equivalence"]
+  },
+  "verificationOwner": ["weftext-engine/tests/styles.rs", "weftext-engine/tests/export_semantics.rs"],
+  "evidenceLimit": "Native tests establish bounded tree/style/source/font behavior. Browser visual layout, assistive technology and cross-platform acceptance are separate."
+}

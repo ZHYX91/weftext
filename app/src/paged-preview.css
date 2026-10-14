@@ -1,0 +1,24 @@
+.paged-preview { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; width: 100%; background: #eef1eb; }
+.paged-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); background: #f8faf4; }
+.paged-freshness { font-size: 10px; color: #928a6d; line-height: 1.7; }
+.paged-freshness.current { color: #59734f; }
+.paged-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.paged-actions a[aria-disabled="true"] { color: #a3ac9d; background: #f5f6f1; cursor: default; opacity: .6; }
+.paged-status { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 160px; padding: 28px; color: #8f997f; font-size: 12px; line-height: 1.9; text-align: center; white-space: pre-line; overflow-wrap: anywhere; }
+.paged-status[hidden], .paged-viewer[hidden], .paged-help[hidden] { display: none; }
+.paged-viewer { flex: 1; min-height: 260px; width: 100%; border: 0; background: #dce1d7; }
+.paged-help { flex-shrink: 0; margin: 0; padding: 8px 16px; border-top: 1px solid var(--line); background: #f8faf4; color: #8d9880; font-size: 9px; line-height: 1.8; }
+.paged-pending .paged-freshness { color: #a28b5e; }
+.paged-diagnostics { flex-shrink: 0; max-height: 150px; overflow: auto; border-top: 1px solid #e9dac4; color: #a38858; background: #faf7ee; font-size: 10px; padding: 10px 16px; }
+.paged-diagnostics[hidden] { display: none; }
+.paged-diagnostics summary { cursor: pointer; }
+.paged-diagnostic { line-height: 1.8; margin: 8px 0; overflow-wrap: anywhere; }
+.paged-diagnostic.error { color: #b96d50; }
+@media (max-width: 780px) {
+  .paged-toolbar { align-items: flex-start; flex-wrap: wrap; gap: 7px; padding: 8px 12px; }
+  .paged-actions { gap: 6px; }
+  .paged-actions .compact { padding: 6px 9px; }
+  .paged-viewer { min-height: 210px; }
+  .paged-help { padding: 7px 12px; }
+}
+.paged-host { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }

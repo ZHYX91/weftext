@@ -1,0 +1,204 @@
+import "./data-view.css";
+import "./style-panel.css";
+import "./export-panel.css";
+import { api, apiBlob, operationId } from "./api";
+import { createLibraryTrashController } from "./library-trash";
+import { mountMediaViewer, mountResourceViewer } from "./media-viewer";
+import type { ResourceOpenTarget } from "./media-selection";
+import "./media-viewer.css";
+import { DataPanel, type DocumentBasis, type PanelHost, type SourcePatch } from "./data-panel";
+import { QueryPanel } from "./query-panel";
+import { OutputPanel } from "./export-panel";
+import { mountKnowledgePanel, type KnowledgeContext, type KnowledgePlan, type KnowledgeReceipt, type KnowledgeTextMapping } from "./knowledge-panel";
+import { sameKnowledgeBasis, type KnowledgeNodeRef } from "./knowledge-state";
+import { openLibraryStylePanel, type NativeStyleController } from "./style-panel";
+import type { OpenedDocument } from "./types";
+import type { FrozenQuery } from "./export-state";
+
+export interface WorkspaceToolsHost {
+  getDocument(): (DocumentBasis & { dirty: boolean; workspaceId?: string }) | null;
+  selection(): KnowledgeContext["selection"];
+  applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
+  openDocument(path: string, root?: string): Promise<void>;
+  openResolved(document: OpenedDocument): Promise<void>;
+  created(document: OpenedDocument): Promise<void>;
+  applyReceipt(receipt: KnowledgeReceipt, context: KnowledgeContext): Promise<void>;
+  savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
+  navigate(target: string | KnowledgeNodeRef): Promise<void>;
+  selectSource(from: number, to: number): void;
+  beforeAction(): Promise<void>;
+  canEditSource(): boolean;
+  notify(message: string, error?: boolean): void;
+  stylesChanged(root: string): Promise<void>;
+  refreshLibrary?(root: string): Promise<void>;
+}
+
+/** UI composition only: every action uses the document's existing Draft or Core. */
+export class WorkspaceTools {
+  readonly bar = document.createElement("nav");
+  readonly inspector = document.createElement("aside");
+  private readonly propertyPanel: DataPanel;
+  private readonly queryPanel: QueryPanel;
+  private readonly outputPanel: OutputPanel;
+  private readonly knowledgeContainer = document.createElement("div");
+  private readonly knowledgePanel;
+  private readonly libraryTrash;
+  private readonly header = document.createElement("header");
+  private readonly panelBody = document.createElement("div");
+  private library: { root: string; workspaceId?: string } | null = null;
+  private active: "data" | "knowledge" | "query" | null = null;
+  private readonly styles = new Map<string, NativeStyleController>();
+  private refreshTimer?: ReturnType<typeof setTimeout>;
+  private pendingImport: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
+
+  constructor(private readonly host: WorkspaceToolsHost) {
+    this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify });
+    this.bar.className = "workspace-tools"; this.bar.setAttribute("aria-label", "笔记工具");
+    this.inspector.className = "workspace-inspector"; this.inspector.hidden = true;
+    this.header.className = "inspector-header"; this.panelBody.className = "inspector-body";
+    this.inspector.append(this.header, this.panelBody);
+    const dataHost: PanelHost = {
+      request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
+      openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
+      savedDefinition: host.savedDefinition,
+      prepareAction: host.beforeAction,
+      openTemplates: async () => {
+        if (this.active !== "knowledge") await this.show("knowledge");
+        else await this.host.beforeAction();
+        this.knowledgePanel.selectTab("templates");
+      },
+      created: async result => {
+        const opened = result as OpenedDocument;
+        if (!opened || typeof opened.sessionId !== "string" || typeof opened.source !== "string") throw new Error("新笔记缺少实际打开结果，请检查原操作。");
+        await host.created(opened);
+      },
+    };
+    this.propertyPanel = new DataPanel(dataHost); this.outputPanel = new OutputPanel({ ...dataHost, imported: async receipt => { const root = receipt.root ?? dataHost.getDocument()?.root; if (!root) throw new Error("导入回执缺少可刷新资料库位置，实际回执已保留。"); await host.refreshLibrary?.(root); if (this.library?.root === root) await this.queryPanel.refresh(); } }); this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
+    this.knowledgePanel = mountKnowledgePanel(this.knowledgeContainer, {
+      context: () => this.context(), load: context => api("/api/knowledge/read", { context }),
+      prepare: (intent, context) => api("/api/knowledge/prepare", { operationId: operationId(), context, intent }),
+      commit: (plan, context) => this.commit(plan, context),
+      navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
+      inspectOperation: async (id, context) => { const receipt = await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }); await host.applyReceipt(receipt, context); return receipt; },
+      selectSource: host.selectSource,
+      previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
+      linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
+      mountMedia: (container, selected, initial) => mountMediaViewer(container, {
+        context: () => this.context(), list: sessionId => api("/api/resources/list", { sessionId }),
+        read: (sessionId, resource, revision) => apiBlob("/api/resources/read", { sessionId, resource, revision }),
+        importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
+      }, selected, initial),
+    });
+    this.bar.append(this.button("属性", () => this.show("data")), this.button("链接与批注", () => this.show("knowledge")), this.button("查询与视图", () => this.show("query")), this.button("输出与导入", () => this.outputPanel.open()), this.button("库样式", () => this.showStyles()), this.button("回收站", async () => { if (!this.library?.workspaceId) throw new Error("请先打开笔记库。"); await this.host.beforeAction(); await this.libraryTrash.open(this.library.root); }));
+  }
+  private button(label: string, run: () => void | Promise<void>): HTMLButtonElement {
+    const button = document.createElement("button"); button.type = "button"; button.className = "text-button"; button.textContent = label;
+    button.onclick = () => { void Promise.resolve(run()).catch(error => this.host.notify(error instanceof Error ? error.message : String(error), true)); }; return button;
+  }
+  private context(): KnowledgeContext | null { const doc = this.host.getDocument(); return doc ? { ...doc, selection: this.host.selection() } : null; }
+  setLibrary(library: { root: string; workspaceId?: string } | null, scope: string | null = null): void {
+    this.library = library; this.queryPanel.setLibrary(library); this.queryPanel.setScope(scope);
+  }
+  async search(text: string, includeBody: boolean): Promise<void> {
+    this.queryPanel.setSearch(text, includeBody);
+    if (this.active !== "query") await this.show("query");
+  }
+  openQueryOutput(query: FrozenQuery): void { this.outputPanel.open(query); }
+  openResource(documentBasis: OpenedDocument, target: ResourceOpenTarget): void {
+    const dialog = document.createElement("dialog"); dialog.className = "modal";
+    const title = document.createElement("h2"); title.textContent = "笔记资源";
+    const container = document.createElement("div");
+    // A read-only resource view owns the exact resolved session, independently
+    // of a conflicting editor Draft or a later active-tab change.
+    const controller = mountResourceViewer(container, {
+      context: () => ({ sessionId: documentBasis.sessionId }),
+      list: sessionId => api("/api/resources/list", { sessionId }),
+      read: (sessionId, resource, revision) => apiBlob("/api/resources/read", { sessionId, resource, revision }),
+      notify: this.host.notify,
+    }, target);
+    const close = (): void => { controller.dispose(); dialog.close(); dialog.remove(); };
+    dialog.append(title, container, this.button("关闭", close));
+    dialog.oncancel = event => { event.preventDefault(); close(); };
+    document.body.append(dialog); dialog.showModal();
+  }
+  async show(kind: "data" | "knowledge" | "query"): Promise<void> {
+    await this.host.beforeAction();
+    if (this.active === kind) { this.active = null; this.inspector.hidden = true; return; }
+    this.active = kind; this.inspector.hidden = false; this.inspector.classList.toggle("wide", kind === "query");
+    const title = document.createElement("strong"); title.textContent = { data: "笔记属性", knowledge: "链接与批注", query: "查询与视图" }[kind];
+    this.header.replaceChildren(title, this.button("关闭", () => { this.active = null; this.inspector.hidden = true; }));
+    this.panelBody.replaceChildren(kind === "data" ? this.propertyPanel.element : kind === "query" ? this.queryPanel.element : this.knowledgeContainer);
+    if (kind === "data") await this.propertyPanel.refresh();
+    else if (kind === "query") await this.queryPanel.refresh();
+    else await this.knowledgePanel.refresh();
+  }
+  documentChanged(): void {
+    clearTimeout(this.refreshTimer);
+    this.knowledgePanel.attachSurface(null);
+    this.refreshTimer = setTimeout(() => {
+      if (this.active === "data" && !this.inspector.contains(document.activeElement)) void this.propertyPanel.refresh().catch(error => this.host.notify(String(error), true));
+      if (this.active === "query" && !this.inspector.contains(document.activeElement)) this.queryPanel.documentChanged();
+    }, 450);
+  }
+  async projectionChanged(surface: HTMLElement | null, mappings: KnowledgeTextMapping[]): Promise<void> {
+    this.knowledgePanel.attachSurface(surface, mappings);
+    if (this.host.getDocument()?.nodeId) await this.knowledgePanel.refresh();
+  }
+  attachSurface(surface: HTMLElement | null, mappings: KnowledgeTextMapping[] = []): void { this.knowledgePanel.attachSurface(surface, mappings); }
+  private async importResource(file: File, sessionId: string): Promise<void> {
+    if (this.pendingImport) {
+      const pending = this.pendingImport;
+      const status = await api<KnowledgeReceipt>("/api/operations/status", { operationId: pending.plan.operationId, context: pending.context });
+      if (["committed", "saved", "complete", "success"].includes(status.status)) { await this.host.applyReceipt(status, pending.context); this.pendingImport = null; this.host.notify("已确认上一次资源导入成功。"); return; }
+      if (["failed", "conflict", "rejected"].includes(status.status)) { this.pendingImport = null; throw new Error("上一次导入未完成，原文件仍保留。请再次选择后重新准备。"); }
+      await this.commit(pending.plan, pending.context); this.pendingImport = null; return;
+    }
+    if (file.size > 64 * 1024 * 1024) throw new Error("单个资源导入上限为 64 MiB，原文件保持不变。");
+    await this.host.beforeAction();
+    const context = this.context(); if (!context || context.sessionId !== sessionId) throw new Error("当前笔记已变化，请重新选择资源。");
+    const array = new Uint8Array(await file.arrayBuffer()); let binary = "";
+    for (let index = 0; index < array.length; index += 8192) binary += String.fromCharCode(...array.subarray(index, index + 8192));
+    const plan = await api<KnowledgePlan>("/api/resources/prepare-import", { sessionId, name: file.name, bytes: btoa(binary), operationId: operationId() });
+    const dialog = document.createElement("dialog"); dialog.className = "modal";
+    const title = document.createElement("h2"); title.textContent = "导入资源";
+    const description = document.createElement("p"); description.textContent = `将 ${file.name}（${file.size.toLocaleString()} 字节）复制到当前笔记。原文件保留。`;
+    const list = document.createElement("ul");
+    for (const change of plan.changes ?? []) { const item = document.createElement("li"); item.textContent = change.path ?? "当前笔记的资源清单"; list.append(item); }
+    dialog.append(title, description, list); document.body.append(dialog);
+    const accepted = await new Promise<boolean>(resolve => {
+      const finish = (result: boolean): void => { dialog.close(); dialog.remove(); resolve(result); };
+      dialog.append(this.button("取消", () => finish(false)), this.button("导入", () => finish(true)));
+      dialog.oncancel = event => { event.preventDefault(); finish(false); }; dialog.showModal();
+    });
+    if (!accepted) return;
+    this.pendingImport = { plan, context };
+    try { const result = await this.commit(plan, context); if (["committed", "saved", "complete", "success"].includes(result.status)) this.pendingImport = null; }
+    catch (error) { this.host.notify("资源导入结果待确认。再次导入会先检查原操作。", true); throw error; }
+  }
+  private async commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt> {
+    if (!sameKnowledgeBasis(context, this.context())) throw new Error("草稿已变化，请重新准备。");
+    if (plan.draftOnly === true) {
+      const edit = plan.edit as SourcePatch | undefined;
+      if (!edit || typeof edit.from !== "number" || typeof edit.to !== "number" || typeof edit.text !== "string" || typeof plan.source !== "string") throw new Error("链接提案没有完整的准确源码变更。");
+      if (context.source.slice(0, edit.from) + edit.text + context.source.slice(edit.to) !== plan.source) throw new Error("链接提案与预览不一致。");
+      await this.host.applyPatch(edit, context);
+      return { status: "committed", operationId: plan.operationId, message: "链接已更新到当前草稿，可撤销。" };
+    }
+    const receipt = await api<KnowledgeReceipt>("/api/operations/commit", { operationId: plan.operationId, planId: plan.planId, context });
+    await this.host.applyReceipt(receipt, context); return receipt;
+  }
+  private async showStyles(): Promise<void> {
+    const library = this.library;
+    if (!library?.workspaceId) throw new Error("请先打开资料库，再设置库默认样式。");
+    await this.host.beforeAction();
+    const root = library.root;
+    const controller = await openLibraryStylePanel({
+      read: () => api("/api/styles/read", { root }),
+      prepare: request => api("/api/styles/prepare", { root, ...request }),
+      apply: request => api("/api/styles/apply", { root, ...request }),
+      openSource: path => this.host.openDocument(path, root),
+      onApplied: () => this.host.stylesChanged(root), operationId,
+    }, this.styles.get(root));
+    this.styles.set(root, controller);
+  }
+}

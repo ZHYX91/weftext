@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst Core：文件、提交与运行边界
 
-状态：**accepted-design-not-implemented**，独立全局接受及固定技术基线见 [REVIEW](REVIEW.zh-CN.md) §7；需求权威为[需求清单](../REQUIREMENTS.zh-CN.md)，本套 [SOURCE](SOURCE.zh-CN.md)、[EDITOR](EDITOR.zh-CN.md)、[FEATURES](FEATURES.zh-CN.md) 与本文共同定义一套新设计。前轮的协议和有界复核保留为历史证据，不成为本套协议依赖。产品、崩溃、断电、同步、Server、安全与性能验收尚未通过。
+状态：**design-refinement-not-implemented**；固定旧基线的独立接受保持为历史事实，当前修订及证据限制见 [REVIEW](REVIEW.zh-CN.md) §8。
 
 ## 1. 一个文件工作区与一条作者提交路径
 
@@ -25,15 +25,25 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 目录树是 live Node 的唯一 parent/name/path 权威。portable metadata 不另存可独立修改的 parent/children 列表。父的排序策略与子的稀疏手动 rank 只记录树无法表达的排序；自然名称顺序为默认。Trash 的实际目录树决定其内部结构；回收记录可保存原位置、回收批次和恢复成员，因为这些是历史与恢复事实，不能反向覆盖 live 树。恢复目标已占用则冲突，不覆盖。
 
-`.weftext-rules` 显式分类 ignored、visible unmanaged 与 managed 边界，不继承 `.gitignore`。unmanaged 目录是完整不可重入边界；ignored 字节仍纳入备份。不能单独把 canonical `.typ` 分类为 unmanaged。Core 是唯一库存生产者，所有壳与 Query 消费它；操作目标在 ignored/unmanaged 内，或已知 managed subtree 内含此边界时拒绝结构改动。开放树未观察新增的严格排除是强范围能力；§5保留迟到边界的pending处理，不以扫描伪造CAS。
+`.weftext-rules` 不继承 `.gitignore`。Core 的单一库存分别记录文件存在/可见性、Folder Node 资格及显式节点识别边界：ignored 从普通列表隐藏并排除节点发现，字节仍备份；unmanaged 可见、可展开并可打开普通文件，不获得 Node/typed Query 资格。无同名主文件的目录与非配对 `.typ` 默认标“不管理”，不因此停止向下普通枚举或发现未被显式排除的后代配对。用户显式将目录子树设为不管理时，节点发现/批量整理不重入该子树，普通文件浏览仍可进入。完整节点的 canonical `.typ` 不可独立设为不管理；显式退出节点管理须预览身份/引用后果，不自动移动或删除文件。
 
-受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged边界不自动加ID；若保留unmanaged，只能有明确较弱的locator书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
+节点结构动作仍拒绝显式 ignored/unmanaged 边界内的目标，或已知子树含这类排除边界的动作；普通非节点文件动作经同一安全后端独立预览确切范围，不借普通改名/移动绕过受管节点的两侧配对、已登记资源及历史责任。已接纳节点突然缺主文件或改配对是诊断/恢复事件，不能静默降为普通文件、退休身份或猜新 ID。开放树未观察新增的严格排除仍需强范围能力；§5 的迟到边界 pending 规则针对这些显式排除边界，不把普通容器缺主文件误当同一阻断条件。
+
+受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
 
 portable 控制资料只保存无法从当前文件恢复的事实：身份创建与退休、schema 历史、已提交版本/因果关系、资源文件绑定、Trash 恢复信息。资源的稳定 Ref 通过节点内 `weftext.resources.json` 的资源 ID 与相对文件定位绑定；该文件不决定 Node parentage。普通非 canonical 文件仍可见；未登记资源不被自动授予稳定 ID，原始改名若无法证明原对象则显式重新绑定或冲突。批注 JSON 中的 annotation ID 与其 target/lifecycle 分域。
 
 `.weftext-history/` 保存不可变已提交 manifest 与需要保留的 exact blobs。它是历史、复制与恢复证据，不能被编辑成第二套 current 源。设备/session Draft、活动 SQLite journal/WAL、运行凭据与派生索引放在同步根外。durable commit 到 manifest 发布之间，原 journal 的已提交记录和完整 blobs 是该次身份/版本/结果的真实证据；启动先恢复这些待发布记录，备份必须一致包含它们，不能因 history 尚缺就重新执行。历史快照可能与 current 文件不同；当前读取仍须观察实际文件与当前权限。索引、搜索、关系反向视图、缩略图和图可删除重建，不能重建执行责任或凭空生成 ID。
 
 完整备份包含普通文件、ignored 字节、portable 控制/历史及一致捕获的本机未决 journal/Draft；只复制活动 SQLite 主文件不合格。可单独导出仅资料备份，但须说明它不能恢复丢失的操作/费用责任。恢复到新设备重建本地观察与派生索引；真实未决执行责任只由原日志或显式责任接管恢复。
+
+### 2.1 普通文件会话
+
+`openFile` 可打开库外或库内未管理的 `.typ`，不初始化工作区、不注入 metadata，不因文件自带 id 就接纳为 Node。会话目标为实际文件对象与授权路径范围；FileBasis 记录原字节、真实对象/路径绑定、观察世代和依赖根，与 NodeRef/RevisionId 分域。它复用 Draft、单文件保存后端、操作日志/恢复与冲突检查，不生成伪 WorkspaceId、portable manifest 或 schema admission。语法无效仍可准确保存原文并显示诊断；写权限、读权限和编译资格分别判断。
+
+首次打开以父目录作为明确可见的默认项目根，可由用户调整。相对路径以各实际来源文件为基准，根相对路径以所选项目根为基准；依赖只读访问须在授予范围内，越界拒绝，不能把整个磁盘交给 compiler。沿用官方包解析及明确的离线/联网策略、应用字体默认；无所属库时不套用当前库样式/schema。依赖文件编辑另开普通会话。
+
+保存比较当前文件对象和准确 Base，保外部并发稿；不能只凭 hash 声称 CAS。另存默认 create-only，已存在目标必须单独预览和取得它自己的当前写依据；来源不变。可用平台提供同一安全后端；WebUI 没有本机文件写能力时说明上传副本/下载另存的实际语义，不冒原位保存。恢复稿存于应用私有区而非在用户目录造控制文件。对已管理文件重定向回其 Node/Resource 会话，不允许绕过其合同。主动纳入库时预览新节点/必要元数据及文件安排，成功前保原件。
 
 ## 3. 身份、版本与当前读取
 
@@ -52,6 +62,20 @@ portable 控制资料只保存无法从当前文件恢复的事实：身份创�
 `DependencySet` 只有一套 typed object、lifecycle、structure/range、schema、authorization、environment 与 World read 类型。完整负范围和不存在也须从当前获权枚举证明；placeholder、I/O 错误、隐藏对象或未扫索引不是不存在。无关对象改变不使一个只依赖本篇的保存失效。需要全集/约束的强动作须证明实际范围，不能因为普通保存成功而声称全集完整。
 
 普通获权原始读取可保留合法或无效 external bytes；external 未接纳状态不获得持久 typed 写地址。普通整源保存可在短时保护窗口核对同一 external Base 并显式接纳，不要求先编译整篇。保存语义独立区分 local_valid / semantic_pending；完整强动作的跨对象条件未证不能降级成功。
+
+### 3.1 本地笔记时间线
+
+本地笔记时间线列入当前 v0.5 本地补齐范围，按时间浏览同一笔记实际保留的已保存源码版本。Core 按稳定 NodeRef 与已提交版本事实关联历史；经 Core 管理的改名、移动仍属同一笔记，不按 path/title 合并另一笔记或外部同名文件。复用既有 Core 历史、准确字节和恢复机制，不另建版本库；未提交/未决 journal、Draft 与已保存版本分开显示，不能把恢复提案冒充已保存记录。业务 Query 的任务、事件等时间轴是另一领域。
+
+列表显示实际保留范围、每条版本的保存时间依据和可用状态；缺保存时间明确标记“时间未知”，不把文件 mtime、扫描时间或 UUID 顺序冒充提交时间。未保留、缺失、不可读的历史准确标明，不能补取 latest 假作选中旧版，也不以列表为空声称从未保存。保留策略沿用 §§2/9.2 的历史与恢复责任，不承诺每次键入永久保存，或永久保留全部版本。
+
+在现有提交记录中补充真实保存时间，并派生可重建的列表；旧记录缺时间则保持未知，不另设时间线账本。设备时钟只提供显示时间，同时间或时钟回拨不改变已证明的提交关系。本地范围为该库、该笔记已由 Core 保存或明确接纳且仍保留的版本；未接纳的外部修改、每次键入、未导入的其他设备历史不承诺收录。外部改名/移动须先由现有身份恢复流程证明连续性，无法证明则提示待处理，不能按路径或同名续接。
+
+打开旧版只读，比较固定所选历史版本与本次读取的当前已保存版本。有未保存草稿时，须明确比较对象是“当前已保存版本”还是“当前草稿快照”，并保护草稿；浏览、比较不得替换编辑缓冲区或清除 Undo/Draft。历史语义读取沿用本节的原 SourceSchemaBasis；原配置或依赖缺失时报告相应预览/语义不可用，仍可只读查看可获权的准确源码。
+
+恢复所选旧版作为一次新的普通保存提案，保留其后的历史，不回退/截断版本链或直接覆盖 current 文件。先明确保存、保留或合并未保存草稿，再以当前对象、当前 Base 和写资格冻结提案，沿用同一 Core 操作、幂等和并发变化防覆写规则。恢复响应 unknown 时查询原 operationId/原计划，不能重建操作盲目重试；历史可读不授予恢复写权限，未决恢复先按既有机制处理。
+
+本地候选实现沿用原保存/事务提交记录中的 `savedAtUnixMs`、`commitSequence` 和原操作/版本证据派生时间线；版本键引用原保存操作，不新增历史账本。浏览器提供准确源码、与当前已保存内容或草稿快照的比较，并经原保存路径恢复；选择保护草稿时先保留当前缓冲和既有恢复稿，来源基线保持原样。恢复回执更新 Base；原脏稿或请求期间新输入继续保留，共享 Undo 不重建。所有提交后的错误均先对原 operationId 查状态，明确未登记的拒绝才可解除；回执应用/草稿持久化失败仍保留原操作。当前历史预览仅提供准确源码与文本差异，不用当前依赖冒充历史富预览，恢复后业务语义仍须重新验证。实际验收沿用 ROADMAP LHT01–06；多用户历史读取/恢复权限及同步展示留到 v0.6。
 
 ## 4. 冻结计划与准确结果
 

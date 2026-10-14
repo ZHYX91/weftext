@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 编辑、阅读、标题与 Word 的新项目方案
 
-状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。本文定义编辑、流式阅读、标题与 Word 输出的共同规则；实验与实际支持范围见 [REVIEW](REVIEW.zh-CN.md)。
+状态：**design-refinement-not-implemented**；固定旧基线的独立接受保持为历史事实，当前修订及证据限制见 [REVIEW](REVIEW.zh-CN.md) §8。
 
 [SOURCE](SOURCE.zh-CN.md) 拥有作者源与类型/来源解释，[CORE](CORE.zh-CN.md) 拥有身份、依据、授权与统一事务，[FEATURES](FEATURES.zh-CN.md) 拥有链接、Query、模板及转换。当前结果要求来自 [REQUIREMENTS](../REQUIREMENTS.zh-CN.md)，这些 owner 的新候选与本文一起协调，前轮技术不成为新的规范依赖。
 
@@ -40,6 +40,34 @@ V03/V04/V05 的渲染部分消费§8同一当前最终投影。V03 在§3已证�
 V04 使用相同写资格和§4具名操作，文档区不显示源码标记，也不因聚焦自动退为 V03。特殊构造由明确专用控件处理；缺控件则保留只读出现项，让用户主动切换可显示语法的视图，不能把隐藏语法解释成任意逆向编辑。V05 选区用于阅读/复制/批注，键入和粘贴不得开启正文写入。
 
 切换先按§5完成或保留 IME，再依当前源/投影关联转移选区；无唯一显示位置时保原源选区、恢复最近可证明容器/阅读位置，不改变源点来假装映射成功。同会话进入 V05 默认显示明确标记的当前 Draft 预览；用户显式选择已提交版本才另看它，不能替换未保存稿。返回编辑继续原 DraftUndo。个人视图偏好不写作者源；V02/V03 语法装饰不进入正文 Query、逻辑复制、批注可见摘录或导出，显式复制源码仍返回获权原字节。
+
+### 2.2 普通文件与输入原型
+
+RQ26 的普通文件会话由 Core §2.1 提供 FileBasis，替代本节的 EntityRef/Base 入口，复用同一 Draft/Undo、五档、选区、官方编译与局部编辑算法。无 NodeId 不阻止正文编辑；依赖根、保存位置和普通文件身份可见。不自动添加应用声明、不套另一库的样式；不为该普通文件伪造自身的稳定 Node 地址或 node-owned 批注，也不自动授予库 Query。正文已有的完整 Node 链接可按目标库的独立授权解析。另存不偷改会话原目标；成功并重新打开目标后才切换 Base，后续输入仍保留。
+
+首个真实输入原型必须证明最终 native 出现项→准确原源范围→局部修改→重新编译，而非预置测试映射。先让官方 AST 驱动源 buffer 的即时编辑与结构命令；最终消费树承担真实显示/阅读，只有证明关联的区域才连接富编辑。编译不阻塞 IME，旧 serial 的结果不能覆盖新稿。选择 AST 驱动输入不产生第二作者模型，也不取消 V03/V04 的来源资格要求。
+
+首批验证包含空文档、中文输入、强调、链接、普通表格、五档切换、选区、撤销/重做、迟到投影与保存恢复；同时放入 wrapper、重复 include、show 重写和无效中间稿作为负例。有限原型按实测范围报告，不将未实现路径或模拟 composition 事件冒充真实 OS IME/产品验收。
+
+### 2.3 正文内嵌 Query 的五档交互
+
+正文中的查询定义或调用表达式仍属于同一份原生 `.typ` 源。五档围绕同一定义、同一会话 Draft 和 DraftUndo 调整显示与编辑入口；结果是派生呈现，不能替代源、冒充定义或授予源写权。Query 的定义、执行及结果状态由 [FEATURES §5.5](FEATURES.zh-CN.md#55-正文内嵌-query) 拥有，本节只规定正文交互。
+
+| 档位 | 查询源码、结果与定义编辑入口 |
+| --- | --- |
+| V01 纯源码 | 直接编辑准确查询源码；结果可另开明确标识的预览。 |
+| V02 渲染且显示语法 | 完整查询源码始终可见，同时展示对应结果；不以结果替换查询表达式，不隐藏其中的语法、注释或作者字节。 |
+| V03 按需显示语法 | 默认展示结果；用户通过键盘命令或触屏控件主动展开该查询对应的源码编辑区，直接修改同一 Draft 的准确范围。展开或收起不改源。 |
+| V04 隐藏语法的界面编辑 | 默认展示结果，用查询构建器修改定义。用户明确选择“编辑源码”时，打开独立源码编辑界面或切至源码可见档，仍编辑同一 Draft/Undo；聚焦结果或构建器不自动暴露语法。 |
+| V05 阅读 | 结果只读，不提供查询定义编辑入口，也不提供改字段、勾选任务或拖移结果行等写操作；保阅读、选择、复制及获权导航。 |
+
+独立“编辑源码”窗口的输入是尚未应用的编辑提案，取消不改共享 Draft；确认须基于打开时的 serial 和准确目标重验后，仅写同一 Draft/Undo，并发修改冲突保双方输入、不覆盖。这不是第二份持久查询定义或草稿权威；切至 V01/V02 则直接按既有同 Draft 规则编辑，没有模态取消语义。
+
+源码编辑区与构建器必须由当前官方 AST、准确字节范围和可证明的定义/调用关联定位，不能按结果文字、行序或 DOM 位置猜源。V01–V04 的定义修改进入共享源 buffer，一次具名构建器修改为一个 Draft 操作和一个 Undo；只做已证明目标内的修改，保外部字节与不能安全表达的原生条件。构建器遇到无法往返的原生查询时保留源及只读说明，提供用户明确选择的源码入口；V04 的该入口独立于隐藏语法的正文区，V05 不提供编辑入口。include、生成或多次显示的查询没有唯一本篇 writer 时不任选一个出现项回写；可编辑档只给已获权真实 owner 的明确源码导航。
+
+切档不改查询源、不保存笔记，也不创建另一份查询定义、结果缓存权威或撤销栈。刷新遵循既有 Query 的执行、失效与权限规则。定义的 Draft serial、准确来源依据或调用参数发生变化后，先前结果必须明示“对应旧定义/来源依据已过期”；数据结果的 partial、stale、错误或不可用状态分别保留。迟到结果不得覆盖新定义、选区或控件输入，旧结果不得恢复源 writer。结果行已有获权操作与定义编辑按不同目标重新验证；V01–V04 的行操作仍受 FEATURES 的当前资格限制，V05 的正文内嵌结果整体只读。
+
+本项归属 v0.2 五档编辑与 v0.3 Query，接入当前 v0.5 本地候选。官方 AST 定位完整声明，最终编译 metadata 标记关联正文实际出现位置；完整源码仍是唯一编辑依据。V03 展開共享编辑器的准确范围，V04 构建器和独立源码提案仅向同一 Draft 提交一次可撤销修改；V05 无定义编辑或结果写回入口。include、生成或重复出现而缺乏唯一当地来源的内容显示只读限制，不猜选 writer；无法执行的出现项明确不可用。实际交互验收统一见 [ROADMAP IQV01–07](../ROADMAP.zh-CN.md)，真实 OS IME、完整辅助技术及其他平台仍须分别验证。
 
 ## 3. 可写区域的实际产生方式
 
@@ -146,6 +174,8 @@ Core `compile(sourceSnapshot,environment,target,budget)` 供应固定官方 Rust
 三个产品分域：AuthoredLink 来自可识别作者构造；RenderedLink、正文检索、逻辑复制、可见批注摘录和离线链接 route 来自所选 target 的最终消费投影；heading 产品来自该次最终 native Introspector，保真实 level/label/counter 及其显示对应或无显示状态。show 删除 heading 仍可能保 introspection，不能把它补成可见文字。原生 HTML 的 h2 等标签不能反推业务 heading level；由原元素的真实语义和实际消费关联取得。任意 show 输出只保实际 return，不把入口 strong/heading 的角色强加给返回的普通文字。
 
 **有界原生样式适配。** stock HTML 主要输出语义结构，不能据它成功就声称原生字体、字号、列表 marker 或表格边框已保留。适配器在官方 HTML 元素实际生产点消费已有 effective StyleChain/已求值参数，把具名可表示属性转为受控 CSS/角色/来源旁信息，随所产生的节点进入最终树。不能扫描作者 set 文本重造优先级，不能为样式再执行 show/query/context，不以所有稳定日志做文字匹配回填。基础正文/列表/表格的库默认、note 和局部覆盖须实测；支持表随实现版本发布，未知单位/paint/自定义排版不静默忽略。此适配是内部目标转换，不要求作者写 CSS 或另一套样式配置。[官方 HTML 范围](https://typst.app/docs/reference/html/)
+
+生产适配优先使用官方公开的 `Library.rules` / `NativeRuleMap::replace` 注册接口；文字转换确需内部信息时才保最小 hook。研究 observer、事件日志和 CLI 导出不默认进入产品。固定版本并记录实际修改符号，不预先承诺零 fork，也不把研究补丁整体当作产品后端。
 
 最低 renderer 仍须让普通中英/RTL段落、title/subtitle、heading、strong/emph/strike、列表、raw/code、链接/引用、图像 alt/caption、普通及 header/span 表格连续滚动并随 320px 重排，宽二维内容仅局部横滚。基本公式优先消费官方 MathML，再验证实际 AT；必要原生 frame/SVG 带准确数学或文字替代，不以图片冒无障碍通过。HTML 标签/属性/样式/资源均经安全的 typed 转换；脚本、任意宿主文件/网络和不受控事件处理器不执行，受影响的合法原源保留并明确报告显示限制。只有 Core 获权资源句柄可被 renderer 读取，HTML URL 不能绕过 World/资源交付权限。
 
@@ -270,6 +300,8 @@ annotation 读取只交自己的已存摘要/正文/历史，不自动读取已�
 
 DOCX 是 Weftext 自有转换器，不是 Typst 官方内建输出。默认语义转换 profile 消费一次冻结 Html 编译的最终语义树、同 target 的标题/引用产品及准确来源关联、获权资源；不自己重跑 Query、猜第一表或混入另一份 Paged 输出。自定义 show 后未显示的 native heading 不能凭 introspection 补成幽灵段落。明确选择 Paged 语义转换时是另一个具名 profile，预览与输出均注明 target，支持范围单独验证。局部 html.frame 保同次 Html 编译的来源边界。转换保真实段落、run、table、bookmarks 与可编辑资源；无法表达的复杂布局明确 loss/unavailable。标题映 Title、关联副标题映 Subtitle；不进 section counter。此路线与 FEATURES §11 一致，最终语义生产者仍受 E1 验证门约束。
 
+转换器拥有的核心是冻结语义、精确映射和损失判断，不要求自建全部 ZIP/OOXML。默认先比较成熟离线 DOCX writer 加定向后处理与纯 Rust 后端：两者消费同一派生导出 IR，不重新解析 Typst 猜语义。用混排行标题、模板继承、引用、中文和表格样本在实际 Word 中更新目录并再编辑后选择；WPS/LibreOffice 单独验收。后端选择不会创建第二作者源。
+
 1–9 级 section 映真实 Heading N、outlineLvl=N−1 与同一多级编号。独立 heading 和同行 heading 共用编号定义。同行默认是一整个 Heading N paragraph，前部 title runs，后部 body runs：这正是已认可方案。正文字符格式来自模板正文占位符/Normal 的**有效字符属性**，解析 docDefaults、theme、basedOn、字符样式与直接属性继承；显式复位 Heading 继承的 bold/italic 等，再叠加作者强调。不能 copy 空 raw rPr 就称复制了有效样式，也不硬编码字体/字号。段落级缩进、行距、keepNext 等仍是 Heading 段属性，预览须如实展示。[Microsoft 段落样式](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-create-and-add-a-paragraph-style-to-a-word-processing-document)
 
 默认 Word TOC/导航按整段 Heading/outline 处理，可能把同行后部正文收进去；正文 run 换字体不会改变段落范围。输出预览/说明必须写明这一点，不能冒称默认目录只含标题。编号引用用准确 heading bookmark 与原生字段，不固定数字。[Microsoft 标题多级编号](https://support.microsoft.com/en-gb/word/number-your-headings)
@@ -291,7 +323,7 @@ Job 完整生成并验证准确文件与 loss，再显示结果；内网下载�
 | 门 / 对应需求 | 必须做的真实验证 | 通过前阻止什么 |
 | --- | --- | --- |
 | E1 / RQ01–03、06、§5.3 | 已有 16 例官方 Html 最终树及有界样式原型；独立核最终消费选择、原生语义、target 边界、保源降级与不可伪造来源方案 | 独立接受前不关闭桥设计问题；完整 renderer、编辑逆映射和样式支持仍须实现验收 |
-| E2 / RQ02、24、§5.4 | 五档之间共享源/Draft/Undo 与语法显示；真输入 surface：空→输入→删空、任意 caret、跨格式/块、math/list、等值 table cell、IME/Undo/迟到响应及权限/ABA | 阻止普通编辑器完成声明 |
+| E2 / RQ02、15、24、§5.4 | 五档之间共享源/Draft/Undo 与语法显示；真输入 surface：空→输入→删空、任意 caret、跨格式/块、math/list、等值 table cell、IME/Undo/迟到响应及权限/ABA；正文内嵌 Query 按 §2.3 与 FEATURES §5.5 验证编辑入口、保源、结果依据和 V05 只读 | 阻止普通编辑器及正文内嵌 Query 五档完成声明 |
 | E3 / RQ03、23 | 真 Desktop/WebUI/目标 Mobile 的 AT/RTL/zoom/320px、sanitizer/隔离/资源撤权、预算和性能 | 阻止该 surface 阅读与无障碍通过 |
 | E4 / RQ04–07 | 深度1–9与10+、titleless、副标题角色、逐标题同行、长段落/孤行/分页、counter/custom scope | 阻止全标题矩阵通过，有限原生证据仍成立 |
 | E5 / RQ07、20 | Word/WPS/LO 实机打开/更新字段→增删/移/改级→目录/导航/引用→再存/再开；不同模板、CJK/RTL与正文有效字符格式 | 阻止 DOCX 互操作支持声明；style separator 单独验 |

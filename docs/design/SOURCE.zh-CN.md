@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 作者源与集中 schema
 
-状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。需求依据为 [REQUIREMENTS](../REQUIREMENTS.zh-CN.md)，验证状态见 [REVIEW](REVIEW.zh-CN.md)。本文定义作者源、应用角色与唯一字段类型体系；代表 schema 和样例不是全部业务能力的上限。
+状态：**design-refinement-not-implemented**；固定旧基线的独立接受保持为历史事实，当前修订及证据限制见 [REVIEW](REVIEW.zh-CN.md) §8。
 
 ## 1. 作者源与角色
 
@@ -81,6 +81,10 @@ absence、none、""、`()`, (:)、0 和 false 不同。必填约束检查 presen
 ## 3. 集中 schema 的闭合模型
 
 schema是Core管理的标准JSON非执行配置，不是.typ嵌入语言。准确配置版本/授权由Core管理，笔记不重复schema或内部FieldId。
+
+实际作者配置见 [schema.authoring.json](examples/schema.authoring.json)：provider 仅选择 `{id,implementation,data,limits}`，validator 仅选择 `{id,provider,operation}`。固定 family、exports、inputs、parameters shape、result 均来自随 Core 交付的受信内建注册表，不能在作者配置中覆写。下文闭合形状和 [schema.json](examples/schema.json) 描述解析后的完整模型；该文件由 [resolve_builtin_schema.py](examples/resolve_builtin_schema.py) 生成，是可重建的测试/审阅投影，不再手工维护第二份签名。数据、限额、实际 constraint 参数及所有业务类型仍可配置。
+
+本设计阶段 [builtin-abi.design.json](examples/builtin-abi.design.json) 是唯一内建签名输入，尚不是已编译实现。生产 Rust 落地时由同一受信注册源产生实际导出和检查用描述，替代手工设计镜像；未知操作/ABI、签名覆写或缺必需数据仍拒绝。Core 的 ConfigRevision 固定实际作者配置及其解析所依赖的注册版本/数据，历史基准不能在升级时偷偷换注册含义。
 
 Schema顶层恰为 `version, definitions, fields, types, aliases, relations, validators, providers, series_policies`。version=1。除作者值Record的明确unknown策略，配置对象未知成员/版本一律拒绝；JSON对象重复键拒绝。所有ID/key/alias精确唯一，不做case/NFC规范化。Core配置SchemaRef/RevisionId/安装权限和字节摘要属于Core，不额外建立总账、签名树或自报出生。
 
@@ -206,6 +210,8 @@ cold reopen/current definition：先获权读owner+key的当前声明（pinned�
 Core每个SourceRevision的CommitManifest/admission记录恰一个SourceSchemaBasis：SchemaRef及ConfigRevisionId。cold解析只据该源基准将作者key/type短名解为永久语义ID；schema变化不能令不变源字节变成另一含义。新建与外部admit先冻结获权基准并在同事务承认。body-only和既有字段更新默认保源基准；增加它没有的字段/Type或改名语义需显式schema/source迁移，预览重绑ID及原生名词改写。它不是第二份Fields/AST镜像，不是作者要每篇手填的schema。
 
 消费当前源值须同时满足真实source basis及当前获权schema的显式保ID兼容映射；不能只凭同use名称或ID相同视为兼容。兼容检查展开definitions，并核对成员codec/precision、required/nullable、validator输入参数及ABI、关系target/direction/max、时间数据版本和series政策。仅显示名改动不变含义；新增optional成员可明确登记兼容。改变业务语义/读取闭包的迁移需新ID或准确获权预览，不静默复用废弃ID。source和Query的基准分别保留它们自己的事实：旧Query定义读当前真实获权值，绝非旧数据快照。Core readConfigProjection提供这些必要已获权定义；不可得依赖统一unavailable，不降级按当前同名key解码。
+
+当前决定保留 SourceSchemaBasis 和保存 Query 的准确 binding：它们保护已有短名/别名可变规则下的冷读取与历史语义。内部配置版本共享去重，普通用户不逐篇填写基准。首代不增加任意复用已用技术 key/Type alias 的界面；显示标签可改。将来若采用不可复用技术词汇，可在证明不兼容变更、旧别名、历史 Query 与跨库映射后再缩减基准，不能只删版本而保留名称漂移。
 
 ## 4. 关系、文字回退与来源
 

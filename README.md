@@ -8,9 +8,12 @@ translation_status: synced
 
 # Weftext
 
-A file-based knowledge and writing tool built around native Typst. Current state: **accepted design, product not implemented**. This is the refactoring baseline; archived prototypes are not an installable product release.
+A file-based knowledge and writing tool built around native Typst. Current state: **a 0.5.0-alpha.2 Windows local candidate; the complete product remains in progress**. Archived prototypes are not current build dependencies.
 
-- [Requirements](docs/REQUIREMENTS.md): the single current inventory, including navigation, rich types, library styles, five views and Chinese defaults.
+- [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
+- [Version roadmap](docs/ROADMAP.md): seven milestones after the first version, covering current confirmed requirements.
+
+- [Requirements](docs/REQUIREMENTS.md): the single current inventory of 27 groups, including navigation, rich types, library styles, five views and Chinese defaults.
 - [Technical design](docs/design/README.md): authoring, Core, editor and features, with necessary schemas, examples and bounded experiments.
 - [Implementation order](docs/design/INTEGRATION.md): begin with a vertical local open/edit/save/recover slice.
 - [Final design acceptance](docs/design/REVIEW.md): fixed technical baseline, disposition and evidence limits.

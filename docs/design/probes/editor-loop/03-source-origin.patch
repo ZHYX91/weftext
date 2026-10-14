@@ -1,0 +1,66 @@
+diff --git a/crates/typst-cli/src/compile.rs b/crates/typst-cli/src/compile.rs
+index aef28c2..554d224 100644
+--- a/crates/typst-cli/src/compile.rs
++++ b/crates/typst-cli/src/compile.rs
+@@ -327,7 +327,7 @@ fn compile_and_export(
+         }
+         OutputFormat::Html => {
+             let Warned { output, warnings } = typst::compile::<HtmlDocument>(world);
+-            if let Ok(doc) = &output { typst::probe::emit("final_html_tree", html_probe_node(doc.root_node())); }
++            if let Ok(doc) = &output { typst::probe::emit("final_html_tree", html_probe_node(doc.root_node(), world)); }
+             let result = output.and_then(|document| export_html(&document, config));
+             Warned {
+                 output: result.map(|()| vec![config.output.clone()]),
+@@ -759,12 +759,12 @@ impl From<PdfStandard> for typst_pdf::PdfStandard {
+ }
+ 
+ // Snapshot the actual one final HtmlDocument product, not realization events.
+-fn html_probe_node(n: &typst_html::HtmlNode) -> serde_json::Value {
++fn html_probe_node(n: &typst_html::HtmlNode, world: &SystemWorld) -> serde_json::Value {
+     use serde_json::json;
+     use typst_html::HtmlNode;
+     match n {
+-        HtmlNode::Text(t,s) => json!({"kind":"text","text":t.as_str(),"span":format!("{:?}",s)}),
+-        HtmlNode::Element(e) => json!({"kind":"element","tag":e.tag.resolve().as_str(),"span":format!("{:?}",e.span),"css":e.css.to_inline().to_string(),"attrs":e.attrs.0.iter().map(|(k,v)|(k.resolve().as_str().to_string(), v.to_string())).collect::<Vec<_>>(),"children":e.children.iter().map(html_probe_node).collect::<Vec<_>>()}),
++        HtmlNode::Text(t,s) => json!({"kind":"text","text":t.as_str(),"span":format!("{:?}",s),"origin":editor_origin(*s, world)}),
++        HtmlNode::Element(e) => json!({"kind":"element","tag":e.tag.resolve().as_str(),"span":format!("{:?}",e.span),"css":e.css.to_inline().to_string(),"attrs":e.attrs.0.iter().map(|(k,v)|(k.resolve().as_str().to_string(), v.to_string())).collect::<Vec<_>>(),"children":e.children.iter().map(|n| html_probe_node(n, world)).collect::<Vec<_>>()}),
+         HtmlNode::Tag(t) => match t {
+             typst::introspection::Tag::Start(c,_) => json!({"kind":"tag-start","content":typst::probe::content(c),"location":format!("{:?}",t.location())}),
+             _ => json!({"kind":"tag-end","location":format!("{:?}",t.location())})
+@@ -772,3 +772,36 @@ fn html_probe_node(n: &typst_html::HtmlNode) -> serde_json::Value {
+         HtmlNode::Frame(f) => json!({"kind":"frame","target":"paged","span":format!("{:?}",f.span),"frame":typst::probe::frame(&f.inner)}),
+     }
+ }
++
++// Bounded editor experiment: actual final-native text to official source node.
++// Origin is evidence, not a writer capability; the consumer applies its profile.
++fn editor_origin(span: Span, world: &SystemWorld) -> serde_json::Value {
++    use typst::World;
++    let Some(id) = span.id() else { return serde_json::Value::Null; };
++    let Ok(source) = world.source(id) else { return serde_json::Value::Null; };
++    let Some(node) = source.find(span) else { return serde_json::Value::Null; };
++    let range = node.range();
++    let mut ancestors = Vec::new();
++    let mut parent = node.parent();
++    while let Some(p) = parent {
++        ancestors.push(serde_json::json!({"kind":format!("{:?}", p.kind()), "start":p.range().start,"end":p.range().end}));
++        parent = p.parent();
++    }
++    serde_json::json!({
++        "file":format!("{:?}",id.vpath()),
++        "start":range.start,"end":range.end,
++        "raw":source.text().get(range).unwrap_or(""),
++        "kind":format!("{:?}",node.kind()),"ancestors":ancestors,
++        "syntax_kinds":editor_syntax_kinds(source.root())
++    })
++}
++
++fn editor_syntax_kinds(node: &typst::syntax::SyntaxNode) -> Vec<String> {
++    let mut kinds = vec![format!("{:?}", node.kind())];
++    for child in node.children() {
++        kinds.extend(editor_syntax_kinds(child));
++    }
++    kinds.sort();
++    kinds.dedup();
++    kinds
++}

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {Session,literalText} from './session.mjs';
+const s=new Session('甲*乙*丙');
+s.selection=[2,3];
+s.replace(2,3,'中文',0);
+assert.equal(s.source,'甲*中文*丙');
+assert.equal(s.accept({source:'甲*乙*丙',serial:0}),false);
+assert.throws(()=>s.replace(2,3,'覆盖',0),/Stale/);
+assert.equal(s.undo(),true);assert.equal(s.source,'甲*乙*丙');assert.deepEqual(s.selection,[2,3]);
+assert.equal(s.redo(),true);assert.equal(s.source,'甲*中文*丙');
+const before=s.source;
+s.beginComposition();s.edit(before+'z');s.edit(before+'中');s.edit(before+'中文');
+assert.equal(s.undo(),false);s.endComposition();s.undo();assert.equal(s.source,before);
+s.redo();assert.equal(s.source,before+'中文');
+assert.equal(literalText('甲*乙#丙'), '甲\\*乙\\#丙');
+assert.throws(()=>literalText(''));
+assert.throws(()=>literalText('第一行\n= 第二行'));
+console.log('PASS: shared history, exact patch, stale rejection and synthetic composition grouping. Not OS IME acceptance.');

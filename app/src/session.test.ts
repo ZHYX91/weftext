@@ -1,0 +1,99 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs } from "./session";
+import type { OpenedDocument, RenderOutput } from "./types";
+import { createSourceState } from "./editor";
+import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
+
+const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
+const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
+
+test("native link strings preserve Unicode and use Typst control escapes rather than JSON escapes", () => {
+  assert.equal(quoteTypstString('中文/"A"\\B\b\f\n\t\u2028😀'), '"中文/\\"A\\"\\\\B\\u{8}\\u{c}\\u{a}\\u{9}\\u{2028}😀"');
+});
+
+test("a save completing during typing advances its base without replacing the later draft", () => {
+  const session = new DocumentSession(opened);
+  session.edit("提交内容");
+  const submitted = session.source;
+  session.edit("提交内容，继续输入");
+  session.acknowledgeSave(submitted, "next");
+  assert.equal(session.source, "提交内容，继续输入");
+  assert.equal(session.baseSource, "提交内容");
+  assert.equal(session.baseId, "next");
+  assert.equal(session.dirty, true);
+});
+
+test("old preview cannot become current even after undo returns to equal bytes", () => {
+  const session = new DocumentSession(opened);
+  const old = render(session.source, session.serial);
+  session.edit("改动");
+  session.edit("原文");
+  assert.equal(session.acceptProjection(old), false);
+  assert.equal(session.projection, null);
+  assert.equal(session.acceptProjection(render("原文", session.serial)), true);
+});
+
+test("recovered draft remains visibly dirty against real committed bytes", () => {
+  const session = new DocumentSession({ ...opened, recoveredDraft: "恢复输入" });
+  assert.equal(session.source, "恢复输入");
+  assert.equal(session.baseSource, "原文");
+  assert.equal(session.dirty, true);
+  assert.equal(session.recovered, true);
+});
+
+test("literal editing refuses changed raw ranges and escapes native control punctuation", () => {
+  assert.equal(validLiteralRange("中文😀文本", 2, 4, "😀"), true);
+  assert.equal(validLiteralRange("新的😀文本", 2, 4, "旧文"), false);
+  assert.equal(validLiteralRange("abc", -1, 2, "ab"), false);
+  assert.equal(encodeLiteral("中文 #x[*强调*]\\"), "中文 \\#x\\[\\*强调\\*\\]\\\\");
+});
+
+test("an older draft persistence response cannot acknowledge newer input", () => {
+  const session = new DocumentSession(opened);
+  session.acknowledgeDraft("新", 4);
+  session.acknowledgeDraft("旧", 2);
+  assert.equal(session.lastDraftSource, "新");
+  assert.equal(session.lastDraftSerial, 4);
+});
+
+test("save completion persists newer uncommitted rich input instead of the older shared buffer", () => {
+  const session = new DocumentSession(opened);
+  const proposal = { source: "原文", from: 0, to: 2, raw: "原文", text: "后续 *文字*", nodeKey: "source-key" };
+  session.acknowledgeSave("原文", "saved");
+  assert.equal(recoverySource(session.source, proposal), "后续 \\*文字\\*");
+  session.edit("已在源码修改");
+  assert.equal(recoverySource(session.source, proposal), "已在源码修改");
+});
+
+test("empty-body rich recovery proposal includes the native sibling paragraph boundary", () => {
+  assert.equal(recoverySource("旧段落", { source: "旧段落", from: 3, to: 3, raw: "", text: "新段落", nodeKey: "@body" }), "旧段落\n\n新段落\n");
+});
+
+test("real CodeMirror state preserves BOM, mixed EOL, and exact UTF16 source coordinates", () => {
+  const source = "\uFEFF= 标题\r\n中文😀\r\n末行\n";
+  const state = createSourceState(source);
+  assert.equal(state.doc.toString(), source);
+  const from = source.indexOf("中文");
+  const changed = state.update({ changes: { from, to: from + 2, insert: "改写" } }).state;
+  assert.equal(changed.doc.toString(), "\uFEFF= 标题\r\n改写😀\r\n末行\n");
+});
+
+test("file link picking retains target meaning for Chinese names and literal fragment punctuation", () => {
+  assert.equal(relativeFileTarget("D:\\库\\A\\A.typ", "D:\\库\\B\\题目#100%.typ"), "../B/%E9%A2%98%E7%9B%AE%23100%25.typ");
+  assert.equal(absoluteFileTarget("D:\\库\\A.typ"), "file:///D:/%E5%BA%93/A.typ");
+});
+
+test("Save As reopens only the exact saved target and never qualifies its old proposal against an external version", () => {
+  const original = new DocumentSession(opened);
+  original.edit("另存为内容 A");
+  const submitted = original.source;
+  original.edit("继续输入 C");
+  const external = { ...opened, path: "b.typ", baseId: "external", source: "外部内容 B" };
+  assert.equal(canRebindSaveAs(submitted, external), false);
+  assert.equal(original.path, "a.typ");
+  assert.equal(original.source, "继续输入 C");
+  assert.equal(original.baseId, "b");
+  assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted }), true);
+  assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted, recoveredDraftConflict: true }), false);
+});

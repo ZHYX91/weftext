@@ -1,0 +1,66 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "name": "actual-final-native-origins",
+      "pass": true
+    },
+    {
+      "name": "strong-chinese-roundtrip-keeps-outside-bytes",
+      "pass": true
+    },
+    {
+      "name": "escaped-punctuation-keeps-literal-rendering",
+      "pass": true
+    },
+    {
+      "name": "repeated-include-no-writer",
+      "pass": true
+    },
+    {
+      "name": "show-rewrite-no-guess",
+      "pass": true
+    },
+    {
+      "name": "generated-function-no-guess",
+      "pass": true
+    },
+    {
+      "name": "nested-code-no-writer",
+      "pass": true
+    },
+    {
+      "name": "table-is-source-only-in-this-profile",
+      "pass": true
+    },
+    {
+      "name": "invalid-source-retained",
+      "pass": true
+    },
+    {
+      "name": "empty-source-compiles",
+      "pass": true
+    },
+    {
+      "name": "same-handle-save",
+      "pass": true
+    },
+    {
+      "name": "same-operation-retry",
+      "pass": true
+    },
+    {
+      "name": "external-change-preserved",
+      "pass": true
+    },
+    {
+      "name": "restart-preserves-undecided-before-after",
+      "pass": true
+    },
+    {
+      "name": "recovery-preserves-third-state",
+      "pass": true
+    }
+  ],
+  "scope": "literal markup origin experiment; injected exception is not a power-loss test; real OS IME and production writer remain unrun"
+}

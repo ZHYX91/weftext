@@ -7,7 +7,7 @@ translation_status: source
 
 # Features：链接、查询、导航、批注与输出
 
-状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。本文承接 [REQUIREMENTS](../REQUIREMENTS.zh-CN.md) 的链接、Query、导航、业务类型、批注和输出需求，并保留 Agent、自动化、外部效果与费用边界。共同快照、冻结分页、schema 基线、Calendar 优先级、批注投影、citation 和 Html/Paged 消费者与其它 owner 协调；修订与有限证据见 [REVIEW](REVIEW.zh-CN.md)。设计接受与产品验收分开，本文不宣称实现已完成。
+状态：**design-refinement-not-implemented**；固定旧基线的独立接受保持为历史事实，当前修订及证据限制见 [REVIEW](REVIEW.zh-CN.md) §8。
 
 ## 1. 少数共用对象与分工
 
@@ -96,7 +96,7 @@ Html frame内官方局部Paged renderer只是在该Html compile内的局部边�
 
 1. 从一次获权词典快照建立 Aho–Corasick trie，终止节点保留所有完整目标，遍历每个逻辑片段，返回全部命中，复杂度 `O(n + z)`；预算不足按片段记录 partial，不保留最长匹配后删其他。
 2. 命中为 `(flow, startScalar, endScalar, targets[])`；按完全相同范围分组，目标按完整身份稳定排序，不按标题合并。范围记录实际匹配词和来源。包含和交叉不是去重条件。
-3. 另计算 [start,end) 间隔重叠图。`a.start < b.end && b.start < a.end` 才重叠；端点相接可共层。所有命中保留在语义列表中。
+3. 不枚举两两重叠边。按 `(start asc,end desc)` 排序，以当前连通分量最大 end 扫描：下一 start 小于它则加入，否则开始新分量。`a.start < b.end && b.start < a.end` 才重叠；端点相接可共层。所有命中保留在语义列表中。
 4. 候选视觉方案为最多两层上下分离下划线，按 `(start asc,end desc)` 贪心分配最小空闲层；无层者进入该重叠连通分量的“更多匹配”入口。两层、默认关闭和每页 20 项均是可替换设计选择，用户需求是完整可达。键盘/触屏/辅助技术列表直接列全部范围，与视觉层无关，稳定 cursor 分页不得静默截断。
 5. hover/click/键盘/长按打开同一候选列表；Escape 回原选区，后台扫描不抢 IME/正文焦点。明确选择目标并按“转换”才写入，不默认第一项。
 6. 转换重新获权、重验词典项和 current Draft，scalar→准确源 byte 映射的两端须为完整 grapheme 边界，不拆 combining/ZWJ/CRLF。半字素只读发现不可转换；不扩大选区。使用 §3 生成原生 ID link，比较目标、显示文字及外部字节，一个 Undo。
@@ -111,6 +111,8 @@ Html frame内官方局部Paged renderer只是在该Html compile内的局部边�
 ```
 
 RTL 用逻辑范围及当前排版映射绘线，不按 x 坐标排序语义。用户可关提示而不改源，允许可见区优先及取消。目标撤权后清理其候选及已显示上下文，完整性只说明当前获权扫描程度，不暴露隐藏词数量。全库未扫描完不阻止一个已独立验证的局部转换。
+
+区间排序 `O(z log z)`、分组/两条显示 lane 分配与存储 `O(z)`；每条 lane 只记 end，保全部语义命中。密集重叠不生成平方级图边；分页不删除候选。
 
 ## 5. 一个 Query 语义与清楚的状态
 
@@ -206,9 +208,37 @@ binding: (
 
 CEL AST只来自作者表达式parser；官方Typst AST只解metadata与native值，CLI metadata JSON不作精确值权威。builder、text search和导航产生同一normalized Query plan。自定义纯函数、relation scan和recurrence expansion来自SOURCE闭合安装descriptor，不能用“已注册”散文去解释unknown codec/constraint。执行前所有实际函数/provider选择纳入baseline、LogicalCut依赖及预算；具体业务接口见§8.2–8.3。
 
-Cell与CEL边界具体如下：字段root绑定携SOURCE T以及其Cell状态，state函数 `isValue/isAbsent/isNull/isInvalid/isUnavailable` 是此language profile的具名内建，直接检该Cell不先unwrap。普通值运算/record member/list comprehension只在value态取得T；在非value态使用产生明确 `cell_absent/null/invalid/unavailable` EvaluationIssue，绝不让状态tag作为CEL bool/string或自动false。可选record member保presence，标准 `has(p.label)` 检查对应已授权record键；`has`不读取无权字段。guard使用标准短路 `&&/||`，不会为了判断左侧false而访问右侧值。provider `bool-cell`在value态适配CEL bool，compareTemporal的order-cell在value态适配i64(-1/0/1)，duration-cell按固定record签名适配，其它态转EvaluationIssue，不把整个Cell结构放进 `&&`。例如containsDate未记期间→unavailable，不意味着该员工永久有效。
+Cell与CEL边界具体如下：字段root绑定携SOURCE T以及其Cell状态，state函数 `isValue/isAbsent/isNull/isInvalid/isUnavailable` 是此language profile的具名内建，直接检该Cell不先unwrap。普通值运算/record member/list comprehension只在value态取得T；在非value态使用产生明确 `cell_absent/null/invalid/unavailable` EvaluationIssue，绝不让状态tag作为CEL bool/string或自动false。可选record member保presence，标准 `has(p.label)` 检查对应已授权record键；`has`不读取无权字段。`&&/||` 使用标准 CEL 的可交换布尔语义，不承诺左到右求值；确需跳过分支的 guard 使用 `has(p.label) ? p.label == "work" : false` 等条件表达式。guard 不是授权门，实际输入权限/读取闭包在求值前核定。provider `bool-cell`在value态适配CEL bool，compareTemporal的order-cell在value态适配i64(-1/0/1)，duration-cell按固定record签名适配，其它态转EvaluationIssue，不把整个Cell结构放进 `&&`。例如containsDate未记期间→unavailable，不意味着该员工永久有效。
 
-静态型检查记录declared T/成员presence/可能的read effect，禁止跨T coercion及非法member；运行时依准确Cell保持错误差别。filter产value(bool)才确定成员；unavailable/invalid依赖导致未决行和partial诊断，schema/表达式静态非法是整个query error。明确state test可选择“只看可得值”或诊断行，这是可见作者条件而非后台丢数据；数据库存未决仍不得complete。简单UI只为已知absent/可选member生成明确守卫，不默认把isValue=false的invalid/unavailable排除；用户明确“仅可得值”才生成并展示该状态条件。高级源码不替作者补false。select直接字段仍导出其原Cell状态，不先unwrap再丢状态；aggregate输入含非value必须有作者明确筛除/诊断策略，否则partial或error，不能补0。
+静态型检查记录declared T/成员presence/可能的read effect，禁止跨T coercion及非法member；运行时依准确Cell保持错误差别。最终 filter 表达式产 value(bool) 才确定成员；未被布尔结果吸收的 EvaluationIssue 导致未决行和 partial。中间曾求得 issue 不自动使已可确定的成员关系变 partial；诊断和字段 Cell 质量另记。schema/表达式静态非法是整个 query error。明确state test可选择“只看可得值”或诊断行，这是可见作者条件而非后台丢数据；数据库存未决仍不得complete。简单UI只为已知absent/可选member生成明确守卫，不默认把isValue=false的invalid/unavailable排除；用户明确“仅可得值”才生成并展示该状态条件。高级源码不替作者补false。select直接字段仍导出其原Cell状态，不先unwrap再丢状态；aggregate输入含非value必须有作者明确筛除/诊断策略，否则partial或error，不能补0。
+
+#### CEL 组合与完整性
+
+保持 [CEL 标准逻辑运算与宏](https://github.com/cel-expr/cel-spec/blob/master/doc/langdef.md#logical-operators)，不增加另一套求值器。以下 `issue` 是已获权业务值运算产生的可吸收 EvaluationIssue；权限不足、无完整读取范围、撤权、预算耗尽、取消与宿主失败不是该值，必须由宿主维持相应失败/partial，不能被 `true` 掩盖。
+
+| 表达式或宏 | 成员资格结果 |
+| --- | --- |
+| `false && issue`、`issue && false` | false；该条件可确定排除 |
+| `true || issue`、`issue || true` | true；该条件可确定包含 |
+| `true && issue`、`false || issue` | issue；未决/partial |
+| `exists` 至少一项 true，其它项 issue | true；不宣称其它项可用 |
+| `all` 至少一项 false，其它项 issue | false；不宣称其它项可用 |
+| `filter`/`map` 的必需元素产生 issue | 宏结果 issue；不静默删掉该元素 |
+| 条件表达式未选择的分支 | 不消费该分支值；其静态类型/权限规则仍有效 |
+
+SOURCE 时间函数仍须在调用内部完成共同时间基准检查，再计算自己的结果；CEL 吸收整个调用的 issue 不改变 provider 算法。最小真实 runtime 对照覆盖换序、exists/all、filter、条件 guard 和宿主预算中止；旧 Python 模型不作为此项运行证据。
+
+### 5.5 正文内嵌 Query
+
+正文内嵌只改变查询的呈现与编辑入口。定义继续使用 §§5.3、7 的原生承载、schema 基线和定义/实例规则，构建器与源码使用同一 Query AST、CEL 校验和执行器；结果容器消费 §§5.1–5.2 的同一封存 QueryResult，不另建编辑器查询引擎或可独立更新的缓存权威。[EDITOR §2.3](EDITOR.zh-CN.md#23-正文内嵌-query-的五档交互) 规定 V01 直接编辑查询源、V02 完整源始终可见且同时显示结果、V03 主动展开对应源、V04 构建器加明确独立源码入口、V05 只读且无定义编辑入口。
+
+每个正文出现项的会话关联须记录它实际使用的定义选择、参数及结果依据，并关联当前 Draft serial 与准确源范围；这是现有来源和结果合同的消费，不另持久化定义。未保存的本篇定义按 §5.3 冻结当前 schema/profile，并明确显示草稿预览。调用保存 Query 时，修改本篇调用/参数与修改定义所属笔记分开；后者进入已获权 owner 会话，不从结果位置反写另一篇定义或 pinned 历史。构建器只对能证明完整往返的范围提出共享 Draft 修改；不能安全表达的原生查询保原字节、说明控件限制，V01–V04 提供明确源码入口，V05 不提供定义编辑。运行、展开/收起、切档和结果刷新均不隐式保存。
+
+来源依据过期、当前定义/参数与旧结果不一致、数据 freshness=stale 是不同说明；可以并存，不能用“还有结果”掩盖当前定义未运行或错误。沿用既有权限、预算、错误、partial、stale 和撤权处理；完整空结果仅适用于其已说明且合格的定义/数据范围。结果行 lineage 不授源 writer，构建器可用也不授结果行写权。行上的勾选、改字段、拖移等既有操作仍按 §5、§7 独立 prepare 和重验目标，不能改查询定义来冒行写入；正文 V05 禁用这些写动作，保整体只读。
+
+本地候选接通正文出现项与同一 Query 执行器：用当前准确 Draft 求值新预览，current 调用可使用同 owner 的准确草稿，pinned 调用仍读取真实保留版本，不借草稿冒充原 Revision。结果带原覆盖、错误与过期状态；迟到响应按来源与 serial 拒绝，刷新不保存定义。构建器只修改已证目标，复杂原生条件保持；其他出现项/源码字节保留。已有结果可经原冻结输出入口输出，不另查一次。当前原生分页/PDF 和 DOCX 正文不物化浏览器内嵌结果：分页界面明确提示，DOCX 正文输出报告 `embedded_query_results_not_materialized` 损失；需要结果时明确选择已显示的冻结 Query 输出。交付验收共用 [ROADMAP IQV01–07](../ROADMAP.zh-CN.md)，不另建通过记录。
+
+保留两个最小技术反例：定义 Q1 改为 Q2 后，Q1 的响应迟到，不能回写新稿或标成 Q2 的当前结果；构建器不能往返某个原生条件时，不能在 V04 聚焦后自动露语法或删除该条件，进入 V05 后也不能沿用先前定义/行写命令。完整交互与状态矩阵按路线图验收，此处不另记已通过事实。
 
 ## 6. 嵌套集合：同项绑定、保序与代表查询
 
@@ -271,14 +301,14 @@ filter(phones,p => p.number == "13800138000")
 
 保存 Query 的定义定位采用作者 note + 唯一应用 definition key，label是显示/原生定位名称。direct metadata用 `kind:"weftext.query"`、Core分配lowercase UUIDv4 key，身份是owner+key，不是新NodeID；定义其余scope/types/where/select/order成员由本文件拥有，SOURCE按同root的官方AST/binding规则识别并检查key与label全根唯一，generated/include/nested/计算声明不给定义资格。正常引用默认 **current**：每次打开当前获权定义，界面显示本次用的 RevisionId，定义变化说明“定义已更新”并重新求值。显式 **pinned** 固定定义 RevisionId，界面标“固定定义”；历史不可得或当前不允许读取时明确 unavailable，绝不偷偷换 latest。pinned 固定定义，不固定数据：每次仍以当前获权数据求值。需要记录一批准确旧结果时使用显式结果导出/历史快照入口，不用 pinned 假扮数据冻结。旧结果、cursor 或 pinned 定义均不给 current writer。
 
-新定义创建分配一次不随标签改名变化的应用 key，仍置于原生 metadata，label 可编辑；读取按 key 识别，不按同名新对象猜替代。复制产生新的 owner/key 映射，typed 保存定义引用随同一 copy map 更新；引用 current/pinned选择保持。SOURCE 必须将 key 声明、重复检查及字面投影资格与 root 一致设计。高级/计算声明可原生读取保存，但不能伪成应用可执行定义。
+新定义创建分配一次不随标签改名变化的应用 key，仍置于原生 metadata，label 可编辑；读取按 key 识别，不按同名新对象猜替代。复制产生新的 owner/key 映射；current 定义引用随 copy map 更新。pinned 定义引用默认保留原 owner/key/RevisionId，预览明确其外部历史依赖，不把原版本号拼到新 owner，也不换成副本当前版。首代要求完全独立而仍含此依赖时明确拒绝该模式；用户可单独创建并核对旧定义内容的新副本，再显式改引用，不把该操作冒充保 pin 的普通复制。SOURCE 必须将 key 声明、重复检查及字面投影资格与 root 一致设计。高级/计算声明可原生读取保存，但不能伪成应用可执行定义。
 
 | 需求 | 候选交互与状态 |
 | --- | --- |
 | NAV01 | 导航/列表/正文三面板可收起调宽，窄屏逐层进入返回。会话记录 Query AST、范围、selected identity、scroll anchor + offset、焦点及按 owner 保留的 Draft/Undo。返回先获权重新求值；selected消失显示移出/删除/不可用，不复活旧行。后台预览不聚焦正文或提交 Draft。 |
 | NAV02 | 列表可选当前获权摘要、图片/PDF缩略图、明确名称的日期、关键属性与密度。无作者标题以可披露 filename/path 作显示回退并标回退，不补写标题。预览状态是 absent/building/ready/failed/unsupported/unavailable，字段 absent 另标；首行可用即能浏览，不等全库 OCR/缩略图。 |
 | NAV03 | 目录、标签、类型及属性值点击生成同一 Query 条件 chip，可逐项移除，包含子目录/全库/正文搜索明确。facet counts 对 current获权相同范围按 `count_distinct(self)`，多值笔记每值最多一次、缺值单独组，partial计数标已知范围，顺序选择不改日期条件。 |
-| NAV04 | 快捷入口使用 NodeRef、DirectoryRef、TagRef 或保存 Query key，可重排移除，删除入口不删目标。Node 目录直接用 NodeRef；非 Node 受管目录由 CORE admitDirectory 登记身份后使用 DirectoryRef；标签由 CORE 登记，SOURCE 的 typed TagRef 与导航/Query 一致。显式接纳只影响选定目录，不自动改造全库或 unmanaged 边界。重复身份、观察缺口或目标失效准确提示，不猜同名。仅保留路径的外部书签明确不具改名稳定性。列表置顶仅改变当前合格结果的显示顺序，不越筛选/权限，也不等同快捷入口。 |
+| NAV04 | 快捷入口使用 NodeRef、DirectoryRef、TagRef 或保存 Query key，可重排移除，删除入口不删目标。Node 目录直接用 NodeRef；非 Node 目录经用户明确授权，由 CORE admitDirectory 只登记导航身份后使用 DirectoryRef，不升级为 Node 或改变发现边界；标签由 CORE 登记，SOURCE 的 typed TagRef 与导航/Query 一致。显式接纳只影响选定目录，不自动改造全库或 unmanaged 边界。重复身份、观察缺口或目标失效准确提示，不猜同名。仅保留路径的外部书签明确不具改名稳定性。列表置顶仅改变当前合格结果的显示顺序，不越筛选/权限，也不等同快捷入口。 |
 | NAV05 | 个人本地 ViewPreference 按目录/标签/Query身份记排序、分组、列、摘要/缩略图开关和密度，可恢复默认。失效字段/target提示，不替同名项；设置不含结果或writer，不改源、真实目录顺序或其他人的偏好。 |
 
 设备偏好存应用配置，不进入业务 metadata。快捷方式、视图偏好和具名布局都是重新解析入口，不能持久化旧授权/结果/writer。列表 pin 可个人按 context 保存 NodeRef 集合，先 query 得当前成员后再稳定分区 pinned/unpinned，各区按显式 Query 排序；导出 Query 数据仍按 Query 原顺序，导出所见列表需显式含该个人排序选择并标其含义。
@@ -523,7 +553,7 @@ Typst不自动给每个块永久ID；可以给一个真实block加原生label，
 
 排版模板用标准 Typst module/import/functions/set/show；包只看到冻结获权inputs、字体/资源，不能从模板函数取得文件/网络、可信id或author write。应用创建模板定义参数类型/默认值和准确title/body/field槽，UI不要求用户手写recipe/wire。缺参数、null与未给参数不同，默认仅未给时生效。文字参数安全literal，不把`#metadata`输入当代码执行。预览包含全部新笔记、资源、typed引用、批注保留/省略以及具体loss；实际和预览绑定同一Plan。
 
-复制算法：枚举完整已获权选择闭包 → 一次分配 fresh笔记/资源/批注/定义key及候选RevisionId映射 → 官方AST与schema遍历所有 typed ref/link/definition槽 → 在旧context解析路径，再以新source位置及同map编码 → 验证全部目标/fragment/owner/定义选择 → 冻结全部after和损失 → 原子提交。自由文字、未知字段、CEL string和看似UUID的号码不做字符串替换；未知应用定义的typed引用范围不能证明时完整复制拒绝或显式保留原件/loss方案。两份笔记互引、无Ref定义和同源多实例分别用完整source/result key关联，不能依数组位置join。资源re-own明确，不因路径相同误共用私有附件；批注目标可证明则同map更新，不能证明则保讨论并标stale/明确省略选择。
+复制算法：枚举完整已获权选择闭包 → 一次分配 fresh笔记/资源/批注/定义key及候选RevisionId映射 → 官方AST与schema遍历所有 typed ref/link/definition槽 → 在旧context解析路径，再以新source位置及同map编码（§7 的 pinned 定义引用保原历史三元组并预览外部依赖，不套 owner/key 新映射） → 验证全部目标/fragment/owner/定义选择 → 冻结全部after和损失 → 原子提交。自由文字、未知字段、CEL string和看似UUID的号码不做字符串替换；未知应用定义的typed引用范围不能证明时完整复制拒绝或显式保留原件/loss方案。两份笔记互引、无Ref定义和同源多实例分别用完整source/result key关联，不能依数组位置join。资源re-own明确，不因路径相同误共用私有附件；批注目标可证明则同map更新，不能证明则保讨论并标stale/明确省略选择。
 
 导入用Weftext自有Rust基础设施：先保原件；安全解析完整parts/sheets/资源及未知数据；形成准确native值和语义结构；对每个不能表达的信息给原始位置、影响、选项；预览；通过同一Core创建。PDF编译成功不证明业务保真，换扩展名不算导入。工作簿公式/hidden sheet/缓存结果分开保留，宏、恶意ZIP/XML和worker额外输出不会执行。大导入可分明确有限组，已提交前缀可查，cancel只停止后续组；unknown查原组opId，不重新导入既有前缀。
 
@@ -591,6 +621,16 @@ citation绑定key按SOURCE明确ASCII全文 `[A-Za-z][A-Za-z0-9_-]*` 校验，�
 
 ## 11. 可编辑输出与内网下载
 
+### 11.1. Office 模板与样式选择
+
+Office 模板和 Typst 样式模块分别负责各自格式。DOCX 使用标准内容控件的 `w:tag` 定位正文、标题、字段或 Query 结果；XLSX 使用标准命名区域与表格定位字段和结果区域。用户在界面选择绑定，不在模板里另写一套表达式语言。检查模板中的真实位置、容量和支持状态后再生成；缺失或不支持的槽位明确报错，不凭同名文字猜位置。
+
+默认使用模板的段落、字体、边框和表格样式，转换正文仍保留明确的强调等语义。用户可以选择保留可映射的来源样式；无法表示的样式进入损失预览。两种选择都只改变输出工件，不修改作者源。模板的已有内容和未使用部件保留；不能以重新建一份空文件冒充套用原模板。
+
+Query 绑定使用用户实际选中的冻结结果，保持原行序、列序、schema 与完整性状态。容量不足、合并单元格冲突、公式或其他被保护的目标不能静默截断或覆盖。来源字符串不会变成公式，模板中的宏、外部链接与活动内容不会被执行；不支持的模板明确拒绝。生成后的预览、损失确认和下载使用同一份字节。
+
+### 11.2. 转换和交付合同
+
 中文默认、字体和语言交付遵循 [EDITOR](EDITOR.zh-CN.md) §8.6/CJK01–08：模板、转换和内网 worker 使用同一获权冻结环境，不依赖公共字体 CDN 或操作系统偶然回退。PDF、可编辑 DOCX 与独立 Typst 工程分别验证字体/语言映射、许可和目标端缺依赖；XLSX 中文字符串同样保原值，工作簿字体按目标能力披露。网页预览能显示中文不证明下载工件也正确。
 
 准确source导出只交原 `.typ` bytes，不依赖排版/模板；准确结构结果导出交完整schema、Cell和值/order，不交runtime句柄或writer。PDF/SVG/PNG走真实可用Typst输出，实验能力标实验；DOCX/XLSX是Weftext独立转换器和真实验证路线。
@@ -607,11 +647,15 @@ XLSX输出真实workbook/sheets/typed cells及明确选择的table/query顺序�
 
 ## 12. Agent、automation与外部效果
 
-保留已选agent/automation/connector能力的必要授权和结果语义，重新采用当前Plan/Job/OperationJournal体系；不是因为需求表无新编号而删除D10。agent读取/作者写入走相同Core范围，模型、文档、网页、邮件与工具输出都是数据，不能自行产生批准。有限委托明确主体、范围、动作、次数/期限、budget；字段授权不升级整篇、包执行不获ambient workspace/network/secret。精确包/字体/provider版本准入支持内网离线，不静默联网。
+RQ27 的交付链明确为：获权读取→提出修改→人工审阅/应用；随后支持有限规则对指定库内容自动写入；具体连接器可读取获准来源或生成待确认的准确外部请求。首代外部效果逐请求确认，无人值守外发后置。普通本地保存、编译、DOCX/XLSX 生成和内网下载不要求先实现模型平台、scheduler 或费用服务；实际启用收费/外部适配器时才启用相应 Job 责任。选型不由旧模块名称决定。
+
+Agent 读取与作者写入走同一 Core；模型、文档、网页、邮件及工具输出是数据，不能产生批准。有限委托限定主体、范围、动作、次数/期限与预算；字段授权不升级整篇，包执行无 ambient workspace/network/secret。精确包/字体/provider 准入支持内网离线，不静默联网。
 
 自动作者写先fresh prepare完整效果，匹配用户已授权的有限规则或交互确认；实际效果超界则停等用户，不静默扩大。规则不是模型摘要，批准绑定准确Plan。scheduler有稳定事件/run key，重启不重复已处理发生项，改规则不替换旧unknown Run。stop/revocation在首次不可逆发送/提交前有当前检查与原子fence，先赢则阻止；已发/已提交历史保留，不伪退款或回滚。取消停止尚未开始工作，unknown仍对原请求只读reconcile。
 
 外部mutation先冻结准确account/target/payload与idempotency key，展示完整真实请求并由获准用户确认；宽泛授权、读权限、export确认都不等于发送批准。发送状态 prepared/submitting/succeeded/failed-no-effect/unknown 明确；unknown只有可靠同请求幂等合同或无效果证据才自动重试，不换id再发。凭据轮换不能借新账户复做旧未知操作。外部补偿是新授权效果；Core作者事务与外部mutation分别报告，不能假综合原子receipt。
+
+任何携带库内容、查询片段或敏感派生值的外部请求，包括“只读”的模型/检索请求，都需要独立内容出站授权，限定目的地/账户、数据范围、用途与有效期，发送前重验。具体有限授权可在其范围内复用，不强迫逐次弹窗；读取权限和费用额度不能替代出站授权。外部变更另按上一段逐请求确认，二者不混用。
 
 可能收费的model/tool/network调用开始前以实际账户、币种、pricing版本和有限上限原子预留费用，防并发超支。settled、released-no-charge和uncertain区分；unknown或stop不取消已经可能发生的费用。grant续期不清零历史消费。费用和author效果不是同一回滚状态，UI呈现两者。secret不进入public日志、Query、source或工件；worker只读限定输入/输出slot，无直接workspace挂载或任意命令权限。首代不自动增加白板、持久多Query仪表盘、提醒执行、复杂工作流或实时协作。
 
@@ -633,7 +677,7 @@ XLSX输出真实workbook/sheets/typed cells及明确选择的table/query顺序�
 | F10 / RQ10 | 论文作者表单/Query/CSL/引用/Word同顺序，刷新冲突保作者改动，标识不当身份，未知precision/字段保原件。 |
 | F11 / RQ04–07/20 | DOCX实际可编辑、run-in正文格式/显式强调正确、Heading1–9与10+loss；真实XLSX不误公式/舍入。Office真实应用验收。 |
 | F12 / RQ20/23 | 内网无需publish下载同确认bytes、resume不换内容、撤权停止；离线链接按occurrence完整覆盖，worker多余输出不交。 |
-| F13 / RQ21–24/D10 | 授权与外部approve/费用/stop/unknown交叉测试；同文档冲突保双方稿、无关文档可继续，跨authority不假原子。 |
+| F13 / RQ21–24/27 | 授权与外部approve/费用/stop/unknown交叉测试；同文档冲突保双方稿、无关文档可继续，跨authority不假原子。 |
 
 实现前重点原型：官方最终语义来源轨迹是否能覆盖全部links/headings且不伪writer；大词典Aho–Corasick与密集重叠可访问性；嵌套数组query同项/空值/完整性及窄字段授权；个人导航状态在撤权/Draft切换下保全；批注多文件原子恢复；可编辑Word混排与真实XLSX精度；撤权过程中chunk交付边界。源/元数据字面投影可不等待整文编译，但所有声明和快捷写必须用官方AST及准确binding证明。无法证明的输入保源/稿并明确能力状态，不能由Features另起字符串parser绕过。
 

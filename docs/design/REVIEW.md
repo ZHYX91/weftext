@@ -8,7 +8,7 @@ translation_status: synced
 
 # Final design acceptance and evidence limits
 
-This file retains the final disposition. Earlier rounds and CI links belong to the archived repository. Section number 7 preserves the original reference. Required bounded experiments remain in [examples](examples/) and [probes](probes/). Repository consolidation does not claim product implementation or another global technical review.
+This file retains the fixed final disposition and subsequent refinement limits. Earlier rounds and CI links belong to the archived repository. Section number 7 preserves the original reference. Required bounded experiments remain in [examples](examples/) and [probes](probes/). Repository consolidation does not claim product implementation or another global technical review.
 
 ## 7. f951 independent global final review: design accepted
 
@@ -39,3 +39,9 @@ Global acceptance covers the coordinated SOURCE/CORE/EDITOR/FEATURES and INTEGRA
 Acceptance means a design sufficient to guide refactoring. Production Rust providers/CEL, Core transactions and platform failure guarantees, Server, production Html origins and inverse editing, IME/AT, CJK font delivery, Word/WPS/LibreOffice, XLSX round trips, intranet revocation and performance still require implementation and testing. Unchanged 23 native compilation cases and three probes were not rerun in this round; their original evidence scopes remain. Follow INTEGRATION's vertical slices to finalize actual interfaces, persistent formats, backend capabilities and environments. These product responsibilities are not additional open findings in this design review.
 
 This section and concurrent entry updates only record the final disposition and current status; they do not change accepted algorithms, schemas, models or acceptance oracles. Fixed f951 is the technical review baseline. Later status-record commits do not claim a new full technical review. The PR remains Draft, unmerged and unreleased, with product implementation not started.
+
+## 8. 2026-10-13 bounded refinements and implementation evidence
+
+The user authorized refinements following the greenfield re-review. Current text clarifies `A/A.typ`, ordinary-file/unmanaged boundaries, RQ26 outside-library editing, RQ27 Agent paths and egress authorization. It fixes CEL boolean/error absorption, retains original historical targets for pinned Query copies, and resolves builtin signatures from one trusted registration source without removing business types. SourceSchemaBasis remains. Small practical comparisons narrow compiler adaptation and DOCX backend work.
+
+Section 7 accepts only its fixed earlier baseline, not this refinement; this section is not new Pro global acceptance. INTEGRATION §5 lists targeted requirements. Documentation/configuration/bounded-model checks prove only their scope. See [editor-loop](probes/editor-loop/README.md) and [cel-semantics](probes/cel-semantics/README.md) for actual probe results and unrun cases. Product/platform faults, real OS IME and Office acceptance remain separate obligations.

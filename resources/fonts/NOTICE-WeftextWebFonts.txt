@@ -1,0 +1,50 @@
+Weftext Web Serif 1.0 — 浏览器专用派生字体 / browser-only derived fonts
+
+中文
+WeftextWebSerif-Regular.woff2 和 WeftextWebSerif-Italic.woff2 是修改后的字体，
+不是上游原始文件。源是 typst-assets 0.15.1 固定提交
+ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f 中的 NewCM10-Regular.otf 与
+NewCM10-Italic.otf；原始文件完整保存在 web-sources，字节身份见 web-manifest.json。
+原始字体作者、版权及条款保存在字体的 name 表和 NOTICE-TypstAssets.txt。
+
+修改记录（2026-10-13，Weftext Web 1.0）：展开 CFF 子程序，删除 CFF 提示指令，
+改名为 Weftext Web Serif，并编码为 WOFF2。没有裁剪、增加或替换字形；生成脚本逐一
+比较完整 glyph 顺序、所有 cmap、轮廓与水平度量，并核对其余 12 个 SFNT 表不变。
+网页栅格化不再使用原 CFF 提示，因此不承诺与原字体完全相同的逐像素效果。
+原生 Typst 编译仍使用未修改的原始字体。CSS 家族名 New Computer Modern 是原生
+输出到这些同字形网页字体的明确别名，不是派生文件的内部字体名。
+
+Regular 保持 GPL 3 或更高版本及原 Font Exception / Distribution Exception；Font
+Exception 明确延伸到该派生版本。Italic 保持 GUST Font License 1.0，即其引用的
+LPPL 1.3c 或更高版本，并遵从其字体/文件改名请求。完整条款见 NOTICE-TypstAssets.txt
+及 LICENSE-LPPL-1.3c.txt。派生版本由 Weftext 项目维护；上游作者不为这些修改提供支持。
+完整原始工作、作者源码与许可可从 https://ctan.org/pkg/newcomputermodern 获取。
+本目录提供源输入、derive_web.py 与 requirements-web.txt，用于重建和完整比较。
+
+English
+WeftextWebSerif-Regular.woff2 and WeftextWebSerif-Italic.woff2 are modified fonts,
+not upstream originals. Their inputs are NewCM10-Regular.otf and NewCM10-Italic.otf
+from typst-assets 0.15.1, commit ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f.
+The complete original input files are retained in web-sources. web-manifest.json
+records their exact byte identities. Original authorship, copyright and license
+notices remain in the fonts' name tables and NOTICE-TypstAssets.txt.
+
+Changes (2026-10-13, Weftext Web 1.0): CFF desubroutinization, removal of CFF hint
+instructions, renaming to Weftext Web Serif, and WOFF2 encoding. No glyphs are
+subsetted, added or substituted. The generator compares every glyph's outline,
+the complete glyph order, all cmaps and horizontal metrics, and verifies the
+other 12 SFNT tables remain unchanged. Web rasterization no longer uses the
+original CFF hints; identical pixels are not promised. Native Typst compilation
+still uses the unmodified originals. The CSS family New Computer Modern is an
+explicit alias from native output to these equal-outline web fonts, not their
+internal derived font name.
+
+Regular remains under GPL 3 or later with the original Font Exception and
+Distribution Exception; the Font Exception is explicitly extended to this
+derived version. Italic remains under GUST Font License 1.0 (its referenced
+LPPL 1.3c or later), with its requested font/file renaming honored. Full terms
+are in NOTICE-TypstAssets.txt and LICENSE-LPPL-1.3c.txt. These derivatives are
+maintained by the Weftext project; the upstream authors do not support these
+modifications. The complete original work, author sources and license are
+available at https://ctan.org/pkg/newcomputermodern. The input fonts, derive_web.py
+and requirements-web.txt are included for reproduction and full comparison.

@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-13",
+  "surface": "Codex in-app browser, Windows, localhost dedicated experiment",
+  "method": "Observed UI interactions, source view and on-disk save verification; no hidden application state injection",
+  "cases": [
+    {"name": "V02 syntax retained with heading and strong styling", "pass": true},
+    {"name": "V04 Chinese text edit appears in V01 with surrounding delimiters and text retained", "pass": true},
+    {"name": "Cross-view Undo and Redo restore original and changed source", "pass": true},
+    {"name": "V03 selected literal source applies to the shared draft", "pass": true},
+    {"name": "Final version rejects empty literal replacement and retains original text", "pass": true},
+    {"name": "Final version Chinese writeback produces 甲*最终中文*丙", "pass": true},
+    {"name": "V05 renders changed text with zero contenteditable projection elements", "pass": true},
+    {"name": "Save shows success and dedicated note plus journal record actual committed contents", "pass": true}
+  ],
+  "console_errors_observed": 0,
+  "limits": ["No actual OS IME", "No full five-view or production acceptance", "Early view checks preceded the final stricter source-profile and literal-escaping changes; final-version cases are named explicitly", "No library or user files edited"]
+}

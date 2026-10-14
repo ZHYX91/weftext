@@ -7,9 +7,12 @@ translation_status: source
 
 # Weftext
 
-基于原生 Typst 的文件型知识与写作工具。当前状态：**设计已接受，产品待实现**。这是重构起点，旧原型已归档，不是可安装的产品版本。
+基于原生 Typst 的文件型知识与写作工具。当前状态：**0.5.0-alpha.2 Windows 本地候选，完整产品仍在推进**。旧原型已归档，不是当前构建依赖。
 
-- [需求](docs/REQUIREMENTS.zh-CN.md)：唯一当前需求集；25 组需求及导航、丰富类型、库样式、五档视图、中文默认支持。
+- [本地候选使用与边界](docs/MVP.zh-CN.md)：写作、属性与 Query、链接与批注、Office 输出与资料交换，以及保存恢复；含构建命令和实际限制。
+- [版本路线图](docs/ROADMAP.zh-CN.md)：首版之后 7 个里程碑，覆盖当前已确认需求。
+
+- [需求](docs/REQUIREMENTS.zh-CN.md)：唯一当前需求集；27 组需求及导航、丰富类型、库样式、五档视图、中文默认支持。
 - [技术设计](docs/design/README.zh-CN.md)：作者源、Core、编辑器、业务功能；必要 schema、例子和有限实验随文档保留。
 - [实施顺序](docs/design/INTEGRATION.zh-CN.md)：从本地打开、编辑、保存和恢复的纵向闭环开始。
 - [最终设计接受](docs/design/REVIEW.zh-CN.md)：固定技术基线、结论与证据限制。

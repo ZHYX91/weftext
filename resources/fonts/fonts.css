@@ -1,0 +1,29 @@
+/* Same files as the native font store. No network or system-font discovery. */
+@font-face { font-family: "Noto Serif CJK SC"; src: url("/fonts/NotoSerifCJKsc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Serif CJK SC"; src: url("/fonts/NotoSerifCJKsc-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Noto Serif CJK TC"; src: url("/fonts/NotoSerifCJKtc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Serif CJK TC"; src: url("/fonts/NotoSerifCJKtc-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Noto Sans CJK SC"; src: url("/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Sans CJK SC"; src: url("/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Noto Sans CJK TC"; src: url("/fonts/NotoSansCJKtc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Sans CJK TC"; src: url("/fonts/NotoSansCJKtc-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Noto Sans Mono CJK SC"; src: url("/fonts/NotoSansMonoCJKsc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Noto Sans Mono CJK TC"; src: url("/fonts/NotoSansMonoCJKtc-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+/* The native compiler embeds these exact typst-assets 0.15.1 files. */
+@font-face { font-family: "New Computer Modern"; src: url("/fonts/WeftextWebSerif-Regular.woff2") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "New Computer Modern"; src: url("/fonts/NewCM10-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "New Computer Modern"; src: url("/fonts/WeftextWebSerif-Italic.woff2") format("woff2"); font-style: italic; font-weight: 400; font-display: swap; }
+@font-face { font-family: "New Computer Modern"; src: url("/fonts/NewCM10-BoldItalic.otf") format("opentype"); font-style: italic; font-weight: 700; font-display: swap; }
+@font-face { font-family: "DejaVu Sans Mono"; src: url("/fonts/DejaVuSansMono.ttf") format("truetype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "DejaVu Sans Mono"; src: url("/fonts/DejaVuSansMono-Bold.ttf") format("truetype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "DejaVu Sans Mono"; src: url("/fonts/DejaVuSansMono-Oblique.ttf") format("truetype"); font-style: oblique; font-weight: 400; font-display: swap; }
+@font-face { font-family: "DejaVu Sans Mono"; src: url("/fonts/DejaVuSansMono-BoldOblique.ttf") format("truetype"); font-style: oblique; font-weight: 700; font-display: swap; }
+@font-face { font-family: "New Computer Modern Math"; src: url("/fonts/NewCMMath-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "New Computer Modern Math"; src: url("/fonts/NewCMMath-Book.otf") format("opentype"); font-style: normal; font-weight: 450; font-display: swap; }
+@font-face { font-family: "New Computer Modern Math"; src: url("/fonts/NewCMMath-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-Regular.otf") format("opentype"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-Bold.otf") format("opentype"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-Italic.otf") format("opentype"); font-style: italic; font-weight: 400; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-BoldItalic.otf") format("opentype"); font-style: italic; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-Semibold.otf") format("opentype"); font-style: normal; font-weight: 600; font-display: swap; }
+@font-face { font-family: "Libertinus Serif"; src: url("/fonts/LibertinusSerif-SemiboldItalic.otf") format("opentype"); font-style: italic; font-weight: 600; font-display: swap; }

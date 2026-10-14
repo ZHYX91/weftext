@@ -1,0 +1,36 @@
+[package]
+name = "weftext-app"
+version = "0.5.0-alpha.2"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[[bin]]
+name = "weftext"
+path = "src/main.rs"
+
+[dependencies]
+weftext-core = { path = "../weftext-core" }
+weftext-engine = { path = "../weftext-engine" }
+weftext-data = { path = "../weftext-data" }
+weftext-knowledge = { path = "../weftext-knowledge" }
+weftext-export = { path = "../weftext-export" }
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive"] }
+include_dir = "0.7"
+mime_guess = "2"
+url = "2"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+lopdf = { version = "0.38", default-features = false }
+base64 = "0.22"
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading"] }
+

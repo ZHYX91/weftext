@@ -1,0 +1,19 @@
+.library-style-panel { width: min(860px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; }
+.style-path { color: var(--muted, #6e7c64); font-size: 11px; overflow-wrap: anywhere; margin: 0 0 18px; }
+.style-enabled { display: flex; gap: 9px; align-items: center; font-size: 12px; color: #526d48; }
+.style-enabled input { accent-color: #6c8a58; }
+.style-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.style-controls .text-input:disabled { opacity: .65; }
+.style-notices { display: grid; gap: 8px; }
+.style-warning, .style-error { color: #946638; }
+.style-native-source { border: 1px solid var(--line, #dbe5d1); border-radius: 6px; padding: 14px; }
+.style-native-source summary { cursor: pointer; font-size: 12px; color: #607952; }
+.style-native-source > p { margin: 12px 0; }
+.style-source { font-family: "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", monospace; font-size: 11px; resize: vertical; tab-size: 4; white-space: pre; overflow-wrap: normal; overflow: auto; }
+.style-native-source .text-button { margin-top: 8px; }
+.style-status { font-size: 11px; min-height: 1.7em; margin: 0; }
+.style-plan { border-top: 1px solid var(--line, #dbe5d1); padding-top: 16px; }
+.style-plan h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+.style-plan ul { font-size: 11px; line-height: 1.8; color: #65775a; padding-left: 20px; }
+.style-source-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 620px) { .style-controls, .style-source-comparison { grid-template-columns: minmax(0, 1fr); } }

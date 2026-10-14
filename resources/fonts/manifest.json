@@ -1,0 +1,429 @@
+{
+  "schemaVersion": 1,
+  "fontSetVersion": "weftext-offline-cjk-v1",
+  "sample": "简体中文繁體漢字總價單價數量，。！？“”‘’（）【】《》—…ABCxyz0123",
+  "coverageClaim": "Common simplified/traditional Han, Chinese punctuation and mixed Latin. Not all Unicode. Cmap presence is not native layout or browser acceptance.",
+  "fonts": [
+    {
+      "file": "NotoSansCJKsc-Bold.otf",
+      "family": "Noto Sans CJK SC",
+      "role": "sans",
+      "version": "2.004",
+      "weight": 700,
+      "locale": "zh-CN",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Bold.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Bold.otf",
+      "sha256": "b5f0d1a190a7f9b43c310a8850630af12553df32c4c050543f9059732d9b4c0a",
+      "bytes": 17002248,
+      "inspection": {
+        "family": "Noto Sans CJK SC",
+        "subfamily": "Bold",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 227,
+          "A": 641,
+          "i": 304,
+          "W": 915,
+          "0": 590
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "ff4c0450e8a5bf0290fbb6013a72dc61a10e8e56"
+    },
+    {
+      "file": "NotoSansCJKsc-Regular.otf",
+      "family": "Noto Sans CJK SC",
+      "role": "sans",
+      "version": "2.004",
+      "weight": 400,
+      "locale": "zh-CN",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "bytes": 16437364,
+      "inspection": {
+        "family": "Noto Sans CJK SC",
+        "subfamily": "Regular",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 224,
+          "A": 608,
+          "i": 275,
+          "W": 878,
+          "0": 555
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "dc15562470b4f842321894787a0d066879ccff8b"
+    },
+    {
+      "file": "NotoSansCJKtc-Bold.otf",
+      "family": "Noto Sans CJK TC",
+      "role": "sans",
+      "version": "2.004",
+      "weight": 700,
+      "locale": "zh-TW",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/OTF/TraditionalChinese/NotoSansCJKtc-Bold.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Bold.otf",
+      "sha256": "3ee160e5015106e3ec1a394301df54fa9bbbf8a251519984aec5c0abc50840c0",
+      "bytes": 17000768,
+      "inspection": {
+        "family": "Noto Sans CJK TC",
+        "subfamily": "Bold",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 227,
+          "A": 641,
+          "i": 304,
+          "W": 915,
+          "0": 590
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "fdebf29af936764175a90e87141f9576e2079223"
+    },
+    {
+      "file": "NotoSansCJKtc-Regular.otf",
+      "family": "Noto Sans CJK TC",
+      "role": "sans",
+      "version": "2.004",
+      "weight": 400,
+      "locale": "zh-TW",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf",
+      "sha256": "dce08bd4fd91aa8aa76ed8fea4b694c2dfb8550f67871e326843212ddbeb88b4",
+      "bytes": 16435884,
+      "inspection": {
+        "family": "Noto Sans CJK TC",
+        "subfamily": "Regular",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 224,
+          "A": 608,
+          "i": 275,
+          "W": 878,
+          "0": 555
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "f9376bae1d421520f73a3c6c9d50b22f89548301"
+    },
+    {
+      "file": "NotoSansMonoCJKsc-Regular.otf",
+      "family": "Noto Sans Mono CJK SC",
+      "role": "code",
+      "version": "2.004",
+      "weight": 400,
+      "locale": "zh-CN",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/Mono/NotoSansMonoCJKsc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/Mono/NotoSansMonoCJKsc-Regular.otf",
+      "sha256": "ec04cc376b34887cedbdf84074e2e226ed2761eeabdcb9173fc1dd7bfd153ef7",
+      "bytes": 16393784,
+      "inspection": {
+        "family": "Noto Sans Mono CJK SC",
+        "subfamily": "Regular",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 500,
+          "A": 500,
+          "i": 500,
+          "W": 500,
+          "0": 500
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "5ff7011ee3c76bb800e3c7ed0ed496427c3477de"
+    },
+    {
+      "file": "NotoSansMonoCJKtc-Regular.otf",
+      "family": "Noto Sans Mono CJK TC",
+      "role": "code",
+      "version": "2.004",
+      "weight": 400,
+      "locale": "zh-TW",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSansCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Sans2.004",
+      "sourceCommit": "523d033d6cb47f4a80c58a35753646f5c3608a78",
+      "sourcePath": "Sans/Mono/NotoSansMonoCJKtc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/Mono/NotoSansMonoCJKtc-Regular.otf",
+      "sha256": "82a040aed900bba51b5990bc158a86b264c8ad5071a2d8911e8696350e0794b3",
+      "bytes": 16392304,
+      "inspection": {
+        "family": "Noto Sans Mono CJK TC",
+        "subfamily": "Regular",
+        "copyright": "© 2014-2021 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.004;hotconv 1.0.118;makeotfexe 2.5.65603",
+        "mappedCodepoints": 44810,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 500,
+          "A": 500,
+          "i": 500,
+          "W": 500,
+          "0": 500
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "5321e80fa9a339f07e9c0d09851db1bd183fd0b4"
+    },
+    {
+      "file": "NotoSerifCJKsc-Bold.otf",
+      "family": "Noto Serif CJK SC",
+      "role": "body",
+      "version": "2.003",
+      "weight": 700,
+      "locale": "zh-CN",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSerifCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Serif2.003",
+      "sourceCommit": "9b0f1436e455d902de067a2501422e5dc71ad16b",
+      "sourcePath": "Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Bold.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/9b0f1436e455d902de067a2501422e5dc71ad16b/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Bold.otf",
+      "sha256": "8af07d4b6c2e82bcc72a30e066eaf295f11b9424f4aad2eaa9fe0e9c3b38fc73",
+      "bytes": 25521460,
+      "inspection": {
+        "family": "Noto Serif CJK SC",
+        "subfamily": "Bold",
+        "copyright": "© 2017-2024 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
+        "mappedCodepoints": 44777,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 250,
+          "A": 746,
+          "i": 349,
+          "W": 1091,
+          "0": 593
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "f1bd9c86c5765f3358815fb84b19003fd5711747"
+    },
+    {
+      "file": "NotoSerifCJKsc-Regular.otf",
+      "family": "Noto Serif CJK SC",
+      "role": "body",
+      "version": "2.003",
+      "weight": 400,
+      "locale": "zh-CN",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSerifCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Serif2.003",
+      "sourceCommit": "9b0f1436e455d902de067a2501422e5dc71ad16b",
+      "sourcePath": "Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/9b0f1436e455d902de067a2501422e5dc71ad16b/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Regular.otf",
+      "sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca",
+      "bytes": 24543080,
+      "inspection": {
+        "family": "Noto Serif CJK SC",
+        "subfamily": "Regular",
+        "copyright": "© 2017-2024 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
+        "mappedCodepoints": 44777,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 256,
+          "A": 718,
+          "i": 332,
+          "W": 1053,
+          "0": 557
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "cba8a4783cc38574ac7cda52cae7d9b4241c07a5"
+    },
+    {
+      "file": "NotoSerifCJKtc-Bold.otf",
+      "family": "Noto Serif CJK TC",
+      "role": "body",
+      "version": "2.003",
+      "weight": 700,
+      "locale": "zh-TW",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSerifCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Serif2.003",
+      "sourceCommit": "9b0f1436e455d902de067a2501422e5dc71ad16b",
+      "sourcePath": "Serif/OTF/TraditionalChinese/NotoSerifCJKtc-Bold.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/9b0f1436e455d902de067a2501422e5dc71ad16b/Serif/OTF/TraditionalChinese/NotoSerifCJKtc-Bold.otf",
+      "sha256": "a4441a76dbf56719600c5dcbd5b5e5a068a20944cc41c959487a657133576ee6",
+      "bytes": 25520284,
+      "inspection": {
+        "family": "Noto Serif CJK TC",
+        "subfamily": "Bold",
+        "copyright": "© 2017-2024 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
+        "mappedCodepoints": 44777,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 250,
+          "A": 746,
+          "i": 349,
+          "W": 1091,
+          "0": 593
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "f2d24a769d44431fc3134f4ff22825fdd64d8563"
+    },
+    {
+      "file": "NotoSerifCJKtc-Regular.otf",
+      "family": "Noto Serif CJK TC",
+      "role": "body",
+      "version": "2.003",
+      "weight": 400,
+      "locale": "zh-TW",
+      "license": "OFL-1.1",
+      "licenseFile": "LICENSE-NotoSerifCJK.txt",
+      "sourceRepository": "https://github.com/notofonts/noto-cjk",
+      "sourceTag": "Serif2.003",
+      "sourceCommit": "9b0f1436e455d902de067a2501422e5dc71ad16b",
+      "sourcePath": "Serif/OTF/TraditionalChinese/NotoSerifCJKtc-Regular.otf",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/9b0f1436e455d902de067a2501422e5dc71ad16b/Serif/OTF/TraditionalChinese/NotoSerifCJKtc-Regular.otf",
+      "sha256": "234301038e76e7c35c43113785024700c4e4fe7bdce1d1fbbc42fca7e6683798",
+      "bytes": 24541904,
+      "inspection": {
+        "family": "Noto Serif CJK TC",
+        "subfamily": "Regular",
+        "copyright": "© 2017-2024 Adobe (http://www.adobe.com/).",
+        "fontVersion": "Version 2.003;hotconv 1.1.1;makeotfexe 2.6.0",
+        "mappedCodepoints": 44777,
+        "unitsPerEm": 1000,
+        "missingSampleCharacters": [],
+        "asciiAdvances": {
+          " ": 256,
+          "A": 718,
+          "i": 332,
+          "W": 1053,
+          "0": 557
+        },
+        "cjkAdvances": {
+          "中": 1000,
+          "漢": 1000,
+          "，": 1000,
+          "。": 1000
+        }
+      },
+      "sourceBlobSha1": "a59de8d047a3ed619164a57b231e51856762ef56"
+    }
+  ],
+  "licenses": [
+    {
+      "file": "LICENSE-NotoSansCJK.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78/LICENSE",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "sourceBlobSha1": "d952d62c065f3f35fb83a173496e90b21525aef3"
+    },
+    {
+      "file": "LICENSE-NotoSerifCJK.txt",
+      "sourceUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/9b0f1436e455d902de067a2501422e5dc71ad16b/Serif/LICENSE",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+      "sourceBlobSha1": "d952d62c065f3f35fb83a173496e90b21525aef3"
+    },
+    {
+      "file": "NOTICE-TypstAssets.txt",
+      "scope": "Unmodified bundled Typst asset notices, including New Computer Modern Math and DejaVu Sans Mono",
+      "sourceUrl": "https://raw.githubusercontent.com/typst/typst-assets/ab9eed7b046c6a29f6cdb8566f4b44fb46a2f57f/NOTICE",
+      "sha256": "80ac46fb7d70f1c30bf0c14d3408e6a6f0f9cc9997a00b592aa0d2c8a5243a9d",
+      "sourceBlobSha1": "575a12380bc6ef386b582beb393c84a5e90e95f6"
+    }
+  ]
+}

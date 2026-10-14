@@ -1,0 +1,4497 @@
+//! Frozen, explicitly executed local operations. A journal decision provides
+//! logical atomicity to this Core; ordinary external tools can observe partial
+//! installs. No recovery path retries an unknown namespace operation.
+use super::*;
+use backend::NamespaceGuard;
+use std::collections::{BTreeMap, BTreeSet};
+
+const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
+const MAX_OPERATION_FILES: usize = 5000;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OperationRequest {
+    pub operation_id: String,
+    pub root: String,
+    pub intent: OperationIntent,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum OperationIntent {
+    RenameNode {
+        source: String,
+        name: String,
+    },
+    MoveNode {
+        source: String,
+        parent: String,
+    },
+    CopyNode {
+        source: String,
+        parent: String,
+        name: String,
+        #[serde(default)]
+        allow_losses: bool,
+    },
+    TemplateNode {
+        source: String,
+        parent: String,
+        name: String,
+        instantiated_source: String,
+        source_base_id: String,
+    },
+    TrashNode {
+        source: String,
+    },
+    RestoreNode {
+        trash_operation_id: String,
+        parent: String,
+        name: String,
+    },
+    NewNode {
+        parent: String,
+        name: String,
+        source: Option<String>,
+    },
+    UpdateFiles {
+        changes: Vec<FileChange>,
+    },
+    BackupLibrary {
+        destination: String,
+    },
+    ConfigureStyle {
+        base_id: String,
+        source: String,
+        enabled: bool,
+    },
+    ImportResource {
+        node: String,
+        name: String,
+        bytes: Vec<u8>,
+        manifest_base_id: String,
+        resource_base_id: String,
+    },
+    ImportNative {
+        parent: String,
+        name: String,
+        bytes: Vec<u8>,
+        #[serde(default)]
+        allow_losses: bool,
+    },
+    ImportBibliography {
+        parent: String,
+        name: String,
+        format: String,
+        bytes: Vec<u8>,
+        #[serde(default)]
+        allow_losses: bool,
+    },
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FileChange {
+    pub path: String,
+    #[serde(default)]
+    pub base_id: Option<String>,
+    /// The caller's exact base is compared to the guarded actual file. None
+    /// means create-only, not permission to overwrite an existing file.
+    pub before: Option<Vec<u8>>,
+    pub after: Vec<u8>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationChange {
+    pub path: String,
+    pub action: String,
+    pub bytes: usize,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationPreview {
+    pub operation_id: String,
+    pub plan_id: String,
+    pub kind: String,
+    pub status: String,
+    pub changes: Vec<OperationChange>,
+    pub node_map: BTreeMap<String, String>,
+    pub new_node_id: Option<String>,
+    pub revisions: BTreeMap<String, String>,
+    pub resource_map: BTreeMap<String, String>,
+    pub losses: Vec<weftext_knowledge::Loss>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationReceipt {
+    pub operation_id: String,
+    pub plan_id: String,
+    pub status: String,
+    pub path: String,
+    pub node_ids: Vec<String>,
+    pub message: String,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfigRole {
+    Schema,
+    WorkspaceSettings,
+}
+impl ConfigRole {
+    fn filename(self) -> &'static str {
+        match self {
+            Self::Schema => ".weftext-schema.json",
+            Self::WorkspaceSettings => ".weftext-settings.json",
+        }
+    }
+    fn role(self) -> &'static str {
+        match self {
+            Self::Schema => "schema",
+            Self::WorkspaceSettings => "workspace-settings",
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigDocument {
+    pub role_ref: String,
+    pub path: String,
+    pub bytes: Option<Vec<u8>>,
+    pub revision: Option<String>,
+    pub base_id: String,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryStyleDocument {
+    pub source: String,
+    pub base_id: String,
+    pub path: String,
+    pub enabled: bool,
+    pub resource_ref: Option<String>,
+    pub entry_function: String,
+    pub installed: bool,
+}
+#[derive(Clone)]
+pub(crate) struct StyleBasis {
+    root: String,
+    settings: SnapshotBinding,
+    style: Option<SnapshotBinding>,
+    manifest: Option<SnapshotBinding>,
+    owner: Option<SnapshotBinding>,
+    source: String,
+    resource_ref: Option<String>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashEntry {
+    pub operation_id: String,
+    pub name: String,
+    pub path: String,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedResource {
+    pub resource_id: String,
+    pub resource_ref: String,
+    pub node_id: String,
+    pub path: String,
+    pub bytes: Vec<u8>,
+    pub base_id: String,
+    pub revision: Option<String>,
+    pub identity_status: String,
+    pub manifest_path: String,
+    pub manifest_base_id: String,
+    pub manifest_bytes: Vec<u8>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct ResourceBirth {
+    resource_id: String,
+    workspace_id: String,
+    node_id: String,
+    identity: FileIdentity,
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct DefinitionReservation {
+    owner_id: String,
+    source: RevisionReservation,
+    key: String,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotFile {
+    pub path: String,
+    pub bytes: Option<Vec<u8>>,
+    pub base_id: String,
+    pub node_id: Option<String>,
+    pub kind: String,
+    pub currentness: String,
+    pub revision: Option<String>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotSet {
+    pub files: Vec<SnapshotFile>,
+    pub complete: bool,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdmittedSnapshot {
+    pub cut_id: String,
+    pub membership_ids: Vec<String>,
+    pub inventory: Inventory,
+    pub files: Vec<SnapshotFile>,
+    pub schema: Option<SnapshotFile>,
+    pub complete: bool,
+    pub warnings: Vec<String>,
+    pub raw_complete: bool,
+    pub raw_pending: usize,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdmittedCompileSnapshot {
+    pub snapshot: AdmittedSnapshot,
+    pub files: BTreeMap<String, Vec<u8>>,
+    pub style: Option<weftext_engine::StyleModule>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedOperationSource {
+    pub receipt: Option<Receipt>,
+    pub source: String,
+    pub definition_key: Option<String>,
+    pub status: String,
+}
+#[derive(Clone)]
+pub(crate) struct SnapshotBinding {
+    pub(crate) path: String,
+    pub(crate) captured: Option<CapturedFile>,
+    pub(crate) parent: FileIdentity,
+}
+#[derive(Clone)]
+pub(crate) struct AdmittedBasis {
+    root: String,
+    members: BTreeSet<String>,
+    bases: Vec<String>,
+    complete: bool,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct RevisionFact {
+    pub(crate) path: String,
+    pub(crate) stamp: FileStamp,
+    pub(crate) hash: String,
+    pub(crate) revision: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct RevisionReservation {
+    pub(crate) path: String,
+    pub(crate) stamp: FileStamp,
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) revision: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct CapturedFile {
+    pub(crate) path: String,
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) stamp: FileStamp,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct CapturedDirectory {
+    pub(crate) path: String,
+    pub(crate) identity: FileIdentity,
+    pub(crate) entries: Vec<String>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct AbsentDependency {
+    pub(crate) path: String,
+    pub(crate) parent: FileIdentity,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct NewBirth {
+    pub(crate) path: String,
+    pub(crate) node_id: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) enum Mutation {
+    Relocate {
+        source: String,
+        target: String,
+        source_identity: FileIdentity,
+        target_parent_identity: FileIdentity,
+        create_trash_parent: bool,
+        old_leaf: String,
+        new_leaf: String,
+        leaf_identity: FileIdentity,
+    },
+    CreateTree {
+        target: String,
+        directories: Vec<String>,
+        files: Vec<FileChange>,
+        births: Vec<NewBirth>,
+        updates: Vec<FileChange>,
+    },
+    Update {
+        files: Vec<FileChange>,
+    },
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FrozenOperation {
+    pub(crate) request: OperationRequest,
+    pub(crate) preview: OperationPreview,
+    pub(crate) files: Vec<CapturedFile>,
+    pub(crate) directories: Vec<CapturedDirectory>,
+    pub(crate) mutation: Mutation,
+    pub(crate) receipt: OperationReceipt,
+    #[serde(default)]
+    pub(crate) expected_membership: Option<BTreeSet<String>>,
+    #[serde(default)]
+    pub(crate) absent_dependencies: Vec<AbsentDependency>,
+    #[serde(default)]
+    pub(crate) write_parents: Vec<(String, FileIdentity)>,
+}
+impl FrozenOperation {
+    pub(crate) fn affects(&self, path: &Path) -> bool {
+        let target = display(path).to_lowercase();
+        let within = |p: &str| {
+            let p = p.to_lowercase();
+            target == p || target.starts_with(&(p + "\\"))
+        };
+        match &self.mutation {
+            Mutation::Relocate { source, target, .. } => within(source) || within(target),
+            Mutation::CreateTree {
+                target, updates, ..
+            } => {
+                within(target)
+                    || updates
+                        .iter()
+                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
+            }
+            Mutation::Update { files } => files
+                .iter()
+                .any(|f| f.path.eq_ignore_ascii_case(&display(path))),
+        }
+    }
+    pub(crate) fn has_identity(&self, identity: &FileIdentity) -> bool {
+        self.files.iter().any(|f| &f.stamp.identity == identity)
+    }
+}
+impl Core {
+    pub fn saved_operation_source(
+        &self,
+        operation_id: &str,
+    ) -> Result<Option<SavedOperationSource>> {
+        valid_operation_id(operation_id)?;
+        let Some(plan) = self.operations.get(operation_id) else {
+            return Ok(None);
+        };
+        if plan.kind != "save" || plan.transaction.is_some() {
+            return Err(CoreError::new(
+                "operationConflict",
+                "This operation is not an original source save",
+            ));
+        }
+        let definition_key =
+            match fs::read(self.journal_path(operation_id, "definition-reservation")) {
+                Ok(bytes) => Some(serde_json::from_slice::<DefinitionReservation>(&bytes)?.key),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e.into()),
+            };
+        let committed = self.committed(operation_id);
+        Ok(Some(SavedOperationSource {
+            receipt: if committed {
+                plan.receipt.clone()
+            } else {
+                None
+            },
+            source: decode(&plan.after)?,
+            definition_key,
+            status: if committed {
+                "committed"
+            } else if self.resolved(operation_id) {
+                "resolved"
+            } else {
+                "recoveryPending"
+            }
+            .into(),
+        }))
+    }
+    /// Only immutable evidence and drafts belonging to the selected library are
+    /// portable. Other libraries and ordinary documents share this data dir.
+    fn snapshot_library_private(
+        &self,
+        root: &Path,
+        workspace_id: &str,
+        files: &mut Vec<CapturedFile>,
+    ) -> Result<()> {
+        let selected = self
+            .operations
+            .values()
+            .filter(|p| {
+                p.workspace_id.as_deref() == Some(workspace_id)
+                    || locator_within(Path::new(&p.path), root)
+            })
+            .map(|p| p.operation_id.clone())
+            .collect::<BTreeSet<_>>();
+        let mut total = files.iter().map(|f| f.bytes.len()).sum::<usize>();
+        for directory in ["journal", "drafts", "draft-history"] {
+            let folder = self.data_dir.join(directory);
+            let guard = ParentGuard::acquire(&folder.join(".backup-prospective"))?;
+            let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
+            if !complete {
+                return Err(CoreError::new(
+                    "budget",
+                    "Private evidence enumeration exceeds the backup budget",
+                ));
+            }
+            for (name, attrs) in entries {
+                if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+                    return Err(CoreError::new(
+                        "unsupportedPath",
+                        "Private evidence has an unsupported object",
+                    ));
+                }
+                let name_text = name.to_string_lossy();
+                if directory == "journal"
+                    && !selected
+                        .iter()
+                        .any(|id| name_text.starts_with(&format!("{id}.")))
+                {
+                    continue;
+                }
+                let path = folder.join(&name);
+                let f = capture_optional(&path)?.ok_or_else(|| {
+                    CoreError::new("scopeChanged", "Private evidence disappeared")
+                })?;
+                if directory != "journal" {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&f.bytes).map_err(|_| {
+                            CoreError::new(
+                                "privateEvidence",
+                                "A private draft record cannot be scoped safely",
+                            )
+                        })?;
+                    let direct = value
+                        .get("path")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|p| locator_within(Path::new(p), root));
+                    let migration = value
+                        .get("consumed")
+                        .and_then(serde_json::Value::as_array)
+                        .is_some_and(|refs| {
+                            !refs.is_empty()
+                                && refs.iter().all(|r| {
+                                    r.get("path")
+                                        .and_then(serde_json::Value::as_str)
+                                        .is_some_and(|p| locator_within(Path::new(p), root))
+                                })
+                        });
+                    let companion = if name_text.ends_with(".relocation.json") {
+                        let companion = folder.join(format!(
+                            "{}.json",
+                            name_text.trim_end_matches(".relocation.json")
+                        ));
+                        capture_optional(&companion)?
+                            .and_then(|f| {
+                                serde_json::from_slice::<serde_json::Value>(&f.bytes).ok()
+                            })
+                            .is_some_and(|v| {
+                                v["path"]
+                                    .as_str()
+                                    .is_some_and(|p| locator_within(Path::new(p), root))
+                            })
+                    } else {
+                        false
+                    };
+                    if !direct && !migration && !companion {
+                        continue;
+                    }
+                }
+                total += f.bytes.len();
+                files.push(f);
+                if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Selected library backup exceeds 64 MiB or 5000 files",
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn read_observation_facts(&self, operation_id: &str) -> Result<Vec<RevisionFact>> {
+        let mut facts = Vec::new();
+        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+            let path = entry?.path();
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            if name == format!("{operation_id}.observations.json")
+                || (name.starts_with(&format!("{operation_id}.recovery-observations-"))
+                    && name.ends_with(".json"))
+            {
+                facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(&fs::read(
+                    path,
+                )?)?);
+            }
+        }
+        Ok(facts)
+    }
+    pub(crate) fn validate_recovery_scope(&self, t: &FrozenOperation) -> Result<()> {
+        let Some(expected) = &t.expected_membership else {
+            return Ok(());
+        };
+        let root = Path::new(&t.request.root);
+        let workspace = self.require_workspace(root)?;
+        let mut members = BTreeSet::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            for b in self.read_births(&p.operation_id)? {
+                if b.workspace_id == workspace.workspace_id {
+                    members.insert(b.node_id);
+                }
+            }
+        }
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            let Some(previous) = &p.transaction else {
+                continue;
+            };
+            if previous.request.root != t.request.root
+                || !matches!(previous.request.intent, OperationIntent::TrashNode { .. })
+            {
+                continue;
+            }
+            if let Mutation::Relocate {
+                target,
+                source_identity,
+                ..
+            } = &previous.mutation
+            {
+                if !Path::new(target).exists() {
+                    continue;
+                }
+                let guard = ParentGuard::acquire(&Path::new(target).join(".recovery-membership"))?;
+                if guard.directory_identity()? != *source_identity {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "A committed trash tree was replaced",
+                    ));
+                }
+                let mut files = vec![];
+                let mut dirs = vec![];
+                snapshot_tree(Path::new(target), &mut files, &mut dirs, false)?;
+                for file in files {
+                    if let Some(b) = self.admitted_binding(&file.stamp.identity) {
+                        members.remove(&b.node_id);
+                    }
+                }
+            }
+        }
+        if &members != expected {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "The original strong operation's admitted membership changed; no replay or barrier release",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn publish_recovery_facts(
+        &self,
+        plan: &journal::Plan,
+        materialized: &[(String, FileStamp)],
+    ) -> Result<()> {
+        let t = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new("invalidState", "Recovery needs the original transaction")
+        })?;
+        let stamps = materialized.iter().cloned().collect::<BTreeMap<_, _>>();
+        let output = match &t.mutation {
+            Mutation::Update { files } => files.iter().collect::<Vec<_>>(),
+            Mutation::CreateTree { files, updates, .. } => files.iter().chain(updates).collect(),
+            Mutation::Relocate { .. } => vec![],
+        };
+        let facts = output
+            .iter()
+            .filter_map(|c| t.preview.revisions.get(&c.path).map(|r| (c, r)))
+            .map(|(c, r)| {
+                Ok(RevisionFact {
+                    path: c.path.clone(),
+                    stamp: stamps
+                        .get(&c.path)
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "recoveryUnavailable",
+                                "A recovery member stamp is missing",
+                            )
+                        })?
+                        .clone(),
+                    hash: hash(&c.after),
+                    revision: r.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let record = self.journal_path(&plan.operation_id, "observations");
+        if record.exists() {
+            journal::private_create(
+                &self.journal_path(
+                    &plan.operation_id,
+                    &format!("recovery-observations-{}", fresh()),
+                ),
+                &serde_json::to_vec(&facts)?,
+            )?;
+        } else {
+            journal::private_create(&record, &serde_json::to_vec(&facts)?)?;
+        }
+        if let Mutation::CreateTree { births, .. } = &t.mutation {
+            let mut actual = Vec::new();
+            for birth in births {
+                let observed = stamps.get(&birth.path).ok_or_else(|| {
+                    CoreError::new("recoveryUnavailable", "A birth member is missing")
+                })?;
+                if self
+                    .materialized_identity(&plan.operation_id, Path::new(&birth.path))?
+                    .as_ref()
+                    != Some(&observed.identity)
+                {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "A proposed new Node is not the original materialized object",
+                    ));
+                }
+                actual.push(Birth {
+                    node_id: birth.node_id.clone(),
+                    workspace_id: plan.workspace_id.clone().unwrap(),
+                    identity: observed.identity.clone(),
+                });
+            }
+            let record = self.journal_path(&plan.operation_id, "births");
+            if record.exists() {
+                let old: Vec<Birth> = serde_json::from_slice(&fs::read(&record)?)?;
+                if old.len() != actual.len()
+                    || old.iter().any(|b| {
+                        !actual.iter().any(|a| {
+                            a.node_id == b.node_id
+                                && a.workspace_id == b.workspace_id
+                                && a.identity == b.identity
+                        })
+                    })
+                {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Retained birth binding disagrees with the original materialized objects",
+                    ));
+                }
+            } else if !actual.is_empty() {
+                journal::private_create(&record, &serde_json::to_vec(&actual)?)?;
+            }
+        }
+        let mut resources = Vec::new();
+        for (path, reference) in &t.preview.resource_map {
+            let stamp = stamps.get(path).ok_or_else(|| {
+                CoreError::new("recoveryUnavailable", "A fresh resource member is missing")
+            })?;
+            if self
+                .materialized_identity(&plan.operation_id, Path::new(path))?
+                .as_ref()
+                != Some(&stamp.identity)
+            {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "A resource is not the original materialized object",
+                ));
+            }
+            let node_id = match &t.mutation {
+                Mutation::CreateTree { births, .. } => births
+                    .iter()
+                    .filter(|b| Path::new(path).starts_with(Path::new(&b.path).parent().unwrap()))
+                    .max_by_key(|b| Path::new(&b.path).components().count())
+                    .map(|b| b.node_id.clone()),
+                Mutation::Update { .. } => t.preview.node_map.values().next().cloned(),
+                _ => None,
+            }
+            .ok_or_else(|| CoreError::new("invalidState", "Resource owner is missing"))?;
+            resources.push(ResourceBirth {
+                resource_id: reference.rsplit('/').next().unwrap().into(),
+                workspace_id: plan.workspace_id.clone().unwrap(),
+                node_id,
+                identity: stamp.identity.clone(),
+            });
+        }
+        let record = self.journal_path(&plan.operation_id, "resource-births");
+        if !resources.is_empty() {
+            if record.exists() {
+                let old: Vec<ResourceBirth> = serde_json::from_slice(&fs::read(&record)?)?;
+                if old.len() != resources.len()
+                    || old.iter().any(|b| {
+                        !resources.iter().any(|a| {
+                            a.resource_id == b.resource_id
+                                && a.node_id == b.node_id
+                                && a.identity == b.identity
+                        })
+                    })
+                {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Retained resource bindings differ",
+                    ));
+                }
+            } else {
+                journal::private_create(&record, &serde_json::to_vec(&resources)?)?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn record_materialized(
+        &self,
+        operation_id: &str,
+        path: &Path,
+        file: &File,
+    ) -> Result<()> {
+        journal::private_create(
+            &self.journal_path(
+                operation_id,
+                &format!("object-{}", hash(display(path).as_bytes())),
+            ),
+            &serde_json::to_vec(
+                &serde_json::json!({"path":display(path),"identity":stamp(file)?.identity}),
+            )?,
+        )
+    }
+    pub(crate) fn materialized_identity(
+        &self,
+        operation_id: &str,
+        path: &Path,
+    ) -> Result<Option<FileIdentity>> {
+        match fs::read(self.journal_path(
+            operation_id,
+            &format!("object-{}", hash(display(path).as_bytes())),
+        )) {
+            Ok(bytes) => {
+                let v: serde_json::Value = serde_json::from_slice(&bytes)?;
+                if v["path"] != display(path) {
+                    return Err(CoreError::new(
+                        "invalidState",
+                        "Materialized object record path mismatch",
+                    ));
+                }
+                Ok(Some(serde_json::from_value(v["identity"].clone())?))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+    pub(crate) fn record_observation(
+        &self,
+        operation_id: &str,
+        path: &Path,
+        stamp: &FileStamp,
+        bytes: &[u8],
+        revision: &str,
+    ) -> Result<()> {
+        journal::private_create(
+            &self.journal_path(operation_id, "observations"),
+            &serde_json::to_vec(&vec![RevisionFact {
+                path: display(path),
+                stamp: stamp.clone(),
+                hash: hash(bytes),
+                revision: revision.into(),
+            }])?,
+        )
+    }
+    pub fn prepared_operation_files(&self, operation_id: &str) -> Result<Vec<FileChange>> {
+        let t = self
+            .operations
+            .get(operation_id)
+            .and_then(|p| p.transaction.as_ref())
+            .ok_or_else(|| CoreError::new("operationMissing", "No frozen operation has this ID"))?;
+        Ok(match &t.mutation {
+            Mutation::Update { files } => files.clone(),
+            Mutation::CreateTree { files, updates, .. } => {
+                files.iter().chain(updates).cloned().collect()
+            }
+            Mutation::Relocate { .. } => vec![],
+        })
+    }
+    pub fn committed_operation_receipt(
+        &self,
+        operation_id: &str,
+    ) -> Result<Option<OperationReceipt>> {
+        let p = self.operations.get(operation_id).ok_or_else(|| {
+            CoreError::new("operationMissing", "No original operation has this ID")
+        })?;
+        let t = p.transaction.as_ref().ok_or_else(|| {
+            CoreError::new("operationConflict", "This ID belongs to a legacy operation")
+        })?;
+        Ok(self.committed(operation_id).then(|| t.receipt.clone()))
+    }
+    pub fn reserve_definition_key(
+        &mut self,
+        root: impl AsRef<Path>,
+        owner_path: impl AsRef<Path>,
+        base_id: &str,
+        operation_id: &str,
+    ) -> Result<String> {
+        valid_operation_id(operation_id)?;
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(owner_path.as_ref())?;
+        let current = self.managed_node(
+            &root,
+            path.parent()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing source parent"))?,
+            false,
+        )?;
+        if current.path != display(&path) {
+            return Err(CoreError::new(
+                "unsupportedRole",
+                "Definitions require canonical Node source",
+            ));
+        }
+        let owner = self.admitted_binding(&current.stamp.identity).unwrap();
+        let record = self.journal_path(operation_id, "definition-reservation");
+        if let Ok(bytes) = fs::read(&record) {
+            let old: DefinitionReservation = serde_json::from_slice(&bytes)?;
+            if old.owner_id == owner.node_id && self.committed(operation_id) {
+                return Ok(old.key);
+            }
+            if old.owner_id != owner.node_id
+                || old.source.stamp != current.stamp
+                || old.source.bytes != current.bytes
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "Definition reservation already belongs to a different source basis",
+                ));
+            }
+            return Ok(old.key);
+        }
+        self.verify_snapshot(&path, base_id, Some(&current))?;
+        let key = fresh();
+        let revision = self.accepted_revision(&current).unwrap_or_else(fresh);
+        journal::private_create(
+            &record,
+            &serde_json::to_vec(&DefinitionReservation {
+                owner_id: owner.node_id,
+                source: RevisionReservation {
+                    path: current.path,
+                    stamp: current.stamp,
+                    bytes: current.bytes,
+                    revision,
+                },
+                key: key.clone(),
+            })?,
+        )?;
+        Ok(key)
+    }
+    pub fn is_definition_key_admitted(
+        &self,
+        root: impl AsRef<Path>,
+        owner_id: &str,
+        key: &str,
+    ) -> Result<bool> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let owner = weftext_knowledge::NodeRef {
+            workspace_id: workspace.workspace_id,
+            node_id: owner_id.into(),
+        };
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            let reservation =
+                fs::read(self.journal_path(&p.operation_id, "definition-reservation"))
+                    .ok()
+                    .and_then(|b| serde_json::from_slice::<DefinitionReservation>(&b).ok());
+            if let Some(r) = reservation
+                && r.owner_id == owner_id
+                && r.key == key
+            {
+                let after =
+                    if p.kind == "save" && p.identity.as_ref() == Some(&r.source.stamp.identity) {
+                        Some(&p.after)
+                    } else {
+                        p.transaction.as_ref().and_then(|t| match &t.mutation {
+                            Mutation::Update { files } => files
+                                .iter()
+                                .find(|f| f.path == r.source.path)
+                                .map(|f| &f.after),
+                            _ => None,
+                        })
+                    };
+                if after
+                    .and_then(|b| std::str::from_utf8(b).ok())
+                    .is_some_and(|s| {
+                        weftext_knowledge::definition_slots(s, &owner)
+                            .is_ok_and(|slots| slots.iter().any(|slot| slot.key == key))
+                    })
+                {
+                    return Ok(true);
+                }
+            }
+            if let Some(t) = &p.transaction
+                && t.preview.node_map.values().any(|n| n == owner_id)
+                && let Mutation::CreateTree { files, .. } = &t.mutation
+                && files
+                    .iter()
+                    .filter_map(|f| std::str::from_utf8(&f.after).ok())
+                    .any(|s| {
+                        weftext_engine::inspect_metadata(s).id.as_deref() == Some(owner_id)
+                            && weftext_knowledge::definition_slots(s, &owner)
+                                .is_ok_and(|slots| slots.iter().any(|slot| slot.key == key))
+                    })
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    pub fn read_source_revision(
+        &self,
+        root: impl AsRef<Path>,
+        owner_id: &str,
+        revision: &str,
+    ) -> Result<Vec<u8>> {
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        let inventory = self.inventory(&root)?;
+        let current = inventory
+            .entries
+            .iter()
+            .filter(|e| e.node_id.as_deref() == Some(owner_id) && e.identity_status == "admitted")
+            .collect::<Vec<_>>();
+        if current.len() != 1 {
+            return Err(CoreError::new(
+                "revisionUnavailable",
+                "Current owner is missing, duplicated or unqualified",
+            ));
+        }
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            if let Ok(bytes) = self.revision_payload(p, revision)
+                && weftext_engine::inspect_metadata(&decode(&bytes)?)
+                    .id
+                    .as_deref()
+                    == Some(owner_id)
+            {
+                return Ok(bytes);
+            }
+            if let Ok(bytes) = fs::read(self.journal_path(&p.operation_id, "revision-reservation"))
+            {
+                let r: RevisionReservation = serde_json::from_slice(&bytes)?;
+                if r.revision == revision
+                    && weftext_engine::inspect_metadata(&decode(&r.bytes)?)
+                        .id
+                        .as_deref()
+                        == Some(owner_id)
+                    && p.transaction.as_ref().is_some_and(|t| {
+                        t.files
+                            .iter()
+                            .any(|f| f.stamp == r.stamp && f.bytes == r.bytes)
+                    })
+                {
+                    return Ok(r.bytes);
+                }
+            }
+        }
+        Err(CoreError::new(
+            "revisionUnavailable",
+            "No committed retained exact source revision has this ID; latest was not substituted",
+        ))
+    }
+    pub fn read_config_revision(
+        &self,
+        root: impl AsRef<Path>,
+        role: ConfigRole,
+        revision: &str,
+    ) -> Result<Vec<u8>> {
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        let path = display(&root.join(role.filename()));
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id) && p.workspace_id.is_some())
+        {
+            if p.transaction.as_ref().is_some_and(|t| {
+                t.request.root == display(&root)
+                    && t.preview
+                        .revisions
+                        .get(&path)
+                        .is_some_and(|r| r == revision)
+            }) {
+                return self.revision_payload(p, revision);
+            }
+        }
+        Err(CoreError::new(
+            "revisionUnavailable",
+            "No retained exact config revision has this ID",
+        ))
+    }
+    fn revision_payload(&self, p: &journal::Plan, revision: &str) -> Result<Vec<u8>> {
+        let facts = self.read_observation_facts(&p.operation_id)?;
+        let fact = facts
+            .iter()
+            .find(|f| f.revision == revision)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "revisionUnavailable",
+                    "No decision witness for this revision",
+                )
+            })?;
+        let bytes = if matches!(p.kind.as_str(), "save" | "createNote") {
+            Some(&p.after)
+        } else {
+            p.transaction.as_ref().and_then(|t| match &t.mutation {
+                Mutation::Update { files } => {
+                    files.iter().find(|f| f.path == fact.path).map(|f| &f.after)
+                }
+                Mutation::CreateTree { files, updates, .. } => files
+                    .iter()
+                    .chain(updates)
+                    .find(|f| f.path == fact.path)
+                    .map(|f| &f.after),
+                _ => None,
+            })
+        };
+        bytes
+            .filter(|b| hash(b) == fact.hash)
+            .cloned()
+            .ok_or_else(|| {
+                CoreError::new(
+                    "revisionUnavailable",
+                    "Retained exact bytes are unavailable",
+                )
+            })
+    }
+    fn admitted_resource(
+        &self,
+        id: &str,
+        workspace: &str,
+        node: &str,
+        identity: &FileIdentity,
+    ) -> bool {
+        self.operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+            .any(|p| {
+                fs::read(self.journal_path(&p.operation_id, "resource-births"))
+                    .ok()
+                    .and_then(|b| serde_json::from_slice::<Vec<ResourceBirth>>(&b).ok())
+                    .is_some_and(|bs| {
+                        bs.iter().any(|b| {
+                            b.resource_id == id
+                                && b.workspace_id == workspace
+                                && b.node_id == node
+                                && &b.identity == identity
+                        })
+                    })
+            })
+    }
+    pub fn managed_resource_snapshot(
+        &mut self,
+        root: impl AsRef<Path>,
+        node_source: impl AsRef<Path>,
+    ) -> Result<Vec<ManagedResource>> {
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(node_source.as_ref())?;
+        let directory = path
+            .parent()
+            .ok_or_else(|| CoreError::new("invalidPath", "Missing Node parent"))?;
+        let node = self.managed_node(&root, directory, false)?;
+        let birth = self.admitted_binding(&node.stamp.identity).unwrap();
+        let manifest_path = directory.join("weftext.resources.json");
+        let manifest = self
+            .read_snapshot(&root, &[display(&manifest_path)])?
+            .files
+            .remove(0);
+        let Some(bytes) = manifest.bytes.clone() else {
+            return Ok(Vec::new());
+        };
+        let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+        if value["version"] != 1 {
+            return Err(CoreError::new(
+                "resourceManifest",
+                "Unsupported resource manifest version",
+            ));
+        }
+        let resources = value["resources"]
+            .as_array()
+            .ok_or_else(|| CoreError::new("resourceManifest", "Missing resources array"))?;
+        if resources.len() > 64 {
+            return Err(CoreError::new(
+                "budget",
+                "At most64 registered resources per snapshot",
+            ));
+        }
+        let mut paths = Vec::new();
+        let mut ids = BTreeSet::new();
+        for r in resources {
+            let id = r["resourceId"]
+                .as_str()
+                .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource ID"))?;
+            valid_operation_id(id)?;
+            if !ids.insert(id) {
+                return Err(CoreError::new("resourceManifest", "Duplicate resource ID"));
+            }
+            let name = r["path"]
+                .as_str()
+                .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource path"))?;
+            paths.push(display(&resource_path(directory, name)?));
+        }
+        if paths.is_empty() {
+            return Ok(vec![]);
+        }
+        paths.push(display(&manifest_path));
+        let cut = self.read_snapshot(&root, &paths)?;
+        let current_manifest = cut.files.last().unwrap();
+        if current_manifest.bytes != manifest.bytes {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "Resource manifest changed while preparing the exact cut",
+            ));
+        }
+        let mut result = Vec::new();
+        for (r, f) in resources.iter().zip(&cut.files) {
+            let id = r["resourceId"].as_str().unwrap();
+            let Some(bytes) = f.bytes.clone() else {
+                return Err(CoreError::new(
+                    "resourceMissing",
+                    "Registered resource file is absent",
+                ));
+            };
+            let capture = self.snapshots[&f.base_id].captured.as_ref().unwrap();
+            let admitted = self.admitted_resource(
+                id,
+                &birth.workspace_id,
+                &birth.node_id,
+                &capture.stamp.identity,
+            );
+            result.push(ManagedResource {
+                resource_id: id.into(),
+                resource_ref: format!("weftext-resource://{}/{id}", birth.workspace_id),
+                node_id: birth.node_id.clone(),
+                path: f.path.clone(),
+                bytes,
+                base_id: f.base_id.clone(),
+                revision: if admitted { f.revision.clone() } else { None },
+                identity_status: if admitted { "admitted" } else { "unadmitted" }.into(),
+                manifest_path: current_manifest.path.clone(),
+                manifest_base_id: current_manifest.base_id.clone(),
+                manifest_bytes: current_manifest.bytes.clone().unwrap(),
+            });
+        }
+        Ok(result)
+    }
+    pub fn prepare_import_resource(
+        &mut self,
+        root: impl AsRef<Path>,
+        node_source: impl AsRef<Path>,
+        name: &str,
+        bytes: Vec<u8>,
+        operation_id: &str,
+    ) -> Result<OperationPreview> {
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(node_source.as_ref())?;
+        valid_name(name)?;
+        if let Some(t) = self
+            .operations
+            .get(operation_id)
+            .and_then(|p| p.transaction.as_ref())
+        {
+            if t.request.root == display(&root)
+                && matches!(&t.request.intent,OperationIntent::ImportResource{node,name:old_name,bytes:old_bytes,..}if node==&display(&path)&&old_name==name&&old_bytes==&bytes)
+            {
+                return self.operation_details(operation_id);
+            }
+            return Err(CoreError::new(
+                "operationConflict",
+                "This operationId belongs to a different import request",
+            ));
+        }
+        let directory = path
+            .parent()
+            .ok_or_else(|| CoreError::new("invalidPath", "Missing resource owner"))?;
+        self.managed_node(&root, directory, false)?;
+        let manifest = directory.join("weftext.resources.json");
+        let target = directory.join(name);
+        let cut = self.read_snapshot(&root, &[display(&manifest), display(&target)])?;
+        self.prepare_operation(OperationRequest {
+            operation_id: operation_id.into(),
+            root: display(&root),
+            intent: OperationIntent::ImportResource {
+                node: display(&path),
+                name: name.into(),
+                bytes,
+                manifest_base_id: cut.files[0].base_id.clone(),
+                resource_base_id: cut.files[1].base_id.clone(),
+            },
+        })
+    }
+    pub fn has_library(&self, root: impl AsRef<Path>) -> Result<bool> {
+        let root = absolute_path(root.as_ref())?;
+        if self.workspace(&root)?.is_some() {
+            return Ok(true);
+        }
+        if root.join(".weftext-format").exists() || root.join(".weftext-workspace.json").exists() {
+            return Err(CoreError::new(
+                "unadmittedLibrary",
+                "The existing library controls are incomplete or lack their original private journal",
+            ));
+        }
+        Ok(false)
+    }
+    pub fn validate_snapshot(
+        &self,
+        root: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        base_id: &str,
+    ) -> Result<()> {
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(path.as_ref())?;
+        self.require_workspace(&root)?;
+        if !path.starts_with(&root) {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "Snapshot belongs outside the library",
+            ));
+        }
+        self.check_pending(&path)?;
+        self.verify_snapshot(&path, base_id, capture_optional(&path)?.as_ref())
+    }
+    pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        let b = self
+            .style_bases
+            .get(base_id)
+            .ok_or_else(|| CoreError::new("staleBase", "Style basis is unavailable"))?;
+        if b.root != display(&root) {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "Style basis belongs to a different library",
+            ));
+        }
+        if b.style.is_some() {
+            self.managed_node(&root, &root.join("Styles"), false)?;
+        }
+        for basis in [
+            &b.settings,
+            b.style.as_ref().unwrap_or(&b.settings),
+            b.manifest.as_ref().unwrap_or(&b.settings),
+            b.owner.as_ref().unwrap_or(&b.settings),
+        ] {
+            self.check_pending(Path::new(&basis.path))?;
+            let current = capture_optional(Path::new(&basis.path))?;
+            let parent = ParentGuard::acquire(Path::new(&basis.path))?;
+            if basis.parent != parent.directory_identity()?
+                || basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+                    != current.as_ref().map(|f| (&f.stamp, &f.bytes))
+            {
+                return Err(CoreError::new(
+                    "staleBase",
+                    "Style environment changed after it was frozen",
+                ));
+            }
+        }
+        Ok(())
+    }
+    pub fn library_style_basis(
+        &self,
+        root: impl AsRef<Path>,
+        base_id: &str,
+    ) -> Result<LibraryStyleDocument> {
+        let root = absolute_path(root.as_ref())?;
+        self.validate_library_style(&root, base_id)?;
+        let b = &self.style_bases[base_id];
+        Ok(LibraryStyleDocument {
+            source: b.source.clone(),
+            base_id: base_id.into(),
+            path: display(&root.join("Styles/library-style.typ")),
+            enabled: value_enabled(&b.settings.captured.as_ref().map(|f| f.bytes.clone()))?,
+            resource_ref: b.resource_ref.clone(),
+            entry_function: "library-style".into(),
+            installed: b.style.is_some(),
+        })
+    }
+    pub fn trash_entries(&self, root: impl AsRef<Path>) -> Result<Vec<TrashEntry>> {
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        let mut entries = Vec::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            let Some(t) = &p.transaction else {
+                continue;
+            };
+            if t.request.root != display(&root)
+                || !matches!(t.request.intent, OperationIntent::TrashNode { .. })
+            {
+                continue;
+            }
+            if let Mutation::Relocate {
+                target, old_leaf, ..
+            } = &t.mutation
+                && let Ok(Some(f)) = capture_optional(&Path::new(target).join(old_leaf))
+                && self.admitted_binding(&f.stamp.identity).is_some()
+            {
+                entries.push(TrashEntry {
+                    operation_id: p.operation_id.clone(),
+                    name: old_leaf.trim_end_matches(".typ").into(),
+                    path: target.clone(),
+                });
+            }
+        }
+        entries.sort_by(|a, b| a.operation_id.cmp(&b.operation_id));
+        Ok(entries)
+    }
+    pub fn read_library_style(&mut self, root: impl AsRef<Path>) -> Result<LibraryStyleDocument> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let settings_path = root.join(ConfigRole::WorkspaceSettings.filename());
+        let settings = self
+            .read_snapshot(&root, &[display(&settings_path)])?
+            .files
+            .remove(0);
+        let settings_binding = self.snapshots[&settings.base_id].clone();
+        let value: serde_json::Value = settings
+            .bytes
+            .as_ref()
+            .map(|b| serde_json::from_slice(b))
+            .transpose()?
+            .unwrap_or_else(|| serde_json::json!({"version":1}));
+        let resource_ref = value
+            .get("defaultStyle")
+            .and_then(|v| v.get("resource"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        if value
+            .get("defaultStyle")
+            .and_then(|v| v.get("entryFunction"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|s| s != "library-style")
+        {
+            return Err(CoreError::new(
+                "styleSelection",
+                "This style profile supports the exact library-style entry function only",
+            ));
+        }
+        let path = root.join("Styles").join("library-style.typ");
+        let mut style_binding = None;
+        let mut manifest_binding = None;
+        let mut owner_binding = None;
+        let (source, enabled, installed) = if let Some(selected) = &resource_ref {
+            let prefix = format!("weftext-resource://{}/", workspace.workspace_id);
+            let resource_id = selected.strip_prefix(&prefix).ok_or_else(|| {
+                CoreError::new(
+                    "styleSelection",
+                    "Default style reference belongs to a different workspace",
+                )
+            })?;
+            valid_operation_id(resource_id)?;
+            self.managed_node(&root, &root.join("Styles"), false)?;
+            let snapshots = self.read_snapshot(
+                &root,
+                &[
+                    display(&path),
+                    display(&root.join("Styles/weftext.resources.json")),
+                    display(&root.join("Styles/Styles.typ")),
+                ],
+            )?;
+            let module = &snapshots.files[0];
+            let manifest = &snapshots.files[1];
+            let value: serde_json::Value =
+                serde_json::from_slice(manifest.bytes.as_ref().ok_or_else(|| {
+                    CoreError::new("styleSelection", "Style resource binding is missing")
+                })?)?;
+            if value["version"] != 1
+                || !value["resources"].as_array().is_some_and(|a| {
+                    let selected = a
+                        .iter()
+                        .filter(|r| r["resourceId"] == resource_id)
+                        .collect::<Vec<_>>();
+                    selected.len() == 1 && selected[0]["path"] == "library-style.typ"
+                })
+            {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "Selected resource is not bound to this exact style module",
+                ));
+            }
+            let source = decode(module.bytes.as_ref().ok_or_else(|| {
+                CoreError::new("styleSelection", "Selected module is unavailable")
+            })?)?;
+            let owner_capture = self.snapshots[&snapshots.files[2].base_id]
+                .captured
+                .as_ref()
+                .ok_or_else(|| CoreError::new("styleSelection", "Style owner source is missing"))?;
+            let owner = self
+                .admitted_binding(&owner_capture.stamp.identity)
+                .ok_or_else(|| {
+                    CoreError::new("styleSelection", "Style owner source is unadmitted")
+                })?;
+            if weftext_engine::inspect_metadata(&decode(&owner_capture.bytes)?)
+                .id
+                .as_ref()
+                != Some(&owner.node_id)
+            {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "Style owner declaration is damaged",
+                ));
+            }
+            let binding = self.snapshots[&module.base_id].captured.as_ref().unwrap();
+            if !self.admitted_resource(
+                resource_id,
+                &workspace.workspace_id,
+                &owner.node_id,
+                &binding.stamp.identity,
+            ) {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "The selected style resource object has no committed Core birth binding",
+                ));
+            }
+            style_binding = Some(self.snapshots[&module.base_id].clone());
+            manifest_binding = Some(self.snapshots[&manifest.base_id].clone());
+            owner_binding = Some(self.snapshots[&snapshots.files[2].base_id].clone());
+            (source, value_enabled(&settings.bytes)?, true)
+        } else {
+            (default_style_source().into(), false, false)
+        };
+        let base_id = fresh();
+        self.style_bases.insert(
+            base_id.clone(),
+            StyleBasis {
+                root: display(&root),
+                settings: settings_binding,
+                style: style_binding,
+                manifest: manifest_binding,
+                owner: owner_binding,
+                source: source.clone(),
+                resource_ref: resource_ref.clone(),
+            },
+        );
+        Ok(LibraryStyleDocument {
+            source,
+            base_id,
+            path: display(&path),
+            enabled,
+            resource_ref,
+            entry_function: "library-style".into(),
+            installed,
+        })
+    }
+    pub fn prepare_library_style(
+        &mut self,
+        root: impl AsRef<Path>,
+        base_id: &str,
+        source: &str,
+        enabled: bool,
+        operation_id: &str,
+    ) -> Result<OperationPreview> {
+        let root = absolute_path(root.as_ref())?;
+        self.prepare_operation(OperationRequest {
+            operation_id: operation_id.into(),
+            root: display(&root),
+            intent: OperationIntent::ConfigureStyle {
+                base_id: base_id.into(),
+                source: source.into(),
+                enabled,
+            },
+        })
+    }
+    fn accepted_revision(&self, captured: &CapturedFile) -> Option<String> {
+        self.operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+            .find_map(|p| {
+                let facts = self.read_observation_facts(&p.operation_id).ok()?;
+                facts
+                    .into_iter()
+                    .find(|f| f.stamp == captured.stamp && f.hash == hash(&captured.bytes))
+                    .map(|f| f.revision)
+            })
+    }
+    pub fn reserve_source_revision(
+        &mut self,
+        root: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        base_id: &str,
+        operation_id: &str,
+    ) -> Result<String> {
+        valid_operation_id(operation_id)?;
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(path.as_ref())?;
+        let current = self.managed_node(
+            &root,
+            path.parent()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing source parent"))?,
+            false,
+        )?;
+        if current.path != display(&path) {
+            return Err(CoreError::new(
+                "unsupportedRole",
+                "Only canonical managed source has SourceRevision",
+            ));
+        }
+        self.verify_snapshot(&path, base_id, Some(&current))?;
+        if let Some(revision) = self.accepted_revision(&current) {
+            return Ok(revision);
+        }
+        let reservation_path = self.journal_path(operation_id, "revision-reservation");
+        if let Ok(bytes) = fs::read(&reservation_path) {
+            let old: RevisionReservation = serde_json::from_slice(&bytes)?;
+            if old.path != current.path || old.stamp != current.stamp || old.bytes != current.bytes
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "This revision reservation belongs to a different source basis",
+                ));
+            }
+            return Ok(old.revision);
+        }
+        let revision = fresh();
+        journal::private_create(
+            &reservation_path,
+            &serde_json::to_vec(&RevisionReservation {
+                path: current.path,
+                stamp: current.stamp,
+                bytes: current.bytes,
+                revision: revision.clone(),
+            })?,
+        )?;
+        Ok(revision)
+    }
+    fn verify_snapshot(
+        &self,
+        path: &Path,
+        base_id: &str,
+        current: Option<&CapturedFile>,
+    ) -> Result<()> {
+        let basis = self.snapshots.get(base_id).ok_or_else(|| {
+            CoreError::new(
+                "basisRequired",
+                "Read an exact Core snapshot before preparing updates",
+            )
+        })?;
+        let parent_guard = ParentGuard::acquire(path)?;
+        if basis.path != display(path)
+            || basis.parent != parent_guard.directory_identity()?
+            || basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+                != current.map(|f| (&f.stamp, &f.bytes))
+        {
+            return Err(CoreError::new(
+                "staleBase",
+                "The snapshot object, bytes or parent changed after review",
+            ));
+        }
+        Ok(())
+    }
+    pub fn read_config(
+        &mut self,
+        root: impl AsRef<Path>,
+        role: ConfigRole,
+    ) -> Result<ConfigDocument> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let path = root.join(role.filename());
+        let snapshot = self
+            .read_snapshot(&root, &[display(&path)])?
+            .files
+            .remove(0);
+        Ok(ConfigDocument {
+            role_ref: format!(
+                "weftext-config://{}/{}",
+                workspace.workspace_id,
+                role.role()
+            ),
+            path: display(&path),
+            bytes: snapshot.bytes,
+            revision: snapshot.revision,
+            base_id: snapshot.base_id,
+        })
+    }
+    pub fn prepare_config_save(
+        &mut self,
+        root: impl AsRef<Path>,
+        role: ConfigRole,
+        before: Option<Vec<u8>>,
+        after: Vec<u8>,
+        operation_id: &str,
+    ) -> Result<OperationPreview> {
+        let root = absolute_path(root.as_ref())?;
+        if let Some(t) = self
+            .operations
+            .get(operation_id)
+            .and_then(|p| p.transaction.as_ref())
+        {
+            if t.request.root == display(&root)
+                && matches!(&t.request.intent,OperationIntent::UpdateFiles{changes}if changes.len()==1&&changes[0].path==display(&root.join(role.filename()))&&changes[0].before==before&&changes[0].after==after)
+            {
+                return self.operation_details(operation_id);
+            }
+            return Err(CoreError::new(
+                "operationConflict",
+                "This operationId belongs to different config input",
+            ));
+        }
+        let current = self.read_config(&root, role)?;
+        self.prepare_operation(OperationRequest {
+            operation_id: operation_id.into(),
+            root: display(&root),
+            intent: OperationIntent::UpdateFiles {
+                changes: vec![FileChange {
+                    path: display(&root.join(role.filename())),
+                    base_id: Some(current.base_id),
+                    before,
+                    after,
+                }],
+            },
+        })
+    }
+    pub fn read_snapshot(
+        &mut self,
+        root: impl AsRef<Path>,
+        paths: &[String],
+    ) -> Result<SnapshotSet> {
+        self.read_bounded_snapshot(root.as_ref(), paths, 64)
+    }
+    fn read_bounded_snapshot(
+        &mut self,
+        root: &Path,
+        paths: &[String],
+        limit: usize,
+    ) -> Result<SnapshotSet> {
+        let root = absolute_path(root)?;
+        self.require_workspace(&root)?;
+        if paths.is_empty() || paths.len() > limit {
+            return Err(CoreError::new(
+                "budget",
+                format!("A snapshot requires1to{limit} exact files"),
+            ));
+        }
+        let mut guards = Vec::new();
+        let mut handles = Vec::new();
+        let mut seen = BTreeSet::new();
+        for p in paths {
+            let path = absolute_path(Path::new(p))?;
+            if !path.starts_with(&root) || !seen.insert(display(&path).to_lowercase()) {
+                return Err(CoreError::new(
+                    "outsideRoot",
+                    "Snapshot paths must be unique and inside the library",
+                ));
+            }
+            self.check_pending(&path)?;
+            let guard = ParentGuard::acquire(&path)?;
+            let handle = match guard.open_file(false, false) {
+                Ok(f) => Some(f),
+                Err(e) if e.code == "missing" => None,
+                Err(e) => return Err(e),
+            };
+            if let Some(f) = &handle {
+                self.check_pending_identity(&stamp(f)?.identity)?;
+            }
+            guards.push((path, guard));
+            handles.push(handle);
+        }
+        let mut output = Vec::new();
+        let mut total = 0usize;
+        for ((path, guard), handle) in guards.iter().zip(&mut handles) {
+            let captured = match handle {
+                Some(f) => Some(CapturedFile {
+                    path: display(path),
+                    stamp: stamp(f)?,
+                    bytes: read_blob(f)?,
+                }),
+                None => None,
+            };
+            total += captured.as_ref().map_or(0, |f| f.bytes.len());
+            if total > MAX_OPERATION_BYTES {
+                return Err(CoreError::new(
+                    "budget",
+                    "Selected snapshot exceeds64MiB; no partial snapshot published",
+                ));
+            }
+            let birth = captured
+                .as_ref()
+                .and_then(|f| self.admitted_binding(&f.stamp.identity));
+            let base_id = fresh();
+            let revision = captured.as_ref().and_then(|f| self.accepted_revision(f));
+            output.push(SnapshotFile {
+                path: display(path),
+                bytes: captured.as_ref().map(|f| f.bytes.clone()),
+                base_id: base_id.clone(),
+                node_id: birth.as_ref().map(|b| b.node_id.clone()),
+                kind: if birth.is_some() { "managed" } else { "file" }.into(),
+                currentness: if revision.is_some() {
+                    "accepted"
+                } else {
+                    "observed"
+                }
+                .into(),
+                revision,
+            });
+            self.snapshots.insert(
+                base_id,
+                SnapshotBinding {
+                    path: display(path),
+                    captured,
+                    parent: guard.directory_identity()?,
+                },
+            );
+        }
+        Ok(SnapshotSet {
+            files: output,
+            complete: true,
+        })
+    }
+    pub fn admitted_snapshot(&mut self, root: impl AsRef<Path>) -> Result<AdmittedSnapshot> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        // The universe is the finite set of committed birth facts in this one
+        // private authority, not all raw directories that resemble Nodes.
+        let mut expected = BTreeMap::new();
+        let mut trashed = BTreeSet::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            for b in self.read_births(&p.operation_id)? {
+                if b.workspace_id == workspace.workspace_id {
+                    expected.insert(b.node_id.clone(), b);
+                }
+            }
+            if let Some(t) = &p.transaction
+                && t.request.root == display(&root)
+                && matches!(t.request.intent, OperationIntent::TrashNode { .. })
+                && let Mutation::Relocate { target, .. } = &t.mutation
+            {
+                // An actually present, owned trash tree determines which
+                // born objects are outside live Query membership now.
+                if Path::new(target).exists() {
+                    let mut fs = vec![];
+                    let mut ds = vec![];
+                    snapshot_tree(Path::new(target), &mut fs, &mut ds, false)?;
+                    for f in fs {
+                        if let Some(b) = self.admitted_binding(&f.stamp.identity) {
+                            trashed.insert(b.node_id);
+                        }
+                    }
+                }
+            }
+        }
+        expected.retain(|id, _| !trashed.contains(id));
+        let mut inventory = self.inventory(&root)?;
+        let raw_complete = inventory.complete;
+        let raw_pending = inventory
+            .entries
+            .iter()
+            .filter(|e| e.kind == "node" && e.identity_status != "admitted")
+            .count();
+        let mut paths = Vec::new();
+        let mut warnings = Vec::new();
+        let mut complete = true;
+        let mut members = Vec::new();
+        for (id, birth) in &expected {
+            let candidates = inventory
+                .entries
+                .iter()
+                .filter(|e| e.node_id.as_ref() == Some(id) && e.identity_status == "admitted")
+                .collect::<Vec<_>>();
+            if candidates.len() != 1 {
+                complete = false;
+                warnings.push(format!(
+                    "Admitted Node{id}is missing, duplicated, excluded or pending"
+                ));
+                continue;
+            }
+            let candidate = candidates[0];
+            let observed = capture_optional(Path::new(&candidate.path))?;
+            if observed
+                .as_ref()
+                .is_none_or(|f| f.stamp.identity != birth.identity)
+            {
+                complete = false;
+                warnings.push(format!(
+                    "Admitted Node{id}has no matching actual source object"
+                ));
+                continue;
+            }
+            paths.push(candidate.path.clone());
+            members.push(id.clone());
+        }
+        if expected.len() > MAX_OPERATION_FILES {
+            return Err(CoreError::new("budget", "Admitted set exceeds5000Nodes"));
+        }
+        let schema_path = display(&root.join(ConfigRole::Schema.filename()));
+        paths.push(schema_path.clone());
+        // All selected share-zero source/config handles coexist during capture.
+        // Core commit cannot run between members because this authority is mutably
+        // borrowed; new raw files cannot fabricate committed birth membership.
+        let mut cut = self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?;
+        let schema = cut.files.pop().unwrap();
+        for f in &cut.files {
+            let expected_node = inventory
+                .entries
+                .iter()
+                .find(|e| e.path == f.path)
+                .and_then(|e| e.node_id.clone());
+            if f.node_id != expected_node
+                || f.bytes.as_ref().is_none_or(|b| {
+                    decode(b)
+                        .ok()
+                        .is_none_or(|s| weftext_engine::inspect_metadata(&s).id != expected_node)
+                })
+            {
+                complete = false;
+                warnings.push(format!(
+                    "{}lost source/admission qualification during capture",
+                    f.path
+                ));
+            }
+            if let Some(entry) = inventory.entries.iter_mut().find(|e| e.path == f.path) {
+                entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+            }
+        }
+        // Schema is frozen author input; absence is explicit and the caller can
+        // choose its bundled schema for an unconfigured library.
+        if !raw_complete {
+            warnings.extend(inventory.warnings.iter().cloned());
+        }
+        let cut_id = fresh();
+        self.admitted_cuts.insert(
+            cut_id.clone(),
+            AdmittedBasis {
+                root: display(&root),
+                members: members.iter().cloned().collect(),
+                bases: cut
+                    .files
+                    .iter()
+                    .chain(std::iter::once(&schema))
+                    .map(|f| f.base_id.clone())
+                    .collect(),
+                complete,
+            },
+        );
+        Ok(AdmittedSnapshot {
+            cut_id,
+            membership_ids: members,
+            inventory,
+            files: cut.files,
+            schema: Some(schema),
+            complete,
+            warnings,
+            raw_complete,
+            raw_pending,
+        })
+    }
+    pub fn trash_admitted_snapshot(&mut self, root: impl AsRef<Path>) -> Result<AdmittedSnapshot> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let mut source_files = BTreeMap::new();
+        let mut warnings = Vec::new();
+        let mut complete = true;
+        let mut entries = Vec::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            let Some(t) = &p.transaction else {
+                continue;
+            };
+            if t.request.root != display(&root)
+                || !matches!(t.request.intent, OperationIntent::TrashNode { .. })
+            {
+                continue;
+            }
+            let Mutation::Relocate { target, .. } = &t.mutation else {
+                continue;
+            };
+            if !Path::new(target).exists() {
+                continue;
+            }
+            let mut files = vec![];
+            let mut dirs = vec![];
+            if let Err(e) = snapshot_tree(Path::new(target), &mut files, &mut dirs, false) {
+                complete = false;
+                warnings.push(e.message);
+                continue;
+            }
+            for file in files {
+                let Some(birth) = self.admitted_binding(&file.stamp.identity) else {
+                    continue;
+                };
+                if birth.workspace_id != workspace.workspace_id {
+                    continue;
+                }
+                let source = decode(&file.bytes)?;
+                let info = weftext_engine::inspect_metadata(&source);
+                if info.id.as_deref() != Some(&birth.node_id) {
+                    complete = false;
+                    warnings.push(format!(
+                        "Trashed Node{}has damaged declaration",
+                        birth.node_id
+                    ));
+                    continue;
+                }
+                if source_files
+                    .insert(birth.node_id.clone(), file.path.clone())
+                    .is_some()
+                {
+                    complete = false;
+                    warnings.push(format!(
+                        "Duplicate admitted trash identity{}",
+                        birth.node_id
+                    ));
+                }
+                entries.push(InventoryEntry {
+                    path: file.path.clone(),
+                    relative_path: Path::new(&file.path)
+                        .strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                    name: Path::new(&file.path)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into(),
+                    parent_path: display(Path::new(&file.path).parent().unwrap()),
+                    kind: "node".into(),
+                    node_id: Some(birth.node_id),
+                    identity_status: "admitted".into(),
+                    title: info.title,
+                    excerpt: None,
+                    source: Some(source),
+                });
+            }
+        }
+        let mut paths = source_files.values().cloned().collect::<Vec<_>>();
+        paths.push(display(&root.join(ConfigRole::Schema.filename())));
+        let mut snapshot = self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?;
+        let schema = snapshot.files.pop().unwrap();
+        for f in &snapshot.files {
+            if let Some(entry) = entries.iter_mut().find(|e| e.path == f.path) {
+                entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+                if f.node_id != entry.node_id {
+                    complete = false;
+                    warnings.push(format!("{}changed admission during trash capture", f.path));
+                }
+            }
+        }
+        let inventory = Inventory {
+            root: display(&root),
+            workspace_id: Some(workspace.workspace_id),
+            status: "trashReadOnly".into(),
+            entries,
+            warnings: warnings.clone(),
+            complete,
+        };
+        Ok(AdmittedSnapshot {
+            cut_id: fresh(),
+            membership_ids: source_files.keys().cloned().collect(),
+            inventory,
+            files: snapshot.files,
+            schema: Some(schema),
+            complete,
+            warnings,
+            raw_complete: complete,
+            raw_pending: 0,
+        })
+    }
+    pub fn prepare_operation(&mut self, request: OperationRequest) -> Result<OperationPreview> {
+        self.prepare_internal(request, None, None, &[])
+    }
+    /// Freeze the finite admitted source set and all bounded native filesystem
+    /// inputs together. The engine may only read this map; absent inputs remain
+    /// unavailable. This is an immutable local input cut, not a currentness claim.
+    pub fn admitted_compile_snapshot(
+        &mut self,
+        root: impl AsRef<Path>,
+        lifecycle: &str,
+    ) -> Result<AdmittedCompileSnapshot> {
+        let root = absolute_path(root.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let snapshot = match lifecycle {
+            "live" => self.admitted_snapshot(&root)?,
+            "trash" => self.trash_admitted_snapshot(&root)?,
+            _ => {
+                return Err(CoreError::new(
+                    "invalidScope",
+                    "Choose live or trash admitted scope",
+                ));
+            }
+        };
+        let mut captured = Vec::new();
+        let mut directories = Vec::new();
+        snapshot_tree(&root, &mut captured, &mut directories, false)?;
+        let mut guards = Vec::new();
+        let mut handles = Vec::new();
+        for f in &captured {
+            self.check_pending(Path::new(&f.path))?;
+            let guard = ParentGuard::acquire(Path::new(&f.path))?;
+            let mut handle = guard.open_file(false, false)?;
+            if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "A compile input changed while acquiring the shared cut",
+                ));
+            }
+            guards.push(guard);
+            handles.push(handle);
+        }
+        for original in snapshot.files.iter().chain(snapshot.schema.iter()) {
+            let basis = self
+                .snapshots
+                .get(&original.base_id)
+                .ok_or_else(|| CoreError::new("staleBase", "A selected source basis expired"))?;
+            let current = captured
+                .iter()
+                .find(|f| locator_equal(&f.path, &original.path));
+            if basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+                != current.map(|f| (&f.stamp, &f.bytes))
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Selected admitted source/schema changed before the compile cut",
+                ));
+            }
+            if current.is_none() {
+                let guard = ParentGuard::acquire(Path::new(&basis.path))?;
+                ensure_absent(Path::new(&basis.path))?;
+                if guard.directory_identity()? != basis.parent {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "Negative schema basis changed",
+                    ));
+                }
+                guards.push(guard);
+            }
+        }
+        for d in &directories {
+            let guard = ParentGuard::acquire(&Path::new(&d.path).join(".compile-membership"))?;
+            let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
+            if !complete
+                || guard.directory_identity()? != d.identity
+                || sorted_entries(entries, Path::new(&d.path)) != d.entries
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Compile input membership changed",
+                ));
+            }
+            guards.push(guard);
+        }
+        let settings_path = root.join(ConfigRole::WorkspaceSettings.filename());
+        let settings = captured
+            .iter()
+            .find(|f| locator_equal(&f.path, &display(&settings_path)));
+        let settings_value: serde_json::Value = settings
+            .map(|f| serde_json::from_slice(&f.bytes))
+            .transpose()?
+            .unwrap_or_else(|| serde_json::json!({"version":1}));
+        let style = if settings_value["defaultStyle"]["enabled"] == true {
+            let selected = settings_value["defaultStyle"]["resource"]
+                .as_str()
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "styleSelection",
+                        "Enabled default style has no exact resource selector",
+                    )
+                })?;
+            let resource_id = selected
+                .strip_prefix(&format!("weftext-resource://{}/", workspace.workspace_id))
+                .ok_or_else(|| {
+                    CoreError::new("styleSelection", "Style belongs to another workspace")
+                })?;
+            if settings_value["defaultStyle"]["entryFunction"]
+                .as_str()
+                .is_some_and(|f| f != "library-style")
+            {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "Unsupported explicit style entry function",
+                ));
+            }
+            let module = captured
+                .iter()
+                .find(|f| locator_equal(&f.path, &display(&root.join("Styles/library-style.typ"))))
+                .ok_or_else(|| {
+                    CoreError::new("styleSelection", "Selected style module is unavailable")
+                })?;
+            let manifest = captured
+                .iter()
+                .find(|f| {
+                    locator_equal(
+                        &f.path,
+                        &display(&root.join("Styles/weftext.resources.json")),
+                    )
+                })
+                .ok_or_else(|| {
+                    CoreError::new("styleSelection", "Selected style binding is unavailable")
+                })?;
+            let value: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
+            if value["version"] != 1
+                || !value["resources"].as_array().is_some_and(|a| {
+                    let v = a
+                        .iter()
+                        .filter(|r| r["resourceId"] == resource_id)
+                        .collect::<Vec<_>>();
+                    v.len() == 1 && v[0]["path"] == "library-style.typ"
+                })
+            {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "Selected style resource binding is ambiguous",
+                ));
+            }
+            let owner = captured
+                .iter()
+                .find(|f| locator_equal(&f.path, &display(&root.join("Styles/Styles.typ"))))
+                .and_then(|f| self.admitted_binding(&f.stamp.identity))
+                .ok_or_else(|| {
+                    CoreError::new("styleSelection", "Selected style owner is unavailable")
+                })?;
+            if !self.admitted_resource(
+                resource_id,
+                &workspace.workspace_id,
+                &owner.node_id,
+                &module.stamp.identity,
+            ) {
+                return Err(CoreError::new(
+                    "styleSelection",
+                    "Selected style is not the admitted resource object",
+                ));
+            }
+            Some(weftext_engine::StyleModule {
+                path: module.path.clone(),
+                source: decode(&module.bytes)?,
+                enabled: true,
+                entry_function: "library-style".into(),
+            })
+        } else {
+            None
+        };
+        let mut files = BTreeMap::new();
+        let mut bases = Vec::new();
+        for f in captured {
+            let path = Path::new(&f.path);
+            let base_id = fresh();
+            let parent = ParentGuard::acquire(path)?.directory_identity()?;
+            files.insert(
+                path.strip_prefix(&root)
+                    .map_err(|_| {
+                        CoreError::new("outsideRoot", "Compile input is outside selected library")
+                    })?
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                f.bytes.clone(),
+            );
+            self.snapshots.insert(
+                base_id.clone(),
+                SnapshotBinding {
+                    path: f.path.clone(),
+                    captured: Some(f),
+                    parent,
+                },
+            );
+            bases.push(base_id);
+        }
+        if let Some(cut) = self.admitted_cuts.get_mut(&snapshot.cut_id) {
+            cut.bases.extend(bases);
+        }
+        drop(handles);
+        drop(guards);
+        Ok(AdmittedCompileSnapshot {
+            snapshot,
+            files,
+            style,
+        })
+    }
+    pub fn feature_operation_status(
+        &self,
+        operation_id: &str,
+        canonical_author_intent: &serde_json::Value,
+    ) -> Result<Option<OperationPreview>> {
+        valid_operation_id(operation_id)?;
+        let fingerprint = hash(&canonical_json_bytes(canonical_author_intent)?);
+        if let Some(p) = self.operations.get(operation_id) {
+            if p.fingerprint != fingerprint {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "This operationId belongs to different canonical author intent",
+                ));
+            }
+            return self.operation_details(operation_id).map(Some);
+        }
+        Ok(None)
+    }
+    pub fn prepare_feature_operation(
+        &mut self,
+        request: OperationRequest,
+        canonical_author_intent: &serde_json::Value,
+    ) -> Result<OperationPreview> {
+        self.prepare_internal(
+            request,
+            None,
+            Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
+            &[],
+        )
+    }
+    pub fn prepare_dependent_feature_operation(
+        &mut self,
+        request: OperationRequest,
+        canonical_author_intent: &serde_json::Value,
+        base_ids: &[String],
+    ) -> Result<OperationPreview> {
+        self.prepare_internal(
+            request,
+            None,
+            Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
+            base_ids,
+        )
+    }
+    /// Strong product actions freeze the complete admitted-set membership and
+    /// every supplied cut source/schema basis as dependencies of the same plan.
+    pub fn prepare_admitted_operation(
+        &mut self,
+        request: OperationRequest,
+        cut_id: &str,
+    ) -> Result<OperationPreview> {
+        let cut = self.admitted_cuts.get(cut_id).cloned().ok_or_else(|| {
+            CoreError::new(
+                "cutExpired",
+                "Read a fresh admitted set snapshot before preparing",
+            )
+        })?;
+        if cut.root != request.root || !cut.complete {
+            return Err(CoreError::new(
+                "coverageIncomplete",
+                "Strong action requires its complete admitted set cut",
+            ));
+        }
+        self.prepare_internal(request, Some(cut), None, &[])
+    }
+    fn prepare_internal(
+        &mut self,
+        request: OperationRequest,
+        cut: Option<AdmittedBasis>,
+        author_fingerprint: Option<String>,
+        dependencies: &[String],
+    ) -> Result<OperationPreview> {
+        valid_operation_id(&request.operation_id)?;
+        let fingerprint = author_fingerprint.unwrap_or(hash(&serde_json::to_vec(&request)?));
+        if let Some(old) = self.operations.get(&request.operation_id) {
+            if old.fingerprint != fingerprint {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "This operationId belongs to different input",
+                ));
+            }
+            return self.operation_details(&request.operation_id);
+        }
+        let root = absolute_path(Path::new(&request.root))?;
+        let workspace = self.require_workspace(&root)?;
+        let plan_id = fresh();
+        let mut preview = OperationPreview {
+            operation_id: request.operation_id.clone(),
+            plan_id: plan_id.clone(),
+            kind: intent_kind(&request.intent).into(),
+            status: "prepared".into(),
+            changes: Vec::new(),
+            node_map: BTreeMap::new(),
+            new_node_id: None,
+            revisions: BTreeMap::new(),
+            resource_map: BTreeMap::new(),
+            losses: Vec::new(),
+        };
+        let mut files = Vec::new();
+        let mut directories = Vec::new();
+        let mut absent_dependencies = Vec::new();
+        for id in dependencies {
+            let basis =
+                self.snapshots.get(id).cloned().ok_or_else(|| {
+                    CoreError::new("staleBase", "A dependency basis is unavailable")
+                })?;
+            if !locator_within(Path::new(&basis.path), &root) {
+                return Err(CoreError::new(
+                    "outsideRoot",
+                    "A dependency belongs to another library",
+                ));
+            }
+            self.check_pending(Path::new(&basis.path))?;
+            let current = capture_optional(Path::new(&basis.path))?;
+            self.verify_snapshot(Path::new(&basis.path), id, current.as_ref())?;
+            if let Some(f) = current {
+                files.push(f);
+            } else {
+                absent_dependencies.push(AbsentDependency {
+                    path: basis.path,
+                    parent: basis.parent,
+                });
+            }
+        }
+        if let Some(cut) = &cut {
+            let current = self.admitted_snapshot(&root)?;
+            if !current.complete
+                || current
+                    .membership_ids
+                    .iter()
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+                    != cut.members
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Admitted set membership changed before planning",
+                ));
+            }
+            for id in &cut.bases {
+                let basis = self.snapshots.get(id).cloned().ok_or_else(|| {
+                    CoreError::new("staleBase", "A frozen cut basis is unavailable")
+                })?;
+                let current = capture_optional(Path::new(&basis.path))?;
+                self.verify_snapshot(Path::new(&basis.path), id, current.as_ref())?;
+                if let Some(f) = current {
+                    files.push(f);
+                } else {
+                    absent_dependencies.push(AbsentDependency {
+                        path: basis.path,
+                        parent: basis.parent,
+                    });
+                }
+            }
+        }
+        let mutation = match &request.intent {
+            OperationIntent::ImportNative {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+            } => self.plan_native_import(
+                &root,
+                Path::new(parent),
+                name,
+                bytes,
+                *allow_losses,
+                &mut preview,
+                &mut files,
+                &mut absent_dependencies,
+            )?,
+            OperationIntent::ImportBibliography {
+                parent,
+                name,
+                format,
+                bytes,
+                allow_losses,
+            } => self.plan_bibliography_import(
+                &root,
+                Path::new(parent),
+                name,
+                format,
+                bytes,
+                *allow_losses,
+                &mut preview,
+                &mut files,
+                &mut absent_dependencies,
+            )?,
+            OperationIntent::RenameNode { source, name } => {
+                valid_name(name)?;
+                let source = absolute_path(Path::new(source))?;
+                let parent = source
+                    .parent()
+                    .ok_or_else(|| CoreError::new("invalidPath", "Node has no parent"))?;
+                self.prepare_relocation(
+                    &root,
+                    &source,
+                    &parent.join(name),
+                    false,
+                    &mut files,
+                    &mut preview,
+                )?
+            }
+            OperationIntent::MoveNode { source, parent } => {
+                let source = absolute_path(Path::new(source))?;
+                let parent = absolute_path(Path::new(parent))?;
+                let name = node_name(&source)?;
+                self.prepare_relocation(
+                    &root,
+                    &source,
+                    &parent.join(name),
+                    false,
+                    &mut files,
+                    &mut preview,
+                )?
+            }
+            OperationIntent::TrashNode { source } => {
+                let source = absolute_path(Path::new(source))?;
+                let trash = root.join(".weftext-trash");
+                let target = trash.join(&request.operation_id);
+                self.prepare_relocation(&root, &source, &target, true, &mut files, &mut preview)?
+            }
+            OperationIntent::RestoreNode {
+                trash_operation_id,
+                parent,
+                name,
+            } => {
+                valid_name(name)?;
+                valid_operation_id(trash_operation_id)?;
+                let previous = self
+                    .operations
+                    .get(trash_operation_id)
+                    .and_then(|p| p.transaction.as_ref())
+                    .ok_or_else(|| {
+                        CoreError::new("trashMissing", "No retained trash operation has this ID")
+                    })?;
+                if !self.committed(trash_operation_id)
+                    || !matches!(previous.request.intent, OperationIntent::TrashNode { .. })
+                {
+                    return Err(CoreError::new(
+                        "trashMissing",
+                        "Trash operation is not committed",
+                    ));
+                }
+                let Mutation::Relocate { target, .. } = &previous.mutation else {
+                    return Err(CoreError::new("invalidState", "Invalid trash record"));
+                };
+                let source = PathBuf::from(target);
+                let parent = absolute_path(Path::new(parent))?;
+                self.prepare_relocation(
+                    &root,
+                    &source,
+                    &parent.join(name),
+                    true,
+                    &mut files,
+                    &mut preview,
+                )?
+            }
+            OperationIntent::NewNode {
+                parent,
+                name,
+                source,
+            } => {
+                valid_name(name)?;
+                let parent = absolute_path(Path::new(parent))?;
+                self.owned_parent(&root, &parent)?;
+                let target = parent.join(name);
+                ensure_absent(&target)?;
+                let node_id = fresh();
+                let source = match source {
+                    None => default_note_source(&node_id, name)?,
+                    Some(s) => initialize_source(s, &node_id)?,
+                };
+                check_size(source.as_bytes())?;
+                let path = target.join(format!("{name}.typ"));
+                preview.new_node_id = Some(node_id.clone());
+                preview.revisions.insert(display(&path), fresh());
+                preview.changes.push(change(&path, "create", source.len()));
+                Mutation::CreateTree {
+                    target: display(&target),
+                    directories: Vec::new(),
+                    files: vec![FileChange {
+                        path: display(&path),
+                        base_id: None,
+                        before: None,
+                        after: source.into_bytes(),
+                    }],
+                    births: vec![NewBirth {
+                        path: display(&path),
+                        node_id,
+                    }],
+                    updates: Vec::new(),
+                }
+            }
+            OperationIntent::UpdateFiles { changes } => {
+                if changes.is_empty() || changes.len() > 64 {
+                    return Err(CoreError::new(
+                        "budget",
+                        "A bounded update requires between 1 and 64 files",
+                    ));
+                }
+                let mut seen = BTreeSet::new();
+                for c in changes {
+                    let path = absolute_path(Path::new(&c.path))?;
+                    if !seen.insert(display(&path).to_lowercase()) {
+                        return Err(CoreError::new(
+                            "duplicatePath",
+                            "One operation cannot write the same path twice",
+                        ));
+                    }
+                    self.validate_update(&root, &path, &c.after)?;
+                    if path
+                        .file_name()
+                        .is_some_and(|n| n == "weftext.directory.json")
+                    {
+                        self.validate_directory_plan(
+                            &request.operation_id,
+                            &root,
+                            &path,
+                            &c.after,
+                        )?;
+                    }
+                    self.check_pending(&path)?;
+                    if is_canonical(&path) {
+                        check_size(&c.after)?;
+                    } else if c.after.len() > MAX_OPERATION_BYTES {
+                        return Err(CoreError::new("budget", "A file exceeds64MiB"));
+                    }
+                    let current = capture_optional(&path)?;
+                    if current.as_ref().map(|f| &f.bytes) != c.before.as_ref() {
+                        return Err(CoreError::new(
+                            "conflict",
+                            "Exact current bytes differ from the supplied base",
+                        ));
+                    }
+                    let base_id = c.base_id.as_deref().ok_or_else(|| CoreError::new("basisRequired", "Updates require the exact Core snapshot baseId, including create-only targets"))?;
+                    self.verify_snapshot(&path, base_id, current.as_ref())?;
+                    let revision = current
+                        .as_ref()
+                        .filter(|f| f.bytes == c.after)
+                        .and_then(|f| self.accepted_revision(f));
+                    let reservation =
+                        fs::read(self.journal_path(&request.operation_id, "revision-reservation"))
+                            .ok()
+                            .and_then(|b| serde_json::from_slice::<RevisionReservation>(&b).ok())
+                            .filter(|r| {
+                                r.path == c.path
+                                    && current
+                                        .as_ref()
+                                        .is_some_and(|f| f.stamp == r.stamp && f.bytes == r.bytes)
+                                    && r.bytes == c.after
+                            });
+                    preview.revisions.insert(
+                        c.path.clone(),
+                        revision
+                            .or_else(|| reservation.map(|r| r.revision))
+                            .unwrap_or_else(fresh),
+                    );
+                    if let Some(f) = current
+                        && !files.iter().any(|old| old.path == f.path)
+                    {
+                        files.push(f);
+                    }
+                    let action = if c.before.as_ref() == Some(&c.after) {
+                        if preview.revisions.get(&c.path).is_some_and(|r| {
+                            files
+                                .iter()
+                                .find(|f| f.path == c.path)
+                                .and_then(|f| self.accepted_revision(f))
+                                .as_ref()
+                                != Some(r)
+                        }) {
+                            "admitObservedSource"
+                        } else {
+                            "readDependency"
+                        }
+                    } else if c.before.is_some() {
+                        "write"
+                    } else {
+                        "create"
+                    };
+                    preview.changes.push(change(&path, action, c.after.len()));
+                }
+                Mutation::Update {
+                    files: changes.clone(),
+                }
+            }
+            OperationIntent::CopyNode {
+                source,
+                parent,
+                name,
+                allow_losses,
+            } => {
+                let source = absolute_path(Path::new(source))?;
+                let parent = absolute_path(Path::new(parent))?;
+                valid_name(name)?;
+                self.managed_node(&root, &source, false)?;
+                self.owned_parent(&root, &parent)?;
+                self.check_subtree_boundary(&root, &source)?;
+                let target = parent.join(name);
+                ensure_absent(&target)?;
+                snapshot_tree(&source, &mut files, &mut directories, false)?;
+                let schema_path = root.join(ConfigRole::Schema.filename());
+                let schema = capture_optional(&schema_path)?;
+                let mutation = self.plan_copy(
+                    &root,
+                    &source,
+                    &target,
+                    &files,
+                    &directories,
+                    &mut preview,
+                    *allow_losses,
+                    schema.as_ref(),
+                )?;
+                if let Some(config) = schema {
+                    files.push(config);
+                } else {
+                    absent_dependencies.push(AbsentDependency {
+                        path: display(&schema_path),
+                        parent: ParentGuard::acquire(&schema_path)?.directory_identity()?,
+                    });
+                }
+                mutation
+            }
+            OperationIntent::TemplateNode {
+                source,
+                parent,
+                name,
+                instantiated_source,
+                source_base_id,
+            } => {
+                let canonical = absolute_path(Path::new(source))?;
+                let source = canonical.parent().ok_or_else(|| {
+                    CoreError::new("templateSource", "Template source has no Node parent")
+                })?;
+                let original = self.managed_node(&root, source, false)?;
+                if original.path != display(&canonical) {
+                    return Err(CoreError::new(
+                        "templateSource",
+                        "Templates require the exact admitted canonical source",
+                    ));
+                }
+                self.verify_snapshot(&canonical, source_base_id, Some(&original))?;
+                let parent = absolute_path(Path::new(parent))?;
+                valid_name(name)?;
+                self.owned_parent(&root, &parent)?;
+                self.check_subtree_boundary(&root, source)?;
+                let target = parent.join(name);
+                ensure_absent(&target)?;
+                let mut originals = Vec::new();
+                let mut original_dirs = Vec::new();
+                snapshot_tree(source, &mut originals, &mut original_dirs, false)?;
+                let mut instantiated = originals.clone();
+                let owner = self
+                    .admitted_binding(&original.stamp.identity)
+                    .ok_or_else(|| {
+                        CoreError::new("templateSource", "Template owner is unadmitted")
+                    })?;
+                instantiated
+                    .iter_mut()
+                    .find(|f| f.path == original.path)
+                    .unwrap()
+                    .bytes = initialize_source(instantiated_source, &owner.node_id)?.into_bytes();
+                let schema_path = root.join(ConfigRole::Schema.filename());
+                let schema = capture_optional(&schema_path)?;
+                let mutation = self.plan_copy(
+                    &root,
+                    source,
+                    &target,
+                    &instantiated,
+                    &original_dirs,
+                    &mut preview,
+                    false,
+                    schema.as_ref(),
+                )?;
+                preview.new_node_id = preview.node_map.get(&owner.node_id).cloned();
+                files.extend(originals);
+                directories.extend(original_dirs);
+                if let Some(config) = schema {
+                    files.push(config);
+                } else {
+                    absent_dependencies.push(AbsentDependency {
+                        path: display(&schema_path),
+                        parent: ParentGuard::acquire(&schema_path)?.directory_identity()?,
+                    });
+                }
+                mutation
+            }
+            OperationIntent::BackupLibrary { destination } => {
+                let target = absolute_path(Path::new(destination))?;
+                if target.starts_with(&root)
+                    || target.starts_with(&self.data_dir)
+                    || root.starts_with(&target)
+                    || self.data_dir.starts_with(&target)
+                {
+                    return Err(CoreError::new(
+                        "recursiveBackup",
+                        "Backup destination must be outside the library and private data directory",
+                    ));
+                }
+                ensure_absent(&target)?;
+                snapshot_tree(&root, &mut files, &mut directories, false)?;
+                let library_count = files.len();
+                let library_dirs = directories.len();
+                self.snapshot_library_private(&root, &workspace.workspace_id, &mut files)?;
+                let mut output = Vec::new();
+                let mut dirs = vec![
+                    "library".into(),
+                    "private".into(),
+                    "private/journal".into(),
+                    "private/drafts".into(),
+                    "private/draft-history".into(),
+                ];
+                for (index, d) in directories.iter().enumerate() {
+                    let (base, prefix) = if index < library_dirs {
+                        (&root, "library")
+                    } else {
+                        (&self.data_dir, "private")
+                    };
+                    let relative = Path::new(&d.path).strip_prefix(base).unwrap();
+                    if !relative.as_os_str().is_empty() {
+                        dirs.push(display(&Path::new(prefix).join(relative)));
+                    }
+                }
+                for (index, f) in files.iter().enumerate() {
+                    let (base, prefix) = if index < library_count {
+                        (&root, "library")
+                    } else {
+                        (&self.data_dir, "private")
+                    };
+                    output.push(FileChange {
+                        path: display(
+                            &target
+                                .join(prefix)
+                                .join(Path::new(&f.path).strip_prefix(base).unwrap()),
+                        ),
+                        base_id: None,
+                        before: None,
+                        after: f.bytes.clone(),
+                    });
+                }
+                let manifest = serde_json::to_vec_pretty(
+                    &serde_json::json!({"version":1,"kind":"weftext.local-backup.v1","workspaceId":workspace.workspace_id,"sourceRoot":display(&root),"privateDataRoot":display(&self.data_dir),"operationId":request.operation_id,"storageProfile":STORAGE_PROFILE,"files":output.iter().map(|f| serde_json::json!({"path":Path::new(&f.path).strip_prefix(&target).unwrap().to_string_lossy(),"sha256":hash(&f.after),"bytes":f.after.len()})).collect::<Vec<_>>(),"restore":"Preserve originals. Physical object bindings require explicit restore/re-admission; do not reset private state or replace a live library."}),
+                )?;
+                output.push(FileChange {
+                    path: display(&target.join("backup.json")),
+                    base_id: None,
+                    before: None,
+                    after: manifest,
+                });
+                preview.changes.extend(
+                    output
+                        .iter()
+                        .map(|f| change(Path::new(&f.path), "backup", f.after.len())),
+                );
+                Mutation::CreateTree {
+                    target: display(&target),
+                    directories: dirs,
+                    files: output,
+                    births: Vec::new(),
+                    updates: Vec::new(),
+                }
+            }
+            OperationIntent::ConfigureStyle {
+                base_id,
+                source,
+                enabled,
+            } => {
+                check_size(source.as_bytes())?;
+                let basis = self.style_bases.get(base_id).cloned().ok_or_else(|| {
+                    CoreError::new("staleBase", "Read the style again before preparing")
+                })?;
+                if basis.root != display(&root) {
+                    return Err(CoreError::new(
+                        "outsideRoot",
+                        "Style basis belongs to another library",
+                    ));
+                }
+                for b in [
+                    &basis.settings,
+                    basis.style.as_ref().unwrap_or(&basis.settings),
+                    basis.manifest.as_ref().unwrap_or(&basis.settings),
+                    basis.owner.as_ref().unwrap_or(&basis.settings),
+                ] {
+                    let current = capture_optional(Path::new(&b.path))?;
+                    if b.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+                        != current.as_ref().map(|f| (&f.stamp, &f.bytes))
+                    {
+                        return Err(CoreError::new(
+                            "staleBase",
+                            "Style module, manifest or settings changed after review",
+                        ));
+                    }
+                    if let Some(f) = current
+                        && !files.iter().any(|old: &CapturedFile| old.path == f.path)
+                    {
+                        files.push(f);
+                    }
+                }
+                let mut settings: serde_json::Value = basis
+                    .settings
+                    .captured
+                    .as_ref()
+                    .map(|f| serde_json::from_slice(&f.bytes))
+                    .transpose()?
+                    .unwrap_or_else(|| serde_json::json!({"version":1}));
+                if !settings.is_object() {
+                    return Err(CoreError::new(
+                        "invalidState",
+                        "Workspace settings must be an object",
+                    ));
+                }
+                let target = root.join("Styles");
+                let module_path = target.join("library-style.typ");
+                let resource_ref = basis.resource_ref.unwrap_or_else(|| {
+                    format!("weftext-resource://{}/{}", workspace.workspace_id, fresh())
+                });
+                if settings.get("defaultStyle").is_none() {
+                    settings["defaultStyle"] = serde_json::json!({});
+                }
+                if !settings["defaultStyle"].is_object() {
+                    return Err(CoreError::new(
+                        "styleSelection",
+                        "Unknown default style selector cannot be overwritten",
+                    ));
+                }
+                settings["defaultStyle"]["enabled"] = (*enabled).into();
+                settings["defaultStyle"]["resource"] = resource_ref.clone().into();
+                settings["defaultStyle"]["entryFunction"] = "library-style".into();
+                let settings_change = FileChange {
+                    path: basis.settings.path,
+                    base_id: None,
+                    before: basis.settings.captured.map(|f| f.bytes),
+                    after: serde_json::to_vec_pretty(&settings)?,
+                };
+                preview.changes.push(change(
+                    Path::new(&settings_change.path),
+                    "configure",
+                    settings_change.after.len(),
+                ));
+                preview
+                    .revisions
+                    .insert(settings_change.path.clone(), fresh());
+                preview
+                    .changes
+                    .push(change(&module_path, "style", source.len()));
+                preview.revisions.insert(display(&module_path), fresh());
+                if let Some(style) = basis.style {
+                    Mutation::Update {
+                        files: vec![
+                            FileChange {
+                                path: style.path,
+                                base_id: None,
+                                before: style.captured.map(|f| f.bytes),
+                                after: source.as_bytes().to_vec(),
+                            },
+                            settings_change,
+                        ],
+                    }
+                } else {
+                    ensure_absent(&target)?;
+                    self.owned_parent(&root, &root)?;
+                    let node_id = fresh();
+                    let node_path = target.join("Styles.typ");
+                    let declaration = format!(
+                        "#metadata((id: \"{node_id}\", types: ())) <weftext>\n= 库默认样式\n"
+                    );
+                    let resource_id = resource_ref.rsplit('/').next().unwrap();
+                    preview
+                        .resource_map
+                        .insert(display(&module_path), resource_ref.clone());
+                    let manifest = serde_json::to_vec_pretty(
+                        &serde_json::json!({"version":1,"resources":[{"resourceId":resource_id,"path":"library-style.typ"}]}),
+                    )?;
+                    preview.new_node_id = Some(node_id.clone());
+                    preview.revisions.insert(display(&node_path), fresh());
+                    let output = vec![
+                        FileChange {
+                            path: display(&node_path),
+                            base_id: None,
+                            before: None,
+                            after: declaration.into_bytes(),
+                        },
+                        FileChange {
+                            path: display(&module_path),
+                            base_id: None,
+                            before: None,
+                            after: source.as_bytes().to_vec(),
+                        },
+                        FileChange {
+                            path: display(&target.join("weftext.resources.json")),
+                            base_id: None,
+                            before: None,
+                            after: manifest,
+                        },
+                    ];
+                    preview.changes.extend(
+                        output
+                            .iter()
+                            .filter(|f| f.path != display(&module_path))
+                            .map(|f| change(Path::new(&f.path), "create", f.after.len())),
+                    );
+                    Mutation::CreateTree {
+                        target: display(&target),
+                        directories: vec![],
+                        files: output,
+                        births: vec![NewBirth {
+                            path: display(&node_path),
+                            node_id,
+                        }],
+                        updates: vec![settings_change],
+                    }
+                }
+            }
+            OperationIntent::ImportResource {
+                node,
+                name,
+                bytes,
+                manifest_base_id,
+                resource_base_id,
+            } => {
+                valid_name(name)?;
+                if bytes.len() > MAX_OPERATION_BYTES {
+                    return Err(CoreError::new("budget", "Resource exceeds64MiB"));
+                }
+                let node_path = absolute_path(Path::new(node))?;
+                let directory = node_path
+                    .parent()
+                    .ok_or_else(|| CoreError::new("invalidPath", "Missing resource owner"))?;
+                let canonical = self.managed_node(&root, directory, false)?;
+                if canonical.path != *node {
+                    return Err(CoreError::new(
+                        "unsupportedRole",
+                        "Select the canonical admitted Node source",
+                    ));
+                }
+                let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
+                let target = directory.join(name);
+                let manifest_path = directory.join("weftext.resources.json");
+                if target == node_path
+                    || target == manifest_path
+                    || name == "weftext.annotations.json"
+                {
+                    return Err(CoreError::new(
+                        "resourceConflict",
+                        "A resource cannot replace a Node control file",
+                    ));
+                }
+                let manifest = capture_optional(&manifest_path)?;
+                self.verify_snapshot(&manifest_path, manifest_base_id, manifest.as_ref())?;
+                let current = capture_optional(&target)?;
+                self.verify_snapshot(&target, resource_base_id, current.as_ref())?;
+                if current.is_some() {
+                    return Err(CoreError::new("exists", "Resource import is create-only"));
+                }
+                let mut value: serde_json::Value = manifest
+                    .as_ref()
+                    .map(|f| serde_json::from_slice(&f.bytes))
+                    .transpose()?
+                    .unwrap_or_else(|| serde_json::json!({"version":1,"resources":[]}));
+                if value["version"] != 1 || !value["resources"].is_array() {
+                    return Err(CoreError::new(
+                        "resourceManifest",
+                        "Unsupported resource manifest",
+                    ));
+                }
+                if value["resources"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|r| r["path"] == name.as_str())
+                {
+                    return Err(CoreError::new(
+                        "resourceConflict",
+                        "Manifest already has this path",
+                    ));
+                }
+                let resource_id = fresh();
+                let resource_ref = format!(
+                    "weftext-resource://{}/{resource_id}",
+                    workspace.workspace_id
+                );
+                value["resources"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(serde_json::json!({"resourceId":resource_id,"path":name}));
+                let changes = vec![
+                    FileChange {
+                        path: display(&target),
+                        base_id: Some(resource_base_id.clone()),
+                        before: None,
+                        after: bytes.clone(),
+                    },
+                    FileChange {
+                        path: display(&manifest_path),
+                        base_id: Some(manifest_base_id.clone()),
+                        before: manifest.as_ref().map(|f| f.bytes.clone()),
+                        after: serde_json::to_vec_pretty(&value)?,
+                    },
+                ];
+                if let Some(f) = manifest {
+                    files.push(f);
+                }
+                files.push(canonical);
+                for c in &changes {
+                    preview
+                        .changes
+                        .push(change(Path::new(&c.path), "import", c.after.len()));
+                    preview.revisions.insert(c.path.clone(), fresh());
+                }
+                preview
+                    .node_map
+                    .insert(owner.node_id.clone(), owner.node_id);
+                preview.resource_map.insert(display(&target), resource_ref);
+                Mutation::Update { files: changes }
+            }
+        };
+        let result_path = match &mutation {
+            Mutation::Relocate { target, .. } | Mutation::CreateTree { target, .. } => {
+                target.clone()
+            }
+            Mutation::Update { files } => files[0].path.clone(),
+        };
+        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id, status: "committed".into(), path: result_path.clone(), node_ids: preview.node_map.values().cloned().chain(preview.new_node_id.clone()).collect(), message: "One durable Core decision committed the frozen local operation; external tools can observe installs before this decision".into() };
+        let mut plan = journal::Plan::file(
+            request.operation_id.clone(),
+            fingerprint,
+            Path::new(&result_path),
+            None,
+            Vec::new(),
+            None,
+            &preview.kind,
+        );
+        plan.workspace_id = Some(workspace.workspace_id);
+        plan.node_id = preview.new_node_id.clone();
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        files.dedup_by(|a, b| a.path == b.path);
+        let mut write_parents = Vec::new();
+        let writes = match &mutation {
+            Mutation::Update { files } => files.iter().collect::<Vec<_>>(),
+            Mutation::CreateTree { updates, .. } => updates.iter().collect(),
+            _ => vec![],
+        };
+        for c in writes {
+            write_parents.push((
+                c.path.clone(),
+                ParentGuard::acquire(Path::new(&c.path))?.directory_identity()?,
+            ));
+        }
+        if let Mutation::CreateTree { target, .. } = &mutation {
+            write_parents.push((
+                target.clone(),
+                ParentGuard::acquire(Path::new(target))?.directory_identity()?,
+            ));
+        }
+        plan.transaction = Some(FrozenOperation {
+            request,
+            preview: preview.clone(),
+            files,
+            directories,
+            mutation,
+            receipt,
+            expected_membership: cut.map(|c| c.members),
+            absent_dependencies,
+            write_parents,
+        });
+        self.stage(plan)?;
+        Ok(preview)
+    }
+    pub fn operation_details(&self, operation_id: &str) -> Result<OperationPreview> {
+        let p = self
+            .operations
+            .get(operation_id)
+            .and_then(|p| p.transaction.as_ref())
+            .ok_or_else(|| CoreError::new("operationMissing", "No frozen operation has this ID"))?;
+        let mut preview = p.preview.clone();
+        preview.status = if self.committed(operation_id) {
+            "committed"
+        } else if self.resolved(operation_id) {
+            "resolved"
+        } else if self.journal_path(operation_id, "install").exists() {
+            "recoveryPending"
+        } else {
+            "prepared"
+        }
+        .into();
+        Ok(preview)
+    }
+    pub fn execute_operation(
+        &mut self,
+        operation_id: &str,
+        plan_id: &str,
+    ) -> Result<OperationReceipt> {
+        let result = self.execute_operation_inner(operation_id, plan_id);
+        result.map_err(|error|{
+            if self.journal_path(operation_id,"install").exists()&&!self.committed(operation_id)&&!self.resolved(operation_id){
+                CoreError::new("recoveryPending",format!("Operation {operation_id} began installation and is not committed. Keep the original plan and inspect recovery; underlying {}: {}",error.code,error.message))
+            }else{error}
+        })
+    }
+    fn execute_operation_inner(
+        &mut self,
+        operation_id: &str,
+        plan_id: &str,
+    ) -> Result<OperationReceipt> {
+        let plan = self
+            .operations
+            .get(operation_id)
+            .cloned()
+            .ok_or_else(|| CoreError::new("operationMissing", "Prepare the operation first"))?;
+        let t = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new("operationConflict", "This ID belongs to a legacy operation")
+        })?;
+        if t.preview.plan_id != plan_id {
+            return Err(CoreError::new(
+                "planConflict",
+                "Execute the exact reviewed frozen plan ID",
+            ));
+        }
+        if self.committed(operation_id) {
+            return Ok(t.receipt.clone());
+        }
+        if self.resolved(operation_id) || self.journal_path(operation_id, "install").exists() {
+            return Err(CoreError::new(
+                "recoveryPending",
+                "The original operation may have effects; inspect it and do not execute again",
+            ));
+        }
+        let root = Path::new(&t.request.root);
+        self.require_workspace(root)?;
+        if let Some(expected) = &t.expected_membership {
+            let current = self.admitted_snapshot(root)?;
+            if !current.complete
+                || current.membership_ids.into_iter().collect::<BTreeSet<_>>() != *expected
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Admitted set membership changed after the reviewed strong plan",
+                ));
+            }
+        }
+        // ImportResource and ConfigureStyle build their closed write set in
+        // Core's role-specific planner. Generic UpdateFiles only permits
+        // unchanged resource dependencies. Both retain every original file,
+        // owner, manifest and parent guard through the same decision below.
+        if let Mutation::Update { files: changes } = &t.mutation
+            && !matches!(
+                t.request.intent,
+                OperationIntent::ImportResource { .. } | OperationIntent::ConfigureStyle { .. }
+            )
+        {
+            for c in changes {
+                self.validate_update(root, Path::new(&c.path), &c.after)?;
+                if Path::new(&c.path)
+                    .file_name()
+                    .is_some_and(|n| n == "weftext.directory.json")
+                {
+                    self.validate_directory_plan(operation_id, root, Path::new(&c.path), &c.after)?;
+                }
+            }
+        }
+        // All existing files are guarded together before the first write. This
+        // gives a consistent bounded source set and prevents current reads of a
+        // partially written annotation/source pair.
+        let mut guards = Vec::new();
+        let mut handles = Vec::new();
+        let mut observations = Vec::new();
+        for (path, parent) in &t.write_parents {
+            let guard = ParentGuard::acquire(Path::new(path))?;
+            if guard.directory_identity()? != *parent {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "A frozen write parent was replaced",
+                ));
+            }
+            guards.push(guard);
+        }
+        for absent in &t.absent_dependencies {
+            let guard = ParentGuard::acquire(Path::new(&absent.path))?;
+            if guard.directory_identity()? != absent.parent {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "An absent dependency's original parent was replaced",
+                ));
+            }
+            match guard.open_file(false, false) {
+                Err(e) if e.code == "missing" => {}
+                Ok(_) => {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "An original absent source/config dependency now exists",
+                    ));
+                }
+                Err(e) => return Err(e),
+            }
+            guards.push(guard);
+        }
+        if !matches!(t.mutation, Mutation::Relocate { .. }) {
+            for f in &t.files {
+                self.check_pending(Path::new(&f.path))?;
+                let guard = ParentGuard::acquire(Path::new(&f.path))?;
+                let write = matches!(&t.mutation, Mutation::Update {files} if files.iter().any(|c|c.path==f.path && c.before.as_ref()!=Some(&c.after)))
+                    || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path));
+                let mut handle = guard.open_file(write, false)?;
+                if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
+                    return Err(CoreError::new(
+                        "conflict",
+                        "A frozen source object or its bytes changed; prepare a new operation",
+                    ));
+                }
+                guards.push(guard);
+                handles.push(handle);
+            }
+            for d in &t.directories {
+                let guard =
+                    ParentGuard::acquire(&Path::new(&d.path).join(".snapshot-prospective"))?;
+                let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
+                let names = sorted_entries(entries, Path::new(&d.path));
+                let names = if matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
+                    && Path::new(&d.path) == self.data_dir.join("journal")
+                {
+                    names
+                        .into_iter()
+                        .filter(|name| {
+                            !name.starts_with(&format!("{}.plan.json:", plan.operation_id))
+                        })
+                        .collect()
+                } else {
+                    names
+                };
+                if !complete || guard.directory_identity()? != d.identity || names != d.entries {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "Frozen directory membership changed or became incomplete",
+                    ));
+                }
+                guards.push(guard);
+            }
+        }
+        match &t.mutation {
+            Mutation::Relocate {
+                source,
+                target,
+                source_identity,
+                target_parent_identity,
+                create_trash_parent,
+                old_leaf,
+                new_leaf,
+                leaf_identity,
+            } => {
+                let source = Path::new(source);
+                let target = Path::new(target);
+                if !source
+                    .components()
+                    .any(|c| c.as_os_str() == ".weftext-trash")
+                {
+                    self.check_subtree_boundary(root, source)?;
+                }
+                if !target
+                    .components()
+                    .any(|c| c.as_os_str() == ".weftext-trash")
+                {
+                    self.owned_parent(root, target.parent().unwrap())?;
+                }
+                let mut trash_guard = None;
+                let mut trash_directory = None;
+                if *create_trash_parent {
+                    let guard = ParentGuard::acquire(target.parent().unwrap())?;
+                    if guard.directory_identity()? != *target_parent_identity {
+                        return Err(CoreError::new("conflict", "Trash parent closure changed"));
+                    }
+                    ensure_absent(target.parent().unwrap())?;
+                    self.install_record(&plan)?;
+                    let directory = guard.create_directory()?;
+                    self.record_materialized(operation_id, target.parent().unwrap(), &directory)?;
+                    trash_directory = Some(directory);
+                    trash_guard = Some(guard);
+                }
+                let namespace = NamespaceGuard::acquire(source, target.parent().unwrap())?;
+                if namespace.source_identity()? != *source_identity
+                    || (!create_trash_parent
+                        && namespace.parent_identity()? != *target_parent_identity)
+                {
+                    return Err(CoreError::new(
+                        "conflict",
+                        "A source directory or target parent was replaced",
+                    ));
+                }
+                let mut leaf = namespace.open_source_file(old_leaf, old_leaf != new_leaf)?;
+                let captured = t
+                    .files
+                    .iter()
+                    .find(|f| f.path == display(&source.join(old_leaf)))
+                    .ok_or_else(|| CoreError::new("invalidPlan", "Missing canonical preimage"))?;
+                if stamp(&leaf)?.identity != *leaf_identity
+                    || read_source(&mut leaf)? != captured.bytes
+                {
+                    return Err(CoreError::new(
+                        "conflict",
+                        "The canonical source changed after preview",
+                    ));
+                }
+                if source == target {
+                    self.install_record(&plan)?;
+                    self.commit(&plan)?;
+                    return Ok(t.receipt.clone());
+                }
+                ensure_absent(target)?;
+                if !create_trash_parent {
+                    self.install_record(&plan)?;
+                }
+                if old_leaf != new_leaf {
+                    namespace.rename_leaf(&leaf, new_leaf)?;
+                }
+                drop(leaf);
+                namespace.move_source(
+                    target
+                        .file_name()
+                        .unwrap()
+                        .to_str()
+                        .ok_or_else(|| CoreError::new("invalidName", "Non-UTF8 target name"))?,
+                )?;
+                let reopened = namespace.open_moved_file(new_leaf)?;
+                if stamp(&reopened)?.identity != *leaf_identity {
+                    return Err(CoreError::new(
+                        "recoveryPending",
+                        "Canonical object binding changed during rename",
+                    ));
+                }
+                self.commit(&plan)?;
+                drop(trash_directory);
+                drop(trash_guard);
+            }
+            Mutation::Update { files: changes } => {
+                let mut created = Vec::new();
+                for c in changes.iter().filter(|c| c.before.is_none()) {
+                    let guard = ParentGuard::acquire(Path::new(&c.path))?;
+                    ensure_absent(Path::new(&c.path))?;
+                    created.push((guard, c));
+                }
+                self.install_record(&plan)?;
+                for c in changes.iter().filter(|c| c.before.is_some()) {
+                    let index = t.files.iter().position(|f| f.path == c.path).unwrap();
+                    if c.before.as_ref() != Some(&c.after) {
+                        write_blob(&mut handles[index], &c.after)?;
+                    }
+                    observations.push(RevisionFact {
+                        path: c.path.clone(),
+                        stamp: stamp(&handles[index])?,
+                        hash: hash(&c.after),
+                        revision: t.preview.revisions[&c.path].clone(),
+                    });
+                }
+                let mut resource_births = Vec::new();
+                for (guard, c) in created {
+                    let mut file = guard.open_file(true, true)?;
+                    self.record_materialized(operation_id, Path::new(&c.path), &file)?;
+                    write_blob(&mut file, &c.after)?;
+                    observations.push(RevisionFact {
+                        path: c.path.clone(),
+                        stamp: stamp(&file)?,
+                        hash: hash(&c.after),
+                        revision: t.preview.revisions[&c.path].clone(),
+                    });
+                    if let Some(reference) = t.preview.resource_map.get(&c.path) {
+                        resource_births.push(ResourceBirth {
+                            resource_id: reference.rsplit('/').next().unwrap().into(),
+                            workspace_id: plan.workspace_id.clone().unwrap(),
+                            node_id: t.preview.node_map.values().next().unwrap().clone(),
+                            identity: stamp(&file)?.identity,
+                        });
+                    }
+                    handles.push(file);
+                    guards.push(guard);
+                }
+                if !resource_births.is_empty() {
+                    journal::private_create(
+                        &self.journal_path(operation_id, "resource-births"),
+                        &serde_json::to_vec(&resource_births)?,
+                    )?;
+                }
+                journal::private_create(
+                    &self.journal_path(operation_id, "observations"),
+                    &serde_json::to_vec(&observations)?,
+                )?;
+                self.commit(&plan)?;
+            }
+            Mutation::CreateTree {
+                target,
+                directories,
+                files: output,
+                births,
+                updates,
+            } => {
+                if !matches!(t.request.intent, OperationIntent::BackupLibrary { .. }) {
+                    self.owned_parent(root, Path::new(target).parent().unwrap())?;
+                }
+                let guard = ParentGuard::acquire(Path::new(target))?;
+                ensure_absent(Path::new(target))?;
+                let mut update_creates = Vec::new();
+                for c in updates.iter().filter(|c| c.before.is_none()) {
+                    let g = ParentGuard::acquire(Path::new(&c.path))?;
+                    ensure_absent(Path::new(&c.path))?;
+                    update_creates.push((g, c));
+                }
+                self.install_record(&plan)?;
+                let directory = guard.create_directory()?;
+                self.record_materialized(operation_id, Path::new(target), &directory)?;
+                let mut dir_handles = BTreeMap::from([(PathBuf::new(), directory)]);
+                let mut dirs = directories.iter().map(PathBuf::from).collect::<Vec<_>>();
+                dirs.sort_by_key(|p| p.components().count());
+                dirs.dedup();
+                for relative in dirs {
+                    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+                    let parent = dir_handles.get(parent).ok_or_else(|| {
+                        CoreError::new("invalidPlan", "Missing planned parent directory")
+                    })?;
+                    let handle = ParentGuard::child_directory(
+                        parent,
+                        relative.file_name().unwrap().to_str().unwrap(),
+                    )
+                    .map_err(|mut e| {
+                        e.message = format!(
+                            "Create directory {}: {}",
+                            display(&Path::new(target).join(&relative)),
+                            e.message
+                        );
+                        e
+                    })?;
+                    self.record_materialized(
+                        operation_id,
+                        &Path::new(target).join(&relative),
+                        &handle,
+                    )?;
+                    dir_handles.insert(relative, handle);
+                }
+                let mut new_births = Vec::new();
+                let mut resource_births = Vec::new();
+                for c in output {
+                    let relative = Path::new(&c.path).strip_prefix(target).map_err(|_| {
+                        CoreError::new("invalidPlan", "Planned file escaped target")
+                    })?;
+                    let parent = dir_handles
+                        .get(relative.parent().unwrap_or_else(|| Path::new("")))
+                        .ok_or_else(|| {
+                            CoreError::new("invalidPlan", "Missing planned file parent")
+                        })?;
+                    let mut file = ParentGuard::child_file(
+                        parent,
+                        relative.file_name().unwrap().to_str().unwrap(),
+                    )?;
+                    self.record_materialized(operation_id, Path::new(&c.path), &file)?;
+                    write_blob(&mut file, &c.after)?;
+                    if let Some(revision) = t.preview.revisions.get(&c.path) {
+                        observations.push(RevisionFact {
+                            path: c.path.clone(),
+                            stamp: stamp(&file)?,
+                            hash: hash(&c.after),
+                            revision: revision.clone(),
+                        });
+                    }
+                    if let Some(b) = births.iter().find(|b| b.path == c.path) {
+                        new_births.push(Birth {
+                            node_id: b.node_id.clone(),
+                            workspace_id: plan.workspace_id.clone().unwrap(),
+                            identity: stamp(&file)?.identity,
+                        });
+                    }
+                    if let Some(reference) = t.preview.resource_map.get(&c.path) {
+                        let owner = births
+                            .iter()
+                            .filter(|b| {
+                                Path::new(&c.path).starts_with(Path::new(&b.path).parent().unwrap())
+                            })
+                            .max_by_key(|b| Path::new(&b.path).components().count())
+                            .ok_or_else(|| {
+                                CoreError::new(
+                                    "invalidPlan",
+                                    "A fresh resource lacks its fresh owner",
+                                )
+                            })?;
+                        resource_births.push(ResourceBirth {
+                            resource_id: reference.rsplit('/').next().unwrap().into(),
+                            workspace_id: plan.workspace_id.clone().unwrap(),
+                            node_id: owner.node_id.clone(),
+                            identity: stamp(&file)?.identity,
+                        });
+                    }
+                    handles.push(file);
+                }
+                for c in updates.iter().filter(|c| c.before.is_some()) {
+                    let index = t
+                        .files
+                        .iter()
+                        .position(|f| f.path == c.path)
+                        .ok_or_else(|| CoreError::new("invalidPlan", "Missing config preimage"))?;
+                    write_source(&mut handles[index], &c.after)?;
+                    observations.push(RevisionFact {
+                        path: c.path.clone(),
+                        stamp: stamp(&handles[index])?,
+                        hash: hash(&c.after),
+                        revision: t.preview.revisions[&c.path].clone(),
+                    });
+                }
+                for (g, c) in update_creates {
+                    let mut f = g.open_file(true, true)?;
+                    self.record_materialized(operation_id, Path::new(&c.path), &f)?;
+                    write_source(&mut f, &c.after)?;
+                    observations.push(RevisionFact {
+                        path: c.path.clone(),
+                        stamp: stamp(&f)?,
+                        hash: hash(&c.after),
+                        revision: t.preview.revisions[&c.path].clone(),
+                    });
+                    handles.push(f);
+                    guards.push(g);
+                }
+                if !new_births.is_empty() {
+                    journal::private_create(
+                        &self.journal_path(operation_id, "births"),
+                        &serde_json::to_vec(&new_births)?,
+                    )?;
+                }
+                if !resource_births.is_empty() {
+                    journal::private_create(
+                        &self.journal_path(operation_id, "resource-births"),
+                        &serde_json::to_vec(&resource_births)?,
+                    )?;
+                }
+                journal::private_create(
+                    &self.journal_path(operation_id, "observations"),
+                    &serde_json::to_vec(&observations)?,
+                )?;
+                self.commit(&plan)?;
+            }
+        }
+        // Existing UI sessions retain their drafts but their bases become stale.
+        for session in self.sessions.values_mut().filter(|s| t.affects(&s.path)) {
+            session.base_id = fresh();
+        }
+        Ok(t.receipt.clone())
+    }
+    fn install_record(&self, plan: &journal::Plan) -> Result<()> {
+        journal::private_create(
+            &self.journal_path(&plan.operation_id, "install"),
+            &serde_json::to_vec(
+                &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),
+            )?,
+        )
+    }
+    pub(crate) fn require_workspace(&self, root: &Path) -> Result<WorkspaceConfig> {
+        self.workspace(root)?.ok_or_else(|| {
+            CoreError::new(
+                "unadmittedLibrary",
+                "The library needs its original committed private identity journal",
+            )
+        })
+    }
+    pub(crate) fn owned_parent(&self, root: &Path, parent: &Path) -> Result<()> {
+        if !parent.starts_with(root)
+            || parent
+                .strip_prefix(root)
+                .unwrap()
+                .components()
+                .any(|c| c.as_os_str().to_string_lossy().starts_with(".weftext-"))
+        {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "Target is outside the live managed library",
+            ));
+        }
+        self.check_discovery_boundary(root, parent)?;
+        let _ = ParentGuard::acquire(&parent.join(".parent-prospective"))?;
+        Ok(())
+    }
+    fn managed_node(
+        &self,
+        root: &Path,
+        directory: &Path,
+        allow_trash: bool,
+    ) -> Result<CapturedFile> {
+        if !directory.starts_with(root) {
+            return Err(CoreError::new("outsideRoot", "Node is outside the library"));
+        }
+        if !allow_trash {
+            self.check_subtree_boundary(root, directory)?;
+        }
+        let name = node_name(directory)?;
+        let path = directory.join(format!("{name}.typ"));
+        let file = capture_optional(&path)?
+            .ok_or_else(|| CoreError::new("missingNode", "The canonical source is missing"))?;
+        self.check_pending(&path)?;
+        let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
+            CoreError::new(
+                "identityConflict",
+                "Source object has no committed admission",
+            )
+        })?;
+        let workspace = self.require_workspace(root)?;
+        if birth.workspace_id != workspace.workspace_id
+            || weftext_engine::inspect(&decode(&file.bytes)?).id.as_ref() != Some(&birth.node_id)
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "Canonical source declaration and admission differ",
+            ));
+        }
+        Ok(file)
+    }
+    fn prepare_relocation(
+        &self,
+        root: &Path,
+        source: &Path,
+        target: &Path,
+        trash: bool,
+        files: &mut Vec<CapturedFile>,
+        preview: &mut OperationPreview,
+    ) -> Result<Mutation> {
+        // Trash folders use operation UUID names but keep the original canonical
+        // basename. Restore obtains that name from the original frozen record.
+        let mut file = if source
+            .components()
+            .any(|c| c.as_os_str() == ".weftext-trash")
+        {
+            let old = self
+                .operations
+                .values()
+                .filter(|p| self.committed(&p.operation_id))
+                .filter_map(|p| p.transaction.as_ref())
+                .find_map(|t| match &t.mutation {
+                    Mutation::Relocate {
+                        target, new_leaf, ..
+                    } if Path::new(target) == source => Some(new_leaf.clone()),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "trashMissing",
+                        "No committed record binds this trash directory",
+                    )
+                })?;
+            capture_optional(&source.join(old))?.ok_or_else(|| {
+                CoreError::new("missingNode", "Trashed canonical source is missing")
+            })?
+        } else {
+            self.managed_node(root, source, false)?
+        };
+        self.check_pending(Path::new(&file.path))?;
+        let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
+            CoreError::new(
+                "identityConflict",
+                "Original admitted node object was replaced",
+            )
+        })?;
+        let workspace = self.require_workspace(root)?;
+        if birth.workspace_id != workspace.workspace_id
+            || weftext_engine::inspect(&decode(&file.bytes)?).id.as_ref() != Some(&birth.node_id)
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "Node declaration or workspace changed",
+            ));
+        }
+        if !trash
+            || !target
+                .components()
+                .any(|c| c.as_os_str() == ".weftext-trash")
+        {
+            self.owned_parent(root, target.parent().unwrap())?;
+        }
+        let create_trash_parent = target
+            .parent()
+            .is_some_and(|p| p == root.join(".weftext-trash") && !p.exists());
+        let namespace = NamespaceGuard::acquire(
+            source,
+            if create_trash_parent {
+                root
+            } else {
+                target.parent().unwrap()
+            },
+        )?;
+        let old_leaf = Path::new(&file.path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let new_leaf = if target
+            .components()
+            .any(|c| c.as_os_str() == ".weftext-trash")
+        {
+            old_leaf.clone()
+        } else {
+            format!("{}.typ", node_name(target)?)
+        };
+        if source != target {
+            ensure_absent(target)?;
+        }
+        let source_identity = namespace.source_identity()?;
+        let target_parent_identity = namespace.parent_identity()?;
+        // Compare the exact canonical file through the namespace's actual source handle.
+        let mut current = namespace.open_source_file(&old_leaf, false)?;
+        if stamp(&current)? != file.stamp || read_source(&mut current)? != file.bytes {
+            return Err(CoreError::new(
+                "conflict",
+                "Canonical object changed during planning",
+            ));
+        }
+        file.path = display(&source.join(&old_leaf));
+        preview
+            .changes
+            .push(change(source, "relocateFrom", file.bytes.len()));
+        preview
+            .changes
+            .push(change(target, "relocateTo", file.bytes.len()));
+        preview
+            .node_map
+            .insert(birth.node_id.clone(), birth.node_id);
+        let leaf_identity = file.stamp.identity.clone();
+        files.push(file);
+        Ok(Mutation::Relocate {
+            source: display(source),
+            target: display(target),
+            source_identity,
+            target_parent_identity,
+            create_trash_parent,
+            old_leaf,
+            new_leaf,
+            leaf_identity,
+        })
+    }
+    fn validate_update(&self, root: &Path, path: &Path, after: &[u8]) -> Result<()> {
+        if !path.starts_with(root) || path.components().any(|c| c.as_os_str() == ".weftext-trash") {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "Updates require live files inside this library",
+            ));
+        }
+        let name = path.file_name().unwrap_or_default();
+        if name == "weftext.directory.json" {
+            return crate::directory_identity::validate_directory_marker(after).map(|_| ());
+        }
+        if path.parent() == Some(root)
+            && [
+                ".weftext-schema.json",
+                ".weftext-settings.json",
+                ".weftext-tags.json",
+                ".weftext-rules",
+            ]
+            .iter()
+            .any(|n| name == *n)
+        {
+            let _: serde_json::Value = serde_json::from_slice(after)?;
+            return Ok(());
+        }
+        let parent = path.parent().unwrap();
+        self.check_discovery_boundary(root, parent)?;
+        let canonical = self.managed_node(root, parent, false)?;
+        if Path::new(&canonical.path) == path {
+            let before_id = weftext_engine::inspect(&decode(&canonical.bytes)?).id;
+            if weftext_engine::inspect(&decode(after)?).id != before_id {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "A source update must preserve its admitted Node ID",
+                ));
+            }
+        } else if name == "weftext.annotations.json" || name == "weftext.resources.json" {
+            let _: serde_json::Value = serde_json::from_slice(after)?;
+        } else {
+            let manifest =
+                capture_optional(&parent.join("weftext.resources.json"))?.ok_or_else(|| {
+                    CoreError::new(
+                        "unsupportedRole",
+                        "Resource updates require an existing owned resource manifest",
+                    )
+                })?;
+            let value: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
+            if value["version"] != 1
+                || !value["resources"].as_array().is_some_and(|a| {
+                    let records = a
+                        .iter()
+                        .filter(|r| r["path"].as_str() == name.to_str())
+                        .collect::<Vec<_>>();
+                    records.len() == 1
+                        && records.iter().any(|r| {
+                            r["path"].as_str() == name.to_str()
+                                && r["resourceId"]
+                                    .as_str()
+                                    .is_some_and(|id| Uuid::parse_str(id).is_ok())
+                        })
+                })
+            {
+                return Err(CoreError::new(
+                    "unsupportedRole",
+                    "The file is not registered as a Node-owned resource",
+                ));
+            }
+            let file = capture_optional(path)?.ok_or_else(|| {
+                CoreError::new("resourceMissing", "A dependency resource is missing")
+            })?;
+            let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
+            let resource_id = value["resources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["path"].as_str() == name.to_str())
+                .unwrap()["resourceId"]
+                .as_str()
+                .unwrap();
+            if file.bytes != after
+                || !self.admitted_resource(
+                    resource_id,
+                    &owner.workspace_id,
+                    &owner.node_id,
+                    &file.stamp.identity,
+                )
+            {
+                return Err(CoreError::new(
+                    "unsupportedRole",
+                    "UpdateFiles may only freeze an unchanged admitted Resource dependency",
+                ));
+            }
+        }
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)] // One frozen source/schema/tree scope plus its output preview.
+    fn plan_copy(
+        &self,
+        root: &Path,
+        source: &Path,
+        target: &Path,
+        files: &[CapturedFile],
+        dirs: &[CapturedDirectory],
+        preview: &mut OperationPreview,
+        allow_losses: bool,
+        schema_config: Option<&CapturedFile>,
+    ) -> Result<Mutation> {
+        use weftext_knowledge as knowledge;
+        let workspace = self.require_workspace(root)?;
+        let schema = if let Some(config) = schema_config {
+            weftext_data::Schema::from_author_json(&decode(&config.bytes)?)
+        } else {
+            weftext_data::Schema::bundled()
+        }
+        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+        let inventory = self.inventory(root)?;
+        if !inventory.complete {
+            return Err(CoreError::new(
+                "coverageIncomplete",
+                "Copy requires a complete bounded inventory observation",
+            ));
+        }
+        let mut nodes = Vec::new();
+        let mut node_map = BTreeMap::new();
+        let mut births = Vec::new();
+        let mut revisions = BTreeMap::new();
+        let mut definitions = BTreeMap::new();
+        let mut owners = BTreeMap::new();
+        let mut source_targets = BTreeMap::new();
+        for item in inventory.entries.iter().filter(|e| e.kind == "node") {
+            if item.identity_status != "admitted" {
+                if Path::new(&item.path).starts_with(source) {
+                    return Err(CoreError::new(
+                        "identityConflict",
+                        "Copy subtree has an unadmitted, duplicate or damaged Node",
+                    ));
+                }
+                continue;
+            }
+            let id = item.node_id.clone().unwrap();
+            let owner = knowledge::NodeRef {
+                workspace_id: workspace.workspace_id.clone(),
+                node_id: id.clone(),
+            };
+            let observed = if let Some(f) = files.iter().find(|f| f.path == item.path) {
+                f.clone()
+            } else {
+                capture_optional(Path::new(&item.path))?
+                    .ok_or_else(|| CoreError::new("scopeChanged", "Link target disappeared"))?
+            };
+            let source_text = decode(&observed.bytes)?;
+            let info = weftext_engine::inspect_metadata(&source_text);
+            let revision = self.accepted_revision(&observed).unwrap_or_default();
+            nodes.push(knowledge::NodeSnapshot {
+                owner: owner.clone(),
+                path: file_url(Path::new(&item.path))?,
+                library_path: Path::new(&item.path)
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                revision_id: revision,
+                source: source_text.clone(),
+                title: info.title,
+                aliases: vec![],
+                labels: vec![],
+                labels_complete: false,
+            });
+            if Path::new(&item.path).starts_with(source) {
+                let new = knowledge::NodeRef {
+                    workspace_id: workspace.workspace_id.clone(),
+                    node_id: fresh(),
+                };
+                let after_path = copy_path(source, target, Path::new(&item.path))?;
+                preview.node_map.insert(id.clone(), new.node_id.clone());
+                node_map.insert(owner.clone(), new.clone());
+                let revision = fresh();
+                preview
+                    .revisions
+                    .insert(display(&after_path), revision.clone());
+                revisions.insert(owner.clone(), revision);
+                births.push(NewBirth {
+                    path: display(&after_path),
+                    node_id: new.node_id,
+                });
+                owners.insert(item.path.clone(), owner.clone());
+                source_targets.insert(item.path.clone(), display(&after_path));
+                for slot in knowledge::definition_slots(&source_text, &owner)
+                    .map_err(|e| CoreError::new(&e.code, e.message))?
+                {
+                    if !self.is_definition_key_admitted(root, &owner.node_id, &slot.key)? {
+                        return Err(CoreError::new(
+                            "definitionUnadmitted",
+                            "An authored definition key has no committed Core allocation fact",
+                        ));
+                    }
+                    definitions.insert(slot.identity, fresh());
+                }
+            }
+        }
+        let mut resource_map = BTreeMap::new();
+        let mut resource_revisions = BTreeMap::new();
+        let mut resources = Vec::new();
+        let mut manifests = BTreeMap::new();
+        let mut annotations = BTreeMap::new();
+        for file in files {
+            let path = Path::new(&file.path);
+            if path
+                .file_name()
+                .is_some_and(|n| n == "weftext.directory.json")
+            {
+                manifests.insert(
+                    file.path.clone(),
+                    self.copy_directory_marker(root, path, &file.bytes)?,
+                );
+            } else if path
+                .file_name()
+                .is_some_and(|n| n == "weftext.resources.json")
+            {
+                let canonical = path
+                    .parent()
+                    .unwrap()
+                    .join(format!("{}.typ", node_name(path.parent().unwrap())?));
+                let owner = owners.get(&display(&canonical)).ok_or_else(|| {
+                    CoreError::new(
+                        "resourceOwner",
+                        "Resource manifest is not inside a copied admitted Node",
+                    )
+                })?;
+                let mut value: serde_json::Value = serde_json::from_slice(&file.bytes)?;
+                if value["version"] != 1 || !value["resources"].is_array() {
+                    return Err(CoreError::new(
+                        "resourceManifest",
+                        "Unsupported resource manifest format",
+                    ));
+                }
+                for record in value["resources"].as_array_mut().unwrap() {
+                    let old_id = record["resourceId"]
+                        .as_str()
+                        .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource ID"))?
+                        .to_string();
+                    valid_operation_id(&old_id)?;
+                    let name = record["path"].as_str().ok_or_else(|| {
+                        CoreError::new("resourceManifest", "Missing resource path")
+                    })?;
+                    let resource_path = resource_path(path.parent().unwrap(), name)?;
+                    let resource = files
+                        .iter()
+                        .find(|f| f.path == display(&resource_path))
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "resourceMissing",
+                                "Copy snapshot omits a registered resource",
+                            )
+                        })?;
+                    if !self.admitted_resource(
+                        &old_id,
+                        &workspace.workspace_id,
+                        &owner.node_id,
+                        &resource.stamp.identity,
+                    ) {
+                        return Err(CoreError::new(
+                            "resourceUnadmitted",
+                            "Manifest UUID alone does not establish a Resource identity",
+                        ));
+                    }
+                    let new_id = fresh();
+                    let old_ref = format!("weftext-resource://{}/{old_id}", workspace.workspace_id);
+                    let new_ref = format!("weftext-resource://{}/{new_id}", workspace.workspace_id);
+                    if resource_map
+                        .insert(old_ref.clone(), new_ref.clone())
+                        .is_some()
+                    {
+                        return Err(CoreError::new(
+                            "duplicateResource",
+                            "Duplicate resource IDs in copy snapshot",
+                        ));
+                    }
+                    let after_path = copy_path(source, target, &resource_path)?;
+                    let revision = fresh();
+                    preview
+                        .revisions
+                        .insert(display(&after_path), revision.clone());
+                    resource_revisions.insert(old_ref.clone(), revision);
+                    preview.resource_map.insert(display(&after_path), new_ref);
+                    resources.push(knowledge::ResourceSnapshot {
+                        key: old_ref,
+                        path: file_url(&resource_path)?,
+                        revision_id: self.accepted_revision(resource).unwrap_or_default(),
+                    });
+                    record["resourceId"] = new_id.into();
+                }
+                manifests.insert(file.path.clone(), serde_json::to_vec_pretty(&value)?);
+            } else if path
+                .file_name()
+                .is_some_and(|n| n == "weftext.annotations.json")
+            {
+                let doc = knowledge::decode_annotations(&file.bytes)
+                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+                for record in doc.records {
+                    if annotations.insert(record.annotation_id, fresh()).is_some() {
+                        return Err(CoreError::new(
+                            "duplicateAnnotation",
+                            "Duplicate annotation IDs in copy snapshot",
+                        ));
+                    }
+                }
+            }
+        }
+        let mut transfer = Vec::new();
+        for file in files {
+            let owner = owners.get(&file.path).cloned();
+            let kind = if owner.is_some() {
+                knowledge::CopyFileKind::Source
+            } else if Path::new(&file.path)
+                .file_name()
+                .is_some_and(|n| n == "weftext.annotations.json")
+            {
+                knowledge::CopyFileKind::Annotations
+            } else {
+                knowledge::CopyFileKind::Resource
+            };
+            let mut typed_refs = vec![];
+            let mut definition_references = vec![];
+            let mut complete = true;
+            if let Some(owner) = &owner {
+                match weftext_data::typed_ref_closure(&decode(&file.bytes)?, &schema) {
+                    Ok(closure) => {
+                        complete = closure.complete;
+                        typed_refs = closure
+                            .slots
+                            .into_iter()
+                            .map(|s| knowledge::TypedRefSlot {
+                                from: s.from,
+                                to: s.to,
+                                target: s.target,
+                                kind: s.kind,
+                            })
+                            .collect();
+                    }
+                    Err(_) => complete = false,
+                }
+                match knowledge::saved_query_reference_slots(&decode(&file.bytes)?, &schema, owner)
+                {
+                    Ok(slots) => {
+                        typed_refs.extend(slots.typed_refs);
+                        definition_references = slots.definition_references;
+                    }
+                    Err(_) => complete = false,
+                }
+                match weftext_engine::citation_work_slots(&decode(&file.bytes)?) {
+                    Ok(slots) => {
+                        typed_refs.extend(slots.into_iter().map(|slot| knowledge::TypedRefSlot {
+                            from: slot.range.from,
+                            to: slot.range.to,
+                            target: slot.work,
+                            kind: "node_ref".into(),
+                        }))
+                    }
+                    Err(_) => complete = false,
+                }
+            }
+            transfer.push(knowledge::CopyFile {
+                source_path: file_url(Path::new(&file.path))?,
+                target_path: display(&copy_path(source, target, Path::new(&file.path))?),
+                before: file.bytes.clone(),
+                kind,
+                owner,
+                typed_refs,
+                definition_references,
+                typed_refs_complete: complete,
+            });
+        }
+        let plan = knowledge::plan_copy(knowledge::CopyInput {
+            files: transfer,
+            node_map,
+            resource_map,
+            annotation_map: annotations,
+            definition_map: definitions,
+            revision_map: revisions,
+            resource_revision_map: resource_revisions,
+            inventory: knowledge::InventorySnapshot {
+                generation: preview.plan_id.clone(),
+                coverage: knowledge::Coverage::Complete,
+                nodes,
+                resources,
+            },
+            allow_losses,
+        })
+        .map_err(|e| CoreError::new(&e.code, e.message))?;
+        preview.losses = plan.losses;
+        let mut output = plan
+            .files
+            .into_iter()
+            .map(|f| FileChange {
+                path: f.path,
+                base_id: None,
+                before: None,
+                after: f.after,
+            })
+            .collect::<Vec<_>>();
+        for (original, after) in manifests {
+            let target_path = display(&copy_path(source, target, Path::new(&original))?);
+            output
+                .iter_mut()
+                .find(|f| f.path == target_path)
+                .unwrap()
+                .after = after;
+        }
+        let mut directories = dirs
+            .iter()
+            .filter_map(|d| Path::new(&d.path).strip_prefix(source).ok())
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(display)
+            .collect::<Vec<_>>();
+        if !plan.preserved_originals.is_empty() {
+            directories.push(".weftext-copy-originals".into());
+            for original in plan.preserved_originals {
+                let original_path = url::Url::parse(&original.source_path)
+                    .ok()
+                    .and_then(|u| u.to_file_path().ok())
+                    .ok_or_else(|| CoreError::new("invalidPlan", "Invalid preserved source URL"))?;
+                let name = hash(display(&original_path).as_bytes());
+                output.push(FileChange {
+                    path: display(&target.join(".weftext-copy-originals").join(name)),
+                    base_id: None,
+                    before: None,
+                    after: original.bytes,
+                });
+            }
+        }
+        preview.changes.extend(
+            output
+                .iter()
+                .map(|f| change(Path::new(&f.path), "copy", f.after.len())),
+        );
+        Ok(Mutation::CreateTree {
+            target: display(target),
+            directories,
+            files: output,
+            births,
+            updates: vec![],
+        })
+    }
+}
+fn intent_kind(intent: &OperationIntent) -> &'static str {
+    match intent {
+        OperationIntent::RenameNode { .. } => "renameNode",
+        OperationIntent::MoveNode { .. } => "moveNode",
+        OperationIntent::CopyNode { .. } => "copyNode",
+        OperationIntent::TemplateNode { .. } => "templateNode",
+        OperationIntent::TrashNode { .. } => "trashNode",
+        OperationIntent::RestoreNode { .. } => "restoreNode",
+        OperationIntent::NewNode { .. } => "newNode",
+        OperationIntent::UpdateFiles { .. } => "updateFiles",
+        OperationIntent::BackupLibrary { .. } => "backupLibrary",
+        OperationIntent::ConfigureStyle { .. } => "configureStyle",
+        OperationIntent::ImportResource { .. } => "importResource",
+        OperationIntent::ImportNative { .. } => "importNative",
+        OperationIntent::ImportBibliography { .. } => "importBibliography",
+    }
+}
+pub(crate) fn canonical_json_bytes(value: &serde_json::Value) -> Result<Vec<u8>> {
+    fn sorted(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(object) => {
+                let mut keys = object.keys().collect::<Vec<_>>();
+                keys.sort();
+                let mut result = serde_json::Map::new();
+                for key in keys {
+                    result.insert(key.clone(), sorted(&object[key]));
+                }
+                serde_json::Value::Object(result)
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(sorted).collect())
+            }
+            other => other.clone(),
+        }
+    }
+    Ok(serde_json::to_vec(&sorted(value))?)
+}
+fn value_enabled(bytes: &Option<Vec<u8>>) -> Result<bool> {
+    Ok(bytes
+        .as_ref()
+        .map(|b| serde_json::from_slice::<serde_json::Value>(b))
+        .transpose()?
+        .and_then(|v| v["defaultStyle"]["enabled"].as_bool())
+        .unwrap_or(false))
+}
+fn default_style_source() -> &'static str {
+    weftext_engine::DEFAULT_LIBRARY_STYLE
+}
+fn resource_path(directory: &Path, name: &str) -> Result<PathBuf> {
+    let relative = PathBuf::from(name);
+    if relative.is_absolute()
+        || relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|c| !matches!(c, Component::Normal(_)))
+    {
+        return Err(CoreError::new(
+            "resourcePath",
+            "Resources require a canonical relative file path",
+        ));
+    }
+    let path = absolute_path(&directory.join(relative))?;
+    if is_canonical(&path) {
+        return Err(CoreError::new(
+            "resourcePath",
+            "Canonical Node source cannot be registered as a resource",
+        ));
+    }
+    Ok(path)
+}
+pub(crate) fn file_url(path: &Path) -> Result<String> {
+    url::Url::from_file_path(path)
+        .map(|u| u.to_string())
+        .map_err(|_| CoreError::new("invalidPath", "Cannot form a canonical local file URL"))
+}
+fn copy_path(source: &Path, target: &Path, path: &Path) -> Result<PathBuf> {
+    let relative = path
+        .strip_prefix(source)
+        .map_err(|_| CoreError::new("invalidPlan", "Copy member escaped its selected source"))?;
+    if relative == Path::new(&format!("{}.typ", node_name(source)?)) {
+        Ok(target.join(format!("{}.typ", node_name(target)?)))
+    } else {
+        Ok(target.join(relative))
+    }
+}
+pub(crate) fn read_blob(file: &mut File) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    file.seek(SeekFrom::Start(0))?;
+    file.take(MAX_OPERATION_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_OPERATION_BYTES {
+        return Err(CoreError::new("budget", "File exceeds64MiB"));
+    }
+    Ok(bytes)
+}
+pub(crate) fn write_blob(file: &mut File, bytes: &[u8]) -> Result<()> {
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(bytes)?;
+    file.set_len(bytes.len() as u64)?;
+    file.sync_all()?;
+    if read_blob(file)? != bytes {
+        return Err(CoreError::new(
+            "verificationFailed",
+            "Same-handle blob readback differs; original operation retained",
+        ));
+    }
+    Ok(())
+}
+pub(crate) fn change(path: &Path, action: &str, bytes: usize) -> OperationChange {
+    OperationChange {
+        path: display(path),
+        action: action.into(),
+        bytes,
+    }
+}
+fn node_name(directory: &Path) -> Result<String> {
+    let name = directory
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| CoreError::new("invalidName", "Node name must be UTF-8"))?;
+    valid_name(name)?;
+    Ok(name.into())
+}
+pub(crate) fn ensure_absent(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Err(CoreError::new(
+            "exists",
+            "Create-only target is occupied; no overwrite is allowed",
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+fn capture_optional(path: &Path) -> Result<Option<CapturedFile>> {
+    let guard = ParentGuard::acquire(path)?;
+    match guard.open_file(false, false) {
+        Ok(mut file) => {
+            let bytes = read_blob(&mut file)?;
+            Ok(Some(CapturedFile {
+                path: display(path),
+                bytes,
+                stamp: stamp(&file)?,
+            }))
+        }
+        Err(e) if e.code == "missing" => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+fn locator_within(path: &Path, root: &Path) -> bool {
+    let path = display(path).replace('/', "\\").to_lowercase();
+    let root = display(root)
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase();
+    path == root || path.starts_with(&(root + "\\"))
+}
+fn locator_equal(a: &str, b: &str) -> bool {
+    a.replace('/', "\\")
+        .eq_ignore_ascii_case(&b.replace('/', "\\"))
+}
+pub(crate) fn sorted_entries(entries: Vec<(std::ffi::OsString, u32)>, _: &Path) -> Vec<String> {
+    let mut names = entries
+        .into_iter()
+        .map(|(name, attrs)| format!("{}:{attrs}", name.to_string_lossy()))
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+fn snapshot_tree(
+    root: &Path,
+    files: &mut Vec<CapturedFile>,
+    dirs: &mut Vec<CapturedDirectory>,
+    skip_instance_lock: bool,
+) -> Result<()> {
+    let mut queue = vec![root.to_path_buf()];
+    let mut total = files.iter().map(|f| f.bytes.len()).sum::<usize>();
+    while let Some(path) = queue.pop() {
+        let guard = ParentGuard::acquire(&path.join(".snapshot-prospective"))?;
+        let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
+        if !complete {
+            return Err(CoreError::new(
+                "coverageIncomplete",
+                "Directory exceeds the snapshot entry budget",
+            ));
+        }
+        dirs.push(CapturedDirectory {
+            path: display(&path),
+            identity: guard.directory_identity()?,
+            entries: sorted_entries(entries.clone(), &path),
+        });
+        for (name, attrs) in entries {
+            if skip_instance_lock && path == root && name == "instance.lock" {
+                continue;
+            }
+            if attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+                return Err(CoreError::new(
+                    "unsupportedPath",
+                    "A snapshot member is reparse, offline or a cloud placeholder",
+                ));
+            }
+            let child = path.join(name);
+            if attrs & 0x10 != 0 {
+                queue.push(child);
+            } else {
+                let captured = capture_optional(&child)?
+                    .ok_or_else(|| CoreError::new("scopeChanged", "Snapshot file disappeared"))?;
+                total += captured.bytes.len();
+                files.push(captured);
+                if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Snapshot exceeds 64 MiB or 5000 files; no partial success",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+fn initialize_source(source: &str, node_id: &str) -> Result<String> {
+    let info = weftext_engine::inspect_metadata(source);
+    if let Some(metadata) = info.metadata {
+        let Some(id) = metadata.fields.iter().find(|f| f.key == "id") else {
+            use typst_syntax::{
+                LinkedNode, Source,
+                ast::{self, AstNode},
+            };
+            let parsed = Source::detached(source);
+            let root = LinkedNode::new(parsed.root());
+            let call = root
+                .children()
+                .find(|n| {
+                    n.range().start == metadata.from && n.get().cast::<ast::FuncCall>().is_some()
+                })
+                .ok_or_else(|| {
+                    CoreError::new("templateIdentity", "Exact metadata call unavailable")
+                })?;
+            let call_ast = call.get().cast::<ast::FuncCall>().unwrap();
+            let dict = call_ast
+                .args()
+                .items()
+                .find_map(|arg| {
+                    if let ast::Arg::Pos(e) = arg {
+                        e.to_untyped().cast::<ast::Dict>()
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| {
+                    CoreError::new("templateIdentity", "Exact metadata dictionary unavailable")
+                })?;
+            let node = parsed.find(dict.to_untyped().span()).ok_or_else(|| {
+                CoreError::new("templateIdentity", "Exact dictionary span unavailable")
+            })?;
+            let range = node.range();
+            let mut after = source.to_string();
+            if source[range.start + 1..range.end - 1].trim() == ":" {
+                after.replace_range(range, &format!("(id: \"{node_id}\")"));
+            } else {
+                after.insert_str(range.start + 1, &format!("id: \"{node_id}\", "));
+            }
+            if weftext_engine::inspect_metadata(&after).id.as_deref() != Some(node_id) {
+                return Err(CoreError::new(
+                    "templateIdentity",
+                    "New metadata id did not reparse",
+                ));
+            }
+            return Ok(after);
+        };
+        if !id.writable
+            || id
+                .value
+                .as_ref()
+                .and_then(serde_json::Value::as_str)
+                .is_none()
+        {
+            return Err(CoreError::new(
+                "templateIdentity",
+                "Computed template identity cannot be rewritten safely",
+            ));
+        }
+        let mut after = source.to_string();
+        after.replace_range(id.from..id.to, &format!("\"{node_id}\""));
+        if weftext_engine::inspect_metadata(&after).id.as_deref() != Some(node_id) {
+            return Err(CoreError::new(
+                "templateIdentity",
+                "Rewritten declaration is not one exact new identity",
+            ));
+        }
+        Ok(after)
+    } else if info.identity_status == "absent" {
+        Ok(format!(
+            "#metadata((id: \"{node_id}\", types: ())) <weftext>\n\n{source}"
+        ))
+    } else {
+        Err(CoreError::new(
+            "templateIdentity",
+            "Unknown or ambiguous template identity is preserved and cannot be initialized",
+        ))
+    }
+}

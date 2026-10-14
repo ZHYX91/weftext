@@ -1,0 +1,27 @@
+.embedded-query { display: block; margin: 1.1em 0; padding: 18px; border: 1px solid #d7e0d9; border-radius: 10px; background: #f7faf6; color: #33413a; font: 14px/1.65 var(--font-ui, sans-serif); }
+.embedded-query-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.embedded-query-heading strong { flex: 1; min-width: 130px; font-size: 16px; }
+.embedded-query-button { border: 1px solid #d2dcd3; background: #fff; color: #385c4f; border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; }
+.embedded-query-button:focus-visible, .embedded-query-input:focus-visible { outline: 2px solid #5a8c7b; outline-offset: 2px; }
+.embedded-query-button:disabled { opacity: .55; cursor: default; }
+.embedded-query-basis, .embedded-query-help { margin: 8px 0; color: #6c776d; font-size: 12px; }
+.embedded-query-warning { margin: 8px 0; color: #945c34; font-size: 13px; white-space: pre-wrap; }
+.embedded-query-result-state { margin: 10px 0 4px; color: #3a6656; font-weight: 600; }
+.embedded-query-result-state.partial, .embedded-query-result-state.stale { color: #945c34; }
+.embedded-query-native-source { display: block; max-height: none; margin: 12px 0; padding: 12px; border-radius: 5px; background: #edf2ed; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 "Noto Sans Mono CJK SC", monospace; }
+.embedded-query-table-host { overflow-x: auto; margin-top: 10px; }
+.embedded-query-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.embedded-query-table th, .embedded-query-table td { border-bottom: 1px solid #dfe7de; padding: 7px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.embedded-query-empty { padding: 12px; color: #647165; }
+.embedded-query-builder { display: grid; gap: 9px; margin-top: 16px; padding-top: 13px; border-top: 1px solid #d7e0d9; }
+.embedded-query-field { display: grid; gap: 4px; font-size: 13px; }
+.embedded-query-input { box-sizing: border-box; width: 100%; padding: 8px; border: 1px solid #ced9d0; border-radius: 5px; background: #fff; color: #283d33; font: 13px/1.6 "Noto Sans Mono CJK SC", monospace; }
+.embedded-query-parameters summary { cursor: pointer; font-size: 12px; color: #647165; }
+.embedded-query-source-host { height: 260px; min-height: 140px; margin-top: 12px; border: 1px solid #ced9d0; border-radius: 5px; background: #fff; overflow: hidden; }
+.embedded-query-source-host .cm-content { padding-top: 12px; padding-bottom: 24px; }
+.embedded-query-dialog { width: min(800px, 90vw); max-height: 90vh; overflow: auto; padding: 24px; border: 1px solid #ced9d0; border-radius: 12px; box-shadow: 0 16px 80px #1b302b40; }
+.embedded-query-dialog::backdrop { background: #13231d66; }
+.embedded-query-dialog h2 { font-size: 19px; margin-top: 0; }
+.embedded-query-source-proposal { margin: 10px 0; min-height: 240px; white-space: pre; }
+.paged-query-flow { flex: 1; min-width: 300px; overflow: auto; border-left: 1px solid #e3e9df; }
+@media (max-width: 760px) { .embedded-query { padding: 12px; } .embedded-query-heading { align-items: stretch; } .embedded-query-heading strong { flex-basis: 100%; } .mode-styled .preview-pane, .mode-source.with-preview .preview-pane { display: block; } .preview-toggle { display: inline-flex; } }

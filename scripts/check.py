@@ -1,6 +1,7 @@
 """Portable documentation gate; optional bounded models run in disposable copies."""
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -13,9 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def check():
     count=0
-    for p in sorted(ROOT.rglob('*.md')):
-        if '.git' in p.parts:
-            continue
+    files = []
+    for directory, children, names in os.walk(ROOT):
+        children[:] = [name for name in children if name not in
+                       {'.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__'}]
+        files.extend(Path(directory) / name for name in names if name.endswith('.md'))
+    for p in sorted(files):
         text=p.read_text(encoding='utf-8')
         plain=re.sub(r'```.*?```','',text,flags=re.S)
         for target in re.findall(r'\]\(([^\n)]+)\)',plain):
@@ -40,7 +44,7 @@ def check():
         json.loads(p.read_text(encoding='utf-8-sig'),object_pairs_hook=unique)
     for lang in ['.zh-CN','']:
         req=(ROOT/f'docs/REQUIREMENTS{lang}.md').read_text(encoding='utf-8')
-        assert set(re.findall(r'^\| (RQ\d+) /',req,re.M))=={f'RQ{i:02}' for i in range(1,26)}
+        assert set(re.findall(r'^\| (RQ\d+) /',req,re.M))=={f'RQ{i:02}' for i in range(1,28)}
         assert len(re.findall(r'^\| P[12]-\d+ \|',req,re.M))==21
     print(f'PASS: {count} Markdown files, local file links, bilingual peers, JSON, requirement inventory')
     print('Inventory checks do not establish semantics or product behavior.')
@@ -49,7 +53,8 @@ def models():
     with tempfile.TemporaryDirectory(prefix='weftext-check-') as temp:
         copied=Path(temp)/'examples'
         shutil.copytree(ROOT/'docs/design/examples',copied)
-        for script in ['validate_repair.py','precision_relation_model.py']:
+        subprocess.run([sys.executable,str(copied/'resolve_builtin_schema.py'),'--check'],check=True,cwd=copied)
+        for script in ['test_builtin_schema.py','validate_repair.py','precision_relation_model.py']:
             subprocess.run([sys.executable,str(copied/script)],check=True,cwd=copied)
     print('PASS: bounded design models; no product acceptance claimed; source evidence unchanged')
 

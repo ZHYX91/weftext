@@ -1,0 +1,127 @@
+{
+  "cases": [
+    {
+      "actual": "false",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "false",
+      "expression": "false \u0026\u0026 (1 / 0 == 0)",
+      "pass": true
+    },
+    {
+      "actual": "false",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "false",
+      "expression": "(1 / 0 == 0) \u0026\u0026 false",
+      "pass": true
+    },
+    {
+      "actual": "true",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "true",
+      "expression": "true || (1 / 0 == 0)",
+      "pass": true
+    },
+    {
+      "actual": "true",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "true",
+      "expression": "(1 / 0 == 0) || true",
+      "pass": true
+    },
+    {
+      "actual": "error",
+      "budget": 1000,
+      "diagnostic": "division by zero",
+      "expected": "error",
+      "expression": "true \u0026\u0026 (1 / 0 == 0)",
+      "pass": true
+    },
+    {
+      "actual": "error",
+      "budget": 1000,
+      "diagnostic": "division by zero",
+      "expected": "error",
+      "expression": "false || (1 / 0 == 0)",
+      "pass": true
+    },
+    {
+      "actual": "true",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "true",
+      "expression": "[1, 0].exists(x, 1 / x \u003e 0)",
+      "pass": true
+    },
+    {
+      "actual": "true",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "true",
+      "expression": "[0, 1].exists(x, 1 / x \u003e 0)",
+      "pass": true
+    },
+    {
+      "actual": "false",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "false",
+      "expression": "[0, 1].all(x, 1 / x \u003c 0)",
+      "pass": true
+    },
+    {
+      "actual": "false",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "false",
+      "expression": "[1, 0].all(x, 1 / x \u003c 0)",
+      "pass": true
+    },
+    {
+      "actual": "error",
+      "budget": 1000,
+      "diagnostic": "division by zero",
+      "expected": "error",
+      "expression": "[1, 0].filter(x, 1 / x \u003e 0).size() == 1",
+      "pass": true
+    },
+    {
+      "actual": "error",
+      "budget": 1000,
+      "diagnostic": "division by zero",
+      "expected": "error",
+      "expression": "[1, 0].map(x, 1 / x).size() == 2",
+      "pass": true
+    },
+    {
+      "actual": "true",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "true",
+      "expression": "false ? (1 / 0 == 0) : true",
+      "pass": true
+    },
+    {
+      "actual": "false",
+      "budget": 1000,
+      "diagnostic": "",
+      "expected": "false",
+      "expression": "has({}.label) ? {}.label == 'work' : false",
+      "pass": true
+    },
+    {
+      "actual": "error",
+      "budget": 1,
+      "diagnostic": "operation cancelled: actual cost limit exceeded",
+      "expected": "error",
+      "expression": "[1,2,3,4].map(x, x*x).size() == 4 || true",
+      "pass": true
+    }
+  ],
+  "passed": true,
+  "runtime": "cel.dev/cel-go v0.32.0",
+  "scope": "CEL runtime only; Weftext Cell/Rust adapters and authorization not implemented"
+}

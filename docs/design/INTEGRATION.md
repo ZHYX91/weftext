@@ -8,7 +8,7 @@ translation_status: synced
 
 # Contract integration and refactoring order
 
-Status: **accepted-design-not-implemented**; [REVIEW](REVIEW.md) §7 records independent global acceptance of the fixed technical baseline and implementation boundaries. This file connects requirements to the current solution without creating another transaction or field authority.
+Status: **design-refinement-not-implemented**. Independent acceptance of the fixed earlier baseline remains historical; current refinements and evidence limits are recorded in [REVIEW](REVIEW.md) §8.
 
 ## 1. One solution
 
@@ -34,6 +34,8 @@ These are design and implementation paths, **not executed product tests**. Origi
 | RQ19–20 | FEATURES, CORE, EDITOR | Template/import/copy → frozen inputs/map → correct output/loss → confirmation and intranet delivery of the same artifact |
 | RQ21–24 | CORE, all consumers | Actual local/sync/Server guarantees → current permission/revision → save/conflict/recovery/retry; local single-user use does not replace hosted multi-user needs |
 | RQ25, NAV01–05 | EDITOR, FEATURES, CORE | Navigation/list/document state → personal presentation restoration → current permission/result revalidation; UI preferences do not edit source |
+| RQ26 | CORE, EDITOR | Ordinary-file open → explicit dependency root → shared Draft/five views → exact save/Save As/conflict recovery; no automatic Node identity |
+| RQ27 | FEATURES, CORE | Read/propose/manual apply → bounded library rules → specific connectors; separately qualify egress, author writes, external effects and costs |
 
 Structured-capability checks cover the actual historical D4 types and selected behavior, not just three person/task examples. Richer bibliographic, calendar and task structures cannot be deleted because a table control is missing; real deferrals remain explicit. Common and optional advanced fields have layered UI rather than making every field mandatory.
 
@@ -71,8 +73,8 @@ Prior Typst TR-01–09, PR618-01 and PRD5F-01 also retain counterexample value: 
 
 ## 4. Implementation order and entry criteria
 
-1. **Baseline and risks.** Verify requirements/types and form this coherent candidate; validate architecture-sensitive file backends, native data, editing origins and output choices. Independent Sol review precedes a fresh Pro global review. Collect and resolve actual findings before freezing the refactoring baseline.
-2. **Small vertical loop.** Open workspace → ordinary Typst note → local Draft/source save/recovery → stable identity/links → ordinary flow reading/basic rich editing. Test external-editor races and faults early rather than after all features are implemented.
+1. **Bounded refinements and selection prototype.** Apply current requirement/contract fixes while preserving the earlier fixed review as history. First prove real origin mapping/input under EDITOR §2.2 and compare CEL behavior in a real runtime. Repair actual failures with targeted review, without automatically restarting full Pro review.
+2. **Minimum vertical slice.** Verify library-note and outside-library file opening in parallel → one Draft/source save/recovery → basic five-view/flow interaction → stable node identity/links. Test external editing races, late compilation and faults from the first slice. Prototype success covers only its explicit scope, not every view/platform.
 3. **Structure and organization.** Central schemas, property forms, richer types, Query/navigation/lists/task views; validate same-item collection queries, unknown/exact values and safe local edits together.
 4. **Cross-object capabilities.** Independent annotations, templates/copy/import, headings and editable Word/spreadsheet output, intranet downloads, preservation and recoverable Jobs.
 5. **Surfaces and deployment.** Complete hosted multi-user permissions and synchronization through the shared Core, then validate client/offline/revocation/fault combinations. Platforms may ship in stages with unsupported backends explicitly identified; a research probe is not a supported product.
@@ -80,3 +82,14 @@ Prior Typst TR-01–09, PR618-01 and PRD5F-01 also retain counterexample value: 
 Stages may overlap, but later stages cannot bypass identity, transaction or authorization contracts. Freeze public APIs, actual persistence formats, backend capabilities and environments before their implementation slice, without inventing multiple wire generations unnecessarily. Refactoring requires sufficiently concrete core mechanisms, resolved major design gaps and evidence for material choices; release additionally requires real platform acceptance, which limited experiments cannot replace.
 
 Before transforming real materials, make recoverable backups and import old formats from copies with explicit loss and recovery reports. Do not automatically rewrite an original library without confirmation. When no real historical data has been supplied, nonexistent migration objects neither block the new design nor justify a claim that migration is complete.
+
+## 5. Targeted checks for this refinement
+
+- `Inbox/loose.typ` and directories without a primary file remain visible/expandable and Unmanaged. Explicit unmanaged subtrees stop Node discovery, not ordinary browsing. Missing admitted primaries retain identity diagnostics; ignored content never silently becomes Nodes.
+- Outside-library `.typ` without ID opens/saves/Save-As with correct relative dependencies and no new control files beside originals. Preserve both drafts on external change; WebUI copy-download is not in-place save.
+- CEL swaps/exists/all/filter/conditional guards and host aborts follow FEATURES §5.4; authorization/budget failures cannot be absorbed by true.
+- Copy A current r2 plus B pinned to A/Q@r1: retain the exact historical target and preview its dependency; independent copy explicitly rejects instead of changing to r2.
+- Compact schema rejects signature overrides, unknown operations and wrong ABIs; resolution preserves all business fields/constraints/value rules.
+- Check Agent read/egress/write/external effects/cost separately; a free read-only model request still needs the proper egress scope.
+
+These are design requirements. REVIEW §8 and probe READMEs record actual execution; unrun operations are not passes.

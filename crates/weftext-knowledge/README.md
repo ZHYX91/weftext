@@ -1,0 +1,30 @@
+---
+source_language: zh-CN
+translation_of: README.zh-CN.md
+translation_status: synced
+---
+
+[简体中文](README.zh-CN.md)
+
+# Knowledge algorithms
+
+This crate processes only readable snapshots qualified and frozen by Core. It reads or writes no files, allocates no identities and grants no permissions. Core owns current file generations, read qualification, operation IDs, complete selection closures, exact before/after images and logical transactions. Snapshot `coverage` describes only the authorized scope; partial results cannot prove absence of links or candidates throughout the library.
+
+- [Links](src/links.rs): the official Typst AST and standard binding certificate enumerate native links, document labels and references. Unproven or shadowed `link` calls never enter the real-link index. ID and currently resolved path incoming links have separate groups; property references have a separate projection. Notes and existing resources support four address forms. Resource library paths derive from real platform paths and the library-relative path of an admitted note, without guessing filenames. Conversions reparse and compare identical targets, preserving the authored fragment spelling, display and unselected bytes. Links without an explicit body retain their old displayed text through the same single call patch.
+- [Potential links](src/mentions.rs): exact overlapping Unicode matching uses one authorized dictionary. Same-span multiple targets, contained ranges and crossing ranges remain intact. Candidates beyond two display lanes remain in the complete list. Ranges explicitly carry UTF-8 and UTF-16 coordinates; partial graphemes, stale terms and discoveries without a unique editor map cannot receive a shortcut write. Separate logical fragments in the compilation tree are never concatenated. Scalar, candidate or output budgets return explicit partial coverage and the actual stopping point, without truncating a same-span target set.
+- [Annotations](src/annotations.rs): independent JSON retains discussions, replies, states and historical targets. Duplicate JSON members, damaged files and unknown formats never become empty files. Invalid targets retain discussion and resolve/reopen actions; conservative recovery is read-only. Default annotation projections exclude source preimages, private URIs, raw ranges and fresh target context. Cross-revision relocation requires a stepwise verified exact edit chain, never similar-text matching. Suggestions use proven ordinary text slots and return both source and acceptance-state before/after images. Reconfirmation is a separate explicit action.
+- [Templates and copying](src/copy.rs): reusable template registrations refer to a native note's exact identity and revision, without a second authoritative source copy; revision changes require registration again. Official AST or writable text mappings prove parameter slots, excluding managed identity/type controls. Parameters enter exact slots as native literals; missing values, defaults and explicit null differ. Copying uses ordered identity/resource/annotation/definition/candidate-revision maps supplied once by Core. Only official AST and installed schema slots are rewritten, never ordinary text, phone values or CEL strings. The data engine qualifies complete native saved Query roles before their call and scope references bind to actual AST controls. Current definition references follow the same copy map; pinned references retain their original owner/key/revision and expose the historical external dependency. Unproven references or annotation locations reject complete copying or return explicit losses and originals that must be retained.
+
+`NodeSnapshot.path` is a platform-produced canonical local file URL; `PlannedFile.path` is the actual installation destination supplied by the host. The host converts paths at these boundaries and rechecks current permissions. Neither a `SourcePatch` nor a string identity grants write authority.
+
+Current boundaries: generated final-tree links can navigate, but unproven origins acquire no writer. Note fragments require a complete semantic label set for the exact revision; resource fragments require qualification from the actual reader against the exact resource revision. Media targets must be checked against actual authorized `ResourceFacts` for pages, pixels, extraction products and timebases. This crate provides no media decoder, media annotation UI, OCR or arbitrary-format importer. JSON numbers that cannot be preserved exactly reject writable decoding and retain their originals. Core must freeze template settings and source read dependencies; instantiation reuses the copy planner and compiles at the actual future destination. One source has one result identity within a copy input; the host handles multiple instances through separately scoped source/result maps and combines their frozen effects. `preserved_originals` must be saved as real Core effects, rather than discarded after showing losses.
+
+Validation entry points:
+
+```text
+cargo fmt -p weftext-knowledge --check
+cargo test -p weftext-knowledge
+cargo clippy -p weftext-knowledge --all-targets -- -D warnings
+```
+
+Algorithm regressions cover address round trips, moves/revocation/partial scans, native binding shadowing, implicit displayed text, nested and crossing candidates, combining/ZWJ graphemes, damaged JSON, private preimage isolation, forged continuity maps, dual-file suggestion plans, media coordinate qualification, mutual references, definition keys, current/pinned copying and template input injection. These pure algorithm tests do not establish acceptance of desktop workflows, storage faults, permission services or media interactions.

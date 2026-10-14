@@ -1,0 +1,68 @@
+.history-panel, .history-restore {
+  color: var(--text, #253129);
+  background: var(--bg, #fafbf9);
+  border: 1px solid var(--border, #d6dfd7);
+  border-radius: 14px;
+  box-shadow: 0 18px 70px #17251a38;
+  padding: 22px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.history-panel { width: min(1180px, 94vw); }
+.history-restore { width: min(800px, 90vw); }
+.history-panel::backdrop, .history-restore::backdrop { background: #152a1e66; }
+.history-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.history-header h2, .history-restore h2 { font-size: 20px; margin: 0; }
+.history-path { overflow-wrap: anywhere; font-size: 13px; color: var(--muted, #58695b); }
+.history-help { color: var(--muted, #58695b); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.history-layout { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); gap: 20px; }
+.history-sidebar { border-right: 1px solid var(--border, #d6dfd7); padding-right: 16px; }
+.history-versions { list-style: none; padding: 0; margin: 0; max-height: 58vh; overflow: auto; }
+.history-version { padding: 5px 0; }
+.history-version .history-button { text-align: left; width: 100%; }
+.history-version .history-button[aria-pressed="true"] { border-color: var(--accent, #32734b); background: #e5efe7; }
+.history-version-meta { display: block; font-size: 12px; font-weight: normal; color: var(--muted, #58695b); margin-top: 5px; }
+.history-content { min-width: 0; }
+.history-source-pane { min-width: 0; }
+.history-source-pane h3, .history-protected h3 { font-size: 14px; margin: 10px 0; }
+.history-source {
+  font-family: "Noto Sans Mono CJK SC", "Cascadia Code", "Consolas", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d6dfd7);
+  border-radius: 8px;
+  padding: 14px;
+  margin: 0;
+  max-height: 45vh;
+  min-height: 100px;
+  overflow: auto;
+  tab-size: 4;
+}
+.history-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.history-removed { background: #fbe6e3; text-decoration: line-through; text-decoration-color: #9b3a35; }
+.history-added { background: #dceddf; text-decoration: underline; text-decoration-color: #2c653c; }
+.history-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 16px 0 0; }
+.history-button { font: inherit; font-size: 13px; line-height: 1.5; color: inherit; background: var(--surface, #fff); border: 1px solid var(--border, #d6dfd7); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+.history-button.primary { color: #fff; background: var(--accent, #32734b); border-color: var(--accent, #32734b); }
+.history-button:disabled { cursor: default; opacity: .5; }
+.history-button:focus-visible, .history-source:focus-visible, .history-draft summary:focus-visible { outline: 2px solid var(--accent, #32734b); outline-offset: 3px; }
+.history-compare-choice { border: 1px solid var(--border, #d6dfd7); border-radius: 7px; margin: 0; padding: 8px 12px; font-size: 13px; }
+.history-radio { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
+.history-status { font-size: 13px; line-height: 1.7; min-height: 1.7em; overflow-wrap: anywhere; }
+.history-warning, .history-error { color: #9a4e21; line-height: 1.7; font-size: 13px; overflow-wrap: anywhere; }
+.history-operation .history-button { margin: 0 8px 8px 0; }
+.history-protected { border-top: 1px solid var(--border, #d6dfd7); margin-top: 15px; padding-top: 8px; }
+.history-protected:empty { display: none; }
+.history-draft { border: 1px solid var(--border, #d6dfd7); border-radius: 7px; padding: 10px; margin: 10px 0; }
+.history-draft summary { cursor: pointer; font-size: 13px; line-height: 1.6; }
+.history-protection { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.7; margin-top: 16px; }
+.history-protection input { margin-top: 6px; flex-shrink: 0; }
+@media (max-width: 720px) {
+  .history-panel, .history-restore { padding: 15px; }
+  .history-layout, .history-comparison { grid-template-columns: minmax(0, 1fr); }
+  .history-sidebar { border-right: 0; border-bottom: 1px solid var(--border, #d6dfd7); padding: 0 0 14px; }
+  .history-versions { max-height: 25vh; }
+}
