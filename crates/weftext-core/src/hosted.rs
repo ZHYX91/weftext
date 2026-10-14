@@ -3,6 +3,15 @@
 //! configured resources before calling it, and again before disclosing results.
 use super::*;
 use std::collections::BTreeMap;
+#[path = "hosted_library.rs"]
+mod library;
+pub(crate) use library::{ActorLibraryBinding, ActorLibraryHeader, read_actor_library_header};
+#[path = "hosted_backup.rs"]
+mod backup;
+pub use backup::{ActorOwnerBackupStatus, OwnerBackupArtifact};
+#[path = "hosted_content_import.rs"]
+mod content_import;
+pub use content_import::{ActorContentImportReceipt, ContentImportMember};
 #[path = "hosted_feature.rs"]
 mod feature;
 pub use feature::{
@@ -159,6 +168,8 @@ pub struct ActorSaveStatus {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ActorOperation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<ActorLibraryBinding>,
     actor: String,
     resource: String,
     fingerprint: String,
@@ -175,6 +186,8 @@ struct ActorOperation {
     save_definition_reservations: Vec<definition::SaveDefinitionReservation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     history: Option<actor_history::HistoryOperation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    owner_backup: Option<backup::OwnerBackupOperation>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -275,6 +288,7 @@ impl Core {
                 "Open the source in the current actor session",
             ));
         }
+        self.actor_library_for_session(session_id)?;
         Ok(())
     }
 
@@ -320,7 +334,13 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        if record.feature.is_some() || record.definition.is_some() || record.history.is_some() {
+        self.check_actor_library(&record.library)?;
+        if record.feature.is_some()
+            || record.definition.is_some()
+            || record.owner_backup.is_some()
+            || record.history.is_some()
+            || record.owner_backup.is_some()
+        {
             return Err(CoreError::new(
                 "operationConflict",
                 "This operation belongs to a feature or definition proposal",
@@ -353,6 +373,7 @@ impl Core {
         let mut record = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<ActorOperation>(&bytes)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => ActorOperation {
+                library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
                 fingerprint: String::new(),
@@ -363,6 +384,7 @@ impl Core {
                 definition: None,
                 save_definition_reservations: vec![],
                 history: None,
+                owner_backup: None,
             },
             Err(e) => return Err(e.into()),
         };
@@ -378,7 +400,7 @@ impl Core {
             return Ok(status);
         }
         record.cancelled = true;
-        private_replace(&path, &serde_json::to_vec(&record)?)?;
+        private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
         self.actor_save_status(operation)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing settled record"))
     }
@@ -409,12 +431,15 @@ impl Core {
         let record = match fs::read(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                self.check_actor_library(&record.library)?;
                 if record.actor != *self.actor.as_ref().unwrap()
                     || record.resource != resource
                     || record.field.is_some()
                     || record.feature.is_some()
                     || record.definition.is_some()
+                    || record.owner_backup.is_some()
                     || record.history.is_some()
+                    || record.owner_backup.is_some()
                 {
                     return Err(CoreError::new(
                         "operationConflict",
@@ -458,6 +483,7 @@ impl Core {
                     )?
                 };
                 let record = ActorOperation {
+                    library: self.actor_library.clone(),
                     actor: self.actor.clone().unwrap(),
                     resource: resource.into(),
                     fingerprint,
@@ -468,8 +494,9 @@ impl Core {
                     definition: None,
                     save_definition_reservations: reservations,
                     history: None,
+                    owner_backup: None,
                 };
-                journal::private_create(&path, &serde_json::to_vec(&record)?)?;
+                journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
                 record
             }
             Err(e) => return Err(e.into()),
@@ -503,6 +530,7 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.check_actor_library(&record.library)?;
         let field = record
             .field
             .filter(|f| f.field_id == field_id)
@@ -563,6 +591,7 @@ impl Core {
         match fs::read(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                self.check_actor_library(&record.library)?;
                 let status = self
                     .actor_field_status(resource, field_id, &request.operation_id)?
                     .ok_or_else(|| {
@@ -581,6 +610,7 @@ impl Core {
         }
         self.check_actor_session(&request.session_id)?;
         let record = ActorOperation {
+            library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
             fingerprint: fingerprint.into(),
@@ -594,8 +624,9 @@ impl Core {
             definition: None,
             save_definition_reservations: vec![],
             history: None,
+            owner_backup: None,
         };
-        journal::private_create(&path, &serde_json::to_vec(&record)?)?;
+        journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
         self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -617,6 +648,7 @@ impl Core {
             .is_none()
         {
             let record = ActorOperation {
+                library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
                 fingerprint: String::new(),
@@ -630,10 +662,11 @@ impl Core {
                 definition: None,
                 save_definition_reservations: vec![],
                 history: None,
+                owner_backup: None,
             };
             journal::private_create(
                 &self.actor_record(operation)?,
-                &serde_json::to_vec(&record)?,
+                &Self::actor_operation_bytes(&record)?,
             )?;
         } else {
             self.actor_settle(resource, operation)?;

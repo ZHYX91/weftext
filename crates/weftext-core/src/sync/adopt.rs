@@ -475,6 +475,7 @@ impl Core {
             blobs,
         });
         plan.transaction = Some(FrozenOperation {
+            backup_private_digest: None,
             request,
             preview: preview.clone(),
             files,

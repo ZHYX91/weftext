@@ -71,7 +71,7 @@ fn access(
     let rights = inner.rights(&actor, resource)?;
     if !rights.query.definitions
         || write && !rights.write
-        || !inner.config.files.get(resource).is_some_and(|f| f.editable)
+        || !inner.file(resource).ok().is_some_and(|f| f.editable)
     {
         return Err(unavailable());
     }
@@ -119,7 +119,7 @@ fn check_owner(
         return Ok(());
     };
     let root = inner.config.root.clone();
-    let path = root.join(&inner.config.files[resource].path);
+    let path = root.join(&inner.file(resource)?.path);
     let file = inner
         .core
         .read_snapshot(&root, &[path.to_string_lossy().into_owned()])
@@ -160,13 +160,13 @@ fn pending_keys(
     resource: &str,
 ) -> Result<BTreeSet<String>, ApiError> {
     let root = inner.config.root.clone();
-    let path = root.join(&inner.config.files[resource].path);
+    let path = root.join(&inner.file(resource)?.path);
     let scope = inner.actor_scope(actor);
     // A short-lived private source session allows recovery without trusting an
     // expired browser session. It does not mutate the personal Draft or save.
     inner
         .core
-        .with_actor(&scope, |core| {
+        .with_actor_for_root(&scope, &inner.config.root, |core| {
             let doc = core.open(&path, Some(root.clone()))?;
             let result = core.actor_definition_list(resource, &root, &doc.session_id);
             core.close_session(&doc.session_id)?;
@@ -262,7 +262,7 @@ fn delivery(
             let scope = inner.actor_scope(&actor);
             can_apply = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.check_session_base(&req.session_id, &req.base_id)
                 })
                 .is_ok();
@@ -283,7 +283,7 @@ async fn prepare(
         let actor = access(inner, &auth, &req.resource, true)?;
         let intent = fingerprint(&req)?;
         let scope = inner.actor_scope(&actor);
-        let known = inner.core.with_actor(&scope, |core| core.actor_definition_retry(&req.resource, &req.operation_id, &intent)).map_err(core_error)?;
+        let known = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.actor_definition_retry(&req.resource, &req.operation_id, &intent)).map_err(core_error)?;
         let proposal = match known {
             Some(proposal) => proposal,
             None => {
@@ -298,7 +298,7 @@ async fn prepare(
                 let root = inner.config.root.clone();
                 let witnesses = validation.guard.snapshot_witnesses();
                 inner.core.with_guarded_snapshot_witnesses(&root, &witnesses, &validation.guard.owner_path, |core| {
-                    core.with_actor(&scope, |core| core.actor_definition_reserve(&req.resource, &root, weftext_core::HostedDefinitionReservationRequest {
+                    core.with_actor_for_root(&scope, &inner.config.root, |core| core.actor_definition_reserve(&req.resource, &root, weftext_core::HostedDefinitionReservationRequest {
                         session_id: req.session_id.clone(), base_id: req.base_id.clone(), operation_id: req.operation_id.clone(),
                         intent_fingerprint: intent, binding: validation.binding.clone(),
                     }, |key, binding| weftext_data::upsert_saved_query_with_context(&req.source, None, key, &req.label, binding,
@@ -327,7 +327,7 @@ async fn operation(
             let scope = inner.actor_scope(&actor);
             let Some(proposal) = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_definition_details(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -359,7 +359,7 @@ async fn settle(
             let scope = inner.actor_scope(&actor);
             let original = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_definition_status(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -368,7 +368,7 @@ async fn settle(
             }
             let status = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_definition_settle(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -387,7 +387,7 @@ async fn reservations(
         access(inner, &auth, &session.resource, false)?;
         let scope = inner.actor_scope(&actor);
         let root = inner.config.root.clone();
-        let statuses = inner.core.with_actor(&scope, |core| core.actor_definition_list(&session.resource, &root, &req.session_id)).map_err(core_error)?;
+        let statuses = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.actor_definition_list(&session.resource, &root, &req.session_id)).map_err(core_error)?;
         Ok(json!({"resource":session.resource,"reservations":statuses.iter().map(summary).collect::<Vec<_>>()}))
     }).await?))
 }
@@ -413,19 +413,23 @@ pub(super) fn save(
     if ids.is_empty() {
         return inner
             .core
-            .with_actor(&scope, |core| core.actor_save(&session.resource, req))
+            .with_actor_for_root(&scope, &inner.config.root, |core| {
+                core.actor_save(&session.resource, req)
+            })
             .map_err(HostedInner::core_error);
     }
     let original = inner
         .core
-        .with_actor(&scope, |core| core.actor_save_status(&req.operation_id))
+        .with_actor_for_root(&scope, &inner.config.root, |core| {
+            core.actor_save_status(&req.operation_id)
+        })
         .map_err(core_error)?;
     if original.is_some_and(|s| s.status != "notCommitted") {
         // Core verifies the exact source/ID-set fingerprint before returning the
         // original status. No new callee lookup can turn recovery into a writer.
         return inner
             .core
-            .with_actor(&scope, |core| {
+            .with_actor_for_root(&scope, &inner.config.root, |core| {
                 core.actor_save_with_definition_reservations(&session.resource, &root, req, &ids)
             })
             .map_err(HostedInner::core_error);
@@ -436,7 +440,7 @@ pub(super) fn save(
         .map(|id| {
             inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_definition_status(&session.resource, id)
                 })
                 .map_err(core_error)?
@@ -499,11 +503,11 @@ pub(super) fn save(
         guard.recheck(inner, auth).map_err(save_validation_error)?;
     }
     let witnesses = witness_pool.iter().collect::<Vec<_>>();
-    let owner_path = root.join(&inner.config.files[&session.resource].path);
+    let owner_path = root.join(&inner.file(&session.resource)?.path);
     inner
         .core
         .with_guarded_snapshot_witnesses(&root, &witnesses, &owner_path, |core| {
-            core.with_actor(&scope, |core| {
+            core.with_actor_for_root(&scope, &inner.config.root, |core| {
                 core.actor_save_with_definition_reservations(&session.resource, &root, req, &ids)
             })
         })
@@ -646,6 +650,8 @@ mod integration_tests {
                 grants: BTreeMap::from([("Shared".into(), rights)]),
                 sync_owner: false,
                 native_whole_library: Default::default(),
+                content_imports: Default::default(),
+                owner_backup: Default::default(),
                 navigation: Default::default(),
             },
         )]);
@@ -659,6 +665,8 @@ mod integration_tests {
                 structure_slots: Default::default(),
                 structure_templates: Default::default(),
                 native_whole_library_export: false,
+                content_import_slots: Default::default(),
+                owner_backup_directory: None,
                 navigation: Default::default(),
                 deployment: "definitions-test".into(),
                 bind: "127.0.0.1:0".parse().unwrap(),
@@ -697,6 +705,7 @@ mod integration_tests {
             library: Default::default(),
             media: Default::default(),
             navigation_registry: Default::default(),
+            owner_backup: Default::default(),
         };
         let doc = inner.open("alice", "Shared").unwrap();
         writing_api::observe_version(

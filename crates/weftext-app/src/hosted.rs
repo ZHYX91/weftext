@@ -2,6 +2,7 @@
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
 mod citations;
+mod content_import;
 mod definition;
 mod editor;
 mod embedded_query;
@@ -15,6 +16,7 @@ mod navigation;
 mod navigation_registry;
 mod office;
 mod office_import;
+mod owner_backup;
 mod query;
 mod query_providers;
 mod query_scopes;
@@ -105,6 +107,10 @@ struct User {
     native_whole_library: office::NativeRights,
     #[serde(default)]
     navigation: navigation_registry::Rights,
+    #[serde(default)]
+    content_imports: BTreeMap<String, content_import::Rights>,
+    #[serde(default)]
+    owner_backup: owner_backup::Rights,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -142,6 +148,10 @@ struct Config {
     native_whole_library_export: bool,
     #[serde(default)]
     navigation: navigation_registry::Config,
+    #[serde(default)]
+    content_import_slots: BTreeMap<String, content_import::Slot>,
+    #[serde(default)]
+    owner_backup_directory: Option<PathBuf>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -167,6 +177,7 @@ struct HostedInner {
     library: library::Store,
     media: media::Store,
     navigation_registry: navigation_registry::Store,
+    owner_backup: owner_backup::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -276,6 +287,11 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !content_import::valid_rights(config, &user.content_imports)
+            || !owner_backup::valid_rights(&user.owner_backup)
+        {
+            return Err(ApiError::bad("资料导入与完整恢复资料备份须独立明确授权"));
+        }
         if !navigation_registry::valid_rights(config, &user.navigation) {
             return Err(ApiError::bad("导航授权须引用明确配置的目录或接纳槽"));
         }
@@ -386,14 +402,12 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
 /// Reading a managed author document is separate from authoring. Compiler
 /// inputs and arbitrary JSON/binary files do not become document sessions.
 fn author_file(inner: &HostedInner, resource: &str) -> Result<FileEntry, ApiError> {
-    let file = inner
-        .config
-        .files
-        .get(resource)
-        .filter(|f| f.lifecycle == "live")
-        .cloned()
-        .ok_or_else(unavailable)?;
+    let file = inner.file(resource)?;
+    if file.lifecycle != "live" {
+        return Err(unavailable());
+    }
     structure::guard_slot(inner, resource)?;
+    content_import::qualify_member(inner, resource)?;
     if !file.editable {
         let path = inner.config.root.join(&file.path);
         if path.extension().is_none_or(|e| e != "typ") {
@@ -418,6 +432,50 @@ fn author_file(inner: &HostedInner, resource: &str) -> Result<FileEntry, ApiErro
     Ok(file)
 }
 impl HostedInner {
+    /// Effective author locators are private projections of original producer
+    /// facts. They are never written back into operator configuration.
+    fn file(&self, resource: &str) -> Result<FileEntry, ApiError> {
+        self.config
+            .files
+            .get(resource)
+            .cloned()
+            .map(Ok)
+            .unwrap_or_else(|| content_import::member_file(self, resource)?.ok_or_else(unavailable))
+    }
+    fn grant(&self, actor: &str, resource: &str) -> Result<Rights, ApiError> {
+        let user = self
+            .policy
+            .users
+            .get(actor)
+            .filter(|u| u.enabled)
+            .ok_or_else(expired)?;
+        user.grants
+            .get(resource)
+            .cloned()
+            .or_else(|| content_import::member_rights(self, actor, resource))
+            .ok_or_else(unavailable)
+    }
+    fn files_view(&self, actor: &str) -> Result<BTreeMap<String, FileEntry>, ApiError> {
+        let mut files = self.config.files.clone();
+        for id in content_import::member_ids(self, actor)? {
+            files.insert(id.clone(), self.file(&id)?);
+        }
+        Ok(files)
+    }
+    fn grants_view(&self, actor: &str) -> Result<BTreeMap<String, Rights>, ApiError> {
+        let mut grants = self
+            .policy
+            .users
+            .get(actor)
+            .filter(|u| u.enabled)
+            .ok_or_else(expired)?
+            .grants
+            .clone();
+        for id in content_import::member_ids(self, actor)? {
+            grants.insert(id.clone(), self.grant(actor, &id)?);
+        }
+        Ok(grants)
+    }
     fn actor(&self, auth: &Auth) -> Result<String, ApiError> {
         self.policy
             .users
@@ -427,24 +485,15 @@ impl HostedInner {
             .ok_or_else(expired)
     }
     fn rights(&self, actor: &str, resource: &str) -> Result<Rights, ApiError> {
-        if !self
-            .config
-            .files
-            .get(resource)
-            .is_some_and(|f| f.lifecycle == "live")
-        {
+        if self.file(resource)?.lifecycle != "live" {
             return Err(unavailable());
         }
-        let rights = self
-            .policy
-            .users
-            .get(actor)
-            .filter(|u| u.enabled)
-            .and_then(|u| u.grants.get(resource))
-            .filter(|r| r.read)
-            .cloned()
-            .ok_or_else(unavailable)?;
+        let rights = self.grant(actor, resource)?;
+        if !rights.read {
+            return Err(unavailable());
+        }
         structure::guard_slot(self, resource)?;
+        content_import::qualify_member(self, resource)?;
         Ok(rights)
     }
     fn actor_generation(&self, actor: &str) -> u64 {
@@ -506,7 +555,7 @@ impl HostedInner {
         let scope = self.actor_scope(actor);
         let opened = self
             .core
-            .with_actor(&scope, |c| c.open(path, Some(root)))
+            .with_actor_for_root(&scope, &self.config.root, |c| c.open(path, Some(root)))
             .map_err(Self::core_error)?;
         self.sessions.insert(
             opened.session_id.clone(),
@@ -610,8 +659,7 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
             let files = inner
-                .config
-                .files
+                .files_view(&actor)?
                 .iter()
                 .filter_map(|(id, f)| {
                     inner
@@ -649,7 +697,7 @@ async fn close(
             let (actor, _, _) = inner.session(&auth, &req.session_id)?;
             inner
                 .core
-                .with_actor(&inner.actor_scope(&actor), |c| {
+                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
                     c.close_session(&req.session_id)
                 })
                 .map_err(HostedInner::core_error)?;
@@ -673,7 +721,7 @@ async fn draft(
             }
             inner
                 .core
-                .with_actor(&inner.actor_scope(&actor), |c| {
+                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
                     c.persist_draft(&req.session_id, &req.source)
                 })
                 .map_err(HostedInner::core_error)?;
@@ -718,7 +766,7 @@ async fn resolve_draft(
             }
             inner
                 .core
-                .with_actor(&inner.actor_scope(&actor), |c| {
+                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
                     c.resolve_draft(&req.session_id, "mergeRecovered", Some(&req.source))
                 })
                 .map_err(HostedInner::core_error)?;
@@ -737,7 +785,7 @@ async fn status(
             let actor = inner.actor(&auth)?;
             let status = inner
                 .core
-                .with_actor(&inner.actor_scope(&actor), |c| {
+                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
                     c.actor_save_status(&req.operation_id)
                 })
                 .map_err(HostedInner::core_error)?;
@@ -765,7 +813,7 @@ async fn settle(
             value(
                 inner
                     .core
-                    .with_actor(&inner.actor_scope(&actor), |c| {
+                    .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
                         c.actor_settle(&req.resource, &req.operation_id)
                     })
                     .map_err(HostedInner::core_error)?,
@@ -783,7 +831,7 @@ async fn search(
         let actor = inner.actor(&auth)?;
         if req.text.is_empty() || req.text.len() > 256 { return Err(ApiError::bad("搜索词须为 1–256 字节")); }
         let mut rows = Vec::new(); let mut complete = true;
-        let docs = inner.config.files.iter().filter(|(id, _)| inner.rights(&actor, id).is_ok() && author_file(inner,id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
+        let docs = inner.files_view(&actor)?.iter().filter(|(id, _)| inner.rights(&actor, id).is_ok() && author_file(inner,id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
         let mut total = 0;
         for (id, file) in docs {
             match inner.files(&actor, std::slice::from_ref(&id)) {
@@ -854,7 +902,7 @@ async fn prepare_download(
         inner.downloads.retain(|_, d| d.expires > Instant::now());
         if inner.downloads.len() >= 32 { return Err(ApiError::bad("暂存下载已达上限，请稍后重试")); }
         let files = inner.files(&actor, std::slice::from_ref(&req.resource))?;
-        let bytes = files[&inner.config.files[&req.resource].path].clone();
+        let bytes = files[&inner.file(&req.resource)?.path].clone();
         let ticket = uuid::Uuid::new_v4().to_string();
         let result = json!({"ticket":ticket,"length":bytes.len(),"sha256":digest(&bytes),"chunkSize":65536,"status":"frozen"});
         if inner.downloads.values().map(|d| d.bytes.len()).sum::<usize>() + bytes.len() > 64*1024*1024 { return Err(ApiError::bad("下载暂存总量已达 64 MiB")); }
@@ -933,6 +981,8 @@ async fn update_policy(
                             && old.library == user.library
                             && old.native_whole_library == user.native_whole_library
                             && old.navigation == user.navigation
+                            && old.content_imports == user.content_imports
+                            && old.owner_backup == user.owner_backup
                             && old.resources == user.resources
                             && old.resource_collections == user.resource_collections
                             && old.structure == user.structure
@@ -959,7 +1009,7 @@ async fn update_policy(
                 let scope = format!("{}:{}", inner.config.deployment, session.actor);
                 inner
                     .core
-                    .with_actor(&scope, |c| c.close_session(&id))
+                    .with_actor_for_root(&scope, &inner.config.root, |c| c.close_session(&id))
                     .map_err(HostedInner::core_error)?;
             }
             inner.downloads.retain(|_, d| {
@@ -973,6 +1023,7 @@ async fn update_policy(
             fields::expire_revoked(inner);
             review::expire_revoked(inner);
             office::expire_revoked(inner);
+            owner_backup::expire_revoked(inner);
             media::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
@@ -1067,6 +1118,8 @@ pub(super) async fn serve(
     }
     let mut references = BTreeSet::new();
     if !media::valid_config(&config)
+        || !content_import::valid_config(&config)
+        || !owner_backup::valid_config(&config)
         || !navigation_registry::valid_config(&config)
         || !resource_collections::valid_config(&config)
         || !structure::valid_config(&config)
@@ -1165,6 +1218,7 @@ pub(super) async fn serve(
             library: library::Store::default(),
             media: media::Store::default(),
             navigation_registry: Default::default(),
+            owner_backup: Default::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -1177,6 +1231,8 @@ pub(super) async fn serve(
         .merge(history_api::router())
         .merge(navigation::router())
         .merge(navigation_registry::router())
+        .merge(content_import::router())
+        .merge(owner_backup::router())
         .merge(library::router())
         .merge(knowledge_links::router())
         .merge(citations::router())

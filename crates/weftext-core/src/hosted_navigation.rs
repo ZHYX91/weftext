@@ -98,6 +98,7 @@ impl Core {
     ) -> Result<ActorFeatureStatus> {
         valid_resource(resource)?;
         valid_fingerprint(fingerprint)?;
+        self.actor_library_for_root(root.as_ref())?;
         let root = display(&absolute_path(root.as_ref())?);
         if let HostedNavigationIntent::AdmitDirectory { path } = &mut intent {
             *path = display(&absolute_path(Path::new(path))?);
@@ -121,6 +122,7 @@ impl Core {
             return Ok(status);
         }
         let record = ActorOperation {
+            library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
             fingerprint: fingerprint.into(),
@@ -138,10 +140,11 @@ impl Core {
             definition: None,
             save_definition_reservations: vec![],
             history: None,
+            owner_backup: None,
         };
         journal::private_create(
             &self.actor_record(operation)?,
-            &serde_json::to_vec(&record)?,
+            &Self::actor_operation_bytes(&record)?,
         )?;
         navigation.prepare(self, &record.core_operation_id)?;
         self.actor_feature_status(resource, operation)?

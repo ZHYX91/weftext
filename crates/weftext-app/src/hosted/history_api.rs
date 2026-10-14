@@ -88,11 +88,11 @@ fn qualify_session(
     let (actor, session, _) = inner.session(auth, session_id)?;
     access(inner, auth, &session.resource, write)?;
     let root = inner.config.root.clone();
-    let path = root.join(&inner.config.files[&session.resource].path);
+    let path = root.join(&inner.file(&session.resource)?.path);
     let scope = inner.actor_scope(&actor);
     let qualified = inner
         .core
-        .with_actor(&scope, |core| {
+        .with_actor_for_root(&scope, &inner.config.root, |core| {
             core.qualified_node_for_session_at(&root, &path, session_id)
         })
         .map_err(history_error)?;
@@ -109,7 +109,7 @@ fn final_session(
     if session.resource != resource || current.owner != original.owner {
         return Err(unavailable());
     }
-    let path = inner.config.root.join(&inner.config.files[resource].path);
+    let path = inner.config.root.join(&inner.file(resource)?.path);
     inner
         .core
         .validate_snapshot_witness(&inner.config.root, &path, &original.witness)
@@ -177,7 +177,9 @@ async fn list(
             let scope = inner.actor_scope(&actor);
             let timeline = inner
                 .core
-                .with_actor(&scope, |core| core.list_history(&req.session_id))
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
+                    core.list_history(&req.session_id)
+                })
                 .map_err(history_error)?;
             final_session(inner, &auth, &req.session_id, &session.resource, &qualified)?;
             value(clean_timeline(timeline, &session.resource))
@@ -197,7 +199,7 @@ async fn read(
             let scope = inner.actor_scope(&actor);
             let read = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.read_history(&req.session_id, &req.version_id)
                 })
                 .map_err(history_error)?;
@@ -219,7 +221,7 @@ async fn compare(
             let scope = inner.actor_scope(&actor);
             let comparison = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.compare_history(&req.session_id, &req.version_id)
                 })
                 .map_err(history_error)?;
@@ -239,8 +241,8 @@ async fn compare_draft(
         let (actor, session, qualified) = qualify_session(inner, &auth, &req.session_id, false)?;
         writing_api::exact_version(&inner.editor_versions, &req.session_id, &req.source, req.serial)?;
         let scope = inner.actor_scope(&actor);
-        let selected = inner.core.with_actor(&scope, |core| core.read_history(&req.session_id, &req.version_id)).map_err(history_error)?;
-        let timeline = inner.core.with_actor(&scope, |core| core.list_history(&req.session_id)).map_err(history_error)?;
+        let selected = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.read_history(&req.session_id, &req.version_id)).map_err(history_error)?;
+        let timeline = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.list_history(&req.session_id)).map_err(history_error)?;
         final_session(inner, &auth, &req.session_id, &session.resource, &qualified)?;
         writing_api::exact_version(&inner.editor_versions, &req.session_id, &req.source, req.serial)?;
         Ok(json!({"selected":clean_read(selected.clone()),"current":{"source":req.source,"serial":req.serial,
@@ -264,35 +266,37 @@ fn public_status(
     let actor = access(inner, auth, &status.resource, false)?;
     let scope = inner.actor_scope(&actor);
     let root = inner.config.root.clone();
-    let path = root.join(&inner.config.files[&status.resource].path);
+    let path = root.join(&inner.file(&status.resource)?.path);
     let mut output = json!({"operationId":status.operation_id,"resource":status.resource,"status":status.status,"resultStatus":"unavailable"});
     if status.status == "committed" {
-        let result = inner.core.with_actor(&scope, |core| {
-            let result = core.actor_history_restore_result_at(
-                &status.resource,
-                &root,
-                &path,
-                &status.operation_id,
-            )?;
-            let qualified = core.qualified_node_at(&root, &path)?;
-            let current = core.actor_history_restore_current_at(
-                &status.resource,
-                &root,
-                &path,
-                &status.operation_id,
-            )?;
-            // A configured path could have been replaced between reading the
-            // retained result and qualifying its current basis. Recheck the
-            // original private owner, then the captured current source bytes.
-            core.actor_history_restore_owner_at(
-                &status.resource,
-                &root,
-                &path,
-                &status.operation_id,
-            )?;
-            core.validate_snapshot_witness(&root, &path, &qualified.witness)?;
-            Ok((result, qualified, current))
-        });
+        let result = inner
+            .core
+            .with_actor_for_root(&scope, &inner.config.root, |core| {
+                let result = core.actor_history_restore_result_at(
+                    &status.resource,
+                    &root,
+                    &path,
+                    &status.operation_id,
+                )?;
+                let qualified = core.qualified_node_at(&root, &path)?;
+                let current = core.actor_history_restore_current_at(
+                    &status.resource,
+                    &root,
+                    &path,
+                    &status.operation_id,
+                )?;
+                // A configured path could have been replaced between reading the
+                // retained result and qualifying its current basis. Recheck the
+                // original private owner, then the captured current source bytes.
+                core.actor_history_restore_owner_at(
+                    &status.resource,
+                    &root,
+                    &path,
+                    &status.operation_id,
+                )?;
+                core.validate_snapshot_witness(&root, &path, &qualified.witness)?;
+                Ok((result, qualified, current))
+            });
         match result {
             Ok((result, qualified, original_current)) => {
                 let current = original_current
@@ -329,7 +333,7 @@ async fn restore(
             let scope = inner.actor_scope(&actor);
             let known = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_history_restore_retry(&req.resource, &req.operation_id, &intent)
                 })
                 .map_err(history_error)?;
@@ -347,10 +351,10 @@ async fn restore(
                         req.serial,
                     )?;
                     let root = inner.config.root.clone();
-                    let path = root.join(&inner.config.files[&req.resource].path);
+                    let path = root.join(&inner.file(&req.resource)?.path);
                     inner
                         .core
-                        .with_actor(&scope, |core| {
+                        .with_actor_for_root(&scope, &inner.config.root, |core| {
                             core.actor_history_restore(
                                 &req.resource,
                                 &root,
@@ -382,7 +386,7 @@ async fn status(
     Ok(Json(locked(&state, move |inner| {
         let actor = access(inner, &auth, &req.resource, false)?;
         let scope = inner.actor_scope(&actor);
-        let status = inner.core.with_actor(&scope, |core| core.actor_history_restore_status(&req.resource, &req.operation_id)).map_err(history_error)?;
+        let status = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.actor_history_restore_status(&req.resource, &req.operation_id)).map_err(history_error)?;
         match status {
             Some(status) => public_status(inner, &auth, status),
             None => Ok(json!({"operationId":req.operation_id,"resource":req.resource,"status":"notRegistered","resultStatus":"unavailable"})),
@@ -400,7 +404,7 @@ async fn settle(
             let scope = inner.actor_scope(&actor);
             let status = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_history_restore_settle(&req.resource, &req.operation_id)
                 })
                 .map_err(history_error)?;
@@ -483,6 +487,8 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
                 grants: BTreeMap::from([("Shared".into(), rights)]),
                 sync_owner: false,
                 native_whole_library: Default::default(),
+                content_imports: Default::default(),
+                owner_backup: Default::default(),
                 navigation: Default::default(),
             },
         )
@@ -498,6 +504,8 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
             structure_slots: Default::default(),
             structure_templates: Default::default(),
             native_whole_library_export: false,
+            content_import_slots: Default::default(),
+            owner_backup_directory: None,
             navigation: Default::default(),
             deployment: "history-test".into(),
             bind: "127.0.0.1:0".parse().unwrap(),
@@ -544,6 +552,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
         library: Default::default(),
         media: Default::default(),
         navigation_registry: Default::default(),
+        owner_backup: Default::default(),
     };
     let doc = inner.open("alice", "Shared").unwrap();
     writing_api::observe_version(

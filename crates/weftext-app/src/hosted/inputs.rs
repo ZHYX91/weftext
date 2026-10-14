@@ -19,7 +19,7 @@ fn budget() -> ApiError {
     ApiError::bad("本次输入及其原始依据超出 32 MiB 或 64 个输入的预算")
 }
 pub(super) fn path(inner: &HostedInner, actor: &str, id: &str) -> Result<String, ApiError> {
-    if let Some(file) = inner.config.files.get(id) {
+    if let Ok(file) = inner.file(id) {
         return Ok(file.path.clone());
     }
     Ok(media::resolve_asset(inner, actor, id)?.path)
@@ -39,7 +39,7 @@ pub(super) fn binding_hash(
     let mut files = BTreeMap::new();
     let mut assets = BTreeSet::new();
     for id in ids {
-        if let Some(file) = inner.config.files.get(id) {
+        if let Ok(file) = inner.file(id) {
             files.insert(id, file);
         } else if media::valid_input(&inner.config, id) {
             assets.insert(id.clone());
@@ -65,7 +65,7 @@ pub(super) fn read_files(
     }
     let paths = ids
         .iter()
-        .filter_map(|id| inner.config.files.get(id).map(|f| f.path.clone()))
+        .filter_map(|id| inner.file(id).ok().map(|f| f.path.clone()))
         .collect::<BTreeSet<_>>();
     let mut files = inner
         .core
@@ -323,7 +323,7 @@ fn capture_inputs(
         let entry = if media::is_asset(&inner.config, id) {
             let qualified = if allow_missing {
                 let r = media::resolve_asset(inner, actor, id)?;
-                let owner = &inner.config.files[&r.owner];
+                let owner = &inner.file(&r.owner)?;
                 inner
                     .core
                     .qualified_resource_input_at(
@@ -369,7 +369,7 @@ fn capture_inputs(
                 }
             }
         } else {
-            let file = inner.config.files.get(id).ok_or_else(unavailable)?.clone();
+            let file = inner.file(id).ok().ok_or_else(unavailable)?.clone();
             let absolute = inner.config.root.join(&file.path);
             let node = file
                 .expected_node

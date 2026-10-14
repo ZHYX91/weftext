@@ -225,127 +225,7 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
     row.insert("id".into(), json!(work.key));
     row.insert("type".into(), json!(csl_kind));
     row.insert("title".into(), json!(title));
-    let contributors = p
-        .member("contributors")
-        .and_then(NativeValue::array)
-        .filter(|a| !a.is_empty())
-        .ok_or_else(|| fail(format!("{}: ordered contributors unavailable", work.key)))?;
-    let mut authors = vec![];
-    let mut editors = vec![];
-    for (index, contributor) in contributors.iter().enumerate() {
-        let agent = contributor.member("agent").ok_or_else(|| {
-            fail(format!(
-                "{}: contributor {index} agent unavailable",
-                work.key
-            ))
-        })?;
-        let agent_ref = agent.member("ref");
-        let agent_text = agent.member("text");
-        if agent.record().is_none()
-            || agent_ref.is_some() == agent_text.is_some()
-            || agent_ref.is_some_and(|value| !weftext_data::scalar_valid("node_ref", value))
-            || agent_text.is_some_and(|value| !weftext_data::scalar_valid("nonempty_text", value))
-        {
-            return Err(fail(format!(
-                "{}: contributor {index} needs exactly one valid ref/text Agent branch",
-                work.key
-            )));
-        }
-        let family = text(contributor, "family").filter(|s| !s.is_empty());
-        let given = text(contributor, "given").filter(|s| !s.is_empty());
-        let literal = text(contributor, "credited_as")
-            .filter(|s| !s.is_empty())
-            .or_else(|| text(agent, "text").filter(|s| !s.is_empty()));
-        let mut person = Map::new();
-        if let Some(family) = family {
-            person.insert("family".into(), json!(family));
-            if let Some(given) = given {
-                person.insert("given".into(), json!(given));
-            }
-        } else if let Some(literal) = literal {
-            person.insert("literal".into(), json!(literal));
-        } else {
-            return Err(fail(format!(
-                "{}: contributor {index} has no credited or structured name; referenced Agent is not guessed",
-                work.key
-            )));
-        }
-        let roles = contributor
-            .member("roles")
-            .and_then(NativeValue::array)
-            .ok_or_else(|| fail(format!("{}: contributor {index} role is unknown", work.key)))?;
-        let mut mapped = false;
-        let mut seen_roles = BTreeSet::new();
-        for role in roles {
-            if let Some(role) = role.text()
-                && !seen_roles.insert(role)
-            {
-                loss(
-                    losses,
-                    "duplicateContributorRole",
-                    "Repeated role retained in the exact extension; standard citation lists the contributor once for this role",
-                    format!("{}.contributors[{index}].roles", work.key),
-                );
-                continue;
-            }
-            match role.text() {
-                Some("author") => {
-                    authors.push(Value::Object(person.clone()));
-                    mapped = true;
-                }
-                Some("editor") => {
-                    editors.push(Value::Object(person.clone()));
-                    mapped = true;
-                }
-                Some(role) => loss(
-                    losses,
-                    "contributorRole",
-                    format!(
-                        "Role {role} is retained in the exact extension; standard author/editor arrays do not express it"
-                    ),
-                    format!("{}.contributors[{index}].roles", work.key),
-                ),
-                None => return Err(fail(format!("{}: contributor role is not text", work.key))),
-            }
-        }
-        if !mapped {
-            loss(
-                losses,
-                "contributorNotInStandardCitation",
-                "Contributor retained only in the exact publication extension",
-                format!("{}.contributors[{index}]", work.key),
-            );
-        }
-        if agent_ref.is_some()
-            || contributor.record().is_some_and(|members| {
-                members.iter().any(|member| {
-                    !matches!(
-                        member.key.as_str(),
-                        "agent" | "credited_as" | "family" | "given" | "roles"
-                    )
-                })
-            })
-        {
-            loss(
-                losses,
-                "contributorExtension",
-                "Agent references, affiliations and additional contributor members are retained exactly; standard bibliography consumers only receive the rendered name and author/editor role",
-                format!("{}.contributors[{index}]", work.key),
-            );
-        }
-    }
-    if authors.is_empty() && editors.is_empty() {
-        return Err(fail(format!(
-            "{}: no author/editor is declared; complete citation unavailable",
-            work.key
-        )));
-    }
-    if !authors.is_empty() {
-        row.insert("author".into(), Value::Array(authors));
-    }
-    if !editors.is_empty() {
-        row.insert("editor".into(), Value::Array(editors));
-    }
+    row.extend(project_contributors(p, &work.key, losses, true)?);
     for (native, csl) in [
         ("container", "container-title"),
         ("volume", "volume"),
@@ -359,13 +239,8 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
             row.insert(csl.into(), json!(value));
         }
     }
-    if let Some(keywords) = p.member("keywords").and_then(NativeValue::array) {
-        let values = keywords
-            .iter()
-            .map(|v| v.text().map(str::to_owned))
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| fail("Publication keyword is not text"))?;
-        row.insert("keyword".into(), json!(values.join(", ")));
+    if let Some(keywords) = project_keywords(p)? {
+        row.insert("keyword".into(), keywords);
     }
     if let Some(issued) = p.member("issued") {
         match date_parts(issued) {
@@ -380,31 +255,7 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
             ),
         }
     }
-    let mut schemes = BTreeSet::new();
-    if let Some(identifiers) = p.member("identifiers").and_then(NativeValue::array) {
-        for (index, identifier) in identifiers.iter().enumerate() {
-            let scheme =
-                text(identifier, "scheme").ok_or_else(|| fail("Identifier scheme unavailable"))?;
-            let value =
-                text(identifier, "value").ok_or_else(|| fail("Identifier value unavailable"))?;
-            let csl = match scheme {
-                "doi" => Some("DOI"),
-                "isbn" => Some("ISBN"),
-                "issn" => Some("ISSN"),
-                _ => None,
-            };
-            if let Some(csl) = csl.filter(|_| schemes.insert(scheme.to_owned())) {
-                row.insert(csl.into(), json!(value));
-            } else {
-                loss(
-                    losses,
-                    "identifier",
-                    "Identifier scheme or additional value retained only in the exact publication extension",
-                    format!("{}.identifiers[{index}]", work.key),
-                );
-            }
-        }
-    }
+    row.extend(project_identifiers(p, &work.key, losses)?);
     for member in members {
         if !matches!(
             member.key.as_str(),
@@ -435,6 +286,184 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
     // spelling. The association is provenance, never an import identity command.
     row.insert("weftext".into(), json!({"version":1,"work":work.work.entity_ref,"sourceBasis":work.work.source_basis,"publication":p}));
     Ok(Value::Object(row))
+}
+
+fn project_contributors(
+    p: &NativeValue,
+    key: &str,
+    losses: &mut Vec<ExportLoss>,
+    complete: bool,
+) -> Result<Map<String, Value>> {
+    let mut row = Map::new();
+    let contributors = p
+        .member("contributors")
+        .and_then(NativeValue::array)
+        .ok_or_else(|| fail(format!("{}: ordered contributors unavailable", key)))?;
+    if complete && contributors.is_empty() {
+        return Err(fail(format!("{key}: ordered contributors unavailable")));
+    }
+    let mut authors = vec![];
+    let mut editors = vec![];
+    for (index, contributor) in contributors.iter().enumerate() {
+        let agent = contributor
+            .member("agent")
+            .ok_or_else(|| fail(format!("{}: contributor {index} agent unavailable", key)))?;
+        let agent_ref = agent.member("ref");
+        let agent_text = agent.member("text");
+        if agent.record().is_none()
+            || agent_ref.is_some() == agent_text.is_some()
+            || agent_ref.is_some_and(|value| !weftext_data::scalar_valid("node_ref", value))
+            || agent_text.is_some_and(|value| !weftext_data::scalar_valid("nonempty_text", value))
+        {
+            return Err(fail(format!(
+                "{}: contributor {index} needs exactly one valid ref/text Agent branch",
+                key
+            )));
+        }
+        let family = text(contributor, "family").filter(|s| !s.is_empty());
+        let given = text(contributor, "given").filter(|s| !s.is_empty());
+        let literal = text(contributor, "credited_as")
+            .filter(|s| !s.is_empty())
+            .or_else(|| text(agent, "text").filter(|s| !s.is_empty()));
+        let mut person = Map::new();
+        if let Some(family) = family {
+            person.insert("family".into(), json!(family));
+            if let Some(given) = given {
+                person.insert("given".into(), json!(given));
+            }
+        } else if let Some(literal) = literal {
+            person.insert("literal".into(), json!(literal));
+        } else {
+            return Err(fail(format!(
+                "{}: contributor {index} has no credited or structured name; referenced Agent is not guessed",
+                key
+            )));
+        }
+        let roles = contributor
+            .member("roles")
+            .and_then(NativeValue::array)
+            .ok_or_else(|| fail(format!("{}: contributor {index} role is unknown", key)))?;
+        let mut mapped = false;
+        let mut seen_roles = BTreeSet::new();
+        for role in roles {
+            if let Some(role) = role.text()
+                && !seen_roles.insert(role)
+            {
+                loss(
+                    losses,
+                    "duplicateContributorRole",
+                    "Repeated role retained in the exact extension; standard citation lists the contributor once for this role",
+                    format!("{}.contributors[{index}].roles", key),
+                );
+                continue;
+            }
+            match role.text() {
+                Some("author") => {
+                    authors.push(Value::Object(person.clone()));
+                    mapped = true;
+                }
+                Some("editor") => {
+                    editors.push(Value::Object(person.clone()));
+                    mapped = true;
+                }
+                Some(role) => loss(
+                    losses,
+                    "contributorRole",
+                    format!(
+                        "Role {role} is retained in the exact extension; standard author/editor arrays do not express it"
+                    ),
+                    format!("{}.contributors[{index}].roles", key),
+                ),
+                None => return Err(fail(format!("{}: contributor role is not text", key))),
+            }
+        }
+        if !mapped {
+            loss(
+                losses,
+                "contributorNotInStandardCitation",
+                "Contributor retained only in the exact publication extension",
+                format!("{}.contributors[{index}]", key),
+            );
+        }
+        if agent_ref.is_some()
+            || contributor.record().is_some_and(|members| {
+                members.iter().any(|member| {
+                    !matches!(
+                        member.key.as_str(),
+                        "agent" | "credited_as" | "family" | "given" | "roles"
+                    )
+                })
+            })
+        {
+            loss(
+                losses,
+                "contributorExtension",
+                "Agent references, affiliations and additional contributor members are retained exactly; standard bibliography consumers only receive the rendered name and author/editor role",
+                format!("{}.contributors[{index}]", key),
+            );
+        }
+    }
+    if complete && authors.is_empty() && editors.is_empty() {
+        return Err(fail(format!(
+            "{}: no author/editor is declared; complete citation unavailable",
+            key
+        )));
+    }
+    if !complete || !authors.is_empty() {
+        row.insert("author".into(), Value::Array(authors));
+    }
+    if !complete || !editors.is_empty() {
+        row.insert("editor".into(), Value::Array(editors));
+    }
+    Ok(row)
+}
+
+fn project_identifiers(
+    p: &NativeValue,
+    key: &str,
+    losses: &mut Vec<ExportLoss>,
+) -> Result<Map<String, Value>> {
+    let mut row = Map::new();
+    let mut schemes = BTreeSet::new();
+    if let Some(identifiers) = p.member("identifiers").and_then(NativeValue::array) {
+        for (index, identifier) in identifiers.iter().enumerate() {
+            let scheme =
+                text(identifier, "scheme").ok_or_else(|| fail("Identifier scheme unavailable"))?;
+            let value =
+                text(identifier, "value").ok_or_else(|| fail("Identifier value unavailable"))?;
+            let csl = match scheme {
+                "doi" => Some("DOI"),
+                "isbn" => Some("ISBN"),
+                "issn" => Some("ISSN"),
+                _ => None,
+            };
+            if let Some(csl) = csl.filter(|_| schemes.insert(scheme.to_owned())) {
+                row.insert(csl.into(), json!(value));
+            } else {
+                loss(
+                    losses,
+                    "identifier",
+                    "Identifier scheme or additional value retained only in the exact publication extension",
+                    format!("{}.identifiers[{index}]", key),
+                );
+            }
+        }
+    }
+    Ok(row)
+}
+
+fn project_keywords(p: &NativeValue) -> Result<Option<Value>> {
+    p.member("keywords")
+        .and_then(NativeValue::array)
+        .map(|values| {
+            values
+                .iter()
+                .map(NativeValue::text)
+                .collect::<Option<Vec<_>>>()
+                .map(|values| json!(values.join(", ")))
+                .ok_or_else(|| fail("Publication keyword is not text"))
+        })
+        .transpose()
 }
 
 fn csl_to_bib(row: &Value) -> Result<String> {
@@ -857,74 +886,7 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
         // Extensions preserve exact values, but an external editor can change
         // the standard fields. Surface those edits as choices instead of
         // silently restoring an older embedded title or contributor list.
-        let work = CitationWork {
-            key: suggested_key
-                .clone()
-                .filter(|k| citation_key(k))
-                .unwrap_or_else(|| "imported".into()),
-            work: FrozenWork {
-                entity_ref: extension["work"].as_str().unwrap_or("").into(),
-                source_basis: extension["sourceBasis"].as_str().unwrap_or("").into(),
-                publication: publication.clone(),
-            },
-        };
-        if let Ok(expected) = project_work(&work, &mut vec![]) {
-            for (csl, native) in [
-                ("type", "kind"),
-                ("title", "title"),
-                ("container-title", "container"),
-                ("volume", "volume"),
-                ("issue", "issue"),
-                ("page", "pages"),
-                ("abstract", "abstract"),
-                ("URL", "url"),
-                ("language", "language"),
-                ("issued", "issued"),
-                ("keyword", "keywords"),
-            ] {
-                if object.contains_key(csl)
-                    && row[csl] != expected[csl]
-                    && let Some(imported) = mapped.member(native)
-                {
-                    conflicts.push(PublicationConflict {
-                        key: native.into(),
-                        current: publication
-                            .member(native)
-                            .cloned()
-                            .unwrap_or(NativeValue::None),
-                        imported: imported.clone(),
-                    });
-                }
-            }
-            if ["author", "editor"]
-                .iter()
-                .any(|role| object.contains_key(*role) && row[*role] != expected[*role])
-                && let Some(imported) = mapped.member("contributors")
-            {
-                conflicts.push(PublicationConflict {
-                    key: "contributors".into(),
-                    current: publication
-                        .member("contributors")
-                        .cloned()
-                        .unwrap_or(NativeValue::None),
-                    imported: imported.clone(),
-                });
-            }
-            if ["DOI", "ISBN", "ISSN"]
-                .iter()
-                .any(|key| object.contains_key(*key) && row[*key] != expected[*key])
-                && let Some(imported) = mapped.member("identifiers")
-            {
-                conflicts.push(PublicationConflict {
-                    key: "identifiers".into(),
-                    current: publication
-                        .member("identifiers")
-                        .cloned()
-                        .unwrap_or(NativeValue::None),
-                    imported: imported.clone(),
-                });
-            }
-        }
+        conflicts = exact_standard_conflicts(&publication, &mapped, row, index)?;
         sources.push(FieldSource {
             path: "publication".into(),
             original_field:
@@ -939,6 +901,191 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
         sources,
         conflicts,
     })
+}
+
+/// Compare only the submitted standard fields. A partial exact record is valid
+/// author data even when it cannot generate a complete citation. Complex groups
+/// reuse the real forward projection; unsupported shapes remain undecidable.
+fn exact_standard_conflicts(
+    publication: &NativeValue,
+    mapped: &NativeValue,
+    row: &Value,
+    index: usize,
+) -> Result<Vec<PublicationConflict>> {
+    let object = row.as_object().unwrap();
+    let incomparable = |field: &str| {
+        fail(format!(
+            "records[{index}].{field}: standard field cannot be compared accurately with the exact publication; preserve both originals"
+        ))
+    };
+    let mut conflicts = vec![];
+    let mut compare = |key: &str, imported: NativeValue| {
+        conflicts.push(PublicationConflict {
+            key: key.into(),
+            current: publication
+                .member(key)
+                .cloned()
+                .unwrap_or(NativeValue::None),
+            imported,
+        });
+    };
+    for (csl, native) in [
+        ("type", "kind"),
+        ("title", "title"),
+        ("container-title", "container"),
+        ("volume", "volume"),
+        ("issue", "issue"),
+        ("page", "pages"),
+        ("abstract", "abstract"),
+        ("URL", "url"),
+        ("language", "language"),
+    ] {
+        if !object.contains_key(csl) {
+            continue;
+        }
+        let imported = mapped.member(native).ok_or_else(|| incomparable(csl))?;
+        let current = publication.member(native);
+        if current.is_some_and(|v| !matches!(v, NativeValue::Text(_) | NativeValue::None)) {
+            return Err(incomparable(csl));
+        }
+        if native == "kind" {
+            let supported = |v: &NativeValue| {
+                matches!(
+                    v.text(),
+                    Some(
+                        "article"
+                            | "book"
+                            | "report"
+                            | "standard"
+                            | "dataset"
+                            | "chapter"
+                            | "thesis"
+                            | "web"
+                    )
+                )
+            };
+            if !supported(imported)
+                || current.is_some_and(|v| *v != NativeValue::None && !supported(v))
+            {
+                return Err(incomparable(csl));
+            }
+        }
+        if current != Some(imported) {
+            compare(native, imported.clone());
+        }
+    }
+    if object.contains_key("issued") {
+        let imported = mapped
+            .member("issued")
+            .ok_or_else(|| incomparable("issued"))?;
+        if !row["issued"]
+            .as_object()
+            .is_some_and(|v| v.len() == 1 && v.contains_key("date-parts"))
+        {
+            return Err(incomparable("issued"));
+        }
+        let expected = match publication.member("issued") {
+            None | Some(NativeValue::None) => Value::Null,
+            Some(value) => {
+                json!({"date-parts":[date_parts(value).ok_or_else(|| incomparable("issued"))?]})
+            }
+        };
+        if row["issued"] != expected {
+            compare("issued", imported.clone());
+        }
+    }
+    if object.contains_key("keyword") {
+        let imported = mapped
+            .member("keywords")
+            .ok_or_else(|| incomparable("keyword"))?;
+        let expected = match publication.member("keywords") {
+            None | Some(NativeValue::None) => Value::Null,
+            Some(value) => {
+                value.array().ok_or_else(|| incomparable("keyword"))?;
+                project_keywords(publication)
+                    .map_err(|_| incomparable("keyword"))?
+                    .ok_or_else(|| incomparable("keyword"))?
+            }
+        };
+        if row["keyword"] != expected {
+            compare("keywords", imported.clone());
+        }
+    }
+    if ["author", "editor"]
+        .iter()
+        .any(|role| object.contains_key(*role))
+    {
+        // Additional CSL name parts are retained by the ordinary importer, but
+        // cannot be flattened into a proven native contributor replacement.
+        for role in ["author", "editor"]
+            .into_iter()
+            .filter(|role| object.contains_key(*role))
+        {
+            let names = row[role].as_array().ok_or_else(|| incomparable(role))?;
+            if names.iter().any(|name| {
+                !name.as_object().is_some_and(|parts| {
+                    parts.iter().all(|(key, value)| {
+                        matches!(key.as_str(), "family" | "given" | "literal") && value.is_string()
+                    })
+                })
+            }) {
+                return Err(incomparable(role));
+            }
+        }
+        let expected = match publication.member("contributors") {
+            None | Some(NativeValue::None) => {
+                Map::from_iter([("author".into(), json!([])), ("editor".into(), json!([]))])
+            }
+            Some(_) => project_contributors(publication, "exact", &mut vec![], false)
+                .map_err(|_| incomparable("author/editor"))?,
+        };
+        if ["author", "editor"]
+            .iter()
+            .any(|role| object.contains_key(*role) && row[*role] != expected[*role])
+        {
+            compare(
+                "contributors",
+                mapped
+                    .member("contributors")
+                    .cloned()
+                    .unwrap_or_else(|| NativeValue::Array(vec![])),
+            );
+        }
+    }
+    if ["DOI", "ISBN", "ISSN"]
+        .iter()
+        .any(|field| object.contains_key(*field))
+    {
+        for field in ["DOI", "ISBN", "ISSN"]
+            .into_iter()
+            .filter(|field| object.contains_key(*field))
+        {
+            if !row[field].is_string() {
+                return Err(incomparable(field));
+            }
+        }
+        if publication
+            .member("identifiers")
+            .is_some_and(|v| v.array().is_none() && *v != NativeValue::None)
+        {
+            return Err(incomparable("DOI/ISBN/ISSN"));
+        }
+        let expected = project_identifiers(publication, "exact", &mut vec![])
+            .map_err(|_| incomparable("DOI/ISBN/ISSN"))?;
+        if ["DOI", "ISBN", "ISSN"].iter().any(|field| {
+            object.contains_key(*field)
+                && row[*field] != expected.get(*field).cloned().unwrap_or(Value::Null)
+        }) {
+            compare(
+                "identifiers",
+                mapped
+                    .member("identifiers")
+                    .cloned()
+                    .ok_or_else(|| incomparable("DOI/ISBN/ISSN"))?,
+            );
+        }
+    }
+    Ok(conflicts)
 }
 
 fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<ImportedPublication>> {
@@ -1642,6 +1789,11 @@ mod tests {
             let imported = import_bibliography(format, &output.bytes).unwrap();
             assert_eq!(imported.original, output.bytes);
             assert_eq!(imported.records[0].publication, work.work.publication);
+            assert!(
+                imported.records[0].conflicts.is_empty(),
+                "{format:?}: {:?}",
+                imported.records[0].conflicts
+            );
         }
         let output = project_bibliography(&[work], BibliographyFormat::CslJson).unwrap();
         let rows: Value = serde_json::from_slice(&output.bytes).unwrap();
@@ -1756,5 +1908,142 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn partial_exact_title_and_kind_changes_are_reported_without_complete_citation() {
+        let exact = record([
+            ("kind", txt("article")),
+            ("title", txt("Preserved exact title")),
+        ]);
+        for (kind, title, expected) in [
+            ("article-journal", "Externally changed title", vec!["title"]),
+            ("book", "Preserved exact title", vec!["kind"]),
+            ("article-journal", "Preserved exact title", vec![]),
+            ("article-magazine", "Preserved exact title", vec![]),
+        ] {
+            let rows = json!([{"id":"originalKey","type":kind,"title":title,"weftext":{"version":1,"publication":exact}}]);
+            let bytes = serde_json::to_vec(&rows).unwrap();
+            let imported = import_bibliography(BibliographyFormat::CslJson, &bytes).unwrap();
+            assert_eq!(imported.original, bytes);
+            assert_eq!(imported.records[0].original_record, rows[0]);
+            assert_eq!(imported.records[0].publication, exact);
+            assert_eq!(
+                imported.records[0]
+                    .conflicts
+                    .iter()
+                    .map(|v| v.key.as_str())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            if title != "Preserved exact title" {
+                assert_eq!(
+                    imported.records[0].conflicts[0].current,
+                    txt("Preserved exact title")
+                );
+                assert_eq!(imported.records[0].conflicts[0].imported, txt(title));
+            }
+        }
+        let mut incomplete = work();
+        incomplete.work.publication = exact;
+        assert!(project_bibliography(&[incomplete], BibliographyFormat::CslJson).is_err());
+    }
+
+    #[test]
+    fn partial_exact_complex_groups_use_the_same_forward_projection_without_flattening() {
+        let original = work();
+        let exact = record([
+            (
+                "contributors",
+                original
+                    .work
+                    .publication
+                    .member("contributors")
+                    .unwrap()
+                    .clone(),
+            ),
+            ("issued", precision_date(&[2026, 9]).unwrap()),
+            ("keywords", NativeValue::Array(vec![txt("one"), txt("two")])),
+            (
+                "identifiers",
+                NativeValue::Array(vec![
+                    record([("scheme", txt("doi")), ("value", txt("original"))]),
+                    record([
+                        ("scheme", txt("doi")),
+                        ("value", txt("another retained identifier")),
+                    ]),
+                ]),
+            ),
+        ]);
+        let mut rows = json!([{"author":[{"family":"陈","given":"明"},{"literal":"Native Research Group"}],"issued":{"date-parts":[[2026,9]]},"keyword":"one, two","DOI":"original","weftext":{"version":1,"publication":exact}}]);
+        let unchanged = import_bibliography(
+            BibliographyFormat::CslJson,
+            &serde_json::to_vec(&rows).unwrap(),
+        )
+        .unwrap();
+        assert!(unchanged.records[0].conflicts.is_empty());
+        assert_eq!(unchanged.records[0].publication, exact);
+        rows[0]["DOI"] = json!("external");
+        let changed = import_bibliography(
+            BibliographyFormat::CslJson,
+            &serde_json::to_vec(&rows).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(changed.records[0].conflicts.len(), 1);
+        assert_eq!(changed.records[0].conflicts[0].key, "identifiers");
+        assert_eq!(changed.records[0].publication, exact);
+        rows[0]["author"] = json!([]);
+        let removed = import_bibliography(
+            BibliographyFormat::CslJson,
+            &serde_json::to_vec(&rows).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            removed.records[0]
+                .conflicts
+                .iter()
+                .any(|c| c.key == "contributors" && c.imported == NativeValue::Array(vec![]))
+        );
+    }
+
+    #[test]
+    fn partial_exact_unprovable_standard_groups_are_rejected_instead_of_guessed() {
+        let unresolved = record([(
+            "contributors",
+            NativeValue::Array(vec![record([
+                ("agent", record([("ref", txt(&work().work.entity_ref))])),
+                ("roles", NativeValue::Array(vec![txt("author")])),
+            ])]),
+        )]);
+        let rows = json!([{"author":[{"literal":"Do not guess this Agent name"}],"weftext":{"version":1,"publication":unresolved}}]);
+        assert!(
+            import_bibliography(
+                BibliographyFormat::CslJson,
+                &serde_json::to_vec(&rows).unwrap()
+            )
+            .unwrap_err()
+            .0
+            .contains("cannot be compared accurately")
+        );
+        let exact = record([
+            ("title", txt("Exact title")),
+            ("issued", record([("calendar", txt("unknown"))])),
+        ]);
+        for field in [
+            json!({"issued":{"date-parts":[[2026]]}}),
+            json!({"author":[{"family":"Known","non-dropping-particle":"Not flattenable"}]}),
+            json!({"title":123}),
+        ] {
+            let mut row = field;
+            row["weftext"] = json!({"version":1,"publication":exact});
+            let bytes = serde_json::to_vec(&json!([row])).unwrap();
+            assert!(
+                import_bibliography(BibliographyFormat::CslJson, &bytes)
+                    .unwrap_err()
+                    .0
+                    .contains("cannot be compared accurately")
+            );
+            assert_eq!(text(&exact, "title"), Some("Exact title"));
+        }
     }
 }

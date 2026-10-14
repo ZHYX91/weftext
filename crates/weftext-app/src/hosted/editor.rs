@@ -234,9 +234,8 @@ pub(super) fn freeze(
 > {
     inner.rights(actor, resource)?;
     let selected = inner
-        .config
-        .files
-        .get(resource)
+        .file(resource)
+        .ok()
         .ok_or_else(unavailable)?
         .inputs
         .clone();
@@ -259,12 +258,7 @@ pub(super) fn freeze_with_inputs(
 > {
     inner.rights(actor, resource)?;
     writing_api::validate_source(source, None)?;
-    let file = inner
-        .config
-        .files
-        .get(resource)
-        .ok_or_else(unavailable)?
-        .clone();
+    let file = inner.file(resource).ok().ok_or_else(unavailable)?.clone();
     captured_inputs.validate(inner, actor)?;
     // This entry only reuses an already frozen selection for this exact slot.
     if !captured_inputs.matches_selection(&file.inputs) {
@@ -302,7 +296,7 @@ pub(super) fn validate_inputs(
     expected: &BTreeMap<String, String>,
 ) -> Result<(), ApiError> {
     inner.rights(actor, resource)?;
-    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+    let file = inner.file(resource).ok().ok_or_else(unavailable)?;
     let current = inner
         .files(actor, &file.inputs)?
         .iter()

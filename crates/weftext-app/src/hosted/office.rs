@@ -270,7 +270,7 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
             media::input_access(inner, actor, r, true)?;
             continue;
         }
-        let grant = user.grants.get(r).ok_or_else(unavailable)?;
+        let grant = &inner.grant(actor, r)?;
         if !grant.read || !format_access(grant, &needs.format, download) {
             return Err(unavailable());
         }
@@ -280,7 +280,7 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
             media::input_access(inner, actor, r, true)?;
             continue;
         }
-        let grant = user.grants.get(r).ok_or_else(unavailable)?;
+        let grant = &inner.grant(actor, r)?;
         if !format_access(grant, &needs.format, download)
             || (needs.sources.contains(r) && !grant.read)
             || needs.fields.get(r).is_some_and(|fs| {
@@ -348,7 +348,9 @@ fn check_draft(
     let base = req.base_id.as_deref().ok_or_else(failed)?;
     inner
         .core
-        .with_actor(&actor_scope, |core| core.check_session_base(session, base))
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+            core.check_session_base(session, base)
+        })
         .map_err(|_| failed())?;
     Ok(())
 }
@@ -368,10 +370,7 @@ fn freeze_fields(
     if ids.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let rights = inner.policy.users[actor]
-        .grants
-        .get(resource)
-        .ok_or_else(unavailable)?;
+    let rights = inner.grant(actor, resource)?;
     if ids
         .iter()
         .any(|id| !rights.fields.get(id).is_some_and(|f| f.read))
@@ -414,7 +413,7 @@ fn freeze_fields(
         inner
             .config
             .root
-            .join(&inner.config.files[resource].path)
+            .join(&inner.file(resource)?.path)
             .to_string_lossy()
             .into_owned(),
         qualified.witness,
@@ -763,8 +762,9 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
     locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;
         expire_revoked(inner);
-        let resources:Vec<_>=inner.policy.users[&actor].grants.iter().filter_map(|(r,g)|{
-            let f=inner.config.files.get(r)?;
+        let grants=inner.grants_view(&actor)?;
+        let resources:Vec<_>=grants.iter().filter_map(|(r,g)|{
+            let f=inner.file(r).ok()?;
             let eligible=author_file(inner,r).is_ok();
             let mut formats=vec![];let mut downloads=vec![];
             for format in ["docx","xlsx","pdf","bibtex","csl-json","ris"] {if eligible && format_access(g,format,false) {formats.push(format);if format_access(g,format,true) {downloads.push(format);}}}
@@ -986,7 +986,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
     let mut witnesses = vec![];
     let mut field_cells = BTreeMap::new();
     let worker = if let Some(r) = &req.resource {
-        let main = inner.config.root.join(&inner.config.files[r].path);
+        let main = inner.config.root.join(&inner.file(r)?.path);
         let mut paths: Vec<_> = needs
             .sources
             .iter()
@@ -1042,7 +1042,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
             let root = inner.config.root.clone();
             let current = inner
                 .core
-                .with_actor(&scope(inner, actor), |core| {
+                .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
                     let doc = core.open(&main, Some(root))?;
                     let result = doc
                         .workspace_id
@@ -1429,7 +1429,7 @@ fn lookup(
 fn missing(inner: &mut HostedInner, actor: &str, request: &str) -> Result<Value, ApiError> {
     let exists = inner
         .core
-        .with_actor(&scope(inner, actor), |core| {
+        .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
             core.actor_output_fingerprint(request)
         })
         .map_err(HostedInner::core_error)?
@@ -1468,7 +1468,7 @@ async fn prepare(
         expire_revoked(inner);
         let old = inner
             .core
-            .with_actor(&scope(inner, &actor), |core| {
+            .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
                 core.actor_output_fingerprint(&captured.request_id)
             })
             .map_err(HostedInner::core_error)?;
@@ -1509,7 +1509,7 @@ async fn prepare(
         }
         if !inner
             .core
-            .with_actor(&scope(inner, &actor), |core| {
+            .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
                 core.actor_output_claim(&captured.request_id, &fingerprint)
             })
             .map_err(HostedInner::core_error)?

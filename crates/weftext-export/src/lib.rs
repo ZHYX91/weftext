@@ -3,6 +3,7 @@ pub mod bibliography;
 pub mod bibliography_import;
 pub mod docx;
 pub mod exchange;
+pub mod recovery_backup;
 pub mod xlsx;
 use serde::{Deserialize, Serialize};
 

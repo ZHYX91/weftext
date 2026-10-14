@@ -954,6 +954,7 @@ impl Core {
                 check_size(source.as_bytes())?;
                 if dirty_buffer && !to_protect.iter().any(|d| d.source == *source) {
                     to_protect.push(Draft {
+                        library: self.draft_session_library(&request.session_id)?,
                         path: context.current.path.clone(),
                         base_source: current_source.clone(),
                         source: source.clone(),

@@ -355,6 +355,7 @@ impl Core {
             selection: Some(objects.clone()),
         });
         plan.transaction = Some(FrozenOperation {
+            backup_private_digest: None,
             request,
             preview: preview.clone(),
             files: vec![],

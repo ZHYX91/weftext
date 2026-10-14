@@ -206,6 +206,7 @@ impl Core {
             return Ok(None);
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.definition.is_none()
@@ -213,6 +214,7 @@ impl Core {
             || record.feature.is_some()
             || !record.save_definition_reservations.is_empty()
             || record.history.is_some()
+            || record.owner_backup.is_some()
         {
             return Err(conflict());
         }
@@ -232,6 +234,7 @@ impl Core {
     }
 
     fn definition_owner(&self, root: &Path, session_id: &str) -> Result<(NodeRef, FileIdentity)> {
+        self.actor_library_for_root(root)?;
         self.check_actor_session(session_id)?;
         let root = absolute_path(root)?;
         let workspace = self.require_workspace(&root)?;
@@ -340,6 +343,7 @@ impl Core {
             "intent":request.intent_fingerprint,"binding":request.binding,
         }))?);
         let record = ActorOperation {
+            library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
             fingerprint,
@@ -362,8 +366,9 @@ impl Core {
             }),
             save_definition_reservations: vec![],
             history: None,
+            owner_backup: None,
         };
-        let bytes = serde_json::to_vec(&record)?;
+        let bytes = Self::actor_operation_bytes(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
@@ -478,6 +483,7 @@ impl Core {
         let mut record = match self.definition_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
                 fingerprint: String::new(),
@@ -488,6 +494,7 @@ impl Core {
                 definition: Some(DefinitionOperation { proposal: None }),
                 save_definition_reservations: vec![],
                 history: None,
+                owner_backup: None,
             },
         };
         if let Some(status) = self.actor_definition_status(resource, operation)? {
@@ -495,9 +502,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &serde_json::to_vec(&record)?)?;
+            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &serde_json::to_vec(&record)?)?;
+            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -538,6 +545,7 @@ impl Core {
                 ));
             }
             let record: ActorOperation = serde_json::from_slice(&bytes)?;
+            self.check_actor_library(&record.library)?;
             if self.actor.as_ref() != Some(&record.actor) {
                 return Err(conflict());
             }

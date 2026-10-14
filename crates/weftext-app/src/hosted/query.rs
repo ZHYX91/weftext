@@ -152,17 +152,11 @@ pub(super) fn authorize_authority(
     library::authorize_execution(inner, actor, &authority.execution)?;
     query_providers::authorize(inner, actor, &authority.providers)?;
     query_scopes::authorize(inner, actor, &authority.scopes)?;
-    let user = inner
-        .policy
-        .users
-        .get(actor)
-        .filter(|u| u.enabled)
-        .ok_or_else(expired)?;
     let access = |resource: &str| {
-        user.grants
-            .get(resource)
-            .filter(|_| inner.config.files.contains_key(resource))
-            .ok_or_else(unavailable)
+        if inner.file(resource).is_err() {
+            return Err(unavailable());
+        }
+        inner.grant(actor, resource)
     };
     for (resource, fields) in &authority.fields {
         let rights = access(resource)?;
@@ -272,7 +266,7 @@ fn definitions_access(
         ..Default::default()
     };
     authorize_authority(inner, actor, &authority)?;
-    if !inner.config.files.get(resource).is_some_and(|f| f.editable) {
+    if !inner.file(resource).ok().is_some_and(|f| f.editable) {
         return Err(unavailable());
     }
     structure::guard_slot(inner, resource)?;
@@ -286,7 +280,7 @@ fn read_definitions(
 ) -> Result<Value, ApiError> {
     let pinned = matches!(selection, Some(DefinitionSelection::Pinned { .. }));
     definitions_access(inner, actor, resource, pinned)?;
-    let path = inner.config.root.join(&inner.config.files[resource].path);
+    let path = inner.config.root.join(&inner.file(resource)?.path);
     let root = inner.config.root.clone();
     let snapshot = inner
         .core
@@ -354,12 +348,12 @@ fn read_definitions(
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
-        let grants = inner.policy.users[&actor].grants.clone();
+        let grants = inner.grants_view(&actor)?;
         let mut resources = vec![];
         let mut definitions = vec![];
         let mut unavailable_definitions = vec![];
         for (resource, rights) in grants {
-            let Some(file) = inner.config.files.get(&resource).filter(|f| f.editable || f.lifecycle=="trash" && inner.policy.users[&actor].query_scopes.trash) else { continue; };
+            let Some(file) = inner.file(&resource).ok().filter(|f| f.editable || f.lifecycle=="trash" && inner.policy.users[&actor].query_scopes.trash) else { continue; };
             let fields = rights.fields.iter().filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<Vec<_>>();
             if fields.is_empty() && !rights.query.definitions && !rights.query.products.values().any(|p| *p) && rights.query.relations.is_empty() { continue; }
             resources.push(json!({"resource":resource,"title":file.title,"lifecycle":file.lifecycle,"readOnly":file.lifecycle=="trash","fields":fields,
@@ -494,14 +488,10 @@ fn row_access(
         ..Default::default()
     };
     authorize_authority(inner, actor, &authority)?;
-    let rights = inner.policy.users[actor]
-        .grants
-        .get(resource)
-        .ok_or_else(unavailable)?;
+    let rights = inner.grant(actor, resource)?;
     if !inner
-        .config
-        .files
-        .get(resource)
+        .file(resource)
+        .ok()
         .is_some_and(|f| f.editable && f.lifecycle == "live" || f.lifecycle == "trash")
         || (!rights.fields.values().any(|f| f.read)
             && !rights.query.products.values().any(|p| *p)
@@ -725,7 +715,7 @@ fn owner_resource(
     owner: &str,
     workspace: &str,
 ) -> Result<String, ApiError> {
-    if inner.config.files.contains_key(owner) {
+    if inner.file(owner).is_ok() {
         definitions_access(inner, actor, owner, false)?;
         return Ok(owner.into());
     }
@@ -734,12 +724,10 @@ fn owner_resource(
     }
     // Native definition calls retain NodeRefs. Search only explicitly permitted
     // configured definition owners, never a library inventory or ambient path.
-    let candidates = inner.policy.users[actor]
-        .grants
+    let available_grants = inner.grants_view(actor)?;
+    let candidates = available_grants
         .iter()
-        .filter(|(r, g)| {
-            g.query.definitions && inner.config.files.get(*r).is_some_and(|f| f.editable)
-        })
+        .filter(|(r, g)| g.query.definitions && inner.file(r).ok().is_some_and(|f| f.editable))
         .map(|(r, _)| r.clone())
         .collect::<Vec<_>>();
     let mut found = vec![];
@@ -750,14 +738,14 @@ fn owner_resource(
         let paths = batch
             .iter()
             .map(|r| {
-                inner
+                Ok(inner
                     .config
                     .root
-                    .join(&inner.config.files[r].path)
+                    .join(&inner.file(r)?.path)
                     .to_string_lossy()
-                    .into_owned()
+                    .into_owned())
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ApiError>>()?;
         let files = inner
             .core
             .read_snapshot(&inner.config.root, &paths)
@@ -867,7 +855,7 @@ fn freeze_definitions(
                     .iter()
                     .any(|h| &h.revision == revision)
             {
-                let path = inner.config.root.join(&inner.config.files[&resource].path);
+                let path = inner.config.root.join(&inner.file(&resource)?.path);
                 let bytes = inner
                     .core
                     .read_source_revision_at(&inner.config.root, &path, owner_id, revision)
@@ -1111,7 +1099,7 @@ pub(super) fn validate_definition(
         .and_then(|s| s.strip_suffix("/schema"))
         .ok_or_else(changed)?
         .to_owned();
-    let owner_path = inner.config.root.join(&inner.config.files[resource].path);
+    let owner_path = inner.config.root.join(&inner.file(resource)?.path);
     let mut owners = BTreeMap::new();
     for _ in 0..64 {
         let resources = owners
@@ -1122,16 +1110,17 @@ pub(super) fn validate_definition(
         if resources.len() >= 64 {
             return Err(invalid());
         }
-        let paths = std::iter::once(config.path.clone())
-            .chain(resources.iter().map(|r| {
+        let mut paths = vec![config.path.clone()];
+        for r in &resources {
+            paths.push(
                 inner
                     .config
                     .root
-                    .join(&inner.config.files[r].path)
+                    .join(&inner.file(r)?.path)
                     .to_string_lossy()
-                    .into_owned()
-            }))
-            .collect::<Vec<_>>();
+                    .into_owned(),
+            );
+        }
         let mut files = inner
             .core
             .read_snapshot(&inner.config.root, &paths)
@@ -1218,8 +1207,7 @@ pub(super) fn validate_definition(
         let demands = weftext_data::query_read_requirements(plan, &baseline, &context)
             .map_err(|_| unavailable())?;
         let configured = inner
-            .config
-            .files
+            .files_view(&actor)?
             .iter()
             .filter(|(_, f)| {
                 f.editable
@@ -1227,7 +1215,7 @@ pub(super) fn validate_definition(
             })
             .map(|(id, _)| id.clone())
             .collect();
-        let effects = static_authority(&inner.policy.users[&actor].grants, &configured, &demands)?;
+        let effects = static_authority(&inner.grants_view(&actor)?, &configured, &demands)?;
         authority.fields = effects.fields;
         authority.products = effects.products;
         authority.relations = effects.relations;
@@ -1386,26 +1374,31 @@ fn capture(
     // Perform this gate even for resources=[] and before any Schema discovery.
     query_providers::authorize(inner, &actor, &selected_providers)?;
     req.plan.take.get_or_insert(500);
-    let grants = inner.policy.users[&actor].grants.clone();
+    let grants = inner.grants_view(&actor)?;
+    let all_file_entries = grants
+        .keys()
+        .map(|r| Ok((r.clone(), inner.file(r)?)))
+        .collect::<Result<BTreeMap<_, _>, ApiError>>()?;
     for field in &req.fields {
-        if !grants.iter().any(|(r, g)| {
-            inner.config.files.contains_key(r) && g.fields.get(field).is_some_and(|f| f.read)
-        }) {
+        if !grants
+            .iter()
+            .any(|(r, g)| inner.file(r).is_ok() && g.fields.get(field).is_some_and(|f| f.read))
+        {
             return Err(unavailable());
         }
     }
     for product in &req.products {
         if !grants.iter().any(|(r, g)| {
-            inner.config.files.contains_key(r)
-                && g.query.products.get(product).copied().unwrap_or(false)
+            inner.file(r).is_ok() && g.query.products.get(product).copied().unwrap_or(false)
         }) {
             return Err(unavailable());
         }
     }
     for relation in &req.relations {
-        if !grants.iter().any(|(r, g)| {
-            inner.config.files.contains_key(r) && g.query.relations.contains(relation)
-        }) {
+        if !grants
+            .iter()
+            .any(|(r, g)| inner.file(r).is_ok() && g.query.relations.contains(relation))
+        {
             return Err(unavailable());
         }
     }
@@ -1422,13 +1415,13 @@ fn capture(
         (_, None) => BTreeSet::new(),
         (Some(resources), Some(lifecycles)) => resources
             .iter()
-            .filter(|r| lifecycles.contains(&inner.config.files[*r].lifecycle))
+            .filter(|r| lifecycles.contains(&all_file_entries[*r].lifecycle))
             .cloned()
             .collect(),
         (None, Some(lifecycles)) => grants
             .keys()
             .filter(|r| row_access(inner, &actor, r, &req).is_ok())
-            .filter(|r| lifecycles.contains(&inner.config.files[*r].lifecycle))
+            .filter(|r| lifecycles.contains(&all_file_entries[*r].lifecycle))
             .cloned()
             .collect(),
     };
@@ -1537,14 +1530,14 @@ fn capture(
         let selected = match &req.resources {
             Some(selected) => selected
                 .iter()
-                .filter(|r| scopes.includes(&inner.config.files[*r].lifecycle))
+                .filter(|r| scopes.includes(&all_file_entries[*r].lifecycle))
                 .cloned()
                 .collect(),
             None => grants
                 .keys()
                 .filter(|r| {
                     row_access(inner, &actor, r, &req).is_ok()
-                        && scopes.includes(&inner.config.files[*r].lifecycle)
+                        && scopes.includes(&all_file_entries[*r].lifecycle)
                 })
                 .cloned()
                 .collect(),
@@ -1620,7 +1613,7 @@ fn capture(
             resources = grants
                 .keys()
                 .filter(|r| row_access(inner, &actor, r, &req).is_ok())
-                .filter(|r| scopes.includes(&inner.config.files[*r].lifecycle))
+                .filter(|r| scopes.includes(&all_file_entries[*r].lifecycle))
                 .cloned()
                 .collect();
             if resources
@@ -1663,8 +1656,7 @@ fn capture(
                 let r = grants
                     .iter()
                     .find(|(r, g)| {
-                        inner.config.files.contains_key(*r)
-                            && g.fields.get(field).is_some_and(|f| f.read)
+                        inner.file(r).is_ok() && g.fields.get(field).is_some_and(|f| f.read)
                     })
                     .ok_or_else(unavailable)?
                     .0;
@@ -1678,8 +1670,7 @@ fn capture(
                 let r = grants
                     .iter()
                     .find(|(r, g)| {
-                        inner.config.files.contains_key(*r)
-                            && g.query.products.get(p).copied().unwrap_or(false)
+                        inner.file(r).is_ok() && g.query.products.get(p).copied().unwrap_or(false)
                     })
                     .ok_or_else(unavailable)?
                     .0;
@@ -1692,9 +1683,7 @@ fn capture(
             for relation in &req.relations {
                 let r = grants
                     .iter()
-                    .find(|(r, g)| {
-                        inner.config.files.contains_key(*r) && g.query.relations.contains(relation)
-                    })
+                    .find(|(r, g)| inner.file(r).is_ok() && g.query.relations.contains(relation))
                     .ok_or_else(unavailable)?
                     .0;
                 authority
@@ -1711,7 +1700,7 @@ fn capture(
             .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
         {
             for r in &resources {
-                needed_inputs.extend(inner.config.files[r].inputs.iter().cloned());
+                needed_inputs.extend(inner.file(r)?.inputs.iter().cloned());
             }
         }
         for r in &needed_inputs {
@@ -1846,7 +1835,7 @@ fn capture(
                     path: coordinate.to_string_lossy().into_owned(),
                     source: String::new(),
                     revision: cut_id.clone(),
-                    lifecycle: inner.config.files[r].lifecycle.clone(),
+                    lifecycle: inner.file(r)?.lifecycle.clone(),
                     title: None,
                     body: None,
                     products: None,
@@ -1857,7 +1846,7 @@ fn capture(
                     .iter()
                     .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
                 {
-                    let config_file = &inner.config.files[r];
+                    let config_file = &inner.file(r)?;
                     let row_inputs = captured_inputs.members_for(&config_file.inputs)?;
                     let missing = row_inputs
                         .iter()
@@ -2086,7 +2075,7 @@ async fn execute_captured(
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
-        for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.config.files[&resource].lifecycle=="live"&&inner.config.files[&resource].editable&&inner.rights(&actor,&resource).is_ok());}}
+        for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.file(&resource)?.lifecycle=="live"&&inner.file(&resource)?.editable&&inner.rights(&actor,&resource).is_ok());}}
         let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority)?;
         Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
     }).await

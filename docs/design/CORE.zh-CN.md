@@ -37,6 +37,10 @@ portable 控制资料只保存无法从当前文件恢复的事实：身份创�
 
 完整备份包含普通文件、ignored 字节、portable 控制/历史及一致捕获的本机未决 journal/Draft；只复制活动 SQLite 主文件不合格。可单独导出仅资料备份，但须说明它不能恢复丢失的操作/费用责任。恢复到新设备重建本地观察与派生索引；真实未决执行责任只由原日志或显式责任接管恢复。
 
+`BackupLibrary` 保留原 v1 `library/`、`private/`、`backup.json` 树。新 ActorOperation、output claim、Draft 和迁移记录把可选库归属放在原记录首个 metadata 字段，不另建归属账本。托管 producer 绑定可信配置 root、实际文件身份及已接纳 WorkspaceId；新本地 Draft 使用原 Session root，普通 root 可无 WorkspaceId。保留的旧事实不补造归属。选择器在受保护句柄上先读有界 metadata，再读正文，检查完整的保留 proposal／消费闭包，排除可证外库正文。归属未知或混库时明确失败，不过滤 proposal 或导出整个共享私有目录。
+
+原冻结备份计划保留所选准确文件和一枚私有成员／路由摘要，执行与原事务恢复均重新检查。只有同一备份操作的类型和内容均已验证的证据，才允许其自身新增 journal 文件；文件名前缀相同不获得例外。备份只有在捕获完整原未决证据及当前树时，才可包含仍 installing 的源操作，不先解决它或认定其 committed。首个输出 effect 前，原 manifest 与唯一文件／目录须符合 64 MiB、5,000 成员输入预算，无损 ZIP 须在 80 MiB 内；编码只消费这些冻结 after-images。专用托管备份 fence 位于原 ActorOperation，独立于通用 feature／output 权限，不增加自动 restore decoder，也不允许因交付缓存丢失重放原请求。
+
 原生内容包另用 `capture_native_export` 在一次捕获中生成包字节、manifest 与内存 `NativeExportWitness`，消费方交付前复验同一见证，不另读一份当前树来证明旧包。获权的纳管正文、登记资源、批注、Schema、设置和样式按原角色收集；未纳管、忽略和 Trash 内容只记录必要的省略路径及物理元数据，不读其正文后再过滤。当前最多 5,000 个命名空间成员与 64 MiB 保留输入，见证核实际观察到的成员及对象，不承诺任意未来原始文件的强负范围。该包不包含私有 journal、草稿或凭据，不能替代完整恢复备份。
 
 v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。

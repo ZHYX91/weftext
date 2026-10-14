@@ -15,16 +15,67 @@ pub struct DraftAlternative {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct DraftReference {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
     path: String,
     fingerprint: String,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DraftMigration {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
     identity: FileIdentity,
     consumed: Vec<DraftReference>,
 }
 impl Core {
+    pub(crate) fn draft_library_for_session(
+        &self,
+        session_id: &str,
+        retained: Option<&Draft>,
+    ) -> Result<Option<hosted::ActorLibraryBinding>> {
+        let binding = self.draft_session_library(session_id)?;
+        let session = self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+        match File::open(self.draft_path(&session.path)) {
+            Ok(mut file) => match hosted::read_actor_library_header(&mut file)? {
+                hosted::ActorLibraryHeader::LegacyUnbound => return Ok(None),
+                hosted::ActorLibraryHeader::Bound(original)
+                    if Some(&original) != binding.as_ref() =>
+                {
+                    return Ok(None);
+                }
+                _ => {}
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+        let Some(original) = retained else {
+            return Ok(binding);
+        };
+        // Never backfill a legacy recovered proposal with a new root binding.
+        if original.library.is_none() {
+            return Ok(None);
+        }
+        if original.library != binding {
+            return Ok(None);
+        }
+        let root = &self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?
+            .root;
+        if std::iter::once(original.path.as_str())
+            .chain(original.alternatives.iter().map(|p| p.path.as_str()))
+            .any(|path| relative_draft_path(Path::new(path), root).is_none())
+        {
+            return Ok(None);
+        }
+        Ok(binding)
+    }
+
     pub(super) fn retained_draft_alternatives(
         draft: Option<&Draft>,
         incoming: &str,
@@ -168,14 +219,17 @@ impl Core {
                 }
                 Err(e) => return Err(e.into()),
             };
+            let parsed: Draft = serde_json::from_slice(&bytes)?;
             let reference = DraftReference {
+                library: parsed.library.clone(),
                 path: prior.replace('/', "\\").to_lowercase(),
                 fingerprint: hash(&bytes),
             };
             if prior != &current_path && consumed.contains(&reference) {
                 continue;
             }
-            let draft: Draft = serde_json::from_slice(&bytes)?;
+            let draft = parsed;
+            self.check_actor_library(&draft.library)?;
             if (draft
                 .identity
                 .as_ref()
@@ -226,6 +280,12 @@ impl Core {
             }
             alternatives.push(proposal);
         }
+        if candidates
+            .iter()
+            .any(|draft| draft.library != chosen.library)
+        {
+            chosen.library = None;
+        }
         chosen.path = current_path;
         chosen.alternatives = alternatives;
         if !imported.is_empty() {
@@ -248,6 +308,7 @@ impl Core {
             private_replace(
                 &self.draft_migration_path(path),
                 &serde_json::to_vec(&DraftMigration {
+                    library: chosen.library.clone(),
                     identity: identity.clone(),
                     consumed,
                 })?,

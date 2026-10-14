@@ -33,6 +33,8 @@ pub struct ActorFeatureStatus {
 enum FeatureIntentKind {
     UpdateFiles,
     ImportDocx,
+    ImportNative,
+    ImportBibliography,
     ConfigureStyle,
     ImportResource,
     NewNode,
@@ -51,6 +53,8 @@ impl FeatureIntentKind {
         match intent {
             OperationIntent::UpdateFiles { .. } => Ok(Self::UpdateFiles),
             OperationIntent::ImportDocx { .. } => Ok(Self::ImportDocx),
+            OperationIntent::ImportNative { .. } => Ok(Self::ImportNative),
+            OperationIntent::ImportBibliography { .. } => Ok(Self::ImportBibliography),
             OperationIntent::ConfigureStyle { .. } => Ok(Self::ConfigureStyle),
             OperationIntent::ImportResource { .. } => Ok(Self::ImportResource),
             OperationIntent::NewNode { .. } => Ok(Self::NewNode),
@@ -70,6 +74,8 @@ impl FeatureIntentKind {
         match self {
             Self::UpdateFiles => "updateFiles",
             Self::ImportDocx => "importDocx",
+            Self::ImportNative => "importNative",
+            Self::ImportBibliography => "importBibliography",
             Self::ConfigureStyle => "configureStyle",
             Self::ImportResource => "importResource",
             Self::NewNode => "newNode",
@@ -85,7 +91,14 @@ impl FeatureIntentKind {
         }
     }
     fn has_losses(self) -> bool {
-        matches!(self, Self::ImportDocx | Self::CopyNode | Self::TemplateNode)
+        matches!(
+            self,
+            Self::ImportDocx
+                | Self::ImportNative
+                | Self::ImportBibliography
+                | Self::CopyNode
+                | Self::TemplateNode
+        )
     }
 }
 
@@ -116,9 +129,11 @@ impl FeatureOperation {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct OutputClaim {
-    actor: String,
-    fingerprint: String,
+pub(super) struct OutputClaim {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) library: Option<ActorLibraryBinding>,
+    pub(super) actor: String,
+    pub(super) fingerprint: String,
 }
 
 /// Loss details and paths may contain destination schema or server locations.
@@ -163,22 +178,59 @@ fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> serde_
         return import_losses(preview);
     }
     if preview.losses.is_empty() {
-        serde_json::json!([])
+        return serde_json::json!([]);
+    }
+    if matches!(
+        kind,
+        FeatureIntentKind::ImportNative | FeatureIntentKind::ImportBibliography
+    ) {
+        // Only finite producer-defined meanings cross this trusted wrapper.
+        // Never deliver source paths, schema IDs or original loss details.
+        let mut losses = BTreeMap::new();
+        for loss in &preview.losses {
+            let (code, message) = match loss.code.as_str() {
+                "generatedBibliographyNotInstalled" => (
+                    "generatedBibliographyNotInstalled",
+                    "生成的文献库仅保留在原件中，不安装到作者资料树；请依据重新映射且当前获权的文献数据重新生成。",
+                ),
+                "resourceModuleContextPreserved" => (
+                    "resourceModuleContextPreserved",
+                    "Typst 资源模块保留原字节；模块内身份和根相对依赖未重新映射，使用前请检查迁移后的上下文。",
+                ),
+                "settingsNotApplied" => (
+                    "settingsNotApplied",
+                    "原库设置和样式选择保留在原件中；目标库设置保持有效，不自动启用导入样式。",
+                ),
+                "unregisteredFileOmitted" => (
+                    "unregisteredFileOmitted",
+                    "原生资料包省略了部分未登记或库内部资料；此导入不能恢复省略的资料，完整历史和草稿需完整恢复资料备份。",
+                ),
+                _ => (
+                    "content-import-loss",
+                    "部分资料不能完整映射；原件和原值已保留，请明确接受原计划中的导入限制。",
+                ),
+            };
+            losses.insert(code, message);
+        }
+        serde_json::Value::Array(
+            losses
+                .into_iter()
+                .map(|(code, message)| serde_json::json!({"code":code,"message":message}))
+                .collect(),
+        )
     } else {
-        // No source path, schema detail, target title or producer message is
-        // disclosed. The exact original losses remain in the private Plan.
         serde_json::json!([{"code":"structure-copy-loss","message":"部分引用或批注不能完整迁移；原值已保留，请明确接受原计划中的复制限制。"}])
     }
 }
 
-fn conflict() -> CoreError {
+pub(super) fn conflict() -> CoreError {
     CoreError::new(
         "operationConflict",
         "The original reviewed actor, resource or intent differs",
     )
 }
 
-fn valid_resource(resource: &str) -> Result<()> {
+pub(super) fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
@@ -188,7 +240,7 @@ fn valid_resource(resource: &str) -> Result<()> {
     Ok(())
 }
 
-fn valid_fingerprint(fingerprint: &str) -> Result<()> {
+pub(super) fn valid_fingerprint(fingerprint: &str) -> Result<()> {
     if fingerprint.len() != 64
         || !fingerprint
             .bytes()
@@ -203,6 +255,17 @@ fn valid_fingerprint(fingerprint: &str) -> Result<()> {
 }
 
 impl Core {
+    fn actor_output_bytes(claim: &OutputClaim) -> Result<Vec<u8>> {
+        let bytes = serde_json::to_vec(claim)?;
+        if bytes.len() > 4096 {
+            return Err(CoreError::new(
+                "budget",
+                "Output claim exceeds its durable read budget",
+            ));
+        }
+        Ok(bytes)
+    }
+
     fn actor_output_path(&self, operation: &str) -> Result<PathBuf> {
         // Canonical names prevent alternate UUID spellings from bypassing a fence.
         valid_operation_id(operation)?;
@@ -236,6 +299,7 @@ impl Core {
             ));
         }
         let claim: OutputClaim = serde_json::from_slice(&bytes)?;
+        self.check_actor_library(&claim.library)?;
         if self.actor.as_ref() != Some(&claim.actor) {
             return Err(conflict());
         }
@@ -259,7 +323,8 @@ impl Core {
         }
         journal::private_create(
             &path,
-            &serde_json::to_vec(&OutputClaim {
+            &Self::actor_output_bytes(&OutputClaim {
+                library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 fingerprint: fingerprint.into(),
             })?,
@@ -267,7 +332,7 @@ impl Core {
         Ok(true)
     }
 
-    fn actor_feature_record(
+    pub(super) fn actor_feature_record(
         &self,
         resource: &str,
         operation: &str,
@@ -290,11 +355,13 @@ impl Core {
             ));
         }
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.feature.is_none()
             || record.field.is_some()
             || record.history.is_some()
+            || record.owner_backup.is_some()
             || record.definition.is_some()
             || !record.save_definition_reservations.is_empty()
             || record
@@ -395,7 +462,7 @@ impl Core {
             record.feature.as_mut().unwrap().import_losses = Some(feature_losses(detail, kind));
             private_replace(
                 &self.actor_record(operation)?,
-                &serde_json::to_vec(&record)?,
+                &Self::actor_operation_bytes(&record)?,
             )?;
         }
         let feature = record.feature.unwrap();
@@ -629,7 +696,7 @@ impl Core {
         )
     }
     #[allow(clippy::too_many_arguments)]
-    fn actor_feature_prepare_inner(
+    pub(super) fn actor_feature_prepare_inner(
         &mut self,
         resource: &str,
         external_operation_id: &str,
@@ -642,6 +709,7 @@ impl Core {
         tree: Option<&FeatureTreeWitness>,
         destination_slot: Option<&str>,
     ) -> Result<ActorFeatureStatus> {
+        self.actor_library_for_root(Path::new(&request.root))?;
         let intent_kind = FeatureIntentKind::from_intent(&request.intent)?;
         if let Some(record) = self.actor_feature_record(resource, external_operation_id)?
             && !(record.cancelled && record.fingerprint.is_empty())
@@ -697,7 +765,20 @@ impl Core {
                         })
                         .is_none_or(|bytes| bytes > 32 * 1024 * 1024)
             }
-            OperationIntent::ImportDocx {
+            OperationIntent::ImportNative {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+            }
+            | OperationIntent::ImportBibliography {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+                ..
+            }
+            | OperationIntent::ImportDocx {
                 parent,
                 name,
                 bytes,
@@ -811,6 +892,7 @@ impl Core {
         }
         check_size(&serde_json::to_vec(&preview)?)?;
         let record = ActorOperation {
+            library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
             fingerprint: fingerprint.into(),
@@ -828,10 +910,11 @@ impl Core {
             definition: None,
             save_definition_reservations: vec![],
             history: None,
+            owner_backup: None,
         };
         journal::private_create(
             &self.actor_record(external_operation_id)?,
-            &serde_json::to_vec(&record)?,
+            &Self::actor_operation_bytes(&record)?,
         )?;
         request.operation_id = record.core_operation_id.clone();
         let mut canonical = serde_json::json!({
@@ -929,6 +1012,7 @@ impl Core {
         let mut record = match self.actor_feature_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
                 fingerprint: String::new(),
@@ -946,6 +1030,7 @@ impl Core {
                 definition: None,
                 save_definition_reservations: vec![],
                 history: None,
+                owner_backup: None,
             },
         };
         if let Some(status) = self.actor_feature_status(resource, operation)? {
@@ -961,9 +1046,9 @@ impl Core {
                 self.resolve_record(&record.core_operation_id, "cancelPrepared")?;
             }
             record.cancelled = true;
-            private_replace(&path, &serde_json::to_vec(&record)?)?;
+            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &serde_json::to_vec(&record)?)?;
+            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
         }
         self.actor_feature_status(resource, operation)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing settled feature operation"))

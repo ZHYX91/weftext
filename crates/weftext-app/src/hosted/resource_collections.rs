@@ -43,11 +43,20 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 pub(super) fn split_member<'a>(config: &Config, id: &'a str) -> Option<(&'a str, &'a str)> {
+    if let Some(member) = content_import::split_asset(config, id) {
+        return Some(member);
+    }
     let (collection, member) = id.split_once('/')?;
     (config.resource_collections.contains_key(collection) && canonical_uuid(member))
         .then_some((collection, member))
 }
 pub(super) fn selection<'a>(config: &Config, id: &'a str) -> Option<&'a str> {
+    if let Some(owner) = id
+        .strip_suffix("/*")
+        .filter(|owner| content_import::split_member(config, owner).is_some())
+    {
+        return Some(owner);
+    }
     let collection = id.strip_suffix("/*")?;
     config
         .resource_collections
@@ -92,22 +101,33 @@ pub(super) fn valid_rights(config: &Config, rights: &BTreeMap<String, Rights>) -
                 .is_some_and(|c| (!r.download || r.read) && (!r.r#import || c.lifecycle == "live"))
         })
 }
-fn access<'a>(
-    inner: &'a HostedInner,
+pub(super) fn configured(inner: &HostedInner, collection: &str) -> Result<Collection, ApiError> {
+    if let Some(c) = inner.config.resource_collections.get(collection) {
+        return Ok(c.clone());
+    }
+    let file = content_import::member_file(inner, collection)?.ok_or_else(unavailable)?;
+    Ok(Collection {
+        owner: collection.into(),
+        expected_owner: file.expected_node,
+        from_import_slot: false,
+        from_structure_slot: false,
+        lifecycle: "live".into(),
+        title: file.title,
+    })
+}
+fn access(
+    inner: &HostedInner,
     actor: &str,
     collection: &str,
-) -> Result<(&'a Collection, &'a Rights), ApiError> {
-    let c = inner
-        .config
-        .resource_collections
-        .get(collection)
-        .ok_or_else(unavailable)?;
+) -> Result<(Collection, Rights), ApiError> {
+    let c = configured(inner, collection)?;
     let r = inner
         .policy
         .users
         .get(actor)
         .filter(|u| u.enabled)
-        .and_then(|u| u.resource_collections.get(collection))
+        .and_then(|u| u.resource_collections.get(collection).cloned())
+        .or_else(|| content_import::resource_rights(inner, actor, collection))
         .ok_or_else(unavailable)?;
     Ok((c, r))
 }
@@ -118,6 +138,15 @@ pub(super) fn input_access(
     collection: &str,
     download: bool,
 ) -> Result<(), ApiError> {
+    if content_import::split_member(&inner.config, collection).is_some() {
+        let r =
+            content_import::resource_rights(inner, actor, collection).ok_or_else(unavailable)?;
+        return if r.read && (!download || r.download) {
+            Ok(())
+        } else {
+            Err(unavailable())
+        };
+    }
     let (_, r) = access(inner, actor, collection)?;
     if !r.read || (download && !r.download) {
         return Err(unavailable());
@@ -137,19 +166,14 @@ fn core_error(_: CoreError) -> ApiError {
 /// The special empty Office slot is tied to its original committed producer,
 /// never to whichever author declaration happens to occupy that path now.
 pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<NodeRef, ApiError> {
-    let c = inner
-        .config
-        .resource_collections
-        .get(collection)
-        .ok_or_else(unavailable)?;
+    let c = configured(inner, collection)?;
     if let Some(expected) = &c.expected_owner {
         return Ok(expected.clone());
     }
     if c.from_structure_slot {
         let file = inner
-            .config
-            .files
-            .get(&c.owner)
+            .file(&c.owner)
+            .ok()
             .filter(|f| f.lifecycle == "live")
             .ok_or_else(unavailable)?;
         let node = inner
@@ -173,9 +197,8 @@ pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<N
         return Err(unavailable());
     }
     let owner = inner
-        .config
-        .files
-        .get(&c.owner)
+        .file(&c.owner)
+        .ok()
         .filter(|f| f.importable && f.lifecycle == "live")
         .ok_or_else(unavailable)?;
     inner
@@ -188,12 +211,9 @@ pub(super) fn qualify(
     inner: &HostedInner,
     collection: &str,
 ) -> Result<QualifiedResourceCollection, ApiError> {
-    let c = inner
-        .config
-        .resource_collections
-        .get(collection)
-        .ok_or_else(unavailable)?;
-    let owner = inner.config.files.get(&c.owner).ok_or_else(unavailable)?;
+    content_import::qualify_member(inner, collection)?;
+    let c = configured(inner, collection)?;
+    let owner = inner.file(&c.owner).ok().ok_or_else(unavailable)?;
     let expected = effective_owner(inner, collection)?;
     let captured = inner
         .core
@@ -223,10 +243,38 @@ pub(super) fn expand_inputs(
     actor: &str,
     ids: &[String],
 ) -> Result<ExpandedInputs, ApiError> {
+    let mut expanded = vec![];
+    for id in ids {
+        if let Some(slot) = id
+            .strip_suffix("/*")
+            .filter(|s| inner.config.content_import_slots.contains_key(*s))
+        {
+            let r = inner
+                .policy
+                .users
+                .get(actor)
+                .filter(|u| u.enabled)
+                .and_then(|u| u.content_imports.get(slot))
+                .ok_or_else(unavailable)?;
+            if !r.members.read || !r.resources.read {
+                return Err(unavailable());
+            }
+            let members = content_import::slot_member_ids(inner, slot)?;
+            if members.len() > 64 {
+                return Err(ApiError::bad("展开输入超过 64 项预算"));
+            }
+            for member in members {
+                expanded.push(member.clone());
+                expanded.push(format!("{member}/*"));
+            }
+        } else {
+            expanded.push(id.clone());
+        }
+    }
     let mut actual = BTreeSet::new();
     let mut captures = BTreeMap::new();
     let mut bytes = 0usize;
-    for id in ids {
+    for id in &expanded {
         if let Some(collection) =
             selection(&inner.config, id).or_else(|| split_member(&inner.config, id).map(|(c, _)| c))
         {
@@ -272,22 +320,12 @@ pub(super) fn expand_inputs(
     }
     Ok((actual.into_iter().collect(), captures.into_iter().collect()))
 }
-pub(super) fn title<'a>(inner: &'a HostedInner, collection: &'a str) -> Result<&'a str, ApiError> {
-    let c = inner
-        .config
-        .resource_collections
-        .get(collection)
-        .ok_or_else(unavailable)?;
+pub(super) fn title(inner: &HostedInner, collection: &str) -> Result<String, ApiError> {
+    let c = configured(inner, collection)?;
     Ok(if c.title.is_empty() {
-        inner
-            .config
-            .files
-            .get(&c.owner)
-            .ok_or_else(unavailable)?
-            .title
-            .as_str()
+        inner.file(&c.owner)?.title
     } else {
-        &c.title
+        c.title
     })
 }
 #[derive(Deserialize)]
@@ -357,16 +395,12 @@ fn original_allowed(
     serde_json::from_value::<Decision>(status.preview["_resourceImport"].clone()).is_ok_and(|d| {
         d.epoch == inner.actor_generation(actor)
             && binding(inner, id).is_ok_and(|b| b == d.binding)
-            && inner
-                .config
-                .resource_collections
-                .get(id)
+            && configured(inner, id)
+                .ok()
                 .is_some_and(|_| effective_owner(inner, id).is_ok_and(|owner| owner == d.owner))
-            && inner
-                .config
-                .resource_collections
-                .get(id)
-                .and_then(|c| inner.config.files.get(&c.owner))
+            && configured(inner, id)
+                .ok()
+                .and_then(|c| inner.file(&c.owner).ok())
                 .is_some_and(|f| {
                     inner
                         .core
@@ -405,7 +439,7 @@ fn safe_status(
         && serde_json::from_value::<Decision>(status.preview["_resourceImport"].clone())
             .is_ok_and(|d| d.expires > now_ms());
     Ok(
-        json!({"collection":id,"owner":inner.config.resource_collections[id].owner,"operationId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|allowed),"preview":preview,"resourceRefs":refs,"assets":assets,"commitAllowed":allowed}),
+        json!({"collection":id,"owner":configured(inner,id)?.owner,"operationId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|allowed),"preview":preview,"resourceRefs":refs,"assets":assets,"commitAllowed":allowed}),
     )
 }
 fn valid_name(name: &str) -> bool {
@@ -429,9 +463,9 @@ async fn prepare(
         if bytes.len()>MAX_UPLOAD {return Err(ApiError::bad("资源原件上限为 16 MiB"));}
         let fp=digest(&serde_json::to_vec(&json!({"collection":req.collection,"name":req.name,"uploadDigest":digest(&bytes)})).map_err(|_|changed())?);
         let actor_scope=scope(inner,&actor);
-        if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.collection,&req.operation_id,&fp)).map_err(core_error)? {return safe_status(inner,&actor,&req.collection,old);}
+        if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.collection,&req.operation_id,&fp)).map_err(core_error)? {return safe_status(inner,&actor,&req.collection,old);}
         let captured=qualify(inner,&req.collection)?;
-        let root=inner.config.root.clone();let owner_path=root.join(&inner.config.files[&config.owner].path);
+        let root=inner.config.root.clone();let owner_path=root.join(&inner.file(&config.owner)?.path);
         let node=inner.core.qualified_query_node_at(&root,&owner_path,&captured.owner,"live").map_err(core_error)?;
         let directory=owner_path.parent().ok_or_else(changed)?;
         let cut=inner.core.read_snapshot(&root,&[directory.join("weftext.resources.json").to_string_lossy().into_owned(),directory.join(&req.name).to_string_lossy().into_owned()]).map_err(core_error)?;
@@ -447,7 +481,7 @@ async fn prepare(
             let preview=json!({"summary":"以原生资源导入所选所有者，保留现有登记和未知成员；不保存正文或增加读取授权。","name":req.name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
             let request=OperationRequest{operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent:OperationIntent::ImportResource{node:owner_path.to_string_lossy().into_owned(),name:req.name,bytes,manifest_base_id:cut.files[0].base_id.clone(),resource_base_id:cut.files[1].base_id.clone()}};
             let refs=pool.iter().collect::<Vec<_>>();
-            let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare_with_witnesses(&req.collection,&req.operation_id,&fp,request,preview,&[],&refs)).map_err(core_error)?;
+            let status=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_prepare_with_witnesses(&req.collection,&req.operation_id,&fp,request,preview,&[],&refs)).map_err(core_error)?;
             safe_status(inner,&actor,&req.collection,status)
         })();
         for id in ids {let _=inner.core.take_snapshot_witness(&id);}
@@ -461,7 +495,7 @@ async fn operation(
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let config=import_access(inner,&actor,&req.collection)?;
-        match inner.core.with_actor(&scope(inner,&actor),|core|core.actor_feature_status(&req.collection,&req.operation_id)).map_err(core_error)? {
+        match inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|core|core.actor_feature_status(&req.collection,&req.operation_id)).map_err(core_error)? {
             Some(status)=>safe_status(inner,&actor,&req.collection,status),
             None=>Ok(json!({"collection":req.collection,"owner":config.owner,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"resourceRefs":[],"assets":[],"commitAllowed":false}))
         }
@@ -479,7 +513,7 @@ async fn commit(
             let actor_scope = scope(inner, &actor);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_status(&req.collection, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -494,7 +528,7 @@ async fn commit(
             }
             let status = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_commit(&req.collection, &req.operation_id, &req.plan_id)
                 })
                 .map_err(core_error)?;
@@ -514,7 +548,7 @@ async fn settle(
             import_access(inner, &actor, &req.collection)?;
             let status = inner
                 .core
-                .with_actor(&scope(inner, &actor), |core| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
                     core.actor_feature_settle(&req.collection, &req.operation_id)
                 })
                 .map_err(core_error)?;

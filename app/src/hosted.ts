@@ -11,12 +11,14 @@ import { HostedStructure } from "./hosted-structure";
 import { HostedKnowledgeLinks } from "./hosted-knowledge-links";
 import { HostedCitations } from "./hosted-citations";
 import { HostedNavigationRegistry } from "./hosted-navigation-registry";
+import { HostedContentImport } from "./hosted-content-import";
+import { HostedOwnerBackup } from "./hosted-owner-backup";
 import type { StructureReceipt, StructureRequest } from "./hosted-structure-state";
 import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
-import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, hostedOpenedDraft, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
@@ -44,6 +46,8 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="review" aria-label="托管批注与校对" hidden></section>
 <section id="media" aria-label="托管获权资源与媒体" hidden></section>
 <section id="office" aria-label="Office 导入与输出" hidden></section>
+<section id="content-import" aria-label="托管原生资料与文献导入" hidden></section>
+<section id="owner-backup" aria-label="托管完整恢复资料备份" hidden></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata));
@@ -73,6 +77,7 @@ let busy = false;
 let requestEpoch = 0;
 let authorizationEpoch = 0;
 let compareRequired = false;
+let installingDocument = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
 const retiredStructureSessions = new Set<string>();
 const retiredStructureSources = new Set<string>();
@@ -81,7 +86,7 @@ async function closeOwnedSession(sessionId: string, captured: Pick<HostedNodeAud
   const current = sessionAudience(); if ((["authorization", "credential", "actor", "generation", "deployment"] as const).some(key => captured[key] !== current[key])) return;
   // Disposing a former coordinate must never be interpreted as revoking a
   // different view. Use the captured audience and no global error delivery.
-  try { await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store" }); } catch { /* No alternate source is installed by cleanup. */ }
+  try { const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store" }); await response.arrayBuffer(); } catch { /* No alternate source is installed by cleanup. */ }
 }
 const status = (message: string) => { el("status").textContent = message; };
 const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
@@ -116,6 +121,8 @@ const citations = new HostedCitations(el("citations"), request, {
 });
 function knowledgeAuthorChanged() { knowledgeLinks.documentChanged(); citations.documentChanged(); }
 const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged });
+const contentImport = new HostedContentImport(el("content-import"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged, open: openQueryResource });
+const ownerBackup = new HostedOwnerBackup(el("owner-backup"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged });
 const history = new HostedHistory(el("history-list"), request, {
   context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
   basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); knowledgeAuthorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
@@ -285,7 +292,7 @@ function clearDisplay(message: string, clearToken = false) {
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
-  for (const clear of [() => source.clear(), () => knowledgeLinks.clear(), () => citations.clear(), () => navigationRegistry.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
+  for (const clear of [() => source.clear(), () => knowledgeLinks.clear(), () => citations.clear(), () => navigationRegistry.clear(), () => contentImport.clear(), () => ownerBackup.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
     try { clear(); } catch (error) { clearErrors.push(error); }
   }
   el("documents").replaceChildren();
@@ -298,7 +305,7 @@ function clearDisplay(message: string, clearToken = false) {
   if (clearToken) { token = ""; identity = undefined; remove("weftext-hosted-token"); remove("weftext-hosted-identity"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
   controls(); status(clearErrors.length ? `${message.split(/[，。]/)[0]}。受保护展示已清除；浏览器拒绝删除部分恢复缓存，请在浏览器中清除此站点数据。` : message);
 }
-async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget"): Promise<T> {
   const epoch = requestEpoch, credential = token;
   const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
   const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store", signal});
@@ -321,9 +328,9 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
       // A hidden/unknown asset is not a revocation of the independently open
       // note. Only a current identity's changed actor epoch clears all views.
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧媒体与缓存已清除，请刷新目录。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Caller stops this resource delivery; personal source remains protected. */ }
-    } else if ([404, 409, 410].includes(response.status) && (path.startsWith("navigation/") || path.startsWith("structure/") || path.startsWith("knowledge-links/") || path.startsWith("citations/") || path.startsWith("export/")) && sameHostedQueryIdentity(captured, audience())) {
+    } else if ([404, 409, 410].includes(response.status) && (failureScope === "stagedTarget" || path === "open" || path.startsWith("navigation/") || path.startsWith("structure/") || path.startsWith("knowledge-links/") || path.startsWith("citations/") || path.startsWith("export/") || path.startsWith("import/") || path.startsWith("owner-backup/")) && sameHostedQueryIdentity(captured, audience())) {
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧链接定位与缓存已清除，请刷新列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Stop this link delivery without treating a hidden same-epoch target as source revocation. */ }
-    } else if (response.status === 404 && !retired && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("structure/") && !path.startsWith("knowledge-links/") && !path.startsWith("citations/") && !path.startsWith("export/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    } else if (response.status === 404 && failureScope !== "stagedTarget" && !retired && path !== "query" && path !== "open" && !path.startsWith("navigation/") && !path.startsWith("structure/") && !path.startsWith("knowledge-links/") && !path.startsWith("citations/") && !path.startsWith("export/") && !path.startsWith("import/") && !path.startsWith("owner-backup/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
     throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
@@ -355,6 +362,8 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
   status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation); await structures.connect(next.deployment, next.actor, next.generation); structures.setDocuments(structureDocuments); knowledgeLinks.connect(); await citations.connect(identity!.deployment, identity!.actor, identity!.generation); await navigationRegistry.connect(identity!.deployment, identity!.actor, identity!.generation);
+  if (identity?.actor !== next.actor || identity.deployment !== next.deployment || identity.generation !== next.generation) return;
+  await contentImport.connect(next.deployment, next.actor, next.generation); await ownerBackup.connect(next.deployment, next.actor, next.generation);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -367,51 +376,56 @@ async function list(term?: string) {
 }
 async function open(resource: string) {
   clearNodeNavigation();
-  await source.flush(); retain();
-  source.disabled = true;
-  status("正在重新读取；现有草稿已保留。");
+  const prior = doc, captured = nodeAudience();
+  const current = () => doc === prior && sameHostedNodeAudience(captured, nodeAudience());
+  const sameIdentity = () => { const now = sessionAudience(); return (["authorization", "credential", "actor", "generation", "deployment"] as const).every(key => captured[key] === now[key]); };
+  const authority = async () => { if (!sameIdentity()) return false; const next = await request<Me>("me"); if (!sameIdentity()) return false; if (next.actor !== captured.actor || next.deployment !== captured.deployment || next.generation !== captured.generation) { authorizationsChanged("授权策略已更新，旧展示与缓存已清除。请重新选择文档。", next); return false; } return true; };
+  await source.flush(); if (!current()) return; retain();
+  status("正在核验目标；现有草稿与 Undo 保留，尚未切换文档。");
   const currentIdentity = await request<Me>("me");
-  if (identity && currentIdentity.generation !== identity.generation) {
-    clearDisplay("授权策略已更新，旧展示与缓存已清除。请重新选择文档。"); identity = currentIdentity; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(identity)); await list(); return;
+  if (!sameIdentity()) return;
+  if (identity && (currentIdentity.generation !== identity.generation || currentIdentity.actor !== identity.actor || currentIdentity.deployment !== identity.deployment)) {
+    authorizationsChanged("授权策略已更新，旧展示与缓存已清除。请重新选择文档。", currentIdentity); await list(); return;
   }
-  cachePrefix = hostedCachePrefix("draft", currentIdentity.deployment, currentIdentity.actor, currentIdentity.generation);
-  const prior = doc;
-  const local = cached(resource);
-  if (prior) {
-    try { await request("close",{sessionId:prior.sessionId}); }
-    catch (e) { if (!(e instanceof HostedError) || e.http !== 410 && !(e.http === 404 && retiredStructureSessions.has(prior.sessionId))) throw e; }
-  }
-  const epoch = ++requestEpoch;
-  const opened = await request<Doc>("open",{resource});
-  if (epoch !== requestEpoch) return;
-  if (prior && draft?.reference && source.pausedSession && prior.resource !== resource) {
-    const ref = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: opened.sessionId });
-    if (epoch !== requestEpoch) return;
-    if (ref.resource === opened.resource && ref.reference === draft.reference) { const retained = { ...draft, source: source.value }; source.rebindResourceAlias(resource); installDocument(opened, retained); scheduleCurrentDraft(); return; }
-  }
-  doc = opened;
-  draft = local ?? {source:opened.recoveredDraft ?? opened.source,baseSource:opened.recoveredDraftBaseSource ?? opened.source};
-  let recoveredSave = false;
-  if (draft.pending) {
-    let outcome = await request<SaveStatus>("operation",{operationId:draft.pending.operationId});
-    if (["notRegistered","notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle",{resource,operationId:draft.pending.operationId});
-    if (epoch !== requestEpoch) return;
-    if (outcome.status === "committed") { draft = applySaveResult(draft,draft.pending.source); recoveredSave = true; }
-    else if (["cancelled","resolved"].includes(outcome.status)) { delete draft.pending; }
-    else status("原保存尚需恢复，请保留草稿并联系管理员；不会重复提交。");
-  }
-  installDocument(opened, draft, recoveredSave);
+  if (!current()) return;
+  let opened: Doc | undefined, adopted = false;
+  try {
+    opened = await request<Doc>("open", { resource }); if (!await authority() || !current()) return;
+    if (opened.resource !== resource) throw new Error("打开回执不对应原目标，当前草稿保留。");
+    let targetDraft = cached(resource) ?? { source: opened.recoveredDraft ?? opened.source, baseSource: opened.recoveredDraftBaseSource ?? opened.source };
+    let alias = false, recoveredSave = false;
+    if (prior && draft?.reference && source.pausedSession && prior.resource !== resource) {
+      const ref = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: opened.sessionId }); if (!current()) return;
+      if (ref.resource === opened.resource && ref.reference === draft.reference) { targetDraft = { ...draft, source: source.value }; alias = true; }
+    }
+    if (targetDraft.pending) {
+      let outcome = await request<SaveStatus>("operation", { operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      if (outcome.status === "committed") { targetDraft = applySaveResult(targetDraft, targetDraft.pending.source); recoveredSave = true; }
+      else if (["cancelled", "resolved"].includes(outcome.status)) delete targetDraft.pending;
+    }
+    if (!await authority() || !current()) return; retain();
+    targetDraft = hostedOpenedDraft(opened.source, targetDraft);
+    // A quota failure must happen while the original editor and session still
+    // exist. This exact prepared cache is not written again during install.
+    try { sessionStorage.setItem(cachePrefix + opened.resource, JSON.stringify(targetDraft)); }
+    catch { throw new Error("浏览器无法可靠保留目标恢复稿；当前草稿、Undo 与原会话保留，未切换文档。"); }
+    // Install only after every target qualification/recovery succeeds. Closing
+    // the former session uses its captured actor and cannot clear the new view.
+    requestEpoch++; if (alias) source.rebindResourceAlias(resource); installDocument(opened, targetDraft, recoveredSave, true); adopted = true;
+    if (alias) scheduleCurrentDraft(); if (prior) await closeOwnedSession(prior.sessionId, captured);
+  } finally { if (opened && !adopted) await closeOwnedSession(opened.sessionId, captured); }
 }
-function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false) {
-  clearNodeNavigation(); doc = opened; draft = retainedDraft; const epoch = requestEpoch;
-  if (!draft.pending && draftDisposition(opened.source,draft) === "current") draft = { ...draft, source:opened.source, baseSource:opened.source };
-  source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write;
+function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false, stagedCache = false) {
+  clearNodeNavigation(); doc = opened; draft = stagedCache ? retainedDraft : hostedOpenedDraft(opened.source, retainedDraft); const epoch = requestEpoch;
+  installingDocument = true;
+  try { source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write; } finally { installingDocument = false; }
   el("title").textContent = opened.title;
   compareRequired = opened.recoveredDraftConflict || draftDisposition(opened.source,draft) === "compare";
   el("comparison").hidden = !compareRequired; el("current").textContent = compareRequired ? opened.source : "";
   history.documentChanged();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
-  retain(); controls(); queries.authorChanged(true); knowledgeAuthorChanged();
+  if (!stagedCache) retain(); controls(); queries.authorChanged(true); knowledgeAuthorChanged();
   void readReference(opened, epoch);
   if (recoveredSave) void queries.refreshCatalog();
   status(draft.pending ? "原保存结果尚未确定，暂不允许再次保存。" : compareRequired ? "双方稿已保留，请核对后合并。" : draft.source !== opened.source ? "已恢复个人草稿，尚未保存正文。" : "已读取当前稿。");
@@ -449,6 +463,7 @@ async function run(action: () => Promise<void>) {
   finally { busy = false; source.disabled = !doc?.rights.write; controls(); }
 }
 function sourceChanged() {
+  if (installingDocument) return;
   clearNodeNavigation();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   try { retain(); status(navigator.onLine ? "个人草稿，尚未保存正文。" : "连接中断，本页草稿仍保留。"); } catch { status("浏览器无法保留恢复稿，请先复制你的输入。"); }
@@ -470,6 +485,8 @@ el("refresh").onclick = () => void run(async () => {
   if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
   identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
   await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation); await structures.connect(current.deployment, current.actor, current.generation); structures.setDocuments(structureDocuments); knowledgeLinks.connect(); await citations.connect(identity!.deployment, identity!.actor, identity!.generation); await navigationRegistry.connect(identity!.deployment, identity!.actor, identity!.generation);
+  if (identity?.actor !== current.actor || identity.deployment !== current.deployment || identity.generation !== current.generation) return;
+  await contentImport.connect(current.deployment, current.actor, current.generation); await ownerBackup.connect(current.deployment, current.actor, current.generation);
 });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);

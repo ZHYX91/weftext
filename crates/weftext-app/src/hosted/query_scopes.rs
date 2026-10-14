@@ -130,7 +130,7 @@ pub(super) fn authorize(
             .map_err(|_| query::changed())?;
     }
     for (resource, owner) in &authority.nodes {
-        let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+        let file = inner.file(resource).ok().ok_or_else(unavailable)?;
         inner
             .core
             .qualified_query_node_at(
@@ -354,7 +354,7 @@ impl Capture {
         if let Some(path) = self.coordinates.get(resource) {
             return Ok(path.clone());
         }
-        let entry = &inner.config.files[resource];
+        let entry = &inner.file(resource)?;
         self.authority.trash |= entry.lifecycle == "trash";
         let inferred = weftext_knowledge::NodeRef {
             workspace_id: workspace.into(),

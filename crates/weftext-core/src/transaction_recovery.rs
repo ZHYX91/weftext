@@ -102,6 +102,7 @@ impl Core {
         let t = plan.transaction.as_ref().unwrap();
         let mut capture =
             self.capture_transaction_recovery(plan, action == "resumeOriginalPlan")?;
+        let _private_capture = self.validate_owner_backup_private(plan, true)?;
         let installing = self.journal_path(&plan.operation_id, "install").exists();
         if action == "keepCurrent" {
             if capture.coherence != "knownBefore" {
@@ -261,6 +262,35 @@ impl Core {
                 message: error.message,
             });
         }
+        match self.validate_owner_backup_private(plan, false) {
+            Ok(Some(private)) => {
+                capture.guards.extend(private.guards);
+                capture.placement_files.extend(private.handles);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                capture.members.push(RecoveryMember {
+                    kind: "privateScope".into(),
+                    role: "readDependency".into(),
+                    path: t.request.root.clone(),
+                    target_path: None,
+                    before: RecoveryBlob::from_bytes(
+                        t.backup_private_digest.as_deref().map(str::as_bytes),
+                    ),
+                    after: RecoveryBlob::from_bytes(
+                        t.backup_private_digest.as_deref().map(str::as_bytes),
+                    ),
+                    current: RecoveryBlob::from_bytes(None),
+                    state: "thirdState".into(),
+                    matches_before: false,
+                    matches_after: false,
+                    identity_binding: "mismatch".into(),
+                    expected_identity: None,
+                    current_identity: None,
+                    message: error.message,
+                });
+            }
+        }
         for other in self.operations.values().filter(|p| {
             p.operation_id != plan.operation_id
                 && !self.committed(&p.operation_id)
@@ -268,19 +298,21 @@ impl Core {
                 && (p.transaction.is_none()
                     || self.journal_path(&p.operation_id, "install").exists())
         }) {
-            let overlap = t.files.iter().any(|f| {
-                other.path.eq_ignore_ascii_case(&f.path)
-                    || other.identity.as_ref() == Some(&f.stamp.identity)
-                    || other.transaction.as_ref().is_some_and(|pending| {
-                        pending.affects(Path::new(&f.path))
-                            || pending.has_identity(&f.stamp.identity)
-                    })
-            }) || other.transaction.as_ref().is_some_and(|pending| {
-                t.preview
-                    .changes
-                    .iter()
-                    .any(|c| pending.affects(Path::new(&c.path)))
-            });
+            let overlap = (!matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
+                && t.files.iter().any(|f| {
+                    other.path.eq_ignore_ascii_case(&f.path)
+                        || other.identity.as_ref() == Some(&f.stamp.identity)
+                        || other.transaction.as_ref().is_some_and(|pending| {
+                            pending.affects(Path::new(&f.path))
+                                || pending.has_identity(&f.stamp.identity)
+                        })
+                }))
+                || other.transaction.as_ref().is_some_and(|pending| {
+                    t.preview
+                        .changes
+                        .iter()
+                        .any(|c| pending.affects(Path::new(&c.path)))
+                });
             if overlap {
                 capture.members.push(RecoveryMember {
                     kind: "barrier".into(),
@@ -423,12 +455,7 @@ impl Core {
                 Ok(guard) => {
                     let identity = guard.directory_identity()?;
                     let (entries, complete) = guard.directory_entries(5000)?;
-                    let mut names = operations::sorted_entries(entries, Path::new(&directory.path));
-                    if matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
-                        && Path::new(&directory.path) == self.data_dir.join("journal")
-                    {
-                        names.retain(|name| !name.starts_with(&format!("{}.", plan.operation_id)));
-                    }
+                    let names = operations::sorted_entries(entries, Path::new(&directory.path));
                     let same =
                         complete && identity == directory.identity && names == directory.entries;
                     member.current = directory_blob(Some(&identity));
@@ -494,10 +521,11 @@ impl Core {
             Ok(guard) => {
                 let opened = if !write
                     && plan.transaction.as_ref().is_some_and(|t| {
-                        crate::operations::operation_read_control(
-                            Path::new(&t.request.root),
-                            Path::new(path),
-                        )
+                        matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
+                            || crate::operations::operation_read_control(
+                                Path::new(&t.request.root),
+                                Path::new(path),
+                            )
                     }) {
                     guard.open_read_guard_file()
                 } else {

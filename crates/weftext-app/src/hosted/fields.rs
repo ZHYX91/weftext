@@ -250,16 +250,11 @@ fn rights(
     write: bool,
 ) -> Result<FieldRights, ApiError> {
     inner
-        .policy
-        .users
-        .get(actor)
-        .filter(|u| u.enabled)
-        .and_then(|u| u.grants.get(resource))
-        .and_then(|r| r.fields.get(field))
+        .grant(actor, resource)?
+        .fields
+        .get(field)
         .filter(|r| {
-            r.read
-                && (!write
-                    || r.write && inner.config.files.get(resource).is_some_and(|f| f.editable))
+            r.read && (!write || r.write && inner.file(resource).ok().is_some_and(|f| f.editable))
         })
         .cloned()
         .ok_or_else(unavailable)
@@ -319,7 +314,7 @@ fn with_source<T>(
     // Keep API failures free of Core paths, full currentSource and details.
     inner
         .core
-        .with_actor(&scope, |core| {
+        .with_actor_for_root(&scope, &inner.config.root, |core| {
             let doc = core.open(path, Some(root.clone()))?;
             let result = (|| {
                 let config = core
@@ -368,8 +363,8 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
-            let fields = inner.policy.users[&actor]
-                .grants
+            let available_grants = inner.grants_view(&actor)?;
+            let fields = available_grants
                 .iter()
                 .flat_map(|(resource, rights)| {
                     rights.fields.iter().filter(|(_, r)| r.read).map(
@@ -391,9 +386,10 @@ async fn read(
         let actor = inner.actor(&auth)?;
         let access = rights(inner, &actor, &req.resource, &req.field_id, false)?;
         expire_revoked(inner);
-        let granted = inner.policy.users[&actor].grants[&req.resource].fields.iter()
+        let grant=inner.grant(&actor,&req.resource)?;
+        let granted = grant.fields.iter()
             .filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<BTreeSet<_>>();
-        let file_writable = inner.config.files.get(&req.resource).is_some_and(|f| f.editable);
+        let file_writable = inner.file(&req.resource).ok().is_some_and(|f| f.editable);
         let (mut field, writable) = with_source(inner, &actor, &req.resource, None, |_, doc, schema, history, can_write_schema| {
             let profile = narrow_profile(&doc.source, schema, &BTreeSet::from([req.field_id.clone()]), None)
                 .map_err(|_| profile_unavailable())?;
@@ -436,7 +432,7 @@ async fn write(
             let fingerprint = digest(&serde_json::to_vec(&req).map_err(|_| conflict())?);
             if let Some(status) = inner
                 .core
-                .with_actor(&scope, |core| {
+                .with_actor_for_root(&scope, &inner.config.root, |core| {
                     core.actor_field_retry(
                         &req.resource,
                         &req.field_id,
@@ -548,7 +544,7 @@ async fn operation(
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
         rights(inner, &actor, &req.resource, &req.field_id, false)?;
-        let result = inner.core.with_actor(&field_scope(inner, &actor, Some(&req.operation_id)), |core|
+        let result = inner.core.with_actor_for_root(&field_scope(inner, &actor, Some(&req.operation_id)), &inner.config.root, |core|
             core.actor_field_status(&req.resource, &req.field_id, &req.operation_id)).map_err(operation_error)?;
         match result {
             Some(status) => value(status),
@@ -568,8 +564,9 @@ async fn settle(
             value(
                 inner
                     .core
-                    .with_actor(
+                    .with_actor_for_root(
                         &field_scope(inner, &actor, Some(&req.operation_id)),
+                        &inner.config.root,
                         |core| {
                             core.actor_field_settle(&req.resource, &req.field_id, &req.operation_id)
                         },

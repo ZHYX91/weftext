@@ -7,10 +7,11 @@ mod export_read;
 mod history;
 mod hosted;
 pub use hosted::{
-    ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus, ActorFieldStatus,
-    ActorHistoryRestoreStatus, ActorSaveStatus, ActorStructureNode, ActorStructureReceipt,
-    FeatureTreeWitness, HostedDefinitionReservationRequest, HostedNavigationIntent,
-    HostedSaveRequest,
+    ActorContentImportReceipt, ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus,
+    ActorFieldStatus, ActorHistoryRestoreStatus, ActorOwnerBackupStatus, ActorSaveStatus,
+    ActorStructureNode, ActorStructureReceipt, ContentImportMember, FeatureTreeWitness,
+    HostedDefinitionReservationRequest, HostedNavigationIntent, HostedSaveRequest,
+    OwnerBackupArtifact,
 };
 #[cfg(all(test, windows))]
 mod history_tests;
@@ -174,6 +175,7 @@ pub struct LibraryInfo {
 
 #[derive(Clone)]
 struct Session {
+    root: PathBuf,
     actor: Option<String>,
     path: PathBuf,
     base_id: String,
@@ -185,6 +187,8 @@ struct Session {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Draft {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
     path: String,
     base_source: String,
     source: String,
@@ -213,6 +217,8 @@ struct Birth {
 }
 
 pub struct Core {
+    actor_library: Option<hosted::ActorLibraryBinding>,
+    actor_library_path: Option<PathBuf>,
     actor: Option<String>,
     _instance_lock: File,
     _data_guard: ParentGuard,
@@ -261,6 +267,8 @@ impl Core {
             .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
             .collect::<Result<Vec<_>>>()?;
         let mut core = Self {
+            actor_library: None,
+            actor_library_path: None,
             actor: None,
             _instance_lock: instance_lock,
             _data_guard: data_guard,
@@ -291,6 +299,7 @@ impl Core {
                 "The source is outside the explicitly selected project root",
             ));
         }
+        self.actor_library_for_root(&root)?;
         let guard = ParentGuard::acquire(&path)?;
         let mut file = guard.open_file(false, false)?;
         let bytes = read_source(&mut file)?;
@@ -309,6 +318,7 @@ impl Core {
                 root = library_root;
             }
         }
+        self.actor_library_for_root(&root)?;
         let source = decode(&bytes)?;
         let info = weftext_engine::inspect(&source);
         let workspace = self.workspace(&root)?;
@@ -360,6 +370,7 @@ impl Core {
         self.sessions.insert(
             session_id.clone(),
             Session {
+                root: root.clone(),
                 actor: self.actor.clone(),
                 path: path.clone(),
                 base_id: base_id.clone(),
@@ -398,6 +409,8 @@ impl Core {
             )
         })?;
         let draft = Draft {
+            library: self
+                .draft_library_for_session(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
             base_source: session
                 .conflicting_draft
@@ -463,6 +476,7 @@ impl Core {
         }
         if action == "mergeRecovered" {
             let reviewed = Draft {
+                library: self.draft_session_library(session_id)?,
                 path: display(&session.path),
                 base_source: decode(&session.bytes)?,
                 source: source.unwrap().into(),
@@ -519,6 +533,10 @@ impl Core {
         }
         if request.base_id != session.base_id {
             let draft = Draft {
+                library: self.draft_library_for_session(
+                    &request.session_id,
+                    session.conflicting_draft.as_ref(),
+                )?,
                 path: display(&session.path),
                 base_source: String::new(),
                 source: request.source.clone(),

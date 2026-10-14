@@ -127,6 +127,23 @@ pub(super) fn input_access(
     asset: &str,
     download: bool,
 ) -> Result<(), ApiError> {
+    if let Some(slot) = asset
+        .strip_suffix("/*")
+        .filter(|s| inner.config.content_import_slots.contains_key(*s))
+    {
+        let r = inner
+            .policy
+            .users
+            .get(actor)
+            .filter(|u| u.enabled)
+            .and_then(|u| u.content_imports.get(slot))
+            .ok_or_else(unavailable)?;
+        return if r.members.read && r.resources.read && (!download || r.resources.download) {
+            Ok(())
+        } else {
+            Err(unavailable())
+        };
+    }
     if let Some(collection) = resource_collections::selection(&inner.config, asset)
         .or_else(|| resource_collections::split_member(&inner.config, asset).map(|(c, _)| c))
     {
@@ -149,7 +166,9 @@ pub(super) fn is_asset(config: &Config, id: &str) -> bool {
     config.resources.contains_key(id) || resource_collections::split_member(config, id).is_some()
 }
 pub(super) fn valid_input(config: &Config, id: &str) -> bool {
-    is_asset(config, id) || resource_collections::selection(config, id).is_some()
+    is_asset(config, id)
+        || resource_collections::selection(config, id).is_some()
+        || content_import::selection(config, id).is_some()
 }
 /// Resolve a single registered member. Never derives a locator from a client UUID.
 pub(super) fn resolve_asset(
@@ -183,8 +202,8 @@ fn resolve_with_collection(
     if matching.next().is_some() {
         return Err(unavailable());
     }
-    let c = &inner.config.resource_collections[collection];
-    let owner = &inner.config.files[&c.owner];
+    let c = resource_collections::configured(inner, collection)?;
+    let owner = &inner.file(&c.owner)?;
     let directory = std::path::Path::new(&owner.path)
         .parent()
         .ok_or_else(changed)?;
@@ -231,30 +250,37 @@ pub(super) fn binding_hash(
 ) -> Result<String, ApiError> {
     let mut resources = BTreeMap::new();
     let mut collections = BTreeMap::new();
+    let mut imports = BTreeMap::new();
     let mut owners = BTreeMap::new();
     for id in assets {
+        if content_import::selection(&inner.config, id).is_some()
+            || content_import::split_asset(&inner.config, id).is_some()
+        {
+            imports.insert(id, content_import::binding(inner, id)?);
+            continue;
+        }
         let owner = if let Some(r) = inner.config.resources.get(id) {
             resources.insert(id, r);
-            &r.owner
+            r.owner.clone()
         } else {
             let collection = resource_collections::selection(&inner.config, id)
                 .or_else(|| resource_collections::split_member(&inner.config, id).map(|(c, _)| c))
                 .ok_or_else(unavailable)?;
-            let c = &inner.config.resource_collections[collection];
+            let c = resource_collections::configured(inner, collection)?;
+            let owner = c.owner.clone();
             collections.insert(id, c);
-            &c.owner
+            owner
         };
         owners.insert(
-            owner,
-            inner.config.files.get(owner).ok_or_else(unavailable)?,
+            owner.clone(),
+            inner.file(&owner).ok().ok_or_else(unavailable)?,
         );
     }
-    Ok(digest(
-        &serde_json::to_vec(
-            &json!({"root":inner.config.root,"resources":resources,"collections":collections,"owners":owners}),
-        )
-        .map_err(|_| changed())?,
-    ))
+    let mut value = json!({"root":inner.config.root,"resources":resources,"collections":collections,"owners":owners});
+    if !imports.is_empty() {
+        value["imports"] = json!(imports);
+    }
+    Ok(digest(&serde_json::to_vec(&value).map_err(|_| changed())?))
 }
 pub(super) fn capture_input(
     inner: &HostedInner,
@@ -263,7 +289,7 @@ pub(super) fn capture_input(
 ) -> Result<QualifiedResource, ApiError> {
     input_access(inner, actor, asset, false)?;
     let r = resolve_asset(inner, actor, asset)?;
-    let owner = inner.config.files.get(&r.owner).ok_or_else(unavailable)?;
+    let owner = inner.file(&r.owner).ok().ok_or_else(unavailable)?;
     inner
         .core
         .qualified_resource_at(
@@ -288,7 +314,7 @@ pub(super) fn exact(
         return Err(changed());
     }
     let r = resolve_asset(inner, actor, asset)?;
-    let owner = inner.config.files.get(&r.owner).ok_or_else(unavailable)?;
+    let owner = inner.file(&r.owner).ok().ok_or_else(unavailable)?;
     inner
         .core
         .qualified_resource_at(
@@ -386,11 +412,7 @@ pub(super) fn context(
     revision: Option<&str>,
 ) -> Result<Context, ApiError> {
     let (configured, collection) = resolve_with_collection(inner, actor, asset)?;
-    let owner = inner
-        .config
-        .files
-        .get(&configured.owner)
-        .ok_or_else(unavailable)?;
+    let owner = inner.file(&configured.owner).ok().ok_or_else(unavailable)?;
     let resource = Arc::new(
         inner
             .core
@@ -442,6 +464,11 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
                     {
                         u.resource_collections
                             .get(collection)
+                            .or_else(|| {
+                                content_import::split_member(config, collection).and_then(
+                                    |(s, _)| u.content_imports.get(s).map(|r| &r.resources),
+                                )
+                            })
                             .is_some_and(|r| r.read && (t.purpose == Purpose::View || r.download))
                     } else {
                         u.resources
@@ -510,8 +537,10 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         let actor=inner.actor(&auth)?;let mut resources=vec![];let mut bytes=0usize;let mut complete=true;
         let mut assets=inner.config.resources.keys().filter(|id|input_access(inner,&actor,id,false).is_ok()).cloned().collect::<Vec<_>>();
         let mut collections=vec![];let mut witnesses=vec![];
-        for (id,c) in &inner.config.resource_collections {
-            let Some(rights)=inner.policy.users[&actor].resource_collections.get(id).filter(|r|r.read || r.r#import) else {continue;};
+        let mut configured_collections=inner.config.resource_collections.clone();
+        for id in content_import::collection_ids(inner,&actor)? {configured_collections.insert(id.clone(),resource_collections::configured(inner,&id)?);}
+        for (id,c) in &configured_collections {
+            let Some(rights)=inner.policy.users[&actor].resource_collections.get(id).cloned().or_else(||content_import::resource_rights(inner,&actor,id)).filter(|r|r.read || r.r#import) else {continue;};
             let captured=resource_collections::qualify(inner,id);
             let ready=match captured {Ok(captured) if bytes.saturating_add(captured.retained_bytes())<=MAX_BYTES=>{
                 bytes+=captured.retained_bytes();
@@ -632,7 +661,9 @@ async fn resolve(
         if req.reference.len()>2048 || split_reference(base).is_none(){return Err(ApiError::bad("请使用完整的稳定资源引用"));}
         let mut candidates=inner.config.resources.iter().filter(|(id,r)|r.reference==base && input_access(inner,&actor,id,false).is_ok()).map(|(id,_)|id.clone()).collect::<BTreeSet<_>>();
         let mut bytes=0usize;
-        for (id,c) in &inner.config.resource_collections {
+        let mut configured_collections=inner.config.resource_collections.clone();
+        for id in content_import::collection_ids(inner,&actor)? {configured_collections.insert(id.clone(),resource_collections::configured(inner,&id)?);}
+        for (id,c) in &configured_collections {
             if c.expected_owner.as_ref().is_some_and(|owner|owner.workspace_id!=split_reference(base).unwrap().0) || resource_collections::input_access(inner,&actor,id,false).is_err(){continue;}
             if let Ok(captured)=resource_collections::capture(inner,&actor,id) {
                 bytes=bytes.saturating_add(captured.retained_bytes());

@@ -63,21 +63,14 @@ fn access(
     export: bool,
     download: bool,
 ) -> Result<(), ApiError> {
-    let user = inner
-        .policy
-        .users
-        .get(actor)
-        .filter(|u| u.enabled)
-        .ok_or_else(expired)?;
-    let r = user.grants.get(resource).ok_or_else(unavailable)?;
+    let r = inner.grant(actor, resource)?;
     if !r.citations.r#use
         || !r.fields.get(PUBLICATION).is_some_and(|f| f.read)
         || (export && !r.citations.export)
         || (download && !r.citations.download)
         || !inner
-            .config
-            .files
-            .get(resource)
+            .file(resource)
+            .ok()
             .is_some_and(|f| f.lifecycle == "live")
     {
         return Err(unavailable());
@@ -411,9 +404,8 @@ pub(super) fn native_inputs(
             let [(work_path, _)] = matches.as_slice() else {
                 return Err(unavailable());
             };
-            let candidates = inner
-                .config
-                .files
+            let configured_files = inner.files_view(actor)?;
+            let candidates = configured_files
                 .iter()
                 .filter(|(id, f)| {
                     f.path.replace('\\', "/").eq_ignore_ascii_case(work_path)
@@ -491,8 +483,7 @@ pub(super) fn freeze(
     // Only candidates with their independent publication/use grants are ever
     // qualified. No inventory or target title search takes place here.
     let candidates = inner
-        .config
-        .files
+        .files_view(actor)?
         .keys()
         .filter(|id| access(inner, actor, id, false, false).is_ok())
         .cloned()
@@ -504,7 +495,7 @@ pub(super) fn freeze(
         .collect::<BTreeSet<_>>();
     let mut refs: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for id in candidates {
-        let file = &inner.config.files[&id];
+        let file = &inner.file(&id)?;
         if file
             .expected_node
             .as_ref()
@@ -530,7 +521,7 @@ pub(super) fn freeze(
         selections.push((entry.key.clone(), id.clone()));
     }
     let mut capture = capture_works(inner, actor, &selections, Some((resource, source)))?;
-    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+    let file = inner.file(resource).ok().ok_or_else(unavailable)?;
     let path = Path::new(&file.path)
         .parent()
         .unwrap_or_else(|| Path::new(""))
@@ -573,8 +564,8 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/citations/propose", post(propose))
 }
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
-    Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;let ids=inner.config.files.keys().filter(|id|access(inner,&actor,id,false,false).is_ok()).cloned().collect::<Vec<_>>();let mut partial=false;let mut works=vec![];
-        for id in ids {match selected(inner,&actor,std::slice::from_ref(&id)) {Ok(c)=> {let w=&c.works[0];let title=w.work.publication.member("title").and_then(weftext_data::NativeValue::text).map(str::to_owned).unwrap_or_else(||inner.config.files[&id].title.clone());let grant=&inner.policy.users[&actor].grants[&id];works.push(json!({"resource":id,"reference":w.work.entity_ref,"title":title,"status":"ready","use":true,"export":grant.citations.export && grant.outputs.bibliography.export,"download":grant.citations.export && grant.citations.download && grant.outputs.bibliography.export && grant.outputs.bibliography.download}));},Err(_)=> {partial=true;works.push(json!({"resource":id,"title":inner.config.files[&id].title,"status":"unavailable","use":true,"export":false,"download":false}));}}
+    Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;let ids=inner.files_view(&actor)?.keys().filter(|id|access(inner,&actor,id,false,false).is_ok()).cloned().collect::<Vec<_>>();let mut partial=false;let mut works=vec![];
+        for id in ids {match selected(inner,&actor,std::slice::from_ref(&id)) {Ok(c)=> {let w=&c.works[0];let title=w.work.publication.member("title").and_then(weftext_data::NativeValue::text).map(str::to_owned).unwrap_or(inner.file(&id)?.title.clone());let grant=&inner.grant(&actor,&id)?;works.push(json!({"resource":id,"reference":w.work.entity_ref,"title":title,"status":"ready","use":true,"export":grant.citations.export && grant.outputs.bibliography.export,"download":grant.citations.export && grant.citations.download && grant.outputs.bibliography.export && grant.outputs.bibliography.download}));},Err(_)=> {partial=true;works.push(json!({"resource":id,"title":inner.file(&id)?.title,"status":"unavailable","use":true,"export":false,"download":false}));}}
             if serde_json::to_vec(&works).map_err(|_|changed())?.len()>8*1024*1024 {return Err(ApiError::bad("文献目录超过 8 MiB 交付预算"));}
         }
         Ok(json!({"works":works,"coverage":if partial{"partial"}else{"complete"}}))}).await?))
@@ -596,7 +587,7 @@ async fn propose(
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{
         let (actor,session,rights)=inner.session(&auth,&req.session_id)?;
-        if !rights.write || !inner.config.files[&session.resource].editable {return Err(unavailable());}
+        if !rights.write || !inner.file(&session.resource)?.editable {return Err(unavailable());}
         writing_api::validate_source(&req.source,Some(&req.source_hash))?;
         writing_api::exact_version(&inner.editor_versions,&req.session_id,&req.source,req.serial)?;
         if req.key.len()>256 || !weftext_engine::valid_citation_key(&req.key) {return Err(ApiError::bad("引用 key 须为有界的准确原生 ASCII 标识"));}

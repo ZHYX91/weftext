@@ -255,24 +255,19 @@ fn text<'a>(input: &'a Value, key: &str) -> Result<&'a str, ApiError> {
         .ok_or_else(|| ApiError::bad(format!("缺少 {key}")))
 }
 fn access(inner: &HostedInner, actor: &str, resource: &str) -> Result<Rights, ApiError> {
-    let rights = inner
-        .policy
-        .users
-        .get(actor)
-        .filter(|u| u.enabled)
-        .and_then(|u| u.grants.get(resource))
-        .filter(|r| r.annotations.read)
-        .cloned()
-        .ok_or_else(unavailable)?;
+    let rights = inner.grant(actor, resource)?;
+    if !rights.annotations.read {
+        return Err(unavailable());
+    }
     if !inner
-        .config
-        .files
-        .get(resource)
+        .file(resource)
+        .ok()
         .is_some_and(|f| f.editable || f.lifecycle == "trash")
     {
         return Err(unavailable());
     }
     structure::guard_slot(inner, resource)?;
+    content_import::qualify_member(inner, resource)?;
     Ok(rights)
 }
 fn authorize(rights: &Rights, n: &Needs) -> Result<(), ApiError> {
@@ -416,7 +411,7 @@ fn rights_json(rights: &Rights) -> Value {
     value
 }
 fn config_hash(inner: &HostedInner, resource: &str) -> Result<String, ApiError> {
-    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+    let file = inner.file(resource).ok().ok_or_else(unavailable)?;
     let mut ids = file.inputs.iter().cloned().collect::<BTreeSet<_>>();
     ids.insert(resource.into());
     inputs::binding_hash(inner, &ids)
@@ -436,7 +431,7 @@ fn capture(
     resource: &str,
     source_needed: bool,
 ) -> Result<Basis, ApiError> {
-    let source_path = inner.config.root.join(&inner.config.files[resource].path);
+    let source_path = inner.config.root.join(&inner.file(resource)?.path);
     let annotation_path = source_path
         .parent()
         .ok_or_else(unavailable)?
@@ -445,7 +440,7 @@ fn capture(
     let actor_scope = scope(inner, actor);
     let (annotations, source, node) = inner
         .core
-        .with_actor(&actor_scope, |core| {
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
             let annotations = core
                 .read_snapshot(&root, &[annotation_path.to_string_lossy().into_owned()])?
                 .files
@@ -647,15 +642,14 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
-            let resources: Vec<_> = inner.policy.users[&actor]
-                .grants
+            let grants = inner.grants_view(&actor)?;
+            let resources: Vec<_> = grants
                 .iter()
                 .filter(|(id, r)| {
                     r.annotations.read
                         && inner
-                            .config
-                            .files
-                            .get(*id)
+                            .file(id)
+                            .ok()
                             .is_some_and(|f| f.editable || f.lifecycle == "trash")
                 })
                 .map(|(id, r)| json!({"resource":id,"rights":rights_json(r)}))
@@ -674,7 +668,7 @@ async fn read(
         let actor = inner.actor(&auth)?; let rights = access(inner, &actor, &req.resource)?; expire_revoked(inner);
         if let Some(asset)=&req.asset {let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource{return Err(unavailable());}}
         if inner.review.bases.len() >= 128 || inner.review.bases.values().filter(|b|b.actor==actor).count() >= 32 { return Err(ApiError::bad("批注依据已达上限，请稍后重新读取")); }
-        let live=inner.config.files[&req.resource].lifecycle=="live";
+        let live=inner.file(&req.resource)?.lifecycle=="live";
         let mut b = capture(inner, &actor, &req.resource, live && (rights.read || (req.asset.is_none() && rights.annotations.target)))?;
         let cleanup=snapshot_ids(&b).collect::<Vec<_>>();
         let result=(|| {
@@ -1036,10 +1030,10 @@ async fn prepare(
             let asset=text(&req.intent["target"],"asset")?;media::input_access(inner,&actor,asset,false)?;
             let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource || configured.lifecycle!="live" {return Err(unavailable());}
         }
-        if inner.config.files[&req.resource].lifecycle!="live" {return Err(unavailable());}
+        if inner.file(&req.resource)?.lifecycle!="live" {return Err(unavailable());}
         let canonical=json!({"resource":req.resource,"basis":req.basis,"intent":req.intent});
         let fingerprint=digest(&serde_json::to_vec(&canonical).map_err(|_|changed())?); let actor_scope=scope(inner,&actor);
-        if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
+        if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
         let b=basis(inner,&actor,&req.resource,&req.basis,needs.source_read)?; let doc=document(&b)?;
         let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
         let annotation_id=req.intent["annotationId"].as_str(); if let Some(id)=annotation_id {preview["annotationId"]=json!(id);}
@@ -1116,7 +1110,7 @@ async fn prepare(
         changes.push(change(&b.annotations,after));
         preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution,media:media_decision})?;
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent:OperationIntent::UpdateFiles {changes}};
-        let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare_with_witnesses(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies,&witnesses.iter().collect::<Vec<_>>())).map_err(core_error)?;
+        let status=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_prepare_with_witnesses(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies,&witnesses.iter().collect::<Vec<_>>())).map_err(core_error)?;
         safe_status(inner,&actor,&rights,status)
     }).await?))
 }
@@ -1127,7 +1121,7 @@ async fn operation(
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let rights=access(inner,&actor,&req.resource)?;
-        let status=inner.core.with_actor(&scope(inner,&actor),|core|core.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;
+        let status=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|core|core.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;
         match status {Some(status)=>safe_status(inner,&actor,&rights,status),None=>Ok(json!({"operationId":req.operation_id,"resource":req.resource,"status":"notRegistered","planId":null,"preview":{},"commitAllowed":false}))}
     }).await?))
 }
@@ -1143,7 +1137,7 @@ async fn commit(
             let actor_scope = scope(inner, &actor);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_status(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -1151,7 +1145,7 @@ async fn commit(
             if old.status != "prepared" {
                 let status = inner
                     .core
-                    .with_actor(&actor_scope, |core| {
+                    .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                         core.actor_feature_commit(&req.resource, &req.operation_id, &req.plan_id)
                     })
                     .map_err(core_error)?;
@@ -1173,7 +1167,7 @@ async fn commit(
             }
             let status = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_commit(&req.resource, &req.operation_id, &req.plan_id)
                 })
                 .map_err(core_error)?;
@@ -1214,7 +1208,7 @@ async fn settle(
             // Fencing one's original request grants no new author effect or target read.
             let status = inner
                 .core
-                .with_actor(&scope(inner, &actor), |core| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
                     core.actor_feature_settle(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?;

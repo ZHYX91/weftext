@@ -101,15 +101,16 @@ fn uri(node: &knowledge::NodeRef) -> String {
 
 /// Filter before touching any source. A configured read-only managed note is
 /// a candidate; editable controls writing and never confers target authority.
-fn authorized_files(inner: &HostedInner, actor: &str) -> BTreeMap<String, FileEntry> {
-    let user = &inner.policy.users[actor];
-    inner
-        .config
-        .files
+fn authorized_files(
+    inner: &HostedInner,
+    actor: &str,
+) -> Result<BTreeMap<String, FileEntry>, ApiError> {
+    Ok(inner
+        .files_view(actor)?
         .iter()
-        .filter(|(id, f)| f.lifecycle == "live" && user.grants.get(*id).is_some_and(|r| r.read))
+        .filter(|(id, f)| f.lifecycle == "live" && inner.grant(actor, id).is_ok_and(|r| r.read))
         .map(|(id, f)| (id.clone(), f.clone()))
-        .collect()
+        .collect())
 }
 fn binding(inner: &HostedInner, actor: &str) -> Result<String, ApiError> {
     let user = &inner.policy.users[actor];
@@ -127,7 +128,7 @@ fn binding(inner: &HostedInner, actor: &str) -> Result<String, ApiError> {
             c.lifecycle == "live" && user.resource_collections.get(*id).is_some_and(|r| r.read)
         })
         .collect::<BTreeMap<_, _>>();
-    Ok(digest(&serde_json::to_vec(&json!({"root":inner.config.root,"files":authorized_files(inner,actor),"resources":resources,"collections":collections})).map_err(|_| changed())?))
+    Ok(digest(&serde_json::to_vec(&json!({"root":inner.config.root,"files":authorized_files(inner,actor)?,"resources":resources,"collections":collections})).map_err(|_| changed())?))
 }
 fn qualify(
     inner: &mut HostedInner,
@@ -137,7 +138,7 @@ fn qualify(
     write: bool,
 ) -> Result<(String, HostedSession, Rights), ApiError> {
     let (actor, session, rights) = inner.session(auth, &req.session_id)?;
-    if write && (!rights.write || !inner.config.files[&session.resource].editable) {
+    if write && (!rights.write || !inner.file(&session.resource)?.editable) {
         return Err(unavailable());
     }
     writing_api::validate_source(&req.source, Some(&req.source_hash))?;
@@ -363,11 +364,11 @@ fn capture(
 ) -> Result<Captured, ApiError> {
     let (actor, session, _) = qualify(inner, auth, &req, observe, write)?;
     let root = inner.config.root.clone();
-    let selected_file = inner.config.files[&session.resource].clone();
+    let selected_file = inner.file(&session.resource)?.clone();
     let scope = inner.actor_scope(&actor);
     let selected = inner
         .core
-        .with_actor(&scope, |c| {
+        .with_actor_for_root(&scope, &inner.config.root, |c| {
             c.qualified_node_for_session_at(&root, &root.join(&selected_file.path), &req.session_id)
         })
         .map_err(|_| unavailable())?;
@@ -380,7 +381,7 @@ fn capture(
         .source
         .len()
         .saturating_add(selected.witness.retained_bytes());
-    let configured = authorized_files(inner, &actor);
+    let configured = authorized_files(inner, &actor)?;
     let mut candidates = vec![Candidate {
         resource: session.resource.clone(),
         file: selected_file,
@@ -441,7 +442,9 @@ fn capture(
     let semantic_fields = candidates
         .iter()
         .filter_map(|c| {
-            let fields = inner.policy.users[&actor].grants[&c.resource]
+            let fields = inner
+                .grant(&actor, &c.resource)
+                .ok()?
                 .fields
                 .iter()
                 .filter(|(_, r)| r.read)
@@ -741,14 +744,10 @@ fn recheck(
     }
     let root = inner.config.root.clone();
     for (resource, fields) in &captured.semantic_fields {
-        let rights = &inner.policy.users[&actor]
-            .grants
-            .get(resource)
-            .ok_or_else(unavailable)?
-            .fields;
+        let rights = inner.grant(&actor, resource)?;
         if fields
             .iter()
-            .any(|field| !rights.get(field).is_some_and(|r| r.read))
+            .any(|field| !rights.fields.get(field).is_some_and(|r| r.read))
         {
             return Err(unavailable());
         }
@@ -764,9 +763,11 @@ fn recheck(
         let path = root.join(&candidate.file.path);
         let current = if candidate.resource == captured.resource {
             let scope = inner.actor_scope(&actor);
-            inner.core.with_actor(&scope, |c| {
-                c.qualified_node_for_session_at(&root, &path, &captured.request.session_id)
-            })
+            inner
+                .core
+                .with_actor_for_root(&scope, &inner.config.root, |c| {
+                    c.qualified_node_for_session_at(&root, &path, &captured.request.session_id)
+                })
         } else {
             inner.core.qualified_node_at(&root, &path)
         }
@@ -1000,7 +1001,7 @@ async fn read(
     compile(&state, &mut captured).await;
     locked(&state,move|inner|{
         recheck(inner,&auth,&captured,false)?;
-        let writable=inner.rights(&captured.actor,&captured.resource)?.write && inner.config.files[&captured.resource].editable;
+        let writable=inner.rights(&captured.actor,&captured.resource)?.write && inner.file(&captured.resource)?.editable;
         let index=knowledge::link_index_bounded(&captured.inventory,&captured.source().owner,MAX_EDGES,1024*1024);
         let scan=mention_scan(&captured,writable)?;
         let mentions=scan.fragments.into_iter().map(|f|json!({"id":f.id,"nodeKey":f.node_key,"text":f.text,"coverage":f.coverage,"partialReason":f.partial_reason,"hits":f.hits.into_iter().map(|h|json!({"startScalar":h.start_scalar,"endScalar":h.end_scalar,"startUtf16":h.start_utf16,"endUtf16":h.end_utf16,"terms":h.terms,"writable":h.writable,"sourceRange":h.source_range,"lane":h.lane,"component":h.component,"targets":h.targets.iter().filter_map(|n|public_node(&captured,n)).collect::<Vec<_>>() })).collect::<Vec<_>>() })).collect::<Vec<_>>();
@@ -1251,6 +1252,183 @@ mod tests {
         assert!(source_only.schema_witness.is_none());
         assert!(source_only.inventory.nodes[0].aliases.is_empty());
         assert!(source_only.properties.is_empty());
+    }
+
+    #[test]
+    fn imported_member_semantics_recheck_uses_independent_member_fields_and_original_session() {
+        let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        let op = uuid::Uuid::new_v4().to_string();
+        let admitted = inner
+            .core
+            .prepare_directory_admission(&root, &root, &op)
+            .unwrap();
+        inner
+            .core
+            .execute_operation(&admitted.preview.operation_id, &admitted.preview.plan_id)
+            .unwrap();
+        inner.config.directories.insert(
+            "root".into(),
+            query_scopes::Directory {
+                path: String::new(),
+                title: "Approved parent".into(),
+                reference: admitted.target_ref,
+                lifecycle: "live".into(),
+            },
+        );
+        inner.config.content_import_slots.insert(
+            "Native".into(),
+            content_import::Slot {
+                parent: "root".into(),
+                name: "Native".into(),
+                title: "Approved imported sources".into(),
+                inputs: vec![],
+            },
+        );
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .content_imports
+            .insert(
+                "Native".into(),
+                content_import::Rights {
+                    members: Rights {
+                        read: true,
+                        write: true,
+                        fields: BTreeMap::from([(
+                            "tasks/status".into(),
+                            FieldRights {
+                                read: true,
+                                write: false,
+                            },
+                        )]),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+        let bytes = inner.core.capture_native_export(&root).unwrap().bytes;
+        let op = uuid::Uuid::new_v4().to_string();
+        let scope = format!("{}:content-import", inner.actor_scope("alice"));
+        let prepared = inner
+            .core
+            .with_actor_for_root(&scope, &root, |c| {
+                c.actor_feature_prepare_content_import(
+                    "Native",
+                    &op,
+                    &digest(b"original native import"),
+                    weftext_core::OperationRequest {
+                        operation_id: op.clone(),
+                        root: root.to_string_lossy().into_owned(),
+                        intent: weftext_core::OperationIntent::ImportNative {
+                            parent: root.to_string_lossy().into_owned(),
+                            name: "Native".into(),
+                            bytes,
+                            allow_losses: true,
+                        },
+                    },
+                    json!({}),
+                    &[],
+                    "Native",
+                )
+            })
+            .unwrap();
+        inner
+            .core
+            .with_actor_for_root(&scope, &root, |c| {
+                c.actor_feature_commit_with_losses(
+                    "Native",
+                    &op,
+                    prepared.plan_id.as_deref().unwrap(),
+                    true,
+                )
+            })
+            .unwrap();
+        let members = content_import::slot_member_ids(&inner, "Native").unwrap();
+        assert!(members.len() >= 2);
+        let selected = &members[0];
+        let target = &members[1];
+        let target_file = inner.file(target).unwrap();
+        let target_owner = inner
+            .core
+            .qualified_node_at(&root, &root.join(target_file.path))
+            .unwrap()
+            .owner;
+        let opened = inner.open("alice", selected).unwrap();
+        let source = format!(
+            "{}\n#link(\"{}\")[Original imported target]\n",
+            opened["source"].as_str().unwrap(),
+            uri(&target_owner)
+        );
+        let captured = capture(
+            &mut inner,
+            &auth,
+            request(&opened, &source, 1),
+            true,
+            false,
+            true,
+        )
+        .unwrap();
+        assert!(!inner.policy.users["alice"].grants.contains_key(selected));
+        assert_eq!(
+            captured.semantic_fields[selected],
+            BTreeSet::from(["tasks/status".into()])
+        );
+        recheck(&mut inner, &auth, &captured, false).unwrap();
+        let index = knowledge::link_index_bounded(
+            &captured.inventory,
+            &captured.source().owner,
+            MAX_EDGES,
+            1024 * 1024,
+        );
+        let edge = index
+            .outgoing
+            .into_iter()
+            .find(|e| e.occurrence.target == uri(&target_owner))
+            .unwrap();
+        assert_eq!(
+            public_edge(&captured, edge)["resolution"]["target"]["resource"],
+            target.as_str()
+        );
+        let member_fields = &mut inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .content_imports
+            .get_mut("Native")
+            .unwrap()
+            .members
+            .fields;
+        member_fields.get_mut("tasks/status").unwrap().read = false;
+        assert_eq!(
+            recheck(&mut inner, &auth, &captured, false)
+                .unwrap_err()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .content_imports
+            .get_mut("Native")
+            .unwrap()
+            .members
+            .fields
+            .get_mut("tasks/status")
+            .unwrap()
+            .read = true;
+        recheck(&mut inner, &auth, &captured, false).unwrap();
+        let path = root.join(&inner.file(selected).unwrap().path);
+        let original = std::fs::read(&path).unwrap();
+        std::fs::rename(&path, path.with_extension("preserved")).unwrap();
+        std::fs::write(&path, original).unwrap();
+        assert!(recheck(&mut inner, &auth, &captured, false).is_err());
     }
 
     fn request(doc: &Value, source: &str, serial: u64) -> Snapshot {
@@ -1631,8 +1809,8 @@ async fn copy(
     if req.form == "original" {
         return Ok(Json(locked(&state,move|inner|{
             let (actor,session,_)=qualify(inner,&auth,&req.basis,false,false)?;
-            let root=inner.config.root.clone();let path=root.join(&inner.config.files[&session.resource].path);let scope=inner.actor_scope(&actor);
-            let original=inner.core.with_actor(&scope,|c|c.qualified_node_for_session_at(&root,&path,&req.basis.session_id)).map_err(|_|unavailable())?;
+            let root=inner.config.root.clone();let path=root.join(&inner.file(&session.resource)?.path);let scope=inner.actor_scope(&actor);
+            let original=inner.core.with_actor_for_root(&scope,&root,|c|c.qualified_node_for_session_at(&root,&path,&req.basis.session_id)).map_err(|_|unavailable())?;
             if weftext_engine::inspect_metadata(&req.basis.source).id.as_deref()!=Some(original.owner.node_id.as_str()){return Err(changed());}
             let selected=occurrence(&req.basis.source,&req.occurrence)?;
             let full_link=authored_literal(&req.basis.source,&selected).ok_or_else(changed)?;

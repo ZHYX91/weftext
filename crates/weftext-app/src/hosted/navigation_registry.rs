@@ -519,7 +519,7 @@ fn build(inner: &mut HostedInner, actor: &str, req: Prepare) -> Result<Value, Ap
     let scope = scope(inner, actor);
     if let Some(old) = inner
         .core
-        .with_actor(&scope, |c| {
+        .with_actor_for_root(&scope, &inner.config.root, |c| {
             c.actor_feature_retry(RESOURCE, &req.operation_id, &fingerprint)
         })
         .map_err(core_error)?
@@ -606,7 +606,7 @@ fn build(inner: &mut HostedInner, actor: &str, req: Prepare) -> Result<Value, Ap
     let root = inner.config.root.clone();
     let status = inner
         .core
-        .with_actor(&scope, |c| {
+        .with_actor_for_root(&scope, &inner.config.root, |c| {
             c.actor_feature_prepare_navigation(
                 RESOURCE,
                 &req.operation_id,
@@ -681,7 +681,7 @@ async fn operation(
             valid_operation(&req.operation_id)?;
             let old = inner
                 .core
-                .with_actor(&scope(inner, &actor), |c| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c| {
                     c.actor_feature_status(RESOURCE, &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -705,7 +705,7 @@ async fn settle(
             valid_operation(&req.operation_id)?;
             let old = inner
                 .core
-                .with_actor(&scope(inner, &actor), |c| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c| {
                     c.actor_feature_settle(RESOURCE, &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -728,7 +728,7 @@ async fn commit(
             let actor_scope = scope(inner, &actor);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_status(RESOURCE, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -741,7 +741,7 @@ async fn commit(
             }
             let old = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_commit(RESOURCE, &req.operation_id, &req.plan_id)
                 })
                 .map_err(core_error)?;
@@ -763,7 +763,7 @@ async fn resolve(
             Resolve::AdmittedDirectory { slot, operation_id, reference } => {
                 authorize(inner, &actor, &Intent::AdmitDirectory { slot: slot.clone() })?;
                 valid_operation(&operation_id)?;
-                let status = inner.core.with_actor(&scope(inner, &actor), |c|c.actor_feature_status(RESOURCE, &operation_id)).map_err(|_| unavailable())?.ok_or_else(unavailable)?;
+                let status = inner.core.with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c|c.actor_feature_status(RESOURCE, &operation_id)).map_err(|_| unavailable())?.ok_or_else(unavailable)?;
                 let d = decision(inner, &actor, &status).filter(|d|matches!(&d.request.intent,Intent::AdmitDirectory{slot:original} if original==&slot)).ok_or_else(unavailable)?;
                 if status.navigation_ref.as_ref() != Some(&reference) { return Err(unavailable()); }
                 receipt_target(inner, &actor, &status, &d)

@@ -135,9 +135,11 @@ fn final_owner(
             return Err(unavailable());
         }
         let scope = inner.actor_scope(&actor);
-        inner.core.with_actor(&scope, |core| {
-            core.qualified_node_for_session_at(&root, &path, session_id)
-        })
+        inner
+            .core
+            .with_actor_for_root(&scope, &inner.config.root, |core| {
+                core.qualified_node_for_session_at(&root, &path, session_id)
+            })
     } else {
         inner.core.qualified_node_at(&root, &path)
     }
@@ -161,7 +163,7 @@ async fn reference(
         let root = inner.config.root.clone();
         let path = root.join(&file.path);
         let scope = inner.actor_scope(&actor);
-        let qualified = inner.core.with_actor(&scope, |core| core.qualified_node_for_session_at(&root, &path, &req.session_id)).map_err(|_| unavailable())?;
+        let qualified = inner.core.with_actor_for_root(&scope, &inner.config.root, |core| core.qualified_node_for_session_at(&root, &path, &req.session_id)).map_err(|_| unavailable())?;
         // The same original owner and source permission are rechecked before
         // publishing; no Core session/path or body is included in this DTO.
         final_owner(inner, &auth, &session.resource, &qualified, Some(&req.session_id))?;
@@ -177,7 +179,7 @@ async fn resolve(
     let check = auth.clone();
     let (resolved,compile)=locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
-        let candidates = inner.config.files.iter().filter(|(r, _)| inner.rights(&actor, r).is_ok()).map(|(r, f)| (r.clone(), f.clone())).collect::<Vec<_>>();
+        let candidates = inner.files_view(&actor)?.iter().filter(|(r, _)| inner.rights(&actor, r).is_ok()).map(|(r, f)| (r.clone(), f.clone())).collect::<Vec<_>>();
         let mut partial = false;
         let mut found = None;
         for (resource, file) in candidates {
@@ -400,7 +402,7 @@ async fn fragment(
         let scope = inner.actor_scope(&actor);
         let owner = inner
             .core
-            .with_actor(&scope, |core| {
+            .with_actor_for_root(&scope, &inner.config.root, |core| {
                 core.qualified_node_for_session_at(&root, &path, &captured.session_id)
             })
             .map_err(|_| unavailable())?;

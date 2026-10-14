@@ -362,7 +362,7 @@ async fn prepare(
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;access(inner,&actor,&req.role,true)?;
         let fingerprint=digest(&serde_json::to_vec(&req).map_err(|_|changed())?);let actor_scope=scope(inner,&actor);let resource=resource(&req.role);
-        if let Some(old)=inner.core.with_actor(&actor_scope,|c|c.actor_feature_retry(&resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return status(inner,&actor,&req.role,old);}
+        if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|c|c.actor_feature_retry(&resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return status(inner,&actor,&req.role,old);}
         prune(inner);let basis=inner.library.bases.get(&req.basis).filter(|b|b.actor==actor && b.role==req.role && b.epoch==inner.actor_generation(&actor) && b.config_hash==config_hash(inner).unwrap_or_default()).cloned().ok_or_else(changed)?;
         if req.source.is_some() && req.changes.is_some() {return Err(ApiError::bad("源码和控件修改须分别准备"));}
         let root=inner.config.root.clone();
@@ -387,7 +387,7 @@ async fn prepare(
         // Core's durable preview budget applies before creating an original ID.
         if serde_json::to_vec(&preview).map_err(|_|changed())?.len()>MAX_SOURCE {return Err(ApiError::bad("本次前后源码预览超出 2 MiB 原操作预算；输入仍保留"));}
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent};
-        let old=inner.core.with_actor(&actor_scope,|c|c.actor_feature_prepare(&resource,&req.operation_id,&fingerprint,request,preview,&[])).map_err(core_error)?;
+        let old=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|c|c.actor_feature_prepare(&resource,&req.operation_id,&fingerprint,request,preview,&[])).map_err(core_error)?;
         status(inner,&actor,&req.role,old)
     }).await?))
 }
@@ -397,7 +397,7 @@ async fn operation(
     Json(req): Json<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;access(inner,&actor,&req.role,false)?;
-        let old=inner.core.with_actor(&scope(inner,&actor),|c|c.actor_feature_status(&resource(&req.role),&req.operation_id)).map_err(core_error)?;
+        let old=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|c|c.actor_feature_status(&resource(&req.role),&req.operation_id)).map_err(core_error)?;
         match old {Some(old)=>status(inner,&actor,&req.role,old),None=>Ok(json!({"role":req.role,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"commitAllowed":false}))}
     }).await?))
 }
@@ -414,7 +414,7 @@ async fn commit(
             let resource = resource(&req.role);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_status(&resource, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -427,7 +427,7 @@ async fn commit(
             }
             let old = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_commit(&resource, &req.operation_id, &req.plan_id)
                 })
                 .map_err(core_error)?;
@@ -447,7 +447,7 @@ async fn settle(
             access(inner, &actor, &req.role, true)?;
             let old = inner
                 .core
-                .with_actor(&scope(inner, &actor), |c| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c| {
                     c.actor_feature_settle(&resource(&req.role), &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -980,6 +980,7 @@ mod tests {
                 library: Default::default(),
                 media: Default::default(),
                 navigation_registry: Default::default(),
+                owner_backup: Default::default(),
             })),
             origin,
             host,

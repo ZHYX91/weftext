@@ -5,6 +5,8 @@ use super::*;
 use backend::NamespaceGuard;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod owner_backup;
+
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
 
@@ -475,6 +477,8 @@ pub(crate) struct FrozenOperation {
     pub(crate) hosted_destination: Option<String>,
     #[serde(default)]
     pub(crate) expected_membership: Option<BTreeSet<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) backup_private_digest: Option<String>,
     #[serde(default)]
     pub(crate) absent_dependencies: Vec<AbsentDependency>,
     #[serde(default)]
@@ -736,114 +740,6 @@ impl Core {
             }
             .into(),
         }))
-    }
-    /// Only immutable evidence and drafts belonging to the selected library are
-    /// portable. Other libraries and ordinary documents share this data dir.
-    fn snapshot_library_private(
-        &self,
-        root: &Path,
-        workspace_id: &str,
-        files: &mut Vec<CapturedFile>,
-        directories: &mut Vec<CapturedDirectory>,
-    ) -> Result<()> {
-        let selected = self
-            .operations
-            .values()
-            .filter(|p| {
-                p.workspace_id.as_deref() == Some(workspace_id)
-                    || locator_within(Path::new(&p.path), root)
-            })
-            .map(|p| p.operation_id.clone())
-            .collect::<BTreeSet<_>>();
-        let mut total = files.iter().map(|f| f.bytes.len()).sum::<usize>();
-        for directory in ["journal", "drafts", "draft-history"] {
-            let folder = self.data_dir.join(directory);
-            let guard = ParentGuard::acquire(&folder.join(".backup-prospective"))?;
-            let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
-            if !complete {
-                return Err(CoreError::new(
-                    "budget",
-                    "Private evidence enumeration exceeds the backup budget",
-                ));
-            }
-            for (name, attrs) in entries {
-                if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
-                    return Err(CoreError::new(
-                        "unsupportedPath",
-                        "Private evidence has an unsupported object",
-                    ));
-                }
-                let name_text = name.to_string_lossy();
-                if directory == "journal"
-                    && !selected
-                        .iter()
-                        .any(|id| name_text.starts_with(&format!("{id}.")))
-                {
-                    continue;
-                }
-                let path = folder.join(&name);
-                let f = capture_optional(&path)?.ok_or_else(|| {
-                    CoreError::new("scopeChanged", "Private evidence disappeared")
-                })?;
-                if directory != "journal" {
-                    let value: serde_json::Value =
-                        serde_json::from_slice(&f.bytes).map_err(|_| {
-                            CoreError::new(
-                                "privateEvidence",
-                                "A private draft record cannot be scoped safely",
-                            )
-                        })?;
-                    let direct = value
-                        .get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .is_some_and(|p| locator_within(Path::new(p), root));
-                    let migration = value
-                        .get("consumed")
-                        .and_then(serde_json::Value::as_array)
-                        .is_some_and(|refs| {
-                            !refs.is_empty()
-                                && refs.iter().all(|r| {
-                                    r.get("path")
-                                        .and_then(serde_json::Value::as_str)
-                                        .is_some_and(|p| locator_within(Path::new(p), root))
-                                })
-                        });
-                    let companion = if name_text.ends_with(".relocation.json") {
-                        let companion = folder.join(format!(
-                            "{}.json",
-                            name_text.trim_end_matches(".relocation.json")
-                        ));
-                        capture_optional(&companion)?
-                            .and_then(|f| {
-                                serde_json::from_slice::<serde_json::Value>(&f.bytes).ok()
-                            })
-                            .is_some_and(|v| {
-                                v["path"]
-                                    .as_str()
-                                    .is_some_and(|p| locator_within(Path::new(p), root))
-                            })
-                    } else {
-                        false
-                    };
-                    if !direct && !migration && !companion {
-                        continue;
-                    }
-                }
-                total += f.bytes.len();
-                files.push(f);
-                if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {
-                    return Err(CoreError::new(
-                        "budget",
-                        "Selected library backup exceeds 64 MiB or 5000 files",
-                    ));
-                }
-            }
-        }
-        let sync = self.data_dir.join("sync").join(workspace_id);
-        if sync.exists() {
-            snapshot_tree(&sync, files, directories, false)?;
-        }
-        Ok(())
     }
     pub(crate) fn read_observation_facts(&self, operation_id: &str) -> Result<Vec<RevisionFact>> {
         let mut facts = Vec::new();
@@ -3100,6 +2996,7 @@ impl Core {
         };
         let mut files = Vec::new();
         let mut directories = Vec::new();
+        let mut backup_private_digest = None;
         let mut absent_dependencies = Vec::new();
         let mut dependency_pool = Vec::new();
         let mut incoming = Vec::with_capacity(dependencies.len());
@@ -3648,12 +3545,13 @@ impl Core {
                 snapshot_tree(&root, &mut files, &mut directories, false)?;
                 let library_count = files.len();
                 let library_dirs = directories.len();
-                self.snapshot_library_private(
+                let private = self.capture_owner_backup_private(
                     &root,
                     &workspace.workspace_id,
                     &mut files,
                     &mut directories,
                 )?;
+                backup_private_digest = Some(private.digest);
                 let mut output = Vec::new();
                 let mut dirs = vec![
                     "library".into(),
@@ -3709,6 +3607,38 @@ impl Core {
                     before: None,
                     after: manifest,
                 });
+                dirs.sort();
+                dirs.dedup();
+                if output.len().saturating_add(dirs.len()) > MAX_OPERATION_FILES
+                    || output
+                        .iter()
+                        .try_fold(0usize, |total, f| total.checked_add(f.after.len()))
+                        .is_none_or(|total| total > MAX_OPERATION_BYTES)
+                {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Complete backup including its manifest and directories exceeds 64 MiB or 5000 members",
+                    ));
+                }
+                // Use the same pure encoder as delivery, including its 80 MiB
+                // ZIP/path/manifest budget, before staging or any user effect.
+                let relative = output
+                    .iter()
+                    .map(|f| display(Path::new(&f.path).strip_prefix(&target).unwrap()))
+                    .collect::<Vec<_>>();
+                weftext_export::recovery_backup::encode_recovery_backup(
+                    &dirs,
+                    relative
+                        .iter()
+                        .zip(&output)
+                        .map(|(path, f)| (path.as_str(), f.after.as_slice())),
+                )
+                .map_err(|_| {
+                    CoreError::new(
+                        "budget",
+                        "Original backup is outside its complete bounded ZIP delivery profile",
+                    )
+                })?;
                 preview.changes.extend(
                     output
                         .iter()
@@ -4128,6 +4058,7 @@ impl Core {
             receipt,
             hosted_destination: destination_slot.map(str::to_owned),
             expected_membership: cut.map(|c| c.members),
+            backup_private_digest,
             absent_dependencies,
             write_parents,
         });
@@ -4261,6 +4192,7 @@ impl Core {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         let mut observations = Vec::new();
+        let _private_capture = self.validate_owner_backup_private(&plan, false)?;
         for (path, parent) in &t.write_parents {
             let guard = ParentGuard::acquire(Path::new(path))?;
             if guard.directory_identity()? != *parent {
@@ -4293,11 +4225,16 @@ impl Core {
         }
         if !matches!(t.mutation, Mutation::Relocate { .. }) {
             for f in &t.files {
-                self.check_pending(Path::new(&f.path))?;
+                if !matches!(t.request.intent, OperationIntent::BackupLibrary { .. }) {
+                    self.check_pending(Path::new(&f.path))?;
+                }
                 let guard = ParentGuard::acquire(Path::new(&f.path))?;
                 let write = matches!(&t.mutation, Mutation::Update {files} if files.iter().any(|c|c.path==f.path && c.before.as_ref()!=Some(&c.after)))
                     || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path && c.before.as_ref()!=Some(&c.after)));
-                let mut handle = if !write && operation_read_control(root, Path::new(&f.path)) {
+                let mut handle = if !write
+                    && (matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
+                        || operation_read_control(root, Path::new(&f.path)))
+                {
                     guard.open_read_guard_file()?
                 } else {
                     guard.open_file(write, false)?
@@ -4316,18 +4253,6 @@ impl Core {
                     ParentGuard::acquire(&Path::new(&d.path).join(".snapshot-prospective"))?;
                 let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
                 let names = sorted_entries(entries, Path::new(&d.path));
-                let names = if matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
-                    && Path::new(&d.path) == self.data_dir.join("journal")
-                {
-                    names
-                        .into_iter()
-                        .filter(|name| {
-                            !name.starts_with(&format!("{}.plan.json:", plan.operation_id))
-                        })
-                        .collect()
-                } else {
-                    names
-                };
                 if !complete || guard.directory_identity()? != d.identity || names != d.entries {
                     return Err(CoreError::new(
                         "scopeChanged",
@@ -4827,6 +4752,7 @@ impl Core {
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
+                let _private_final = self.validate_owner_backup_private(&plan, true)?;
                 self.commit(&plan)?;
             }
         }

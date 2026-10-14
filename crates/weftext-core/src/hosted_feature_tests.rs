@@ -1,5 +1,65 @@
 use super::*;
 
+#[test]
+fn hosted_content_import_losses_project_known_codes_without_private_details() {
+    let mut f = Fixture::new();
+    let (request, _) = f.proposal();
+    let mut original = f.core.prepare_operation(request).unwrap();
+    original.losses = [
+        "generatedBibliographyNotInstalled",
+        "resourceModuleContextPreserved",
+        "settingsNotApplied",
+        "unregisteredFileOmitted",
+        "PRIVATE_UNKNOWN_CODE",
+        "PRIVATE_OTHER_CODE",
+    ]
+    .iter()
+    .map(|code| weftext_knowledge::Loss {
+        path: "PRIVATE_SCHEMA_PATH".into(),
+        code: (*code).into(),
+        detail: "PRIVATE_PRODUCER_DETAILS".into(),
+    })
+    .collect();
+    for kind in [
+        FeatureIntentKind::ImportNative,
+        FeatureIntentKind::ImportBibliography,
+    ] {
+        let projected = feature_losses(&original, kind);
+        assert_eq!(projected.as_array().unwrap().len(), 5);
+        for code in [
+            "generatedBibliographyNotInstalled",
+            "resourceModuleContextPreserved",
+            "settingsNotApplied",
+            "unregisteredFileOmitted",
+            "content-import-loss",
+        ] {
+            assert!(
+                projected
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|loss| loss["code"] == code)
+            );
+        }
+        let public = serde_json::to_string(&projected).unwrap();
+        for secret in [
+            "PRIVATE_SCHEMA_PATH",
+            "PRIVATE_PRODUCER_DETAILS",
+            "PRIVATE_UNKNOWN_CODE",
+            "PRIVATE_OTHER_CODE",
+        ] {
+            assert!(!public.contains(secret));
+        }
+        assert!(
+            projected
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|loss| loss.as_object().unwrap().len() == 2)
+        );
+    }
+}
+
 const ACTOR: &str = "deployment:alice:review";
 const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_FP: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

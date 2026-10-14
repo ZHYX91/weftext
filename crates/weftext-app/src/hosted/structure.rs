@@ -127,10 +127,13 @@ pub(super) fn valid_rights(config: &Config, rights: &Rights) -> bool {
     rights.sources.len() <= 256
         && rights.destinations.len() <= 64
         && rights.sources.iter().all(|(id, _)| {
-            config
-                .files
-                .get(id)
-                .is_some_and(|f| f.lifecycle == "live" && f.editable)
+            id.strip_suffix("/*")
+                .is_some_and(|s| config.content_import_slots.contains_key(s))
+                || content_import::split_member(config, id).is_some()
+                || config
+                    .files
+                    .get(id)
+                    .is_some_and(|f| f.lifecycle == "live" && f.editable)
         })
         && rights
             .destinations
@@ -141,7 +144,7 @@ pub(super) fn valid_rights(config: &Config, rights: &Rights) -> bool {
 /// Neither a raw occupant nor another admitted object at that name qualifies.
 pub(super) fn guard_slot(inner: &HostedInner, resource: &str) -> Result<(), ApiError> {
     if inner.config.structure_slots.contains_key(resource) {
-        let file = &inner.config.files[resource];
+        let file = &inner.file(resource)?;
         let q = inner
             .core
             .qualified_structure_slot_at(
@@ -188,14 +191,41 @@ fn now_ms() -> u64 {
         .try_into()
         .unwrap_or(u64::MAX)
 }
-fn rights<'a>(inner: &'a HostedInner, actor: &str) -> Result<&'a Rights, ApiError> {
-    inner
+fn rights(inner: &HostedInner, actor: &str) -> Result<Rights, ApiError> {
+    let mut rights = inner
         .policy
         .users
         .get(actor)
         .filter(|u| u.enabled)
-        .map(|u| &u.structure)
-        .ok_or_else(expired)
+        .map(|u| u.structure.clone())
+        .ok_or_else(expired)?;
+    let selectors = rights
+        .sources
+        .iter()
+        .filter_map(|(id, r)| {
+            id.strip_suffix("/*")
+                .filter(|s| inner.config.content_import_slots.contains_key(*s))
+                .map(|s| (id.clone(), s.to_owned(), r.clone()))
+        })
+        .collect::<Vec<_>>();
+    for (selector, slot, r) in selectors {
+        rights.sources.remove(&selector);
+        for id in content_import::slot_member_ids(inner, &slot)? {
+            if let Some(existing) = rights.sources.get_mut(&id) {
+                existing.rename |= r.rename;
+                existing.r#move |= r.r#move;
+                existing.trash |= r.trash;
+                existing.restore |= r.restore;
+                existing.copy |= r.copy;
+                existing.template |= r.template;
+                existing.tree_read |= r.tree_read;
+                existing.tree_export |= r.tree_export;
+            } else {
+                rights.sources.insert(id, r.clone());
+            }
+        }
+    }
+    Ok(rights)
 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -337,9 +367,8 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
     }
     for id in &req.inputs {
         if !inner
-            .config
-            .files
-            .get(id)
+            .file(id)
+            .ok()
             .is_some_and(|f| f.editable && f.lifecycle == "live")
         {
             return Err(unavailable());
@@ -366,14 +395,8 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
     Ok(())
 }
 fn binding(inner: &HostedInner, req: &Prepare) -> Result<String, ApiError> {
-    let source = req
-        .source
-        .as_ref()
-        .and_then(|id| inner.config.files.get(id));
-    let destination = req
-        .destination
-        .as_ref()
-        .and_then(|id| inner.config.files.get(id));
+    let source = req.source.as_ref().and_then(|id| inner.file(id).ok());
+    let destination = req.destination.as_ref().and_then(|id| inner.file(id).ok());
     let slot = req
         .destination
         .as_ref()
@@ -386,14 +409,7 @@ fn binding(inner: &HostedInner, req: &Prepare) -> Result<String, ApiError> {
     let inputs = req
         .inputs
         .iter()
-        .map(|id| {
-            inner
-                .config
-                .files
-                .get(id)
-                .map(|f| (id, f))
-                .ok_or_else(unavailable)
-        })
+        .map(|id| inner.file(id).ok().map(|f| (id, f)).ok_or_else(unavailable))
         .collect::<Result<BTreeMap<_, _>, _>>()?;
     Ok(digest(&serde_json::to_vec(&json!({"root":inner.config.root,"source":source,"destination":destination,"slot":slot,"parent":parent,"template":template,"inputs":inputs})).map_err(|_|changed())?))
 }
@@ -427,14 +443,11 @@ fn safe_status(
         let destination = d.request.destination.as_ref();
         let actor_scope = scope(inner, actor);
         if let Some(destination) = destination {
-            let path = inner
-                .config
-                .root
-                .join(&inner.config.files[destination].path);
+            let path = inner.config.root.join(&inner.file(destination)?.path);
             let root = inner.config.root.clone();
             let receipt = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_structure_receipt(&status.resource, &status.operation_id)
                 })
                 .map_err(core_error)?;
@@ -442,15 +455,17 @@ fn safe_status(
                 .as_ref()
                 .and_then(|r| r.nodes.iter().find(|n| same_path(&n.source, &path)));
             if let Some(node) = selected {
-                let q = inner.core.with_actor(&actor_scope, |c| {
-                    c.actor_feature_structure_result_at(
-                        &status.resource,
-                        &root,
-                        &path,
-                        &status.operation_id,
-                        &node.node_ref,
-                    )
-                });
+                let q = inner
+                    .core
+                    .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
+                        c.actor_feature_structure_result_at(
+                            &status.resource,
+                            &root,
+                            &path,
+                            &status.operation_id,
+                            &node.node_ref,
+                        )
+                    });
                 let can_open = q.is_ok() && inner.rights(actor, destination).is_ok_and(|r| r.read);
                 result = json!({"resource":destination,"nodeRef":node.node_ref,"canOpen":can_open,"status":if q.is_ok(){"available"}else{"unavailable"}});
             } else {
@@ -467,11 +482,11 @@ fn safe_status(
     )
 }
 fn owner(inner: &HostedInner, id: &str) -> Result<weftext_core::QualifiedQueryNode, ApiError> {
+    content_import::qualify_member(inner, id)?;
     guard_slot(inner, id)?;
     let file = inner
-        .config
-        .files
-        .get(id)
+        .file(id)
+        .ok()
         .filter(|f| f.lifecycle == "live")
         .ok_or_else(unavailable)?;
     let path = inner.config.root.join(&file.path);
@@ -780,7 +795,7 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
     let source_path = inner
         .config
         .root
-        .join(&inner.config.files[&configured.source].path);
+        .join(&inner.file(&configured.source)?.path);
     let root = inner.config.root.clone();
     let cut = inner
         .core
@@ -847,7 +862,7 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
     let parameters=definition.slots.iter().map(|s|{let mut v=json!({"name":s.name,"kind":s.kind,"nullable":s.nullable,"required":s.default.is_none()});if let Some(d)=&s.default{v["default"]=crate::knowledge_api::template_value(d);}v}).collect::<Vec<_>>();
     let _ = actor;
     Ok(
-        json!({"id":id,"title":inner.config.files[&configured.source].title,"source":configured.source,"status":"ready","builtin":false,"parameters":parameters}),
+        json!({"id":id,"title":inner.file(&configured.source)?.title,"source":configured.source,"status":"ready","builtin":false,"parameters":parameters}),
     )
 }
 async fn prepare(
@@ -870,7 +885,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
     let actor_scope = scope(inner, &actor);
     if let Some(status) = inner
         .core
-        .with_actor(&actor_scope, |c| {
+        .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
             c.actor_feature_retry(&req.resource, &req.operation_id, &fp)
         })
         .map_err(core_error)?
@@ -914,7 +929,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .ok_or_else(|| ApiError::bad("缺少原 Trash 操作编号"))?;
                 let receipt = inner
                     .core
-                    .with_actor(&actor_scope, |c| {
+                    .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                         c.actor_feature_structure_receipt(source, original)
                     })
                     .map_err(core_error)?
@@ -927,7 +942,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .ok_or_else(unavailable)?;
                 let q = inner
                     .core
-                    .with_actor(&actor_scope, |c| {
+                    .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                         c.actor_feature_structure_result_at(
                             source,
                             &root,
@@ -941,8 +956,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                 q
             } else {
                 let q = owner(inner, source)?;
-                selected_source =
-                    Some((root.join(&inner.config.files[source].path), String::new()));
+                selected_source = Some((root.join(&inner.file(source)?.path), String::new()));
                 q
             };
             source_owner = Some(q.owner.clone());
@@ -1175,7 +1189,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
         };
         let status = inner
             .core
-            .with_actor(&actor_scope, |c| {
+            .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                 c.actor_feature_prepare_structure(
                     &req.resource,
                     &req.operation_id,
@@ -1202,7 +1216,7 @@ async fn operation(
     Extension(auth): Extension<Auth>,
     Json(req): Json<Operation>,
 ) -> ApiResult {
-    Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;anchor_access(inner,&actor,&req.resource)?;let status=inner.core.with_actor(&scope(inner,&actor),|c|c.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;match status{Some(s)=>safe_status(inner,&actor,s),None=>Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"nodeRefs":[],"resourceRefs":[],"commitAllowed":false,"result":null}))}}).await?))
+    Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;anchor_access(inner,&actor,&req.resource)?;let status=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|c|c.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;match status{Some(s)=>safe_status(inner,&actor,s),None=>Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"nodeRefs":[],"resourceRefs":[],"commitAllowed":false,"result":null}))}}).await?))
 }
 async fn settle(
     State(state): State<HostedState>,
@@ -1215,7 +1229,7 @@ async fn settle(
             anchor_access(inner, &actor, &req.resource)?;
             let s = inner
                 .core
-                .with_actor(&scope(inner, &actor), |c| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c| {
                     c.actor_feature_settle(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?;
@@ -1236,7 +1250,7 @@ async fn commit(
             let actor_scope = scope(inner, &actor);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_status(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -1254,7 +1268,7 @@ async fn commit(
             }
             let s = inner
                 .core
-                .with_actor(&actor_scope, |c| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
                     c.actor_feature_commit_with_losses(
                         &req.resource,
                         &req.operation_id,
@@ -1271,14 +1285,14 @@ async fn commit(
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{
         let actor=inner.actor(&auth)?;let rights=rights(inner,&actor)?.clone();let mut sources=vec![];let mut slots=vec![];let mut templates=vec![];let mut partial=false;
-        for(id,r)in &rights.sources {let file=&inner.config.files[id];let ready=owner(inner,id).is_ok();partial|=!ready;
+        for(id,r)in &rights.sources {let file=&inner.file(id)?;let ready=owner(inner,id).is_ok();partial|=!ready;
             let actions=KINDS.iter().filter(|k|r.allows(k)&&(!matches!(**k,"copy"|"template")||(r.tree_read&&r.tree_export&&library::access(inner,&actor,"schema",false).is_ok()))).collect::<Vec<_>>();
             if !actions.is_empty(){sources.push(json!({"resource":id,"title":file.title,"actions":actions,"status":if ready{"ready"}else{"unavailable"}}));}}
         for(id,r)in &rights.destinations {if !r.create&&!r.receive{continue;}let slot=&inner.config.structure_slots[id];let parent=&inner.config.directories[&slot.parent];let ready=inner.core.qualified_query_scope_at(&inner.config.root,&inner.config.root.join(&parent.path),&parent.reference,"live").is_ok();partial|=!ready;
-            let mut row=json!({"resource":id,"title":inner.config.files[id].title,"name":slot.name,"parent":slot.parent,"parentTitle":parent.title,"create":r.create,"receive":r.receive,"status":if ready{"ready"}else{"unavailable"},"types":slot.types});
+            let mut row=json!({"resource":id,"title":inner.file(id)?.title,"name":slot.name,"parent":slot.parent,"parentTitle":parent.title,"create":r.create,"receive":r.receive,"status":if ready{"ready"}else{"unavailable"},"types":slot.types});
             if r.create&&!slot.types.is_empty(){match typed_catalog(inner,&actor,id){Ok(c)=>row["capture"]=c,Err(_)=>{row["captureStatus"]="unavailable".into();partial=true;}}}slots.push(row);}
         if rights.destinations.values().any(|d|d.create){templates.push(json!({"id":"native-note","title":"原生笔记","status":"ready","builtin":true,"parameters":[{"name":"title","kind":"markup","nullable":false,"required":true},{"name":"body","kind":"markup","nullable":false,"required":false,"default":""}]}));}
-        let configured=inner.config.structure_templates.clone();for(id,t)in &configured {if rights.sources.get(&t.source).is_some_and(|r|r.template&&r.tree_read&&r.tree_export)&&library::access(inner,&actor,"schema",false).is_ok(){match template_catalog(inner,&actor,id){Ok(t)=>templates.push(t),Err(_)=>{templates.push(json!({"id":id,"title":inner.config.files[&t.source].title,"source":t.source,"status":"unavailable","builtin":false}));partial=true;}}}}
+        let configured=inner.config.structure_templates.clone();for(id,t)in &configured {if rights.sources.get(&t.source).is_some_and(|r|r.template&&r.tree_read&&r.tree_export)&&library::access(inner,&actor,"schema",false).is_ok(){match template_catalog(inner,&actor,id){Ok(t)=>templates.push(t),Err(_)=>{templates.push(json!({"id":id,"title":inner.file(&t.source)?.title,"source":t.source,"status":"unavailable","builtin":false}));partial=true;}}}}
         Ok(json!({"scope":"configuredAuthorizedStructure","coverage":if partial{"partial"}else{"complete"},"sources":sources,"slots":slots,"templates":templates}))
     }).await?))
 }
@@ -1792,5 +1806,144 @@ mod tests {
                 .unwrap()
                 .contains("TemplateLiteral")
         );
+    }
+    #[test]
+    fn imported_members_need_explicit_structure_rights_and_keep_original_trash_status() {
+        let (_temp, state, auth) = fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        inner.config.content_import_slots.insert(
+            "Native".into(),
+            content_import::Slot {
+                parent: "root".into(),
+                name: "Native".into(),
+                title: "Approved import".into(),
+                inputs: vec![],
+            },
+        );
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .content_imports
+            .insert(
+                "Native".into(),
+                content_import::Rights {
+                    members: super::super::Rights {
+                        read: true,
+                        write: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+        let bytes = inner.core.capture_native_export(&root).unwrap().bytes;
+        let import_id = id();
+        let import_scope = format!("{}:content-import", inner.actor_scope("alice"));
+        let p = inner
+            .core
+            .with_actor_for_root(&import_scope, &root, |c| {
+                c.actor_feature_prepare_content_import(
+                    "Native",
+                    &import_id,
+                    &digest(b"original-import"),
+                    OperationRequest {
+                        operation_id: import_id.clone(),
+                        root: root.to_string_lossy().into_owned(),
+                        intent: OperationIntent::ImportNative {
+                            parent: root.to_string_lossy().into_owned(),
+                            name: "Native".into(),
+                            bytes,
+                            allow_losses: true,
+                        },
+                    },
+                    json!({}),
+                    &[],
+                    "Native",
+                )
+            })
+            .unwrap();
+        inner
+            .core
+            .with_actor_for_root(&import_scope, &root, |c| {
+                c.actor_feature_commit_with_losses(
+                    "Native",
+                    &import_id,
+                    p.plan_id.as_deref().unwrap(),
+                    true,
+                )
+            })
+            .unwrap();
+        let member = content_import::slot_member_ids(&inner, "Native")
+            .unwrap()
+            .remove(0);
+        let trash = request("trash", Some(&member), None);
+        assert_eq!(
+            prepare_inner(&mut inner, &auth, trash.clone())
+                .unwrap_err()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .structure
+            .sources
+            .insert(
+                "Native/*".into(),
+                SourceRights {
+                    trash: true,
+                    ..Default::default()
+                },
+            );
+        assert!(valid_rights(
+            &inner.config,
+            &inner.policy.users["alice"].structure
+        ));
+        let expanded = rights(&inner, "alice").unwrap();
+        assert!(expanded.sources[&member].trash);
+        assert!(!expanded.sources[&member].copy);
+        assert!(!expanded.sources[&member].tree_read);
+        assert!(!expanded.sources[&member].tree_export);
+        let unknown = format!("Native/{}", id());
+        assert_eq!(
+            prepare_inner(&mut inner, &auth, request("trash", Some(&unknown), None))
+                .unwrap_err()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        let prepared = prepare_inner(&mut inner, &auth, trash.clone()).unwrap();
+        let actor_scope = scope(&inner, "alice");
+        let committed = inner
+            .core
+            .with_actor_for_root(&actor_scope, &root, |c| {
+                c.actor_feature_commit_with_losses(
+                    &member,
+                    &trash.operation_id,
+                    prepared["planId"].as_str().unwrap(),
+                    true,
+                )
+            })
+            .unwrap();
+        assert_eq!(
+            safe_status(&mut inner, "alice", committed).unwrap()["status"],
+            "committed"
+        );
+        assert!(owner(&inner, &member).is_err());
+        assert!(prepare_inner(&mut inner, &auth, request("trash", Some(&member), None)).is_err());
+        let original = inner
+            .core
+            .with_actor_for_root(&actor_scope, &root, |c| {
+                c.actor_feature_status(&member, &trash.operation_id)
+            })
+            .unwrap()
+            .unwrap();
+        let replay = safe_status(&mut inner, "alice", original).unwrap();
+        assert_eq!(replay["status"], "committed");
+        assert_eq!(replay["preview"]["kind"], "trash");
+        assert_eq!(replay["result"]["status"], "trash");
     }
 }

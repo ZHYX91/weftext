@@ -87,11 +87,9 @@ fn access(inner: &HostedInner, actor: &str, resource: &str) -> Result<FileEntry,
         return Err(unavailable());
     }
     inner
-        .config
-        .files
-        .get(resource)
+        .file(resource)
+        .ok()
         .filter(|f| f.editable && f.importable)
-        .cloned()
         .ok_or_else(unavailable)
 }
 
@@ -183,13 +181,13 @@ async fn prepare(
         if bytes.is_empty()||bytes.len()>MAX_UPLOAD {return Err(ApiError::bad("DOCX 原件须为 1 字节至 16 MiB"));}
         let upload_digest=digest(&bytes);let fingerprint=digest(&serde_json::to_vec(&json!({"resource":req.resource,"uploadDigest":upload_digest})).map_err(|_|changed())?);
         let actor_scope=scope(inner,&actor);
-        if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&file,old);}
+        if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&file,old);}
         let (parent,name,target)=slot(inner,&file)?;
         if !available(&target) {return Err(changed());}
         let decision=Decision {actor_epoch:inner.actor_generation(&actor),expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&file)?,upload_digest};
         let preview=json!({"summary":"在所选空槽位导入可编辑正文，并保留 DOCX 原件、批注和图片；转换损失须明确接受。","_officeImport":decision});
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent:OperationIntent::ImportDocx {parent:parent.to_string_lossy().into_owned(),name,bytes,allow_losses:true}};
-        let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare(&req.resource,&req.operation_id,&fingerprint,request,preview,&[])).map_err(core_error)?;
+        let status=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_prepare(&req.resource,&req.operation_id,&fingerprint,request,preview,&[])).map_err(core_error)?;
         safe_status(inner,&actor,&file,status)
     }).await?))
 }
@@ -200,7 +198,7 @@ async fn operation(
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let file=access(inner,&actor,&req.resource)?;
-        let status=inner.core.with_actor(&scope(inner,&actor),|core|core.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;
+        let status=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|core|core.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;
         match status {Some(status)=>safe_status(inner,&actor,&file,status),None=>Ok(json!({"operationId":req.operation_id,"resource":req.resource,"status":"notRegistered","planId":null,"preview":{},"commitAllowed":false}))}
     }).await?))
 }
@@ -216,7 +214,7 @@ async fn commit(
             let actor_scope = scope(inner, &actor);
             let old = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_status(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?
@@ -239,7 +237,7 @@ async fn commit(
             }
             let status = inner
                 .core
-                .with_actor(&actor_scope, |core| {
+                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
                     core.actor_feature_commit_with_losses(
                         &req.resource,
                         &req.operation_id,
@@ -264,7 +262,7 @@ async fn settle(
             let file = access(inner, &actor, &req.resource)?;
             let status = inner
                 .core
-                .with_actor(&scope(inner, &actor), |core| {
+                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
                     core.actor_feature_settle(&req.resource, &req.operation_id)
                 })
                 .map_err(core_error)?;
