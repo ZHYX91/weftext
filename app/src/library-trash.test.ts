@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LibraryTrashRestoreFlow } from "./library-trash";
+import { LibraryTrashRestoreFlow, trashRestoreDraft } from "./library-trash";
 import type { LibraryTrashHost, RestoreRequest } from "./library-trash";
 import type { OpenedDocument } from "./types";
 
@@ -104,4 +104,109 @@ test("recoveryPending retains the confirmed original restore and only permits st
   await flow.prepare("D:/notes", entry, "D:/notes", "A"); await assert.rejects(flow.confirmAndCommit()); await flow.reconcile();
   assert.equal(flow.pending?.confirmed, true); assert.equal(flow.pending?.state, "unknown"); assert.equal(commits, 1);
   await assert.rejects(flow.prepare("D:/notes", entry, "D:/notes", "A"));
+});
+
+test("two roots from one retired operation keep independent restore drafts across refresh and reorder", () => {
+  const entries = [
+    { operationId: "clone-retired", nodeId: "root-a", name: "Same", path: "trash/A" },
+    { operationId: "clone-retired", nodeId: "root-b", name: "Same", path: "trash/B" },
+  ];
+  const drafts = new Map<string, { name: string; parent: string }>();
+  const a = trashRestoreDraft(drafts, "D:/notes", entries[0]);
+  a.name = "Restore first"; a.parent = "D:/notes/First destination";
+  const b = trashRestoreDraft(drafts, "D:/notes", entries[1]);
+  assert.deepEqual(b, { name: "Same", parent: "D:/notes" });
+  b.name = "Restore second"; b.parent = "D:/notes/Second destination";
+  // New list objects and changed presentation cannot reassign either draft.
+  const refreshed = [...entries].reverse().map(value => ({ ...value, name: "Renamed in list", path: "another display path" }));
+  assert.deepEqual(refreshed.map(value => trashRestoreDraft(drafts, "D:/notes", value)), [
+    { name: "Restore second", parent: "D:/notes/Second destination" },
+    { name: "Restore first", parent: "D:/notes/First destination" },
+  ]);
+  assert.deepEqual(trashRestoreDraft(drafts, "D:/other", entries[0]), { name: "Same", parent: "D:/other" });
+});
+
+test("each root of the same retired operation prepares only its selected identity and independent destination", async () => {
+  const entries = [
+    { operationId: "clone-retired", nodeId: "root-a", name: "Same" },
+    { operationId: "clone-retired", nodeId: "root-b", name: "Same" },
+  ];
+  const requests: RestoreRequest[] = [];
+  let ids = 0;
+  const flow = new LibraryTrashRestoreFlow(harness(async <T>(route: string, body?: unknown): Promise<T> => {
+    assert.equal(route, "/api/operations/prepare");
+    const request = body as RestoreRequest; requests.push(request);
+    return { ...plan, operationId: request.operationId, planId: `plan-${request.operationId}` } as T;
+  }), () => `restore-${++ids}`);
+  await flow.prepare("D:/notes", entries[1], "D:/notes/B", "Second");
+  flow.cancelPrepared();
+  await flow.prepare("D:/notes", entries[0], "D:/notes/A", "First");
+  assert.deepEqual(requests, [
+    { operationId: "restore-1", root: "D:/notes", intent: { kind: "restoreNode", trashOperationId: "clone-retired", nodeId: "root-b", parent: "D:/notes/B", name: "Second" } },
+    { operationId: "restore-2", root: "D:/notes", intent: { kind: "restoreNode", trashOperationId: "clone-retired", nodeId: "root-a", parent: "D:/notes/A", name: "First" } },
+  ]);
+});
+
+test("unknown multi-root restore retains its exact selected root through status and explicit same-plan retry", async () => {
+  const selected = { operationId: "clone-retired", nodeId: "root-b", name: "Same" };
+  const requests: { route: string; body: unknown }[] = [];
+  let ids = 0, commits = 0, delivered = 0;
+  const restored = { ...document, nodeId: "root-b" };
+  const flow = new LibraryTrashRestoreFlow(harness(async <T>(route: string, body?: unknown): Promise<T> => {
+    requests.push({ route, body });
+    if (route.endsWith("prepare")) return plan as T;
+    if (route.endsWith("commit")) {
+      if (++commits === 1) throw new Error("原提交响应丢失");
+      return { ...plan, status: "committed", document: restored } as T;
+    }
+    return plan as T;
+  }, async opened => { assert.equal(opened.nodeId, "root-b"); delivered++; }), () => { ids++; return "restore-once"; });
+  await flow.prepare("D:/notes", selected, "D:/notes/B", "Second");
+  const original = flow.pending!.request;
+  selected.nodeId = "root-a"; selected.name = "Fresh list changed";
+  await assert.rejects(flow.confirmAndCommit());
+  await assert.rejects(flow.prepare("D:/notes", selected, "D:/notes/A", "First"));
+  await flow.reconcile();
+  assert.equal(commits, 1); assert.equal(flow.pending?.confirmed, true);
+  assert.equal(flow.pending?.request, original); assert.equal(original.intent.nodeId, "root-b");
+  assert.equal(Object.isFrozen(original.intent), true);
+  await flow.confirmAndCommit();
+  assert.equal(ids, 1); assert.equal(commits, 2); assert.equal(delivered, 1);
+  assert.deepEqual(requests.filter(call => call.route.endsWith("commit")).map(call => call.body), [
+    { operationId: "restore-once", planId: "frozen" }, { operationId: "restore-once", planId: "frozen" },
+  ]);
+  assert.equal(requests.filter(call => call.route.endsWith("prepare")).length, 1);
+});
+
+test("a successful receipt for another root is retained for inspection and never opens that root", async () => {
+  let deliveries = 0, commits = 0;
+  const flow = new LibraryTrashRestoreFlow(harness(async <T>(route: string): Promise<T> => {
+    if (route.endsWith("prepare")) return plan as T;
+    if (route.endsWith("commit")) { commits++; return { ...plan, status: "committed", document: { ...document, nodeId: "root-a" } } as T; }
+    return { ...plan, status: "committed", document: { ...document, nodeId: "root-b" } } as T;
+  }, async opened => { assert.equal(opened.nodeId, "root-b"); deliveries++; }), () => "restore-once");
+  await flow.prepare("D:/notes", { operationId: "clone-retired", nodeId: "root-b", name: "Same" }, "D:/notes/B", "Second");
+  await flow.confirmAndCommit();
+  assert.equal(flow.pending?.state, "committed"); assert.equal(flow.pending?.delivered, false); assert.equal(deliveries, 0);
+  await flow.reconcile();
+  assert.equal(flow.pending?.delivered, true); assert.equal(deliveries, 1); assert.equal(commits, 1);
+});
+
+test("an ambiguous or mismatched retired selection is rejected without guessing another root", async () => {
+  for (const code of ["trashSelectionRequired", "trashSelectionMismatch"]) {
+    const requests: RestoreRequest[] = []; let ids = 0;
+    const flow = new LibraryTrashRestoreFlow(harness(async <T>(route: string, body?: unknown): Promise<T> => {
+      assert.equal(route, "/api/operations/prepare");
+      const request = body as RestoreRequest; requests.push(request);
+      if (requests.length === 1) throw Object.assign(new Error("请选择准确回收根"), { code });
+      return { ...plan, operationId: request.operationId, planId: `plan-${request.operationId}` } as T;
+    }), () => `restore-${++ids}`);
+    const original = { operationId: "clone-retired", name: "Same", ...(code === "trashSelectionMismatch" ? { nodeId: "another-root" } : {}) };
+    await assert.rejects(flow.prepare("D:/notes", original, "D:/notes", "Same"));
+    assert.equal(flow.pending?.state, "failed"); assert.equal(requests.length, 1);
+    assert.equal(flow.pending?.request.intent.nodeId, original.nodeId);
+    if (code === "trashSelectionRequired") assert.equal(Object.hasOwn(requests[0].intent, "nodeId"), false);
+    await flow.prepare("D:/notes", { operationId: "clone-retired", nodeId: "root-b", name: "Same" }, "D:/notes/B", "Selected");
+    assert.equal(requests.length, 2); assert.equal(requests[1].intent.nodeId, "root-b");
+  }
 });

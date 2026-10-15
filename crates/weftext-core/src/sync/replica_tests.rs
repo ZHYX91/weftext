@@ -207,6 +207,7 @@ fn rename_parent_keeps_child_save_location_and_trash_restore_retains_original_co
         &root,
         OperationIntent::RestoreNode {
             trash_operation_id: trash.operation_id,
+            node_id: None,
             parent: display(&root),
             name: "Restored".into(),
         },

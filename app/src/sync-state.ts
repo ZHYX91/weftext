@@ -19,6 +19,7 @@ export interface SyncAdoptionCut {
   identity: SyncIdentity;
   expectedInstalled: { object: ObjectKey; revisions: string[] }[];
   changes: { path: string; baseId: string; before: number[]; after: number[] }[];
+  removedMembers?: { path: string; baseId: string }[];
 }
 export interface SyncDependency { object: ObjectKey; revisions: string[] }
 export interface SyncRevalidation {
@@ -32,9 +33,9 @@ export interface SyncRevalidationCut {
   coverage: string;
 }
 export interface SyncAnnotationTargetStatus { owner: { workspaceId: string; nodeId: string }; annotationId: string; state: string; reason: string }
-export interface SyncRevalidationReview { expectedInstalled: SyncDependency[]; reviewedVersions: SyncDependency[]; resolutions: SyncRevalidation[]; annotationTargets: SyncAnnotationTargetStatus[] }
-export interface SyncRevalidationInput { root: string; identity: SyncIdentity; resolutions: SyncRevalidation[]; blobs: Record<string, number[]> }
-export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } | ({ kind: "adoptSyncExternal" } & SyncAdoptionCut) | ({ kind: "revalidateSync"; identity: SyncIdentity; blobs: Record<string, number[]> } & Omit<SyncRevalidationReview, "annotationTargets">) }
+export interface SyncRevalidationReview { operationId?: string; expectedInstalled: SyncDependency[]; reviewedVersions: SyncDependency[]; resolutions: SyncRevalidation[]; annotationTargets: SyncAnnotationTargetStatus[] }
+export interface SyncRevalidationInput { operationId?: string; root: string; identity: SyncIdentity; resolutions: SyncRevalidation[]; blobs: Record<string, number[]> }
+export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } | ({ kind: "adoptSyncExternal" } & SyncAdoptionCut) | ({ kind: "revalidateSync"; identity: SyncIdentity; blobs: Record<string, number[]> } & Omit<SyncRevalidationReview, "operationId" | "annotationTargets">) }
 export interface SyncPlan { operationId: string; planId: string; status: string; changes: { path: string; action: string; bytes: number }[]; losses: { message: string }[] }
 export interface SyncPending { request: SyncRequest; plan?: SyncPlan; attempted: boolean; status: string }
 export interface SyncFlowHost {
@@ -42,6 +43,12 @@ export interface SyncFlowHost {
   store(pending: SyncPending | null): void;
 }
 export const objectKey = (key: ObjectKey): string => `${key.kind}:${key.id ?? ""}`;
+
+export function freezeSyncAdoptionRequest(root: string, identity: SyncIdentity, cut: SyncAdoptionCut, operationId: string): SyncRequest {
+  if (!sameSyncIdentity(cut.identity, identity)) throw new Error("采纳依据属于另一资料库；未准备操作。");
+  return structuredClone({ operationId, root, intent: { kind: "adoptSyncExternal", identity: cut.identity, expectedInstalled: cut.expectedInstalled, changes: cut.changes,
+    ...(cut.removedMembers === undefined ? {} : { removedMembers: cut.removedMembers }) } });
+}
 
 /** The durable request is stored before its first network effect. Status reads
  * never execute; a lost prepare can only retry the exact original request. */
@@ -58,10 +65,10 @@ export class SyncFlow {
       this.pending = { request: result.request, plan: result.plan, status: result.plan.status, attempted: true }; this.retain();
     } finally { this.busy = false; }
   }
-  async prepare(request: SyncRequest): Promise<void> {
+  async prepare(request: SyncRequest, onRetained?: () => void): Promise<void> {
     if (this.busy || this.pending) throw new Error("请先检查或结束原同步操作。");
     this.pending = { request: structuredClone(request), attempted: false, status: "preparing" };
-    this.retain(); await this.retryPrepare();
+    this.retain(); onRetained?.(); await this.retryPrepare();
   }
   async retryPrepare(): Promise<void> {
     const pending = this.pending;

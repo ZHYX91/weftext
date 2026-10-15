@@ -4,22 +4,32 @@ use crate::backend::MultiNamespaceGuard;
 use crate::journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use crate::transaction_recovery::RecoveryCapture;
 
+#[path = "compound_placement.rs"]
+mod placement;
+#[path = "compound_raw.rs"]
+mod raw;
+#[path = "compound_retirement.rs"]
+mod retirement;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum StepPhase {
     Before,
     LeafRenamed,
+    Parked,
     After,
 }
 pub(crate) struct CompoundCapture {
     namespace: MultiNamespaceGuard,
     phases: Vec<StepPhase>,
     directory_keys: BTreeMap<String, PathBuf>,
+    retirement_guards: Vec<ParentGuard>,
 }
 
 fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
     match &t.mutation {
         Mutation::Compound { relocations, .. }
-            if !relocations.is_empty() && relocations.len() <= MAX_OPERATION_FILES =>
+            if (!relocations.is_empty() || !t.retired_members().is_empty())
+                && relocations.len() <= MAX_OPERATION_FILES =>
         {
             Ok(relocations)
         }
@@ -28,6 +38,24 @@ fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
             "Compound requires bounded independent original placements",
         )),
     }
+}
+/// Coordinates from the original frozen namespace phases only. Consumers must
+/// independently retain the returned directory and compare its original FI.
+pub(crate) fn compound_membership_positions(
+    t: &FrozenOperation,
+) -> Result<BTreeMap<String, PathBuf>> {
+    let steps = steps(t)?;
+    let phases = placement::phases(steps)?;
+    Ok(steps
+        .iter()
+        .zip(phases)
+        .map(|(step, phase)| {
+            (
+                step.source.clone(),
+                placement::coordinate(step, phase).to_path_buf(),
+            )
+        })
+        .collect())
 }
 fn creation_directories(t: &FrozenOperation) -> &[String] {
     match &t.mutation {
@@ -39,12 +67,17 @@ fn creation_directories(t: &FrozenOperation) -> &[String] {
     }
 }
 pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
+    placement::validate(t)?;
+    retirement::validate(t)?;
     // Component ordering puts a path immediately before its descendants, so a
     // file can never secretly become the parent of a later output. Exact update
     // paths coalesce; distinct Windows-equivalent namespace slots do not.
     let mut slots = BTreeMap::<PathBuf, bool>::new();
     for file in t.relocated_files() {
         slots.insert(PathBuf::from(file.path), false);
+    }
+    for retired in t.retired_members() {
+        slots.insert(PathBuf::from(&retired.target), false);
     }
     for directory in &t.directories {
         let path = PathBuf::from(t.relocated_path(&directory.path));
@@ -92,19 +125,22 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
     Ok(())
 }
 fn physical_path(t: &FrozenOperation, path: &str, phases: &[StepPhase]) -> PathBuf {
-    t.relocations()
+    let Mutation::Compound { relocations, .. } = &t.mutation else {
+        return PathBuf::from(path);
+    };
+    relocations
         .iter()
         .zip(phases)
-        .find_map(|(step, phase)| {
-            relative(path, step.target).map(|relative| {
-                Path::new(if *phase == StepPhase::After {
-                    step.target
-                } else {
-                    step.source
-                })
-                .join(relative)
+        .filter_map(|(step, phase)| {
+            relative(path, &step.target).map(|relative| {
+                (
+                    Path::new(&step.target).components().count(),
+                    placement::coordinate(step, *phase).join(relative),
+                )
             })
         })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, path)| path)
         .unwrap_or_else(|| PathBuf::from(path))
 }
 fn directory_keys(t: &FrozenOperation, phases: &[StepPhase]) -> BTreeMap<String, PathBuf> {
@@ -189,6 +225,19 @@ fn verify_created_membership(
                 );
             }
         }
+        for retired in t
+            .retired_members()
+            .iter()
+            .filter(|retired| Path::new(&retired.target).parent() == Some(Path::new(path)))
+        {
+            allowed.insert(
+                Path::new(&retired.target)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
         if entries
             .iter()
             .any(|(name, _)| !allowed.contains(name.to_string_lossy().as_ref()))
@@ -266,10 +315,14 @@ fn phase(step: &RelocationStep) -> Result<StepPhase> {
     }
 }
 fn source_relative(
+    t: &FrozenOperation,
     file: &CapturedFile,
     step: &RelocationStep,
     phase: StepPhase,
 ) -> Option<PathBuf> {
+    if !placement::owns(t, &file.path, step) {
+        return None;
+    }
     let path = relative(&file.path, &step.source)?;
     Some(
         if phase != StepPhase::Before && path == Path::new(&step.old_leaf) {
@@ -294,14 +347,46 @@ fn check_membership(
     step: &RelocationStep,
     phase: StepPhase,
     include_creations: bool,
+    raw_budget: &mut raw::Budget,
 ) -> Result<()> {
+    let mut additions = Vec::new();
     for directory in &t.directories {
+        if !placement::owns(t, &directory.path, step) {
+            continue;
+        }
         let Some(path) = relative(&directory.path, &step.source) else {
             continue;
         };
         let (identity, mut entries, complete) =
             namespace.source_directory_snapshot(&path, MAX_OPERATION_FILES)?;
         let mut expected = directory.entries.clone();
+        for retired in t.retired_members().iter().filter(|retired| {
+            Path::new(&retired.source).parent() == Some(Path::new(&directory.path))
+        }) {
+            let name = Path::new(&retired.source).file_name().unwrap();
+            let prefix = format!("{}:", name.to_string_lossy());
+            expected.retain(|entry| !entry.starts_with(&prefix));
+            entries.retain(|(entry, _)| entry != name);
+        }
+        for child in steps(t)?.iter().filter(|child| {
+            child.source != step.source
+                && Path::new(&child.source).parent() == Some(Path::new(&directory.path))
+        }) {
+            let name = Path::new(&child.source).file_name().unwrap();
+            let prefix = format!("{}:", name.to_string_lossy());
+            expected.retain(|entry| !entry.starts_with(&prefix));
+            entries.retain(|(entry, _)| entry != name);
+        }
+        let final_directory = Path::new(&step.target).join(&path);
+        for child in steps(t)?.iter().filter(|child| {
+            child.source != step.source
+                && Path::new(&child.target).parent() == Some(final_directory.as_path())
+        }) {
+            let name = Path::new(&child.target).file_name().unwrap();
+            let prefix = format!("{}:", name.to_string_lossy());
+            expected.retain(|entry| !entry.starts_with(&prefix));
+            entries.retain(|(entry, _)| entry != name);
+        }
         if phase != StepPhase::Before
             && path.as_os_str().is_empty()
             && step.old_leaf != step.new_leaf
@@ -338,17 +423,29 @@ fn check_membership(
                 entries.retain(|(actual, _)| actual != name);
             }
         }
+        let actual = sorted_entries(entries.clone(), Path::new(&directory.path));
         if !complete
             || identity != directory.identity
-            || sorted_entries(entries, Path::new(&directory.path)) != expected
+            || expected
+                .iter()
+                .any(|entry| actual.binary_search(entry).is_err())
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Compound directory identity or complete membership changed",
+                "An original Compound directory identity or captured member changed",
             ));
         }
+        for (name, attributes) in entries {
+            if expected
+                .binary_search(&format!("{}:{attributes}", name.to_string_lossy()))
+                .is_err()
+            {
+                raw_budget.reserve(1)?;
+                additions.push((path.clone(), name, attributes));
+            }
+        }
     }
-    Ok(())
+    raw::validate_additions(namespace, additions, raw_budget)
 }
 fn check_step_identity(
     core: &Core,
@@ -357,15 +454,39 @@ fn check_step_identity(
     index: usize,
     step: &RelocationStep,
     phase: StepPhase,
+    phases: &[StepPhase],
 ) -> Result<()> {
+    let t = plan.transaction.as_ref().unwrap();
     let parent = union.source_parent_identity(index)?;
+    let parking_parent = if let Some(parking) = &step.parking {
+        if placement::forest(steps(t)?) {
+            Some(
+                t.write_parents
+                    .iter()
+                    .find(|(path, _)| locator_equal(path, parking))
+                    .ok_or_else(|| {
+                        CoreError::new("invalidPlan", "Original parking parent evidence is missing")
+                    })?
+                    .1
+                    .clone(),
+            )
+        } else {
+            Some(step.source_parent_identity.clone())
+        }
+    } else {
+        None
+    };
+    let expected_current_parent = match phase {
+        StepPhase::After => expected_parent(core, plan, step)?,
+        StepPhase::Parked => parking_parent.clone(),
+        _ => Some(step.source_parent_identity.clone()),
+    };
     let expected = expected_parent(core, plan, step)?;
     let target_parent = union.target_parent_identity(index)?;
     let namespace = union.select(index)?;
     if namespace.source_identity()? != step.source_identity
         || target_parent != expected
-        || (phase == StepPhase::After && expected.as_ref() != Some(&parent))
-        || (phase != StepPhase::After && parent != step.source_parent_identity)
+        || expected_current_parent.as_ref() != Some(&parent)
     {
         return Err(CoreError::new(
             "thirdState",
@@ -374,11 +495,28 @@ fn check_step_identity(
     }
     // Both address slots are part of the same namespace closure. Equal bytes
     // elsewhere never license a second object occupying the vacated slot.
-    ensure_absent(Path::new(if phase == StepPhase::After {
-        &step.source
-    } else {
-        &step.target
-    }))?;
+    if step.parking.is_none() {
+        ensure_absent(Path::new(if phase == StepPhase::After {
+            &step.source
+        } else {
+            &step.target
+        }))?;
+    } else if union
+        .directory_identity(&placement::source_parent_path(steps(t)?, phases, step))?
+        .as_ref()
+        != Some(&step.source_parent_identity)
+        || step.parking.as_ref().is_some_and(|parking| {
+            union
+                .directory_identity(Path::new(parking).parent().unwrap())
+                .map(|actual| actual != parking_parent)
+                .unwrap_or(true)
+        })
+    {
+        return Err(CoreError::new(
+            "thirdState",
+            "The original parking parent was replaced",
+        ));
+    }
     Ok(())
 }
 fn open_tree(
@@ -386,16 +524,39 @@ fn open_tree(
     t: &FrozenOperation,
     step: &RelocationStep,
     phase: StepPhase,
+    raw_budget: &mut raw::Budget,
 ) -> Result<Vec<(usize, File)>> {
-    check_membership(namespace, t, step, phase, phase == StepPhase::After)?;
+    check_membership(
+        namespace,
+        t,
+        step,
+        phase,
+        phase != StepPhase::Before,
+        raw_budget,
+    )?;
     let mut handles = Vec::new();
     for (index, file) in t.files.iter().enumerate() {
-        let Some(path) = source_relative(file, step, phase) else {
+        let Some(path) = source_relative(t, file, step, phase) else {
             continue;
         };
         let write =
             update(t, file).is_some_and(|change| change.before.as_ref() != Some(&change.after));
-        let mut handle = namespace.open_source_output(&path, write, false)?;
+        let mut handle = if t.is_retired_member(&file.path) {
+            namespace.open_source_retiring(&path, true)?
+        } else {
+            namespace.open_source_output(&path, write, false)?
+        };
+        if let Some(retired) = t
+            .retired_members()
+            .iter()
+            .find(|retired| locator_equal(&retired.source, &file.path))
+            && crate::backend::attributes(&handle)? != retired.attributes
+        {
+            return Err(CoreError::new(
+                "conflict",
+                "Retired member attributes changed",
+            ));
+        }
         if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",
@@ -405,6 +566,10 @@ fn open_tree(
         handles.push((index, handle));
     }
     for entry in &step.members {
+        let original_path = display(&Path::new(&step.source).join(&entry.relative_path));
+        if !placement::owns(t, &original_path, step) {
+            continue;
+        }
         let captured = t
             .files
             .iter()
@@ -429,6 +594,55 @@ fn open_tree(
     }
     Ok(handles)
 }
+
+fn move_final(
+    core: &Core,
+    plan: &Plan,
+    union: &mut MultiNamespaceGuard,
+    index: usize,
+    step: &RelocationStep,
+) -> Result<()> {
+    union.retain_target_parent(index)?;
+    if union.target_parent_identity(index)? != expected_parent(core, plan, step)? {
+        return Err(CoreError::new(
+            "thirdState",
+            "Original final parent changed before placement",
+        ));
+    }
+    let name = Path::new(&step.target)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+    union.select(index)?.move_source(name)
+}
+
+fn rename_original_leaf(
+    namespace: &NamespaceGuard,
+    t: &FrozenOperation,
+    step: &RelocationStep,
+) -> Result<()> {
+    let mut leaf = namespace.open_source_file(&step.old_leaf, step.old_leaf != step.new_leaf)?;
+    let original = t
+        .files
+        .iter()
+        .find(|file| {
+            locator_equal(
+                &file.path,
+                &display(&Path::new(&step.source).join(&step.old_leaf)),
+            )
+        })
+        .ok_or_else(|| CoreError::new("invalidPlan", "Compound canonical before image missing"))?;
+    if stamp(&leaf)? != original.stamp || read_blob(&mut leaf)? != original.bytes {
+        return Err(CoreError::new(
+            "recoveryPending",
+            "Original canonical input changed before its namespace step",
+        ));
+    }
+    if step.old_leaf != step.new_leaf {
+        namespace.rename_leaf(&leaf, &step.new_leaf)?;
+    }
+    Ok(())
+}
 fn verify_creation_absence(
     namespace: &mut NamespaceGuard,
     t: &FrozenOperation,
@@ -452,11 +666,9 @@ fn verify_creation_absence(
         ..
     } = &t.mutation
     {
-        for change in updates
-            .iter()
-            .chain(created_files)
-            .filter(|change| change.before.is_none())
-        {
+        for change in updates.iter().chain(created_files).filter(|change| {
+            change.before.is_none() && placement::owns_final(t, &change.path, step)
+        }) {
             if let Some(path) = relative(&change.path, &step.target) {
                 match namespace.open_source_descendant(&path) {
                     Err(error) if error.code == "missing" => {}
@@ -475,12 +687,52 @@ fn verify_creation_absence(
 }
 
 impl Core {
+    /// Read-only validation for consumers of this same retained Compound Plan.
+    /// Raw additions are handled by the identical original namespace validator
+    /// used by execution and recovery, without treating them as product inputs.
+    pub(crate) fn validate_compound_captured_membership(&self, plan: &Plan) -> Result<()> {
+        let t = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                "The original Compound transaction is missing",
+            )
+        })?;
+        validate_compound_namespace(t)?;
+        let relocations = steps(t)?;
+        let phases = placement::phases(relocations)?;
+        let keys = directory_keys(t, &phases);
+        let mut union = placement::acquire(relocations, &phases, &keys)?;
+        placement::verify_vacancies(relocations, &phases)?;
+        drop(retirement::capture(self, plan, &mut union, &phases, false)?);
+        let mut raw_budget = raw::Budget::new(t)?;
+        for (index, step) in relocations.iter().enumerate() {
+            check_step_identity(self, plan, &mut union, index, step, phases[index], &phases)?;
+            check_membership(
+                union.select(index)?,
+                t,
+                step,
+                phases[index],
+                true,
+                &mut raw_budget,
+            )?;
+        }
+        raw_budget.validate(self, t)
+    }
+
     pub(crate) fn validate_compound_pending(&self, plan: &Plan) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let relocations = steps(t)?;
         let mut roots = relocations
             .iter()
-            .flat_map(|step| [PathBuf::from(&step.source), PathBuf::from(&step.target)])
+            .flat_map(|step| {
+                [
+                    Some(PathBuf::from(&step.source)),
+                    Some(PathBuf::from(&step.target)),
+                    step.parking.as_ref().map(PathBuf::from),
+                ]
+                .into_iter()
+                .flatten()
+            })
             .collect::<Vec<_>>();
         roots.extend(creation_directories(t).iter().map(PathBuf::from));
         let except = Some(plan.operation_id.as_str());
@@ -562,8 +814,17 @@ impl Core {
                     }
                     Mutation::Compound {
                         created_directories,
+                        relocations,
                         ..
-                    } => paths.extend(created_directories.iter().map(PathBuf::from)),
+                    } => {
+                        paths.extend(created_directories.iter().map(PathBuf::from));
+                        paths.extend(
+                            relocations
+                                .iter()
+                                .filter_map(|step| step.parking.as_ref())
+                                .map(PathBuf::from),
+                        );
+                    }
                     Mutation::Relocate { .. } => {}
                 }
             } else {
@@ -648,20 +909,29 @@ impl Core {
         let relocations = steps(t)?;
         validate_compound_namespace(t)?;
         self.validate_compound_pending(plan)?;
+        let initial_phases = vec![StepPhase::Before; relocations.len()];
         for (index, step) in relocations.iter().enumerate() {
+            let original_parent = placement::target_parent_path(relocations, &initial_phases, step);
+            let moving_parent = crate::backend::namespace_path_compare(
+                &original_parent,
+                Path::new(&step.target).parent().unwrap(),
+            )? != std::cmp::Ordering::Equal;
             for (other, another) in relocations.iter().enumerate() {
-                let within = |path: &str, root: &str| {
-                    crate::backend::namespace_relative_path(Path::new(path), Path::new(root))
-                        .map(|relative| relative.is_some())
-                };
                 if index != other
-                    && (within(&step.source, &another.source)?
-                        || within(&step.target, &another.target)?)
-                    || crate::backend::namespace_relative_path(
-                        Path::new(&step.target).parent().unwrap(),
+                    && (crate::backend::namespace_path_compare(
+                        Path::new(&step.source),
                         Path::new(&another.source),
-                    )?
-                    .is_some()
+                    )? == std::cmp::Ordering::Equal
+                        || crate::backend::namespace_path_compare(
+                            Path::new(&step.target),
+                            Path::new(&another.target),
+                        )? == std::cmp::Ordering::Equal)
+                    || (!moving_parent
+                        && crate::backend::namespace_relative_path(
+                            Path::new(&step.target).parent().unwrap(),
+                            Path::new(&another.source),
+                        )?
+                        .is_some())
                 {
                     return Err(CoreError::new(
                         "invalidPlan",
@@ -672,32 +942,26 @@ impl Core {
         }
         for step in relocations {
             self.check_subtree_boundary(Path::new(&t.request.root), Path::new(&step.source))?;
-            if matches!(step.target_parent_identity, RelocationParent::Existing(_)) {
+            if matches!(step.target_parent_identity, RelocationParent::Existing(_))
+                && Path::new(&step.target).parent()
+                    != Some(Path::new(&t.request.root).join(".weftext-trash").as_path())
+            {
                 self.owned_parent(
                     Path::new(&t.request.root),
-                    Path::new(&step.target).parent().unwrap(),
+                    &placement::target_parent_path(relocations, &initial_phases, step),
                 )?;
             }
         }
-        let pairs = relocations
-            .iter()
-            .map(|step| {
-                (
-                    Path::new(&step.source),
-                    Path::new(&step.target).parent().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
-        let initial_phases = vec![StepPhase::Before; relocations.len()];
         let keys = directory_keys(t, &initial_phases);
-        let mut union = if keys.is_empty() {
-            MultiNamespaceGuard::acquire(&pairs)?
-        } else {
-            MultiNamespaceGuard::acquire_planned(
-                &pairs,
-                &keys.values().cloned().collect::<Vec<_>>(),
-            )?
-        };
+        let mut union = placement::acquire(relocations, &initial_phases, &keys)?;
+        placement::verify_vacancies(relocations, &initial_phases)?;
+        drop(retirement::capture(
+            self,
+            plan,
+            &mut union,
+            &initial_phases,
+            false,
+        )?);
         let mut outside_guards = Vec::new();
         let mut outside_handles = Vec::new();
         for (path, expected) in &t.write_parents {
@@ -722,12 +986,28 @@ impl Core {
             outside_guards.push(guard);
         }
         let mut tree_handles = Vec::new();
+        let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in relocations.iter().enumerate() {
-            check_step_identity(self, plan, &mut union, index, step, StepPhase::Before)?;
+            check_step_identity(
+                self,
+                plan,
+                &mut union,
+                index,
+                step,
+                StepPhase::Before,
+                &initial_phases,
+            )?;
             let namespace = union.select(index)?;
-            tree_handles.extend(open_tree(namespace, t, step, StepPhase::Before)?);
+            tree_handles.extend(open_tree(
+                namespace,
+                t,
+                step,
+                StepPhase::Before,
+                &mut raw_budget,
+            )?);
             verify_creation_absence(namespace, t, step)?;
         }
+        raw_budget.validate(self, t)?;
         for (index, file) in t.files.iter().enumerate().filter(|(_, file)| {
             !relocations
                 .iter()
@@ -737,7 +1017,9 @@ impl Core {
             let guard = ParentGuard::acquire(Path::new(&file.path))?;
             let write =
                 update(t, file).is_some_and(|change| change.before.as_ref() != Some(&change.after));
-            let mut handle = if !write
+            let mut handle = if t.is_retired_member(&file.path) {
+                guard.open_retiring_file(true)?
+            } else if !write
                 && operation_read_control(Path::new(&t.request.root), Path::new(&file.path))
             {
                 guard.open_read_guard_file()?
@@ -782,50 +1064,92 @@ impl Core {
         self.install_record(plan)?;
         compound_failpoint("installed")?;
         self.materialize_compound_directories(plan, &mut union, &keys)?;
-        for (index, step) in relocations.iter().enumerate() {
+        let mut current_phases = initial_phases.clone();
+        for index in placement::order(relocations, true) {
+            let step = &relocations[index];
+            if step.parking.is_none() {
+                continue;
+            }
+            placement::verify_vacancies(relocations, &current_phases)?;
+            tree_handles.retain(|(file, _)| !placement::owns(t, &t.files[*file].path, step));
+            union.release_source_descendants(index)?;
+            let namespace = union.select(index)?;
+            rename_original_leaf(namespace, t, step)?;
+            compound_failpoint(&format!("leaf{index}"))?;
+            union.move_source_to(index, Path::new(step.parking.as_ref().unwrap()))?;
+            current_phases[index] = StepPhase::Parked;
+            placement::verify_vacancies(relocations, &current_phases)?;
+            self.retain_compound_directories(plan, &mut union, &keys)?;
+            let mut step_raw_budget = raw::Budget::new(t)?;
+            tree_handles.extend(open_tree(
+                union.select(index)?,
+                t,
+                step,
+                StepPhase::Parked,
+                &mut step_raw_budget,
+            )?);
+            step_raw_budget.validate(self, t)?;
+            compound_failpoint(&format!("park{index}"))?;
+        }
+        if relocations.iter().any(|step| step.parking.is_some()) {
+            compound_failpoint("parked")?;
+        }
+        for index in placement::order(relocations, false) {
+            let step = &relocations[index];
+            placement::verify_vacancies(relocations, &current_phases)?;
             // Releasing only this root's descendants is required by NTFS parent
             // rename. All other roots and the union ancestor closure stay held.
-            tree_handles.retain(|(file, _)| relative(&t.files[*file].path, &step.source).is_none());
+            tree_handles.retain(|(file, _)| !placement::owns(t, &t.files[*file].path, step));
+            union.release_source_descendants(index)?;
             let namespace = union.select(index)?;
-            namespace.release_source_descendants();
-            let mut leaf =
-                namespace.open_source_file(&step.old_leaf, step.old_leaf != step.new_leaf)?;
-            let captured = t
-                .files
-                .iter()
-                .find(|file| {
-                    locator_equal(
-                        &file.path,
-                        &display(&Path::new(&step.source).join(&step.old_leaf)),
-                    )
-                })
-                .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Compound canonical before image missing")
-                })?;
-            if stamp(&leaf)? != captured.stamp || read_blob(&mut leaf)? != captured.bytes {
-                return Err(CoreError::new(
-                    "recoveryPending",
-                    "Compound canonical input changed before its original step",
-                ));
+            if step.parking.is_none() {
+                rename_original_leaf(namespace, t, step)?;
+                compound_failpoint(&format!("leaf{index}"))?;
             }
-            if step.old_leaf != step.new_leaf {
-                namespace.rename_leaf(&leaf, &step.new_leaf)?;
-            }
-            drop(leaf);
-            compound_failpoint(&format!("leaf{index}"))?;
-            namespace.move_source(
-                Path::new(&step.target)
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
-            )?;
+            move_final(self, plan, &mut union, index, step)?;
+            current_phases[index] = StepPhase::After;
+            placement::verify_vacancies(relocations, &current_phases)?;
             // Source descendants had to be released for NTFS rename. Rebind
             // only through the same original root and retained materialization.
             self.retain_compound_directories(plan, &mut union, &keys)?;
             let namespace = union.select(index)?;
-            tree_handles.extend(open_tree(namespace, t, step, StepPhase::After)?);
+            let mut step_raw_budget = raw::Budget::new(t)?;
+            tree_handles.extend(open_tree(
+                namespace,
+                t,
+                step,
+                StepPhase::After,
+                &mut step_raw_budget,
+            )?);
+            step_raw_budget.validate(self, t)?;
             compound_failpoint(&format!("move{index}"))?;
+        }
+        let mut preserved = Vec::new();
+        for (index, retired) in t.retired_members().iter().enumerate() {
+            let original = t
+                .files
+                .iter()
+                .position(|file| locator_equal(&file.path, &retired.source))
+                .unwrap();
+            let mut file = if let Some(position) = tree_handles
+                .iter()
+                .position(|(member, _)| *member == original)
+            {
+                tree_handles.remove(position).1
+            } else {
+                let position = outside_handles
+                    .iter()
+                    .position(|(member, _)| *member == original)
+                    .ok_or_else(|| {
+                        CoreError::new("invalidPlan", "Retirement lacks its original guarded file")
+                    })?;
+                outside_handles.remove(position).1
+            };
+            retirement::check_file(t, retired, &mut file)?;
+            union.move_file_to(&file, Path::new(&retired.target))?;
+            retirement::verify_held(self, plan, &union, retired, &mut file)?;
+            preserved.push((index, file));
+            compound_failpoint(&format!("retire{index}"))?;
         }
         let mut created = Vec::new();
         for change in updates
@@ -836,7 +1160,8 @@ impl Core {
             let mut file = if let Some((index, step)) = relocations
                 .iter()
                 .enumerate()
-                .find(|(_, step)| relative(&change.path, &step.target).is_some())
+                .filter(|(_, step)| relative(&change.path, &step.target).is_some())
+                .max_by_key(|(_, step)| Path::new(&step.target).components().count())
             {
                 union.select(index)?.open_source_output(
                     &relative(&change.path, &step.target).unwrap(),
@@ -892,10 +1217,22 @@ impl Core {
         for (path, file) in &mut created {
             materialized.push((path.clone(), stamp(file)?));
         }
+        let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in relocations.iter().enumerate() {
-            check_membership(union.select(index)?, t, step, StepPhase::After, true)?;
+            check_membership(
+                union.select(index)?,
+                t,
+                step,
+                StepPhase::After,
+                true,
+                &mut raw_budget,
+            )?;
         }
+        raw_budget.validate(self, t)?;
         verify_created_membership(t, &union, &keys)?;
+        for (index, file) in &mut preserved {
+            retirement::verify_held(self, plan, &union, &t.retired_members()[*index], file)?;
+        }
         self.publish_recovery_facts(plan, &materialized)?;
         compound_failpoint("facts")?;
         self.commit(plan)?;
@@ -912,30 +1249,10 @@ impl Core {
         validate_compound_namespace(t)?;
         self.validate_compound_pending(plan)?;
         let relocations = steps(t)?;
-        let phases = relocations.iter().map(phase).collect::<Result<Vec<_>>>()?;
-        let pairs = relocations
-            .iter()
-            .zip(&phases)
-            .map(|(step, phase)| {
-                (
-                    Path::new(if *phase == StepPhase::After {
-                        &step.target
-                    } else {
-                        &step.source
-                    }),
-                    Path::new(&step.target).parent().unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
+        let phases = placement::phases(relocations)?;
         let keys = directory_keys(t, &phases);
-        let mut union = if keys.is_empty() {
-            MultiNamespaceGuard::acquire(&pairs)?
-        } else {
-            MultiNamespaceGuard::acquire_planned(
-                &pairs,
-                &keys.values().cloned().collect::<Vec<_>>(),
-            )?
-        };
+        let mut union = placement::acquire(relocations, &phases, &keys)?;
+        placement::verify_vacancies(relocations, &phases)?;
         for (path, key) in &keys {
             let expected = self.materialized_identity(&plan.operation_id, Path::new(path))?;
             let actual = union.directory_identity(key)?;
@@ -968,12 +1285,21 @@ impl Core {
             capture.members.push(directory);
         }
         verify_created_membership(t, &union, &keys)?;
+        let mut retirement_guards = Vec::new();
+        for proof in retirement::capture(self, plan, &mut union, &phases, write)? {
+            capture.files.push((capture.members.len(), proof.file));
+            capture.members.push(proof.member);
+            if let Some(guard) = proof.guard {
+                retirement_guards.push(guard);
+            }
+        }
         capture.changes = t.relocated_files();
+        let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in relocations.iter().enumerate() {
             let phase = phases[index];
-            check_step_identity(self, plan, &mut union, index, step, phase)?;
+            check_step_identity(self, plan, &mut union, index, step, phase, &phases)?;
             let namespace = union.select(index)?;
-            check_membership(namespace, t, step, phase, true)?;
+            check_membership(namespace, t, step, phase, true, &mut raw_budget)?;
             let evidence = serde_json::to_vec(&step.source_identity)?;
             let mut root = member(
                 &step.source,
@@ -992,13 +1318,17 @@ impl Core {
             root.state = match phase {
                 StepPhase::Before => "knownBefore",
                 StepPhase::LeafRenamed => "knownIntermediate",
+                StepPhase::Parked => "knownIntermediate",
                 StepPhase::After => "knownAfter",
             }
             .into();
             root.message = "Exact original namespace root, parents and membership retained".into();
             capture.members.push(root);
             for original in &t.files {
-                let Some(path) = source_relative(original, step, phase) else {
+                if t.is_retired_member(&original.path) {
+                    continue;
+                }
+                let Some(path) = source_relative(t, original, step, phase) else {
                     continue;
                 };
                 let final_path = t.relocated_path(&original.path);
@@ -1026,14 +1356,7 @@ impl Core {
                     Some(&change.after),
                     Some(&original.stamp.identity),
                 );
-                m.target_path = Some(display(
-                    &Path::new(if phase == StepPhase::After {
-                        &step.target
-                    } else {
-                        &step.source
-                    })
-                    .join(&path),
-                ));
+                m.target_path = Some(display(&placement::coordinate(step, phase).join(&path)));
                 m.current = RecoveryBlob::from_bytes(Some(&bytes));
                 m.current_identity = Some((&observed.identity).into());
                 m.matches_before = before;
@@ -1060,6 +1383,11 @@ impl Core {
                 // sources and handles. Every original file is represented once.
             }
             for entry in &step.members {
+                let original_path = display(&Path::new(&step.source).join(&entry.relative_path));
+                if !placement::owns(t, &original_path, step) || t.is_retired_member(&original_path)
+                {
+                    continue;
+                }
                 if namespace.source_parent_identity(Path::new(&entry.relative_path))?
                     != entry.parent
                 {
@@ -1086,7 +1414,7 @@ impl Core {
             } = &t.mutation
             {
                 for change in updates.iter().chain(created_files).filter(|change| {
-                    change.before.is_none() && relative(&change.path, &step.target).is_some()
+                    change.before.is_none() && placement::owns_final(t, &change.path, step)
                 }) {
                     let path = relative(&change.path, &step.target).unwrap();
                     let materialized =
@@ -1144,10 +1472,12 @@ impl Core {
         }
         // Namespace-root handles stay owned by the recovery capture, including
         // before/intermediate roots that an explicit original continuation moves.
+        raw_budget.validate(self, t)?;
         capture.compound = Some(CompoundCapture {
             namespace: union,
             phases,
             directory_keys: keys,
+            retirement_guards,
         });
         Ok(())
     }
@@ -1159,17 +1489,19 @@ impl Core {
     ) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let relocations = steps(t)?;
-        let compound = capture.compound.as_mut().ok_or_else(|| {
-            CoreError::new(
-                "recoveryConflict",
-                "Original compound namespace proof is unavailable",
-            )
-        })?;
-        self.materialize_compound_directories(
-            plan,
-            &mut compound.namespace,
-            &compound.directory_keys,
-        )?;
+        {
+            let compound = capture.compound.as_mut().ok_or_else(|| {
+                CoreError::new(
+                    "recoveryConflict",
+                    "Original compound namespace proof is unavailable",
+                )
+            })?;
+            self.materialize_compound_directories(
+                plan,
+                &mut compound.namespace,
+                &compound.directory_keys,
+            )?;
+        }
         for directory in capture
             .members
             .iter_mut()
@@ -1177,97 +1509,144 @@ impl Core {
         {
             directory.matches_after = true;
         }
-        for (index, step) in relocations.iter().enumerate() {
-            let phase = compound.phases[index];
-            if phase == StepPhase::After {
+        // Complete every original parking step before filling any final slot.
+        // A restart keeps the same frozen locations and directory identities.
+        for next in [StepPhase::Parked, StepPhase::After] {
+            for index in placement::order(relocations, next == StepPhase::Parked) {
+                let step = &relocations[index];
+                let phase = capture.compound.as_ref().unwrap().phases[index];
+                if phase == StepPhase::After
+                    || (next == StepPhase::Parked
+                        && (step.parking.is_none() || phase == StepPhase::Parked))
+                {
+                    continue;
+                }
+                self.advance_compound_recovery_step(plan, capture, index, next)?;
+            }
+        }
+        retirement::refresh(self, plan, capture)?;
+        for (index, retired) in t.retired_members().iter().enumerate() {
+            let path = t.relocated_path(&retired.source);
+            let member = capture
+                .members
+                .iter()
+                .position(|member| member.role == "memberRetirement" && member.path == path)
+                .unwrap();
+            if capture.members[member].matches_after {
                 continue;
             }
-            capture.files.retain(|(member_index, _)| {
-                !capture.members[*member_index]
-                    .target_path
-                    .as_ref()
-                    .is_some_and(|path| relative(path, &step.source).is_some())
-            });
-            let namespace = compound.namespace.select(index)?;
-            namespace.release_source_descendants();
-            if phase == StepPhase::Before && step.old_leaf != step.new_leaf {
-                let mut leaf = namespace.open_source_file(&step.old_leaf, true)?;
-                let original = t
-                    .files
-                    .iter()
-                    .find(|file| {
-                        locator_equal(
-                            &file.path,
-                            &display(&Path::new(&step.source).join(&step.old_leaf)),
-                        )
-                    })
-                    .unwrap();
-                if stamp(&leaf)? != original.stamp || read_blob(&mut leaf)? != original.bytes {
-                    return Err(CoreError::new(
-                        "recoveryConflict",
-                        "Canonical original changed before continuation",
-                    ));
-                }
-                namespace.rename_leaf(&leaf, &step.new_leaf)?;
-            }
-            namespace.move_source(
-                Path::new(&step.target)
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap(),
-            )?;
-            compound.phases[index] = StepPhase::After;
-            self.retain_compound_directories(
-                plan,
-                &mut compound.namespace,
-                &compound.directory_keys,
-            )?;
-            let namespace = compound.namespace.select(index)?;
-            // Open through the same original root, then bind each held file to
-            // its original recovery member. No target-path namesake is authority.
-            check_membership(namespace, t, step, StepPhase::After, true)?;
-            for original in &t.files {
-                let Some(path) = source_relative(original, step, StepPhase::After) else {
-                    continue;
-                };
-                let final_path = t.relocated_path(&original.path);
-                let member_index = capture
-                    .members
-                    .iter()
-                    .position(|m| m.role == "write" && locator_equal(&m.path, &final_path))
-                    .unwrap();
-                let change = capture
-                    .changes
-                    .iter()
-                    .find(|change| locator_equal(&change.path, &final_path))
-                    .unwrap();
-                let mut file = namespace.open_source_output(
-                    &path,
-                    change.before.as_ref() != Some(&change.after),
-                    false,
-                )?;
-                let observed = stamp(&file)?;
-                let bytes = read_blob(&mut file)?;
-                if observed.identity != original.stamp.identity
-                    || (bytes != original.bytes && bytes != change.after)
-                    || (bytes == original.bytes && observed != original.stamp)
-                {
-                    return Err(CoreError::new(
-                        "recoveryConflict",
-                        "Compound original file changed during namespace continuation",
-                    ));
-                }
-                capture.members[member_index].matches_after = bytes == change.after;
-                capture.files.push((member_index, file));
-            }
-            let root = capture
-                .members
+            let file = &mut capture
+                .files
                 .iter_mut()
-                .find(|m| m.role == "placement" && m.path == step.source)
-                .unwrap();
-            root.matches_after = true;
+                .find(|(index, _)| *index == member)
+                .unwrap()
+                .1;
+            let compound = capture.compound.as_ref().unwrap();
+            compound
+                .namespace
+                .move_file_to(file, Path::new(&retired.target))?;
+            retirement::verify_held(self, plan, &compound.namespace, retired, file)?;
+            capture.members[member].matches_before = false;
+            capture.members[member].matches_after = true;
+            capture.members[member].state = "knownAfter".into();
+            capture.members[member].target_path = Some(retired.target.clone());
+            compound_failpoint(&format!("retire{index}"))?;
         }
+        Ok(())
+    }
+
+    fn advance_compound_recovery_step(
+        &self,
+        plan: &Plan,
+        capture: &mut RecoveryCapture,
+        index: usize,
+        next: StepPhase,
+    ) -> Result<()> {
+        let t = plan.transaction.as_ref().unwrap();
+        let step = &steps(t)?[index];
+        let compound = capture.compound.as_mut().unwrap();
+        let phase = compound.phases[index];
+        let current = placement::coordinate(step, phase);
+        capture.files.retain(|(member_index, _)| {
+            !capture.members[*member_index]
+                .target_path
+                .as_ref()
+                .is_some_and(|path| relative(path, &display(current)).is_some())
+        });
+        placement::verify_vacancies(steps(t)?, &compound.phases)?;
+        compound.namespace.release_source_descendants(index)?;
+        let namespace = compound.namespace.select(index)?;
+        if phase == StepPhase::Before {
+            rename_original_leaf(namespace, t, step)?;
+        }
+        let target = placement::coordinate(step, next);
+        if next == StepPhase::After {
+            move_final(self, plan, &mut compound.namespace, index, step)?;
+        } else {
+            compound.namespace.move_source_to(index, target)?;
+        }
+        compound.phases[index] = next;
+        placement::verify_vacancies(steps(t)?, &compound.phases)?;
+        self.retain_compound_directories(plan, &mut compound.namespace, &compound.directory_keys)?;
+        let namespace = compound.namespace.select(index)?;
+        let mut step_raw_budget = raw::Budget::new(t)?;
+        check_membership(namespace, t, step, next, true, &mut step_raw_budget)?;
+        step_raw_budget.validate(self, t)?;
+        for original in &t.files {
+            if t.is_retired_member(&original.path) {
+                continue;
+            }
+            let Some(path) = source_relative(t, original, step, next) else {
+                continue;
+            };
+            let final_path = t.relocated_path(&original.path);
+            let member_index = capture
+                .members
+                .iter()
+                .position(|member| {
+                    member.role == "write" && locator_equal(&member.path, &final_path)
+                })
+                .unwrap();
+            let change = capture
+                .changes
+                .iter()
+                .find(|change| locator_equal(&change.path, &final_path))
+                .unwrap();
+            let mut file = namespace.open_source_output(
+                &path,
+                change.before.as_ref() != Some(&change.after),
+                false,
+            )?;
+            let observed = stamp(&file)?;
+            let bytes = read_blob(&mut file)?;
+            if observed.identity != original.stamp.identity
+                || (bytes != original.bytes && bytes != change.after)
+                || (bytes == original.bytes && observed != original.stamp)
+            {
+                return Err(CoreError::new(
+                    "recoveryConflict",
+                    "Compound original file changed during namespace continuation",
+                ));
+            }
+            capture.members[member_index].matches_after =
+                next == StepPhase::After && bytes == change.after;
+            capture.members[member_index].target_path = Some(display(&target.join(&path)));
+            capture.files.push((member_index, file));
+        }
+        let root = capture
+            .members
+            .iter_mut()
+            .find(|member| member.role == "placement" && member.path == step.source)
+            .unwrap();
+        root.matches_before = false;
+        root.matches_after = next == StepPhase::After;
+        root.state = if next == StepPhase::After {
+            "knownAfter"
+        } else {
+            "knownIntermediate"
+        }
+        .into();
+        retirement::refresh(self, plan, capture)?;
         Ok(())
     }
     pub(crate) fn verify_compound_final(
@@ -1279,6 +1658,7 @@ impl Core {
         let compound = capture.compound.as_mut().ok_or_else(|| {
             CoreError::new("recoveryConflict", "Original namespace proof missing")
         })?;
+        let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in steps(t)?.iter().enumerate() {
             if compound.phases[index] != StepPhase::After {
                 return Err(CoreError::new(
@@ -1292,9 +1672,28 @@ impl Core {
                 step,
                 StepPhase::After,
                 true,
+                &mut raw_budget,
             )?;
         }
+        raw_budget.validate(self, t)?;
         verify_created_membership(t, &compound.namespace, &compound.directory_keys)?;
+        for retired in t.retired_members() {
+            let path = t.relocated_path(&retired.source);
+            let index = capture
+                .members
+                .iter()
+                .position(|member| member.role == "memberRetirement" && member.path == path)
+                .unwrap();
+            let file = &mut capture
+                .files
+                .iter_mut()
+                .find(|(member, _)| *member == index)
+                .ok_or_else(|| {
+                    CoreError::new("recoveryConflict", "Original retired file proof is missing")
+                })?
+                .1;
+            retirement::verify_held(self, plan, &compound.namespace, retired, file)?;
+        }
         Ok(())
     }
     pub(crate) fn create_compound_recovery_output(
@@ -1308,6 +1707,9 @@ impl Core {
             return Ok(None);
         };
         for (index, step) in steps(t)?.iter().enumerate() {
+            if !placement::owns_final(t, path, step) {
+                continue;
+            }
             if let Some(relative) = relative(path, &step.target) {
                 if compound.phases[index] != StepPhase::After {
                     return Err(CoreError::new(

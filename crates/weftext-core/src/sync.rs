@@ -16,14 +16,26 @@ pub use store::{
 pub use transport::SyncTransfer;
 mod adopt;
 pub(crate) mod apply;
-pub use adopt::SyncAdoptionCut;
+pub use adopt::{SyncAdoptionCut, SyncRemovedMember};
 mod compound;
+#[cfg(all(test, windows))]
+mod compound_placement_tests;
+#[cfg(all(test, windows))]
+mod compound_resource_retirement_tests;
+#[cfg(all(test, windows))]
+mod compound_retirement_tests;
 #[cfg(all(test, windows))]
 mod compound_tests;
 mod install;
+pub(crate) mod member_retirement;
 mod relocate;
 pub(crate) mod revalidation;
 mod revalidation_evidence;
+mod revalidation_native;
+pub use revalidation_native::{
+    SyncNativePreparation, SyncNativeRenderInputs, SyncNativeRenderOutput, SyncNativeReview,
+    SyncOperationPreparation, SyncReviewPreparation,
+};
 pub(crate) mod revalidation_writer;
 pub use apply::SyncResolution;
 pub use revalidation::{

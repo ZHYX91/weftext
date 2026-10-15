@@ -11,6 +11,9 @@ use crate::{
     operations::{FileChange, FrozenOperation, Mutation, NewBirth, change, ensure_absent},
 };
 
+#[path = "clone_layout.rs"]
+mod layout;
+
 impl Core {
     pub(crate) fn prepare_sync_clone(
         &mut self,
@@ -93,44 +96,9 @@ impl Core {
                 ));
             }
             let version = object.versions.into_iter().next().unwrap();
-            if version.state.retired {
-                return Err(CoreError::new(
-                    "syncRetiredSelection",
-                    "Trashed content remains in received history; live replica installation needs an explicit restore plan",
-                ));
-            }
             states.insert(key, version);
         }
-        let mut locations: BTreeMap<ObjectKey, PathBuf> = BTreeMap::new();
-        let mut remaining: BTreeSet<_> = states.keys().cloned().collect();
-        while !remaining.is_empty() {
-            let mut advanced = false;
-            for key in remaining.clone() {
-                let state = &states[&key].state;
-                let target = match &key {
-                    ObjectKey::Node(_) | ObjectKey::Directory(_) => {
-                        let parent = if let Some(parent) = &state.parent {
-                            let Some(path) = locations.get(parent) else {
-                                continue;
-                            };
-                            path.clone()
-                        } else {
-                            root.clone()
-                        };
-                        parent.join(&state.name)
-                    }
-                    _ => root.clone(),
-                };
-                locations.insert(key.clone(), target);
-                remaining.remove(&key);
-                advanced = true;
-            }
-            if !advanced {
-                return Err(invalid(
-                    "Selected placement graph is cyclic or lacks its parent",
-                ));
-            }
-        }
+        let locations = layout::clone_locations(&root, &request.operation_id, &states)?;
         let plan_id = fresh();
         let mut preview = OperationPreview {
             operation_id: request.operation_id.clone(),
@@ -371,9 +339,11 @@ impl Core {
             receipt,
             hosted_destination: None,
             expected_membership: None,
+            expected_trash_membership: None,
             absent_dependencies: vec![],
             write_parents: vec![(display(&root), parent)],
         });
+        layout::validate_clone_namespace(plan.transaction.as_ref().unwrap())?;
         self.stage(plan)?;
         Ok(preview)
     }
@@ -382,3 +352,7 @@ impl Core {
 #[cfg(all(test, windows))]
 #[path = "install_tests.rs"]
 mod tests;
+
+#[cfg(all(test, windows))]
+#[path = "install_retired_tests.rs"]
+mod retired_tests;

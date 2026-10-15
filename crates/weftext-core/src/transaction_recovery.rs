@@ -485,6 +485,9 @@ impl Core {
             )?;
         }
         for file in &t.files {
+            if t.is_retired_member(&file.path) {
+                continue;
+            }
             if !capture
                 .changes
                 .iter()

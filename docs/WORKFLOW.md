@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Current stage
 
-The earlier fixed design baseline was accepted; [REVIEW](design/REVIEW.md) §8 records the bounded refinements and actual evidence limits. Current **0.6.0-alpha.1** is a Windows/NTFS local program with the [first bounded Server / WebUI slice](SERVER.md); see [MVP](MVP.md) for use and limits and the [roadmap](ROADMAP.md) for later scope. Real OS IME, complete assistive-technology and power-loss acceptance remain incomplete. The v0.7 multiple-client milestone and isolated execution routes below are future work, not implemented product capabilities. Archived prototype dependencies do not make current documentation checks depend on the old UI or npm audit.
+The earlier fixed design baseline was accepted; [REVIEW](design/REVIEW.md) §8 records bounded refinements and actual evidence limits. The **established 0.6.0 Windows/NTFS scope is complete**: local, [controlled Server / WebUI](SERVER.md) and v0.6 synchronization passed the complete HTTP matrix, affected browsers and real NAS HTTPS on the same final optimized executable. It is not formally published. See [MVP](MVP.md) for use/limits and the [roadmap](ROADMAP.md) for later scope. Real OS IME, complete assistive-technology and power-loss acceptance remain incomplete. The v0.7 multiple-client milestone and isolated execution routes below are future work, not implemented product capabilities. Archived prototype dependencies do not make current documentation checks depend on the old UI or npm audit.
 
 ## Routine checks
 

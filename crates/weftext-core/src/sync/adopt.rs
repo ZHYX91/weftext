@@ -23,6 +23,15 @@ pub struct SyncAdoptionCut {
     pub identity: SyncIdentity,
     pub expected_installed: Vec<Dependency>,
     pub changes: Vec<FileChange>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub removed_members: Vec<SyncRemovedMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncRemovedMember {
+    pub path: String,
+    pub base_id: String,
 }
 
 impl Core {
@@ -44,7 +53,11 @@ impl Core {
         self.require_workspace(&root)?;
         let setup = self.sync_setup_for(&root)?;
         let identity = setup.identity.clone();
-        let local = self.sync_local_state(setup)?.0;
+        let (local, known) = self.sync_local_state(setup)?;
+        let mut graph = self.read_sync_history(&identity)?;
+        for (digest, bytes) in known {
+            graph.offer_blob(&digest, bytes.clone())?;
+        }
         let mut expected_installed = Vec::new();
         let mut paths = Vec::new();
         let mut originals = Vec::new();
@@ -72,10 +85,20 @@ impl Core {
         let allocated: Vec<_> = snapshot.files.iter().map(|f| f.base_id.clone()).collect();
         let result = (|| {
             let mut changes = Vec::new();
+            let mut removed_members = Vec::new();
             let mut total = 0usize;
             for (file, (object, relative)) in snapshot.files.into_iter().zip(originals) {
                 let original = &local[&object];
-                let captured = self.snapshots[&file.base_id].captured.as_ref().ok_or_else(|| CoreError::new("syncExternalChange", "An installed member is absent; preserve it for an explicit structure decision"))?;
+                let Some(captured) = self.snapshots[&file.base_id].captured.as_ref() else {
+                    self.validate_removed_resource_observation(
+                        &root, &identity, &graph, original, &relative, &physical,
+                    )?;
+                    removed_members.push(SyncRemovedMember {
+                        path: file.path,
+                        base_id: file.base_id,
+                    });
+                    continue;
+                };
                 total += captured.bytes.len();
                 if total > MAX_BLOB_BYTES {
                     return Err(CoreError::new("budget", "Adoption cut exceeds 64 MiB"));
@@ -98,7 +121,7 @@ impl Core {
                     });
                 }
             }
-            if changes.is_empty() {
+            if changes.is_empty() && removed_members.is_empty() {
                 return Err(CoreError::new(
                     "noChange",
                     "The selected installed objects have no observed external change",
@@ -108,6 +131,7 @@ impl Core {
                 identity,
                 expected_installed,
                 changes,
+                removed_members,
             })
         })();
         let retained: BTreeSet<_> = result
@@ -116,6 +140,11 @@ impl Core {
                 cut.changes
                     .iter()
                     .filter_map(|c| c.base_id.as_deref())
+                    .chain(
+                        cut.removed_members
+                            .iter()
+                            .map(|member| member.base_id.as_str()),
+                    )
                     .collect()
             })
             .unwrap_or_default();
@@ -142,16 +171,34 @@ impl Core {
             }
             return self.operation_details(&request.operation_id);
         }
+        let (mut plan, semantic_required) = self.build_sync_adoption_plan(request)?;
+        if semantic_required {
+            let evidence = self.freeze_sync_adoption_plan(&mut plan)?;
+            plan.sync_application.as_mut().unwrap().semantic_evidence = Some(evidence);
+        }
+        let preview = plan.transaction.as_ref().unwrap().preview.clone();
+        self.stage(plan)?;
+        Ok(preview)
+    }
+
+    pub(crate) fn build_sync_adoption_plan(
+        &mut self,
+        request: OperationRequest,
+    ) -> Result<(Plan, bool)> {
+        self.sync_local_owner()?;
+        crate::valid_operation_id(&request.operation_id)?;
+        let fingerprint = hash(&serde_json::to_vec(&request)?);
         let OperationIntent::AdoptSyncExternal {
             identity,
             expected_installed,
             changes,
+            removed_members,
         } = &request.intent
         else {
             return Err(invalid("Expected explicit external adoption intent"));
         };
-        if changes.is_empty()
-            || changes.len() > MAX_FILES
+        if changes.is_empty() && removed_members.is_empty()
+            || changes.len().saturating_add(removed_members.len()) > MAX_FILES
             || expected_installed.is_empty()
             || expected_installed.len() > MAX_CHANGES
             || changes.iter().map(|c| c.after.len()).sum::<usize>() > MAX_BLOB_BYTES
@@ -222,14 +269,35 @@ impl Core {
                 return Err(invalid("One observed leaf has multiple adoption proposals"));
             }
         }
+        let mut requested_removed = BTreeMap::<String, &SyncRemovedMember>::new();
+        for input in removed_members {
+            let path = absolute_path(Path::new(&input.path))?;
+            let selected = before.values().flat_map(|object| object.state.files.keys().map(move |relative| Path::new(&object.directory).join(relative)))
+                .find(|selected| same_path(selected, &path))
+                .ok_or_else(|| CoreError::new("syncAdoptionScope", "Only an originally installed member in the explicit cut can be observed as removed"))?;
+            let selected = display(&selected);
+            if requested.contains_key(&selected)
+                || requested_removed.insert(selected, input).is_some()
+            {
+                return Err(invalid(
+                    "One installed member cannot have duplicate, aliased or competing adoption observations",
+                ));
+            }
+        }
         let mut files = Vec::<CapturedFile>::new();
         let selected = before.keys().cloned().collect();
         let physical = self.sync_installed_stamps(&before, &selected, None)?;
+        let mut graph = self.read_sync_history(identity)?;
+        for (digest, bytes) in known {
+            graph.offer_blob(&digest, bytes.clone())?;
+        }
         let mut output = Vec::new();
         let mut after = before.clone();
         let mut blobs = BTreeMap::new();
         let mut changed = BTreeSet::new();
         let mut total = 0usize;
+        let mut member_count = 0usize;
+        let mut removed_dependencies = Vec::new();
         let mut preview = OperationPreview {
             operation_id: request.operation_id.clone(),
             plan_id: fresh(),
@@ -252,9 +320,42 @@ impl Core {
                 ));
             }
             for (relative, digest) in &original.state.files {
+                member_count += 1;
+                if member_count > MAX_FILES {
+                    return Err(CoreError::new(
+                        "budget",
+                        "The complete adoption member cut exceeds 5000 slots",
+                    ));
+                }
                 let path = Path::new(&original.directory).join(relative);
                 self.check_pending(&path)?;
-                let captured = capture_optional(&path)?.ok_or_else(|| CoreError::new("syncExternalChange", "An installed object member is missing; preserve it for an explicit structure decision"))?;
+                let captured = capture_optional(&path)?;
+                if let Some(input) = requested_removed.get(&display(&path)) {
+                    self.verify_snapshot(&path, &input.base_id, captured.as_ref())?;
+                    if captured.is_some() {
+                        return Err(CoreError::new(
+                            "staleBase",
+                            "A removed-member observation requires its original negative snapshot",
+                        ));
+                    }
+                    self.validate_removed_resource_observation(
+                        &root, identity, &graph, original, relative, &physical,
+                    )?;
+                    let basis = &self.snapshots[&input.base_id];
+                    removed_dependencies.push(AbsentDependency {
+                        path: display(&path),
+                        parent: basis.parent.clone(),
+                    });
+                    let state = &mut after.get_mut(object).unwrap().state;
+                    state.files.remove(relative);
+                    state.file_revisions.remove(relative);
+                    changed.insert(object.clone());
+                    preview
+                        .changes
+                        .push(change(&path, "adoptExternalRemoval", 0));
+                    continue;
+                }
+                let captured = captured.ok_or_else(|| CoreError::new("syncExternalChange", "A missing installed member must have its explicit original removedMembers observation"))?;
                 total += captured.bytes.len();
                 if total > MAX_BLOB_BYTES || files.len() == MAX_FILES {
                     return Err(CoreError::new(
@@ -311,10 +412,6 @@ impl Core {
                 }
                 files.push(captured);
             }
-        }
-        let mut graph = self.read_sync_history(identity)?;
-        for (id, bytes) in known {
-            graph.offer_blob(&id, bytes.clone())?;
         }
         for (id, bytes) in &blobs {
             graph.offer_blob(id, bytes.clone())?;
@@ -374,8 +471,8 @@ impl Core {
                 }
             }
         }
-        let mut absent_dependencies = Vec::new();
-        self.validate_adoption_typed_cut(
+        let mut absent_dependencies = removed_dependencies;
+        let semantic_required = self.validate_adoption_typed_cut(
             &root,
             &before,
             &after,
@@ -485,11 +582,94 @@ impl Core {
             receipt,
             hosted_destination: None,
             expected_membership: None,
+            expected_trash_membership: None,
             absent_dependencies,
             write_parents,
         });
-        self.stage(plan)?;
-        Ok(preview)
+        Ok((plan, semantic_required))
+    }
+
+    /// An external absence is a sender observation, not a receiver delete
+    /// permission. Both owner roles and the removed binding come from this
+    /// replica's original installed cut, never the newer received heads.
+    fn validate_removed_resource_observation(
+        &self,
+        root: &Path,
+        identity: &SyncIdentity,
+        graph: &ReplicaGraph,
+        original: &LocalObject,
+        relative: &str,
+        physical: &BTreeMap<String, crate::FileStamp>,
+    ) -> Result<()> {
+        let failure = || {
+            CoreError::new(
+                "syncExternalChange",
+                "Only an original registered resource removed from the exact observed owner manifest can be adopted as absent",
+            )
+        };
+        let ObjectKey::Node(owner) = &original.object else {
+            return Err(failure());
+        };
+        let resources = super::apply::validate_state(graph, &original.object, &original.state)?;
+        let id = resources.get(relative).ok_or_else(failure)?;
+        let stamp = &physical[&original.state.file_revisions[relative]];
+        if !self.admitted_resource(id, &identity.workspace_id, owner, &stamp.identity) {
+            return Err(CoreError::new(
+                "identityConflict",
+                "The removed resource lacks its original owner-bound physical admission",
+            ));
+        }
+        let source_path =
+            Path::new(&original.directory).join(format!("{}.typ", original.state.name));
+        self.check_pending(&source_path)?;
+        let source = capture_optional(&source_path)?.ok_or_else(failure)?;
+        if source.stamp.identity
+            != physical[&original.state.file_revisions[&format!("{}.typ", original.state.name)]]
+                .identity
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "The removed resource's canonical owner was replaced",
+            ));
+        }
+        self.qualified_query_node_at(
+            root,
+            &source_path,
+            &weftext_knowledge::NodeRef {
+                workspace_id: identity.workspace_id.clone(),
+                node_id: owner.clone(),
+            },
+            if original.state.retired {
+                "trash"
+            } else {
+                "live"
+            },
+        )?;
+        let manifest_path = Path::new(&original.directory).join("weftext.resources.json");
+        self.check_pending(&manifest_path)?;
+        let manifest = capture_optional(&manifest_path)?.ok_or_else(failure)?;
+        if manifest.stamp.identity
+            != physical[&original.state.file_revisions["weftext.resources.json"]].identity
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "The removed resource's original manifest was replaced",
+            ));
+        }
+        let document: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
+        let entries = document["resources"]
+            .as_array()
+            .filter(|_| document["version"] == 1)
+            .ok_or_else(failure)?;
+        if entries.iter().any(|entry| {
+            entry["resourceId"] == *id
+                || entry["path"]
+                    .as_str()
+                    .is_some_and(|path| same_path(Path::new(path), Path::new(relative)))
+        }) {
+            return Err(failure());
+        }
+        Ok(())
     }
 
     pub(crate) fn sync_installed_stamps(
@@ -584,10 +764,10 @@ impl Core {
         files: &[CapturedFile],
         changed: &BTreeSet<ObjectKey>,
         absent_dependencies: &mut Vec<AbsentDependency>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let workspace = &self.sync_setup_for(root)?.identity.workspace_id;
         if !changed.iter().any(|k| matches!(k, ObjectKey::Node(_))) {
-            return Ok(());
+            return Ok(false);
         }
         let schema_path = root.join(".weftext-schema.json");
         let schema = if let Some(file) = files
@@ -631,6 +811,7 @@ impl Core {
             }
             self.adoption_absent_config(root, &rules, absent_dependencies)?;
         }
+        let mut semantic_required = false;
         for object in changed {
             let ObjectKey::Node(_) = object else {
                 continue;
@@ -664,10 +845,7 @@ impl Core {
                 || !definitions.is_empty()
                 || !weftext_data::embedded_queries(&source).is_empty()
             {
-                return Err(CoreError::new(
-                    "syncSemanticDecisionRequired",
-                    "This observed source needs an explicit citation/Query semantic revalidation decision before adoption",
-                ));
+                semantic_required = true;
             }
             let projection = weftext_data::project(&source, &schema);
             if projection.qualification != "qualified"
@@ -684,7 +862,9 @@ impl Core {
                     "The observed author declaration is not valid under the reviewed Schema",
                 ));
             }
-            let refs = weftext_data::typed_ref_closure(&source, &schema)
+            // Adoption preserves opaque author bytes. Only declared Shapes
+            // assert references; unbound members are not copy/rewrite slots.
+            let refs = weftext_data::declared_typed_ref_closure(&source, &schema)
                 .map_err(|e| CoreError::new("invalidTypedSource", e.to_string()))?;
             if !refs.complete {
                 return Err(CoreError::new(
@@ -753,7 +933,7 @@ impl Core {
                 }
             }
         }
-        Ok(())
+        Ok(semantic_required)
     }
 
     fn adoption_absent_config(
@@ -775,6 +955,76 @@ impl Core {
         });
         Ok(())
     }
+}
+
+/// Only this original no-write adoption can explain an installed member's
+/// negative input. A prospective after state alone never grants this exception.
+pub(crate) fn adopted_removed_member(plan: &Plan, path: &Path) -> bool {
+    let (Some(application), Some(transaction), Some(publication)) = (
+        &plan.sync_application,
+        &plan.transaction,
+        &plan.sync_publication,
+    ) else {
+        return false;
+    };
+    let OperationIntent::AdoptSyncExternal {
+        identity,
+        removed_members,
+        ..
+    } = &transaction.request.intent
+    else {
+        return false;
+    };
+    if identity != &application.identity
+        || identity != &publication.identity
+        || transaction.request.operation_id != plan.operation_id
+        || publication.manifest.operation_id != plan.operation_id
+        || transaction.request.root != application.root
+        || !matches!(&transaction.mutation, Mutation::Update { files } if files.iter().all(|file| file.before.as_ref() == Some(&file.after)))
+        || removed_members
+            .iter()
+            .filter(|member| same_path(Path::new(&member.path), path))
+            .count()
+            != 1
+        || !transaction
+            .absent_dependencies
+            .iter()
+            .any(|negative| same_path(Path::new(&negative.path), path))
+    {
+        return false;
+    }
+    application.before.iter().any(|before| {
+        let ObjectKey::Node(_) = &before.object else {
+            return false;
+        };
+        before.state.files.keys().any(|relative| {
+            if relative == &format!("{}.typ", before.state.name)
+                || matches!(
+                    relative.as_str(),
+                    "weftext.resources.json"
+                        | "weftext.annotations.json"
+                        | "weftext.directory.json"
+                )
+                || !same_path(&Path::new(&before.directory).join(relative), path)
+            {
+                return false;
+            }
+            application.after.iter().any(|after| {
+                after.object == before.object
+                    && after.directory == before.directory
+                    && after.state.parent == before.state.parent
+                    && after.state.name == before.state.name
+                    && after.state.retired == before.state.retired
+                    && !after.state.files.contains_key(relative)
+                    && !after.state.file_revisions.contains_key(relative)
+                    && publication.manifest.changes.iter().any(|change| {
+                        change.object == before.object
+                            && change.before == BTreeSet::from([before.revision.clone()])
+                            && change.after == after.state
+                    })
+            })
+        })
+    })
 }
 
 fn same_path(a: &Path, b: &Path) -> bool {

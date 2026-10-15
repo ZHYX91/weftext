@@ -4,7 +4,7 @@
 use super::replica::{LocalObject, SyncPublication};
 use super::*;
 use crate::{
-    Core, OperationIntent, OperationPreview, OperationReceipt, OperationRequest, Path,
+    Core, OperationIntent, OperationPreview, OperationReceipt, OperationRequest, Path, PathBuf,
     absolute_path,
     backend::ParentGuard,
     display, fresh,
@@ -378,6 +378,17 @@ impl Core {
         &mut self,
         input: super::relocate::RelocationInput,
     ) -> Result<OperationPreview> {
+        let mut plan = self.build_sync_application_plan(input)?;
+        self.freeze_sync_revalidation_if_needed(&mut plan)?;
+        self.stage_frozen_sync_application_plan(plan)
+    }
+
+    /// Build the same original writer plan without allocating a second
+    /// transaction or publishing a prepared decision before evidence exists.
+    pub(crate) fn build_sync_application_plan(
+        &mut self,
+        input: super::relocate::RelocationInput,
+    ) -> Result<Plan> {
         let super::relocate::RelocationInput {
             request,
             identity,
@@ -391,11 +402,12 @@ impl Core {
         } = input;
         let root = absolute_path(Path::new(&request.root))?;
         if states.iter().any(|(key, version)| {
-            local
-                .get(key)
-                .is_some_and(|old| super::relocate::placement_changed(&old.state, &version.state))
+            local.get(key).is_some_and(|old| {
+                super::relocate::placement_changed(&old.state, &version.state)
+                    || super::relocate::members_removed(&old.state, &version.state)
+            })
         }) {
-            return self.prepare_sync_relocation(super::relocate::RelocationInput {
+            return self.build_sync_relocation_plan(super::relocate::RelocationInput {
                 request: request.clone(),
                 identity: identity.clone(),
                 fingerprint,
@@ -433,7 +445,12 @@ impl Core {
             let prior = remaining.len();
             for key in remaining.clone() {
                 let state = &states[&key].state;
-                let directory = if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                let directory = if state.retired {
+                    let original = local.get(&key).filter(|old| old.state == *state).ok_or_else(|| {
+                        CoreError::new("syncStructureRequired", "A changed or new retired object requires the original guarded structure application")
+                    })?;
+                    PathBuf::from(&original.directory)
+                } else if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
                     let parent = if let Some(parent) = &state.parent {
                         let Some(parent) = locations.get(parent) else {
                             continue;
@@ -484,15 +501,13 @@ impl Core {
             let old = local.get(&key);
             let state = &version.state;
             let directory = &locations[&key];
-            if state.retired
-                || old.is_some_and(|old| {
-                    state.parent != old.state.parent
-                        || state.name != old.state.name
-                        || state.retired != old.state.retired
-                        || Path::new(&old.directory) != directory
-                        || old.state.files.keys().any(|p| !state.files.contains_key(p))
-                })
-            {
+            if old.is_some_and(|old| {
+                state.parent != old.state.parent
+                    || state.name != old.state.name
+                    || state.retired != old.state.retired
+                    || Path::new(&old.directory) != directory
+                    || old.state.files.keys().any(|p| !state.files.contains_key(p))
+            }) {
                 return Err(CoreError::new(
                     "syncStructureRequired",
                     "Placement, retirement and file removal require a guarded structure application",
@@ -504,7 +519,22 @@ impl Core {
             let resources = validate_state(&graph, &key, state)?;
             if let ObjectKey::Node(id) = &key {
                 if old.is_some() {
-                    let canonical = self.managed_node(&root, directory, false)?;
+                    let canonical = if state.retired {
+                        let path = directory.join(format!("{}.typ", state.name));
+                        self.qualified_query_node_at(
+                            &root,
+                            &path,
+                            &weftext_knowledge::NodeRef {
+                                workspace_id: identity.workspace_id.clone(),
+                                node_id: id.clone(),
+                            },
+                            "trash",
+                        )?;
+                        capture_optional(&path)?
+                            .ok_or_else(|| invalid("The original retired source is unavailable"))?
+                    } else {
+                        self.managed_node(&root, directory, false)?
+                    };
                     if self
                         .admitted_binding(&canonical.stamp.identity)
                         .is_none_or(|b| b.node_id != *id)
@@ -729,10 +759,18 @@ impl Core {
             receipt,
             hosted_destination: None,
             expected_membership: None,
+            expected_trash_membership: None,
             absent_dependencies: vec![],
             write_parents,
         });
-        self.freeze_sync_revalidation_if_needed(&mut plan)?;
+        Ok(plan)
+    }
+
+    pub(crate) fn stage_frozen_sync_application_plan(
+        &mut self,
+        plan: Plan,
+    ) -> Result<OperationPreview> {
+        self.validate_sync_plan_participants(&plan)?;
         let preview = plan.transaction.as_ref().unwrap().preview.clone();
         self.stage(plan)?;
         Ok(preview)
@@ -754,7 +792,7 @@ impl Core {
         };
         self.validate_sync_application_basis(application)?;
         self.publish_sync(&application.root)?;
-        self.validate_sync_application_versions(&plan.operation_id, application)
+        self.validate_sync_application_versions(plan, application)
     }
     /// Inspect the same original replica cut without publishing a fresh outbox.
     /// Committed decisions are handled by the recovery caller before this gate.
@@ -763,7 +801,7 @@ impl Core {
             return Ok(());
         };
         self.validate_sync_application_basis(application)?;
-        self.validate_sync_application_versions(&plan.operation_id, application)
+        self.validate_sync_application_versions(plan, application)
     }
     fn validate_sync_application_basis(&self, application: &SyncApplication) -> Result<()> {
         self.sync_local_owner()?;
@@ -790,7 +828,7 @@ impl Core {
     }
     fn validate_sync_application_versions(
         &self,
-        operation_id: &str,
+        plan: &Plan,
         application: &SyncApplication,
     ) -> Result<()> {
         let current = self.read_sync_history(&application.identity)?.objects()?;
@@ -805,7 +843,15 @@ impl Core {
             ));
         }
         if let Some(evidence) = &application.semantic_evidence {
-            self.validate_sync_semantic_evidence(operation_id, application, evidence)?;
+            let transaction = plan
+                .transaction
+                .as_ref()
+                .ok_or_else(|| invalid("Semantic evidence requires the original transaction"))?;
+            self.validate_sync_semantic_request_evidence(
+                &transaction.request,
+                application,
+                evidence,
+            )?;
         }
         Ok(())
     }

@@ -227,6 +227,7 @@ fn hosted_structure_original_ids_refs_drafts_and_trash_receipts_survive_restart(
         &restore,
         OperationIntent::RestoreNode {
             trash_operation_id: internal,
+            node_id: None,
             parent: display(&root),
             name: "Restored".into(),
         },

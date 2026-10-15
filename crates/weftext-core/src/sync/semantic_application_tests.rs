@@ -767,6 +767,223 @@ fn typed_committed_current_definition_keeps_exact_native_key_admission_after_res
     );
 }
 
+fn lifecycle_query_pair(mixed: bool, bad: bool) -> (Pair, OperationRequest, ObjectKey, ObjectKey) {
+    let mut p = pair(&["Note", "Live", "Archived"]);
+    config(&mut p.a, &p.ar, &weftext_data::Schema::bundled().unwrap());
+    transfer(
+        &p.a,
+        &p.ar,
+        &p.b,
+        &p.identity,
+        &BTreeSet::from([ObjectKey::Schema]),
+    );
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: BTreeSet::from([ObjectKey::Schema]),
+        },
+    );
+    for name in ["Live", "Archived"] {
+        let path = p.ar.join(name).join(format!("{name}.typ"));
+        let document = p.a.open(&path, Some(p.ar.clone())).unwrap();
+        let id = weftext_engine::inspect_metadata(&document.source)
+            .id
+            .unwrap();
+        let status = if name == "Archived" && bad {
+            "done"
+        } else {
+            "open"
+        };
+        p.a.save(SaveRequest {
+            session_id: document.session_id,
+            base_id: document.base_id,
+            operation_id: fresh(),
+            source: format!(
+                "#metadata((id: \"{id}\", types: (\"task\",), status: \"{status}\")) <weftext>\n"
+            ),
+        })
+        .unwrap();
+    }
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let apply_request = apply(&p);
+    let applied = p.b.prepare_operation(apply_request).unwrap();
+    p.b.execute_operation(&applied.operation_id, &applied.plan_id)
+        .unwrap();
+    let archived = key(&p, "Archived");
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::TrashNode {
+            source: display(&p.ar.join("Archived")),
+        },
+    );
+    transfer(
+        &p.a,
+        &p.ar,
+        &p.b,
+        &p.identity,
+        &BTreeSet::from([archived.clone()]),
+    );
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: BTreeSet::from([archived.clone()]),
+        },
+    );
+    let leaf = |lifecycle: &str| weftext_data::QueryPlan {
+        scope: weftext_data::QueryScope {
+            lifecycle: lifecycle.into(),
+            ..Default::default()
+        },
+        types: vec!["task".into()],
+        select: vec![weftext_data::QueryColumn {
+            name: "actual".into(),
+            expr: "nextCivilDay(status == 'done' ? date('9999-12-31') : date('2026-01-01'))".into(),
+        }],
+        ..Default::default()
+    };
+    let plan = if mixed {
+        weftext_data::QueryPlan {
+            advanced: Some(weftext_data::QueryAdvanced {
+                union_all: vec![leaf("live"), leaf("trash")],
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    } else {
+        leaf("trash")
+    };
+    save_definition(
+        &mut p.a,
+        &p.ar,
+        "Note",
+        &plan,
+        &weftext_data::FrozenAdvancedInput::default(),
+    );
+    let note = key(&p, "Note");
+    transfer(
+        &p.a,
+        &p.ar,
+        &p.b,
+        &p.identity,
+        &BTreeSet::from([note.clone()]),
+    );
+    let chosen = chosen_definition(&p.b, &p.identity, &note);
+    let request = typed(&mut p, chosen, BTreeMap::new());
+    (p, request, note, archived)
+}
+
+#[test]
+fn typed_trash_and_mixed_queries_execute_original_actual_rows_and_freeze_both_lifecycles() {
+    for mixed in [false, true] {
+        let (mut p, request, _, archived) = lifecycle_query_pair(mixed, false);
+        let before = fs::read(p.br.join("Note/Note.typ")).unwrap();
+        let preview = p.b.prepare_operation(request.clone()).unwrap();
+        let transaction = p.b.operations[&preview.operation_id]
+            .transaction
+            .as_ref()
+            .unwrap();
+        let ObjectKey::Node(archived_id) = archived else {
+            unreachable!()
+        };
+        assert_eq!(
+            transaction.expected_trash_membership,
+            Some(BTreeSet::from([archived_id]))
+        );
+        assert_eq!(transaction.expected_membership.is_some(), mixed);
+        assert!(
+            !transaction
+                .expected_membership
+                .as_ref()
+                .is_some_and(|members| members.is_empty())
+        );
+        assert_eq!(fs::read(p.br.join("Note/Note.typ")).unwrap(), before);
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        drop(p.b);
+        p.b = Core::new(&p.bd).unwrap();
+        assert_eq!(p.b.prepare_operation(request).unwrap().status, "committed");
+        let snapshot = p.b.trash_admitted_snapshot(&p.br).unwrap();
+        assert!(snapshot.complete);
+        assert_eq!(snapshot.files.len(), 1);
+        // A real registered read-only Trash cut is still no generic writer.
+        let error =
+            p.b.prepare_admitted_operation(
+                OperationRequest {
+                    operation_id: fresh(),
+                    root: display(&p.br),
+                    intent: OperationIntent::NewNode {
+                        parent: display(&p.br),
+                        name: "Unauthorized".into(),
+                        source: None,
+                    },
+                },
+                &snapshot.cut_id,
+            )
+            .unwrap_err();
+        assert_eq!(error.code, "readOnly");
+        assert!(!p.br.join("Unauthorized").exists());
+    }
+}
+
+#[test]
+fn typed_trash_and_mixed_queries_cannot_replace_real_failed_rows_with_empty_input() {
+    for mixed in [false, true] {
+        let (mut p, request, _, _) = lifecycle_query_pair(mixed, true);
+        let before = fs::read(p.br.join("Note/Note.typ")).unwrap();
+        let operation = request.operation_id.clone();
+        assert_eq!(
+            p.b.prepare_operation(request).unwrap_err().code,
+            "queryInvocationUnavailable"
+        );
+        assert_eq!(fs::read(p.br.join("Note/Note.typ")).unwrap(), before);
+        assert!(!p.b.operations.contains_key(&operation));
+    }
+}
+
+#[test]
+fn typed_trash_membership_is_rechecked_before_effect_and_after_restart() {
+    let (mut p, request, _, _) = lifecycle_query_pair(false, false);
+    let preview = p.b.prepare_operation(request).unwrap();
+    let trash = p.b.trash_entries(&p.br).unwrap().remove(0);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::RestoreNode {
+            trash_operation_id: trash.operation_id,
+            node_id: None,
+            parent: display(&p.br),
+            name: "Restored".into(),
+        },
+    );
+    let before = fs::read(p.br.join("Note/Note.typ")).unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.validate_recovery_scope(
+            p.b.operations[&preview.operation_id]
+                .transaction
+                .as_ref()
+                .unwrap()
+        )
+        .unwrap_err()
+        .code,
+        "scopeChanged"
+    );
+    assert_eq!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "syncBasisChanged"
+    );
+    assert_eq!(fs::read(p.br.join("Note/Note.typ")).unwrap(), before);
+    assert!(!p.b.committed(&preview.operation_id));
+}
+
 #[test]
 fn typed_committed_pinned_definition_uses_exact_historical_source_without_inventing_current_slot() {
     let mut p = pair(&["Note"]);

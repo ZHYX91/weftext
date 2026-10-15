@@ -168,6 +168,7 @@ impl std::ops::Deref for QueryValidationRequirements {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct CheckedRevalidation {
     pub states: BTreeMap<ObjectKey, Version>,
     pub dependencies: Vec<Dependency>,
@@ -212,6 +213,9 @@ pub struct SyncRevalidationCut {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncRevalidationReview {
+    /// A caller-owned action identity. Review never creates an operation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_id: Option<String>,
     pub expected_installed: Vec<Dependency>,
     pub reviewed_versions: Vec<Dependency>,
     /// Same exact decisions/after states, with actual semantic reads populated
@@ -236,6 +240,7 @@ pub(crate) fn review_revalidation(
         .cloned()
         .collect();
     Ok(SyncRevalidationReview {
+        operation_id: None,
         expected_installed: installed_cut(local, &selected),
         reviewed_versions: received_cut(&graph, &selected)?,
         resolutions: reviewed
@@ -639,6 +644,42 @@ pub(crate) fn revalidation_cut(
     Ok(cut)
 }
 
+fn inherited_retired(
+    object: &ObjectKey,
+    mut read: impl FnMut(&ObjectKey) -> Result<(bool, Option<ObjectKey>)>,
+) -> Result<bool> {
+    let mut next = Some(object.clone());
+    let mut seen = BTreeSet::new();
+    let mut retired = false;
+    while let Some(object) = next {
+        if seen.len() == MAX_FILES || !seen.insert(object.clone()) {
+            return Err(refuse(
+                "syncIncomplete",
+                "Lifecycle parent closure is cyclic or exceeds its budget",
+            ));
+        }
+        let (flag, parent) = read(&object)?;
+        retired |= flag;
+        next = parent;
+    }
+    Ok(retired)
+}
+
+pub(crate) fn effective_retired(
+    object: &ObjectKey,
+    chosen: &BTreeMap<ObjectKey, Version>,
+) -> Result<bool> {
+    inherited_retired(object, |object| {
+        let version = chosen.get(object).ok_or_else(|| {
+            refuse(
+                "syncDependencyRequired",
+                "The exact lifecycle parent is outside the chosen cut",
+            )
+        })?;
+        Ok((version.state.retired, version.state.parent.clone()))
+    })
+}
+
 struct Validator<'a> {
     graph: &'a ReplicaGraph,
     chosen: BTreeMap<ObjectKey, Version>,
@@ -660,6 +701,12 @@ struct Validator<'a> {
     annotation_targets: Vec<SyncAnnotationTargetStatus>,
 }
 impl Validator<'_> {
+    fn retired(&mut self, object: &ObjectKey) -> Result<bool> {
+        inherited_retired(object, |object| {
+            let version = self.need(object)?;
+            Ok((version.state.retired, version.state.parent))
+        })
+    }
     fn evidence(&mut self, value: RequiredSemanticEvidence) -> Result<()> {
         let key = serde_json::to_string(&value)?;
         if self.evidence.len() == MAX_FILES && !self.evidence.contains_key(&key) {
@@ -928,6 +975,7 @@ impl Validator<'_> {
         };
         let owner = self.node(id);
         let resources = super::apply::validate_state(self.graph, object, &version.state)?;
+        let retired = self.retired(object)?;
         let mut context = ValidationContext {
             owner: Some(format!(
                 "weftext-node://{}/{}",
@@ -947,12 +995,7 @@ impl Validator<'_> {
             context.resources.push(ResourceMetadata {
                 resource_ref: reference,
                 owner: context.owner.clone().unwrap(),
-                lifecycle: if version.state.retired {
-                    "trash"
-                } else {
-                    "live"
-                }
-                .into(),
+                lifecycle: if retired { "trash" } else { "live" }.into(),
             });
         }
         Ok(context)
@@ -1047,7 +1090,7 @@ impl Validator<'_> {
         let id = self.target(reference, "node")?;
         let object = ObjectKey::Node(id.clone());
         let version = self.need(&object)?;
-        if version.state.retired {
+        if self.retired(&object)? {
             return Err(refuse(
                 "citationWorkUnavailable",
                 "Chosen citation Work is retired",
@@ -1646,6 +1689,62 @@ fn check_revalidation(
     enforce_review: bool,
     query_members: &BTreeSet<ObjectKey>,
 ) -> Result<CheckedRevalidation> {
+    check_revalidation_at_cut(
+        graph,
+        chosen,
+        local,
+        reviewed,
+        enforce_review,
+        query_members,
+        false,
+    )
+}
+
+/// External adoption validates precisely the reviewed installed basis. The
+/// received graph remains intact for exact historical inputs; its newer heads
+/// never replace an installed source or imply a conflict-resolution decision.
+pub(crate) fn inspect_installed_adoption(
+    graph: &ReplicaGraph,
+    chosen: &BTreeMap<ObjectKey, Version>,
+    local: &BTreeMap<ObjectKey, LocalObject>,
+    changed: &BTreeSet<ObjectKey>,
+    query_members: &BTreeSet<ObjectKey>,
+) -> Result<CheckedRevalidation> {
+    let reviewed = changed
+        .iter()
+        .map(|object| {
+            let original = local
+                .get(object)
+                .ok_or_else(|| invalid("Adoption requires an originally installed owner"))?;
+            let state = chosen
+                .get(object)
+                .ok_or_else(|| invalid("Adoption is missing its exact observed after state"))?
+                .state
+                .clone();
+            Ok(SyncRevalidation {
+                object: object.clone(),
+                revisions: BTreeSet::from([original.revision.clone()]),
+                decision: SyncRevalidationDecision::Repair {
+                    base_revision: original.revision.clone(),
+                },
+                state,
+                reviewed_dependencies: vec![],
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    check_revalidation_at_cut(graph, chosen, local, &reviewed, false, query_members, true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn check_revalidation_at_cut(
+    graph: &ReplicaGraph,
+    chosen: &BTreeMap<ObjectKey, Version>,
+    local: &BTreeMap<ObjectKey, LocalObject>,
+    reviewed: &[SyncRevalidation],
+    enforce_review: bool,
+    query_members: &BTreeSet<ObjectKey>,
+    installed_cut: bool,
+) -> Result<CheckedRevalidation> {
     if reviewed.is_empty() || reviewed.len() > MAX_CHANGES || chosen.len() > MAX_CHANGES {
         return Err(refuse(
             "budget",
@@ -1653,14 +1752,35 @@ fn check_revalidation(
         ));
     }
     validate_proposed_file_revisions(graph, chosen)?;
-    let current = graph.objects()?;
-    if graph.manifests.iter().any(|(id, manifest)| {
-        manifest
-            .changes
+    let current = if installed_cut {
+        local
             .iter()
-            .any(|change| chosen.contains_key(&change.object))
-            && matches!(graph.status(id), Ok(Admission::Staged { .. }))
-    }) {
+            .map(|(object, installed)| {
+                (
+                    object.clone(),
+                    ObjectView {
+                        versions: vec![Version {
+                            commit: installed.commit.clone(),
+                            revision: installed.revision.clone(),
+                            state: installed.state.clone(),
+                        }],
+                        common_bases: vec![],
+                    },
+                )
+            })
+            .collect()
+    } else {
+        graph.objects()?
+    };
+    if !installed_cut
+        && graph.manifests.iter().any(|(id, manifest)| {
+            manifest
+                .changes
+                .iter()
+                .any(|change| chosen.contains_key(&change.object))
+                && matches!(graph.status(id), Ok(Admission::Staged { .. }))
+        })
+    {
         return Err(refuse(
             "syncIncomplete",
             "Hydrate the complete reviewed transaction before semantic revalidation",
@@ -1724,7 +1844,7 @@ fn check_revalidation(
     let mut validator = Validator {
         graph,
         chosen: chosen.clone(),
-        allow_discovery: !enforce_review,
+        allow_discovery: !enforce_review && !installed_cut,
         current,
         local,
         used_blobs: BTreeSet::new(),
@@ -1749,6 +1869,7 @@ fn check_revalidation(
     let mut dependency_reads = BTreeMap::new();
     for item in reviewed {
         validator.reads.clear();
+        let invocation_start = validator.invocations.len();
         let version = &chosen[&item.object];
         super::apply::validate_state(graph, &item.object, &version.state)?;
         match &item.object {
@@ -1791,7 +1912,18 @@ fn check_revalidation(
                 })
                 .collect(),
         );
-        if enforce_review && validator.reads != declared {
+        let native_pending = validator.invocations[invocation_start..]
+            .iter()
+            .any(|invocation| {
+                weftext_data::query_products(&invocation.plan, &invocation.context.definitions)
+                    .is_ok_and(|products| !products.is_empty())
+            });
+        // Native reads are admitted only after the same original worker input
+        // has completed. The original writer must then enforce exact equality.
+        if enforce_review
+            && validator.reads != declared
+            && !(native_pending && validator.reads.is_subset(&declared))
+        {
             return Err(refuse(
                 "syncDependencyRequired",
                 "The reviewed dependency cut differs from the actual semantic read closure",

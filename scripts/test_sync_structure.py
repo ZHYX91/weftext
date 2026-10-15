@@ -13,6 +13,7 @@ Only this class's structure cases run. Unknown selections fail before startup;
 unsupported planner refusals cannot count as successful negative cases.
 """
 import base64
+import copy
 import hashlib
 import io
 import json
@@ -129,6 +130,10 @@ class SyncStructure(SyncCompound):
         self.nested_image = image
 
     def setUp(self):
+        # Shorten physical paths without changing the method identity used by
+        # the real Native producer in prepare_source_before_sync.
+        names = sorted(name for name in type(self).__dict__ if name.startswith('test_sync_structure_'))
+        self.fixture_directory_name = f'c{names.index(self._testMethodName) + 1:02d}'
         super().setUp()
         binding = self.call(self.b, '/api/sync/binding', root=str(self.rb))
         self.assertNotIn({'kind': 'rules'}, binding['installedObjects'])
@@ -406,6 +411,173 @@ class SyncStructure(SyncCompound):
         self.test_sync_compound_two_moves_content_resources_annotations_and_private_facts()
         self.assert_rules_installed()
 
+    def test_sync_structure_directory_move(self):
+        """Directory relocation revalidates its child's exact older dependency."""
+        directory = self.ra / 'Folder'
+        directory.mkdir()
+        admission = self.call(self.a, '/api/navigation/admit-directory', root=str(self.ra),
+                              path=str(directory), operationId=uid())
+        self.commit(self.a, admission['preview'])
+        marker = json.loads((directory / 'weftext.directory.json').read_bytes())
+        key = {'kind': 'directory', 'id': marker['directoryId']}
+        reference = f'weftext-directory://{self.identity["workspaceId"]}/{marker["directoryId"]}'
+        move_child = self.call(self.a, '/api/operations/prepare', operationId=uid(), root=str(self.ra),
+                               intent={'kind': 'moveNode', 'source': str(self.ra / 'Left'),
+                                       'parent': str(directory)})
+        self.commit(self.a, move_child)
+        objects = [key, self.keys['Left']]
+        self.transfer(self.a, self.ra, self.b, objects)
+        first = self.call(self.b, '/api/operations/prepare', operationId=uid(), root=str(self.rb),
+                          intent={'kind': 'applySync', 'identity': self.identity, 'objects': objects})
+        self.commit(self.b, first)
+        self.assertFalse((self.rb / 'Left').exists())
+        before = tree_state(self.rb / 'Folder')
+        original_marker = (self.rb / 'Folder/weftext.directory.json').read_bytes()
+        current = self.open(self.b, self.rb, Path('Folder/Left/Left.typ'))
+        self.assertEqual(current['recoveredDraft'], self.drafts['Left'])
+        self.assertEqual(current['nodeId'], self.keys['Left']['id'])
+        original_history = self.call(self.b, '/api/history/list', sessionId=current['sessionId'])
+        original_versions = {version['versionId'] for version in original_history['versions']}
+        resource_before = self.resources(self.b, current)['baseline.png']
+
+        sender = self.open(self.a, self.ra, Path('Folder/Left/Left.typ'))
+        sender_draft = sender['source'] + '\nDirectory moved with unsaved sender draft 中文😀'
+        self.call(self.a, '/api/draft', sessionId=sender['sessionId'], baseId=sender['baseId'],
+                  source=sender_draft)
+        sender_before = tree_state(directory)
+        request = {'operationId': uid(), 'root': str(self.ra),
+                   'intent': {'kind': 'relocateDirectory', 'source': str(directory),
+                              'parent': str(self.ra / 'Container'), 'name': 'MovedFolder'}}
+        planned = self.call(self.a, '/api/operations/prepare', **request)
+        self.assertEqual(planned['kind'], 'relocateDirectory')
+        self.assertEqual(tree_state(directory), sender_before)
+        self.assertEqual(self.call(self.a, '/api/operations/prepare', **request), planned)
+        receipt = self.commit(self.a, planned)
+        moved = self.ra / 'Container/MovedFolder'
+        self.assertFalse(directory.exists())
+        self.assertEqual(tree_state(moved), sender_before)
+        self.assertFalse((moved / 'MovedFolder.typ').exists())
+        effects = receipt.get('affectedDocuments', [])
+        rebound = next(effect['document'] for effect in effects
+                       if effect['priorSessionId'] == sender['sessionId'])
+        self.assertEqual(Path(rebound['path']), moved / 'Left/Left.typ')
+        self.assertEqual(rebound['nodeId'], sender['nodeId'])
+        self.assertEqual(rebound['recoveredDraft'], sender_draft)
+        target = self.call(self.a, '/api/navigation/resolve', root=str(self.ra), targetRef=reference)
+        self.assertEqual(target['status'], 'managed')
+        self.assertEqual(Path(target['path']), moved)
+        self.assertEqual(self.commit(self.a, planned)['operationId'], planned['operationId'])
+        self.assertEqual(tree_state(moved), sender_before)
+
+        self.transfer(self.a, self.ra, self.b, objects)
+        receiver_before = tree_state(self.rb)
+        apply_request = {'operationId': uid(), 'root': str(self.rb),
+                         'intent': {'kind': 'applySync', 'identity': self.identity, 'objects': objects}}
+        refused = self.call(self.b, '/api/operations/prepare', expected=409, **apply_request)
+        self.assertEqual(refused['error']['code'], 'syncDependencyConflict',
+                         'The installed child still names the original Folder revision; Apply must not silently upgrade it')
+        self.assertEqual(tree_state(self.rb), receiver_before)
+        self.assertEqual(self.call(self.b, '/api/operations/status',
+                                   operationId=apply_request['operationId'])['status'], 'unknown')
+        cut = self.call(self.b, '/api/sync/revalidation-cut', root=str(self.rb),
+                        identity=self.identity, objects=objects)
+        self.assertEqual(cut['coverage'], 'complete')
+        choices = []
+        for object_key in objects:
+            entry = next(item for item in cut['objects'] if item['object'] == object_key)
+            self.assertEqual(len(entry['view']['versions']), 1)
+            version = entry['view']['versions'][0]
+            choices.append({'object': object_key, 'revisions': [version['revision']],
+                            'decision': {'kind': 'preserve', 'revision': version['revision']},
+                            'state': copy.deepcopy(version['state']), 'reviewedDependencies': []})
+            if object_key == self.keys['Left']:
+                self.assertIn(key, entry['unsettledDependencies'])
+                source = self.call(self.b, '/api/sync/file', identity=self.identity, object=object_key,
+                                   revision=version['revision'], path='Left.typ')
+                self.assertEqual(source['text'], current['source'])
+                self.assertEqual(source['fileRevision'], version['state']['fileRevisions']['Left.typ'])
+                self.assertEqual(source['digest'], version['state']['files']['Left.typ'])
+                original_child = copy.deepcopy(version)
+        operation_id = uid()
+        review = self.call(self.b, '/api/sync/revalidation-review', root=str(self.rb), identity=self.identity,
+                           operationId=operation_id, resolutions=choices, blobs={})
+        self.assertEqual(review['operationId'], operation_id)
+        self.assertEqual(len(review['resolutions']), len(choices))
+        for expected in choices:
+            actual = next(item for item in review['resolutions'] if item['object'] == expected['object'])
+            for field in ['object', 'revisions', 'decision', 'state']:
+                self.assertEqual(actual[field], expected[field])
+        self.assertEqual(tree_state(self.rb), receiver_before, 'Explicit dependency review has no author effect')
+        self.assertEqual(self.call(self.b, '/api/operations/status', operationId=operation_id)['status'], 'unknown')
+        received_request = {'operationId': operation_id, 'root': str(self.rb), 'intent': {
+            'kind': 'revalidateSync', 'identity': self.identity,
+            'expectedInstalled': review['expectedInstalled'], 'reviewedVersions': review['reviewedVersions'],
+            'resolutions': review['resolutions'], 'blobs': {}}}
+        (self.folder / 'directory-revalidation.json').write_text(json.dumps({
+            'rejectedApply': apply_request, 'review': review, 'request': received_request,
+            'receiverBefore': receiver_before, 'folderBefore': before,
+        }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        try:
+            received_plan = self.call(self.b, '/api/operations/prepare', **received_request)
+        except AssertionError:
+            self.assertEqual(tree_state(self.rb), receiver_before, 'An unsuccessful prepare must preserve the exact author tree')
+            self.assertEqual(self.call(self.b, '/api/operations/status', operationId=operation_id)['status'], 'unknown')
+            raise
+        self.assertEqual(received_plan['kind'], 'revalidateSync')
+        self.assertEqual(received_plan['operationId'], operation_id)
+        self.assertEqual(received_plan['status'], 'prepared')
+        self.assertEqual(tree_state(self.rb), receiver_before)
+        self.assertEqual(tree_state(self.rb / 'Folder'), before)
+        self.restart_b()
+        self.assertEqual(tree_state(self.rb), receiver_before)
+        self.assertEqual(self.call(self.b, '/api/operations/prepare', **received_request), received_plan)
+        self.assertEqual(self.call(self.b, '/api/sync/operation', operationId=operation_id),
+                         {'request': received_request, 'plan': received_plan})
+        self.commit(self.b, received_plan)
+        receiver_target = self.rb / 'Container/MovedFolder'
+        self.assertFalse((self.rb / 'Folder').exists())
+        self.assertEqual(tree_state(receiver_target), before)
+        self.assertEqual((receiver_target / 'weftext.directory.json').read_bytes(), original_marker)
+        self.assertFalse((receiver_target / 'MovedFolder.typ').exists())
+        target = self.call(self.b, '/api/navigation/resolve', root=str(self.rb), targetRef=reference)
+        self.assertEqual(target['status'], 'managed')
+        self.assertEqual(Path(target['path']), receiver_target)
+        child = self.open(self.b, self.rb, Path('Container/MovedFolder/Left/Left.typ'))
+        self.assertEqual(child['nodeId'], self.keys['Left']['id'])
+        self.assertEqual(child['recoveredDraft'], self.drafts['Left'])
+        history = self.call(self.b, '/api/history/list', sessionId=child['sessionId'])
+        self.assertEqual({version['versionId'] for version in history['versions']}, original_versions)
+        for version, source in self.history['Left'].items():
+            self.assertEqual(self.call(self.b, '/api/history/read', sessionId=child['sessionId'],
+                                       versionId=version)['source'], source)
+        resource = self.resources(self.b, child)['baseline.png']
+        for field in ['resourceId', 'resource', 'nodeId', 'revision']:
+            self.assertEqual(resource[field], resource_before[field])
+        self.assertEqual(self.call(self.b, '/api/resources/read', sessionId=child['sessionId'],
+                                   resource=resource['resource'], revision=resource['revision']), self.baseline_png)
+        self.call(self.b, '/api/sync/publish', root=str(self.rb))
+        state = self.call(self.b, '/api/sync/status', identity=self.identity)
+        child_versions = next(item['view']['versions'] for item in state['objects']
+                              if item['object'] == self.keys['Left'])
+        self.assertEqual(len(child_versions), 1)
+        self.assertNotEqual(child_versions[0]['revision'], original_child['revision'])
+        for field in ['files', 'fileRevisions']:
+            self.assertEqual(child_versions[0]['state'][field], original_child['state'][field])
+        after = tree_state(self.rb)
+        for relative, original in receiver_before.items():
+            if relative != 'Folder' and not relative.startswith('Folder/'):
+                self.assertEqual(after[relative], original, f'Directory revalidation preserves unrelated {relative}')
+        installed = tree_state(self.rb)
+        self.restart_b()
+        status = self.call(self.b, '/api/operations/status', operationId=received_plan['operationId'])
+        self.assertEqual(status['status'], 'committed')
+        original = self.call(self.b, '/api/sync/operation', operationId=operation_id)
+        self.assertEqual(original['request'], received_request)
+        self.assertEqual(original['plan']['planId'], received_plan['planId'])
+        self.assertEqual(original['plan']['status'], 'committed')
+        self.assertEqual(self.commit(self.b, received_plan), status)
+        self.assertEqual(tree_state(self.rb), installed)
+
     def test_sync_structure_missing_rules_restart_keeps_original_plan_and_receipt(self):
         self.test_sync_compound_restart_preserves_original_id_plan_and_committed_receipt()
         self.assert_rules_installed()
@@ -431,6 +603,350 @@ class SyncStructure(SyncCompound):
         self.assertEqual(slot.read_bytes(), original)
         self.assertEqual(physical_identity(slot), identity)
         self.assertFalse((self.rb / 'Container/Right').exists())
+
+    def structure_request(self, objects):
+        order = {'node': 0, 'directory': 1, 'rootDirectory': 2, 'schema': 3,
+                 'settings': 4, 'tags': 5, 'rules': 6}
+        return {'operationId': uid(), 'root': str(self.rb), 'intent': {
+            'kind': 'applySync', 'identity': self.identity,
+            'objects': sorted(objects, key=lambda key: (order[key['kind']], key.get('id', '')))}}
+
+    def configuration_move_case(self):
+        for leaf in ['.weftext-schema.json', '.weftext-settings.json', '.weftext-rules']:
+            self.assertFalse((self.rb / leaf).exists())
+        schema = self.call(self.a, '/api/data/schema', root=str(self.ra))
+        value = json.loads(schema['source'])
+        value['aliases']['compound_configuration'] = 'tasks/task'
+        source = json.dumps(value, ensure_ascii=False, indent=2) + '\n'
+        planned = self.call(self.a, '/api/data/schema/prepare', root=str(self.ra), operationId=uid(),
+                            source=source, beforeSource=schema['source'], beforeRevision=schema['revision'])
+        self.assertEqual(self.call(self.a, '/api/data/schema/install', operationId=planned['operationId'],
+                                   planId=planned['planId'])['status'], 'committed')
+        style = self.call(self.a, '/api/styles/read', root=str(self.ra))
+        planned = self.call(self.a, '/api/styles/prepare', root=str(self.ra), operationId=uid(),
+                            baseId=style['baseId'], source=style['source'] + '\n// Explicit disabled configuration fixture\n',
+                            enabled=False)
+        installed = self.call(self.a, '/api/styles/apply', root=str(self.ra), operationId=planned['operationId'],
+                              planId=planned['planId'])
+        self.assertFalse(installed['enabled'])
+        self.assertEqual(installed['operationReceipt']['status'], 'committed')
+        self.changes()
+        keys = [{'kind': kind} for kind in ['schema', 'settings', 'rules']]
+        self.transfer(self.a, self.ra, self.b,
+                      [self.keys[name] for name in ['Left', 'Right', 'Still']] + keys)
+        self.configuration_bytes = {leaf: (self.ra / leaf).read_bytes() for leaf in [
+            '.weftext-schema.json', '.weftext-settings.json', '.weftext-rules']}
+        return self.structure_request([self.keys[name] for name in ['Left', 'Right', 'Still']] + keys)
+
+    def test_sync_structure_missing_schema_settings_moves_share_original_plan(self):
+        request = self.configuration_move_case()
+        plan = self.prepare(request)
+        self.assert_original_prepared_after_restart(request, plan)
+        receipt = self.commit(self.b, plan)
+        self.assert_installed()
+        self.assert_rules_installed()
+        graph = self.call(self.a, '/api/sync/status', identity=self.identity)
+        for kind, leaf in [('schema', '.weftext-schema.json'), ('settings', '.weftext-settings.json'),
+                           ('rules', '.weftext-rules')]:
+            self.assertEqual((self.rb / leaf).read_bytes(), self.configuration_bytes[leaf])
+            self.assertNotEqual(physical_identity(self.rb / leaf), physical_identity(self.ra / leaf))
+            versions = next(item['view']['versions'] for item in graph['objects'] if item['object'] == {'kind': kind})
+            self.assertEqual(len(versions), 1)
+            self.assertEqual(plan['revisions'][str(self.rb / leaf)], versions[0]['state']['fileRevisions'][leaf])
+        current = tree_state(self.rb)
+        self.restart_b()
+        self.assertEqual(self.call(self.b, '/api/sync/operation', operationId=plan['operationId'])['request'], request)
+        self.assertEqual(self.commit(self.b, plan), receipt)
+        self.assertEqual(tree_state(self.rb), current)
+
+    def test_sync_structure_late_settings_slot_refuses_configuration_and_moves(self):
+        request = self.configuration_move_case()
+        plan = self.prepare(request)
+        self.assert_original_prepared_after_restart(request, plan)
+        slot = self.rb / '.weftext-settings.json'
+        with slot.open('xb') as handle:
+            handle.write(self.configuration_bytes['.weftext-settings.json'])
+        foreign = physical_identity(slot)
+        current = tree_state(self.rb)
+        self.assert_rejected_without_effect(plan, current)
+        self.assertEqual(slot.read_bytes(), self.configuration_bytes['.weftext-settings.json'])
+        self.assertEqual(physical_identity(slot), foreign)
+        self.assertFalse((self.rb / '.weftext-schema.json').exists())
+        self.assertFalse((self.rb / '.weftext-rules').exists())
+        self.assertEqual(self.call(self.b, '/api/sync/operation', operationId=plan['operationId'])['request'], request)
+
+    def test_sync_structure_new_nodes_in_moving_tree_keep_births_and_resource(self):
+        self.changes()
+        child = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed'),
+                          name='NewChild', operationId=uid())
+        nested = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed/NewChild'),
+                           name='Nested', operationId=uid())
+        self.save(self.a, self.ra, Path('Renamed/NewChild/NewChild.typ'), 'Actual new child within moving tree 中文😀')
+        self.import_resource(self.a, self.ra, Path('Renamed/NewChild/Nested/Nested.typ'), 'nested.bin', bytes([7, 0, 255]))
+        created = [(child, Path('Renamed/NewChild/NewChild.typ')),
+                   (nested, Path('Renamed/NewChild/Nested/Nested.typ'))]
+        keys = [self.keys[name] for name in ['Left', 'Right', 'Still']] + [
+            {'kind': 'node', 'id': doc['nodeId']} for doc, _ in created]
+        self.transfer(self.a, self.ra, self.b, keys)
+        request = self.structure_request(keys)
+        plan = self.prepare(request)
+        self.assertFalse((self.rb / 'Left/NewChild').exists())
+        self.assertFalse((self.rb / 'Renamed').exists())
+        self.assert_original_prepared_after_restart(request, plan)
+        receipt = self.commit(self.b, plan)
+        self.assert_installed()
+        self.assert_rules_installed()
+        for doc, relative in created:
+            actual = self.open(self.b, self.rb, relative)
+            self.assertEqual(actual['nodeId'], doc['nodeId'])
+            self.assertEqual(actual['source'].encode(), (self.ra / relative).read_bytes())
+            self.assertNotEqual(physical_identity(self.rb / relative), physical_identity(self.ra / relative))
+            self.assertNotEqual(physical_identity((self.rb / relative).parent), physical_identity((self.ra / relative).parent))
+            history = self.call(self.b, '/api/history/list', sessionId=actual['sessionId'])
+            births = [version for version in history['versions'] if version['operationId'] == plan['operationId']]
+            self.assertEqual(len(births), 1)
+            self.assertEqual(self.call(self.b, '/api/history/read', sessionId=actual['sessionId'],
+                                       versionId=births[0]['versionId'])['source'], actual['source'])
+        owner = self.open(self.b, self.rb, created[1][1])
+        resources = self.resources(self.b, owner)
+        self.assertEqual(set(resources), {'nested.bin'})
+        resource = resources['nested.bin']
+        self.assertEqual(resource['currentness'], 'accepted')
+        self.assertEqual(self.call(self.b, '/api/resources/read', sessionId=owner['sessionId'],
+                                   resource=resource['resource'], revision=resource['revision']), bytes([7, 0, 255]))
+        current = tree_state(self.rb)
+        self.restart_b()
+        self.assertEqual(self.commit(self.b, plan), receipt)
+        self.assertEqual(tree_state(self.rb), current)
+
+    def test_sync_structure_new_ordinary_directory_parent_and_moves_keep_identity(self):
+        self.changes()
+        directory = self.ra / 'NewContainer'
+        directory.mkdir()
+        admitted = self.call(self.a, '/api/navigation/admit-directory', root=str(self.ra),
+                             path=str(directory), operationId=uid())
+        self.commit(self.a, admitted['preview'])
+        marker = (directory / 'weftext.directory.json').read_bytes()
+        directory_id = json.loads(marker)['directoryId']
+        key = {'kind': 'directory', 'id': directory_id}
+        moved = self.call(self.a, '/api/operations/prepare', root=str(self.ra), operationId=uid(),
+                          intent={'kind': 'moveNode', 'source': str(self.ra / 'Container/Right'),
+                                  'parent': str(directory)})
+        self.commit(self.a, moved)
+        self.after_paths['Right'] = Path('NewContainer/Right/Right.typ')
+        objects = [self.keys[name] for name in ['Left', 'Right', 'Still']] + [key]
+        received = self.transfer(self.a, self.ra, self.b, objects)
+        self.received = {entry['object']['id']: entry['view'] for entry in received['objects'] if entry['object']['kind'] == 'node'}
+        self.assert_received_sources()
+        request = self.structure_request(objects)
+        plan = self.prepare(request)
+        self.assertFalse((self.rb / 'NewContainer').exists())
+        self.assert_original_prepared_after_restart(request, plan)
+        receipt = self.commit(self.b, plan)
+        self.assert_installed()
+        self.assert_rules_installed()
+        self.assertEqual((self.rb / 'NewContainer/weftext.directory.json').read_bytes(), marker)
+        self.assertFalse((self.rb / 'NewContainer/NewContainer.typ').exists())
+        self.assertNotEqual(physical_identity(self.rb / 'NewContainer'), physical_identity(directory))
+        target = self.call(self.b, '/api/navigation/resolve', root=str(self.rb),
+                           targetRef=f'weftext-directory://{self.identity["workspaceId"]}/{directory_id}')
+        self.assertEqual(target['status'], 'managed')
+        self.assertEqual(Path(target['path']), self.rb / 'NewContainer')
+        self.assertIn(key, self.call(self.b, '/api/sync/binding', root=str(self.rb))['installedObjects'])
+        current = tree_state(self.rb)
+        self.restart_b()
+        self.assertEqual(self.commit(self.b, plan), receipt)
+        self.assertEqual(tree_state(self.rb), current)
+
+    def member_retirement_case(self, mixed):
+        # Keep the original partial-clone fixture, then genuinely install its
+        # complete predecessor before the operation under test. The receiver
+        # starts with every removed Resource registered at its original FI.
+        for name in ['Left', 'Right']:
+            self.import_resource(self.a, self.ra, Path(name) / f'{name}.typ', 'keep.bin',
+                                 f'ORIGINAL KEEP {name} 中文'.encode())
+        self.import_resource(self.a, self.ra, Path('Left/Left.typ'), 'extra.bin', b'ORIGINAL EXTRA LEFT')
+        binding = self.call(self.a, '/api/sync/binding', root=str(self.ra))
+        self.transfer(self.a, self.ra, self.b, binding['installedObjects'])
+        baseline = self.call(self.b, '/api/operations/prepare', **self.structure_request(binding['installedObjects']))
+        self.commit(self.b, baseline)
+        self.member_owners = {}
+        self.member_originals = []
+        status = self.call(self.b, '/api/sync/status', identity=self.identity)
+        for name, removed in [('Left', ['baseline.png', 'extra.bin']), ('Right', ['baseline.png'])]:
+            doc = self.open(self.b, self.rb, Path(name) / f'{name}.typ')
+            resources = self.resources(self.b, doc)
+            history = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])
+            old = next(item['view']['versions'] for item in status['objects'] if item['object'] == self.keys[name])
+            self.assertEqual(len(old), 1)
+            self.member_owners[name] = {
+                'removed': {leaf: {'resource': copy.deepcopy(resources[leaf]),
+                                   'identity': physical_identity(self.rb / name / leaf),
+                                   'bytes': (self.rb / name / leaf).read_bytes()} for leaf in removed},
+                'keep': copy.deepcopy(resources['keep.bin']),
+                'tree': tree_state(self.rb / name), 'predecessor': copy.deepcopy(old[0]),
+                'history': {version['versionId']: self.call(self.b, '/api/history/read', sessionId=doc['sessionId'],
+                            versionId=version['versionId'])['source'] for version in history['versions']
+                            if version['status'] == 'available'},
+            }
+            for leaf in removed:
+                original = self.ra / name / leaf
+                retained = self.folder / f'original-A-{name}-{leaf}'
+                identity = physical_identity(original)
+                data = original.read_bytes()
+                self.retain_original(original, retained)
+                self.member_originals.append({'path': retained, 'identity': identity, 'bytes': data})
+            manifest = self.ra / name / 'weftext.resources.json'
+            identity = physical_identity(manifest)
+            value = json.loads(manifest.read_bytes())
+            value['resources'] = [entry for entry in value['resources'] if entry['path'] not in removed]
+            self.assertEqual([entry['path'] for entry in value['resources']], ['keep.bin'])
+            manifest.write_bytes((json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode())
+            self.assertEqual(physical_identity(manifest), identity)
+        observed = tree_state(self.ra)
+        cut = self.call(self.a, '/api/sync/adoption-cut', root=str(self.ra), identity=self.identity,
+                        objects=binding['installedObjects'])
+        self.assertEqual(len(cut['removedMembers']), 3)
+        self.assertEqual(len(cut['changes']), 2)
+        for member in cut['removedMembers']:
+            self.assertEqual(set(member), {'path', 'baseId'})
+            self.assertTrue(member['baseId'])
+        adopt_request = {'operationId': uid(), 'root': str(self.ra), 'intent': {'kind': 'adoptSyncExternal', **cut}}
+        adopted = self.call(self.a, '/api/operations/prepare', **adopt_request)
+        self.assertEqual(tree_state(self.ra), observed)
+        self.assertEqual(self.call(self.a, '/api/operations/prepare', **adopt_request), adopted)
+        self.commit(self.a, adopted)
+        self.assertEqual(tree_state(self.ra), observed, 'Sender adoption records exact observed absence without rewriting files')
+        if mixed:
+            renamed = self.call(self.a, '/api/operations/prepare', root=str(self.ra), operationId=uid(),
+                                intent={'kind': 'renameNode', 'source': str(self.ra / 'Left'), 'name': 'MovedLeft'})
+            self.commit(self.a, renamed)
+            self.save(self.a, self.ra, Path('Right/Right.typ'), 'A content change shares Resource retirement 中文😀')
+        self.member_paths = {'Left': Path('MovedLeft/MovedLeft.typ') if mixed else Path('Left/Left.typ'),
+                             'Right': Path('Right/Right.typ')}
+        self.member_sender_drafts = {}
+        for name, relative in self.member_paths.items():
+            doc = self.open(self.a, self.ra, relative)
+            draft = doc['source'] + f'\nA ORIGINAL UNSAVED {name} RESOURCE DRAFT 🌿'
+            self.call(self.a, '/api/draft', sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
+            self.member_sender_drafts[name] = draft
+        self.member_sender_tree = tree_state(self.ra)
+        self.member_before = tree_state(self.rb)
+        received = self.transfer(self.a, self.ra, self.b, binding['installedObjects'])
+        self.assertEqual(tree_state(self.rb), self.member_before)
+        self.member_after = {}
+        for name in self.member_paths:
+            view = next(item['view'] for item in received['objects'] if item['object'] == self.keys[name])
+            self.assertEqual(len(view['versions']), 1)
+            state = view['versions'][0]['state']
+            for leaf in self.member_owners[name]['removed']:
+                self.assertNotIn(leaf, state['files'])
+                self.assertNotIn(leaf, state['fileRevisions'])
+            self.member_after[name] = copy.deepcopy(view['versions'][0])
+        request = self.structure_request(binding['installedObjects'])
+        plan = self.call(self.b, '/api/operations/prepare', **request)
+        self.assertEqual(plan['status'], 'prepared')
+        self.assertEqual(plan['kind'], 'applySync')
+        self.assertEqual(tree_state(self.rb), self.member_before)
+        self.assertEqual(self.call(self.b, '/api/operations/prepare', **request), plan)
+        self.member_targets = [Path(change['path']) for change in plan['changes'] if change['action'] == 'retainOriginal']
+        retired = [Path(change['path']) for change in plan['changes'] if change['action'] == 'retireMember']
+        self.assertEqual(len(self.member_targets), 3)
+        self.assertEqual(len(set(self.member_targets)), 3)
+        self.assertEqual(set(retired), {(self.rb / self.member_paths[name]).parent / leaf
+                                       for name, owner in self.member_owners.items() for leaf in owner['removed']})
+        for target in self.member_targets:
+            self.assertTrue(target.resolve().is_relative_to(self.rb.resolve()))
+            self.assertFalse(target.exists())
+        (self.folder / 'resource-retirement-plan.json').write_text(json.dumps({
+            'senderAdoption': adopt_request, 'request': request, 'plan': plan,
+            'targets': [str(target) for target in self.member_targets], 'before': self.member_before,
+        }, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        return request, plan
+
+    def assert_member_retirement_installed(self):
+        self.assertEqual(tree_state(self.ra), self.member_sender_tree)
+        targets = {physical_identity(target): target for target in self.member_targets}
+        self.assertEqual(len(targets), 3)
+        graph = self.call(self.b, '/api/sync/status', identity=self.identity)
+        binding = self.call(self.b, '/api/sync/binding', root=str(self.rb))
+        for original in self.member_originals:
+            self.assertEqual(physical_identity(original['path']), original['identity'])
+            self.assertEqual(original['path'].read_bytes(), original['bytes'])
+        for name, relative in self.member_paths.items():
+            owner = self.member_owners[name]
+            directory = (self.rb / relative).parent
+            heads = next(item['view']['versions'] for item in graph['objects'] if item['object'] == self.keys[name])
+            self.assertEqual(heads, [self.member_after[name]])
+            self.assertIn([self.keys[name], self.member_after[name]['revision']], binding['installedVersions'])
+            source = self.open(self.b, self.rb, relative)
+            self.assertEqual(source['nodeId'], self.keys[name]['id'])
+            self.assertEqual(source['source'].encode(), (self.ra / relative).read_bytes())
+            self.assertEqual(source['recoveredDraft'], self.drafts[name])
+            self.assertEqual(physical_identity(directory), owner['tree']['.'][1])
+            self.assertEqual(physical_identity(self.rb / relative), owner['tree'][f'{name}.typ'][1])
+            for leaf in ['weftext.resources.json', 'weftext.annotations.json', 'personal.raw', 'keep.bin']:
+                self.assertEqual(physical_identity(directory / leaf), owner['tree'][leaf][1])
+            self.assertEqual(hashlib.sha256((directory / 'weftext.annotations.json').read_bytes()).hexdigest(),
+                             owner['tree']['weftext.annotations.json'][3])
+            self.assertEqual((directory / 'personal.raw').read_bytes(), f'B RAW {name} 中文😀'.encode())
+            for version, text in owner['history'].items():
+                self.assertEqual(self.call(self.b, '/api/history/read', sessionId=source['sessionId'],
+                                           versionId=version)['source'], text)
+            resources = self.resources(self.b, source)
+            self.assertEqual(set(resources), {'keep.bin'})
+            for field in ['resourceId', 'resource', 'revision']:
+                self.assertEqual(resources['keep.bin'][field], owner['keep'][field])
+            self.assertEqual(resources['keep.bin']['currentness'], 'accepted')
+            self.assertEqual(self.call(self.b, '/api/resources/read', sessionId=source['sessionId'],
+                                       resource=resources['keep.bin']['resource'], revision=resources['keep.bin']['revision']),
+                             f'ORIGINAL KEEP {name} 中文'.encode())
+            for leaf, asset in owner['removed'].items():
+                self.assertFalse((directory / leaf).exists())
+                target = targets[asset['identity']]
+                self.assertEqual(target.read_bytes(), asset['bytes'])
+                refused = self.call(self.b, '/api/resources/read', expected=409, sessionId=source['sessionId'],
+                                    resource=asset['resource']['resource'], revision=asset['resource']['revision'])
+                self.assertEqual(refused['error']['code'], 'resourceUnavailable',
+                                 'Physical preservation cannot grant the retired ref a current owner role')
+                old = self.call(self.b, '/api/sync/file', identity=self.identity, object=self.keys[name],
+                                revision=owner['predecessor']['revision'], path=leaf)
+                self.assertEqual(old['digest'], hashlib.sha256(asset['bytes']).hexdigest())
+            sender = self.open(self.a, self.ra, relative)
+            self.assertEqual(sender['recoveredDraft'], self.member_sender_drafts[name])
+        current = tree_state(self.rb)
+        for relative, original in self.member_before.items():
+            if relative not in ['Left', 'Right'] and not relative.startswith(('Left/', 'Right/')):
+                self.assertEqual(current[relative], original, f'Resource retirement preserves unrelated {relative}')
+        self.assertEqual(self.call(self.b, '/api/knowledge/trash', root=str(self.rb))['trash'], [],
+                         'Preserving retired Resource files must not invent retired Nodes')
+
+    def member_retirement_commit_and_restart(self, mixed):
+        request, plan = self.member_retirement_case(mixed)
+        self.restart_b()
+        self.assertEqual(tree_state(self.rb), self.member_before)
+        self.assertEqual(self.call(self.b, '/api/sync/operation', operationId=plan['operationId']),
+                         {'request': request, 'plan': plan})
+        self.assertEqual(self.call(self.b, '/api/operations/prepare', **request), plan)
+        receipt = self.commit(self.b, plan)
+        self.assert_member_retirement_installed()
+        binding = self.call(self.b, '/api/sync/binding', root=str(self.rb))
+        self.assertEqual(binding['pendingPublications'], 0)
+        current = tree_state(self.rb)
+        self.restart_b()
+        self.assert_member_retirement_installed()
+        original = self.call(self.b, '/api/sync/operation', operationId=plan['operationId'])
+        self.assertEqual(original['request'], request)
+        self.assertEqual(original['plan']['planId'], plan['planId'])
+        self.assertEqual(original['plan']['status'], 'committed')
+        self.assertEqual(self.commit(self.b, plan), receipt)
+        self.assertEqual(tree_state(self.rb), current)
+
+    def test_sync_structure_member_retirement_multi_owner(self):
+        self.member_retirement_commit_and_restart(False)
+
+    def test_sync_structure_member_retirement_move_content(self):
+        self.member_retirement_commit_and_restart(True)
 
     def test_sync_structure_new_node_parent_two_relocations_content_and_private_facts(self):
         self.new_parent_changes()

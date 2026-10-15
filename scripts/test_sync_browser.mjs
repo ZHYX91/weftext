@@ -103,7 +103,7 @@ try {
   await click(pa, '结束已确认操作'); await close(pa);
   assert.equal((await editor.locator('.cm-line').allTextContents()).join('\n'), unsaved);
   const retained = await api(a, '/api/open', { root: ra, path: note.path }); assert.equal(retained.recoveredDraft, unsaved);
-  assert.match(await pageA.locator('body').innerText(), /同步已改变磁盘版本/);
+  assert.match(await pageA.locator('body').innerText(), /磁盘内容已改变。当前草稿与撤销记录保留，请比较后继续保存。/);
   pa = await sync(pageA);
   await pa.getByLabel('原同步操作编号（地址变化或浏览器记录丢失时）', { exact: true }).fill(originalId);
   await click(pa, '读取原同步操作'); assert.match(await pa.innerText(), /原同步操作：committed/);

@@ -358,6 +358,7 @@ fn exact_resource_follows_proven_owner_move_and_trash_original_leaf() {
     );
     f.execute(OperationIntent::RestoreNode {
         trash_operation_id: p.operation_id,
+        node_id: None,
         parent: display(&f.root),
         name: "Restored".into(),
     });
@@ -396,6 +397,21 @@ fn exact_resource_missing_rules_distinguishes_committed_loss_and_legacy() {
         "basisRequired"
     );
     assert!(pool.is_empty());
+    Core::merge_resource_feature_witness(&mut pool, &q.witness).unwrap();
+    assert!(pool.iter().any(|witness| {
+        Path::new(&witness.binding.path) == legacy.root.join(".weftext-rules")
+            && witness.binding.captured.is_none()
+    }));
+    for witness in &pool {
+        legacy
+            .core
+            .validate_snapshot_witness(&legacy.root, &witness.binding.path, witness)
+            .unwrap();
+    }
+    legacy
+        .core
+        .validate_resource_witness(&legacy.root, &q.witness)
+        .unwrap();
     assert!(!legacy.root.join(".weftext-rules").exists());
     let config = legacy
         .core
@@ -418,6 +434,25 @@ fn exact_resource_missing_rules_distinguishes_committed_loss_and_legacy() {
         .core
         .execute_operation(&p.operation_id, &p.plan_id)
         .unwrap();
+    assert!(
+        legacy
+            .core
+            .validate_resource_witness(&legacy.root, &q.witness)
+            .is_err()
+    );
+    let negative = pool
+        .iter()
+        .find(|witness| {
+            Path::new(&witness.binding.path) == legacy.root.join(".weftext-rules")
+                && witness.binding.captured.is_none()
+        })
+        .unwrap();
+    assert!(
+        legacy
+            .core
+            .validate_snapshot_witness(&legacy.root, &negative.binding.path, negative)
+            .is_err()
+    );
     assert!(
         legacy
             .core

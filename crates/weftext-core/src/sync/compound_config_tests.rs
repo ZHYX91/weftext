@@ -46,6 +46,7 @@ fn missing_configuration(extra: bool) -> Pair {
             identity: cut.identity,
             expected_installed: cut.expected_installed,
             changes: cut.changes,
+            removed_members: cut.removed_members,
         },
     );
     pair.a.publish_sync(&pair.ar).unwrap();

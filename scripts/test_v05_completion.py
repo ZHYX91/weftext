@@ -432,11 +432,30 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(path.with_suffix('.typ.owned-original').read_bytes(), original)
 
     def test_08_draft_persistence_failure_refuses_restore_without_source_effect(self):
+        from test_sync_compound import physical_identity
+
         root, _, doc, versions = self.history_versions('草稿写入失败')
         draft = doc['source'] + '\n需要保护的准确草稿🌿。\n'
         self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
-        draft_file = next(path for path in (self.data_dir / 'drafts').glob('*.json')
-                          if json.loads(path.read_bytes())['path'] == doc['path'])
+        source_identity = physical_identity(Path(doc['path']))
+        expected_identity = dict(zip(('volume', 'index', 'created'), source_identity))
+        candidates = []
+        for path in (self.data_dir / 'drafts').glob('*.json'):
+            original = path.read_bytes()
+            record = json.loads(original)
+            if path.name.endswith('.relocation.json'):
+                # A consumed-input marker is a different original record type,
+                # without a Draft path or source. Do not treat it as a proposal.
+                self.assertIn(set(record), ({'identity', 'consumed'},
+                                            {'library', 'identity', 'consumed'}))
+                self.assertIsInstance(record['consumed'], list)
+                continue
+            if (record['path'] == doc['path'] and record['source'] == draft
+                    and record['identity'] == expected_identity):
+                candidates.append((path, original))
+        self.assertEqual(len(candidates), 1, 'The exact original Draft primary must be unique')
+        draft_file, draft_bytes = candidates[0]
+        self.assertTrue(draft_file.name.startswith('object-'))
         parked = draft_file.with_suffix('.json.owned-parked')
         obstruction = draft_file.with_suffix('.json.owned-obstruction')
         draft_file.rename(parked)
@@ -451,6 +470,8 @@ class V05Completion(features.LocalFeatures):
         finally:
             draft_file.rename(obstruction)
             parked.rename(draft_file)
+        self.assertEqual(draft_file.read_bytes(), draft_bytes)
+        self.assertEqual(physical_identity(Path(doc['path'])), source_identity)
         self.assertEqual(self.reopen(doc, root)['recoveredDraft'], draft)
         self.assertNotIn(request['operationId'], [item['versionId'] for item in self.timeline(doc)['versions']])
 

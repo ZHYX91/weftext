@@ -31,6 +31,14 @@ pub(crate) struct FrozenSemanticEvidence {
     pub discharged: Vec<serde_json::Value>,
     pub deferred_queries: Vec<serde_json::Value>,
     pub annotation_targets: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub native_products: Vec<serde_json::Value>,
+}
+
+pub(crate) struct CapturedSemanticValidation {
+    pub capture: revalidation_evidence::EvidenceCapture,
+    pub checked: revalidation::CheckedRevalidation,
+    historical_blobs: BTreeMap<String, Vec<u8>>,
 }
 
 fn refused(code: &str, message: &str) -> CoreError {
@@ -40,28 +48,65 @@ fn same_path(a: &Path, b: &Path) -> bool {
     crate::history::history_relative_path(a, b).is_some_and(|p| p.as_os_str().is_empty())
 }
 
-fn query_read_members(
-    snapshot: &AdmittedSnapshot,
+pub(crate) fn query_read_members(
+    root: &Path,
+    snapshots: &[AdmittedSnapshot],
     chosen: &BTreeMap<ObjectKey, Version>,
     local: &BTreeMap<ObjectKey, LocalObject>,
-) -> BTreeSet<ObjectKey> {
-    let mut members = snapshot
-        .membership_ids
+) -> Result<BTreeSet<ObjectKey>> {
+    let mut members = snapshots
         .iter()
+        .flat_map(|snapshot| &snapshot.membership_ids)
         .cloned()
         .map(ObjectKey::Node)
         .collect::<BTreeSet<_>>();
-    members.extend(
-        chosen
-            .iter()
-            .filter(|(object, version)| {
-                matches!(object, ObjectKey::Node(_))
-                    && !version.state.retired
-                    && local.get(*object).is_none_or(|old| old.state.retired)
-            })
-            .map(|(object, _)| object.clone()),
-    );
-    members
+    for object in chosen
+        .keys()
+        .filter(|object| matches!(object, ObjectKey::Node(_)))
+    {
+        let retired = revalidation::effective_retired(object, chosen)?;
+        let changed = match local.get(object) {
+            Some(old) => local_retired(root, old)? != retired,
+            None => true,
+        };
+        if changed
+            && snapshots
+                .iter()
+                .any(|snapshot| (snapshot.inventory.status == "trashReadOnly") == retired)
+        {
+            members.insert(object.clone());
+        }
+    }
+    Ok(members)
+}
+
+pub(crate) fn local_retired(root: &Path, local: &LocalObject) -> Result<bool> {
+    Ok(crate::backend::namespace_relative_path(
+        Path::new(&local.directory),
+        &root.join(".weftext-trash"),
+    )?
+    .is_some())
+}
+
+fn query_lifecycles(checked: &revalidation::CheckedRevalidation) -> Result<BTreeSet<String>> {
+    checked
+        .invocations
+        .iter()
+        .try_fold(BTreeSet::new(), |mut lifecycles, invocation| {
+            lifecycles.extend(
+                weftext_data::required_query_lifecycles(
+                    &invocation.plan,
+                    &invocation.context.definitions,
+                )
+                .map_err(|_| {
+                    refused(
+                        "queryScopeUnavailable",
+                        "Actual Query lifecycle closure is unavailable",
+                    )
+                })?,
+            );
+            Ok(lifecycles)
+        })
 }
 
 /// This is the same finite transaction/parent closure used by ApplySync. The
@@ -140,6 +185,39 @@ pub(crate) fn close_revalidation_selection(
 }
 
 impl Core {
+    pub(crate) fn capture_sync_query_lifecycles(
+        &mut self,
+        root: &Path,
+        checked: &revalidation::CheckedRevalidation,
+        snapshots: &mut Vec<AdmittedSnapshot>,
+    ) -> Result<bool> {
+        let mut added = false;
+        for lifecycle in query_lifecycles(checked)? {
+            if snapshots.iter().any(|snapshot| {
+                (snapshot.inventory.status == "trashReadOnly") == (lifecycle == "trash")
+            }) {
+                continue;
+            }
+            let snapshot = if lifecycle == "trash" {
+                self.trash_admitted_snapshot(root)?
+            } else {
+                self.admitted_snapshot(root)?
+            };
+            snapshots.push(snapshot);
+            added = true;
+        }
+        Ok(added)
+    }
+
+    pub(crate) fn release_sync_query_lifecycles(&mut self, snapshots: &[AdmittedSnapshot]) {
+        for query in snapshots {
+            for file in query.files.iter().chain(query.schema.iter()) {
+                self.snapshots.remove(&file.base_id);
+            }
+            self.admitted_cuts.remove(&query.cut_id);
+        }
+    }
+
     /// The shared Apply/Merge planner calls this after its original operation-ID
     /// retry gate, then feeds the result to its unchanged original state writer.
     #[allow(clippy::too_many_arguments)]
@@ -187,16 +265,10 @@ impl Core {
             resolutions,
             &BTreeSet::new(),
         )?;
-        let query = if preliminary.invocations.is_empty() {
-            None
-        } else {
-            Some(self.admitted_snapshot(&root)?)
-        };
-        let query_members = query
-            .as_ref()
-            .map(|query| query_read_members(query, &chosen, &local))
-            .unwrap_or_default();
+        let mut query = Vec::new();
         let prepared = (|| {
+            self.capture_sync_query_lifecycles(&root, &preliminary, &mut query)?;
+            let query_members = query_read_members(&root, &query, &chosen, &local)?;
             selection.extend(query_members.iter().cloned());
             selection = close_revalidation_selection(&graph, &local, &selection)?;
             revalidation::prepare_revalidation(
@@ -212,12 +284,7 @@ impl Core {
                 reviewed_versions,
             )
         })();
-        if let Some(query) = query {
-            for file in query.files.iter().chain(query.schema.iter()) {
-                self.snapshots.remove(&file.base_id);
-            }
-            self.admitted_cuts.remove(&query.cut_id);
-        }
+        self.release_sync_query_lifecycles(&query);
         let prepared = prepared?;
         Ok(RelocationInput {
             request: request.clone(),
@@ -266,6 +333,17 @@ impl Core {
         resolutions: &[SyncRevalidation],
         blobs: &BTreeMap<String, Vec<u8>>,
     ) -> Result<SyncRevalidationReview> {
+        self.review_sync_revalidation_seeded(root, identity, resolutions, blobs, &BTreeSet::new())
+    }
+
+    pub(crate) fn review_sync_revalidation_seeded(
+        &mut self,
+        root: impl AsRef<Path>,
+        identity: &SyncIdentity,
+        resolutions: &[SyncRevalidation],
+        blobs: &BTreeMap<String, Vec<u8>>,
+        native_candidates: &BTreeSet<ObjectKey>,
+    ) -> Result<SyncRevalidationReview> {
         self.sync_local_owner()?;
         let root = absolute_path(root.as_ref())?;
         let setup = self.sync_setup_for(&root)?;
@@ -290,17 +368,18 @@ impl Core {
         for (digest, bytes) in blobs {
             graph.offer_blob(digest, bytes.clone())?;
         }
-        let initial = resolutions.iter().map(|r| r.object.clone()).collect();
+        let initial = resolutions
+            .iter()
+            .map(|resolution| resolution.object.clone())
+            .chain(native_candidates.iter().cloned())
+            .collect();
         let mut selected = close_revalidation_selection(&graph, &local, &initial)?;
-        let mut query = None;
+        let mut query = Vec::new();
         let result = (|| {
             loop {
                 let chosen =
                     revalidation::chosen_revalidation_states(&graph, &selected, resolutions)?;
-                let members = query
-                    .as_ref()
-                    .map(|q: &AdmittedSnapshot| query_read_members(q, &chosen, &local))
-                    .unwrap_or_default();
+                let members = query_read_members(&root, &query, &chosen, &local)?;
                 let checked = revalidation::inspect_revalidation(
                     &graph,
                     &chosen,
@@ -308,13 +387,19 @@ impl Core {
                     resolutions,
                     &members,
                 )?;
-                if !checked.invocations.is_empty() && query.is_none() {
-                    query = Some(self.admitted_snapshot(&root)?);
+                if self.capture_sync_query_lifecycles(&root, &checked, &mut query)? {
                     continue;
                 }
                 let mut required = selected.clone();
                 required.extend(checked.states.keys().cloned());
                 required.extend(members);
+                if checked.invocations.iter().any(|invocation| {
+                    weftext_data::query_products(&invocation.plan, &invocation.context.definitions)
+                        .is_ok_and(|products| !products.is_empty())
+                }) && graph.objects()?.contains_key(&ObjectKey::Settings)
+                {
+                    required.insert(ObjectKey::Settings);
+                }
                 let closed = close_revalidation_selection(&graph, &local, &required)?;
                 if closed == selected {
                     return revalidation::review_revalidation(
@@ -323,21 +408,13 @@ impl Core {
                         &closed,
                         resolutions,
                         blobs,
-                        &query
-                            .as_ref()
-                            .map(|q| query_read_members(q, &chosen, &local))
-                            .unwrap_or_default(),
+                        &query_read_members(&root, &query, &chosen, &local)?,
                     );
                 }
                 selected = closed;
             }
         })();
-        if let Some(query) = query {
-            for file in query.files.iter().chain(query.schema.iter()) {
-                self.snapshots.remove(&file.base_id);
-            }
-            self.admitted_cuts.remove(&query.cut_id);
-        }
+        self.release_sync_query_lifecycles(&query);
         result
     }
 
@@ -349,6 +426,16 @@ impl Core {
         plan: &mut Plan,
         resolutions: &[SyncRevalidation],
     ) -> Result<FrozenSemanticEvidence> {
+        let captured = self.capture_sync_revalidation_validation(plan, resolutions, false)?;
+        self.finish_sync_semantic_validation(plan, captured)
+    }
+
+    pub(crate) fn capture_sync_revalidation_validation(
+        &mut self,
+        plan: &mut Plan,
+        resolutions: &[SyncRevalidation],
+        collect_native: bool,
+    ) -> Result<CapturedSemanticValidation> {
         self.sync_local_owner()?;
         let application = plan
             .sync_application
@@ -400,36 +487,188 @@ impl Core {
             resolutions,
             &BTreeSet::new(),
         )?;
-        let query = if preliminary.invocations.is_empty() {
-            None
-        } else {
-            Some(self.admitted_snapshot(&root)?)
-        };
-        let query_members = query
+        let mut query = Vec::new();
+        let result = (|| {
+            self.capture_sync_query_lifecycles(&root, &preliminary, &mut query)?;
+            let query_members = query_read_members(&root, &query, &chosen, &local)?;
+            self.capture_sync_revalidation_plan_mode(
+                plan,
+                &application,
+                &graph,
+                &local,
+                &chosen,
+                resolutions,
+                &query,
+                &query_members,
+                collect_native,
+            )
+        })();
+        self.release_sync_query_lifecycles(&query);
+        result
+    }
+
+    /// The original no-write external-adoption Plan keeps its installed cut.
+    /// It does not select received heads or grant a new native definition key.
+    pub(crate) fn freeze_sync_adoption_plan(
+        &mut self,
+        plan: &mut Plan,
+    ) -> Result<FrozenSemanticEvidence> {
+        let captured = self.capture_sync_adoption_validation(plan, false)?;
+        self.finish_sync_semantic_validation(plan, captured)
+    }
+
+    pub(crate) fn capture_sync_adoption_validation(
+        &mut self,
+        plan: &mut Plan,
+        collect_native: bool,
+    ) -> Result<CapturedSemanticValidation> {
+        self.sync_local_owner()?;
+        let application = plan
+            .sync_application
             .as_ref()
-            .map(|q| query_read_members(q, &chosen, &local))
-            .unwrap_or_default();
-        let result = self.capture_sync_revalidation_plan(
-            plan,
-            &application,
-            &graph,
-            &local,
-            &chosen,
-            resolutions,
-            query.as_ref(),
-            &query_members,
-        );
-        if let Some(query) = query {
-            for file in query.files.iter().chain(query.schema.iter()) {
-                self.snapshots.remove(&file.base_id);
-            }
-            self.admitted_cuts.remove(&query.cut_id);
+            .ok_or_else(|| invalid("Adoption requires its original application"))?
+            .clone();
+        let transaction = plan
+            .transaction
+            .as_ref()
+            .ok_or_else(|| invalid("Adoption requires its original no-write transaction"))?;
+        if !matches!(
+            transaction.request.intent,
+            crate::OperationIntent::AdoptSyncExternal { .. }
+        ) || transaction.request.operation_id != plan.operation_id
+            || transaction.request.root != application.root
+            || transaction.preview.operation_id != plan.operation_id
+        {
+            return Err(invalid(
+                "Semantic adoption requires its exact original request",
+            ));
         }
+        let crate::operations::Mutation::Update { files: outputs } = &transaction.mutation else {
+            return Err(invalid("Adoption must retain the original no-write Update"));
+        };
+        if outputs
+            .iter()
+            .any(|file| file.before.as_ref() != Some(&file.after))
+        {
+            return Err(invalid(
+                "External adoption cannot rewrite the observed author bytes",
+            ));
+        }
+        let root = PathBuf::from(&application.root);
+        let setup = self.sync_setup_for(&root)?;
+        let local = self.sync_local_state(setup)?.0;
+        if setup.identity != application.identity
+            || application
+                .before
+                .iter()
+                .any(|before| local.get(&before.object) != Some(before))
+        {
+            return Err(refused(
+                "syncBasisChanged",
+                "The exact reviewed installed adoption basis changed",
+            ));
+        }
+        let publication = plan
+            .sync_publication
+            .as_ref()
+            .ok_or_else(|| invalid("Adoption requires its original publication"))?;
+        if publication.identity != application.identity
+            || publication.manifest.operation_id != plan.operation_id
+            || publication.manifest.changes.len() != application.after.len()
+        {
+            return Err(invalid(
+                "Adoption publication differs from the original application",
+            ));
+        }
+        let mut chosen = application
+            .before
+            .iter()
+            .map(|before| {
+                (
+                    before.object.clone(),
+                    Version {
+                        commit: before.commit.clone(),
+                        revision: before.revision.clone(),
+                        state: before.state.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut changed = BTreeSet::new();
+        for after in &application.after {
+            let before = local
+                .get(&after.object)
+                .ok_or_else(|| invalid("Adoption cannot create a new owner"))?;
+            if !chosen.contains_key(&after.object)
+                || !changed.insert(after.object.clone())
+                || after.directory != before.directory
+                || after.state.parent != before.state.parent
+                || after.state.name != before.state.name
+                || after.state.retired != before.state.retired
+                || after
+                    .state
+                    .files
+                    .keys()
+                    .any(|file| !before.state.files.contains_key(file))
+                || before
+                    .state
+                    .files
+                    .keys()
+                    .filter(|file| !after.state.files.contains_key(*file))
+                    .any(|file| {
+                        !super::adopt::adopted_removed_member(
+                            plan,
+                            &Path::new(&before.directory).join(file),
+                        )
+                    })
+                || !publication.manifest.changes.iter().any(|change| {
+                    change.object == after.object
+                        && change.revision == after.revision
+                        && change.before == BTreeSet::from([before.revision.clone()])
+                        && change.after == after.state
+                })
+            {
+                return Err(invalid(
+                    "Adoption changes the original owner, placement or publication cut",
+                ));
+            }
+            chosen.get_mut(&after.object).unwrap().state = after.state.clone();
+        }
+        let mut graph = self.read_sync_history(&application.identity)?;
+        for (digest, bytes) in &application.blobs {
+            graph.offer_blob(digest, bytes.clone())?;
+        }
+        let preliminary = revalidation::inspect_installed_adoption(
+            &graph,
+            &chosen,
+            &local,
+            &changed,
+            &BTreeSet::new(),
+        )?;
+        let mut query = Vec::new();
+        let result = (|| {
+            self.capture_sync_query_lifecycles(&root, &preliminary, &mut query)?;
+            let members = query_read_members(&root, &query, &chosen, &local)?;
+            let checked = revalidation::inspect_installed_adoption(
+                &graph, &chosen, &local, &changed, &members,
+            )?;
+            self.capture_sync_checked_plan_mode(
+                plan,
+                &application,
+                &graph,
+                &local,
+                &chosen,
+                &checked,
+                &query,
+                collect_native,
+            )
+        })();
+        self.release_sync_query_lifecycles(&query);
         result
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn capture_sync_revalidation_plan(
+    fn capture_sync_revalidation_plan_mode(
         &mut self,
         plan: &mut Plan,
         application: &SyncApplication,
@@ -437,10 +676,10 @@ impl Core {
         local: &BTreeMap<ObjectKey, LocalObject>,
         chosen: &BTreeMap<ObjectKey, Version>,
         resolutions: &[SyncRevalidation],
-        query: Option<&AdmittedSnapshot>,
+        query: &[AdmittedSnapshot],
         query_members: &BTreeSet<ObjectKey>,
-    ) -> Result<FrozenSemanticEvidence> {
-        let root = Path::new(&application.root);
+        collect_native: bool,
+    ) -> Result<CapturedSemanticValidation> {
         let checked = revalidation::validate_revalidation_with_query_members(
             graph,
             chosen,
@@ -448,6 +687,31 @@ impl Core {
             resolutions,
             query_members,
         )?;
+        self.capture_sync_checked_plan_mode(
+            plan,
+            application,
+            graph,
+            local,
+            chosen,
+            &checked,
+            query,
+            collect_native,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn capture_sync_checked_plan_mode(
+        &mut self,
+        plan: &mut Plan,
+        application: &SyncApplication,
+        graph: &ReplicaGraph,
+        local: &BTreeMap<ObjectKey, LocalObject>,
+        chosen: &BTreeMap<ObjectKey, Version>,
+        checked: &revalidation::CheckedRevalidation,
+        query: &[AdmittedSnapshot],
+        collect_native: bool,
+    ) -> Result<CapturedSemanticValidation> {
+        let root = Path::new(&application.root);
         let installed = chosen
             .keys()
             .filter(|object| local.contains_key(*object))
@@ -501,7 +765,7 @@ impl Core {
             .into_iter()
             .map(|file| self.take_snapshot_witness(&file.base_id))
             .collect::<Result<Vec<_>>>()?;
-        if let Some(query) = query {
+        for query in query {
             for file in query.files.iter().chain(query.schema.iter()) {
                 Core::merge_feature_witnesses(
                     &mut witnesses,
@@ -514,7 +778,11 @@ impl Core {
         let mut locators = BTreeMap::new();
         for object in &installed {
             let local = &local[object];
-            let lifecycle = if local.state.retired { "trash" } else { "live" };
+            let lifecycle = if local_retired(root, local)? {
+                "trash"
+            } else {
+                "live"
+            };
             let directory = Path::new(&local.directory);
             match object {
                 ObjectKey::Node(id) => {
@@ -595,18 +863,23 @@ impl Core {
                     owner,
                     reference,
                     &Path::new(&old.directory).join(relative),
-                    if old.state.retired { "trash" } else { "live" },
+                    if local_retired(root, old)? {
+                        "trash"
+                    } else {
+                        "live"
+                    },
                     None,
                 )?);
             }
         }
         let resource_refs = resources.iter().collect::<Vec<_>>();
         let after_locations = application
-            .after
+            .before
             .iter()
+            .chain(&application.after)
             .map(|object| (object.object.clone(), PathBuf::from(&object.directory)))
             .collect();
-        let query_refs = query.into_iter().collect::<Vec<_>>();
+        let query_refs = query.iter().collect::<Vec<_>>();
         let cut = SuppliedEvidenceCut {
             root,
             graph,
@@ -620,7 +893,43 @@ impl Core {
             after_locations: &after_locations,
             planned: Some(plan),
         };
-        let capture = revalidation_evidence::capture_evidence(self, &cut, &checked)?;
+        let capture = if collect_native {
+            revalidation_evidence::capture_evidence_for_native(self, &cut, checked)?
+        } else {
+            revalidation_evidence::capture_evidence(self, &cut, checked)?
+        };
+        let historical_blobs = checked
+            .historical_inputs
+            .iter()
+            .map(|input| {
+                graph
+                    .blob(&input.digest)
+                    .map(|bytes| (input.digest.clone(), bytes.to_vec()))
+                    .ok_or_else(|| {
+                        refused(
+                            "syncIncomplete",
+                            "Exact historical semantic bytes are missing",
+                        )
+                    })
+            })
+            .collect::<Result<BTreeMap<_, _>>>()?;
+        Ok(CapturedSemanticValidation {
+            capture,
+            checked: checked.clone(),
+            historical_blobs,
+        })
+    }
+
+    pub(crate) fn finish_sync_semantic_validation(
+        &mut self,
+        plan: &mut Plan,
+        captured: CapturedSemanticValidation,
+    ) -> Result<FrozenSemanticEvidence> {
+        let CapturedSemanticValidation {
+            capture,
+            checked,
+            historical_blobs,
+        } = captured;
         if !capture.unfulfilled().is_empty() {
             let gaps = capture
                 .unfulfilled()
@@ -639,7 +948,7 @@ impl Core {
         if reads
             .read_objects
             .iter()
-            .any(|object| !chosen.contains_key(object))
+            .any(|object| !checked.states.contains_key(object))
         {
             return Err(refused(
                 "syncDependencyRequired",
@@ -695,6 +1004,19 @@ impl Core {
             }
             transaction.expected_membership = Some(members);
         }
+        if let Some(members) = reads.query_trash_membership {
+            if transaction
+                .expected_trash_membership
+                .as_ref()
+                .is_some_and(|old| old != &members)
+            {
+                return Err(refused(
+                    "scopeChanged",
+                    "The original Trash Query membership differs from the writer cut",
+                ));
+            }
+            transaction.expected_trash_membership = Some(members);
+        }
         let outputs = revalidation_evidence::original_outputs(transaction);
         if transaction.files.len() + outputs.iter().filter(|file| file.before.is_none()).count()
             > MAX_FILES
@@ -735,12 +1057,7 @@ impl Core {
             .as_mut()
             .ok_or_else(|| invalid("Semantic evidence requires its original application"))?;
         for input in &checked.historical_inputs {
-            let bytes = graph.blob(&input.digest).ok_or_else(|| {
-                refused(
-                    "syncIncomplete",
-                    "Exact historical semantic bytes are missing",
-                )
-            })?;
+            let bytes = historical_blobs[&input.digest].as_slice();
             if frozen_application
                 .blobs
                 .get(&input.digest)
@@ -775,6 +1092,7 @@ impl Core {
             })
             .collect();
         Ok(FrozenSemanticEvidence {
+            native_products: vec![],
             absent_objects,
             historical_inputs: checked
                 .historical_inputs
@@ -813,16 +1131,60 @@ impl Core {
     /// The shared execution/recovery cut gate invokes this before its first
     /// effect. Negative received dependencies cannot be protected by disk-only
     /// absent guards when a new remote configuration has arrived meanwhile.
+    #[cfg(test)]
     pub(crate) fn validate_sync_semantic_evidence(
         &self,
         operation_id: &str,
         application: &SyncApplication,
         evidence: &FrozenSemanticEvidence,
     ) -> Result<()> {
+        let adoption = self
+            .operations
+            .get(operation_id)
+            .and_then(|plan| plan.transaction.as_ref())
+            .is_some_and(|transaction| {
+                matches!(
+                    transaction.request.intent,
+                    crate::OperationIntent::AdoptSyncExternal { .. }
+                )
+            });
+        self.validate_sync_semantic_cut(operation_id, application, evidence, adoption)
+    }
+
+    pub(crate) fn validate_sync_semantic_request_evidence(
+        &self,
+        request: &crate::OperationRequest,
+        application: &SyncApplication,
+        evidence: &FrozenSemanticEvidence,
+    ) -> Result<()> {
+        if request.root != application.root {
+            return Err(invalid(
+                "Semantic evidence belongs to another original request root",
+            ));
+        }
+        self.validate_sync_semantic_cut(
+            &request.operation_id,
+            application,
+            evidence,
+            matches!(
+                request.intent,
+                crate::OperationIntent::AdoptSyncExternal { .. }
+            ),
+        )
+    }
+
+    fn validate_sync_semantic_cut(
+        &self,
+        operation_id: &str,
+        application: &SyncApplication,
+        evidence: &FrozenSemanticEvidence,
+        adoption: bool,
+    ) -> Result<()> {
         for object in &evidence.absent_objects {
             let name = match object {
                 ObjectKey::Schema => ".weftext-schema.json",
                 ObjectKey::Rules => ".weftext-rules",
+                ObjectKey::Settings => ".weftext-settings.json",
                 _ => return Err(invalid("Unsupported absent semantic configuration")),
             };
             self.check_pending_except(
@@ -832,7 +1194,18 @@ impl Core {
         }
         let graph = self.read_sync_history(&application.identity)?;
         let current = graph.objects()?;
+        let installed = if adoption {
+            Some(
+                self.sync_local_state(self.sync_setup_for(Path::new(&application.root))?)?
+                    .0,
+            )
+        } else {
+            None
+        };
         if evidence.absent_objects.iter().any(|object| {
+            if let Some(installed) = &installed {
+                return installed.contains_key(object);
+            }
             current.contains_key(object)
                 || graph.manifests.iter().any(|(id, manifest)| {
                     manifest

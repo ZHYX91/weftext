@@ -65,21 +65,43 @@ fn write_scopes(t: &FrozenOperation) -> Vec<Scope> {
             updates: changes,
             created_files,
             created_directories,
+            retired_members,
             ..
         } => {
             updates(changes);
             updates(created_files);
             scopes.extend(relocations.iter().flat_map(|step| {
                 [
-                    (PathBuf::from(&step.source), ScopeKind::Tree),
-                    (PathBuf::from(&step.target), ScopeKind::Tree),
+                    Some((PathBuf::from(&step.source), ScopeKind::Tree)),
+                    Some((PathBuf::from(&step.target), ScopeKind::Tree)),
+                    step.parking
+                        .as_ref()
+                        .map(|path| (PathBuf::from(path), ScopeKind::Tree)),
                 ]
+                .into_iter()
+                .flatten()
             }));
             scopes.extend(
                 created_directories
                     .iter()
                     .map(|directory| (PathBuf::from(directory), ScopeKind::Tree)),
             );
+            scopes.extend(retired_members.iter().flat_map(|member| {
+                [
+                    (
+                        PathBuf::from(&member.source),
+                        ScopeKind::File {
+                            creates_entry: true,
+                        },
+                    ),
+                    (
+                        PathBuf::from(&member.target),
+                        ScopeKind::File {
+                            creates_entry: true,
+                        },
+                    ),
+                ]
+            }));
         }
     }
     scopes

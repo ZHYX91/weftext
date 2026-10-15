@@ -205,6 +205,7 @@ where
     deserializer.deserialize_map(Fields)
 }
 
+#[derive(Clone)]
 struct SchemaSource {
     source: String,
     before: Option<Vec<u8>>,
@@ -1295,7 +1296,8 @@ struct FrozenQuery {
     raw_pending: usize,
     membership_ids: Vec<String>,
     root: String,
-    lifecycle: String,
+    scope_cuts: BTreeMap<String, String>,
+    schema_source: SchemaSource,
     scope_directories: BTreeSet<String>,
     scope_bindings: BTreeMap<String, String>,
     render_files: Option<BTreeMap<String, Vec<u8>>>,
@@ -1562,7 +1564,7 @@ fn query_snapshot_impl(
     }
     Ok(FrozenQuery {
         input: weftext_data::FrozenQueryInput {
-            cut_id,
+            cut_id: cut_id.clone(),
             schema_revision,
             coverage: if complete { "complete" } else { "partial" }.into(),
             freshness: "stale".into(),
@@ -1577,7 +1579,8 @@ fn query_snapshot_impl(
         raw_pending,
         membership_ids,
         root: inventory.root,
-        lifecycle: lifecycle.into(),
+        scope_cuts: BTreeMap::from([(lifecycle.into(), cut_id)]),
+        schema_source: config,
         scope_directories,
         scope_bindings: stable_scope.into_iter().collect(),
         render_files,
@@ -1630,6 +1633,20 @@ fn freeze_query_definitions_with_draft(
                 continue;
             }
             progress = true;
+            if !frozen
+                .input
+                .notes
+                .iter()
+                .any(|note| note.entity_key == dependency.owner)
+            {
+                let target = core.resolve_navigation_target(&frozen.root, &dependency.owner)?;
+                if target.status == "managed"
+                    && target.kind == "node"
+                    && !frozen.scope_cuts.contains_key("live")
+                {
+                    extend_query_lifecycle(core, frozen, "live".into())?;
+                }
+            }
             let note = frozen
                 .input
                 .notes
@@ -1788,19 +1805,15 @@ fn freeze_query_definitions_with_draft(
 
 fn qualify_query_context(
     core: &mut Core,
-    frozen: &FrozenQuery,
+    frozen: &mut FrozenQuery,
     context: &mut weftext_data::FrozenAdvancedInput,
 ) -> Result<(), CoreError> {
     let lifecycles = weftext_data::required_query_lifecycles(&frozen.plan, &context.definitions)
         .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
-    if lifecycles
-        .iter()
-        .any(|lifecycle| lifecycle != &frozen.lifecycle)
-    {
-        return Err(CoreError::new(
-            "queryScopeUnavailable",
-            "This frozen query cut does not cover all requested lifecycles",
-        ));
+    for lifecycle in lifecycles {
+        if !frozen.scope_cuts.contains_key(&lifecycle) {
+            extend_query_lifecycle(core, frozen, lifecycle)?;
+        }
     }
     let scopes = weftext_data::required_query_scopes(&frozen.plan, &context.definitions)
         .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
@@ -1855,6 +1868,103 @@ fn qualify_query_context(
     Ok(())
 }
 
+fn extend_query_lifecycle(
+    core: &mut Core,
+    frozen: &mut FrozenQuery,
+    lifecycle: String,
+) -> Result<(), CoreError> {
+    // Keep each original Core read cut. The primary cut is not replaced by a
+    // fabricated mixed writable basis; Query/save-definition only consume the
+    // exact readonly rows and original per-lifecycle evidence below.
+    let plan = weftext_data::QueryPlan {
+        scope: weftext_data::QueryScope {
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let extra = query_snapshot_impl(
+        core,
+        &frozen.root,
+        plan,
+        Some((frozen.schema_source.clone(), frozen.schema.clone())),
+        false,
+    )?;
+    if extra.root != frozen.root || extra.input.schema_revision != frozen.input.schema_revision {
+        return Err(CoreError::new(
+            "queryScopeUnavailable",
+            "The lifecycle capture does not share the original library/schema baseline",
+        ));
+    }
+    let count = frozen
+        .input
+        .notes
+        .len()
+        .saturating_add(extra.input.notes.len());
+    let bytes = frozen
+        .input
+        .notes
+        .iter()
+        .chain(&extra.input.notes)
+        .map(|note| note.source.len())
+        .sum::<usize>();
+    if count > 5_000 || bytes > 64 * 1024 * 1024 {
+        return Err(CoreError::new(
+            "queryBudget",
+            "The combined lifecycle snapshot exceeds 5000 notes / 64 MiB",
+        ));
+    }
+    let owners = frozen
+        .input
+        .notes
+        .iter()
+        .map(|note| note.entity_key.as_str())
+        .collect::<BTreeSet<_>>();
+    let paths = frozen
+        .input
+        .notes
+        .iter()
+        .map(|note| note.path.as_str())
+        .collect::<BTreeSet<_>>();
+    for note in &extra.input.notes {
+        if owners.contains(note.entity_key.as_str()) || paths.contains(note.path.as_str()) {
+            return Err(CoreError::new(
+                "queryScopeUnavailable",
+                "A Node appears in competing original lifecycle captures",
+            ));
+        }
+        if let Some(files) = &frozen.render_files {
+            let relative = Path::new(&note.path)
+                .strip_prefix(&frozen.root)
+                .map_err(|_| {
+                    CoreError::new("outsideRoot", "A lifecycle source escaped its library")
+                })?
+                .to_string_lossy()
+                .replace('\\', "/");
+            if files.get(&relative).map(Vec::as_slice) != Some(note.source.as_bytes()) {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "A required lifecycle source differs from the original native World",
+                ));
+            }
+        }
+    }
+    if extra.input.coverage != "complete" {
+        frozen.input.coverage = "partial".into();
+    }
+    frozen.scope_cuts.extend(extra.scope_cuts);
+    frozen.input.notes.extend(extra.input.notes);
+    frozen.versions.extend(extra.versions.into_iter().skip(1));
+    frozen.diagnostics.extend(extra.diagnostics);
+    frozen.scope_directories.extend(extra.scope_directories);
+    frozen.raw_complete &= extra.raw_complete;
+    frozen.raw_pending = frozen.raw_pending.saturating_add(extra.raw_pending);
+    frozen.membership_ids.extend(extra.membership_ids);
+    frozen.membership_ids.sort();
+    frozen.membership_ids.dedup();
+    Ok(())
+}
+
 fn unavailable_products(identity: String, reason: &str) -> weftext_data::NoteProducts {
     let unavailable = || weftext_data::Cell::Unavailable {
         reason: reason.into(),
@@ -1872,65 +1982,7 @@ pub(crate) fn native_query_products(
     identity: String,
     products: weftext_engine::RenderProducts,
 ) -> weftext_data::NoteProducts {
-    let title = match (products.title_status.as_str(), products.title) {
-        ("value", Some(title)) => weftext_data::Cell::value(NativeValue::Text(title)),
-        ("absent", None) => weftext_data::Cell::Absent,
-        ("ambiguous", _) => weftext_data::Cell::Invalid {
-            diagnostics: vec!["The final native document title producers disagree".into()],
-            value: None,
-        },
-        _ => weftext_data::Cell::Unavailable {
-            reason: "The final native document did not qualify a title producer".into(),
-        },
-    };
-    let body = match (products.body_status.as_str(), products.body) {
-        ("complete", Some(body)) => weftext_data::Cell::value(NativeValue::Text(body)),
-        _ => weftext_data::Cell::Unavailable {
-            reason: "The final native HTML contains an unsupported body island".into(),
-        },
-    };
-    let headings = NativeValue::Array(
-        products
-            .headings
-            .into_iter()
-            .map(|heading| {
-                let display = if heading.visible {
-                    "visible"
-                } else if heading.is_main {
-                    "mainSource"
-                } else if heading.path.is_some() {
-                    "includedSource"
-                } else {
-                    "unassociated"
-                };
-                NativeValue::Record(vec![
-                    weftext_data::NativeMember {
-                        key: "level".into(),
-                        value: NativeValue::Int(heading.level.to_string()),
-                    },
-                    weftext_data::NativeMember {
-                        key: "text".into(),
-                        value: NativeValue::Text(heading.text),
-                    },
-                    weftext_data::NativeMember {
-                        key: "generated".into(),
-                        value: NativeValue::Bool(heading.generated),
-                    },
-                    weftext_data::NativeMember {
-                        key: "displayAssociation".into(),
-                        value: NativeValue::Text(display.into()),
-                    },
-                ])
-            })
-            .collect(),
-    );
-    weftext_data::NoteProducts {
-        compile_identity: identity,
-        target: products.target,
-        title,
-        body,
-        headings: weftext_data::Cell::value(headings),
-    }
+    weftext_data::native_query_products(identity, products)
 }
 
 async fn qualify_query_products(
@@ -2075,6 +2127,7 @@ async fn evaluate_frozen(state: &AppState, mut frozen: FrozenQuery) -> Result<Va
     let raw_complete = frozen.raw_complete;
     let raw_pending = frozen.raw_pending;
     let membership_ids = frozen.membership_ids;
+    let scope_cuts = frozen.scope_cuts;
     let mut result = tokio::task::spawn_blocking(move || {
         weftext_data::execute_query(&frozen.input, &frozen.plan, &frozen.schema)
     })
@@ -2106,6 +2159,7 @@ async fn evaluate_frozen(state: &AppState, mut frozen: FrozenQuery) -> Result<Va
     output["externalPending"] = json!(!raw_complete || raw_pending > 0);
     output["rawScope"] = json!({"complete":raw_complete,"pendingCount":raw_pending});
     output["membershipIds"] = json!(membership_ids);
+    output["scopeCuts"] = json!(scope_cuts);
     output["inputVersions"] = json!(versions);
     output["access"] = json!({"audience":"authenticatedLocalSession","scope":"admittedNodesAtSelectedLifecycle",
         "bodyProduct":products.iter().any(|product|product == "body"),"titleProduct":products.iter().any(|product|product == "title"),
@@ -3837,4 +3891,7 @@ mod tests {
         );
         assert_eq!(result["result"]["rows"][0]["lifecycle"], "live");
     }
+
+    #[cfg(windows)]
+    include!("data_lifecycle_tests.rs");
 }

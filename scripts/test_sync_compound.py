@@ -117,8 +117,12 @@ class SyncCompound(unittest.TestCase):
         return None
 
     def setUp(self):
-        self.folder = self.evidence / self._testMethodName
+        directory_name = getattr(self, 'fixture_directory_name', self._testMethodName)
+        self.folder = self.evidence / directory_name
         self.folder.mkdir()
+        if directory_name != self._testMethodName:
+            (self.folder / 'case.json').write_text(
+                json.dumps({'test': self._testMethodName}) + '\n', encoding='utf-8')
         self.transfer_number = 0
         self.servers = []
         self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')

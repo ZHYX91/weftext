@@ -288,3 +288,57 @@ fn actor_library_legacy_backup_validator_requires_original_plan_and_exact_namesp
             .is_err()
     );
 }
+
+#[test]
+fn actor_library_bound_clean_draft_remains_authoritative_over_same_fi_unbound_record() {
+    let (_temp, mut core, root) = scope_fixture();
+    let note = core.create_note(&root, &root, "Note").unwrap();
+    let bound_path = core
+        .with_actor_for_root(ACTOR, &root, |core| {
+            let opened = core.open(&note.path, Some(root.clone()))?;
+            core.persist_draft(&opened.session_id, &opened.source)?;
+            Ok(core.draft_path(Path::new(&note.path)))
+        })
+        .unwrap();
+    // Both records come from real API contexts, with the same actor and FI.
+    // The older unbound context remains unbound and must not steal a subsequent
+    // explicitly scoped proposal from its existing clean primary.
+    let (unbound_path, unbound_bytes) = core
+        .with_actor(ACTOR, |core| {
+            let opened = core.open(&note.path, Some(root.clone()))?;
+            assert!(opened.recovered_draft.is_none());
+            core.persist_draft(&opened.session_id, "retained unbound proposal")?;
+            let path = core.draft_path(Path::new(&note.path));
+            let bytes = fs::read(&path)?;
+            let draft: Draft = serde_json::from_slice(&bytes)?;
+            assert!(draft.library.is_none());
+            Ok((path, bytes))
+        })
+        .unwrap();
+    assert_ne!(bound_path, unbound_path);
+    core.with_actor_for_root(ACTOR, &root, |core| {
+        let opened = core.open(&note.path, Some(root.clone()))?;
+        assert!(opened.recovered_draft.is_none());
+        core.persist_draft(&opened.session_id, "new bound proposal")?;
+        let reopened = core.open(&note.path, Some(root.clone()))?;
+        assert_eq!(
+            reopened.recovered_draft.as_deref(),
+            Some("new bound proposal")
+        );
+        assert_eq!(core.draft_path(Path::new(&note.path)), bound_path);
+        let draft: Draft = serde_json::from_slice(&fs::read(&bound_path)?)?;
+        assert!(draft.library.is_some());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(fs::read(&unbound_path).unwrap(), unbound_bytes);
+    core.with_actor(ACTOR, |core| {
+        let opened = core.open(&note.path, Some(root.clone()))?;
+        assert_eq!(
+            opened.recovered_draft.as_deref(),
+            Some("retained unbound proposal")
+        );
+        Ok(())
+    })
+    .unwrap();
+}

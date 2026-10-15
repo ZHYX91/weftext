@@ -280,6 +280,7 @@ fn restart_before_ui_rebind_preserves_draft_through_rename_move_trash_restore() 
         &root,
         OperationIntent::RestoreNode {
             trash_operation_id: trash.operation_id,
+            node_id: None,
             parent: display(&root),
             name: "Restored".into(),
         },
@@ -345,6 +346,8 @@ fn replacement_at_old_draft_path_never_inherits_original_object_draft() {
     let note = core.open(&path, None).unwrap();
     core.persist_draft(&note.session_id, "original private draft")
         .unwrap();
+    let original_draft_path = core.draft_path(&path);
+    let original_draft_bytes = fs::read(&original_draft_path).unwrap();
     fs::rename(&path, path.with_extension("retained.typ")).unwrap();
     fs::write(&path, "base").unwrap();
     drop(core);
@@ -352,7 +355,7 @@ fn replacement_at_old_draft_path_never_inherits_original_object_draft() {
     let replacement = restarted.open(&path, None).unwrap();
     assert!(replacement.recovered_draft.is_none());
     assert_eq!(replacement.source, "base");
-    assert!(restarted.draft_path(&path).exists());
+    assert_eq!(fs::read(original_draft_path).unwrap(), original_draft_bytes);
 }
 #[test]
 fn relocated_competing_drafts_preserve_both_and_require_explicit_resolution() {
@@ -364,6 +367,13 @@ fn relocated_competing_drafts_preserve_both_and_require_explicit_resolution() {
     let note = core.create_note(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "first unsaved proposal")
         .unwrap();
+    // Reproduce an original pathname record. The new primary must consume this
+    // exact legacy proposal without replacing or deleting its original bytes.
+    fs::rename(
+        core.draft_path(Path::new(&note.path)),
+        core.legacy_draft_path(Path::new(&note.path)),
+    )
+    .unwrap();
     let destination = root.join("Moved/Moved.typ");
     let mut second = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
     second.path = display(&destination);
@@ -933,4 +943,90 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
         dependency_modified
     );
     fs::set_permissions(&dependency.path, original_permissions).unwrap();
+}
+
+#[test]
+fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note(&root, &root, "Original").unwrap();
+    core.persist_draft(&note.session_id, "bound original proposal")
+        .unwrap();
+    let destination = root.join("Moved/Moved.typ");
+    // Exact old-format input: the original FI is known, but no library binding
+    // was retained. It must not gain a binding by colliding with this primary.
+    let mut legacy = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
+    legacy.library = None;
+    legacy.path = display(&destination);
+    legacy.source = "unbound retained competitor".into();
+    let legacy_path = core.legacy_draft_path(&destination);
+    let legacy_bytes = serde_json::to_vec(&legacy).unwrap();
+    private_replace(&legacy_path, &legacy_bytes).unwrap();
+    operate(
+        &mut core,
+        &root,
+        OperationIntent::RenameNode {
+            source: display(&root.join("Original")),
+            name: "Moved".into(),
+        },
+    );
+    for iteration in 0..3 {
+        if iteration > 0 {
+            drop(core);
+            core = Core::new(&data).unwrap();
+        }
+        let opened = core.open(&destination, Some(root.clone())).unwrap();
+        assert_eq!(
+            opened.recovered_draft.as_deref(),
+            Some("bound original proposal")
+        );
+        assert!(opened.recovered_draft_variants.is_empty());
+        let draft = core.read_draft(&destination).unwrap().unwrap();
+        assert!(draft.library.is_some());
+        assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
+    }
+    let opened = core.open(&destination, Some(root.clone())).unwrap();
+    core.persist_draft(&opened.session_id, "new scoped input")
+        .unwrap();
+    let reopened = core.open(&destination, Some(root)).unwrap();
+    assert_eq!(
+        reopened.recovered_draft.as_deref(),
+        Some("new scoped input")
+    );
+    assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
+}
+
+#[test]
+fn draft_complete_record_budget_rejection_preserves_readable_primary_and_original_input() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.typ");
+    fs::write(&path, "original source").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let opened = core.open(&path, None).unwrap();
+    core.persist_draft(&opened.session_id, "retained original proposal")
+        .unwrap();
+    let record_path = core.draft_path(&path);
+    let before = fs::read(&record_path).unwrap();
+    let mut draft = core.read_draft(&path).unwrap().unwrap();
+    // Every individual source is within its ordinary source limit; only the
+    // retained complete record exceeds the matching read/write byte budget.
+    draft.alternatives = (0..9)
+        .map(|index| DraftAlternative {
+            path: display(&path),
+            base_source: "original source".into(),
+            source: format!("{index}{}", "x".repeat(MAX_SOURCE_BYTES - 1)),
+            base_known: true,
+        })
+        .collect();
+    assert_eq!(core.store_draft(&draft).unwrap_err().code, "budget");
+    assert_eq!(fs::read(&record_path).unwrap(), before);
+    assert_eq!(fs::read_to_string(&path).unwrap(), "original source");
+    let reopened = core.open(&path, None).unwrap();
+    assert_eq!(
+        reopened.recovered_draft.as_deref(),
+        Some("retained original proposal")
+    );
 }

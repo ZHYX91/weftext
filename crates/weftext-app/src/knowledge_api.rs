@@ -1826,10 +1826,22 @@ async fn prepare_operation(
     State(state): State<AppState>,
     Json(request): Json<OperationRequest>,
 ) -> ApiResult {
-    Ok(Json(value(
-        core_call(&state, move |core| core.prepare_operation(request)).await?,
-    )?))
+    let prepared = core_call(&state, move |core| core.capture_sync_operation(request)).await?;
+    let preview = match prepared {
+        weftext_core::sync::SyncOperationPreparation::Prepared(preview) => *preview,
+        weftext_core::sync::SyncOperationPreparation::Native(captured) => {
+            let outputs =
+                super::sync_api::native_validation_outputs(&state, captured.render_inputs())
+                    .await?;
+            core_call(&state, move |core| {
+                core.finish_sync_native_preparation(captured, outputs)
+            })
+            .await?
+        }
+    };
+    Ok(Json(value(preview)?))
 }
+
 #[derive(Deserialize)]
 struct TrashRequest {
     root: String,
@@ -1918,7 +1930,7 @@ async fn operation_output(
         "newNode" | "copyNode" | "templateNode" | "restoreNode" => {
             Some((canonical_leaf(&result)?, "created"))
         }
-        "renameNode" | "moveNode" => {
+        "renameNode" | "moveNode" | "relocateDirectory" => {
             let source = preview
                 .changes
                 .iter()
@@ -1926,7 +1938,9 @@ async fn operation_output(
                 .map(|change| PathBuf::from(&change.path));
             if let (Some(loc), Some(source)) = (&loc, source) {
                 if let Ok(relative) = loc.path.strip_prefix(&source) {
-                    let path = if loc.path == canonical_leaf(&source)? {
+                    let path = if preview.kind != "relocateDirectory"
+                        && loc.path == canonical_leaf(&source)?
+                    {
                         canonical_leaf(&result)?
                     } else {
                         result.join(relative)
@@ -1935,8 +1949,10 @@ async fn operation_output(
                 } else {
                     None
                 }
-            } else {
+            } else if preview.kind != "relocateDirectory" {
                 Some((canonical_leaf(&result)?, "rebound"))
+            } else {
+                None
             }
         }
         "trashNode" => {
@@ -1976,7 +1992,7 @@ async fn operation_output(
     }
     if matches!(
         preview.kind.as_str(),
-        "renameNode" | "moveNode" | "trashNode"
+        "renameNode" | "moveNode" | "trashNode" | "relocateDirectory"
     ) && let Some(source) = preview
         .changes
         .iter()
@@ -2004,11 +2020,12 @@ async fn operation_output(
                 .path
                 .strip_prefix(&source)
                 .map_err(|_| ApiError::internal("移动会话范围不一致"))?;
-            let path = if loc.path == canonical_leaf(&source)? {
-                canonical_leaf(&result)?
-            } else {
-                result.join(relative)
-            };
+            let path =
+                if preview.kind != "relocateDirectory" && loc.path == canonical_leaf(&source)? {
+                    canonical_leaf(&result)?
+                } else {
+                    result.join(relative)
+                };
             match core_call(state,move|core|core.open(path,Some(loc.root))).await {
                 Ok(document)=>{let document=value(document)?;remember(state,&document)?;affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","document":document}));},
                 Err(error)=>affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","documentError":{"code":error.code,"message":error.message}})),
@@ -2018,6 +2035,9 @@ async fn operation_output(
     }
     Ok(output)
 }
+#[cfg(all(test, windows))]
+#[path = "knowledge_directory_tests.rs"]
+mod directory_result_tests;
 #[derive(Deserialize)]
 struct LinkCopyRequest {
     context: Context,

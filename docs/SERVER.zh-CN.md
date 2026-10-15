@@ -5,9 +5,9 @@ translation_status: source
 
 [English](SERVER.md)
 
-# 受控 Server / WebUI 首个切片
+# 受控 Server / WebUI 候选
 
-`0.6.0-alpha.1` 为 Windows / NTFS 增加单 writer 的受控远端正文写作入口。它复用本地 Core 的文件保护、保存日志和恢复证据；服务端按用户隔离草稿与原操作记录。它是 v0.6 的第一切片，完整范围仍见[路线图](ROADMAP.zh-CN.md)。
+`0.6.0` 的 Windows／NTFS 既定 Server / WebUI、多用户权限与同所有者同步范围已完成，同一最终优化程序通过完整 HTTP、受影响浏览器和真实 NAS HTTPS 验收；尚未正式发布。它复用单 writer Core 的文件保护、原操作与恢复证据，并隔离个人草稿。当前范围和限制见 [MVP](MVP.zh-CN.md)，后续版本见[路线图](ROADMAP.zh-CN.md)。
 
 ## 配置与启动
 

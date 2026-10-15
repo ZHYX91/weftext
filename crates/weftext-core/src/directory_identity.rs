@@ -448,6 +448,96 @@ impl Core {
         }
         Ok(origins)
     }
+    /// Match only bounded, actually observed FIs against the same original
+    /// positive directory roles. No workspace candidate collection is created.
+    pub(crate) fn any_directory_identity_admitted(
+        &self,
+        workspace: &str,
+        identities: &BTreeSet<String>,
+    ) -> Result<bool> {
+        let observed = |identity: &FileIdentity| -> Result<bool> {
+            Ok(identities.contains(&serde_json::to_string(identity)?))
+        };
+        for plan in self
+            .operations
+            .values()
+            .filter(|plan| self.committed(&plan.operation_id))
+        {
+            if plan.workspace_id.as_deref() == Some(workspace)
+                && let Some(transaction) = &plan.transaction
+            {
+                if matches!(
+                    transaction.request.intent,
+                    OperationIntent::CopyNode { .. }
+                        | OperationIntent::TemplateNode { .. }
+                        | OperationIntent::ImportNative { .. }
+                        | OperationIntent::ImportBibliography { .. }
+                        | OperationIntent::ImportDocx { .. }
+                        | OperationIntent::CloneSync { .. }
+                        | OperationIntent::ApplySync { .. }
+                        | OperationIntent::MergeSync { .. }
+                        | OperationIntent::RevalidateSync { .. }
+                ) {
+                    for file in transaction
+                        .created_files()
+                        .iter()
+                        .filter(|file| is_navigation_marker_output(plan, transaction, file))
+                    {
+                        if serde_json::from_slice::<DirectoryMarker>(&file.after).is_ok()
+                            && let Some(identity) = self.materialized_identity(
+                                &plan.operation_id,
+                                Path::new(&file.path).parent().unwrap(),
+                            )?
+                            && observed(&identity)?
+                        {
+                            return Ok(true);
+                        }
+                    }
+                }
+                if let Some(application) = &plan.sync_application {
+                    for object in &application.after {
+                        if matches!(object.object, sync::ObjectKey::RootDirectory(_)) {
+                            for (path, identity) in &transaction.write_parents {
+                                if Path::new(path).parent() == Some(Path::new(&object.directory))
+                                    && observed(identity)?
+                                {
+                                    return Ok(true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let Some(reservation) = self.read_navigation_record::<DirectoryReservation>(
+                &plan.operation_id,
+                "directory-reservation",
+            )?
+            else {
+                continue;
+            };
+            if reservation.workspace_id != workspace
+                || !observed(&reservation.identity)?
+                || reservation.fingerprint != plan.fingerprint
+            {
+                continue;
+            }
+            if let Some(transaction) = &plan.transaction
+                && let OperationIntent::UpdateFiles { changes } = &transaction.request.intent
+            {
+                let expected = Path::new(&reservation.path).join(DIRECTORY_MARKER);
+                if changes.iter().any(|change| {
+                    change.path == display(&expected)
+                        && change.before.is_none()
+                        && serde_json::from_slice::<DirectoryMarker>(&change.after)
+                            .is_ok_and(|marker| marker.directory_id == reservation.directory_id)
+                }) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     pub(crate) fn directory_admission_candidates(
         &self,
         workspace: &str,

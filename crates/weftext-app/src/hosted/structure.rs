@@ -1075,6 +1075,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                 let (s, p, _) = destination.as_ref().unwrap();
                 OperationIntent::RestoreNode {
                     trash_operation_id: selected_source.as_ref().unwrap().1.clone(),
+                    node_id: Some(source_owner.as_ref().unwrap().node_id.clone()),
                     parent: p.to_string_lossy().into_owned(),
                     name: s.name.clone(),
                 }

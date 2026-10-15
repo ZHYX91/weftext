@@ -4,6 +4,7 @@ import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMe
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput } from "./knowledge-state";
 import type { Origin, RenderNode } from "./types";
 import { storedMediaSelection } from "./media-selection";
+import { trashRestoreDraft, type LibraryTrashEntry } from "./library-trash";
 
 export interface KnowledgeContext extends KnowledgeBasis {
   root: string;
@@ -57,7 +58,7 @@ export interface KnowledgeSnapshot {
   annotationStatus?: string;
   annotationDiagnostics?: string[];
   templates?: KnowledgeTemplate[];
-  trash?: { operationId: string; name: string; path?: string }[];
+  trash?: LibraryTrashEntry[];
   warnings?: string[];
 }
 export interface KnowledgePlan {
@@ -540,7 +541,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     const backup = section("资料库备份", "备份已保存的资料库文件到明确的新目录；预览全部复制项和准确目标。"); const destination = input(draft.backup, "D:\\Backups\\我的资料库副本"); destination.oninput = () => { draft!.backup = destination.value; }; backup.append(field("备份目标（完整路径）", destination), action("准备备份", () => perform("创建资料库备份", { kind: "backupLibrary", destination: destination.value }))); body.append(backup);
     const trash = section("回收站", "这里仅提供明确恢复入口。恢复前检查目标名称、位置与身份。没有永久删除操作。"); body.append(trash);
     if (!snapshot?.trash?.length) trash.append(element("p", "knowledge-empty", "暂无可读恢复记录。"));
-    for (const entry of snapshot?.trash ?? []) { const card = element("article", "knowledge-card"); let restoreDraft = draft.restores.get(entry.operationId); if (!restoreDraft) { restoreDraft = { name: entry.name, parent: context.root }; draft.restores.set(entry.operationId, restoreDraft); } const restoreName = input(restoreDraft.name), restoreParent = input(restoreDraft.parent); restoreName.oninput = () => { restoreDraft!.name = restoreName.value; }; restoreParent.oninput = () => { restoreDraft!.parent = restoreParent.value; }; card.append(element("strong", "", entry.name), field("恢复名称", restoreName), field("恢复父目录", restoreParent), action("准备恢复", () => perform("恢复笔记节点", { kind: "restoreNode", trashOperationId: entry.operationId, parent: restoreParent.value, name: restoreName.value }))); trash.append(card); }
+    for (const entry of snapshot?.trash ?? []) { const card = element("article", "knowledge-card"); const restoreDraft = trashRestoreDraft(draft.restores, context.root, entry); const restoreName = input(restoreDraft.name), restoreParent = input(restoreDraft.parent); restoreName.oninput = () => { restoreDraft.name = restoreName.value; }; restoreParent.oninput = () => { restoreDraft.parent = restoreParent.value; }; card.append(element("strong", "", entry.name)); if (entry.path) card.append(element("p", "knowledge-address", entry.path)); card.append(field("恢复名称", restoreName), field("恢复父目录", restoreParent), action("准备恢复", () => perform("恢复笔记节点", { kind: "restoreNode", trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent: restoreParent.value, name: restoreName.value }))); trash.append(card); }
   }
   function templateValueControl(kind: string, value: KnowledgeTemplateValue | undefined, changed: (value: KnowledgeTemplateValue) => void): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
     if (kind === "bool") { const control = select([["false", "否"], ["true", "是"]]); control.value = value === true ? "true" : "false"; control.onchange = () => changed(control.value === "true"); return control; }

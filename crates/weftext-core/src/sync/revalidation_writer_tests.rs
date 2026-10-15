@@ -149,6 +149,7 @@ fn late_received_configuration_invalidates_the_original_negative_semantic_cut() 
         semantic_evidence: None,
     };
     let evidence = FrozenSemanticEvidence {
+        native_products: vec![],
         absent_objects: BTreeSet::from([ObjectKey::Schema]),
         historical_inputs: vec![],
         provider_requirements: vec![],
@@ -186,6 +187,7 @@ fn original_install_only_configuration_fence_blocks_negative_reads_across_restar
         semantic_evidence: None,
     };
     let evidence = FrozenSemanticEvidence {
+        native_products: vec![],
         absent_objects: BTreeSet::from([ObjectKey::Schema]),
         historical_inputs: vec![],
         provider_requirements: vec![],

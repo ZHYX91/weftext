@@ -5,6 +5,8 @@ mod native;
 mod projection;
 pub use embedded_query::*;
 mod query;
+mod query_native_products;
+pub use query_native_products::native_query_products;
 mod query_providers;
 pub use query_providers::*;
 pub mod query_advanced;

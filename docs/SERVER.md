@@ -6,9 +6,9 @@ translation_status: synced
 
 [简体中文](SERVER.zh-CN.md)
 
-# First bounded Server / WebUI slice
+# Controlled Server / WebUI candidate
 
-`0.6.0-alpha.1` adds a single-writer hosted native-document editing entry for Windows/NTFS. It reuses Core file guards, save journals and recovery evidence, with actor-owned drafts and original operation records. This is the first v0.6 slice; the complete scope remains in the [roadmap](ROADMAP.md).
+The established `0.6.0` Windows/NTFS Server / WebUI, multiuser authorization and same-owner synchronization scope is complete, with the complete HTTP matrix, affected browsers and real NAS HTTPS passing on the same final optimized executable; it is not formally published. It reuses single-writer Core file guards, original operations and recovery evidence with isolated personal Drafts. See [MVP](MVP.md) for current scope/limits and the [roadmap](ROADMAP.md) for subsequent versions.
 
 ## Configuration and startup
 

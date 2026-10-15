@@ -8,7 +8,9 @@ translation_status: synced
 
 # Weftext
 
-A file-based knowledge and writing tool built around native Typst. Current state: **0.6.0-alpha.1 Windows local and bounded hosted development; complete v0.6 remains unfinished**. Hosted consumers, same-owner synchronization, partial replicas and bounded Compound creation of Node parents outside moved trees have been connected and checked in separate batches. The latest complete package remains the first Server / WebUI slice; later independently tested executables do not establish new whole-package acceptance. Archived prototypes are not current build dependencies.
+A file-based knowledge and writing tool built around native Typst. The **established v0.6 scope is complete for 0.6.0 on Windows/NTFS and has passed acceptance on the final optimized executable; it is not formally published**. Local and controlled Server / WebUI, multiuser authorization and same-owner synchronization include partial replicas, complex structural combinations, native semantic revalidation and resource-retirement preservation. Archived prototypes are not current build dependencies.
+
+The same final optimized executable passed the complete HTTP matrix, affected browser suites and real NAS HTTPS acceptance, retaining original physical identities, personal Draft/Undo, separate authorization and original-operation recovery boundaries. See [MVP](docs/MVP.md) for supported scope and unverified platform conditions. Windows/NTFS and NAS client results do not establish other OS, real system IME, complete assistive-technology or actual power-loss acceptance.
 
 - [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
 - [Server / WebUI guide](docs/SERVER.md): separate authorization for multiuser five-view writing, fields/Query, annotations, resources, structures and outputs, plus same-owner hosted synchronization; MVP records tested scope and remaining conditions.

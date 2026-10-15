@@ -111,6 +111,7 @@ struct HistoryContext {
     session: Session,
     birth: Birth,
     current: CapturedFile,
+    in_trash: bool,
 }
 struct HistoryRecord {
     version: HistoryVersion,
@@ -140,7 +141,6 @@ impl Core {
         })?;
         if session.stamp.identity != observed.identity
             || session.node_id.as_ref() != Some(&birth.node_id)
-            || !is_canonical(&session.path)
             || weftext_engine::inspect_metadata(&decode(&bytes)?)
                 .id
                 .as_ref()
@@ -172,11 +172,26 @@ impl Core {
                 "The note is outside its admitted library",
             ));
         }
+        let in_trash = session.path.strip_prefix(&root).is_ok_and(|relative| {
+            relative.components().next().is_some_and(|component| {
+                component
+                    .as_os_str()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(".weftext-trash")
+            })
+        });
+        if !is_canonical(&session.path) && !in_trash {
+            return Err(CoreError::new(
+                "identityPending",
+                "The source is not at its canonical live placement",
+            ));
+        }
         // Missing semantic configuration does not prevent exact source viewing.
         // Current discovery exclusions and current OS file access still apply.
         self.check_discovery_boundary(&root, session.path.parent().unwrap())?;
         self.check_history_placement(&birth, &session.path)?;
         Ok(HistoryContext {
+            in_trash,
             current: CapturedFile {
                 path: display(&session.path),
                 bytes,
@@ -311,18 +326,25 @@ impl Core {
             // Each original step maps its own before coordinates once. A
             // final location is never fed through another step in the same Plan.
             let original_places = places.clone();
-            for relocation in t.relocations() {
-                let operations::RelocationRef {
-                    source,
-                    target,
-                    old_leaf,
-                    new_leaf,
-                    leaf_identity,
-                    source_identity,
-                    members,
-                    ..
-                } = relocation;
-                for prior in original_places.iter().cloned().collect::<Vec<_>>() {
+            let relocations = t.relocations();
+            for prior in original_places {
+                // A child explicitly extracted from an original moving tree
+                // has one placement owner. Its ancestor must not add a second
+                // candidate for the same original physical object.
+                if let Some(relocation) = relocations
+                    .iter()
+                    .filter(|step| {
+                        history_relative_path(Path::new(&prior), Path::new(step.source)).is_some()
+                    })
+                    .max_by_key(|step| Path::new(step.source).components().count())
+                {
+                    let source = relocation.source;
+                    let target = relocation.target;
+                    let old_leaf = relocation.old_leaf;
+                    let new_leaf = relocation.new_leaf;
+                    let leaf_identity = relocation.leaf_identity;
+                    let source_identity = relocation.source_identity;
+                    let members = relocation.members;
                     let Some(relative) =
                         history_relative_path(Path::new(&prior), Path::new(source))
                     else {
@@ -938,6 +960,12 @@ impl Core {
         explicit_owner: Option<(&Path, &Path)>,
     ) -> Result<HistoryRestoreResult> {
         let context = self.history_context(&request.session_id)?;
+        if context.in_trash {
+            return Err(CoreError::new(
+                "readOnlyLifecycle",
+                "Restore the note from Trash before replacing its content with a historical version",
+            ));
+        }
         let selected = self.selected_history_record(&context, &request.version_id)?;
         // The editor buffer belongs to the session's original Base. A raced
         // external observation must never be advertised as that draft's Base.

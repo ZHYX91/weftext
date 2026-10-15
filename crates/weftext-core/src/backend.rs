@@ -348,6 +348,9 @@ mod platform {
             size: ((i.size_high as u64) << 32) | i.size_low as u64,
         })
     }
+    pub(crate) fn attributes(file: &File) -> Result<u32> {
+        Ok(info(file)?.attrs)
+    }
     pub(crate) fn file_coordinates(file: &File) -> Result<PathBuf> {
         let mut buffer = vec![0u16; 32768];
         let n = unsafe {
@@ -543,6 +546,9 @@ mod platform {
         pub fn open_file(&self, write: bool, create: bool) -> Result<File> {
             nt_open(self.dirs.last(), &self.name, false, write, create)
         }
+        pub(crate) fn open_retiring_file(&self, delete: bool) -> Result<File> {
+            nt_open_access(self.dirs.last(), &self.name, false, false, false, delete)
+        }
         pub(crate) fn open_placement_file(&self) -> Result<File> {
             nt_open_mode(
                 self.dirs.last(),
@@ -608,14 +614,10 @@ mod platform {
                     "Same-object moves require one local NTFS volume",
                 ));
             }
-            if target_text.eq_ignore_ascii_case(&source_text)
-                || target_text
-                    .to_lowercase()
-                    .starts_with(&(source_text.to_lowercase() + "\\"))
-            {
+            if super::namespace_relative_path(&target_parent, &source)?.is_some() {
                 return Err(CoreError::new(
                     "recursiveMove",
-                    "A node cannot be moved into itself or a descendant",
+                    "A directory cannot be moved into itself or a descendant",
                 ));
             }
             // Reuse the already qualified volume-root and ancestor opening logic.
@@ -744,6 +746,17 @@ mod platform {
             let directory = self.source_directory(relative.parent().unwrap())?;
             nt_open(Some(directory), name, false, write, create)
         }
+        pub(crate) fn open_source_retiring(
+            &mut self,
+            relative: &Path,
+            delete: bool,
+        ) -> Result<File> {
+            let name = relative
+                .file_name()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing retirement filename"))?;
+            let directory = self.source_directory(relative.parent().unwrap())?;
+            nt_open_access(Some(directory), name, false, false, false, delete)
+        }
         pub fn release_source_descendants(&mut self) {
             self.dirs
                 .retain(|path, _| path == &self.source || !path.starts_with(&self.source));
@@ -797,7 +810,32 @@ mod platform {
             participants: &[(&Path, &Path)],
             planned: &[PathBuf],
         ) -> Result<Self> {
-            if participants.is_empty() || participants.len() > 5000 {
+            Self::acquire_with_ancestors(participants, planned, &[])
+        }
+        pub(crate) fn acquire_with_ancestors(
+            participants: &[(&Path, &Path)],
+            planned: &[PathBuf],
+            ancestors: &[PathBuf],
+        ) -> Result<Self> {
+            Self::acquire_union(participants, planned, ancestors, false)
+        }
+        pub(crate) fn acquire_forest_with_ancestors(
+            participants: &[(&Path, &Path)],
+            planned: &[PathBuf],
+            ancestors: &[PathBuf],
+        ) -> Result<Self> {
+            Self::acquire_union(participants, planned, ancestors, true)
+        }
+        pub(crate) fn acquire_anchors(ancestors: &[PathBuf], planned: &[PathBuf]) -> Result<Self> {
+            Self::acquire_union(&[], planned, ancestors, true)
+        }
+        fn acquire_union(
+            participants: &[(&Path, &Path)],
+            planned: &[PathBuf],
+            ancestors: &[PathBuf],
+            forest: bool,
+        ) -> Result<Self> {
+            if (participants.is_empty() && ancestors.is_empty()) || participants.len() > 5000 {
                 return Err(CoreError::new(
                     "invalidPlan",
                     "Invalid namespace participant count",
@@ -817,7 +855,7 @@ mod platform {
                 .iter()
                 .map(|(_, parent)| namespace_key(parent))
                 .collect::<Result<Vec<_>>>()?;
-            if planned.len() > 5000 {
+            if planned.len() > 5000 || ancestors.len() > 5000 {
                 return Err(CoreError::new("budget", "Too many planned directories"));
             }
             let planned = planned
@@ -828,7 +866,21 @@ mod platform {
                 .iter()
                 .map(|path| namespace_key(path))
                 .collect::<Result<std::collections::BTreeSet<_>>>()?;
-            let text = actual[0].0.to_string_lossy();
+            let ancestors = ancestors
+                .iter()
+                .map(|path| crate::absolute_path(path))
+                .collect::<Result<Vec<_>>>()?;
+            for parent in &ancestors {
+                drop(ParentGuard::acquire(
+                    &parent.join(".original-placement-parent"),
+                )?);
+            }
+            let text = actual
+                .first()
+                .map(|(source, _)| source)
+                .or_else(|| ancestors.first())
+                .unwrap()
+                .to_string_lossy();
             if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
                 return Err(CoreError::new(
                     "unsupportedVolume",
@@ -851,8 +903,9 @@ mod platform {
                     ));
                 }
                 for (other, root) in sources.iter().enumerate() {
-                    if parents[index].starts_with(root)
-                        || (index != other && sources[index].starts_with(root))
+                    if !forest
+                        && (parents[index].starts_with(root)
+                            || (index != other && sources[index].starts_with(root)))
                     {
                         return Err(CoreError::new(
                             "recursiveMove",
@@ -884,6 +937,7 @@ mod platform {
                 .iter()
                 .flat_map(|(source, parent)| [source, parent])
                 .chain(&planned)
+                .chain(&ancestors)
             {
                 let mut current = drive_key.clone();
                 for part in leaf.components().skip(2) {
@@ -919,8 +973,14 @@ mod platform {
             Ok(Self {
                 inner: NamespaceGuard {
                     dirs,
-                    source: sources[0].clone(),
-                    target_parent: parents[0].clone(),
+                    source: sources
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| drive_key.clone()),
+                    target_parent: parents
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| drive_key.clone()),
                     canonical_keys: true,
                 },
                 sources,
@@ -935,6 +995,48 @@ mod platform {
                 .clone();
             self.inner.target_parent = self.parents[index].clone();
             Ok(&mut self.inner)
+        }
+        pub(crate) fn release_source_descendants(&mut self, index: usize) -> Result<()> {
+            let source = self
+                .sources
+                .get(index)
+                .ok_or_else(|| CoreError::new("invalidPlan", "Missing source root"))?;
+            self.inner
+                .dirs
+                .retain(|path, _| self.sources.contains(path) || !path.starts_with(source));
+            Ok(())
+        }
+        pub(crate) fn move_source_to(&self, index: usize, target: &Path) -> Result<()> {
+            let source = self
+                .sources
+                .get(index)
+                .and_then(|key| self.inner.dirs.get(key))
+                .ok_or_else(|| {
+                    CoreError::new("invalidPlan", "Original moving root is not retained")
+                })?;
+            self.move_file_to(source, target)
+        }
+        pub(crate) fn move_file_to(&self, file: &File, target: &Path) -> Result<()> {
+            let parent = target
+                .parent()
+                .ok_or_else(|| CoreError::new("invalidPlan", "Moving target has no parent"))?;
+            let parent = self
+                .inner
+                .dirs
+                .get(&namespace_key(parent)?)
+                .ok_or_else(|| {
+                    CoreError::new("invalidPlan", "Moving target parent is not retained")
+                })?;
+            rename_handle(
+                file,
+                parent,
+                target
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| {
+                        CoreError::new("invalidPath", "Moving target has no UTF-8 name")
+                    })?,
+            )
         }
         pub(crate) fn source_parent_identity(&self, index: usize) -> Result<FileIdentity> {
             let parent = self
@@ -964,6 +1066,13 @@ mod platform {
         pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&File> {
             let key = namespace_key(path)?;
             if !self.inner.dirs.contains_key(&key) {
+                let parent_key = key
+                    .parent()
+                    .ok_or_else(|| {
+                        CoreError::new("invalidPlan", "Retained directory lacks a parent")
+                    })?
+                    .to_path_buf();
+                self.retain_directory(&parent_key)?;
                 let parent = key
                     .parent()
                     .and_then(|parent| self.inner.dirs.get(parent))
@@ -974,6 +1083,18 @@ mod platform {
                 self.inner.dirs.insert(key.clone(), file);
             }
             Ok(&self.inner.dirs[&key])
+        }
+        /// Resolve again only beneath a retained original ancestor handle. Its
+        /// pathname key remains the capture-time coordinate after that ancestor
+        /// moves; callers compare the result to the frozen parent identity.
+        pub(crate) fn retain_target_parent(&mut self, index: usize) -> Result<()> {
+            let parent = self
+                .parents
+                .get(index)
+                .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace parent"))?
+                .clone();
+            self.retain_directory(&parent)?;
+            Ok(())
         }
         pub(crate) fn target_parent_identity(&self, index: usize) -> Result<Option<FileIdentity>> {
             self.directory_identity(
@@ -1093,6 +1214,12 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn open_retiring_file(&self, _: bool) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub(crate) fn open_placement_file(&self) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
@@ -1196,6 +1323,12 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn open_source_retiring(&mut self, _: &Path, _: bool) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub fn release_source_descendants(&mut self) {}
         pub fn rename_leaf(&self, _: &File, _: &str) -> Result<()> {
             Err(CoreError::new(
@@ -1230,6 +1363,50 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn acquire_with_ancestors(
+            _: &[(&Path, &Path)],
+            _: &[PathBuf],
+            _: &[PathBuf],
+        ) -> Result<Self> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn acquire_forest_with_ancestors(
+            _: &[(&Path, &Path)],
+            _: &[PathBuf],
+            _: &[PathBuf],
+        ) -> Result<Self> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn acquire_anchors(_: &[PathBuf], _: &[PathBuf]) -> Result<Self> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn move_file_to(&self, _: &File, _: &Path) -> Result<()> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn release_source_descendants(&mut self, _: usize) -> Result<()> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn move_source_to(&self, _: usize, _: &Path) -> Result<()> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub(crate) fn directory_identity(&self, _: &Path) -> Result<Option<FileIdentity>> {
             Err(CoreError::new(
                 "unsupportedPlatform",
@@ -1243,6 +1420,12 @@ mod platform {
             ))
         }
         pub(crate) fn retain_directory(&mut self, _: &Path) -> Result<&File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn retain_target_parent(&mut self, _: usize) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 "Windows backend required",
@@ -1297,6 +1480,12 @@ mod platform {
             "Windows backend required",
         ))
     }
+    pub(crate) fn attributes(_: &File) -> Result<u32> {
+        Err(CoreError::new(
+            "unsupportedPlatform",
+            "Windows backend required",
+        ))
+    }
     pub(crate) fn publish_private_create(_: &Path, _: &Path) -> Result<()> {
         Err(CoreError::new(
             "unsupportedPlatform",
@@ -1305,8 +1494,8 @@ mod platform {
     }
 }
 pub(crate) use platform::{
-    MultiNamespaceGuard, NamespaceGuard, ParentGuard, file_coordinates, publish_private_create,
-    stamp,
+    MultiNamespaceGuard, NamespaceGuard, ParentGuard, attributes, file_coordinates,
+    publish_private_create, stamp,
 };
 pub(crate) fn namespace_relative_path(path: &Path, prefix: &Path) -> Result<Option<PathBuf>> {
     let mut path = path.components();

@@ -159,6 +159,8 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_sync_compound.py', exe)
         run(sys.executable, 'scripts/test_sync_revalidation.py', exe)
         run(sys.executable, 'scripts/test_sync_structure.py', exe)
+        run(sys.executable, 'scripts/test_sync_placement.py', exe)
+        run(sys.executable, 'scripts/test_sync_retirement.py', exe)
         run(sys.executable, 'scripts/test_sync_history.py', exe)
         run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':

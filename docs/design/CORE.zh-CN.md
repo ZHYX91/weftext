@@ -55,6 +55,18 @@ v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source
 
 保存比较当前文件对象和准确 Base，保外部并发稿；不能只凭 hash 声称 CAS。另存默认 create-only，已存在目标必须单独预览和取得它自己的当前写依据；来源不变。可用平台提供同一安全后端；WebUI 没有本机文件写能力时说明上传副本/下载另存的实际语义，不冒原位保存。恢复稿存于应用私有区而非在用户目录造控制文件。对已管理文件重定向回其 Node/Resource 会话，不允许绕过其合同。主动纳入库时预览新节点/必要元数据及文件安排，成功前保原件。
 
+### 2.2 私有 Draft 与改名恢复
+
+同一 actor 的原 `drafts` 目录内，以原 `FileIdentity` 与完整 `ActorLibraryBinding`（含明确无绑定）派生单层主 record 键，不再按当前位置为同一对象建立相互竞争的草稿。主 record 是该准确对象／库作用域的唯一恢复权威，包括 clean、明确 discard 和 merge 后的状态；读取与写入使用同一作用域优先规则，已有 bound clean 主 record 不能被旧 unbound 提案盖过。不同 actor／库的记录不转授读取或写入权，旧无绑定记录也不因迁移补造库归属。
+
+所有原 session 草稿写口，包括普通持久化、过期 Save 保稿和明确恢复决议，均使用 session 原 stamp 的文件身份，不读取旧路径现 occupant 的身份来选择写目标。原 actor 的库定位沿已核定的 `actor_library_path`，`ActorLibraryBinding` 中的原根坐标及身份只是归属证据，不能当作可直接打开的路径。
+
+旧 path-hash record 仅沿准确文件身份与原已提交 relocation lineage 迁移，核对 canonical 文件及其目录的同对象连续性；按原 scope／路径／准确字节指纹一次消费，独立 consumed marker 不代替主 record。原身份未知的当前槽旧稿仅作未知 Base 提案保留，不据路径补造身份或库归属。原 legacy 字节保留；迁移覆写原主 record 前，先把其准确原字节保存在现有 `draft-history`，再登记新主 record 与消费事实。`draft-history` 是保全和明确比较材料，不自动扫描为当前恢复权威；已明确清稿／合并后，旧历史不能自行复活。主 record 损坏或资格不符也不能回退选择另一作用域或旧历史。
+
+同一 FI 与库作用域不证明外部变动后的当前位置。缺少原已提交位置关系的外部改名或历史坐标回退仍可查看源，但不自动恢复、迁移或消费旧 Draft；历史坐标不能冒作当前迁移证明。新打开的 session 在内存保留位置尚未确认的资格，后续 persist／Save 以 `identityPending` 明确拒绝覆盖原私有记录；编辑器保留当前输入并报告恢复草稿写入失败。正常已获资格的原 session 在已提交移动／交换后仍可按原 FI 与原位置关系续写，不能借旧路径当前其他对象的身份选写草稿。
+
+完整 Draft record（含 Base、提案、全部 alternatives）及迁移记录采用一致的 16 MiB 读写预算；覆写前先校验完整拟议字节，超限或读取／持久化失败保留旧可读草稿，不截断或只检查正文长度。本轮 Windows／NTFS 的定向回归及受影响 Draft、历史、owner backup、库作用域和同步 HTTP／浏览器消费者均已通过最终验收；平台和真实断电限制仍见 MVP。
+
 ## 3. 身份、版本与当前读取
 
 保留随机 UUIDv4：WorkspaceId 与各 Node/Resource/Annotation/Directory/Tag ID 使用完整类型化 `EntityRef`，解决改名稳定引用、离线创建及复制独立身份，且不把名字/路径变成身份。UUID 的价值是稳定随机标识，不是安全凭证。Directory/Tag只补导航必需身份，不成为笔记或逐值事实ID。Core 分配新身份；源码/sidecar中的 ID 是声明。已有身份须匹配已接纳创建事实、当前唯一文件绑定和 lifecycle；重复 ID、外部复制带 ID、缺元数据或 partial sync 不自动新建或重发 ID。
@@ -196,15 +208,19 @@ manifest 的每个文件现在必须同时携带准确 blob 摘要与 `fileRevis
 
 接收端现可用原 Relocate 事务应用单个 Node 子树的改名、移动、回收与恢复，包括携带未单独选中的本机子节点。该同一计划可同时更新正文、批注、现有资源，创建已有父目录下的新批注／资源文件，并更新事务中未移动的其他对象；不能先提交目录移动再另外保存内容。实际文件、Node／资源／目录身份、源树成员、目标父目录及未移动的依赖先核对；移动用保留的原目录 handle，提交前再从该 handle 核对完整结果并持有全部文件。接收端本机伴随文件保留，不因发送端未携带而删除；子节点的本机安装位置一起改变，不制造独立内容提交。已安装源码修订、草稿找回和历史连续保留；历史入口同时认可原 CreateLibrary 与 CloneSync 的库资格。接收回收树进入原回收站列表与 Query 范围，可以在接收端恢复后继续同步。完整 after images 的原操作恢复核对全部子树与依赖，同字节替换对象或外部第三状态不能接纳。只有原目录移动已全部成立、每个内容参与者仍是原 before／after 对象时，才允许 `resumeOriginalPlan` 补完内容；仍使用原 operationId、plan 和最终提交决定，不重发 namespace 步骤。目录尚未完成、无法确认或遇到第三版内容时保留原计划及现场。并发改名仍须显式选择全部冲突分支，历史保双方。
 
-Core 现进一步将至少两个互不重叠、已安装且未回收的 Node 移动／改名与内容更新组成一个内部 Compound mutation，仍沿原 `ApplySync`／`MergeSync` 的 request、Plan、install、commit 和回执。可以同时更新树外参与者，以及在已有父目录下新增资源／批注文件。首个文件系统改动前核对全部原物理身份、完整成员、内容、目标缺席与依赖；共享祖先 guard 去重，逐树移动使用原 root handle，并持有重新打开的成员到整个提交结束。中断恢复聚合判断每个原位置、仅主文件改名的中间位置和最终位置；只有全部仍可证明，才用原计划续做剩余步骤。第三状态、同字节替换或同步基线变化必须保留现场并拒绝续交，已提交回执不因后来版本变化而失效。参与文件与内容逐项计入有界预算；历史、草稿、安装事实及 Pending 覆盖所有移动树和树外参与者。普通本地单树移动的原语义不变。
+Core 现将多个已安装 Node／Directory 的移动、改名和内容更新组成一个内部 Compound mutation，并可组合 Node 的回收／恢复，仍沿原 `ApplySync`／`MergeSync` 的 request、Plan、install、commit 和回执。原计划可表达交换／循环重排、祖先抽取及嵌套最终位置；最终 parent 图仍须闭合且无环，原对象和中间位置必须可证明，不能把任意重叠视为已获准。可同时更新树外参与者及新增资源／批注文件。首效前核对全部原物理身份、完整成员、内容、目标资格与依赖；共享祖先 guard 去重，原 root handle 与重新打开的成员持有至提交结束。恢复按原 namespace phase 聚合证明原位、主文件改名、parking 和最终位置，沿同一 Plan 只续做剩余步骤。第三状态、同字节替换或同步基线变化保留现场并拒绝续交，已提交回执不因后来版本变化而失效。参与者与内容逐项计入有界预算；历史、草稿、安装事实及 Pending 覆盖全部参与者，普通本地单树移动的原语义不变。
 
-该 Compound 计划进一步允许部分副本补入尚未安装的根 Rules、Schema 与 settings 文件，以及在移动树之外创建新 Node 父节点与自有资源的嵌套目录。全部新目标先证明缺席并冻结已有父目录身份；首次创建沿原 materialized 记录保留物理身份、发送端准确文件修订和 Node／Resource 身份，并接入原出生、历史与恢复消费者。创建与各树移动、内容更新仍只有一个最终提交，恢复不能把同字节的新文件当成本操作原件。曾提交后丢失的 Rules 仍不可当作首次缺席自动补建。首效前和恢复时，Pending 检查覆盖原位置、最终位置和未物化子目标；最终文件、目录与移动目标使用宿主文件系统的名称比较规则检查交叠和别名。
+该 Compound 计划进一步允许部分副本补入尚未安装的根 Rules、Schema 与 settings 文件，在移动树内外创建新 Node／普通 Directory 父节点和自有资源嵌套目录，并应用普通 Directory 的独立移动。全部新目标先证明缺席并冻结已有父目录身份；首次创建沿原 materialized 记录保留物理身份、发送端准确文件修订和 Node／Resource／Directory 身份，并接入原出生、历史与恢复消费者。创建与各树移动、内容更新仍只有一个最终提交，恢复不能把同字节的新文件当成本操作原件。曾提交后丢失的 Rules 仍不可当作首次缺席自动补建。首效前和恢复时，Pending 覆盖原位、最终位、parking 和未物化子目标；名称交叠与别名按宿主文件系统比较规则核对。
+
+所选 after 从已安装 Node 的资源 registry 准确移除原 ResourceId，且从 after 文件集中移除其准确相对叶路径时，原 Compound 可同时保全该原叶文件；不将正文、批注、控制文件或未登记伴随文件冒作资源退役。计划冻结原 Resource 资格、文件修订、digest、FI、父目录 FI、字节与 attributes，在同一 namespace guard 中持有带 DELETE 权的原文件 handle，以 no-replace rename 移入该原 Plan 固定的成员保全位置。支持没有目录 placement 的纯资源成员退役，也可与多所有者、移动和内容更新合成；不分配新的 Node／Directory 身份，不另起删除事务，不清空字节或递归删除。旧 Ref 与历史 blob 保留，但不因此继续具有 current Resource 角色。原 source 与 retention target 均进入 Pending；恢复只接纳原 phase 下来源位置与固定保全位置恰有一处持有同一原对象，并核原父／本操作 materialized 保全父、准确字节及 attributes。两处皆有、皆无、外来占位或同字节替换均保现场拒绝。
+
+带 live／Trash 成员依赖的原操作恢复，按原 Plan 捕获的 FI、父目录与 namespace phase 将本操作移动的准确成员逆投至 before lifecycle，再比较原成员集；不能按当前路径或 portable retired 声明猜测旧范围。只有同一 Plan 的出生记录与 materialized FI、当前原对象均匹配时，才从该 before 比较中扣除其自行新建成员。迟到外来成员不被扣除，仍使原范围失效。
 
 同步启用后的 Native 导入沿同一 CreateTree 为外层包装目录及其普通祖先登记 Directory 身份，并在原预览中冻结全部输出文件的修订。Native Resource／Style 不得使用保留的 `weftext.directory.json` 控制文件名；旧计划中的资源也不因文件名匹配而在提交或恢复后获得导航目录资格。
 
 同步后，已打开的编辑器保留个人草稿、撤销记录与原保存依据。同一 Node 的新位置经 Core 确认后，旧会话的预览、正文 Query 和批注刷新暂停，并清除旧派生结果；源码编辑和资料库 Query 仍可继续。已有待提交文字先按原输入状态结算，暂停读取不撤销其输入资格。用户明确比较原始版本、当前磁盘与个人草稿并应用合并后，才接纳新的文件会话并恢复这些消费者；合并本身仍不保存作者文件。
 
-本地浏览器已接目录传输、配对、部分副本、冲突选择及原操作恢复；接收但未安装的准确历史与外部修改采纳入口也已接入，后者的当前边界见下文。在已有移动树内部新建 Node、普通 Directory 的新建父节点与独立移动、相互重叠或循环位置、新副本中的回收对象、移除旧文件，仍明确拒绝并保接收版本；普通 ApplySync／MergeSync 对已变化的语义依赖继续拒绝，须转入下述显式 RevalidateSync 决定，不能用确认框绕过。对应完整结构事务与重新资格检查继续实施，不能把复合事务拆开声称已同步。Server 消费者按各自独立权限逐项接通，不能由本地所有者测试推定其授权正确。新副本明确为选定对象及完整事务／依赖闭包的部分副本。实现接通和内核测试不等同于每个 HTTP／浏览器消费者或完整 v0.6 验收。
+本地浏览器已接目录传输、配对、部分副本、冲突选择及原操作恢复；接收但未安装的准确历史与外部修改采纳入口也已接入，后者边界见下文。Clone 可保所选回收根与继承子树；同一原操作的多个回收根按准确 NodeId 选择恢复，缺少唯一选择时拒绝猜测。上述复杂 placement、回收与资源成员保全沿原事务接通，本轮既定 Windows／NTFS 范围已通过同一最终优化程序的 HTTP／浏览器组合验收。普通 ApplySync／MergeSync 对已变化的语义依赖仍拒绝，须转入显式 RevalidateSync，不能用确认框绕过或拆开事务冒成功；未获原角色／完整结构证明的其他文件移除仍拒绝并保接收版本。Server 消费者各按独立权限验证，所有者测试不代替其授权。新副本是选定对象及完整事务／依赖闭包的部分副本；既定 Windows／NTFS v0.6 范围已完成，尚未正式发布；未跑平台不在此接受范围。
 
 managed 同步传输一个 immutable `CommitManifest + exact blobs` bundle：WorkspaceId、事务、因果 parents、writer replica、所有真实出生/改动/退休、before/after RevisionId、结构/schema 改变与准确 transform。同一 manifest 的校验摘要覆盖整个对象；校验失败/缺 blob/placeholder/父历史缺失只进入 staging，不成为新 head。
 
@@ -342,22 +358,26 @@ RQ01–10 的源、类型、标题/混排/深标题与 Word 由 SOURCE/EDITOR/FE
 
 `AdoptSyncExternal` 明确区分因果前置与当前实物：`expectedInstalled` 固定每个所选对象的准确已安装修订，`changes` 则携带原观察 snapshot base 及相同的 before/after 字节，只接纳已经存在的当前外部修改。`sync/adoption-cut` 从原本机 locators 读取明确选择，不根据收到版本的路径猜本机对象；本地 HTTP 返回的完整 JSON 最多 16 MiB，浏览器存储可能更小，持久保存失败必须发生在首次 prepare 之前。普通 Save/Apply 不因此绕过外部修改冲突。未选对象成员、当前 Schema/规则与所需类型引用依赖仍须按原范围核对；不支持的结构或语义决定保原件并明确拒绝，不用该动作顺带任意改稿。
 
+原 cut 与 intent 可选携带 `removedMembers: [{path, baseId}]`，缺省为空，明确采纳本机已经发生的资源移除。每项必须是原 `expectedInstalled` cut 中已登记、已证明所属 Node 和物理身份的 Resource 叶文件；其原负 snapshot 须证明 `captured=None`、准确路径及同一父目录身份。仍存在的空文件不等于缺失，不能用空 `after` 表示删除；重复、路径别名、与 `changes` 竞争或 cut 外成员均拒绝。原 canonical owner 与资源 registry 仍须是原文件对象，准确观察到的 registry 必须同时省略原 ResourceId 和路径；不能将 canonical source、批注或控制文件的缺失冒充资源移除。
+
+采纳仍为原无本地内容写入的 Update Plan：保留资源缺席／父目录负依赖，其中移除项只在 after 与原 publication 登记准确资源成员及其文件修订条目的退出，原历史修订和 blob 保留。原生验证读取真实 after World，不能为已移除成员补回旧 before 字节；重新出现的文件、父目录替换或 Pending 不能沿旧缺席资格提交或恢复。浏览器预览列出已在外部移除的资源，持久保留原列表与 bases 后按原请求／编号重试，不执行新的本地删除动作。接收端仍须在自己的原 Compound 中证明并保全旧资源实物，不能从发送端缺席获得任意删除权。该保全路径的 Core 与本轮同一最终优化程序 HTTP／浏览器组合已通过验收。
+
 普通 Save 和事务发布同时核对原已安装文件的物理观察；重新打开得到的新 Base 不能把同字节的外部改写变成已安装事实。原 Core 提交产生的同字节写入仍沿其准确观察连续有效；缺失的旧证据不可用当前观察补齐。
 
-当前外部采纳切片遇到文献 Work、保存查询或正文查询语义依赖时仍返回 `syncSemanticDecisionRequired`，不把客户确认或旧解析结果当成已完成重新验证；普通未解析的原生链接仍合法。下述 RevalidateSync 处理明确收到版本的语义决定，不因此授予任意外部改稿接纳或跳过原外部修改保护。
+外部采纳现沿原无写入 Update Plan 核对文献、保存定义及实际 Query／Provider 语义，需要原生产品时进入下述同一编译证据路径。其 current 查询固定为原 Plan 的已安装 before cut 与明确观察到的 after，不跟随较新的 received heads；真实接收图只提供准确历史／pinned 查找，未安装远端分支仍保留。对仍存在的内容，观察适配仅认可同一原文件身份、原 snapshot、before＝after 字节及原预览分配的新文件修订，不授予新的 Node／资源／定义键身份。缺依赖、外国绑定、未知定义资格、过期观察或 Pending 仍拒绝。普通未解析链接和未知作者内容可保留；不需要编译产品的普通源不强制整篇编译。下述 RevalidateSync 仍是对明确收到版本的独立语义决定，不能跳过原外部修改保护。
 
-新 enable 的原 Plan 保留初始叶文件的物理绑定，clone/apply 沿原观察事实建立本机证据；旧计划缺少物理证据时报告 unavailable，不用当前同路径对象回填旧资格。准备后文件、父目录或依赖变化使提交失败，原请求及草稿仍保留。采纳复用原持久 Plan、提交决定、outbox 和恢复；没有第二份当前状态或新执行日志。缺省 Schema/规则必须是真实缺失且保留原负依赖；后来出现的文件不能借 bundled 默认绕过核对。成功登记的是准确当前字节的新修订，历史分支和未安装版本不会被静默选择。
+新 enable 的原 Plan 保留初始叶文件的物理绑定，clone/apply 沿原观察事实建立本机证据；旧计划缺少物理证据时报告 unavailable，不用当前同路径对象回填旧资格。准备后文件、父目录或依赖变化使提交失败，原请求及草稿仍保留。采纳复用原持久 Plan、提交决定、outbox 和恢复；没有第二份当前状态或新执行日志。缺省 Schema/规则必须是真实缺失且保留原负依赖；后来出现的文件不能借 bundled 默认绕过核对。成功登记的是准确当前字节与明确资源成员状态的新修订，历史分支和未安装版本不会被静默选择。
 
 浏览器先持久保留准确请求，再发准备或确认；查询不执行，准备丢响应只重试原请求。按原编号找回入口返回 Core 保留的准确请求和当前预览，支持浏览器地址变化。新增 cancelPrepared 只适用于准确 planId 的原同步事务：原提交/已结束结果保持幂等；安装标记存在则拒绝并要求原恢复；尚未进入安装时，仅持久记录取消，不检查或写入当前文件。这样允许放弃被外部修改使之过期的提案，同时保证迟到原 execute 不能生效。它与 keepCurrent 对原参与对象的完整恢复证明不同，不能用于跳过已发生安装的恢复。
 
 
 ### RevalidateSync：显式语义决定与原事务证据
 
-2026-10-15 的有界 RevalidateSync 切片已接 Core／Data、App DTO 和本地浏览器审阅。原 Pending 读写／负依赖 guard 与 Node 根标记角色问题已按真实生产者反例修复回归；同一最终固定程序的十个真实 HTTP 场景与 Chrome 155.0.8059.41 的五组浏览器检查全部通过，包括 Undo 后准确比较、明确合并和 Save。**这些结果只证明下述有界切片，不代表完整语义复验、整包或完整 v0.6 验收。**
+0.6.0 Windows／NTFS 既定 RevalidateSync 范围已接通 Core／Data、App 与浏览器，并通过同一最终优化程序的语义 HTTP 和受影响浏览器验收。实际原生产品、Native Adopt、移动 include、Style、live／Trash／混合生命周期及原号恢复沿下述同一证据链处理。准确最终检查范围见 [MVP](../MVP.zh-CN.md)；尚未正式发布，其他平台及实际断电不在本轮通过范围。
 
 RevalidateSync 是用户可主动选择的语义决定，不要求先制造普通 ApplySync 的拒绝。普通 Save 与保留固定 Schema 绑定的保存定义不因出现 Query 语法就必然触发 `409`；是否需要特殊复验由准确当前依赖和原操作合同决定，不能把该拒绝作为每个 HTTP 场景的前提。
 
-`sync/revalidation-cut` 只读已接纳收到图的有界对象、原依赖及准确文件描述；对象修订与 `fileRevision` 分别返回。候选清单不授予读取本机任意路径的权力，也不把尚未选择的候选当作实际语义依赖。`sync/revalidation-review` 对明确选择及所供修复字节推导实际语义读集，返回 `expectedInstalled`、`reviewedVersions`、每项 `reviewedDependencies` 和批注目标状态。cut／review 不改作者文件、不 stage、不发布新分支或分配操作／计划身份；临时快照读依据用后释放。返回的 DTO 与客户布尔确认都不是 writer 证据。
+`sync/revalidation-cut` 只读已接纳收到图的有界对象、原依赖及准确文件描述；对象修订与 `fileRevision` 分别返回。候选清单不授予读取本机任意路径的权力，也不把尚未选择的候选当作实际语义依赖。`sync/revalidation-review` 对明确选择及所供修复字节推导实际语义读集，返回 `expectedInstalled`、`reviewedVersions`、每项 `reviewedDependencies` 和批注目标状态。请求可选带入同一 UI 动作预先保留的 `operationId`，响应原样绑定；新回收原生源需要该编号。绑定原编号的多位置／回收组合，其只读位置投影与原 writer 共用 `compound_locations`，沿准确所选 parent 图及原已安装位置推导各根和继承子树目标，不分配新身份或预留路径；需要原编号的新回收布局若缺号，或布局缺 parent 决定／无法闭合，均不能猜测。该编号不是资格：cut／review 不改作者文件、不 stage、不发布新分支，Core 不在此分配操作、Plan 或文件修订；临时快照读依据用后释放。返回的 DTO 与客户布尔确认都不是 writer 证据。
 
 每个决定固定原对象、全部当前收到分支及准确所选基准。`preserve(revision)` 保留该版本的完整 state、原生源字节、文件修订和原绑定，不自动改键、重写 metadata 或绑定 current/latest。`repair(baseRevision)` 明确提交用户选择的完整 after state 与准确新字节；改变的文件必须取得与其所有者／摘要一致的新 `fileRevision`，不能复用原修订改字节。未改文件保原修订；改回准确原字节可保原文件修订。保留决定也可形成有新依赖及完整因果 parents 的新对象修订，不冒充正文已经重写；未知作者内容、批注和未选择文件不能被隐式清理。
 
@@ -365,13 +385,21 @@ RevalidateSync 是用户可主动选择的语义决定，不要求先制造普�
 
 语义检查沿原 Data 类型检查、定义预检和执行器。独立闭合的参数表达式、callee／Provider 调用必须按其准确原基线执行预检，并在需要行数据时消费原 Core 已接纳 cut 及所选 after 的真实行、最终位置和成员关系；新建／恢复／退出 live 的成员必须由同一原计划证明，不能用空行或旧 before 行冒结果。必填参数未知时保留合法的参数化定义及明确 deferred 项，不造参数值；未知参数不能豁免同定义内可独立闭合表达式、兄弟调用或固定 Provider 选择。实际 Provider／策略选择和依赖保留准确版本，校验不全或预算不足不能冒完整零结果。
 
+实际调用需要原生产品时，Core 不透明捕获固定准确源、文件修订、所选 after 位置及可读取的 World；App 在 Core 锁外通过原隔离 Engine worker 编译，所有闭包轮次共用有界预算。最终 title／body／headings 经 Data 的同一产品转换进入原执行器及真实 Provider，不能用静态字段、空行、旧 before 或伪造成功替代。真正消费的 unavailable／歧义产品明确拒绝；不因无关坏正文而要求所有静态动作编译整库。
+
+只读 review 将 compiler 的实际 include／资源／配置读取纳入准确对象依赖，按原接收分支与成员集求有界固定点；缺件、未明确决定的并发依赖或预算不足明确拒绝，不自动绑定 latest。prepare 必须与已审阅的实际读集一致，不能在 finish 私下补选新对象。worker 返回时重新核对已安装／已收到 cut、live 与 Trash 各自原成员集、原文件身份、正／负读取和父目录见证；原 Plan 的 include 移动仍从原位置捕获身份，按准确 after 位置编译并在恢复中重验。已由原 Plan 证明退役的准确 Resource 成员从 after World 及其 current owner 映射排除，原文件的正依赖／FI guard 仍保留；不能读保全位置或旧 before 字节填补编译输入，真实消费缺失输入仍拒绝。当前默认库 Style 还须证明原 Settings 选择、同库唯一资源绑定、实际 Styles Node 与 registry、已接纳资源身份，或同一原 Plan 的 create-only 输出；名称或相同字节不能代替角色，Style／Settings 的迟到变化不能获得旧资格。
+
 纯复验结果仍须由原 writer 补齐六类证据：原对象接纳与位置、准确所属资源、current／pinned 定义身份及历史源码、原配置缺席、批注目标事实、实际 Query／Provider 调用。原 Core 不透明资格与文件／父目录见证和同计划创建的原出生／输出共同证明 after；客户提供的路径、元数据或相同字节不能补造接纳。正／负读依赖、Query 原成员集、准确历史输入及已履行的语义义务冻结进同一 Plan／SyncApplication，受原事务预算约束，在 stage 前、首效前与原操作恢复中重验；commit marker、outbox、状态查询与恢复责任不另起一套 writer 或账本。
 
 将额外语义读集并入原 Plan 时，必须重新核对全部相关既有文件、缺席槽位及父目录的 Pending，执行／恢复只可排除本操作自己的准确编号。磁盘暂时缺席、只读捕获成功或 bundled 默认不能绕过另一个未决安装；新到的配置记录也使原负依赖失效。Directory 与 RootDirectory 必须按准确收到对象角色、原标记、资格见证及实际位置匹配，不能仅按 ID 拼接、路径恰在根或旧依赖列表猜角色。Node 出生容器中的标记外观成员不能获得非 Node Directory 身份；原计划重启、已提交／已知 after 的接纳消费者也须核对同一准确角色证据。上述 Pending 与 Node 根标记的实际反例回归已通过，其它未运行组合仍不得记为通过。
 
 批注原记录、目标描述、回复、状态与未知成员保留。目标不在获权 cut、准确历史范围／资源版本缺失、编译元素来源或可信媒体事实不足时，review／预览明确列 `unavailable` 和原因，不能读取隐藏目标、删除讨论、猜测重锚或扩成整篇成功。可证明的准确目标与不可定位记录分别处理，不因讨论获准保留而产生目标读取权。
 
-当前有界路径仍不能完成依赖原生编译产品的 Query／Provider 证据，以及 Trash 或 live／Trash 混合调用；证据不足须明确拒绝或报告未完成。一般结构／生命周期缺项也不因复验而开放。浏览器保留原 Draft／Undo；分支、修复输入或审阅代次改变即失效旧 review。明确核对后的请求先持久保留，再沿原 SyncFlow prepare／commit／按原编号恢复，迟到 review 不安装新输入，丢响应不另造操作。含保存查询定义的复验准备实测约 83–89 秒，参数化定义的实际运行也曾约 83 秒；负载下准备曾超过 90 秒超时，性能完成门仍未满足；慢准备不等于死锁，不因此改编号重复提交。上述有界通过不表示性能完成门、完整语义复验、整包或完整 v0.6 已完成。
+live、Trash 及混合调用按原实际生命周期快照与所选 after 判定；子节点的 effective Trash 沿准确 parent 链继承，不把 portable 子节点的原 `retired=false` 改成独立退休，也不将其列为另一个回收根。多根回收、live 移动、新出生与资源成员退役可沿同一原 Compound 布局和资格接入实际原生验证，不能用旧 Trash 位置或假 live 行代替。恢复的成员比较仍受上述原 FI／父目录／phase 的 before 投影与同 Plan 出生证明约束，外来迟到成员继续拒绝。本轮既定组合的受影响 HTTP／浏览器已通过同一最终优化程序验收；证据不足或超预算明确拒绝，原生编译成功不等于结构、写资格或整项事务已完成。
+
+浏览器保留原 Draft／Undo。同一明确输入首次 review 预留操作编号，重复读取或只读响应丢失沿用该号；分支、修复输入或资料库／接收 cut 改变时失效旧资格与编号，迟到审阅代次不得确认。响应必须绑定本次原号；正式 prepare 的外层复用该号，intent 不夹带 review 的编号或批注展示状态。准确请求成功持久交给原 SyncFlow 后才消费临时 review，之后 prepare／commit／unknown 查询与重试只沿原请求；持久化失败且未发 HTTP 时保留用户修复输入与选择。终止或放弃后的旧 review 不可再准备同号操作。
+
+原保存查询定义的复验性能热点已修复；本轮最终优化程序的实际定义复验与运行观察见 MVP。这些并发验收观测不作为隔离 benchmark、普遍时延保证或其他平台性能证明。既定 Windows／NTFS v0.6 功能及消费者验收已完成，尚未正式发布。
 
 
 ### 同所有者托管传输消费者

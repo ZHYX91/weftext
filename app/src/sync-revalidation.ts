@@ -17,14 +17,15 @@ export class SyncRevalidationSession {
   private generation = 0;
   private retired = false;
   private accepted: SyncRevalidationReview | null = null;
+  private reviewOperationId: string | null = null;
   readonly cut: SyncRevalidationCut;
   readonly identity: SyncIdentity;
-  constructor(readonly root: string, identity: SyncIdentity, cut: SyncRevalidationCut) { this.identity = structuredClone(identity); this.cut = structuredClone(cut); }
+  constructor(readonly root: string, identity: SyncIdentity, cut: SyncRevalidationCut, private readonly id: () => string = () => crypto.randomUUID()) { this.identity = structuredClone(identity); this.cut = structuredClone(cut); }
   get review(): SyncRevalidationReview | null { return this.accepted ? structuredClone(this.accepted) : null; }
   get selections(): SyncRevalidation[] { return structuredClone([...this.choices.values()]); }
   selection(object: ObjectKey): SyncRevalidation | undefined { const r = this.choices.get(objectKey(object)); return r ? structuredClone(r) : undefined; }
   repairedText(object: ObjectKey, path: string): string | undefined { const r = this.choice(object), bytes = this.supplied.get(r.state.files[path]); return bytes ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(new Uint8Array(bytes)) : undefined; }
-  private changed(): void { this.generation++; this.accepted = null; }
+  private changed(): void { this.generation++; this.accepted = null; this.reviewOperationId = null; }
   invalidate(): void { this.retired = true; this.changed(); }
   touch(): void { this.changed(); }
   private current(): void { if (this.retired) throw new Error("收到的版本或资料库已变化，请重新读取语义审阅。"); }
@@ -65,9 +66,14 @@ export class SyncRevalidationSession {
     return { root: this.root, identity: structuredClone(this.identity), resolutions: this.selections, blobs };
   }
   async inspect(read: (input: SyncRevalidationInput) => Promise<SyncRevalidationReview>): Promise<boolean> {
-    this.changed(); const generation = this.generation, input = this.input();
+    // A repeated read may recompile, but does not create another operation.
+    // Input changes retire both the review generation and its proposed ID.
+    this.generation++; this.accepted = null;
+    const generation = this.generation, input = this.input();
+    input.operationId = this.reviewOperationId ??= this.id();
     const result = await read(structuredClone(input));
     if (this.retired || generation !== this.generation) return false;
+    if (result.operationId !== input.operationId) throw new Error("审阅响应与本次原操作编号不一致；未准备操作。");
     if (result.resolutions.length !== input.resolutions.length) throw new Error("审阅返回了不同的明确选择。");
     const seen = new Set<string>();
     for (const r of result.resolutions) {
@@ -88,9 +94,11 @@ export class SyncRevalidationSession {
       seen.add(key);
     }
   }
-  request(operationId: string): SyncRequest {
+  request(): SyncRequest {
     this.current(); if (!this.accepted) throw new Error("请先读取并核对当前选择的实际语义依赖。");
     const input = this.input(), review = this.accepted;
+    const operationId = review.operationId;
+    if (!operationId || operationId !== this.reviewOperationId) throw new Error("审阅的原操作编号已失效，请重新读取实际语义依赖。");
     return structuredClone({ operationId, root: this.root, intent: { kind: "revalidateSync", identity: this.identity, expectedInstalled: review.expectedInstalled, reviewedVersions: review.reviewedVersions, resolutions: review.resolutions, blobs: input.blobs } });
   }
 }

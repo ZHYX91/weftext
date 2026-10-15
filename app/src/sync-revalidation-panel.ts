@@ -35,7 +35,7 @@ interface Host {
   id(): string;
 }
 export function mountSyncRevalidation(container: HTMLElement, root: string, identity: SyncIdentity, cut: SyncRevalidationCut, initial: { object: ObjectKey; revision: string }[], host: Host): { render(busy: boolean, pending: boolean): void; dispose(): void } {
-  const session = new SyncRevalidationSession(root, identity, cut), summary = el("section"), choices = el("section"), actions = el("div"), pendingEdits = new Set<HTMLTextAreaElement>();
+  const session = new SyncRevalidationSession(root, identity, cut, host.id), summary = el("section"), choices = el("section"), actions = el("div"), pendingEdits = new Set<HTMLTextAreaElement>();
   let disposed = false, blocked = false;
   for (const selected of initial) session.select(selected.object, selected.revision);
   container.dataset.syncRevalidation = "review";
@@ -51,7 +51,7 @@ export function mountSyncRevalidation(container: HTMLElement, root: string, iden
     if (disposed || !accepted) throw new Error("审阅期间选择或收到的版本已变化，请重新审阅。");
     renderSummary();
   }); read.dataset.syncRevalidationAction = "review";
-  const confirm = button("确认依赖并预览重新验证", async () => { await host.beforeAction(); await host.prepare(session.request(host.id())); }); confirm.dataset.syncRevalidationAction = "prepare";
+  const confirm = button("确认依赖并预览重新验证", async () => { await host.beforeAction(); await host.prepare(session.request()); }); confirm.dataset.syncRevalidationAction = "prepare";
   actions.append(read, confirm);
   for (const item of cut.objects) {
     const key = objectKey(item.object), row = el("details"), selected = session.selection(item.object), label = el("label", "本次决定"), select = el("select"), files = el("section"), decision = el("p");

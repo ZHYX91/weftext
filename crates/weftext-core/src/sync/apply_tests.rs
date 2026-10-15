@@ -1452,6 +1452,7 @@ fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_
         &p.ar,
         OperationIntent::RestoreNode {
             trash_operation_id: trashed.operation_id,
+            node_id: None,
             parent: display(&p.ar),
             name: "Restored".into(),
         },
@@ -1704,6 +1705,7 @@ fn locally_restore_received_trash_then_publish_uses_received_retirement_as_prede
         &p.br,
         OperationIntent::RestoreNode {
             trash_operation_id: preview.operation_id,
+            node_id: None,
             parent: display(&p.br),
             name: "Recovered".into(),
         },

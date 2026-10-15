@@ -297,14 +297,20 @@ impl Core {
         &self,
         session_id: &str,
     ) -> Result<Option<ActorLibraryBinding>> {
-        if self.actor.is_some() {
-            return self.actor_library_for_session(session_id);
-        }
         let session = self
             .sessions
             .get(session_id)
             .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
-        let root = &session.root;
+        self.draft_library_for_root(&session.root)
+    }
+
+    pub(crate) fn draft_library_for_root(
+        &self,
+        root: &Path,
+    ) -> Result<Option<ActorLibraryBinding>> {
+        if self.actor.is_some() {
+            return self.actor_library_for_root(root);
+        }
         let guard = ParentGuard::acquire(&root.join(".draft-root-prospective"))?;
         let workspace = self.workspace(root)?;
         if workspace.is_none()

@@ -7,7 +7,9 @@ use crate::journal::Plan;
 use crate::operations::{
     FileChange, FrozenOperation, Mutation, capture_optional, change, snapshot_tree,
 };
-use crate::{Core, OperationPreview, OperationReceipt, OperationRequest, Path, display, fresh};
+use crate::{
+    Core, OperationPreview, OperationReceipt, OperationRequest, Path, PathBuf, display, fresh,
+};
 
 pub(crate) struct RelocationInput {
     pub request: OperationRequest,
@@ -24,6 +26,14 @@ pub(crate) struct RelocationInput {
 pub(crate) fn placement_changed(old: &ObjectState, new: &ObjectState) -> bool {
     old.name != new.name || old.parent != new.parent || old.retired != new.retired
 }
+pub(crate) fn members_removed(old: &ObjectState, new: &ObjectState) -> bool {
+    old.files.keys().any(|name| {
+        !new.files.contains_key(name)
+            && !(name == &format!("{}.typ", old.name)
+                && old.name != new.name
+                && new.files.contains_key(&format!("{}.typ", new.name)))
+    })
+}
 
 fn structure_required() -> CoreError {
     CoreError::new(
@@ -32,28 +42,63 @@ fn structure_required() -> CoreError {
     )
 }
 
-impl Core {
-    pub(crate) fn prepare_sync_relocation(
-        &mut self,
-        input: RelocationInput,
-    ) -> Result<OperationPreview> {
-        if input
-            .states
-            .iter()
-            .filter(|(key, incoming)| {
-                input
-                    .local
-                    .get(key)
+pub(crate) fn requires_compound_relocation(
+    states: &BTreeMap<ObjectKey, Version>,
+    local: &BTreeMap<ObjectKey, LocalObject>,
+) -> bool {
+    states
+        .iter()
+        .filter(|(key, incoming)| {
+            local
+                .get(key)
+                .is_some_and(|old| placement_changed(&old.state, &incoming.state))
+        })
+        .count()
+        > 1
+        || states.keys().any(|object| !local.contains_key(object))
+        || states.iter().any(|(object, incoming)| {
+            local
+                .get(object)
+                .is_some_and(|old| members_removed(&old.state, &incoming.state))
+        })
+        || states.iter().any(|(object, incoming)| {
+            matches!(object, ObjectKey::Directory(_))
+                && local
+                    .get(object)
                     .is_some_and(|old| placement_changed(&old.state, &incoming.state))
-            })
-            .count()
-            > 1
-            || input
-                .states
-                .keys()
-                .any(|object| !input.local.contains_key(object))
+        })
+}
+
+/// This computes the original single-relocation writer's location only. It
+/// grants no admission, namespace reservation, Plan, or materialized identity.
+pub(crate) fn single_relocation_target(
+    root: &Path,
+    operation_id: &str,
+    state: &ObjectState,
+    local: &BTreeMap<ObjectKey, LocalObject>,
+) -> Result<PathBuf> {
+    let parent = if let Some(parent) = &state.parent {
+        let parent = local.get(parent).ok_or_else(structure_required)?;
+        if parent.state.retired
+            || Path::new(&parent.directory).starts_with(root.join(".weftext-trash"))
         {
-            return self.prepare_sync_compound(input);
+            return Err(structure_required());
+        }
+        Path::new(&parent.directory)
+    } else {
+        root
+    };
+    Ok(if state.retired {
+        root.join(".weftext-trash").join(operation_id)
+    } else {
+        parent.join(&state.name)
+    })
+}
+
+impl Core {
+    pub(crate) fn build_sync_relocation_plan(&mut self, input: RelocationInput) -> Result<Plan> {
+        if requires_compound_relocation(&input.states, &input.local) {
+            return self.build_sync_compound_plan(input);
         }
         let RelocationInput {
             request,
@@ -115,22 +160,7 @@ impl Core {
         if states.keys().any(|object| !local.contains_key(object)) {
             return Err(structure_required());
         }
-        let parent = if let Some(parent) = &state.parent {
-            let parent = local.get(parent).ok_or_else(structure_required)?;
-            if parent.state.retired
-                || Path::new(&parent.directory).starts_with(root.join(".weftext-trash"))
-            {
-                return Err(structure_required());
-            }
-            Path::new(&parent.directory)
-        } else {
-            &root
-        };
-        let target = if state.retired {
-            root.join(".weftext-trash").join(&request.operation_id)
-        } else {
-            parent.join(&state.name)
-        };
+        let target = single_relocation_target(&root, &request.operation_id, state, &local)?;
         let kind = if matches!(
             request.intent,
             crate::OperationIntent::RevalidateSync { .. }
@@ -467,12 +497,10 @@ impl Core {
             receipt,
             hosted_destination: None,
             expected_membership: None,
+            expected_trash_membership: None,
             absent_dependencies: vec![],
             write_parents,
         });
-        self.freeze_sync_revalidation_if_needed(&mut plan)?;
-        let preview = plan.transaction.as_ref().unwrap().preview.clone();
-        self.stage(plan)?;
-        Ok(preview)
+        Ok(plan)
     }
 }

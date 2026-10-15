@@ -7,7 +7,7 @@ use crate::backend::{NamespaceGuard, ParentGuard};
 use crate::journal::Plan;
 use crate::operations::{
     FileChange, FrozenOperation, Mutation, NewBirth, RelocationParent, RelocationStep,
-    capture_optional, change, snapshot_tree,
+    RetiredMember, capture_optional, change, snapshot_tree,
 };
 use crate::{Core, OperationPreview, OperationReceipt, Path, PathBuf, display, fresh};
 
@@ -21,6 +21,90 @@ struct CompoundBudget {
     files: usize,
     bytes: usize,
 }
+/// A read-only projection of this request's final locations. It allocates no
+/// identity or reservation; the original writer still freezes every FI/slot.
+pub(crate) fn compound_locations(
+    root: &Path,
+    operation_id: &str,
+    states: &BTreeMap<ObjectKey, Version>,
+    local: &BTreeMap<ObjectKey, LocalObject>,
+) -> Result<BTreeMap<ObjectKey, PathBuf>> {
+    let mut locations = BTreeMap::<ObjectKey, PathBuf>::new();
+    let mut remaining = states.keys().cloned().collect::<BTreeSet<_>>();
+    while !remaining.is_empty() {
+        let prior = remaining.len();
+        for object in remaining.clone() {
+            let state = &states[&object].state;
+            let directory = match &object {
+                ObjectKey::Node(id) | ObjectKey::Directory(id) => {
+                    let parent = if let Some(parent) = &state.parent {
+                        let Some(parent) = locations.get(parent) else {
+                            continue;
+                        };
+                        parent.as_path()
+                    } else {
+                        root
+                    };
+                    if state.retired {
+                        if let Some(original) = local.get(&object).filter(|old| {
+                            old.state.retired && !placement_changed(&old.state, state)
+                        }) {
+                            PathBuf::from(&original.directory)
+                        } else {
+                            let role = if matches!(object, ObjectKey::Node(_)) {
+                                "node"
+                            } else {
+                                "directory"
+                            };
+                            root.join(".weftext-trash")
+                                .join(format!("{operation_id}-{role}-{id}"))
+                        }
+                    } else {
+                        parent.join(&state.name)
+                    }
+                }
+                _ if state.retired => return Err(invalid("Only placed content can be retired")),
+                _ => root.to_path_buf(),
+            };
+            locations.insert(object.clone(), directory);
+            remaining.remove(&object);
+        }
+        if remaining.len() == prior {
+            return Err(invalid(
+                "Compound placement lacks a reviewed parent or is cyclic",
+            ));
+        }
+    }
+    Ok(locations)
+}
+fn original_creation_path(path: &Path, placements: &[(PathBuf, PathBuf)]) -> Result<PathBuf> {
+    let mut original = None;
+    for (source, target) in placements {
+        if let Some(relative) = crate::backend::namespace_relative_path(path, target)? {
+            let depth = target.components().count();
+            if original.as_ref().is_none_or(|(prior, _)| depth > *prior) {
+                original = Some((depth, source.join(relative)));
+            }
+        }
+    }
+    Ok(original.map_or_else(|| path.into(), |(_, original)| original))
+}
+fn snapshot_moving_tree(
+    source: &Path,
+    placements: &[(PathBuf, PathBuf)],
+    files: &mut Vec<crate::operations::CapturedFile>,
+    directories: &mut Vec<crate::operations::CapturedDirectory>,
+) -> Result<()> {
+    for (other, _) in placements {
+        if crate::backend::namespace_relative_path(source, other)?
+            .is_some_and(|relative| !relative.as_os_str().is_empty())
+        {
+            return Ok(());
+        }
+    }
+    snapshot_tree(source, files, directories, false)
+}
+
 fn plan_parent_directories(
     root: &Path,
     original: &Path,
@@ -79,10 +163,7 @@ impl CompoundBudget {
 }
 
 impl Core {
-    pub(crate) fn prepare_sync_compound(
-        &mut self,
-        input: RelocationInput,
-    ) -> Result<OperationPreview> {
+    pub(crate) fn build_sync_compound_plan(&mut self, input: RelocationInput) -> Result<Plan> {
         let RelocationInput {
             request,
             identity,
@@ -102,13 +183,19 @@ impl Core {
                     .is_some_and(|old| placement_changed(&old.state, &version.state))
             })
             .collect();
-        if changed.is_empty()
+        if (changed.is_empty()
+            && !states.iter().any(|(object, version)| {
+                local
+                    .get(object)
+                    .is_some_and(|old| super::relocate::members_removed(&old.state, &version.state))
+            }))
             || changed.len() > MAX_FILES
             || states.keys().any(|object| {
                 !local.contains_key(object)
                     && !matches!(
                         object,
                         ObjectKey::Node(_)
+                            | ObjectKey::Directory(_)
                             | ObjectKey::Rules
                             | ObjectKey::Schema
                             | ObjectKey::Settings
@@ -118,60 +205,38 @@ impl Core {
             return Err(structure_required());
         }
         let root = crate::absolute_path(Path::new(&request.root))?;
-        let mut locations: BTreeMap<ObjectKey, PathBuf> = BTreeMap::new();
-        let mut remaining: BTreeSet<_> = states.keys().cloned().collect();
-        while !remaining.is_empty() {
-            let prior = remaining.len();
-            for object in remaining.clone() {
-                let state = &states[&object].state;
-                if state.retired {
-                    return Err(structure_required());
-                }
-                let directory = if matches!(object, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
-                    let parent = if let Some(parent) = &state.parent {
-                        let Some(parent) = locations.get(parent) else {
-                            continue;
-                        };
-                        parent
-                    } else {
-                        &root
-                    };
-                    parent.join(&state.name)
-                } else {
-                    root.clone()
-                };
-                locations.insert(object.clone(), directory);
-                remaining.remove(&object);
-            }
-            if remaining.len() == prior {
-                return Err(invalid(
-                    "Compound placement lacks a reviewed parent or is cyclic",
-                ));
-            }
-        }
+        let locations = compound_locations(&root, &request.operation_id, &states, &local)?;
         let mut placements = Vec::new();
         let mut changed_indices = BTreeMap::new();
-        for (key, incoming) in &changed {
-            let ObjectKey::Node(_) = key else {
-                return Err(structure_required());
-            };
-            let original = &local[*key];
-            if original.state.retired || incoming.state.retired {
+        let mut directory_sources = BTreeSet::new();
+        for (key, _) in &changed {
+            if !matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
                 return Err(structure_required());
             }
+            let original = &local[*key];
             let source = PathBuf::from(&original.directory);
+            if matches!(key, ObjectKey::Directory(_)) {
+                directory_sources.insert(source.clone());
+            }
             let target = locations[*key].clone();
             changed_indices.insert((*key).clone(), placements.len());
             placements.push((source, target));
         }
         for (index, (source, target)) in placements.iter().enumerate() {
+            let original_parent = original_creation_path(target.parent().unwrap(), &placements)?;
+            let moving_parent =
+                crate::backend::namespace_path_compare(&original_parent, target.parent().unwrap())?
+                    != std::cmp::Ordering::Equal;
             for (other, (other_source, other_target)) in placements.iter().enumerate() {
                 let within = |a: &Path, b: &Path| {
                     crate::backend::namespace_relative_path(a, b).map(|relative| relative.is_some())
                 };
                 if (index != other
-                    && (within(source, other_source)? || within(target, other_target)?))
-                    || within(target.parent().unwrap(), other_source)?
+                    && (crate::backend::namespace_path_compare(source, other_source)?
+                        == std::cmp::Ordering::Equal
+                        || crate::backend::namespace_path_compare(target, other_target)?
+                            == std::cmp::Ordering::Equal))
+                    || (!moving_parent && within(target.parent().unwrap(), other_source)?)
                 {
                     return Err(structure_required());
                 }
@@ -202,20 +267,121 @@ impl Core {
         let mut relocations = Vec::new();
         let mut files = vec![];
         let mut directories = vec![];
+        let mut created_directories = BTreeSet::new();
+        let mut trash_parents = Vec::new();
+        let trash = root.join(".weftext-trash");
+        if placements
+            .iter()
+            .any(|(_, target)| target.starts_with(&trash))
+            && !trash.exists()
+        {
+            created_directories.insert(display(&trash));
+            trash_parents.push((
+                display(&trash),
+                ParentGuard::acquire(&trash)?.directory_identity()?,
+            ));
+        }
+        let source_identities = placements
+            .iter()
+            .map(|(source, _)| {
+                ParentGuard::acquire(&source.join(".original-moving-participant"))?
+                    .directory_identity()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut needs_parking = false;
+        let mut source_forest = false;
         for (source, target) in &placements {
-            if !target.parent().unwrap().exists() {
-                // New parents have no physical identity yet. Qualify the same
-                // original source through its existing ancestor, then bind its
-                // destination to this Plan's create-only directory.
-                let canonical = self.managed_node(&root, source, false)?;
+            for (other, other_target) in &placements {
+                if source != other
+                    && (crate::backend::namespace_relative_path(source, other)?
+                        .is_some_and(|relative| !relative.as_os_str().is_empty())
+                        || crate::backend::namespace_relative_path(target, other_target)?
+                            .is_some_and(|relative| !relative.as_os_str().is_empty()))
+                {
+                    source_forest = true;
+                    needs_parking = true;
+                }
+                if source != other
+                    && crate::backend::namespace_path_compare(target, other)?
+                        == std::cmp::Ordering::Equal
+                {
+                    needs_parking = true;
+                }
+            }
+        }
+        for (index, (source, target)) in placements.iter().enumerate() {
+            let (object, incoming) = changed[index];
+            let original = &local[object];
+            let original_parent = original_creation_path(target.parent().unwrap(), &placements)?;
+            let moving_parent =
+                crate::backend::namespace_path_compare(&original_parent, target.parent().unwrap())?
+                    != std::cmp::Ordering::Equal;
+            let trash_source = source.starts_with(root.join(".weftext-trash"));
+            let trash_target = target.starts_with(root.join(".weftext-trash"));
+            if moving_parent || !target.parent().unwrap().exists() || trash_source || trash_target {
+                // Qualify the original source before its final parent exists
+                // at that coordinate. A moving parent's existing directory FI
+                // remains distinct from a genuinely create-only parent.
+                let (canonical, expected_directory) = if directory_sources.contains(source) {
+                    let (marker, identity) = if trash_source {
+                        let ObjectKey::Directory(id) = object else {
+                            unreachable!()
+                        };
+                        self.qualified_query_scope_at(
+                            &root,
+                            source,
+                            &format!("weftext-directory://{}/{id}", identity.workspace_id),
+                            "trash",
+                        )?;
+                        let marker = capture_optional(&source.join("weftext.directory.json"))?
+                            .ok_or_else(structure_required)?;
+                        let parent =
+                            ParentGuard::acquire(Path::new(&marker.path))?.directory_identity()?;
+                        (marker, parent)
+                    } else {
+                        self.qualified_directory_marker(&root, source)?
+                    };
+                    (marker, Some(identity))
+                } else {
+                    let canonical = if trash_source {
+                        let ObjectKey::Node(id) = object else {
+                            unreachable!()
+                        };
+                        let path = source.join(format!("{}.typ", original.state.name));
+                        self.qualified_query_node_at(
+                            &root,
+                            &path,
+                            &weftext_knowledge::NodeRef {
+                                workspace_id: identity.workspace_id.clone(),
+                                node_id: id.clone(),
+                            },
+                            "trash",
+                        )?;
+                        capture_optional(&path)?.ok_or_else(structure_required)?
+                    } else {
+                        self.managed_node(&root, source, false)?
+                    };
+                    (canonical, None)
+                };
                 let namespace = NamespaceGuard::acquire(source, source.parent().unwrap())?;
+                let source_identity = namespace.source_identity()?;
+                if expected_directory.is_some_and(|identity| identity != source_identity) {
+                    return Err(CoreError::new(
+                        "conflict",
+                        "Original directory changed while qualifying a planned parent",
+                    ));
+                }
                 let old_leaf = Path::new(&canonical.path)
                     .file_name()
                     .unwrap()
                     .to_str()
                     .unwrap()
                     .to_owned();
-                let new_leaf = format!("{}.typ", crate::operations::node_name(target)?);
+                let new_leaf = if directory_sources.contains(source) {
+                    old_leaf.clone()
+                } else {
+                    format!("{}.typ", incoming.state.name)
+                };
                 let mut held = namespace.open_source_file(&old_leaf, false)?;
                 if crate::stamp(&held)? != canonical.stamp
                     || crate::operations::read_blob(&mut held)? != canonical.bytes
@@ -225,14 +391,35 @@ impl Core {
                         "Original source changed while qualifying a planned parent",
                     ));
                 }
+                let target_parent_identity = if original_parent.exists() {
+                    let identity =
+                        ParentGuard::acquire(&original_parent.join(".original-compound-parent"))?
+                            .directory_identity()?;
+                    let original_slot = original_parent.join(target.file_name().unwrap());
+                    match ParentGuard::acquire(&original_slot.join(".original-compound-slot")) {
+                        Ok(guard) if source_identities.contains(&guard.directory_identity()?) => {}
+                        Ok(_) => {
+                            return Err(CoreError::new(
+                                "exists",
+                                "Compound final child slot is occupied by another directory",
+                            ));
+                        }
+                        Err(error) if error.code == "missing" => {}
+                        Err(error) => return Err(error),
+                    }
+                    RelocationParent::Existing(identity)
+                } else {
+                    RelocationParent::Created {
+                        created_directory: display(target.parent().unwrap()),
+                    }
+                };
                 relocations.push(RelocationStep {
                     source: display(source),
                     target: display(target),
-                    source_identity: namespace.source_identity()?,
+                    parking: None,
+                    source_identity,
                     source_parent_identity: ParentGuard::acquire(source)?.directory_identity()?,
-                    target_parent_identity: RelocationParent::Created {
-                        created_directory: display(target.parent().unwrap()),
-                    },
+                    target_parent_identity,
                     old_leaf,
                     new_leaf,
                     leaf_identity: canonical.stamp.identity,
@@ -246,11 +433,38 @@ impl Core {
                     .push(change(target, "relocateTo", canonical.bytes.len()));
                 drop(held);
                 drop(namespace);
-                snapshot_tree(source, &mut files, &mut directories, false)?;
+                snapshot_moving_tree(source, &placements, &mut files, &mut directories)?;
                 continue;
             }
-            let mutation =
-                self.prepare_relocation(&root, source, target, false, &mut vec![], &mut preview)?;
+            let mut occupant = None;
+            for (index, (other, _)) in placements.iter().enumerate() {
+                if source != other
+                    && crate::backend::namespace_path_compare(target, other)?
+                        == std::cmp::Ordering::Equal
+                {
+                    occupant = Some(&source_identities[index]);
+                }
+            }
+            let mutation = if directory_sources.contains(source) {
+                self.prepare_directory_relocation_with_target(
+                    &root,
+                    source,
+                    target,
+                    &mut vec![],
+                    &mut preview,
+                    occupant,
+                )?
+            } else {
+                self.prepare_relocation_with_target(
+                    &root,
+                    source,
+                    target,
+                    false,
+                    &mut vec![],
+                    &mut preview,
+                    occupant,
+                )?
+            };
             let Mutation::Relocate {
                 source: original_source,
                 target: original_target,
@@ -273,6 +487,7 @@ impl Core {
             relocations.push(RelocationStep {
                 source: original_source,
                 target: original_target,
+                parking: None,
                 source_identity,
                 source_parent_identity,
                 target_parent_identity: RelocationParent::Existing(target_parent_identity),
@@ -281,7 +496,28 @@ impl Core {
                 leaf_identity,
                 members,
             });
-            snapshot_tree(source, &mut files, &mut directories, false)?;
+            snapshot_moving_tree(source, &placements, &mut files, &mut directories)?;
+        }
+        let mut parking_parents = Vec::new();
+        if needs_parking {
+            for (index, step) in relocations.iter_mut().enumerate() {
+                let parking_parent = if source_forest {
+                    root.as_path()
+                } else {
+                    Path::new(&step.source).parent().unwrap()
+                };
+                let parking =
+                    parking_parent.join(format!("WeftextMove-{}-{index}", request.operation_id));
+                if source_forest {
+                    parking_parents.push((
+                        display(&parking),
+                        ParentGuard::acquire(&parking)?.directory_identity()?,
+                    ));
+                }
+                crate::operations::ensure_absent(&parking)?;
+                preview.changes.push(change(&parking, "relocateVia", 0));
+                step.parking = Some(display(&parking));
+            }
         }
         // Preserve arbitrary local companion files, but every managed file must
         // still be the exact installed portable preimage. Raw edits need adoption.
@@ -289,10 +525,11 @@ impl Core {
             files: files.len(),
             bytes: files.iter().map(|file| file.bytes.len()).sum(),
         };
-        let mut write_parents = Vec::new();
+        let mut write_parents = parking_parents;
+        write_parents.extend(trash_parents);
         let mut updates = Vec::new();
+        let mut retired_members = Vec::new();
         let mut created_files = Vec::new();
-        let mut created_directories = BTreeSet::new();
         let mut births = Vec::new();
         let mut blobs = BTreeMap::new();
         let mut file_paths = BTreeSet::new();
@@ -303,10 +540,11 @@ impl Core {
             let moved = placements
                 .iter()
                 .enumerate()
-                .find_map(|(index, (source, _))| {
+                .filter_map(|(index, (source, _))| {
                     crate::history::history_relative_path(Path::new(&old.directory), source)
                         .map(|relative| (index, relative))
-                });
+                })
+                .max_by_key(|(index, _)| placements[*index].0.components().count());
             if moved.is_none() && !states.contains_key(object) {
                 continue;
             }
@@ -442,16 +680,94 @@ impl Core {
             }
             let resources = super::apply::validate_state(&graph, object, &new.state)?;
             let old_name = |name: &str| {
-                if changed_indices.contains_key(object) && name == format!("{}.typ", new.state.name)
+                if matches!(object, ObjectKey::Node(_))
+                    && changed_indices.contains_key(object)
+                    && name == format!("{}.typ", new.state.name)
                 {
                     format!("{}.typ", old.state.name)
                 } else {
                     name.to_string()
                 }
             };
-            let retained: BTreeSet<_> = new.state.files.keys().map(|name| old_name(name)).collect();
-            if old.state.files.keys().any(|name| !retained.contains(name)) {
-                return Err(structure_required());
+            for removed in super::member_retirement::qualify_member_retirements(
+                &graph, object, &old.state, &new.state,
+            )? {
+                let source = Path::new(&old.directory).join(&removed.relative_path);
+                let captured = files
+                    .iter()
+                    .find(|file| Path::new(&file.path) == source)
+                    .ok_or_else(structure_required)?;
+                let ObjectKey::Node(owner) = object else {
+                    return Err(structure_required());
+                };
+                if !self.admitted_resource(
+                    &removed.resource_id,
+                    &identity.workspace_id,
+                    owner,
+                    &captured.stamp.identity,
+                ) {
+                    return Err(CoreError::new(
+                        "identityConflict",
+                        "Retired Resource lost its original physical admission",
+                    ));
+                }
+                let guard = ParentGuard::acquire(&source)?;
+                let mut file = guard.open_file(false, false)?;
+                if crate::stamp(&file)? != captured.stamp
+                    || crate::operations::read_blob(&mut file)? != captured.bytes
+                {
+                    return Err(CoreError::new(
+                        "syncExternalChange",
+                        "Retired Resource changed during planning",
+                    ));
+                }
+                let retention = root
+                    .join(".weftext-trash")
+                    .join(format!("{}-members", request.operation_id));
+                crate::operations::ensure_absent(&retention)?;
+                created_directories.insert(display(&retention));
+                if !trash.exists() {
+                    created_directories.insert(display(&trash));
+                    if !write_parents
+                        .iter()
+                        .any(|(path, _)| Path::new(path) == trash)
+                    {
+                        write_parents.push((
+                            display(&trash),
+                            ParentGuard::acquire(&trash)?.directory_identity()?,
+                        ));
+                    }
+                } else if !write_parents
+                    .iter()
+                    .any(|(path, _)| Path::new(path) == retention)
+                {
+                    write_parents.push((
+                        display(&retention),
+                        ParentGuard::acquire(&retention)?.directory_identity()?,
+                    ));
+                }
+                let target =
+                    retention.join(format!("{}-{}", retired_members.len(), removed.resource_id));
+                preview.changes.push(change(
+                    &Path::new(&new.directory).join(&removed.relative_path),
+                    "retireMember",
+                    captured.bytes.len(),
+                ));
+                preview
+                    .changes
+                    .push(change(&target, "retainOriginal", captured.bytes.len()));
+                retired_members.push(RetiredMember {
+                    source: display(&source),
+                    target: display(&target),
+                    identity: captured.stamp.identity.clone(),
+                    parent: guard.directory_identity()?,
+                    attributes: crate::backend::attributes(&file)?,
+                    object: object.clone(),
+                    relative_path: removed.relative_path,
+                    resource_id: removed.resource_id,
+                    digest: removed.digest,
+                    file_revision: removed.file_revision,
+                });
             }
             for (name, digest) in &new.state.files {
                 let path = Path::new(&new.directory).join(name);
@@ -557,28 +873,36 @@ impl Core {
             before.push(old.clone());
             after.push(new);
         }
-        // New Nodes and root configuration share the same create-only payload,
-        // actual materialization and birth facts as the original CreateTree.
+        // New Nodes, Directory parents and root configuration share the same
+        // create-only payload and actual materialization as CreateTree.
         for (object, version) in states
             .iter()
             .filter(|(object, _)| !local.contains_key(*object))
         {
-            if let ObjectKey::Node(id) = object {
+            if matches!(object, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
                 let directory = &locations[object];
-                if placements.iter().any(|(_, target)| {
-                    crate::history::history_relative_path(directory, target).is_some()
-                }) {
-                    return Err(structure_required());
-                }
+                // The final address may be inside an original moving tree.
+                // Its before absence and existing parent identities belong to
+                // that same tree at its original address, while all published
+                // outputs and materialization facts keep their final address.
+                let original_directory = original_creation_path(directory, &placements)?;
                 self.check_pending(directory)?;
-                crate::operations::ensure_absent(directory)?;
+                self.check_pending(&original_directory)?;
+                crate::operations::ensure_absent(&original_directory)?;
                 let resources = super::apply::validate_state(&graph, object, &version.state)?;
+                if matches!(object, ObjectKey::Directory(_))
+                    && !version.state.files.contains_key("weftext.directory.json")
+                {
+                    return Err(invalid("New directory has no exact identity marker"));
+                }
                 for (name, digest) in &version.state.files {
                     let path = directory.join(name);
+                    let original = original_directory.join(name);
                     self.check_pending(&path)?;
+                    self.check_pending(&original)?;
                     plan_parent_directories(
                         &root,
-                        &path,
+                        &original,
                         &path,
                         &placements,
                         &mut created_directories,
@@ -614,11 +938,13 @@ impl Core {
                     });
                     blobs.insert(digest.clone(), bytes.to_vec());
                 }
-                births.push(NewBirth {
-                    path: display(&directory.join(format!("{}.typ", version.state.name))),
-                    node_id: id.clone(),
-                });
-                preview.node_map.insert(id.clone(), id.clone());
+                if let ObjectKey::Node(id) = object {
+                    births.push(NewBirth {
+                        path: display(&directory.join(format!("{}.typ", version.state.name))),
+                        node_id: id.clone(),
+                    });
+                    preview.node_map.insert(id.clone(), id.clone());
+                }
                 after.push(LocalObject {
                     object: object.clone(),
                     directory: display(directory),
@@ -802,6 +1128,7 @@ impl Core {
             created_files,
             created_directories: created_directories.into_iter().collect(),
             births,
+            retired_members,
         };
         let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id: preview.plan_id.clone(), status: "committed".into(), path: display(&root), node_ids: preview.node_map.keys().cloned().collect(), message: "Independent received placements and content committed through one original namespace decision; drafts retained".into() };
         let mut plan = Plan::file(
@@ -835,11 +1162,18 @@ impl Core {
             receipt,
             hosted_destination: None,
             expected_membership: None,
+            expected_trash_membership: None,
             absent_dependencies: vec![],
             write_parents,
         });
-        self.freeze_sync_revalidation_if_needed(&mut plan)?;
+        Ok(plan)
+    }
+
+    pub(crate) fn validate_sync_plan_participants(&self, plan: &Plan) -> Result<()> {
         let transaction = plan.transaction.as_ref().unwrap();
+        if !matches!(transaction.mutation, Mutation::Compound { .. }) {
+            return Ok(());
+        }
         let mut originals = BTreeSet::new();
         let mut finals = BTreeSet::new();
         for file in &transaction.files {
@@ -864,10 +1198,7 @@ impl Core {
             }
         }
         crate::operations::compound::validate_compound_namespace(transaction)?;
-        self.validate_compound_pending(&plan)?;
-        let preview = transaction.preview.clone();
-        self.stage(plan)?;
-        Ok(preview)
+        self.validate_compound_pending(plan)
     }
 }
 

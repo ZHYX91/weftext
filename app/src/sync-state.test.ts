@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SyncFlow, sameSyncIdentity, type SyncPending, type SyncRequest, type SyncPlan } from "./sync-state";
+import { SyncFlow, freezeSyncAdoptionRequest, sameSyncIdentity, type SyncAdoptionCut, type SyncPending, type SyncRequest, type SyncPlan } from "./sync-state";
 const request: SyncRequest = { operationId: "original", root: "R", intent: { kind: "applySync", identity: { workspaceId: "W", genesis: "G" }, objects: [{ kind: "node", id: "N" }] } };
 const plan: SyncPlan = { operationId: "original", planId: "frozen", status: "prepared", changes: [], losses: [] };
 test("pairing compares identity fields, independently of wire member order", () => {
@@ -55,4 +55,59 @@ test("original-ID lookup restores the exact retained proposal without preparatio
   } });
   await flow.recover("old"); assert.equal(flow.pending?.request.root, "original-root"); assert.deepEqual(stored, flow.pending);
   await assert.rejects(flow.recover("other")); await assert.rejects(flow.commit()); flow.forget();
+});
+
+test("adoption freezes explicit missing members separately from present empty-file bytes and checks the original pairing", () => {
+  const identity = { workspaceId: "W", genesis: "G" }, cut: SyncAdoptionCut = { identity, expectedInstalled: [{ object: { kind: "node", id: "N" }, revisions: ["installed"] }],
+    changes: [{ path: "R/N/empty.bin", baseId: "present-empty", before: [], after: [] }], removedMembers: [{ path: "R/N/removed.bin", baseId: "original-missing" }] };
+  const frozen = freezeSyncAdoptionRequest("R", identity, cut, "adopt-original"), original = structuredClone(frozen);
+  if (frozen.intent.kind !== "adoptSyncExternal") throw new Error("wrong intent");
+  assert.deepEqual(frozen.intent.changes, cut.changes); assert.deepEqual(frozen.intent.removedMembers, cut.removedMembers);
+  assert.equal("after" in frozen.intent.removedMembers![0], false); assert.equal(frozen.operationId, "adopt-original");
+  cut.changes[0].baseId = "new-empty"; cut.changes[0].after.push(9); cut.removedMembers![0].path = "R/N/another.bin"; cut.removedMembers![0].baseId = "new-missing";
+  cut.expectedInstalled[0].revisions.push("late-head"); identity.genesis = "new-genesis";
+  assert.deepEqual(frozen, original);
+  assert.throws(() => freezeSyncAdoptionRequest("R", { workspaceId: "W", genesis: "G" }, cut, "foreign"), /另一资料库/);
+});
+
+test("ordinary adoption without removed members retains its original wire shape", () => {
+  const identity = { workspaceId: "W", genesis: "G" }, cut: SyncAdoptionCut = { identity, expectedInstalled: [], changes: [{ path: "R/N/N.typ", baseId: "observed", before: [65], after: [65] }] };
+  const frozen = freezeSyncAdoptionRequest("R", identity, cut, "ordinary-adopt");
+  assert.deepEqual(frozen, { operationId: "ordinary-adopt", root: "R", intent: { kind: "adoptSyncExternal", identity, expectedInstalled: [], changes: cut.changes } });
+  assert.equal("removedMembers" in frozen.intent, false);
+  cut.removedMembers = []; const explicitEmpty = freezeSyncAdoptionRequest("R", identity, cut, "empty-adopt");
+  assert.equal(explicitEmpty.intent.kind, "adoptSyncExternal");
+  if (explicitEmpty.intent.kind !== "adoptSyncExternal") throw new Error("wrong intent");
+  assert.deepEqual(explicitEmpty.intent.removedMembers, []);
+});
+
+test("adoption missing-member bases survive lost prepare, JSON reload and unknown commit through the original operation", async () => {
+  const identity = { workspaceId: "W", genesis: "G" }, cut: SyncAdoptionCut = { identity, expectedInstalled: [{ object: { kind: "node", id: "N" }, revisions: ["original-installed"] }],
+    changes: [{ path: "R/N/weftext.resources.json", baseId: "observed-manifest", before: [123, 125], after: [123, 125] }], removedMembers: [{ path: "R/N/a.bin", baseId: "missing-a" }, { path: "R/N/b.bin", baseId: "missing-b" }] };
+  const original = freezeSyncAdoptionRequest("R", identity, cut, "adopt-once"), plan: SyncPlan = { operationId: "adopt-once", planId: "original-plan", status: "prepared", changes: [], losses: [] };
+  let stored = "", prepares = 0, commits = 0; const calls: { path: string; body: unknown }[] = [];
+  const host = {
+    store: (pending: SyncPending | null): void => { stored = JSON.stringify(pending); },
+    request: async <T>(path: string, body: unknown): Promise<T> => {
+      calls.push({ path, body: structuredClone(body) });
+      const retained = JSON.parse(stored) as SyncPending;
+      if (path === "/api/operations/prepare") {
+        assert.deepEqual(retained.request, original); if (++prepares === 1) throw new Error("prepare response lost");
+        return plan as T;
+      }
+      if (path === "/api/operations/commit") { commits++; throw new Error("commit response lost"); }
+      if (path === "/api/sync/operation") return { request: structuredClone(original), plan: { ...plan, status: "committed" } } as T;
+      assert.equal(path, "/api/operations/status"); return { ...plan, status: "committed" } as T;
+    },
+  };
+  const first = new SyncFlow(host); await assert.rejects(first.prepare(original), /prepare response lost/);
+  cut.removedMembers!.reverse(); cut.removedMembers![0].baseId = "later-missing"; cut.changes[0].after = [1];
+  const reloaded = new SyncFlow(host, JSON.parse(stored) as SyncPending); await reloaded.retryPrepare();
+  assert.deepEqual(calls[0], calls[1]); await assert.rejects(reloaded.commit(), /commit response lost/);
+  assert.throws(() => reloaded.forget()); await assert.rejects(reloaded.retryPrepare());
+  const unknown = new SyncFlow(host, JSON.parse(stored) as SyncPending); await unknown.inspect();
+  assert.equal(unknown.pending?.status, "committed"); assert.deepEqual(unknown.pending?.request, original); assert.equal(commits, 1);
+  unknown.forget(); const recovered = new SyncFlow(host); await recovered.recover("adopt-once");
+  assert.deepEqual(recovered.pending?.request, original); assert.equal(prepares, 2); assert.equal(commits, 1);
+  assert.deepEqual(calls.slice(2).map(call => call.body), [{ operationId: "adopt-once", planId: "original-plan" }, { operationId: "adopt-once" }, { operationId: "adopt-once" }]);
 });

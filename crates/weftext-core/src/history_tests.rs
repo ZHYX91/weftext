@@ -139,6 +139,114 @@ fn history_lists_real_commits_and_read_compare_preserve_saved_and_draft_bytes() 
 }
 
 #[test]
+fn retained_trash_root_reads_exact_history_and_resources_without_content_write_rights() {
+    let mut f = HistoryFixture::new();
+    let initial = f.initial_version();
+    let (_, saved) = f.save("retained original source 中文");
+    let imported = f
+        .core
+        .prepare_import_resource(
+            &f.root,
+            &f.doc.path,
+            "owned.bin",
+            b"owned original".to_vec(),
+            &fresh(),
+        )
+        .unwrap();
+    f.core
+        .execute_operation(&imported.operation_id, &imported.plan_id)
+        .unwrap();
+    let before_resource = f
+        .core
+        .managed_resource_snapshot(&f.root, &f.doc.path)
+        .unwrap()
+        .remove(0);
+    let before_identity = operations::capture_optional(Path::new(&before_resource.path))
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity;
+    let draft = format!("{saved}\nprivate unsaved draft");
+    f.core.persist_draft(&f.doc.session_id, &draft).unwrap();
+    let history = f
+        .core
+        .list_history(&f.doc.session_id)
+        .unwrap()
+        .versions
+        .into_iter()
+        .filter(|version| version.status == "available")
+        .map(|version| {
+            let source = f
+                .core
+                .read_history(&f.doc.session_id, &version.version_id)
+                .unwrap()
+                .source;
+            (version.version_id, source)
+        })
+        .collect::<Vec<_>>();
+    let receipt = f.operate(OperationIntent::TrashNode {
+        source: display(Path::new(&f.doc.path).parent().unwrap()),
+    });
+    let retained = Path::new(&receipt.path).join("Note.typ");
+    f.doc = f.core.open(&retained, Some(f.root.clone())).unwrap();
+    assert_eq!(f.doc.recovered_draft.as_deref(), Some(draft.as_str()));
+    for (version, source) in history {
+        assert_eq!(
+            f.core
+                .read_history(&f.doc.session_id, &version)
+                .unwrap()
+                .source,
+            source
+        );
+    }
+    let resource = f
+        .core
+        .managed_resource_snapshot(&f.root, &retained)
+        .unwrap()
+        .remove(0);
+    assert_eq!(resource.resource_ref, before_resource.resource_ref);
+    assert_eq!(resource.bytes, before_resource.bytes);
+    assert_eq!(resource.revision, before_resource.revision);
+    assert_eq!(
+        operations::capture_optional(Path::new(&resource.path))
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
+        before_identity
+    );
+    let operations_before = f.core.operations.len();
+    let request = f.restore_request(&initial, "retain", Some(&draft));
+    assert_eq!(
+        f.core.restore_history(request).unwrap_err().code,
+        "readOnlyLifecycle"
+    );
+    assert!(
+        f.core
+            .prepare_import_resource(
+                &f.root,
+                &retained,
+                "new.bin",
+                b"no write".to_vec(),
+                &fresh()
+            )
+            .is_err()
+    );
+    assert_eq!(f.core.operations.len(), operations_before);
+    assert_eq!(fs::read_to_string(&retained).unwrap(), saved);
+    let original = fs::read(&retained).unwrap();
+    fs::rename(&retained, f._temp.path().join("retained-original.typ")).unwrap();
+    fs::write(&retained, &original).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_err());
+    assert!(
+        f.core
+            .managed_resource_snapshot(&f.root, &retained)
+            .is_err()
+    );
+    assert_eq!(fs::read(&retained).unwrap(), original);
+}
+
+#[test]
 fn configured_owner_history_reads_exact_admitted_revision_without_other_sources() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
@@ -524,6 +632,12 @@ fn history_managed_moves_restart_and_copies_keep_independent_identity() {
 fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
+    let initial_source = f.doc.source.clone();
+    f.save("saved before external rename");
+    let proposal = format!("{}\noriginal private proposal", f.doc.source);
+    f.core.persist_draft(&f.doc.session_id, &proposal).unwrap();
+    let draft_path = f.core.draft_path(Path::new(&f.doc.path));
+    let draft_bytes = fs::read(&draft_path).unwrap();
     let old = f.root.join("Note");
     let new = f.root.join("External");
     fs::rename(&old, &new).unwrap();
@@ -532,12 +646,74 @@ fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name
         .core
         .open(new.join("External.typ"), Some(f.root.clone()))
         .unwrap();
+    assert!(doc.recovered_draft.is_none());
+    assert!(doc.recovered_draft_variants.is_empty());
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
     assert_eq!(
         f.core.list_history(&doc.session_id).unwrap_err().code,
         "identityPending"
     );
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    let doc = f
+        .core
+        .open(new.join("External.typ"), Some(f.root.clone()))
+        .unwrap();
+    assert!(doc.recovered_draft.is_none());
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
+    assert_eq!(
+        f.core.list_history(&doc.session_id).unwrap_err().code,
+        "identityPending"
+    );
+    let private_snapshot = |directory: &Path| {
+        fs::read_dir(directory)
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let journal_before = private_snapshot(&f.data.join("journal"));
+    let drafts_before = private_snapshot(&f.data.join("drafts"));
+    let author_before = fs::read(new.join("External.typ")).unwrap();
+    assert_eq!(
+        f.core
+            .persist_draft(&doc.session_id, "new input at the external position")
+            .unwrap_err()
+            .code,
+        "identityPending"
+    );
+    let stale_operation = fresh();
+    assert_eq!(
+        f.core
+            .save(SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: fresh(),
+                source: "stale Save input at the external position".into(),
+                operation_id: stale_operation.clone(),
+            })
+            .unwrap_err()
+            .code,
+        "identityPending"
+    );
+    assert!(!f.core.operations.contains_key(&stale_operation));
+    assert_eq!(private_snapshot(&f.data.join("journal")), journal_before);
+    assert_eq!(private_snapshot(&f.data.join("drafts")), drafts_before);
+    assert_eq!(fs::read(new.join("External.typ")).unwrap(), author_before);
     fs::rename(new.join("External.typ"), new.join("Note.typ")).unwrap();
     fs::rename(new, &old).unwrap();
+    f.doc = f.core.open(&f.doc.path, Some(f.root.clone())).unwrap();
+    assert_eq!(f.doc.recovered_draft.as_deref(), Some(proposal.as_str()));
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
+    assert_eq!(
+        f.core
+            .read_history(&f.doc.session_id, &initial)
+            .unwrap()
+            .source,
+        initial_source
+    );
     fs::write(
         f.root.join(".weftext-rules"),
         br#"{"version":1,"ignored":["Note"],"unmanaged":[]}"#,
@@ -568,6 +744,8 @@ fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name
     );
     let replacement = f.core.open(&old_path, Some(f.root.clone())).unwrap();
     assert_eq!(replacement.kind, "ordinary");
+    assert!(replacement.recovered_draft.is_none());
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
     assert_eq!(
         f.core
             .list_history(&replacement.session_id)
@@ -575,6 +753,148 @@ fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name
             .code,
         "historyUnavailable"
     );
+}
+
+#[test]
+fn history_external_rollback_to_former_committed_path_does_not_replace_hidden_draft() {
+    let mut f = HistoryFixture::new();
+    f.save("saved before original application rename");
+    let proposal = format!("{}\noriginal private proposal", f.doc.source);
+    f.core.persist_draft(&f.doc.session_id, &proposal).unwrap();
+    f.operate(OperationIntent::RenameNode {
+        source: display(&f.root.join("Note")),
+        name: "Renamed".into(),
+    });
+    let committed_path = f.root.join("Renamed/Renamed.typ");
+    let moved = f.core.open(&committed_path, Some(f.root.clone())).unwrap();
+    assert_eq!(moved.recovered_draft.as_deref(), Some(proposal.as_str()));
+    let draft_path = f.core.draft_path(&committed_path);
+    let draft_bytes = fs::read(&draft_path).unwrap();
+    fs::rename(f.root.join("Renamed"), f.root.join("Note")).unwrap();
+    fs::rename(f.root.join("Note/Renamed.typ"), &f.doc.path).unwrap();
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    let external = f.core.open(&f.doc.path, Some(f.root.clone())).unwrap();
+    assert!(external.recovered_draft.is_none());
+    assert_eq!(
+        f.core.list_history(&external.session_id).unwrap_err().code,
+        "identityPending"
+    );
+    assert_eq!(
+        f.core
+            .persist_draft(&external.session_id, "input at a former historical slot")
+            .unwrap_err()
+            .code,
+        "identityPending"
+    );
+    let operation_id = fresh();
+    assert_eq!(
+        f.core
+            .save(SaveRequest {
+                session_id: external.session_id,
+                base_id: fresh(),
+                source: "stale Save at a former historical slot".into(),
+                operation_id: operation_id.clone(),
+            })
+            .unwrap_err()
+            .code,
+        "identityPending"
+    );
+    assert!(!f.core.operations.contains_key(&operation_id));
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
+    assert_eq!(fs::read(&f.doc.path).unwrap(), f.doc.source.as_bytes());
+    fs::rename(f.root.join("Note"), f.root.join("Renamed")).unwrap();
+    fs::rename(f.root.join("Renamed/Note.typ"), &committed_path).unwrap();
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    let restored = f.core.open(&committed_path, Some(f.root.clone())).unwrap();
+    assert_eq!(restored.recovered_draft.as_deref(), Some(proposal.as_str()));
+    assert_eq!(fs::read(&draft_path).unwrap(), draft_bytes);
+    assert_eq!(
+        f.core
+            .list_history(&restored.session_id)
+            .unwrap()
+            .versions
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
+    let mut f = HistoryFixture::new();
+    let actor = "deployment:external-draft";
+    let proposal = format!("{}\noriginal unbound private proposal", f.doc.source);
+    let (draft_path, draft_bytes) = f
+        .core
+        .with_actor(actor, |core| {
+            let opened = core.open(&f.doc.path, Some(f.root.clone()))?;
+            core.persist_draft(&opened.session_id, &proposal)?;
+            let path = core.draft_path(Path::new(&f.doc.path));
+            let bytes = fs::read(&path)?;
+            let draft: Draft = serde_json::from_slice(&bytes)?;
+            assert!(draft.library.is_none());
+            Ok((path, bytes))
+        })
+        .unwrap();
+    let original_directory = f.root.join("Note");
+    let external_directory = f.root.join("External");
+    fs::rename(&original_directory, &external_directory).unwrap();
+    let external_source = external_directory.join("External.typ");
+    fs::rename(external_directory.join("Note.typ"), &external_source).unwrap();
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    f.core
+        .with_actor_for_root(actor, &f.root, |core| {
+            let opened = core.open(&external_source, Some(f.root.clone()))?;
+            assert!(opened.recovered_draft.is_none());
+            assert_eq!(
+                core.list_history(&opened.session_id).unwrap_err().code,
+                "identityPending"
+            );
+            assert_eq!(
+                core.persist_draft(&opened.session_id, "new bound-context input")
+                    .unwrap_err()
+                    .code,
+                "identityPending"
+            );
+            let operation_id = fresh();
+            assert_eq!(
+                core.save(SaveRequest {
+                    session_id: opened.session_id,
+                    base_id: fresh(),
+                    source: "stale bound-context input".into(),
+                    operation_id: operation_id.clone(),
+                })
+                .unwrap_err()
+                .code,
+                "identityPending"
+            );
+            assert!(!core.operations.contains_key(&operation_id));
+            assert_eq!(fs::read(&draft_path)?, draft_bytes);
+            assert_eq!(fs::read(&external_source)?, f.doc.source.as_bytes());
+            let paths = fs::read_dir(core.draft_directory("drafts"))?
+                .map(|entry| entry.map(|entry| entry.path()))
+                .collect::<std::io::Result<Vec<_>>>()?;
+            assert_eq!(paths, vec![draft_path.clone()]);
+            Ok(())
+        })
+        .unwrap();
+    fs::rename(&external_source, external_directory.join("Note.typ")).unwrap();
+    fs::rename(&external_directory, &original_directory).unwrap();
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    f.core
+        .with_actor_for_root(actor, &f.root, |core| {
+            let opened = core.open(&f.doc.path, Some(f.root.clone()))?;
+            assert_eq!(opened.recovered_draft.as_deref(), Some(proposal.as_str()));
+            assert_eq!(fs::read(&draft_path)?, draft_bytes);
+            let draft: Draft = serde_json::from_slice(&fs::read(&draft_path)?)?;
+            assert!(draft.library.is_none(), "an old scope is never backfilled");
+            assert_eq!(core.list_history(&opened.session_id)?.versions.len(), 1);
+            Ok(())
+        })
+        .unwrap();
 }
 
 #[test]

@@ -5,10 +5,15 @@ use super::*;
 use backend::NamespaceGuard;
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(all(test, windows))]
+#[path = "definition_admission_tests.rs"]
+mod definition_admission_tests;
+mod directory;
 mod owner_backup;
 mod pending;
 #[cfg(all(test, windows))]
 mod pending_tests;
+mod trash;
 
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
@@ -30,6 +35,8 @@ pub(crate) enum RelocationParent {
 pub(crate) struct RelocationStep {
     pub(crate) source: String,
     pub(crate) target: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) parking: Option<String>,
     pub(crate) source_identity: FileIdentity,
     pub(crate) source_parent_identity: FileIdentity,
     pub(crate) target_parent_identity: RelocationParent,
@@ -37,6 +44,19 @@ pub(crate) struct RelocationStep {
     pub(crate) new_leaf: String,
     pub(crate) leaf_identity: FileIdentity,
     pub(crate) members: Vec<RelocationMember>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct RetiredMember {
+    pub(crate) source: String,
+    pub(crate) target: String,
+    pub(crate) identity: FileIdentity,
+    pub(crate) parent: FileIdentity,
+    pub(crate) attributes: u32,
+    pub(crate) object: sync::ObjectKey,
+    pub(crate) relative_path: String,
+    pub(crate) resource_id: String,
+    pub(crate) digest: String,
+    pub(crate) file_revision: String,
 }
 pub(crate) struct RelocationRef<'a> {
     pub(crate) source: &'a str,
@@ -80,6 +100,8 @@ pub enum OperationIntent {
         identity: crate::sync::SyncIdentity,
         expected_installed: Vec<crate::sync::Dependency>,
         changes: Vec<FileChange>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        removed_members: Vec<crate::sync::SyncRemovedMember>,
     },
     ApplySync {
         identity: crate::sync::SyncIdentity,
@@ -109,6 +131,11 @@ pub enum OperationIntent {
         source: String,
         parent: String,
     },
+    RelocateDirectory {
+        source: String,
+        parent: String,
+        name: String,
+    },
     CopyNode {
         source: String,
         parent: String,
@@ -128,6 +155,8 @@ pub enum OperationIntent {
     },
     RestoreNode {
         trash_operation_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        node_id: Option<String>,
         parent: String,
         name: String,
     },
@@ -305,6 +334,7 @@ fn style_basis_retained_bytes(basis: &StyleBasis) -> usize {
 #[serde(rename_all = "camelCase")]
 pub struct TrashEntry {
     pub operation_id: String,
+    pub node_id: String,
     pub name: String,
     pub path: String,
 }
@@ -440,6 +470,7 @@ fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBind
 #[derive(Clone)]
 pub(crate) struct AdmittedBasis {
     root: String,
+    pub(crate) lifecycle: String,
     members: BTreeSet<String>,
     pub(crate) bases: Vec<String>,
     complete: bool,
@@ -501,6 +532,8 @@ pub(crate) enum Mutation {
         created_directories: Vec<String>,
         #[serde(default)]
         births: Vec<NewBirth>,
+        #[serde(default)]
+        retired_members: Vec<RetiredMember>,
     },
     Relocate {
         source: String,
@@ -545,6 +578,8 @@ pub(crate) struct FrozenOperation {
     #[serde(default)]
     pub(crate) expected_membership: Option<BTreeSet<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) expected_trash_membership: Option<BTreeSet<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) backup_private_digest: Option<String>,
     #[serde(default)]
     pub(crate) absent_dependencies: Vec<AbsentDependency>,
@@ -552,6 +587,19 @@ pub(crate) struct FrozenOperation {
     pub(crate) write_parents: Vec<(String, FileIdentity)>,
 }
 impl FrozenOperation {
+    pub(crate) fn retired_members(&self) -> &[RetiredMember] {
+        match &self.mutation {
+            Mutation::Compound {
+                retired_members, ..
+            } => retired_members,
+            _ => &[],
+        }
+    }
+    pub(crate) fn is_retired_member(&self, path: &str) -> bool {
+        self.retired_members()
+            .iter()
+            .any(|member| locator_equal(&member.source, path))
+    }
     pub(crate) fn births(&self) -> &[NewBirth] {
         match &self.mutation {
             Mutation::CreateTree { births, .. } | Mutation::Compound { births, .. } => births,
@@ -608,7 +656,12 @@ impl FrozenOperation {
     pub(crate) fn relocated_path(&self, path: &str) -> String {
         self.relocations()
             .iter()
-            .find_map(|step| step.map(Path::new(path)))
+            .filter_map(|step| {
+                step.map(Path::new(path))
+                    .map(|mapped| (Path::new(step.source).components().count(), mapped))
+            })
+            .max_by_key(|(depth, _)| *depth)
+            .map(|(_, mapped)| mapped)
             .map(|path| display(&path))
             .unwrap_or_else(|| path.into())
     }
@@ -620,6 +673,7 @@ impl FrozenOperation {
         let mut files: BTreeMap<_, _> = self
             .files
             .iter()
+            .filter(|file| !self.is_retired_member(&file.path))
             .map(|f| {
                 let path = self.relocated_path(&f.path);
                 (
@@ -677,15 +731,21 @@ impl FrozenOperation {
                 updates,
                 created_files,
                 created_directories,
+                retired_members,
                 ..
             } => {
-                relocations
+                relocations.iter().any(|step| {
+                    within(&step.source)
+                        || within(&step.target)
+                        || step.parking.as_ref().is_some_and(|path| within(path))
+                }) || updates
                     .iter()
-                    .any(|step| within(&step.source) || within(&step.target))
-                    || updates
-                        .iter()
-                        .chain(created_files)
-                        .any(|change| Path::new(&change.path) == path)
+                    .chain(created_files)
+                    .any(|change| Path::new(&change.path) == path)
+                    || retired_members.iter().any(|member| {
+                        locator_equal(&member.source, &display(path))
+                            || locator_equal(&member.target, &display(path))
+                    })
                     || created_directories
                         .iter()
                         .any(|directory| within(directory))
@@ -896,61 +956,187 @@ impl Core {
     }
     pub(crate) fn validate_recovery_scope(&self, t: &FrozenOperation) -> Result<()> {
         self.validate_resource_collection_initialization(t)?;
-        let Some(expected) = &t.expected_membership else {
+        if t.expected_membership.is_none() && t.expected_trash_membership.is_none() {
             return Ok(());
-        };
+        }
         let root = Path::new(&t.request.root);
+        let trash = root.join(".weftext-trash");
         let workspace = self.require_workspace(root)?;
+        let failure = || {
+            CoreError::new(
+                "scopeChanged",
+                "Original lifecycle membership no longer has its exact captured physical objects",
+            )
+        };
+        let in_trash = |path: &Path| -> Result<bool> {
+            Ok(backend::namespace_relative_path(path, &trash)?.is_some())
+        };
         let mut members = BTreeSet::new();
-        for p in self
+        for plan in self
             .operations
             .values()
-            .filter(|p| self.committed(&p.operation_id))
+            .filter(|plan| self.committed(&plan.operation_id))
         {
-            for b in self.read_births(&p.operation_id)? {
-                if b.workspace_id == workspace.workspace_id {
-                    members.insert(b.node_id);
+            for birth in self.read_births(&plan.operation_id)? {
+                if birth.workspace_id == workspace.workspace_id {
+                    members.insert(birth.node_id);
                 }
             }
         }
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
-            let Some(previous) = &p.transaction else {
-                continue;
-            };
-            if previous.request.root != t.request.root || !previous.is_trash() {
-                continue;
-            }
-            if let Mutation::Relocate {
-                target,
-                source_identity,
-                ..
-            } = &previous.mutation
-            {
-                if !Path::new(target).exists() {
-                    continue;
-                }
-                let guard = ParentGuard::acquire(&Path::new(target).join(".recovery-membership"))?;
-                if guard.directory_identity()? != *source_identity {
-                    return Err(CoreError::new(
-                        "scopeChanged",
-                        "A committed trash tree was replaced",
-                    ));
-                }
-                let mut files = vec![];
-                let mut dirs = vec![];
-                snapshot_tree(Path::new(target), &mut files, &mut dirs, false)?;
-                for file in files {
-                    if let Some(b) = self.admitted_binding(&file.stamp.identity) {
-                        members.remove(&b.node_id);
+        let mut trash_members = self
+            .admitted_trash_files(root)?
+            .iter()
+            .filter_map(|file| self.admitted_binding(&file.stamp.identity))
+            .filter(|birth| birth.workspace_id == workspace.workspace_id)
+            .map(|birth| birth.node_id)
+            .collect::<BTreeSet<_>>();
+
+        // Project only this original transaction's captured Node objects back
+        // to their before lifecycle. Foreign late members remain in the set.
+        let mut positions = match &t.mutation {
+            Mutation::Compound { .. } => compound::compound_membership_positions(t)?,
+            _ => BTreeMap::new(),
+        };
+        let relocations = t.relocations();
+        let mut held_roots = Vec::new();
+        for step in &relocations {
+            if !matches!(t.mutation, Mutation::Compound { .. }) {
+                for candidate in BTreeSet::from([step.source, step.target]) {
+                    if !Path::new(candidate).try_exists()? {
+                        continue;
+                    }
+                    let guard =
+                        ParentGuard::acquire(&Path::new(candidate).join(".recovery-membership"))?;
+                    if guard.directory_identity()? == *step.source_identity {
+                        if positions
+                            .insert(step.source.into(), PathBuf::from(candidate))
+                            .is_some()
+                        {
+                            return Err(failure());
+                        }
+                        held_roots.push(guard);
                     }
                 }
             }
+            let current = positions.get(step.source).ok_or_else(failure)?;
+            let guard = ParentGuard::acquire(&current.join(".recovery-membership"))?;
+            if guard.directory_identity()? != *step.source_identity {
+                return Err(failure());
+            }
+            held_roots.push(guard);
         }
-        if &members != expected {
+        let mut held_files = Vec::new();
+        for original in &t.files {
+            let Some(birth) = self
+                .admitted_binding(&original.stamp.identity)
+                .filter(|birth| birth.workspace_id == workspace.workspace_id)
+            else {
+                continue;
+            };
+            let mut owner = None;
+            for step in &relocations {
+                if let Some(relative) = backend::namespace_relative_path(
+                    Path::new(&original.path),
+                    Path::new(step.source),
+                )? {
+                    let depth = Path::new(step.source).components().count();
+                    if owner.as_ref().is_none_or(|(prior, _, _)| depth > *prior) {
+                        owner = Some((depth, step, relative));
+                    }
+                }
+            }
+            let Some((_, step, relative)) = owner else {
+                continue;
+            };
+            let current = &positions[step.source];
+            let expected_parent = t
+                .directories
+                .iter()
+                .find(|directory| {
+                    locator_equal(
+                        &directory.path,
+                        &display(Path::new(&original.path).parent().unwrap()),
+                    )
+                })
+                .map(|directory| &directory.identity)
+                .or_else(|| {
+                    step.members
+                        .iter()
+                        .find(|member| member.identity == original.stamp.identity)
+                        .map(|member| &member.parent)
+                })
+                .or_else(|| {
+                    (Path::new(&original.path).parent() == Some(Path::new(step.source)))
+                        .then_some(step.source_identity)
+                })
+                .ok_or_else(failure)?;
+            let mut candidates = BTreeSet::from([current.join(&relative)]);
+            if relative == Path::new(step.old_leaf) {
+                candidates.insert(current.join(step.new_leaf));
+            }
+            let mut found = false;
+            for candidate in candidates {
+                if !candidate.try_exists()? {
+                    continue;
+                }
+                let guard = ParentGuard::acquire(&candidate)?;
+                let file = guard.open_file(false, false)?;
+                if stamp(&file)?.identity != original.stamp.identity {
+                    continue;
+                }
+                if found || guard.directory_identity()? != *expected_parent {
+                    return Err(failure());
+                }
+                found = true;
+                held_roots.push(guard);
+                held_files.push(file);
+            }
+            if !found {
+                return Err(failure());
+            }
+            if in_trash(Path::new(&original.path))? {
+                trash_members.insert(birth.node_id);
+            } else {
+                trash_members.remove(&birth.node_id);
+            }
+        }
+
+        // Post-commit inspection also compares against the original before
+        // cut. Only exact births materialized by this same Plan are removed.
+        for birth in self.read_births(&t.request.operation_id)? {
+            let Some(planned) = t
+                .births()
+                .iter()
+                .find(|planned| planned.node_id == birth.node_id)
+            else {
+                continue;
+            };
+            if birth.workspace_id != workspace.workspace_id
+                || self
+                    .materialized_identity(&t.request.operation_id, Path::new(&planned.path))?
+                    .as_ref()
+                    != Some(&birth.identity)
+            {
+                return Err(failure());
+            }
+            let guard = ParentGuard::acquire(Path::new(&planned.path))?;
+            let file = guard.open_file(false, false)?;
+            if stamp(&file)?.identity != birth.identity {
+                return Err(failure());
+            }
+            held_roots.push(guard);
+            held_files.push(file);
+            members.remove(&birth.node_id);
+            trash_members.remove(&birth.node_id);
+        }
+        members.retain(|id| !trash_members.contains(id));
+        if t.expected_membership
+            .as_ref()
+            .is_some_and(|expected| &members != expected)
+            || t.expected_trash_membership
+                .as_ref()
+                .is_some_and(|expected| &trash_members != expected)
+        {
             return Err(CoreError::new(
                 "scopeChanged",
                 "The original strong operation's admitted membership changed; no replay or barrier release",
@@ -1351,18 +1537,32 @@ impl Core {
                     return Ok(true);
                 }
             }
-            if let Some(t) = &p.transaction
+            if p.workspace_id.as_deref() == Some(owner.workspace_id.as_str())
+                && let Some(t) = &p.transaction
                 && t.preview.node_map.values().any(|n| n == owner_id)
-                && t.created_files()
+            {
+                // Only the original canonical birth source can establish a
+                // definition. Resources and configuration may contain arbitrary
+                // UTF-8, including another copy of the same Node declaration.
+                let mut births = t.births().iter().filter(|birth| birth.node_id == owner_id);
+                let Some(birth) = births.next() else { continue };
+                if births.next().is_some() {
+                    continue;
+                }
+                let mut files = t
+                    .created_files()
                     .iter()
-                    .filter_map(|f| std::str::from_utf8(&f.after).ok())
-                    .any(|s| {
+                    .filter(|file| Path::new(&file.path) == Path::new(&birth.path));
+                let Some(file) = files.next() else { continue };
+                if files.next().is_none()
+                    && std::str::from_utf8(&file.after).is_ok_and(|s| {
                         weftext_engine::inspect_metadata(s).id.as_deref() == Some(owner_id)
                             && weftext_knowledge::definition_slots(s, &owner)
                                 .is_ok_and(|slots| slots.iter().any(|slot| slot.key == key))
                     })
-            {
-                return Ok(true);
+                {
+                    return Ok(true);
+                }
             }
         }
         Ok(false)
@@ -1579,7 +1779,54 @@ impl Core {
         let directory = path
             .parent()
             .ok_or_else(|| CoreError::new("invalidPath", "Missing Node parent"))?;
-        let node = self.managed_node(&root, directory, false)?;
+        let in_trash = directory.strip_prefix(&root).is_ok_and(|relative| {
+            relative.components().next().is_some_and(|component| {
+                component
+                    .as_os_str()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(".weftext-trash")
+            })
+        });
+        let node = if in_trash {
+            let original = capture_optional(&path)?.ok_or_else(|| {
+                CoreError::new("missingNode", "The retained canonical source is missing")
+            })?;
+            let birth = self
+                .admitted_binding(&original.stamp.identity)
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "identityPending",
+                        "The retained source has no original admission",
+                    )
+                })?;
+            let qualified = self.qualified_query_node_at(
+                &root,
+                &path,
+                &weftext_knowledge::NodeRef {
+                    workspace_id: birth.workspace_id,
+                    node_id: birth.node_id,
+                },
+                "trash",
+            )?;
+            let mut witnesses = vec![];
+            Self::merge_query_node_feature_witness(&mut witnesses, &qualified.witness)?;
+            let current = witnesses
+                .into_iter()
+                .find(|witness| locator_equal(&witness.binding.path, &display(&path)))
+                .and_then(|witness| witness.binding.captured)
+                .ok_or_else(|| {
+                    CoreError::new("identityPending", "Missing original source witness")
+                })?;
+            if current.stamp != original.stamp || current.bytes != original.bytes {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "The retained source changed during capture",
+                ));
+            }
+            current
+        } else {
+            self.managed_node(&root, directory, false)?
+        };
         let birth = self.admitted_binding(&node.stamp.identity).unwrap();
         let manifest_path = directory.join("weftext.resources.json");
         let manifest = self
@@ -2066,31 +2313,22 @@ impl Core {
         let root = absolute_path(root.as_ref())?;
         self.require_workspace(&root)?;
         let mut entries = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
-            let Some(t) = &p.transaction else {
+        for entry in self.original_trash_roots(&root)? {
+            let Some(node_id) = &entry.node_id else {
                 continue;
             };
-            if t.request.root != display(&root) || !t.is_trash() {
+            if !entry.path.try_exists()? {
                 continue;
             }
-            if let Mutation::Relocate {
-                target, old_leaf, ..
-            } = &t.mutation
-                && let Ok(Some(f)) = capture_optional(&Path::new(target).join(old_leaf))
-                && self.admitted_binding(&f.stamp.identity).is_some()
-            {
-                entries.push(TrashEntry {
-                    operation_id: p.operation_id.clone(),
-                    name: old_leaf.trim_end_matches(".typ").into(),
-                    path: target.clone(),
-                });
-            }
+            self.capture_original_trash_node(&entry)?;
+            entries.push(TrashEntry {
+                operation_id: entry.operation_id,
+                node_id: node_id.clone(),
+                name: entry.leaf.trim_end_matches(".typ").into(),
+                path: display(&entry.path),
+            });
         }
-        entries.sort_by(|a, b| a.operation_id.cmp(&b.operation_id));
+        entries.sort_by(|a, b| (&a.operation_id, &a.node_id).cmp(&(&b.operation_id, &b.node_id)));
         Ok(entries)
     }
     pub fn read_library_style(&mut self, root: impl AsRef<Path>) -> Result<LibraryStyleDocument> {
@@ -2557,6 +2795,49 @@ impl Core {
             complete: true,
         })
     }
+    /// Original committed relocation or Clone birth evidence locates Trash
+    /// trees; neither a path name nor a matching declaration creates a member.
+    fn admitted_trash_files(&self, root: &Path) -> Result<Vec<CapturedFile>> {
+        let mut files = Vec::new();
+        for entry in self.original_trash_roots(root)? {
+            let path = entry.path;
+            match fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                result => {
+                    result?;
+                }
+            }
+            let guard = ParentGuard::acquire(&Path::new(&path).join(".trash-membership"))?;
+            if guard.directory_identity()? != entry.identity {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "A committed Trash directory was replaced",
+                ));
+            }
+            let mut captured = Vec::new();
+            let mut directories = Vec::new();
+            snapshot_tree(Path::new(&path), &mut captured, &mut directories, false)?;
+            for file in captured {
+                if self.admitted_binding(&file.stamp.identity).is_some()
+                    && !files
+                        .iter()
+                        .any(|old: &CapturedFile| locator_equal(&old.path, &file.path))
+                {
+                    files.push(file);
+                }
+            }
+            if files.len() > MAX_OPERATION_FILES
+                || files.iter().map(|file| file.bytes.len()).sum::<usize>() > MAX_OPERATION_BYTES
+            {
+                return Err(CoreError::new(
+                    "budget",
+                    "Admitted Trash scope exceeds the original transaction budget",
+                ));
+            }
+        }
+        Ok(files)
+    }
+
     pub fn admitted_snapshot(&mut self, root: impl AsRef<Path>) -> Result<AdmittedSnapshot> {
         let root = absolute_path(root.as_ref())?;
         let workspace = self.require_workspace(&root)?;
@@ -2574,23 +2855,12 @@ impl Core {
                     expected.insert(b.node_id.clone(), b);
                 }
             }
-            if let Some(t) = &p.transaction
-                && t.request.root == display(&root)
-                && t.is_trash()
-                && let Mutation::Relocate { target, .. } = &t.mutation
+        }
+        for file in self.admitted_trash_files(&root)? {
+            if let Some(birth) = self.admitted_binding(&file.stamp.identity)
+                && birth.workspace_id == workspace.workspace_id
             {
-                // An actually present, owned trash tree determines which
-                // born objects are outside live Query membership now.
-                if Path::new(target).exists() {
-                    let mut fs = vec![];
-                    let mut ds = vec![];
-                    snapshot_tree(Path::new(target), &mut fs, &mut ds, false)?;
-                    for f in fs {
-                        if let Some(b) = self.admitted_binding(&f.stamp.identity) {
-                            trashed.insert(b.node_id);
-                        }
-                    }
-                }
+                trashed.insert(birth.node_id);
             }
         }
         expected.retain(|id, _| !trashed.contains(id));
@@ -2676,6 +2946,7 @@ impl Core {
             cut_id.clone(),
             AdmittedBasis {
                 root: display(&root),
+                lifecycle: "live".into(),
                 members: members.iter().cloned().collect(),
                 bases: cut
                     .files
@@ -2705,78 +2976,53 @@ impl Core {
         let mut warnings = Vec::new();
         let mut complete = true;
         let mut entries = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
-            let Some(t) = &p.transaction else {
+        for file in self.admitted_trash_files(&root)? {
+            let Some(birth) = self.admitted_binding(&file.stamp.identity) else {
                 continue;
             };
-            if t.request.root != display(&root) || !t.is_trash() {
+            if birth.workspace_id != workspace.workspace_id {
                 continue;
             }
-            let Mutation::Relocate { target, .. } = &t.mutation else {
-                continue;
-            };
-            if !Path::new(target).exists() {
-                continue;
-            }
-            let mut files = vec![];
-            let mut dirs = vec![];
-            if let Err(e) = snapshot_tree(Path::new(target), &mut files, &mut dirs, false) {
+            let source = decode(&file.bytes)?;
+            let info = weftext_engine::inspect_metadata(&source);
+            if info.id.as_deref() != Some(&birth.node_id) {
                 complete = false;
-                warnings.push(e.message);
+                warnings.push(format!(
+                    "Trashed Node{}has damaged declaration",
+                    birth.node_id
+                ));
                 continue;
             }
-            for file in files {
-                let Some(birth) = self.admitted_binding(&file.stamp.identity) else {
-                    continue;
-                };
-                if birth.workspace_id != workspace.workspace_id {
-                    continue;
-                }
-                let source = decode(&file.bytes)?;
-                let info = weftext_engine::inspect_metadata(&source);
-                if info.id.as_deref() != Some(&birth.node_id) {
-                    complete = false;
-                    warnings.push(format!(
-                        "Trashed Node{}has damaged declaration",
-                        birth.node_id
-                    ));
-                    continue;
-                }
-                if source_files
-                    .insert(birth.node_id.clone(), file.path.clone())
-                    .is_some()
-                {
-                    complete = false;
-                    warnings.push(format!(
-                        "Duplicate admitted trash identity{}",
-                        birth.node_id
-                    ));
-                }
-                entries.push(InventoryEntry {
-                    path: file.path.clone(),
-                    relative_path: Path::new(&file.path)
-                        .strip_prefix(&root)
-                        .unwrap()
-                        .to_string_lossy()
-                        .replace('\\', "/"),
-                    name: Path::new(&file.path)
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into(),
-                    parent_path: display(Path::new(&file.path).parent().unwrap()),
-                    kind: "node".into(),
-                    node_id: Some(birth.node_id),
-                    identity_status: "admitted".into(),
-                    title: info.title,
-                    excerpt: None,
-                    source: Some(source),
-                });
+            if source_files
+                .insert(birth.node_id.clone(), file.path.clone())
+                .is_some()
+            {
+                complete = false;
+                warnings.push(format!(
+                    "Duplicate admitted trash identity{}",
+                    birth.node_id
+                ));
             }
+            entries.push(InventoryEntry {
+                path: file.path.clone(),
+                relative_path: Path::new(&file.path)
+                    .strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                name: Path::new(&file.path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into(),
+                parent_path: display(Path::new(&file.path).parent().unwrap()),
+                kind: "node".into(),
+                node_id: Some(birth.node_id),
+                identity_status: "admitted".into(),
+                title: info.title,
+                excerpt: None,
+                source: Some(source),
+            });
         }
         let mut paths = source_files.values().cloned().collect::<Vec<_>>();
         paths.push(display(&root.join(ConfigRole::Schema.filename())));
@@ -2799,9 +3045,26 @@ impl Core {
             warnings: warnings.clone(),
             complete,
         };
+        let cut_id = fresh();
+        let members = source_files.keys().cloned().collect::<Vec<_>>();
+        self.admitted_cuts.insert(
+            cut_id.clone(),
+            AdmittedBasis {
+                root: display(&root),
+                lifecycle: "trash".into(),
+                members: members.iter().cloned().collect(),
+                bases: snapshot
+                    .files
+                    .iter()
+                    .chain(std::iter::once(&schema))
+                    .map(|file| file.base_id.clone())
+                    .collect(),
+                complete,
+            },
+        );
         Ok(AdmittedSnapshot {
-            cut_id: fresh(),
-            membership_ids: source_files.keys().cloned().collect(),
+            cut_id,
+            membership_ids: members,
             inventory,
             files: snapshot.files,
             schema: Some(schema),
@@ -2990,7 +3253,13 @@ impl Core {
                 ));
             }
             Some(weftext_engine::StyleModule {
-                path: module.path.clone(),
+                path: Path::new(&module.path)
+                    .strip_prefix(&root)
+                    .map_err(|_| {
+                        CoreError::new("outsideRoot", "Selected style is outside selected library")
+                    })?
+                    .to_string_lossy()
+                    .replace('\\', "/"),
                 source: decode(&module.bytes)?,
                 enabled: true,
                 entry_function: "library-style".into(),
@@ -3141,6 +3410,12 @@ impl Core {
             return Err(CoreError::new(
                 "coverageIncomplete",
                 "Strong action requires its complete admitted set cut",
+            ));
+        }
+        if cut.lifecycle != "live" {
+            return Err(CoreError::new(
+                "readOnly",
+                "A Trash read cut cannot authorize a new generic author operation",
             ));
         }
         self.prepare_internal(request, Some(cut), None, &[], &[], None, &[], None)
@@ -3356,6 +3631,21 @@ impl Core {
                     &mut preview,
                 )?
             }
+            OperationIntent::RelocateDirectory {
+                source,
+                parent,
+                name,
+            } => {
+                let source = absolute_path(Path::new(source))?;
+                let parent = absolute_path(Path::new(parent))?;
+                self.prepare_directory_relocation(
+                    &root,
+                    &source,
+                    &parent.join(name),
+                    &mut files,
+                    &mut preview,
+                )?
+            }
             OperationIntent::TrashNode { source } => {
                 let source = absolute_path(Path::new(source))?;
                 let trash = root.join(".weftext-trash");
@@ -3364,28 +3654,15 @@ impl Core {
             }
             OperationIntent::RestoreNode {
                 trash_operation_id,
+                node_id,
                 parent,
                 name,
             } => {
                 valid_name(name)?;
                 valid_operation_id(trash_operation_id)?;
-                let previous = self
-                    .operations
-                    .get(trash_operation_id)
-                    .and_then(|p| p.transaction.as_ref())
-                    .ok_or_else(|| {
-                        CoreError::new("trashMissing", "No retained trash operation has this ID")
-                    })?;
-                if !self.committed(trash_operation_id) || !previous.is_trash() {
-                    return Err(CoreError::new(
-                        "trashMissing",
-                        "Trash operation is not committed",
-                    ));
-                }
-                let Mutation::Relocate { target, .. } = &previous.mutation else {
-                    return Err(CoreError::new("invalidState", "Invalid trash record"));
-                };
-                let source = PathBuf::from(target);
+                let selected =
+                    self.select_original_trash_node(&root, trash_operation_id, node_id.as_deref())?;
+                let source = selected.path;
                 let parent = absolute_path(Path::new(parent))?;
                 self.prepare_relocation(
                     &root,
@@ -4256,6 +4533,7 @@ impl Core {
             receipt,
             hosted_destination: destination_slot.map(str::to_owned),
             expected_membership: cut.map(|c| c.members),
+            expected_trash_membership: None,
             backup_private_digest,
             absent_dependencies,
             write_parents,
@@ -4359,6 +4637,17 @@ impl Core {
                 return Err(CoreError::new(
                     "scopeChanged",
                     "Admitted set membership changed after the reviewed strong plan",
+                ));
+            }
+        }
+        if let Some(expected) = &t.expected_trash_membership {
+            let current = self.trash_admitted_snapshot(root)?;
+            if !current.complete
+                || current.membership_ids.into_iter().collect::<BTreeSet<_>>() != *expected
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Admitted Trash membership changed after the reviewed original plan",
                 ));
             }
         }
@@ -5055,32 +5344,44 @@ impl Core {
         files: &mut Vec<CapturedFile>,
         preview: &mut OperationPreview,
     ) -> Result<Mutation> {
+        self.prepare_relocation_with_target(root, source, target, trash, files, preview, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepare_relocation_with_target(
+        &self,
+        root: &Path,
+        source: &Path,
+        target: &Path,
+        trash: bool,
+        files: &mut Vec<CapturedFile>,
+        preview: &mut OperationPreview,
+        occupant: Option<&FileIdentity>,
+    ) -> Result<Mutation> {
         // Trash folders use operation UUID names but keep the original canonical
         // basename. Restore obtains that name from the original frozen record.
-        let mut file = if source
+        let trash_origin = if source
             .components()
             .any(|c| c.as_os_str() == ".weftext-trash")
         {
-            let old = self
-                .operations
-                .values()
-                .filter(|p| self.committed(&p.operation_id))
-                .filter_map(|p| p.transaction.as_ref())
-                .find_map(|t| match &t.mutation {
-                    Mutation::Relocate {
-                        target, new_leaf, ..
-                    } if Path::new(target) == source => Some(new_leaf.clone()),
-                    _ => None,
-                })
-                .ok_or_else(|| {
-                    CoreError::new(
-                        "trashMissing",
-                        "No committed record binds this trash directory",
-                    )
-                })?;
-            capture_optional(&source.join(old))?.ok_or_else(|| {
-                CoreError::new("missingNode", "Trashed canonical source is missing")
-            })?
+            Some(
+                self.original_trash_roots(root)?
+                    .into_iter()
+                    .find(|entry| {
+                        entry.node_id.is_some()
+                            && locator_equal(&display(&entry.path), &display(source))
+                    })
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "trashMissing",
+                            "No committed record binds this trash directory",
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+        let mut file = if let Some(entry) = &trash_origin {
+            self.capture_original_trash_node(entry)?
         } else {
             self.managed_node(root, source, false)?
         };
@@ -5132,9 +5433,21 @@ impl Core {
             format!("{}.typ", node_name(target)?)
         };
         if source != target {
-            ensure_absent(target)?;
+            qualify_relocation_target(target, occupant)?;
+        }
+        if old_leaf != new_leaf {
+            ensure_absent(&source.join(&new_leaf))?;
         }
         let source_identity = namespace.source_identity()?;
+        if trash_origin
+            .as_ref()
+            .is_some_and(|entry| entry.identity != source_identity)
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "The original committed Trash directory was replaced",
+            ));
+        }
         let target_parent_identity = namespace.parent_identity()?;
         // Compare the exact canonical file through the namespace's actual source handle.
         let mut current = namespace.open_source_file(&old_leaf, false)?;
@@ -5751,6 +6064,7 @@ fn intent_kind(intent: &OperationIntent) -> &'static str {
         OperationIntent::RevalidateSync { .. } => "revalidateSync",
         OperationIntent::RenameNode { .. } => "renameNode",
         OperationIntent::MoveNode { .. } => "moveNode",
+        OperationIntent::RelocateDirectory { .. } => "relocateDirectory",
         OperationIntent::CopyNode { .. } => "copyNode",
         OperationIntent::TemplateNode { .. } => "templateNode",
         OperationIntent::TrashNode { .. } => "trashNode",
@@ -5870,6 +6184,20 @@ pub(crate) fn node_name(directory: &Path) -> Result<String> {
         .ok_or_else(|| CoreError::new("invalidName", "Node name must be UTF-8"))?;
     valid_name(name)?;
     Ok(name.into())
+}
+fn qualify_relocation_target(path: &Path, occupant: Option<&FileIdentity>) -> Result<()> {
+    if let Some(expected) = occupant {
+        let guard = ParentGuard::acquire(&path.join(".original-participant-proof"))?;
+        if guard.directory_identity()? != *expected {
+            return Err(CoreError::new(
+                "conflict",
+                "The destination is not its original moving participant",
+            ));
+        }
+        Ok(())
+    } else {
+        ensure_absent(path)
+    }
 }
 pub(crate) fn ensure_absent(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {

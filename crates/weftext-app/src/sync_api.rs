@@ -120,6 +120,7 @@ struct AdoptionCutRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RevalidationReviewRequest {
+    operation_id: Option<String>,
     root: String,
     identity: SyncIdentity,
     resolutions: Vec<SyncRevalidation>,
@@ -146,13 +147,109 @@ async fn revalidation_review(
     State(state): State<AppState>,
     Json(req): Json<RevalidationReviewRequest>,
 ) -> ApiResult {
-    Ok(Json(value(
-        core_call(&state, move |core| {
-            core.review_sync_revalidation(&req.root, &req.identity, &req.resolutions, &req.blobs)
-        })
-        .await?,
-    )?))
+    let captured = core_call(&state, move |core| {
+        core.capture_sync_revalidation_review_for_operation(
+            &req.root,
+            &req.identity,
+            &req.resolutions,
+            &req.blobs,
+            req.operation_id.as_deref(),
+        )
+    })
+    .await?;
+    let mut captured = captured;
+    let mut budget = NativeValidationBudget::new();
+    let reviewed = loop {
+        match captured {
+            weftext_core::sync::SyncReviewPreparation::Reviewed(review) => break review,
+            weftext_core::sync::SyncReviewPreparation::Native(native) => {
+                let outputs = native_validation_outputs_with_budget(
+                    &state,
+                    native.render_inputs(),
+                    &mut budget,
+                )
+                .await?;
+                captured = core_call(&state, move |core| {
+                    core.advance_sync_native_review(native, outputs)
+                })
+                .await?;
+            }
+        }
+    };
+    Ok(Json(value(reviewed)?))
 }
+
+/// Uses the original isolated compiler and its per-worker limits. The Core
+/// mutex is not held across this wait; the total strong action is bounded too.
+pub(crate) async fn native_validation_outputs(
+    state: &AppState,
+    requests: &weftext_core::sync::SyncNativeRenderInputs,
+) -> Result<Vec<weftext_core::sync::SyncNativeRenderOutput>, super::ApiError> {
+    native_validation_outputs_with_budget(state, requests, &mut NativeValidationBudget::new()).await
+}
+struct NativeValidationBudget {
+    deadline: tokio::time::Instant,
+    notes: usize,
+}
+impl NativeValidationBudget {
+    fn new() -> Self {
+        Self {
+            deadline: tokio::time::Instant::now() + std::time::Duration::from_secs(60),
+            notes: 0,
+        }
+    }
+}
+async fn native_validation_outputs_with_budget(
+    state: &AppState,
+    requests: &weftext_core::sync::SyncNativeRenderInputs,
+    budget: &mut NativeValidationBudget,
+) -> Result<Vec<weftext_core::sync::SyncNativeRenderOutput>, super::ApiError> {
+    let failure = |message: &str| {
+        super::ApiError::from(weftext_core::CoreError::new(
+            "queryInvocationUnavailable",
+            message,
+        ))
+    };
+    budget.notes = budget.notes.saturating_add(requests.len());
+    if budget.notes > 32 {
+        return Err(failure(
+            "The native Query validation exceeds 32 exact notes",
+        ));
+    }
+    let mut outputs = Vec::with_capacity(requests.len());
+    let mut retained = 0usize;
+    for index in 0..requests.len() {
+        let request = requests
+            .render_request(index)
+            .ok_or_else(|| failure("The exact native input is missing"))?;
+        let remaining = budget
+            .deadline
+            .saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(failure(
+                "The native Query validation exceeded its total worker budget",
+            ));
+        }
+        let value = tokio::time::timeout(remaining, super::render_frozen_worker(state, request))
+            .await
+            .map_err(|_| failure("The native Query validation timed out"))??;
+        let output: weftext_engine::RenderOutput = serde_json::from_value(value)
+            .map_err(|_| failure("The native worker returned an invalid exact result"))?;
+        retained = retained.saturating_add(
+            serde_json::to_vec(&output.products)
+                .map_err(|_| failure("Invalid native products"))?
+                .len(),
+        );
+        if retained > 32 * 1024 * 1024 {
+            return Err(failure(
+                "The native product inputs exceed the original Query byte budget",
+            ));
+        }
+        outputs.push(output.into());
+    }
+    Ok(outputs)
+}
+
 struct AdoptionJsonBudget(usize);
 impl std::io::Write for AdoptionJsonBudget {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
@@ -187,6 +284,9 @@ async fn adoption_cut(
                     if let Some(base) = &change.base_id {
                         let _ = core.take_snapshot_witness(base);
                     }
+                }
+                for member in &cut.removed_members {
+                    let _ = core.take_snapshot_witness(&member.base_id);
                 }
                 return Err(weftext_core::CoreError::new(
                     "budget",

@@ -122,6 +122,17 @@ impl Core {
                 "Sync setup requires a qualified content inventory",
             ));
         }
+        let trash_roots = self.original_trash_roots(&root)?;
+        let retired_root = |directory: &Path| -> Result<bool> {
+            for original in &trash_roots {
+                if crate::backend::namespace_path_compare(directory, &original.path)?
+                    == std::cmp::Ordering::Equal
+                {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        };
         let replica_id = fresh();
         let genesis = Manifest {
             version: 1,
@@ -166,7 +177,7 @@ impl Core {
                         file_revisions: BTreeMap::new(),
                         parent: None,
                         name,
-                        retired: directory.starts_with(root.join(".weftext-trash")),
+                        retired: retired_root(directory)?,
                         files: BTreeMap::new(),
                     },
                 },
@@ -217,7 +228,7 @@ impl Core {
                                 .unwrap()
                                 .to_string_lossy()
                                 .into(),
-                            retired: false,
+                            retired: retired_root(path.parent().unwrap())?,
                             files: BTreeMap::new(),
                         },
                     },
@@ -320,6 +331,17 @@ impl Core {
                         .ok_or_else(|| invalid("Missing initial parent checkpoint"))?,
                 );
             }
+            // An initial checkpoint still obeys the same lifetime rule as any
+            // received history. The object already has original committed
+            // admission; record its captured content birth before a separate
+            // retirement successor, preserving the exact file revisions.
+            let birth_revision = if tracked.state.retired {
+                fresh()
+            } else {
+                tracked.revision.clone()
+            };
+            let mut birth_state = tracked.state.clone();
+            birth_state.retired = false;
             let manifest = Manifest {
                 version: 1,
                 workspace_id: workspace.workspace_id.clone(),
@@ -329,14 +351,32 @@ impl Core {
                 changes: vec![Change {
                     object: tracked.object.clone(),
                     before: BTreeSet::new(),
-                    revision: tracked.revision.clone(),
-                    after: tracked.state.clone(),
+                    revision: birth_revision.clone(),
+                    after: birth_state,
                 }],
                 dependencies: vec![],
             };
             tracked.commit = manifest.id()?;
-            birth_commits.insert(tracked.object.clone(), tracked.commit.clone());
             bundle.manifests.insert(tracked.commit.clone(), manifest);
+            if tracked.state.retired {
+                let retirement = Manifest {
+                    version: 1,
+                    workspace_id: workspace.workspace_id.clone(),
+                    replica_id: replica_id.clone(),
+                    operation_id: fresh(),
+                    parents: BTreeSet::from([tracked.commit.clone()]),
+                    changes: vec![Change {
+                        object: tracked.object.clone(),
+                        before: BTreeSet::from([birth_revision]),
+                        revision: tracked.revision.clone(),
+                        after: tracked.state.clone(),
+                    }],
+                    dependencies: vec![],
+                };
+                tracked.commit = retirement.id()?;
+                bundle.manifests.insert(tracked.commit.clone(), retirement);
+            }
+            birth_commits.insert(tracked.object.clone(), tracked.commit.clone());
         }
         let setup = SyncSetup {
             root: display(&root),
@@ -732,7 +772,7 @@ impl Core {
                         .iter()
                         .find(|(_, o)| {
                             Path::new(&o.directory) == Path::new(source)
-                                && matches!(o.object, ObjectKey::Node(_))
+                                && matches!(o.object, ObjectKey::Node(_) | ObjectKey::Directory(_))
                         })
                         .map(|(k, _)| k.clone())
                         .ok_or_else(|| invalid("Relocated object has no replica basis"))?;
@@ -752,11 +792,19 @@ impl Core {
                         .remove(old_leaf)
                         .ok_or_else(|| invalid("Relocated canonical revision is missing"))?;
                     node.state.file_revisions.insert(new_leaf.clone(), revision);
-                    node.state.name = Path::new(new_leaf)
-                        .file_stem()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into();
+                    node.state.name = if matches!(key, ObjectKey::Directory(_)) {
+                        Path::new(target)
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into()
+                    } else {
+                        Path::new(new_leaf)
+                            .file_stem()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into()
+                    };
                     node.state.parent = parent;
                     node.state.retired = Path::new(target).starts_with(root.join(".weftext-trash"));
                     for object in objects.values_mut() {

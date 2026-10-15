@@ -1,7 +1,15 @@
 import type { KnowledgePlan, KnowledgeReceipt } from "./knowledge-panel";
 import type { OpenedDocument } from "./types";
 
-export interface LibraryTrashEntry { operationId: string; name: string; path?: string }
+export interface LibraryTrashEntry { operationId: string; nodeId?: string; name: string; path?: string }
+export interface LibraryTrashDraft { name: string; parent: string }
+/** A single retired transaction may contain multiple independently restorable roots. */
+export function trashRestoreDraft(drafts: Map<string, LibraryTrashDraft>, root: string, entry: LibraryTrashEntry): LibraryTrashDraft {
+  const key = JSON.stringify([root, entry.operationId, entry.nodeId ?? null]);
+  let draft = drafts.get(key);
+  if (!draft) { draft = { name: entry.name, parent: root }; drafts.set(key, draft); }
+  return draft;
+}
 export interface LibraryTrashHost {
   request<T>(path: string, body?: unknown): Promise<T>;
   created(document: OpenedDocument): Promise<void>;
@@ -11,7 +19,7 @@ export interface LibraryTrashController { open(root: string): Promise<void> }
 export interface RestoreRequest {
   operationId: string;
   root: string;
-  intent: { kind: "restoreNode"; trashOperationId: string; parent: string; name: string };
+  intent: { kind: "restoreNode"; trashOperationId: string; nodeId?: string; parent: string; name: string };
 }
 export interface PendingRestore {
   request: RestoreRequest;
@@ -25,7 +33,7 @@ export interface PendingRestore {
 
 const success = new Set(["committed", "saved", "complete", "success"]);
 const failed = new Set(["conflict", "failed", "rejected", "failed-no-effect"]);
-const terminalErrorCodes = new Set(["conflict", "operationConflict", "preimageChanged", "invalidName", "invalidPath", "trashMissing", "targetExists", "destinationExists", "unsupported", "permissionDenied", "rejected"]);
+const terminalErrorCodes = new Set(["conflict", "operationConflict", "preimageChanged", "invalidName", "invalidPath", "trashMissing", "trashSelectionRequired", "trashSelectionMismatch", "targetExists", "destinationExists", "unsupported", "permissionDenied", "rejected"]);
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function errorCode(error: unknown): string { return error && typeof error === "object" && "code" in error ? String(error.code) : ""; }
 function lossMessage(value: unknown): string {
@@ -33,10 +41,10 @@ function lossMessage(value: unknown): string {
   if (value && typeof value === "object" && "message" in value && typeof value.message === "string") return value.message;
   return "本次恢复包含尚不能完整处理的内容，请检查准备结果。";
 }
-function openedDocument(value: unknown): value is OpenedDocument {
+function openedDocument(value: unknown, nodeId?: string): value is OpenedDocument {
   if (!value || typeof value !== "object") return false;
   const document = value as Partial<OpenedDocument>;
-  return typeof document.sessionId === "string" && typeof document.path === "string" && typeof document.root === "string" && typeof document.source === "string" && typeof document.baseId === "string";
+  return typeof document.sessionId === "string" && typeof document.path === "string" && typeof document.root === "string" && typeof document.source === "string" && typeof document.baseId === "string" && (nodeId === undefined || document.nodeId === nodeId);
 }
 
 /** Retains the original request across UI lifetimes; status reads never execute it. */
@@ -49,7 +57,7 @@ export class LibraryTrashRestoreFlow {
   async prepare(root: string, entry: LibraryTrashEntry, parent: string, name: string): Promise<void> {
     if (this.busy || this.blocksNewRestore) throw new Error("请先检查或取消原恢复操作，再准备新的恢复。");
     if (!parent.trim() || !name.trim()) throw new Error("请输入恢复位置与名称。");
-    const request: RestoreRequest = Object.freeze({ operationId: this.newId(), root, intent: Object.freeze({ kind: "restoreNode" as const, trashOperationId: entry.operationId, parent, name }) });
+    const request: RestoreRequest = Object.freeze({ operationId: this.newId(), root, intent: Object.freeze({ kind: "restoreNode" as const, trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent, name }) });
     this.pending = { request, confirmed: false, state: "preparing", delivered: false, message: "正在准备准确恢复变动…" };
     this.busy = true;
     try {
@@ -103,7 +111,7 @@ export class LibraryTrashRestoreFlow {
     const pending = this.pending;
     if (!pending || pending.state !== "committed" || pending.delivered) return;
     const document = pending.receipt?.document;
-    if (!openedDocument(document)) { pending.message = "恢复已完成，打开信息暂不可用。检查原操作以读取同一结果。"; return; }
+    if (!openedDocument(document, pending.request.intent.nodeId)) { pending.message = "恢复已完成，准确笔记的打开信息暂不可用。检查原操作以读取同一结果。"; return; }
     try { await this.host.created(document); pending.delivered = true; pending.message = "笔记已恢复并打开。"; this.host.notify(pending.message); }
     catch (error) { pending.message = `笔记已恢复；打开尚未完成：${errorMessage(error)}`; throw error; }
   }
@@ -131,7 +139,7 @@ function field(title: string, value: string): { label: HTMLLabelElement; input: 
 /** Library entry point remains usable when there is no active note. */
 export function createLibraryTrashController(host: LibraryTrashHost): LibraryTrashController {
   const flow = new LibraryTrashRestoreFlow(host);
-  const drafts = new Map<string, { name: string; parent: string }>();
+  const drafts = new Map<string, LibraryTrashDraft>();
   let active: { dialog: HTMLDialogElement; root: string; promise: Promise<void>; close(): void } | null = null;
   return {
     async open(root: string): Promise<void> {
@@ -179,12 +187,12 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
             if (!pending.confirmed) controls.append(button("取消本次准备", () => { flow.cancelPrepared(); render(); }));
             controls.append(button(pending.confirmed ? "执行已确认的原恢复" : "确认恢复", async () => { lock(); await flow.confirmAndCommit(); if (!closed && flow.pending?.state === "committed") await load(); }, true));
           } else if (pending.state === "committed") {
-            controls.append(button(openedDocument(pending.receipt?.document) ? "打开已恢复笔记" : "检查原操作", async () => { lock(); if (openedDocument(flow.pending?.receipt?.document)) await flow.deliverCommitted(); else await flow.reconcile(); }));
+            controls.append(button(openedDocument(pending.receipt?.document, pending.request.intent.nodeId) ? "打开已恢复笔记" : "检查原操作", async () => { lock(); if (openedDocument(flow.pending?.receipt?.document, flow.pending?.request.intent.nodeId)) await flow.deliverCommitted(); else await flow.reconcile(); }));
           } else if (pending.state === "unknown") controls.append(button("检查原操作", async () => { lock(); await flow.reconcile(); if (!closed && flow.pending?.state === "committed") await load(); }));
         }
         if (!entries.length) list.append(el("p", "knowledge-empty", loaded ? "当前资料库暂无可读回收记录。" : "回收记录尚未读取完成。"));
         for (const entry of entries) {
-          const key = `${root}:${entry.operationId}`; let draft = drafts.get(key); if (!draft) { draft = { name: entry.name, parent: root }; drafts.set(key, draft); }
+          const draft = trashRestoreDraft(drafts, root, entry);
           const card = el("article", "knowledge-card"); card.append(el("strong", "", entry.name)); if (entry.path) card.append(el("p", "knowledge-address", entry.path));
           const name = field("恢复名称", draft.name), parent = field("目标父目录（完整路径）", draft.parent); name.input.oninput = () => { draft!.name = name.input.value; }; parent.input.oninput = () => { draft!.parent = parent.input.value; };
           const prepare = button("准备恢复", async () => { lock(); await flow.prepare(root, entry, parent.input.value, name.input.value); }); prepare.disabled = flow.busy || flow.blocksNewRestore; name.input.disabled = parent.input.disabled = flow.busy;

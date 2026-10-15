@@ -175,6 +175,7 @@ fn guarded_rename_move_trash_restore_preserve_node_and_physical_identity() {
         &root,
         OperationIntent::RestoreNode {
             trash_operation_id: trash.operation_id,
+            node_id: None,
             parent: display(&root),
             name: "Restored".into(),
         },
@@ -1061,9 +1062,23 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
         .core
         .open(first.join("C/C.typ"), Some(first.clone()))
         .unwrap();
+    assert_eq!(
+        moved.recovered_draft.as_deref(),
+        Some("selected retained proposal")
+    );
     f.core
         .resolve_draft(&moved.session_id, "discardRecovered", None)
         .unwrap();
+    assert!(
+        fs::read_dir(f.data.join("draft-history"))
+            .unwrap()
+            .any(|entry| {
+                let draft: Draft =
+                    serde_json::from_slice(&fs::read(entry.unwrap().path()).unwrap()).unwrap();
+                draft.source == "selected retained proposal"
+            }),
+        "Explicit resolution must preserve the original selected proposal before backup"
+    );
     let marker = f
         .core
         .draft_path(&first.join("C/C.typ"))
@@ -1301,6 +1316,18 @@ fn admitted_compile_inputs_remain_frozen_and_selected_style_is_exact() {
     let cut = f.core.admitted_compile_snapshot(&root, "live").unwrap();
     assert!(cut.snapshot.complete);
     assert!(cut.style.as_ref().unwrap().enabled);
+    assert_eq!(cut.style.as_ref().unwrap().path, "Styles/library-style.typ");
+    let rendered = weftext_engine::Engine::new_with_system_fonts(false)
+        .unwrap()
+        .render_frozen(&weftext_engine::FrozenRenderRequest {
+            source: note.source.clone(),
+            path: PathBuf::from(&note.path),
+            root: root.clone(),
+            files: cut.files.clone(),
+            style: cut.style.clone(),
+        })
+        .unwrap();
+    assert!(rendered.ok, "{:?}", rendered.diagnostics);
     fs::write(root.join("Note/input.txt"), b"later").unwrap();
     assert_eq!(cut.files["Note/input.txt"], b"first");
     assert_eq!(cut.files["Note/Note.typ"], note.source.as_bytes());

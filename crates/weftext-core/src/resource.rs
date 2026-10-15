@@ -443,6 +443,27 @@ impl Core {
             vec![witness.manifest.clone(), witness.resource.clone()],
         )
     }
+
+    /// A feature Plan also retains the owner's original absent dependencies.
+    /// The selected resource and registration themselves must still exist.
+    pub(crate) fn merge_resource_feature_witness(
+        pool: &mut Vec<SnapshotWitness>,
+        witness: &ResourceWitness,
+    ) -> Result<()> {
+        let result = (|| {
+            let mut positive = vec![];
+            Self::merge_snapshot_witnesses(
+                &mut positive,
+                vec![witness.manifest.clone(), witness.resource.clone()],
+            )?;
+            Self::merge_query_node_feature_witness(pool, &witness.owner_witness)?;
+            Self::merge_feature_witnesses(pool, positive)
+        })();
+        if result.is_err() {
+            pool.clear();
+        }
+        result
+    }
 }
 
 #[cfg(all(test, windows))]

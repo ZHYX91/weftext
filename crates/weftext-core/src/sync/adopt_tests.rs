@@ -54,6 +54,7 @@ fn request(f: &mut Fixture) -> OperationRequest {
             identity: cut.identity,
             expected_installed: cut.expected_installed,
             changes: cut.changes,
+            removed_members: cut.removed_members,
         },
     }
 }
@@ -61,6 +62,446 @@ fn raw(f: &Fixture, text: &str) -> String {
     let source = format!("{}\n{text}", f.source);
     fs::write(&f.path, &source).unwrap();
     source
+}
+
+#[test]
+fn sync_adoption_static_opaque_author_members_keep_exact_source_without_compile() {
+    let mut f = fixture();
+    let ObjectKey::Node(id) = &f.node else {
+        unreachable!()
+    };
+    let external = format!(
+        "#metadata((id: \"{id}\", types: (\"task\",), status: \"open\", opaque: (possible_ref: \"weftext-node://{}/{}\"), opaque_code: preserved_expression())) <weftext>\n#unavailable_display_only()",
+        fresh(),
+        fresh(),
+    );
+    fs::write(&f.path, &external).unwrap();
+    let input = request(&mut f);
+    let preview = f.core.prepare_operation(input).unwrap();
+    assert!(
+        f.core.operations[&preview.operation_id]
+            .sync_application
+            .as_ref()
+            .unwrap()
+            .semantic_evidence
+            .is_none()
+    );
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+}
+
+fn saved_definition_fixture() -> (Fixture, String) {
+    let mut f = fixture();
+    let schema = weftext_data::Schema::bundled().unwrap();
+    let current = f
+        .core
+        .read_config(&f.root, crate::ConfigRole::Schema)
+        .unwrap();
+    let preview = f
+        .core
+        .prepare_config_save(
+            &f.root,
+            crate::ConfigRole::Schema,
+            current.bytes,
+            serde_json::to_vec(&schema).unwrap(),
+            &fresh(),
+        )
+        .unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    f.objects.insert(ObjectKey::Schema);
+    let document = f.core.open(&f.path, Some(f.root.clone())).unwrap();
+    let basis = f
+        .core
+        .read_snapshot(&f.root, &[display(&f.path)])
+        .unwrap()
+        .files
+        .remove(0);
+    let operation = fresh();
+    let key = f
+        .core
+        .reserve_definition_key(&f.root, &f.path, &basis.base_id, &operation)
+        .unwrap();
+    let current = f
+        .core
+        .read_config(&f.root, crate::ConfigRole::Schema)
+        .unwrap();
+    let binding = weftext_data::SavedQueryBinding {
+        schema: current.role_ref,
+        revision: current.revision.unwrap(),
+        language: "weftext.query.cel.v1".into(),
+    };
+    let plan = weftext_data::QueryPlan {
+        select: vec![weftext_data::QueryColumn {
+            name: "value".into(),
+            expr: "1".into(),
+        }],
+        ..Default::default()
+    };
+    let source = weftext_data::upsert_saved_query_with_context(
+        &document.source,
+        None,
+        &key,
+        "weftext-query-adoption",
+        &binding,
+        &plan,
+        &schema,
+        &weftext_data::FrozenAdvancedInput::default(),
+    )
+    .unwrap()
+    .source;
+    f.core
+        .save(SaveRequest {
+            session_id: document.session_id,
+            base_id: document.base_id,
+            source: source.clone(),
+            operation_id: operation,
+        })
+        .unwrap();
+    f.source = source;
+    f.core.publish_sync(&f.root).unwrap();
+    (f, key)
+}
+
+#[test]
+fn sync_adoption_existing_definition_external_body_publishes_and_transfers_exact_source() {
+    let (mut f, key) = saved_definition_fixture();
+    let original = capture_optional(&f.path).unwrap().unwrap();
+    let original_revision = f.core.accepted_revision(&original).unwrap();
+    // Ordinary body compilation is deliberately unavailable. This is not a
+    // reason to reject the unchanged, already-admitted static Query control.
+    let external = raw(&f, "#unavailable_display_only()\nexternal body edit");
+    let input = request(&mut f);
+    let preview = f.core.prepare_operation(input.clone()).unwrap();
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+    assert!(
+        !f.core
+            .journal_path(&preview.operation_id, "install")
+            .exists()
+    );
+    assert!(
+        f.core.operations[&preview.operation_id]
+            .sync_application
+            .as_ref()
+            .unwrap()
+            .semantic_evidence
+            .is_some()
+    );
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    assert_eq!(
+        f.core.prepare_operation(input.clone()).unwrap().plan_id,
+        preview.plan_id
+    );
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    let adopted = capture_optional(&f.path).unwrap().unwrap();
+    assert_eq!(adopted.stamp.identity, original.stamp.identity);
+    assert_eq!(adopted.bytes, external.as_bytes());
+    let revision = f.core.accepted_revision(&adopted).unwrap();
+    assert_ne!(revision, original_revision);
+    let ObjectKey::Node(owner) = &f.node else {
+        unreachable!()
+    };
+    assert!(
+        f.core
+            .is_definition_key_admitted(&f.root, owner, &key)
+            .unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(
+            f.core
+                .sync_operation_request(&preview.operation_id)
+                .unwrap()
+        )
+        .unwrap(),
+        serde_json::to_value(input).unwrap()
+    );
+    f.core.publish_sync(&f.root).unwrap();
+    let mut receiver = Core::new(f.temp.path().join("receiver-private")).unwrap();
+    receiver
+        .receive_sync(
+            &f.identity,
+            f.core.export_sync_objects(&f.identity, &f.objects).unwrap(),
+        )
+        .unwrap();
+    let replica = f.temp.path().join("receiver-library");
+    let clone = receiver
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&replica),
+            intent: OperationIntent::CloneSync {
+                identity: f.identity.clone(),
+                objects: f.objects,
+            },
+        })
+        .unwrap();
+    receiver
+        .execute_operation(&clone.operation_id, &clone.plan_id)
+        .unwrap();
+    let received = replica.join("Note/Note.typ");
+    assert_eq!(fs::read(&received).unwrap(), external.as_bytes());
+    let snapshot = receiver
+        .read_snapshot(&replica, &[display(&received)])
+        .unwrap();
+    assert_eq!(
+        snapshot.files[0].revision.as_deref(),
+        Some(revision.as_str())
+    );
+}
+
+#[test]
+fn sync_adoption_definition_uses_installed_cut_and_preserves_uninstalled_remote_branch() {
+    let (mut f, _) = saved_definition_fixture();
+    let installed = f
+        .core
+        .sync_binding_info(&f.root)
+        .unwrap()
+        .installed_versions;
+    let prior = BTreeSet::from([installed
+        .iter()
+        .find(|(object, _)| object == &f.node)
+        .unwrap()
+        .1
+        .clone()]);
+    let mut remote = Core::new(f.temp.path().join("remote-private")).unwrap();
+    remote
+        .receive_sync(
+            &f.identity,
+            f.core.export_sync_objects(&f.identity, &f.objects).unwrap(),
+        )
+        .unwrap();
+    let root = f.temp.path().join("remote-library");
+    let clone = remote
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&root),
+            intent: OperationIntent::CloneSync {
+                identity: f.identity.clone(),
+                objects: f.objects.clone(),
+            },
+        })
+        .unwrap();
+    remote
+        .execute_operation(&clone.operation_id, &clone.plan_id)
+        .unwrap();
+    let path = root.join("Note/Note.typ");
+    let opened = remote.open(&path, Some(root.clone())).unwrap();
+    let remote_source = format!("{}\nreceived remote branch", opened.source);
+    remote
+        .save(SaveRequest {
+            session_id: opened.session_id,
+            base_id: opened.base_id,
+            source: remote_source.clone(),
+            operation_id: fresh(),
+        })
+        .unwrap();
+    remote.publish_sync(&root).unwrap();
+    f.core
+        .receive_sync(
+            &f.identity,
+            remote.export_sync_objects(&f.identity, &f.objects).unwrap(),
+        )
+        .unwrap();
+    let external = raw(
+        &f,
+        "local observed body from original installed predecessor",
+    );
+    let input = request(&mut f);
+    let preview = f.core.prepare_operation(input).unwrap();
+    let manifest = &f.core.operations[&preview.operation_id]
+        .sync_publication
+        .as_ref()
+        .unwrap()
+        .manifest;
+    assert_eq!(
+        manifest
+            .changes
+            .iter()
+            .find(|c| c.object == f.node)
+            .unwrap()
+            .before,
+        prior
+    );
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    f.core.publish_sync(&f.root).unwrap();
+    let graph = f.core.read_sync_history(&f.identity).unwrap();
+    let objects = graph.objects().unwrap();
+    let versions = &objects[&f.node].versions;
+    assert_eq!(versions.len(), 2);
+    let sources: BTreeSet<_> = versions
+        .iter()
+        .map(|v| graph.blob(&v.state.files["Note.typ"]).unwrap().to_vec())
+        .collect();
+    assert_eq!(
+        sources,
+        BTreeSet::from([external.into_bytes(), remote_source.into_bytes()])
+    );
+}
+
+#[test]
+fn sync_adoption_definition_rejects_invalid_foreign_and_unadmitted_controls_without_staging() {
+    let (mut f, key) = saved_definition_fixture();
+    let definition = weftext_data::saved_queries(&f.source).unwrap().remove(0);
+    let schema = weftext_data::Schema::bundled().unwrap();
+    let original_operations = f.core.operations.len();
+    for (foreign, expected) in [(false, "invalidQuery"), (true, "schemaUnavailable")] {
+        let mut plan = definition.plan.clone();
+        let mut binding = definition.binding.clone();
+        if foreign {
+            binding.schema = format!("weftext-config://{}/schema", fresh());
+        } else {
+            plan.select[0].expr = "1 +".into();
+        }
+        // This is deliberately raw external input. The replay formatter only
+        // serializes it; adoption must apply the actual semantic validator.
+        let external = weftext_data::upsert_saved_query_replay(
+            &f.source,
+            Some(&key),
+            &key,
+            &definition.label,
+            &binding,
+            &plan,
+            &schema,
+        )
+        .unwrap()
+        .source;
+        fs::write(&f.path, &external).unwrap();
+        let input = request(&mut f);
+        assert_eq!(f.core.prepare_operation(input).unwrap_err().code, expected);
+        assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+        assert_eq!(f.core.operations.len(), original_operations);
+    }
+    let forged = fresh();
+    let external = f.source.replace(&key, &forged);
+    assert_ne!(external, f.source);
+    fs::write(&f.path, &external).unwrap();
+    let input = request(&mut f);
+    assert_eq!(
+        f.core.prepare_operation(input).unwrap_err().code,
+        "syncEvidenceRequired"
+    );
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+    assert_eq!(f.core.operations.len(), original_operations);
+    let ObjectKey::Node(owner) = &f.node else {
+        unreachable!()
+    };
+    assert!(
+        !f.core
+            .is_definition_key_admitted(&f.root, owner, &forged)
+            .unwrap()
+    );
+}
+
+#[test]
+fn sync_adoption_definition_stale_observation_and_pending_keep_original_records() {
+    let (mut f, _) = saved_definition_fixture();
+    raw(&f, "first external body");
+    let stale = request(&mut f);
+    let external = raw(&f, "later external body");
+    assert_eq!(
+        f.core.prepare_operation(stale).unwrap_err().code,
+        "staleBase"
+    );
+    let first_request = request(&mut f);
+    let first = f.core.prepare_operation(first_request.clone()).unwrap();
+    let second_request = request(&mut f);
+    let second = f.core.prepare_operation(second_request).unwrap();
+    // An original Core install checkpoint owns this exact observed source.
+    let pending = f.core.operations[&second.operation_id].clone();
+    f.core.install_record(&pending).unwrap();
+    let first_record = fs::read(f.core.journal_path(&first.operation_id, "plan")).unwrap();
+    let second_record = fs::read(f.core.journal_path(&second.operation_id, "plan")).unwrap();
+    assert_eq!(
+        f.core
+            .execute_operation(&first.operation_id, &first.plan_id)
+            .unwrap_err()
+            .code,
+        "recoveryPending"
+    );
+    assert!(!f.core.journal_path(&first.operation_id, "install").exists());
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+    assert_eq!(
+        fs::read(f.core.journal_path(&first.operation_id, "plan")).unwrap(),
+        first_record
+    );
+    assert_eq!(
+        fs::read(f.core.journal_path(&second.operation_id, "plan")).unwrap(),
+        second_record
+    );
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    assert_eq!(
+        f.core.prepare_operation(first_request).unwrap().plan_id,
+        first.plan_id
+    );
+    assert_eq!(
+        f.core
+            .execute_operation(&first.operation_id, &first.plan_id)
+            .unwrap_err()
+            .code,
+        "recoveryPending"
+    );
+    assert!(!f.core.committed(&first.operation_id));
+    assert!(!f.core.committed(&second.operation_id));
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+}
+
+#[test]
+fn sync_adoption_external_citation_uses_exact_selected_work_publication() {
+    let mut f = fixture();
+    let work = f.core.create_note(&f.root, &f.root, "Work").unwrap();
+    let work_id = work.node_id.unwrap();
+    let work_path = PathBuf::from(work.path);
+    let publication = format!(
+        "#metadata((id: \"{work_id}\", types: (\"paper\",), publication: (kind: \"article\", title: \"Reviewed Publication\", contributors: ((agent: (text: \"Author\"), roles: (\"author\",)),)))) <weftext>\n#unavailable_work_body()"
+    );
+    let opened = f.core.open(&work_path, Some(f.root.clone())).unwrap();
+    f.core
+        .save(SaveRequest {
+            session_id: opened.session_id,
+            base_id: opened.base_id,
+            source: publication,
+            operation_id: fresh(),
+        })
+        .unwrap();
+    f.core.publish_sync(&f.root).unwrap();
+    let external = raw(
+        &f,
+        &format!(
+            "#metadata((kind: \"weftext.citations\", entries: ((key: \"work\", work: \"weftext-node://{}/{work_id}\"),))) <weftext-citations>\n#unavailable_document_body()",
+            f.identity.workspace_id
+        ),
+    );
+    let missing_dependency = request(&mut f);
+    assert_eq!(
+        f.core
+            .prepare_operation(missing_dependency)
+            .unwrap_err()
+            .code,
+        "syncDependencyRequired"
+    );
+    f.objects.insert(ObjectKey::Node(work_id));
+    let input = request(&mut f);
+    let preview = f.core.prepare_operation(input).unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
+    assert!(
+        f.core
+            .publish_sync(&f.root)
+            .unwrap()
+            .commits
+            .iter()
+            .all(|c| c.admission == Admission::Accepted)
+    );
 }
 
 #[test]
@@ -502,7 +943,7 @@ fn sync_adoption_invalid_typed_rules_and_uninstalled_or_late_schema_fail_closed(
 }
 
 #[test]
-fn sync_adoption_semantic_citation_gate_preserves_unresolved_ordinary_links() {
+fn sync_adoption_missing_citation_dependency_preserves_unresolved_ordinary_links() {
     let mut f = fixture();
     let reference = format!("weftext-node://{}/{}", f.identity.workspace_id, fresh());
     raw(
@@ -514,7 +955,7 @@ fn sync_adoption_semantic_citation_gate_preserves_unresolved_ordinary_links() {
     let input = request(&mut f);
     assert_eq!(
         f.core.prepare_operation(input).unwrap_err().code,
-        "syncSemanticDecisionRequired"
+        "syncDependencyRequired"
     );
     raw(
         &f,

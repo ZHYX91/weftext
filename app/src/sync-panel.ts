@@ -1,5 +1,5 @@
 import { api, operationId } from "./api";
-import { SyncFlow, objectKey, sameSyncIdentity, type ObjectKey, type ReceivedSyncVersions, type SyncAdoptionCut, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncRevalidationCut, type SyncStatus, type SyncVersion } from "./sync-state";
+import { SyncFlow, freezeSyncAdoptionRequest, objectKey, sameSyncIdentity, type ObjectKey, type ReceivedSyncVersions, type SyncAdoptionCut, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncRevalidationCut, type SyncStatus, type SyncVersion } from "./sync-state";
 import "./sync-panel.css";
 import { mountRemoteSync } from "./sync-remote";
 import { appendSyncRevalidationSummary, mountSyncRevalidation } from "./sync-revalidation-panel";
@@ -78,16 +78,14 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     const currentRoot = targetRoot(), paired = identity(), objects = picked().map(o => o.object);
     await host.beforeAction();
     const cut = await api<SyncAdoptionCut>("/api/sync/adoption-cut", { root: currentRoot, identity: paired, objects });
-    if (!sameSyncIdentity(cut.identity, paired)) throw new Error("采纳依据属于另一资料库；未准备操作。");
-    await flow.prepare({ operationId: operationId(), root: currentRoot,
-      intent: { kind: "adoptSyncExternal", identity: cut.identity, expectedInstalled: cut.expectedInstalled, changes: cut.changes } });
+    await flow.prepare(freezeSyncAdoptionRequest(currentRoot, paired, cut, operationId()));
   }
   async function beginRevalidation(objects: ObjectKey[], initial: { object: ObjectKey; revision: string }[]): Promise<void> {
     if (flow.pending) throw new Error("请先处理原同步操作。");
     clearReview(); const generation = reviewGeneration, currentRoot = targetRoot(), paired = identity();
     const cut = await api<SyncRevalidationCut>("/api/sync/revalidation-cut", { root: currentRoot, identity: paired, objects });
     if (generation !== reviewGeneration || currentRoot !== targetRoot() || !sameSyncIdentity(paired, identity()) || flow.pending) throw new Error("读取期间同步依据已变化，请重新打开语义审阅。");
-    revalidation = mountSyncRevalidation(revalidationHost, currentRoot, paired, cut, initial, { request: api, run, beforeAction: host.beforeAction, id: operationId, prepare: request => flow.prepare(request) });
+    revalidation = mountSyncRevalidation(revalidationHost, currentRoot, paired, cut, initial, { request: api, run, beforeAction: host.beforeAction, id: operationId, prepare: request => flow.prepare(request, clearReview) });
   }
   async function inspectVersion(o: SyncObject, version: SyncVersion, kind: "head" | "base" | "history"): Promise<void> {
     const title = el("h3", `${kind === "base" ? "共同基础" : kind === "history" ? "历史版本（只读）" : "版本"} ${version.revision}`);
@@ -171,13 +169,18 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     if (p) {
       pendingHost.append(el("h3", `原同步操作：${p.status}`), el("code", p.request.operationId), el("p", `目标：${p.request.root} · ${p.request.intent.kind}`));
       if (p.request.intent.kind === "adoptSyncExternal") {
-        pendingHost.append(el("p", "明确采纳本机已存在的外部修改，将这些准确字节登记为新的本地版本。此入口不修改正文、不同时修复内容，也不覆盖个人草稿；尚未收到或未安装的版本仍独立保留。"),
+        pendingHost.append(el("p", "明确采纳本机已存在的外部修改，将核对后的文件内容与资源状态登记为新的本地版本。此入口不修改正文、不同时修复内容，也不覆盖个人草稿；尚未收到或未安装的版本仍独立保留。"),
           el("p", "本次核对的已安装对象与版本："), el("pre", JSON.stringify(p.request.intent.expectedInstalled, null, 2)));
         for (const file of p.request.intent.changes) {
           const details = el("details"); details.append(el("summary", `${file.path} · ${file.after.length} 字节`));
           try { details.append(el("pre", new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(file.after)))); }
           catch { details.append(el("p", "此文件不是 UTF-8 文本；原请求保留准确字节。")); }
           pendingHost.append(details);
+        }
+        if (p.request.intent.removedMembers?.length) {
+          const list = el("ul");
+          for (const member of p.request.intent.removedMembers) list.append(el("li", member.path));
+          pendingHost.append(el("p", "以下资源已在外部移除；确认采纳会记录这一现状："), list);
         }
       }
       if (p.request.intent.kind === "revalidateSync") {
@@ -194,8 +197,9 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
       pendingHost.append(button("检查原操作结果", async () => { await flow.inspect(); await refreshCommitted(); }));
       if (!p.attempted && !p.plan) pendingHost.append(button("重试原准备请求", () => flow.retryPrepare()));
       if (p.status === "prepared") pendingHost.append(button("确认应用此预览", async () => { await host.beforeAction(); await flow.commit(); await refreshCommitted(); }));
-      if (["committed", "resolved"].includes(p.status) || !p.attempted) pendingHost.append(button(["committed", "resolved"].includes(p.status) ? "结束已确认操作" : "取消本次预览", () => { flow.forget(); inspectHost.replaceChildren(); }));
-      if (p.status === "prepared" && p.attempted) pendingHost.append(button("取消尚未开始写入的原提案", async () => { await flow.cancelPrepared(); await refreshCommitted(); }));
+      if (["committed", "resolved"].includes(p.status) || !p.attempted) pendingHost.append(button(["committed", "resolved"].includes(p.status) ? "结束已确认操作" : "放弃本次预览", () => { flow.forget(); inspectHost.replaceChildren(); }));
+      if (!p.attempted && !["committed", "resolved"].includes(p.status)) pendingHost.append(el("p", "放弃预览不会应用内容，也不代表服务端原操作已结束。明确取消需要原准备结果。"));
+      if (p.status === "prepared") pendingHost.append(button("取消尚未开始写入的原提案", async () => { await flow.cancelPrepared(); await refreshCommitted(); }));
       if (["unknown", "recoveryPending"].includes(p.status)) pendingHost.append(el("p", "如需处理已发生的部分步骤，请关闭此窗口进入“恢复记录”，按原操作编号核对；不重新提交。"));
     }
     if (flow.pending) inspectHost.querySelectorAll("button").forEach(e => { if (e.textContent === "预览采用此完整分支" || e.dataset.syncRevalidationStart) e.disabled = true; });

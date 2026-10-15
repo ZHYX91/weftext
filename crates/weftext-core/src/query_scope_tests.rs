@@ -342,6 +342,7 @@ fn query_scope_trash_keeps_original_main_leaf_and_lifecycle_and_restores_exact_m
     );
     let restore = f.prepare(OperationIntent::RestoreNode {
         trash_operation_id: p.operation_id,
+        node_id: None,
         parent: display(&root),
         name: "Back".into(),
     });

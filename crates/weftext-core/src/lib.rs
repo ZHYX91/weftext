@@ -183,6 +183,7 @@ struct Session {
     stamp: FileStamp,
     node_id: Option<String>,
     conflicting_draft: Option<Draft>,
+    draft_placement_pending: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -349,8 +350,9 @@ impl Core {
         };
         let session_id = fresh();
         let base_id = fresh();
-        let draft = self
-            .read_relocated_draft_with_identity(&path, &observed.identity, &source)?
+        let (draft, draft_placement_pending) =
+            self.read_relocated_draft_with_identity(&root, &path, &observed.identity, &source)?;
+        let draft = draft
             .filter(|d| d.source != source || !d.alternatives.is_empty())
             .filter(|d| {
                 !(self.actor.is_some()
@@ -382,6 +384,7 @@ impl Core {
                 } else {
                     None
                 },
+                draft_placement_pending,
             },
         );
         Ok(OpenedDocument {
@@ -427,10 +430,7 @@ impl Core {
                 source,
             ),
         };
-        private_replace(
-            &self.draft_path(&session.path),
-            &serde_json::to_vec(&draft)?,
-        )
+        self.store_draft(&draft)
     }
     pub fn resolve_draft(
         &mut self,
@@ -547,10 +547,7 @@ impl Core {
                     &request.source,
                 ),
             };
-            private_replace(
-                &self.draft_path(&session.path),
-                &serde_json::to_vec(&draft)?,
-            )?;
+            self.store_draft(&draft)?;
             self.sessions
                 .get_mut(&request.session_id)
                 .unwrap()
@@ -983,7 +980,7 @@ impl Core {
                     .find(|b| &b.identity == identity)
             })
     }
-    fn draft_path(&self, path: &Path) -> PathBuf {
+    fn legacy_draft_path(&self, path: &Path) -> PathBuf {
         self.draft_directory("drafts").join(format!(
             "{}.json",
             hash(display(path).replace('/', "\\").to_lowercase().as_bytes())

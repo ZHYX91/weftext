@@ -822,6 +822,12 @@ fn validate(req: &Prepare) -> Result<(), ApiError> {
                 || req.review_mode != "none"
                 || req.include_resolved))
         || (req.format == "docx" && req.resource.is_none())
+        || (req.resource.is_none()
+            && (req.source.is_some()
+                || req.session_id.is_some()
+                || req.base_id.is_some()
+                || req.serial.is_some()
+                || req.source_hash.is_some()))
         || (req.format == "pdf"
             && (req.resource.is_none()
                 || req.source.is_none()
@@ -1856,4 +1862,6 @@ mod tests {
             download: true
         }));
     }
+
+    include!("office_query_input_tests.rs");
 }

@@ -63,13 +63,19 @@ pub(crate) struct UnfulfilledEvidence {
     pub obligation: RequiredSemanticEvidence,
     pub gap: EvidenceGap,
 }
+pub(crate) struct PendingNativeInvocation {
+    pub input: weftext_data::FrozenQueryInput,
+    pub invocation: InvocationValidation,
+}
 pub(crate) struct EvidenceCapture {
+    pub pending_native: Vec<PendingNativeInvocation>,
     witnesses: Vec<SnapshotWitness>,
     discharged: Vec<RequiredSemanticEvidence>,
     unfulfilled: Vec<UnfulfilledEvidence>,
     read_objects: BTreeSet<ObjectKey>,
     provider_dependencies: Vec<QueryValidationTrace>,
     query_membership: Option<BTreeSet<String>>,
+    query_trash_membership: Option<BTreeSet<String>>,
     annotation_targets: Vec<super::revalidation::SyncAnnotationTargetStatus>,
 }
 pub(crate) struct EvidenceReadSet {
@@ -81,9 +87,49 @@ pub(crate) struct EvidenceReadSet {
     pub provider_dependencies: Vec<QueryValidationTrace>,
     /// Preserve in the original FrozenOperation.expected_membership guard.
     pub query_membership: Option<BTreeSet<String>>,
+    pub query_trash_membership: Option<BTreeSet<String>>,
     pub annotation_targets: Vec<super::revalidation::SyncAnnotationTargetStatus>,
 }
 impl EvidenceCapture {
+    pub(crate) fn add_native_witnesses(
+        &mut self,
+        witnesses: Vec<SnapshotWitness>,
+        objects: BTreeSet<ObjectKey>,
+    ) -> Result<()> {
+        Core::merge_feature_witnesses(&mut self.witnesses, witnesses)?;
+        self.read_objects.extend(objects);
+        Ok(())
+    }
+    pub(crate) fn witnesses(&self) -> &[SnapshotWitness] {
+        &self.witnesses
+    }
+    pub(crate) fn awaiting_native_only(&self) -> bool {
+        !self.pending_native.is_empty()
+            && self
+                .unfulfilled
+                .iter()
+                .all(|item| matches!(item.gap, EvidenceGap::CompiledElementOrigin))
+    }
+    pub(crate) fn complete_native(
+        &mut self,
+        products: &BTreeMap<(String, String, String), weftext_data::NoteProducts>,
+    ) -> Result<()> {
+        self.provider_dependencies
+            .extend(validate_native_invocations(
+                std::mem::take(&mut self.pending_native),
+                products,
+            )?);
+        let mut unresolved = vec![];
+        for item in std::mem::take(&mut self.unfulfilled) {
+            if matches!(item.gap, EvidenceGap::CompiledElementOrigin) {
+                self.discharged.push(item.obligation);
+            } else {
+                unresolved.push(item);
+            }
+        }
+        self.unfulfilled = unresolved;
+        Ok(())
+    }
     pub(crate) fn unfulfilled(&self) -> &[UnfulfilledEvidence] {
         &self.unfulfilled
     }
@@ -102,6 +148,7 @@ impl EvidenceCapture {
             read_objects: self.read_objects,
             provider_dependencies: self.provider_dependencies,
             query_membership: self.query_membership,
+            query_trash_membership: self.query_trash_membership,
             annotation_targets: self.annotation_targets,
         })
     }
@@ -153,6 +200,7 @@ struct Capture<'a, 'b> {
     output: EvidenceCapture,
     objects: BTreeSet<ObjectKey>,
     planned_objects: BTreeSet<ObjectKey>,
+    collect_native: bool,
 }
 impl Capture<'_, '_> {
     fn planned_after(&self, object: &ObjectKey) -> Result<bool> {
@@ -277,6 +325,21 @@ impl Capture<'_, '_> {
                 .any(|file| file.before.is_none() && same_locator(Path::new(&file.path), &path)))
     }
     fn received_definition_key(&self, owner: &NodeRef, key: &str) -> Result<bool> {
+        if self
+            .cut
+            .planned
+            .and_then(|plan| plan.transaction.as_ref())
+            .is_some_and(|transaction| {
+                matches!(
+                    transaction.request.intent,
+                    crate::OperationIntent::AdoptSyncExternal { .. }
+                )
+            })
+        {
+            // This same external observation cannot grant a raw definition
+            // key merely by appearing in its prospective publication.
+            return Ok(false);
+        }
         let object = ObjectKey::Node(owner.node_id.clone());
         if !self.planned_after(&object)? {
             return Ok(false);
@@ -348,8 +411,10 @@ impl Capture<'_, '_> {
             return Err(mismatch());
         }
         let captured = witness.binding.captured.as_ref().ok_or_else(mismatch)?;
+        let adoption_observation = self.adoption_observed_file(object, relative, captured)?;
         if !same_locator(Path::new(&captured.path), &expected)
-            || local.state.files.get(relative) != Some(&crate::hash(&captured.bytes))
+            || (!adoption_observation
+                && local.state.files.get(relative) != Some(&crate::hash(&captured.bytes)))
         {
             return Err(mismatch());
         }
@@ -359,16 +424,98 @@ impl Capture<'_, '_> {
             .iter()
             .filter(|b| &b.object == object && b.relative_path == relative)
             .collect::<Vec<_>>();
-        if physical.len() != 1 || physical[0].stamp != captured.stamp {
+        if physical.len() != 1
+            || if adoption_observation {
+                physical[0].stamp.identity != captured.stamp.identity
+            } else {
+                physical[0].stamp != captured.stamp
+            }
+        {
             return Err(mismatch());
         }
-        if !self.installed_file_revision_matches(object, relative, captured)? {
+        if !adoption_observation
+            && !self.installed_file_revision_matches(object, relative, captured)?
+        {
             return Err(error(
                 "syncEvidenceChanged",
                 "Installed file revision lacks its original observation or replica initialization binding",
             ));
         }
         Ok(Some(witness.clone()))
+    }
+
+    /// Recognize only a real original no-write adoption's observed member.
+    /// The installed object and its old content provenance remain unchanged;
+    /// only this Plan's exact external bytes receive its new portable revision.
+    fn adoption_observed_file(
+        &self,
+        object: &ObjectKey,
+        relative: &str,
+        captured: &crate::operations::CapturedFile,
+    ) -> Result<bool> {
+        let Some(plan) = self.cut.planned else {
+            return Ok(false);
+        };
+        let (Some(application), Some(transaction)) = (&plan.sync_application, &plan.transaction)
+        else {
+            return Ok(false);
+        };
+        let crate::OperationIntent::AdoptSyncExternal {
+            changes: requested, ..
+        } = &transaction.request.intent
+        else {
+            return Ok(false);
+        };
+        let crate::operations::Mutation::Update { files: outputs } = &transaction.mutation else {
+            return Err(mismatch());
+        };
+        let Some(after) = application
+            .after
+            .iter()
+            .find(|after| &after.object == object)
+        else {
+            return Ok(false);
+        };
+        let original = self.cut.installed.get(object).ok_or_else(mismatch)?;
+        if application
+            .before
+            .iter()
+            .find(|before| &before.object == object)
+            != Some(original)
+            || after.directory != original.directory
+            || after.state.name != original.state.name
+            || after.state.parent != original.state.parent
+            || after.state.retired != original.state.retired
+        {
+            return Err(mismatch());
+        }
+        let path = Path::new(&original.directory).join(relative);
+        let Some(output) = outputs
+            .iter()
+            .find(|output| same_locator(Path::new(&output.path), &path))
+        else {
+            return Ok(false);
+        };
+        if output.before.as_ref() != Some(&captured.bytes)
+            || output.after != captured.bytes
+            || !requested.iter().any(|input| {
+                same_locator(Path::new(&input.path), &path)
+                    && input.base_id.is_some()
+                    && input.before == output.before
+                    && input.after == output.after
+            })
+            || !transaction.files.iter().any(|file| {
+                same_locator(Path::new(&file.path), &path)
+                    && file.stamp == captured.stamp
+                    && file.bytes == captured.bytes
+            })
+            || after.state.files.get(relative) != Some(&crate::hash(&captured.bytes))
+            || after.state.file_revisions.get(relative)
+                != transaction.preview.revisions.get(&crate::display(&path))
+        {
+            return Err(mismatch());
+        }
+        Ok(true)
     }
     fn installed_file_revision_matches(
         &self,
@@ -445,7 +592,12 @@ impl Capture<'_, '_> {
                     node_id: id.clone(),
                 };
                 if q.owner != owner
-                    || q.lifecycle != if local.state.retired { "trash" } else { "live" }
+                    || q.lifecycle
+                        != if super::revalidation_writer::local_retired(self.cut.root, local)? {
+                            "trash"
+                        } else {
+                            "live"
+                        }
                 {
                     return Err(mismatch());
                 }
@@ -474,7 +626,12 @@ impl Capture<'_, '_> {
             ) => {
                 let reference = format!("weftext-directory://{}/{id}", self.cut.graph.workspace_id);
                 if q.target_ref != reference
-                    || q.lifecycle != if local.state.retired { "trash" } else { "live" }
+                    || q.lifecycle
+                        != if super::revalidation_writer::local_retired(self.cut.root, local)? {
+                            "trash"
+                        } else {
+                            "live"
+                        }
                 {
                     return Err(mismatch());
                 }
@@ -575,7 +732,7 @@ impl Capture<'_, '_> {
         self.core
             .validate_resource_witness(self.cut.root, &q.witness)?;
         let mut pool = vec![];
-        Core::merge_resource_witness(&mut pool, &q.witness)?;
+        Core::merge_resource_feature_witness(&mut pool, &q.witness)?;
         // Prove this qualifier's actual selected file against the original
         // installed stamp/manifest entry. Public descriptor fields are not proof.
         let local = &self.cut.installed[&object];
@@ -609,7 +766,12 @@ impl Capture<'_, '_> {
         if q.content_hash != crate::hash(&actual.bytes)
             || q.bytes() != actual.bytes
             || q.revision.as_ref() != local.state.file_revisions.get(relative)
-            || q.lifecycle != if local.state.retired { "trash" } else { "live" }
+            || q.lifecycle
+                != if super::revalidation_writer::local_retired(self.cut.root, local)? {
+                    "trash"
+                } else {
+                    "live"
+                }
             || !self.core.admitted_resource(
                 id,
                 &owner.workspace_id,
@@ -764,13 +926,24 @@ impl Capture<'_, '_> {
             ObjectKey::Rules => ".weftext-rules",
             _ => return Err(mismatch()),
         };
+        let adoption = self
+            .cut
+            .planned
+            .and_then(|plan| plan.transaction.as_ref())
+            .is_some_and(|transaction| {
+                matches!(
+                    transaction.request.intent,
+                    crate::OperationIntent::AdoptSyncExternal { .. }
+                )
+            });
         if self.cut.installed.contains_key(object)
             || self.cut.chosen.contains_key(object)
-            || self.cut.graph.objects()?.contains_key(object)
-            || self.cut.graph.manifests.iter().any(|(id, m)| {
-                m.changes.iter().any(|c| &c.object == object)
-                    && matches!(self.cut.graph.status(id), Ok(Admission::Staged { .. }))
-            })
+            || (!adoption
+                && (self.cut.graph.objects()?.contains_key(object)
+                    || self.cut.graph.manifests.iter().any(|(id, m)| {
+                        m.changes.iter().any(|c| &c.object == object)
+                            && matches!(self.cut.graph.status(id), Ok(Admission::Staged { .. }))
+                    })))
         {
             return Err(mismatch());
         }
@@ -943,12 +1116,15 @@ impl Capture<'_, '_> {
         if candidates.is_empty() {
             return Ok(Some(EvidenceGap::ExactInvocationInputs));
         }
+        let mut pending = false;
         for invocation in &candidates {
-            if let Some(gap) = self.actual_invocation(invocation)? {
-                return Ok(Some(gap));
+            match self.actual_invocation(invocation)? {
+                Some(EvidenceGap::CompiledElementOrigin) if self.collect_native => pending = true,
+                Some(gap) => return Ok(Some(gap)),
+                None => (),
             }
         }
-        Ok(None)
+        Ok(pending.then_some(EvidenceGap::CompiledElementOrigin))
     }
 
     fn actual_invocation(
@@ -965,151 +1141,145 @@ impl Capture<'_, '_> {
                 "Actual Query lifecycles are unavailable",
             )
         })?;
-        // The existing admitted cut guard is a live-membership guard. Do not
-        // silently turn a Trash/current mixed invocation into a live input.
-        if lifecycles.iter().any(|l| l == "trash") {
-            return Ok(Some(EvidenceGap::ExactInvocationInputs));
-        }
         let snapshots = self
             .cut
             .query_snapshots
             .iter()
             .copied()
-            .filter(|snapshot| snapshot.inventory.status != "trashReadOnly")
+            .filter(|snapshot| {
+                lifecycles.iter().any(|lifecycle| {
+                    (lifecycle == "trash") == (snapshot.inventory.status == "trashReadOnly")
+                })
+            })
             .collect::<Vec<_>>();
-        let [snapshot] = snapshots.as_slice() else {
+        if snapshots.len() != lifecycles.len() {
             return Ok(Some(EvidenceGap::ExactInvocationInputs));
-        };
-        if !snapshot.complete
-            || snapshot.inventory.workspace_id.as_ref() != Some(&self.cut.graph.workspace_id)
-            || !same_locator(Path::new(&snapshot.inventory.root), self.cut.root)
-        {
-            return Err(error(
-                "queryInvocationUnavailable",
-                "Actual Query requires its complete original admitted cut",
-            ));
         }
-        let Some(original) = self.core.admitted_cuts.get(&snapshot.cut_id) else {
-            return Err(error(
-                "cutExpired",
-                "The original admitted Query cut is no longer retained",
-            ));
-        };
-        let actual_bases = snapshot
-            .files
-            .iter()
-            .chain(snapshot.schema.iter())
-            .map(|file| file.base_id.clone())
-            .collect::<BTreeSet<_>>();
-        if actual_bases.len() != snapshot.files.len() + usize::from(snapshot.schema.is_some())
-            || actual_bases != original.bases.iter().cloned().collect()
-        {
-            return Err(mismatch());
-        }
-        let members = snapshot
-            .membership_ids
-            .iter()
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        if members.len() != snapshot.membership_ids.len()
-            || snapshot
+        let mut before_files = BTreeMap::new();
+        let mut seen_lifecycles = BTreeSet::new();
+        for snapshot in &snapshots {
+            let lifecycle = if snapshot.inventory.status == "trashReadOnly" {
+                "trash"
+            } else {
+                "live"
+            };
+            if !seen_lifecycles.insert(lifecycle) {
+                return Err(mismatch());
+            }
+            if !snapshot.complete
+                || snapshot.inventory.workspace_id.as_ref() != Some(&self.cut.graph.workspace_id)
+                || !same_locator(Path::new(&snapshot.inventory.root), self.cut.root)
+            {
+                return Err(error(
+                    "queryInvocationUnavailable",
+                    "Actual Query requires its complete original admitted cut",
+                ));
+            }
+            let Some(original) = self.core.admitted_cuts.get(&snapshot.cut_id) else {
+                return Err(error(
+                    "cutExpired",
+                    "The original admitted Query cut is no longer retained",
+                ));
+            };
+            if original.lifecycle != lifecycle {
+                return Err(mismatch());
+            }
+            let actual_bases = snapshot
                 .files
                 .iter()
-                .filter_map(|f| f.node_id.clone())
-                .collect::<BTreeSet<_>>()
-                != members
-            || snapshot.files.len() != members.len()
-            || !members
-                .iter()
-                .cloned()
-                .map(ObjectKey::Node)
-                .collect::<BTreeSet<_>>()
-                .is_subset(&invocation.members)
-        {
-            return Err(mismatch());
-        }
-        if self
-            .output
-            .query_membership
-            .as_ref()
-            .is_some_and(|old| old != &members)
-        {
-            return Err(mismatch());
-        }
-        let mut notes = Vec::new();
-        for original_file in &snapshot.files {
-            let id = original_file.node_id.as_ref().ok_or_else(mismatch)?;
-            let object = ObjectKey::Node(id.clone());
-            if let Some(gap) = self.ensure_object(&object)? {
-                return Ok(Some(gap));
-            }
-            let installed = &self.cut.installed[&object];
-            let relative = object_file(&object, &installed.state).unwrap();
-            let Some(witness) = self.installed_snapshot(&object, &relative)? else {
-                return Err(mismatch());
-            };
-            let captured = witness.binding.captured.as_ref().unwrap();
-            if !same_locator(Path::new(&original_file.path), Path::new(&captured.path))
-                || original_file.bytes.as_ref() != Some(&captured.bytes)
+                .chain(snapshot.schema.iter())
+                .map(|file| file.base_id.clone())
+                .collect::<BTreeSet<_>>();
+            if actual_bases.len() != snapshot.files.len() + usize::from(snapshot.schema.is_some())
+                || actual_bases != original.bases.iter().cloned().collect()
             {
                 return Err(mismatch());
             }
-            let Some(version) = self.cut.chosen.get(&object) else {
+            let members = snapshot
+                .membership_ids
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            if members.len() != snapshot.membership_ids.len()
+                || snapshot
+                    .files
+                    .iter()
+                    .filter_map(|f| f.node_id.clone())
+                    .collect::<BTreeSet<_>>()
+                    != members
+                || snapshot.files.len() != members.len()
+                || !members
+                    .iter()
+                    .cloned()
+                    .map(ObjectKey::Node)
+                    .collect::<BTreeSet<_>>()
+                    .is_subset(&invocation.members)
+            {
                 return Err(mismatch());
-            };
-            if version.state.retired {
-                // The selected after state has left live membership. Its
-                // before source remains guarded but is not an after Query row.
-                continue;
             }
-            let revision = &version.state.file_revisions[&format!("{}.typ", version.state.name)];
-            let Some(source) = self.source(
-                &NodeRef {
-                    workspace_id: self.cut.graph.workspace_id.clone(),
-                    node_id: id.clone(),
-                },
-                revision,
-            )?
-            else {
-                return Ok(Some(EvidenceGap::ExactHistoricalSource));
+            let frozen_members = if lifecycle == "trash" {
+                &mut self.output.query_trash_membership
+            } else {
+                &mut self.output.query_membership
             };
-            let Some(directory) = self.cut.after_locations.get(&object) else {
-                return Ok(Some(EvidenceGap::ExactInvocationInputs));
-            };
-            notes.push(weftext_data::FrozenNote {
-                entity_key: format!("weftext-node://{}/{id}", self.cut.graph.workspace_id),
-                path: crate::display(&directory.join(format!("{}.typ", version.state.name))),
-                source,
-                revision: revision.clone(),
-                lifecycle: "live".into(),
-                title: None,
-                body: None,
-                products: None,
-                authorized_fields: None,
-            });
+            if frozen_members.as_ref().is_some_and(|old| old != &members) {
+                return Err(mismatch());
+            }
+            *frozen_members = Some(members);
+            for original_file in &snapshot.files {
+                let id = original_file.node_id.as_ref().ok_or_else(mismatch)?;
+                let object = ObjectKey::Node(id.clone());
+                if before_files.insert(object, original_file.clone()).is_some() {
+                    return Err(mismatch());
+                }
+            }
         }
-        for object in invocation.members.iter().filter(|object| match object {
-            ObjectKey::Node(id) => !members.contains(id),
-            _ => true,
-        }) {
+        let query_cut_id = snapshots
+            .iter()
+            .map(|snapshot| snapshot.cut_id.as_str())
+            .collect::<Vec<_>>()
+            .join(":");
+        let mut notes = Vec::new();
+        for object in &invocation.members {
             let ObjectKey::Node(id) = object else {
                 return Err(mismatch());
             };
             let Some(version) = self.cut.chosen.get(object) else {
                 return Err(mismatch());
             };
-            if version.state.retired
-                || self
-                    .cut
-                    .installed
-                    .get(object)
-                    .is_some_and(|old| !old.state.retired)
-                || !self.planned_after(object)?
-            {
-                return Err(mismatch());
+            let retired = super::revalidation::effective_retired(object, self.cut.chosen)?;
+            let lifecycle = if retired { "trash" } else { "live" };
+            if let Some(original_file) = before_files.get(object) {
+                if let Some(gap) = self.ensure_object(object)? {
+                    return Ok(Some(gap));
+                }
+                let installed = &self.cut.installed[object];
+                let relative = object_file(object, &installed.state).unwrap();
+                let Some(witness) = self.installed_snapshot(object, &relative)? else {
+                    return Err(mismatch());
+                };
+                let captured = witness.binding.captured.as_ref().unwrap();
+                if !same_locator(Path::new(&original_file.path), Path::new(&captured.path))
+                    || original_file.bytes.as_ref() != Some(&captured.bytes)
+                {
+                    return Err(mismatch());
+                }
+            } else if lifecycles.iter().any(|required| required == lifecycle) {
+                let unchanged_lifecycle = match self.cut.installed.get(object) {
+                    Some(old) => {
+                        super::revalidation_writer::local_retired(self.cut.root, old)? == retired
+                    }
+                    None => false,
+                };
+                if unchanged_lifecycle || !self.planned_after(object)? {
+                    return Err(mismatch());
+                }
+                if let Some(gap) = self.ensure_object(object)? {
+                    return Ok(Some(gap));
+                }
             }
-            if let Some(gap) = self.ensure_object(object)? {
-                return Ok(Some(gap));
+            if !lifecycles.iter().any(|required| required == lifecycle) {
+                continue;
             }
             let relative = format!("{}.typ", version.state.name);
             let revision = version.state.file_revisions[&relative].clone();
@@ -1131,7 +1301,7 @@ impl Capture<'_, '_> {
                 path: crate::display(&directory.join(relative)),
                 source,
                 revision,
-                lifecycle: "live".into(),
+                lifecycle: lifecycle.into(),
                 title: None,
                 body: None,
                 products: None,
@@ -1146,9 +1316,6 @@ impl Capture<'_, '_> {
                         "Actual Query products are unavailable",
                     )
                 })?;
-        if !products.is_empty() {
-            return Ok(Some(EvidenceGap::CompiledElementOrigin));
-        }
         let mut context = invocation.context.clone();
         for scope in weftext_data::required_query_scopes(&invocation.plan, &context.definitions)
             .map_err(|_| error("queryScopeUnavailable", "Actual Query scope is unavailable"))?
@@ -1179,52 +1346,127 @@ impl Capture<'_, '_> {
                 .insert(scope, crate::display(location));
         }
         let input = weftext_data::FrozenQueryInput {
-            cut_id: snapshot.cut_id.clone(),
+            cut_id: query_cut_id,
             schema_revision: invocation.schema_baseline.revision.clone(),
             coverage: "complete".into(),
             freshness: "stale".into(),
             notes,
             advanced: Some(context),
         };
-        let (result, dependencies) =
-            weftext_data::execute_authorized_query_with_provider_dependencies(
-                &input,
-                &invocation.plan,
-                &invocation.baseline,
-                &weftext_data::QueryBudget::default(),
-                &BTreeMap::new(),
-            )
-            .map_err(|_| {
-                error(
-                    "queryInvocationUnavailable",
-                    "The exact actual Query/provider invocation is invalid",
-                )
-            })?;
-        if result.coverage != "complete" || !result.diagnostics.is_empty() {
-            return Err(error(
-                "queryInvocationUnavailable",
-                "The exact actual Query/provider invocation is incomplete",
-            ));
+        if !products.is_empty() {
+            if self.collect_native {
+                self.output.pending_native.push(PendingNativeInvocation {
+                    input,
+                    invocation: invocation.clone(),
+                });
+            }
+            return Ok(Some(EvidenceGap::CompiledElementOrigin));
         }
         self.output
             .provider_dependencies
-            .push(QueryValidationTrace {
-                owner: invocation.owner.clone(),
-                key: invocation.key.clone(),
-                source_revision: invocation.source_revision.clone(),
-                root_baseline: invocation.schema_baseline.clone(),
-                definition: invocation.definition.clone(),
-                dependencies,
-            });
-        self.output.query_membership = Some(members);
+            .push(execute_invocation(&input, invocation)?);
         Ok(None)
     }
+}
+
+pub(crate) fn validate_native_invocations(
+    invocations: Vec<PendingNativeInvocation>,
+    products: &BTreeMap<(String, String, String), weftext_data::NoteProducts>,
+) -> Result<Vec<QueryValidationTrace>> {
+    invocations
+        .into_iter()
+        .map(|pending| {
+            let mut input = pending.input;
+            for note in &mut input.notes {
+                let key = (
+                    note.entity_key.clone(),
+                    note.revision.clone(),
+                    crate::hash(note.source.as_bytes()),
+                );
+                let product = products.get(&key).ok_or_else(|| {
+                    error(
+                        "queryInvocationUnavailable",
+                        "An exact native note product is missing",
+                    )
+                })?;
+                note.products = Some(product.clone());
+            }
+            execute_invocation(&input, &pending.invocation)
+        })
+        .collect()
+}
+
+fn execute_invocation(
+    input: &weftext_data::FrozenQueryInput,
+    invocation: &InvocationValidation,
+) -> Result<QueryValidationTrace> {
+    let (result, dependencies) = weftext_data::execute_authorized_query_with_provider_dependencies(
+        input,
+        &invocation.plan,
+        &invocation.baseline,
+        &weftext_data::QueryBudget::default(),
+        &BTreeMap::new(),
+    )
+    .map_err(|_| {
+        error(
+            "queryInvocationUnavailable",
+            "The exact actual Query/provider invocation is invalid",
+        )
+    })?;
+    let native_cells_unavailable =
+        !weftext_data::query_products(&invocation.plan, &invocation.context.definitions)
+            .map_err(|_| {
+                error(
+                    "queryInvocationUnavailable",
+                    "The actual native product demand is invalid",
+                )
+            })?
+            .is_empty()
+            && result.rows.iter().any(|row| {
+                row.cells.values().any(|cell| {
+                    matches!(
+                        cell,
+                        weftext_data::Cell::Invalid { .. } | weftext_data::Cell::Unavailable { .. }
+                    )
+                })
+            });
+    if result.coverage != "complete" || !result.diagnostics.is_empty() || native_cells_unavailable {
+        return Err(error(
+            "queryInvocationUnavailable",
+            "The exact actual Query/provider invocation is incomplete",
+        ));
+    }
+    Ok(QueryValidationTrace {
+        owner: invocation.owner.clone(),
+        key: invocation.key.clone(),
+        source_revision: invocation.source_revision.clone(),
+        root_baseline: invocation.schema_baseline.clone(),
+        definition: invocation.definition.clone(),
+        dependencies,
+    })
 }
 
 pub(crate) fn capture_evidence(
     core: &Core,
     cut: &SuppliedEvidenceCut<'_>,
     checked: &CheckedRevalidation,
+) -> Result<EvidenceCapture> {
+    capture_evidence_mode(core, cut, checked, false)
+}
+
+pub(crate) fn capture_evidence_for_native(
+    core: &Core,
+    cut: &SuppliedEvidenceCut<'_>,
+    checked: &CheckedRevalidation,
+) -> Result<EvidenceCapture> {
+    capture_evidence_mode(core, cut, checked, true)
+}
+
+fn capture_evidence_mode(
+    core: &Core,
+    cut: &SuppliedEvidenceCut<'_>,
+    checked: &CheckedRevalidation,
+    collect_native: bool,
 ) -> Result<EvidenceCapture> {
     if cut.chosen != &checked.states
         || checked.required_evidence.len() > MAX_FILES
@@ -1252,16 +1494,19 @@ pub(crate) fn capture_evidence(
         cut,
         checked,
         output: EvidenceCapture {
+            pending_native: vec![],
             witnesses: vec![],
             discharged: vec![],
             unfulfilled: vec![],
             read_objects: BTreeSet::new(),
             provider_dependencies: vec![],
             query_membership: None,
+            query_trash_membership: None,
             annotation_targets: vec![],
         },
         objects: BTreeSet::new(),
         planned_objects: BTreeSet::new(),
+        collect_native,
     };
     // Only supplied observations participate. Never capture a missing one now
     // and treat that newer observation as the reviewed original basis.
@@ -1346,7 +1591,21 @@ pub(crate) fn capture_evidence(
                             })
                         })
             });
-        let negative = planned_negative || witness.binding.captured.is_none()
+        let adopted_negative = witness.binding.captured.is_none()
+            && cut.planned.is_some_and(|plan| {
+                super::adopt::adopted_removed_member(plan, path)
+                    && plan
+                        .transaction
+                        .as_ref()
+                        .unwrap()
+                        .absent_dependencies
+                        .iter()
+                        .any(|negative| {
+                            same_locator(Path::new(&negative.path), path)
+                                && negative.parent == witness.binding.parent
+                        })
+            });
+        let negative = planned_negative || adopted_negative || witness.binding.captured.is_none()
             && checked.required_evidence.iter().any(|obligation| {
                 matches!(obligation, RequiredSemanticEvidence::AbsentConfiguration { object }
                 if match object {

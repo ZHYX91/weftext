@@ -500,27 +500,11 @@ impl Core {
             let tree = root.join(&parts);
             let tree_guard = ParentGuard::acquire(&tree.join(".query-trash-prospective"))?;
             let tree_identity = tree_guard.directory_identity()?;
-            let owned = self
-                .operations
-                .values()
-                .filter(|p| self.committed(&p.operation_id))
-                .any(|p| {
-                    p.transaction.as_ref().is_some_and(|t| {
-                        t.is_trash()
-                            && match &t.mutation {
-                                Mutation::Relocate {
-                                    target,
-                                    source_identity,
-                                    ..
-                                } => {
-                                    crate::history::history_relative_path(Path::new(target), root)
-                                        .is_some_and(|p| query_same_relative(&p, &parts))
-                                        && *source_identity == tree_identity
-                                }
-                                _ => false,
-                            }
-                    })
-                });
+            let owned = self.original_trash_roots(root)?.iter().any(|entry| {
+                crate::history::history_relative_path(&entry.path, root)
+                    .is_some_and(|path| query_same_relative(&path, &parts))
+                    && entry.identity == tree_identity
+            });
             if !owned {
                 return Err(CoreError::new(
                     "identityPending",

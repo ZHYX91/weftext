@@ -856,11 +856,15 @@ impl Core {
             OperationIntent::TrashNode { source } => source.len() > 64 * 1024,
             OperationIntent::RestoreNode {
                 trash_operation_id,
+                node_id,
                 parent,
                 name,
             } => {
                 valid_name(name)?;
                 valid_operation_id(trash_operation_id)?;
+                if let Some(id) = node_id {
+                    valid_operation_id(id)?;
+                }
                 parent.len() > 64 * 1024
             }
             _ => {
