@@ -8,15 +8,15 @@ translation_status: synced
 
 # Weftext
 
-A file-based knowledge and writing tool built around native Typst. Current state: **a 0.6.0-alpha.1 Windows local and bounded hosted candidate; the complete product remains in progress**. Archived prototypes are not current build dependencies.
+A file-based knowledge and writing tool built around native Typst. Current state: **0.6.0-alpha.1 Windows local and bounded hosted development; complete v0.6 remains unfinished**. Hosted consumers, same-owner synchronization and partial replicas have been connected and checked in separate batches. The latest complete package remains the first Server / WebUI slice; later independently tested executables do not establish new whole-package acceptance. Archived prototypes are not current build dependencies.
 
 - [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
-- [First Server / WebUI slice](docs/SERVER.md): multiuser five-view native writing, actor drafts, conflicts and revocation; same-owner hosted sync is connected; complete feature integration remains pending.
-- [Version roadmap](docs/ROADMAP.md): seven milestones after the first version, covering current confirmed requirements.
+- [Server / WebUI guide](docs/SERVER.md): separate authorization for multiuser five-view writing, fields/Query, annotations, resources, structures and outputs, plus same-owner hosted synchronization; MVP records tested scope and remaining conditions.
+- [Version roadmap](docs/ROADMAP.md): implementation scope and completion gates, including v0.6.1/v0.6.2 enhancements and subsequent platform acceptance.
 
 - [Requirements](docs/REQUIREMENTS.md): the single current inventory of 27 groups, including navigation, rich types, library styles, five views and Chinese defaults.
 - [Technical design](docs/design/README.md): authoring, Core, editor and features, with necessary schemas, examples and bounded experiments.
-- [Implementation order](docs/design/INTEGRATION.md): begin with a vertical local open/edit/save/recover slice.
+- [Implementation order](docs/design/INTEGRATION.md): vertical integration, current v0.6 progress and subsequent versions.
 - [Final design acceptance](docs/design/REVIEW.md): fixed technical baseline, disposition and evidence limits.
 - [Acceptance and release](docs/WORKFLOW.md): concise development entry points separating design checks from product tests.
 

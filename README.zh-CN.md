@@ -7,15 +7,15 @@ translation_status: source
 
 # Weftext
 
-基于原生 Typst 的文件型知识与写作工具。当前状态：**0.6.0-alpha.1 Windows 本地与受控服务端候选，完整产品仍在推进**。旧原型已归档，不是当前构建依赖。
+基于原生 Typst 的文件型知识与写作工具。当前状态：**0.6.0-alpha.1 Windows 本地与受控服务端开发版，完整 v0.6 仍未完成**。托管消费者、同所有者同步和部分同步已分批接通与验收；最新完整打包仍是首个 Server / WebUI 切片，后续独立测试程序不冒作新的整包验收。旧原型已归档，不是当前构建依赖。
 
 - [本地候选使用与边界](docs/MVP.zh-CN.md)：写作、属性与 Query、链接与批注、Office 输出与资料交换，以及保存恢复；含构建命令和实际限制。
-- [Server / WebUI 首个切片](docs/SERVER.zh-CN.md)：多用户五档正文写作、独立草稿、冲突和撤权；同所有者托管同步已接通，完整功能接入仍待完成。
-- [版本路线图](docs/ROADMAP.zh-CN.md)：首版之后 7 个里程碑，覆盖当前已确认需求。
+- [Server / WebUI 指南](docs/SERVER.zh-CN.md)：多用户五档、字段与 Query、批注、资源、结构和输出的分别授权，以及同所有者托管同步；实际已验范围和剩余条件见 MVP。
+- [版本路线图](docs/ROADMAP.zh-CN.md)：当前各版本的实施范围与完成条件，包含 v0.6.1／v0.6.2 增强及后续多端验收。
 
 - [需求](docs/REQUIREMENTS.zh-CN.md)：唯一当前需求集；27 组需求及导航、丰富类型、库样式、五档视图、中文默认支持。
 - [技术设计](docs/design/README.zh-CN.md)：作者源、Core、编辑器、业务功能；必要 schema、例子和有限实验随文档保留。
-- [实施顺序](docs/design/INTEGRATION.zh-CN.md)：从本地打开、编辑、保存和恢复的纵向闭环开始。
+- [实施顺序](docs/design/INTEGRATION.zh-CN.md)：纵向闭环、当前 v0.6 进度与后续版本的衔接。
 - [最终设计接受](docs/design/REVIEW.zh-CN.md)：固定技术基线、结论与证据限制。
 - [验收与发布](docs/WORKFLOW.zh-CN.md)：简短开发入口，区分设计检查与产品实测。
 
