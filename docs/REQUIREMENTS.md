@@ -298,6 +298,18 @@ Confirmed on 2026-10-14 for RQ18–24 as **v0.6.2**, reusing §5.12 language/reg
 
 [EDITOR](design/EDITOR.md) §8.8 owns interaction, [FEATURES](design/FEATURES.md) §10.4 processing/provenance, and [ROADMAP](ROADMAP.md) implementation plus IM01–10/LC09. Freeze actual backends, models and persistence contracts before implementation; plans do not constitute product passes.
 
+### 5.14 v0.6.1 body-table editing experience
+
+Confirmed on 2026-10-15 as an RQ01–03 interaction enhancement for **v0.6.1**, accepted alongside cell review, equations and document interchange, and providing an editing surface for basic tables imported in v0.6.2. This is planned scope: existing simple-grid commands and bounded text editing in complex tables do not establish this experience as complete. Existing table preservation, Draft, undo, authorization and sync defects remain current-v0.6 work.
+
+- **Operate within the table.** Provide logical-cell keyboard navigation, rectangular range selection and in-table controls for inserting, deleting and reordering rows/columns, including column reordering. Common operations do not require manually entered row/column numbers. Distinguish text editing from cell selection without seizing Chinese IME composition, existing text selections or focus.
+- **Range clipboard.** Copy, cut and paste TSV for selected ranges, previewing target dimensions, extension and structural limits. Cut requires successful clipboard writing first. Each operation uses the shared Draft/Undo and failures leave no partial changes. Equal text, whitespace, newlines and repeated cells cannot cause incorrect targeting.
+- **Explicit table structures.** Ordinary explicit native tables with proven source mappings gain merge/split, header and transpose commands. Preview content ownership, spanning topology, header direction and affected formatting. Refuse unsafe combinations while retaining source, without silently deleting content, changing unselected content or flattening complex tables into simple grids.
+- **Shared Draft and source preservation.** Body tables retain native Typst author source, shared Draft/selection/undo and Core save/sync paths without another editable table store. Generated cells, spreads, dynamic column counts and custom show rules expose only actually proven local edits or Source entry. Query-result tables do not substitute for body-table acceptance.
+- **Completion and platforms.** v0.6.1 verifies continuous keyboard operation, selection, focus/scroll, Chinese input, undo/redo, save/reopen, sync conflicts and revocation, together with cell review and existing interchange regressions. v0.7 adds touch, RTL, real assistive technology and target-platform checks without deferring basic keyboard reachability or existing correctness obligations.
+
+[EDITOR](design/EDITOR.md) §4.1 owns interaction/source-transform boundaries; [ROADMAP](ROADMAP.md) owns sequence and TB01–06. These gates do not establish arbitrary dynamic Typst tables or arbitrary Office tables as losslessly convertible.
+
 ## 6. Bringing the original 21 findings into the new design
 
 Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: the current independent design disposition is in [new architecture REVIEW](design/REVIEW.md) §7, and **each still requires product implementation verification**; this table does not automatically transfer historical closures. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.
