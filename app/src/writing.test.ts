@@ -6,7 +6,7 @@ import { history, isolateHistory, undo, redo, undoDepth } from "@codemirror/comm
 import { applySourcePatches, createSourceState, sourceRevealEffect, sourceRevealExtensions, type SourceEditorEvent, type SourcePatch, type SourceSelection } from "./editor";
 import { encodeWritingLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult } from "./writing";
 import type { RenderNode } from "./types";
-import { DocumentSession, canRebindSaveAs } from "./session";
+import { DocumentSession, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
 import type { OpenedDocument } from "./types";
 
 function map(source: string, from = 0, to = source.length, text = source.slice(from, to)): WritingMap {
@@ -44,6 +44,36 @@ function harness(source: string, request?: WritingHost["request"]) {
   controller.installMap(map(source), source, serial);
   return { editor, controller, calls, recoveries, serial: () => serial };
 }
+
+test("sync consumer pause allows real in-flight literal/IME settlement before the reviewed move blocks new visual writes", async () => {
+  const editor = new Buffer("甲"); let serial = 0, refreshing = false;
+  const opened = { path: "D:/Library/Old/Old.typ", nodeId: "node", workspaceId: "workspace" };
+  let comparison: typeof opened | undefined;
+  let complete!: (output: WritingResult) => void, started!: () => void;
+  const requested = new Promise<void>(resolve => { started = resolve; }); let requests = 0;
+  editor.observe(event => { if (event.kind === "source") serial++; });
+  const controller = new WritingController({
+    editor, basis: () => ({ sessionId: "original", source: editor.source, serial }),
+    editable: () => !sourceConsumerNeedsComparison(opened, comparison), debounceMs: 60000,
+    request: () => { requests++; started(); return new Promise(resolve => { complete = resolve; }); },
+  });
+  try {
+    controller.installMap(map("甲"), "甲", 0);
+    controller.stageLiteral(writingRange("甲", 0, 1), "甲", "甲新😀");
+    const writing = controller.flush(); await requested;
+    refreshing = true; editor.composition(true);
+    let settled = false;
+    const settlement = controller.settleForSessionChange().then(() => { settled = true; });
+    assert.equal(refreshing && !sourceConsumerNeedsComparison(opened, comparison), true, "consumers pause without revoking original input settlement");
+    assert.equal(controller.recoverySource(), "甲新😀"); assert.equal(settled, false);
+    editor.composition(false); complete(result("甲", 0, 1, "甲新😀"));
+    await writing; await settlement; assert.equal(editor.source, "甲新😀"); assert.equal(controller.pendingText, null);
+    comparison = { ...opened, path: "D:/Library/Moved/Moved.typ" }; refreshing = false;
+    await assert.rejects(controller.execute({ kind: "setTitle", text: "新结构" }), /只读/);
+    assert.equal(requests, 1); assert.equal(editor.source, "甲新😀");
+    editor.undo(); assert.equal(editor.source, "甲"); editor.redo(); assert.equal(editor.source, "甲新😀");
+  } finally { controller.dispose(); }
+});
 
 /** Controller focus/event fixture; this does not exercise browser or OS IME. */
 function textareaFixture() {

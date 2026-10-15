@@ -1,5 +1,14 @@
 import type { OpenedDocument, RenderOutput } from "./types";
 
+/** A qualified same-Node move does not authorize silently rebinding a Draft's
+ * writer. Consumers wait for the user's existing comparison/merge flow. */
+export function sourceConsumerNeedsComparison(opened: Pick<OpenedDocument, "path" | "nodeId" | "workspaceId">, target?: Pick<OpenedDocument, "path" | "nodeId" | "workspaceId">): boolean {
+  const coordinate = (path: string): string => path.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+  return !!target && !!opened.nodeId && !!opened.workspaceId && target.nodeId === opened.nodeId && target.workspaceId === opened.workspaceId && coordinate(target.path) !== coordinate(opened.path);
+}
+
+export const sourceMoveComparisonMessage = "同步已改变磁盘版本和笔记位置。当前草稿、撤销记录与原保存依据保留；请比较磁盘内容并明确合并后恢复预览和批注。";
+
 /** Draft, save base, and projection freshness stay independent. */
 export class DocumentSession {
   source: string;

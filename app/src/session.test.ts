@@ -1,12 +1,39 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs } from "./session";
+import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
 import type { OpenedDocument, RenderOutput } from "./types";
 import { createSourceState } from "./editor";
 import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
 
 const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
 const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
+
+test("qualified same-Node relocation pauses consumers while equal-byte edits retain the original writer and Draft basis", () => {
+  const original = { ...opened, path: "D:\\Library\\Left\\Left.typ", nodeId: "node", workspaceId: "workspace" };
+  const moved = { ...original, path: "D:/Library/Renamed/Renamed.typ", sessionId: "fresh", baseId: "current", source: "当前保存稿" };
+  const session = new DocumentSession(original); session.edit("个人草稿");
+  assert.equal(sourceConsumerNeedsComparison(session.opened, moved), true);
+  session.edit(original.source); session.edit("个人草稿");
+  assert.equal(sourceConsumerNeedsComparison(session.opened, moved), true);
+  assert.equal(session.opened.sessionId, "s"); assert.equal(session.baseId, "b"); assert.equal(session.baseSource, "原文"); assert.equal(session.source, "个人草稿");
+  // The existing explicit comparison installs its actually reopened session.
+  session.opened = moved; session.acknowledgeSave(moved.source, moved.baseId, moved.path);
+  assert.equal(sourceConsumerNeedsComparison(session.opened), false); assert.equal(session.source, "个人草稿");
+});
+
+test("case/separator aliases and same-path content changes preserve normal source consumers", () => {
+  const original = { path: "D:\\Library\\Note\\Note.typ", nodeId: "node", workspaceId: "workspace" };
+  assert.equal(sourceConsumerNeedsComparison(original, { ...original, path: "d:/library/note/note.typ" }), false);
+  assert.equal(sourceConsumerNeedsComparison(original, original), false);
+  assert.equal(sourceConsumerNeedsComparison(original), false);
+});
+
+test("an unrelated target or unqualified path never asserts a same-Node placement decision", () => {
+  const original = { path: "D:/Library/A/A.typ", nodeId: "node", workspaceId: "workspace" };
+  assert.equal(sourceConsumerNeedsComparison(original, { ...original, path: "D:/Library/B/B.typ", nodeId: "other" }), false);
+  assert.equal(sourceConsumerNeedsComparison(original, { ...original, path: "D:/Library/B/B.typ", workspaceId: "other" }), false);
+  assert.equal(sourceConsumerNeedsComparison({ path: "A.typ" }, { path: "B.typ" }), false);
+});
 
 test("native link strings preserve Unicode and use Typst control escapes rather than JSON escapes", () => {
   assert.equal(quoteTypstString('中文/"A"\\B\b\f\n\t\u2028😀'), '"中文/\\"A\\"\\\\B\\u{8}\\u{c}\\u{a}\\u{9}\\u{2028}😀"');

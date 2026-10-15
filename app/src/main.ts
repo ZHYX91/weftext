@@ -5,7 +5,7 @@ import { EmbeddedQueryController } from "./embedded-query";
 import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
-import { DocumentSession, encodeLiteral, canRebindSaveAs } from "./session";
+import { DocumentSession, encodeLiteral, canRebindSaveAs, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
 import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
@@ -82,7 +82,10 @@ interface LiveDocument {
   layout: "continuous" | "paged";
   richRetained: boolean;
   sourceTrashed?: boolean;
+  sourceRefreshing?: boolean;
 }
+
+function sourceConsumersAvailable(doc: LiveDocument): boolean { return !doc.sourceRefreshing && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget); }
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const shell = el("div", "shell");
@@ -113,8 +116,8 @@ let projectionMappings: KnowledgeTextMapping[] = [];
 let readingSelection: { sessionId: string; serial: number; selection: NonNullable<KnowledgeContext["selection"]> } | null = null;
 
 const workspaceTools = new WorkspaceTools({
-  embeddedQueries: () => current?.queries.outputSelections() ?? [],
-  getDocument: () => current && !current.sourceTrashed ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
+  embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
+  getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
   selection: () => {
     if (!current) return undefined;
     if (readingSelection?.sessionId === current.session.opened.sessionId && readingSelection.serial === current.session.serial) return readingSelection.selection;
@@ -128,26 +131,31 @@ const workspaceTools = new WorkspaceTools({
     for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
       const originalSession = doc.session.opened.sessionId;
       const stillOpen = (): boolean => documents.includes(doc) && doc.session.opened.sessionId === originalSession;
-      // A committed sync can arrive during later preedit. Settle/checkpoint that
-      // input before replacing any surface, retaining the shared editor/Undo.
-      await doc.writing.settleForSessionChange();
-      if (!stillOpen()) continue;
-      if (!readOnlySource(doc)) await persistDraft(doc);
-      if (!stillOpen()) continue;
-      let fresh: OpenedDocument | undefined, unavailable = false;
+      doc.sourceRefreshing = true; doc.renderGeneration++; clearTimeout(doc.renderTimer); doc.queries.invalidate(); doc.session.projection = null; doc.editor.tokens([], false);
+      if (doc === current) { pagedPreview?.invalidate("同步结果正在核对，原草稿保留。"); workspaceTools.documentChanged(); }
       try {
-        if (doc.session.opened.nodeId && doc.session.opened.workspaceId) fresh = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` });
-      } catch { unavailable = true; }
-      await doc.writing.deferUntilCompositionEnds(() => {
-        if (!stillOpen()) return;
-        if (fresh && (fresh.source !== doc.session.baseSource || normalize(fresh.path) !== normalize(doc.session.path))) {
-          doc.externalSource = fresh.source; doc.comparisonTarget = fresh;
-          doc.session.error = "同步已改变磁盘版本。当前草稿与撤销记录保留，请比较草稿与磁盘内容后继续。";
-        } else if (unavailable) doc.session.error = "同步后当前笔记暂不可读取。草稿保留，请检查资料库或回收站。";
-        // Source equality does not prove unchanged sidecars, Schema, style or
-        // compile inputs. Cancel old generations and compile the actual cut.
-        doc.queries.invalidate(); doc.session.projection = null; scheduleRender(doc, 0);
-      });
+        // A committed sync can arrive during later preedit. Settle/checkpoint
+        // input before replacing any surface, retaining shared editor/Undo.
+        await doc.writing.settleForSessionChange();
+        if (!stillOpen()) continue;
+        if (!readOnlySource(doc)) await persistDraft(doc);
+        if (!stillOpen()) continue;
+        let fresh: OpenedDocument | undefined, unavailable = false;
+        try {
+          if (doc.session.opened.nodeId && doc.session.opened.workspaceId) fresh = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` });
+        } catch { unavailable = true; }
+        await doc.writing.deferUntilCompositionEnds(() => {
+          if (!stillOpen()) return;
+          if (fresh && (fresh.source !== doc.session.baseSource || normalize(fresh.path) !== normalize(doc.session.path))) {
+            doc.externalSource = fresh.source; doc.comparisonTarget = fresh;
+            doc.session.error = "同步已改变磁盘版本。当前草稿与撤销记录保留，请比较草稿与磁盘内容后继续。";
+          } else if (unavailable) doc.session.error = "同步后当前笔记暂不可读取。草稿保留，请检查资料库或回收站。";
+          // Equality cannot prove unchanged sidecars or compilation inputs.
+          // A moved writer waits for explicit comparison instead of compiling
+          // its old pathname or silently installing the fresh Save basis.
+          doc.renderGeneration++; doc.queries.invalidate(); doc.session.projection = null;
+        });
+      } finally { doc.sourceRefreshing = false; if (stillOpen()) scheduleRender(doc, 0); }
     }
     const displayed = current;
     if (displayed && normalize(displayed.session.opened.root) === normalize(root)) {
@@ -159,7 +167,7 @@ const workspaceTools = new WorkspaceTools({
     }
     await workspaceTools.refreshAfterSync(root); renderSidebar();
   },
-  canEditSource: () => !!current && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
+  canEditSource: () => !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
   savedDefinition: async (result, basis) => {
     const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
     const opened = receipt.document;
@@ -500,6 +508,7 @@ function renderStatus(): void {
   const chars = [...session.source].length; left.append(el("span", "", `${chars.toLocaleString()} 字符`), el("span", "status-kind", session.opened.nodeId ? "资料库笔记" : "普通 Typst 文件"));
   const right = el("div", "status-right");
   if (doc.writing.state.pending || doc.writing.state.busy) right.append(el("span", "pending-label", doc.writing.state.busy ? "文字更新中…" : "文字正在同步至草稿"));
+  else if (!sourceConsumersAvailable(doc)) right.append(el("span", "pending-label", doc.sourceRefreshing ? "正在核对同步结果" : "预览与批注等待明确比较"));
   else if (doc.rendering || !session.projectionCurrent) right.append(el("span", "pending-label", "预览更新中"));
   else if (session.projection?.ok) right.append(icon("check"), el("span", "", "草稿预览已更新"));
   else right.append(icon("alert"), el("span", "", "预览有错误 · 源码已保留"));
@@ -529,6 +538,7 @@ function renderWelcome(): void {
 function renderDocument(): void {
   if (!current) return;
   const doc = current;
+  if (sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget)) doc.session.error = sourceMoveComparisonMessage;
   const controls = el("div", "document-controls");
   const viewSwitch = el("div", "view-switch"); viewSwitch.setAttribute("role", "group"); viewSwitch.setAttribute("aria-label", "文档视图");
   for (const mode of modes) { const choice = button(mode.title, () => changeMode(mode.id), doc.mode === mode.id ? "view-choice active" : "view-choice"); choice.title = `${mode.short} · ${mode.hint}`; choice.setAttribute("aria-pressed", String(doc.mode === mode.id)); viewSwitch.append(choice); }
@@ -551,7 +561,7 @@ function renderDocument(): void {
   if (doc.layout === "paged") {
     if (["source", "styled"].includes(doc.mode)) { const sourcePane = el("section", "source-pane"); sourcePane.append(sourceToolbar(doc)); const host = el("div", "source-host"); sourcePane.append(host); doc.editor.mount(host); body.append(sourcePane); }
     const host = el("section", "paged-host"); body.append(host);
-    pagedPreview = new PagedPreview(host, { basis: () => current === doc ? { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial } : null, request: basis => api("/api/paged", basis), fileName: () => basename(doc.session.path).replace(/\.typ$/i, ".pdf"), onError: showError });
+    pagedPreview = new PagedPreview(host, { basis: () => current === doc && sourceConsumersAvailable(doc) ? { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial } : null, request: basis => api("/api/paged", basis), fileName: () => basename(doc.session.path).replace(/\.typ$/i, ".pdf"), onError: showError });
     void pagedPreview.render();
     if (doc.queries.hasQueries) {
       const flow = el("section", "flow-pane paged-query-flow"); flow.append(el("p", "embedded-query-help", "此处原生分页预览不含查询结果。需要随文 PDF 时，在“输出与导入”选择“PDF 文档（含已显示正文查询）”，固定当前结果后生成。")); renderHost = el("div", "flow-document preview-document"); renderHost.setAttribute("aria-label", "含正文查询的连续草稿预览"); flow.append(renderHost); body.append(flow); flowScroll = flow; renderProjection(doc);
@@ -591,6 +601,14 @@ function renderContent(): void {
   renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus();
 }
 function refreshChrome(): void {
+  if (current && sourceConsumerNeedsComparison(current.session.opened, current.comparisonTarget)) {
+    current.session.error = sourceMoveComparisonMessage;
+    let notice = content.querySelector<HTMLElement>(".document-error:not(.document-conflict)");
+    if (!notice) {
+      notice = el("div", "document-error"); notice.append(icon("alert"), el("span", "", sourceMoveComparisonMessage), button("比较磁盘内容", showDraftComparison, "text-button"));
+      content.querySelector(".document-body")?.before(notice);
+    } else { const message = notice.querySelector("span"); if (message) message.textContent = sourceMoveComparisonMessage; }
+  }
   renderTopbar(); renderTabs(); renderStatus();
   if (current && !current.session.recovered) content.querySelector(".recovery-caption")?.remove();
   if (current && !current.session.error) content.querySelector(".document-error:not(.document-conflict)")?.remove();
@@ -602,6 +620,9 @@ function renderProjection(doc: LiveDocument): void {
   if (doc.writing.retainInput || doc.editor.composing) { renderStatus(); return; }
   const restoreQuerySourceFocus = doc.mode === "focus" && !!doc.editor.revealed && doc.editor.view.hasFocus && !!doc.editor.view.dom.closest(".embedded-query-source-host");
   const host = renderHost; host.replaceChildren();
+  if (!sourceConsumersAvailable(doc)) {
+    const waiting = el("div", "projection-empty"); waiting.append(el("p", "", doc.sourceRefreshing ? "正在核对同步结果，当前草稿保留。" : "笔记位置已改变，请先比较磁盘内容并明确合并；当前源码和撤销记录保留。")); host.append(waiting); return;
+  }
   const projection = doc.session.projection;
   if (!projection) { const waiting = el("div", "projection-empty"); waiting.append(el("div", "loading-ring"), el("p", "", "正在编译草稿…")); host.append(waiting); return; }
   if (!doc.session.projectionCurrent) { const stale = el("div", "preview-stale", "显示上次预览，正在更新。文字编辑暂不可用。"); host.append(stale); }
@@ -732,9 +753,14 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
   doc.draftChain = request;
   try { await request; } catch (error) { doc.draftFailure = error instanceof Error ? error.message : String(error); throw error; } finally { if (doc === current) renderStatus(); }
 }
-function scheduleRender(doc: LiveDocument, delay = 300): void { doc.renderGeneration++; clearTimeout(doc.renderTimer); doc.renderTimer = setTimeout(() => { void compile(doc); }, delay); }
+function scheduleRender(doc: LiveDocument, delay = 300): void {
+  doc.renderGeneration++; clearTimeout(doc.renderTimer);
+  if (!sourceConsumersAvailable(doc)) { if (doc === current) refreshChrome(); return; }
+  doc.renderTimer = setTimeout(() => { void compile(doc); }, delay);
+}
 async function compile(doc: LiveDocument): Promise<void> {
-  clearTimeout(doc.renderTimer); const source = doc.session.source; const serial = doc.session.serial; const generation = doc.renderGeneration; const sessionId = doc.session.opened.sessionId; doc.rendering++; if (doc === current) renderStatus();
+  clearTimeout(doc.renderTimer); if (!sourceConsumersAvailable(doc)) return;
+  const source = doc.session.source; const serial = doc.session.serial; const generation = doc.renderGeneration; const sessionId = doc.session.opened.sessionId; doc.rendering++; if (doc === current) renderStatus();
   if (doc === current && doc.layout === "paged") void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
   try {
     const basis = { sessionId: doc.session.opened.sessionId, source, serial };
@@ -744,13 +770,13 @@ async function compile(doc: LiveDocument): Promise<void> {
       api<WritingMap>("/api/editor-map", basis),
       doc.queries.discover(basis),
     ]);
-    if (generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId) return;
+    if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId) return;
     doc.writing.installMap(editorMap, source, serial);
     if (doc.session.acceptProjection(result)) {
       doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled");
       if (doc === current) { if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries) renderContent(); else renderProjection(doc); if (result.diagnostics.length) renderDiagnostics(doc); else content.querySelector(".diagnostics")?.remove(); scrollFragment(doc); }
     }
-  } catch (error) { if (doc.session.serial === serial && generation === doc.renderGeneration && sessionId === doc.session.opened.sessionId) { doc.session.error = `预览失败：${error instanceof Error ? error.message : String(error)}`; if (doc === current) toast(doc.session.error, true); } }
+  } catch (error) { if (sourceConsumersAvailable(doc) && doc.session.serial === serial && generation === doc.renderGeneration && sessionId === doc.session.opened.sessionId) { doc.session.error = `预览失败：${error instanceof Error ? error.message : String(error)}`; if (doc === current) toast(doc.session.error, true); } }
   finally { doc.rendering--; if (doc === current) refreshChrome(); }
 }
 
@@ -797,7 +823,9 @@ function addDocument(opened: OpenedDocument): void {
   const preference = localStorage.getItem("weftext-view"); const mode = modes.some(m => m.id === preference) ? preference as ViewMode : "styled";
   const writing = new WritingController({
     editor, basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }),
-    editable: () => doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
+    // A temporary consumer pause cannot revoke pending literal settlement.
+    // Only the reviewed placement conflict blocks new native visual actions.
+    editable: () => !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget) && doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
     onState: () => {
       if (!doc) return;
       const retained = doc.writing.retainInput;
@@ -810,8 +838,11 @@ function addDocument(opened: OpenedDocument): void {
   });
   const queries = new EmbeddedQueryController({
     basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }), mode: () => doc.mode,
-    editable: () => current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
-    request: (path, basis) => api(path, basis), prepareEdit: () => writing.flush(), notify: toast, output: query => workspaceTools.openQueryOutput(query),
+    editable: () => sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
+    request: (path, basis) => {
+      if (!sourceConsumersAvailable(doc)) return Promise.reject(new Error("笔记位置正在核对或已变化，请明确比较后恢复正文查询。源码输入保留。"));
+      return api(path, basis);
+    }, prepareEdit: () => writing.flush(), notify: toast, output: query => workspaceTools.openQueryOutput(query),
     apply: async (patches, basis, event) => {
       if (current !== doc || doc.mode === "read" || readOnlySource(doc) || writing.state.composing || session.opened.sessionId !== basis.sessionId || session.serial !== basis.serial || session.source !== basis.source) throw new Error("查询提案的草稿或编辑资格已变化，未应用修改。");
       editor.applyPatches(basis.source, patches, undefined, event); scheduleDraft(doc); scheduleRender(doc, 0);
@@ -940,7 +971,7 @@ async function showDraftComparison(doc = current): Promise<void> {
   }
   fresh.recoveredDraftConflict = false; fresh.recoveredDraft = null; doc.session.opened = fresh; doc.sourceTrashed = fresh.kind === "managedTrash";
   doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path); doc.session.projection = null; doc.externalSource = undefined; doc.comparisonTarget = undefined; doc.lastSave = undefined;
-  doc.editor.apply(0, doc.editor.source.length, result.source); await persistDraft(doc); scheduleRender(doc, 0); renderContent(); toast(result.action === "discardRecovered" ? "已采用磁盘版本。原恢复草稿保留在恢复历史中。" : "已应用明确合并的草稿，保存后才会写入磁盘。");
+  doc.editor.apply(0, doc.editor.source.length, result.source); await persistDraft(doc); workspaceTools.documentChanged(); scheduleRender(doc, 0); renderContent(); toast(result.action === "discardRecovered" ? "已采用磁盘版本。原恢复草稿保留在恢复历史中。" : "已应用明确合并的草稿，保存后才会写入磁盘。");
 }
 async function showRecovery(): Promise<void> {
   const result = await api<RecoveryInfo[] | { recoveries: RecoveryInfo[] }>("/api/recovery"); recoveries = Array.isArray(result) ? result : result.recoveries;

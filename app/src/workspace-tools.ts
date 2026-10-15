@@ -144,6 +144,9 @@ export class WorkspaceTools {
   documentChanged(): void {
     clearTimeout(this.refreshTimer);
     this.knowledgePanel.attachSurface(null);
+    // A known moved writer has no current consumer context until explicit
+    // comparison. This retires snapshots/late delivery without reading paths.
+    if (!this.host.getDocument()) void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
     this.refreshTimer = setTimeout(() => {
       if (this.active === "data" && !this.inspector.contains(document.activeElement)) void this.propertyPanel.refresh().catch(error => this.host.notify(String(error), true));
       if (this.active === "query" && !this.inspector.contains(document.activeElement)) this.queryPanel.documentChanged();
@@ -155,6 +158,10 @@ export class WorkspaceTools {
     // Query results depend on the library, even without an open source. The
     // panel retains its current plan/parameters; frozen outputs stay frozen.
     if (sameRoot(this.library?.root)) await this.queryPanel.refresh();
+    if (!this.host.getDocument()) {
+      if (this.active === "data") await this.propertyPanel.refresh();
+      await this.knowledgePanel.refresh(); return;
+    }
     if (!sameRoot(this.host.getDocument()?.root)) return;
     if (this.active === "data") await this.propertyPanel.refresh();
     // Knowledge refresh also renews the selected media/annotation catalog.
