@@ -1,6 +1,8 @@
 use super::*;
 use crate::{PathBuf, SaveRequest};
 use std::fs;
+#[path = "semantic_application_tests.rs"]
+mod semantic_application_tests;
 
 struct Pair {
     _temp: tempfile::TempDir,

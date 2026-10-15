@@ -4,8 +4,8 @@ use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
-use weftext_core::sync::{ObjectKey, SyncIdentity};
+use std::collections::{BTreeMap, BTreeSet};
+use weftext_core::sync::{ObjectKey, SyncIdentity, SyncRevalidation};
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -18,6 +18,8 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/sync/file", post(file))
         .route("/api/sync/history", post(history))
         .route("/api/sync/adoption-cut", post(adoption_cut))
+        .route("/api/sync/revalidation-cut", post(revalidation_cut))
+        .route("/api/sync/revalidation-review", post(revalidation_review))
         .route("/api/sync/cancel-prepared", post(cancel))
         .route("/api/sync/operation", post(operation))
 }
@@ -114,6 +116,42 @@ struct AdoptionCutRequest {
     root: String,
     identity: SyncIdentity,
     objects: BTreeSet<ObjectKey>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RevalidationReviewRequest {
+    root: String,
+    identity: SyncIdentity,
+    resolutions: Vec<SyncRevalidation>,
+    blobs: BTreeMap<String, Vec<u8>>,
+}
+async fn revalidation_cut(
+    State(state): State<AppState>,
+    Json(req): Json<AdoptionCutRequest>,
+) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            if core.sync_binding_info(&req.root)?.identity != req.identity {
+                return Err(weftext_core::CoreError::new(
+                    "syncIdentity",
+                    "The selected replica does not match the explicit pairing identity",
+                ));
+            }
+            core.sync_revalidation_cut(&req.root, &req.objects)
+        })
+        .await?,
+    )?))
+}
+async fn revalidation_review(
+    State(state): State<AppState>,
+    Json(req): Json<RevalidationReviewRequest>,
+) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.review_sync_revalidation(&req.root, &req.identity, &req.resolutions, &req.blobs)
+        })
+        .await?,
+    )?))
 }
 struct AdoptionJsonBudget(usize);
 impl std::io::Write for AdoptionJsonBudget {

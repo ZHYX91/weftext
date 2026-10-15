@@ -170,16 +170,43 @@ fn same_path(locator: &str, path: &Path) -> bool {
     }
 }
 fn is_navigation_marker_output(
+    plan: &journal::Plan,
     transaction: &operations::FrozenOperation,
     file: &operations::FileChange,
 ) -> bool {
-    Path::new(&file.path)
+    let eligible = Path::new(&file.path)
         .file_name()
         .is_some_and(|name| name == DIRECTORY_MARKER)
         && !transaction.preview.resource_map.keys().any(|path| {
             crate::history::history_relative_path(Path::new(path), Path::new(&file.path))
                 .is_some_and(|relative| relative.as_os_str().is_empty())
-        })
+        });
+    if !eligible {
+        return false;
+    }
+    let parent = Path::new(&file.path).parent().unwrap();
+    // A canonical Node birth already assigns this container its role. An
+    // unknown marker-looking member cannot assign another navigation identity.
+    if transaction
+        .births()
+        .iter()
+        .any(|birth| Path::new(&birth.path).parent() == Some(parent))
+    {
+        return false;
+    }
+    let typed_role = |object: &sync::replica::LocalObject| {
+        matches!(&object.object,sync::ObjectKey::Directory(id)|sync::ObjectKey::RootDirectory(id)
+            if serde_json::from_slice::<DirectoryMarker>(&file.after).is_ok_and(|marker|marker.directory_id==*id))
+            && Path::new(&object.directory) == parent
+            && object.state.files.get(DIRECTORY_MARKER) == Some(&hash(&file.after))
+    };
+    if let Some(application) = &plan.sync_application {
+        return application.after.iter().any(typed_role);
+    }
+    if let Some(setup) = &plan.sync_setup {
+        return setup.initial.iter().any(typed_role);
+    }
+    true
 }
 
 pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
@@ -350,12 +377,13 @@ impl Core {
                         | OperationIntent::CloneSync { .. }
                         | OperationIntent::ApplySync { .. }
                         | OperationIntent::MergeSync { .. }
+                        | OperationIntent::RevalidateSync { .. }
                 )
             {
                 for file in transaction
                     .created_files()
                     .iter()
-                    .filter(|file| is_navigation_marker_output(transaction, file))
+                    .filter(|file| is_navigation_marker_output(plan, transaction, file))
                 {
                     if serde_json::from_slice::<DirectoryMarker>(&file.after)
                         .is_ok_and(|marker| marker.directory_id == id)
@@ -438,7 +466,7 @@ impl Core {
                 for f in t
                     .created_files()
                     .iter()
-                    .filter(|f| is_navigation_marker_output(t, f))
+                    .filter(|f| is_navigation_marker_output(p, t, f))
                 {
                     if let Ok(m) = serde_json::from_slice::<DirectoryMarker>(&f.after) {
                         let parent = Path::new(&f.path).parent().unwrap();
@@ -486,6 +514,7 @@ impl Core {
                     OperationIntent::CloneSync { .. }
                         | OperationIntent::ApplySync { .. }
                         | OperationIntent::MergeSync { .. }
+                        | OperationIntent::RevalidateSync { .. }
                 )
                 && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
             {

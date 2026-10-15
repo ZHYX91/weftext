@@ -278,6 +278,27 @@ impl Core {
             coherence: String::new(),
             compound: None,
         };
+        if !self.committed(&plan.operation_id)
+            && !self.resolved(&plan.operation_id)
+            && let Err(error) = self.validate_operation_pending(plan)
+        {
+            capture.members.push(RecoveryMember {
+                kind: "barrier".into(),
+                role: "readDependency".into(),
+                path: t.request.root.clone(),
+                target_path: None,
+                before: RecoveryBlob::from_bytes(None),
+                after: RecoveryBlob::from_bytes(None),
+                current: RecoveryBlob::from_bytes(None),
+                state: "unavailable".into(),
+                matches_before: false,
+                matches_after: false,
+                identity_binding: "unavailable".into(),
+                expected_identity: None,
+                current_identity: None,
+                message: error.message,
+            });
+        }
         if plan.sync_application.is_some()
             && !self.committed(&plan.operation_id)
             && !self.resolved(&plan.operation_id)
@@ -350,50 +371,6 @@ impl Core {
                     expected_identity: None,
                     current_identity: None,
                     message: error.message,
-                });
-            }
-        }
-        for other in self.operations.values().filter(|p| {
-            p.operation_id != plan.operation_id
-                && !self.committed(&p.operation_id)
-                && !self.resolved(&p.operation_id)
-                && (p.transaction.is_none()
-                    || self.journal_path(&p.operation_id, "install").exists())
-        }) {
-            let overlap = (!matches!(t.request.intent, OperationIntent::BackupLibrary { .. })
-                && t.files.iter().any(|f| {
-                    other.path.eq_ignore_ascii_case(&f.path)
-                        || other.identity.as_ref() == Some(&f.stamp.identity)
-                        || other.transaction.as_ref().is_some_and(|pending| {
-                            pending.affects(Path::new(&f.path))
-                                || pending.has_identity(&f.stamp.identity)
-                        })
-                }))
-                || other.transaction.as_ref().is_some_and(|pending| {
-                    t.preview
-                        .changes
-                        .iter()
-                        .any(|c| pending.affects(Path::new(&c.path)))
-                });
-            if overlap {
-                capture.members.push(RecoveryMember {
-                    kind: "barrier".into(),
-                    role: "readDependency".into(),
-                    path: other.path.clone(),
-                    target_path: None,
-                    before: RecoveryBlob::from_bytes(None),
-                    after: RecoveryBlob::from_bytes(None),
-                    current: RecoveryBlob::from_bytes(None),
-                    state: "unavailable".into(),
-                    matches_before: false,
-                    matches_after: false,
-                    identity_binding: "unavailable".into(),
-                    expected_identity: None,
-                    current_identity: None,
-                    message: format!(
-                        "Another original operation {} has unresolved effects in this scope",
-                        other.operation_id
-                    ),
                 });
             }
         }

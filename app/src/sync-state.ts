@@ -20,7 +20,21 @@ export interface SyncAdoptionCut {
   expectedInstalled: { object: ObjectKey; revisions: string[] }[];
   changes: { path: string; baseId: string; before: number[]; after: number[] }[];
 }
-export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } | ({ kind: "adoptSyncExternal" } & SyncAdoptionCut) }
+export interface SyncDependency { object: ObjectKey; revisions: string[] }
+export interface SyncRevalidation {
+  object: ObjectKey; revisions: string[]; state: ObjectState; reviewedDependencies: SyncDependency[];
+  decision: { kind: "preserve"; revision: string } | { kind: "repair"; baseRevision: string };
+}
+export interface SyncRevalidationCut {
+  expectedInstalled: SyncDependency[]; reviewedVersions: SyncDependency[];
+  objects: (SyncObject & { originalDependencies: [string, SyncDependency[]][]; unsettledDependencies: ObjectKey[] })[];
+  files: { object: ObjectKey; objectRevision: string; fileRevision: string; relativePath: string; digest: string }[];
+  coverage: string;
+}
+export interface SyncAnnotationTargetStatus { owner: { workspaceId: string; nodeId: string }; annotationId: string; state: string; reason: string }
+export interface SyncRevalidationReview { expectedInstalled: SyncDependency[]; reviewedVersions: SyncDependency[]; resolutions: SyncRevalidation[]; annotationTargets: SyncAnnotationTargetStatus[] }
+export interface SyncRevalidationInput { root: string; identity: SyncIdentity; resolutions: SyncRevalidation[]; blobs: Record<string, number[]> }
+export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } | ({ kind: "adoptSyncExternal" } & SyncAdoptionCut) | ({ kind: "revalidateSync"; identity: SyncIdentity; blobs: Record<string, number[]> } & Omit<SyncRevalidationReview, "annotationTargets">) }
 export interface SyncPlan { operationId: string; planId: string; status: string; changes: { path: string; action: string; bytes: number }[]; losses: { message: string }[] }
 export interface SyncPending { request: SyncRequest; plan?: SyncPlan; attempted: boolean; status: string }
 export interface SyncFlowHost {
@@ -54,7 +68,7 @@ export class SyncFlow {
     if (this.busy || !pending || pending.attempted) throw new Error("不能重新准备可能已经执行的操作，请检查原结果。");
     this.retain(); this.busy = true;
     try {
-      const plan = await this.host.request<SyncPlan>("/api/operations/prepare", pending.request);
+      const plan = await this.host.request<SyncPlan>("/api/operations/prepare", structuredClone(pending.request));
       this.acceptPlan(plan); this.retain();
     } finally { this.busy = false; }
   }

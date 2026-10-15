@@ -686,6 +686,7 @@ fn typecheck(
 pub(crate) struct Compiled {
     ast: IdedExpr,
     pub(crate) ty: QType,
+    vars: BTreeMap<String, QType>,
 }
 type GroupBucket = (Vec<Cell>, Vec<Vec<Option<Cell>>>);
 pub(crate) fn compile(
@@ -700,7 +701,11 @@ pub(crate) fn compile(
     let mut ast = p.expression().clone();
     alpha_rename(&mut ast, &BTreeMap::new(), &mut 0);
     let ty = typecheck(&ast, schema, vars, 0)?;
-    Ok(Compiled { ast, ty })
+    Ok(Compiled {
+        ast,
+        ty,
+        vars: vars.clone(),
+    })
 }
 pub(crate) fn alpha_rename(
     ast: &mut IdedExpr,
@@ -1474,8 +1479,114 @@ pub(crate) fn query_env_traced(
     })
 }
 
-/// Only the already authorized original CEL evaluator computes row-free calls.
-/// A subtree with a row/terminal free variable is left for its real occurrence.
+fn expression_inputs_bound(
+    ast: &IdedExpr,
+    known: &BTreeSet<String>,
+    locals: &BTreeSet<String>,
+) -> bool {
+    match &ast.expr {
+        Expr::Ident(name) => locals.contains(name) || known.contains(name),
+        Expr::Call(call) if call.func_name == "field" => false,
+        Expr::Comprehension(comprehension) => {
+            if !expression_inputs_bound(&comprehension.iter_range, known, locals)
+                || !expression_inputs_bound(&comprehension.accu_init, known, locals)
+            {
+                return false;
+            }
+            let mut bound = locals.clone();
+            bound.insert(comprehension.iter_var.clone());
+            bound.insert(comprehension.accu_var.clone());
+            if let Some(name) = &comprehension.iter_var2 {
+                bound.insert(name.clone());
+            }
+            [
+                &comprehension.loop_cond,
+                &comprehension.loop_step,
+                &comprehension.result,
+            ]
+            .into_iter()
+            .all(|child| expression_inputs_bound(child, known, &bound))
+        }
+        _ => {
+            let mut copy = ast.clone();
+            let mut bound = true;
+            let _ = visit_children_mut(&mut copy, |child| {
+                bound &= expression_inputs_bound(child, known, locals);
+                Ok(())
+            });
+            bound
+        }
+    }
+}
+
+pub(crate) fn expression_requires_rows(
+    compiled: &Compiled,
+    shapes: &BTreeMap<String, Shape>,
+) -> bool {
+    !expression_inputs_bound(
+        &compiled.ast,
+        &shapes.keys().cloned().collect(),
+        &BTreeSet::new(),
+    )
+}
+pub(crate) fn expression_uses_unknown_parameters(
+    compiled: &Compiled,
+    parameters: &BTreeMap<String, Cell>,
+) -> bool {
+    fn visit(ast: &IdedExpr, unknown: &BTreeSet<String>, locals: &BTreeSet<String>) -> bool {
+        match &ast.expr {
+            Expr::Ident(name) => unknown.contains(name) && !locals.contains(name),
+            Expr::Comprehension(comprehension) => {
+                if visit(&comprehension.iter_range, unknown, locals)
+                    || visit(&comprehension.accu_init, unknown, locals)
+                {
+                    return true;
+                }
+                let mut bound = locals.clone();
+                bound.insert(comprehension.iter_var.clone());
+                bound.insert(comprehension.accu_var.clone());
+                if let Some(name) = &comprehension.iter_var2 {
+                    bound.insert(name.clone());
+                }
+                [
+                    &comprehension.loop_cond,
+                    &comprehension.loop_step,
+                    &comprehension.result,
+                ]
+                .into_iter()
+                .any(|child| visit(child, unknown, &bound))
+            }
+            _ => {
+                let mut copy = ast.clone();
+                let mut found = false;
+                let _ = visit_children_mut(&mut copy, |child| {
+                    found |= visit(child, unknown, locals);
+                    Ok(())
+                });
+                found
+            }
+        }
+    }
+    let unknown = parameters
+        .iter()
+        .filter(|(_, value)| matches!(value, Cell::Absent))
+        .map(|(name, _)| name.clone())
+        .collect();
+    visit(&compiled.ast, &unknown, &BTreeSet::new())
+}
+
+/// Definition preflight never substitutes example values for unknown inputs.
+pub(crate) fn preflight_definition_expression(
+    compiled: &Compiled,
+    parameters: &BTreeMap<String, Cell>,
+    schema: &Schema,
+    remaining: &mut u64,
+    env: &QueryRuntime,
+) -> Result<Option<Cell>> {
+    preflight_expression(compiled, parameters, schema, remaining, env, false)
+}
+
+/// Only the existing CEL evaluator computes selected, row-free provider calls.
 pub(crate) fn preflight_provider_expression(
     compiled: &Compiled,
     parameters: &BTreeMap<String, Cell>,
@@ -1483,59 +1594,62 @@ pub(crate) fn preflight_provider_expression(
     remaining: &mut u64,
     env: &QueryRuntime,
 ) -> Result<()> {
-    fn contains(ast: &IdedExpr) -> bool {
-        if matches!(&ast.expr,Expr::Call(c) if crate::query_providers::PROVIDER_CALLS.iter().any(|(n,_)| *n==c.func_name))
+    preflight_expression(compiled, parameters, schema, remaining, env, true)
+        .map(|_| ())
+        .map_err(|error| {
+            if error.0 == "Closed Query expression is invalid or unavailable" {
+                DataError("Query provider unavailable".into())
+            } else {
+                error
+            }
+        })
+}
+
+fn preflight_expression(
+    compiled: &Compiled,
+    parameters: &BTreeMap<String, Cell>,
+    schema: &Schema,
+    remaining: &mut u64,
+    env: &QueryRuntime,
+    providers_only: bool,
+) -> Result<Option<Cell>> {
+    fn contains_provider(ast: &IdedExpr) -> bool {
+        if matches!(&ast.expr, Expr::Call(call) if crate::query_providers::PROVIDER_CALLS.iter().any(|(name, _)| *name == call.func_name))
         {
             return true;
         }
         let mut copy = ast.clone();
         let mut found = false;
         let _ = visit_children_mut(&mut copy, |child| {
-            found |= contains(child);
+            found |= contains_provider(child);
             Ok(())
         });
         found
     }
-    fn row_free(
+    fn actual(
         ast: &IdedExpr,
         parameters: &BTreeMap<String, Cell>,
-        locals: &BTreeSet<String>,
-    ) -> bool {
-        match &ast.expr {
-            Expr::Ident(name) => {
-                locals.contains(name)
-                    || parameters
-                        .get(name)
-                        .is_some_and(|c| matches!(c, Cell::Value { .. } | Cell::Null))
-            }
-            Expr::Call(c) if c.func_name == "field" => false,
-            Expr::Comprehension(c) => {
-                if !row_free(&c.iter_range, parameters, locals)
-                    || !row_free(&c.accu_init, parameters, locals)
-                {
-                    return false;
-                }
-                let mut bound = locals.clone();
-                bound.insert(c.iter_var.clone());
-                bound.insert(c.accu_var.clone());
-                if let Some(n) = &c.iter_var2 {
-                    bound.insert(n.clone());
-                }
-                [&c.loop_cond, &c.loop_step, &c.result]
-                    .iter()
-                    .all(|e| row_free(e, parameters, &bound))
-            }
-            _ => {
-                let mut copy = ast.clone();
-                let mut valid = true;
-                let _ = visit_children_mut(&mut copy, |child| {
-                    valid &= row_free(child, parameters, locals);
-                    Ok(())
-                });
-                valid
-            }
+        schema: &Schema,
+        vars: &BTreeMap<String, QType>,
+        remaining: &mut u64,
+        env: &QueryRuntime,
+    ) -> Result<Cell> {
+        let compiled = Compiled {
+            ast: ast.clone(),
+            ty: typecheck(ast, schema, vars, 0)?,
+            vars: vars.clone(),
+        };
+        let value = evaluate(&compiled, parameters, schema, remaining, env)?;
+        if !matches!(value, Cell::Value { .. } | Cell::Null)
+            || env.provider_failed.load(AtomicOrdering::Relaxed)
+        {
+            return Err(DataError(
+                "Closed Query expression is invalid or unavailable".into(),
+            ));
         }
+        Ok(value)
     }
+    #[allow(clippy::too_many_arguments)]
     fn visit(
         ast: &IdedExpr,
         parameters: &BTreeMap<String, Cell>,
@@ -1543,50 +1657,104 @@ pub(crate) fn preflight_provider_expression(
         vars: &BTreeMap<String, QType>,
         remaining: &mut u64,
         env: &QueryRuntime,
-    ) -> Result<()> {
-        if !contains(ast) {
-            return Ok(());
+        providers_only: bool,
+    ) -> Result<Option<Cell>> {
+        if providers_only && !contains_provider(ast) {
+            return Ok(None);
         }
-        if row_free(ast, parameters, &BTreeSet::new()) {
-            let compiled = Compiled {
-                ast: ast.clone(),
-                ty: typecheck(ast, schema, vars, 0)?,
+        let known = parameters
+            .iter()
+            .filter(|(_, value)| matches!(value, Cell::Value { .. } | Cell::Null))
+            .map(|(name, _)| name.clone())
+            .collect();
+        if expression_inputs_bound(ast, &known, &BTreeSet::new()) {
+            return actual(ast, parameters, schema, vars, remaining, env).map(Some);
+        }
+        if let Expr::Call(call) = &ast.expr
+            && matches!(call.func_name.as_str(), "_&&_" | "_||_" | "_?_:_")
+        {
+            let condition = &call.args[0];
+            // The actual CEL guard decides reachability. An unknown guard
+            // defers its alternatives, rather than executing both possible
+            // branches and turning an unreachable error into rejection.
+            let condition = visit(condition, parameters, schema, vars, remaining, env, false)?;
+            let Some(Cell::Value {
+                value: NativeValue::Bool(condition),
+            }) = condition
+            else {
+                return Ok(None);
             };
-            if !matches!(
-                evaluate(&compiled, parameters, schema, remaining, env)?,
-                Cell::Value { .. } | Cell::Null
-            ) || env.provider_failed.load(AtomicOrdering::Relaxed)
+            let selected = match call.func_name.as_str() {
+                "_&&_" if !condition => None,
+                "_||_" if condition => None,
+                "_?_:_" => Some(if condition { 1 } else { 2 }),
+                _ => Some(1),
+            };
+            if let Some(index) = selected
+                && visit(
+                    &call.args[index],
+                    parameters,
+                    schema,
+                    vars,
+                    remaining,
+                    env,
+                    false,
+                )?
+                .is_none()
             {
-                return Err(DataError("Query provider unavailable".into()));
+                return Ok(None);
             }
-            return Ok(());
+            // Return the original evaluator's result, including CEL's
+            // boolean absorption, rather than implementing another evaluator.
+            return actual(ast, parameters, schema, vars, remaining, env).map(Some);
         }
-        if let Expr::Comprehension(c) = &ast.expr {
-            visit(&c.iter_range, parameters, schema, vars, remaining, env)?;
-            visit(&c.accu_init, parameters, schema, vars, remaining, env)?;
-            let mut scoped = parameters.clone();
-            scoped.remove(&c.iter_var);
-            scoped.remove(&c.accu_var);
-            if let Some(name) = &c.iter_var2 {
-                scoped.remove(name);
-            }
-            for child in [&c.loop_cond, &c.loop_step, &c.result] {
-                visit(child, &scoped, schema, vars, remaining, env)?;
-            }
-            return Ok(());
+        if let Expr::Comprehension(comprehension) = &ast.expr {
+            visit(
+                &comprehension.iter_range,
+                parameters,
+                schema,
+                vars,
+                remaining,
+                env,
+                providers_only,
+            )?;
+            visit(
+                &comprehension.accu_init,
+                parameters,
+                schema,
+                vars,
+                remaining,
+                env,
+                providers_only,
+            )?;
+            // Unknown inputs do not establish any particular loop iteration.
+            // Fully bound comprehensions were evaluated by the original CEL above.
+            return Ok(None);
         }
         let mut copy = ast.clone();
         visit_children_mut(&mut copy, |child| {
-            visit(child, parameters, schema, vars, remaining, env)
-        })
+            visit(
+                child,
+                parameters,
+                schema,
+                vars,
+                remaining,
+                env,
+                providers_only,
+            )
+            .map(|_| ())
+        })?;
+        Ok(None)
     }
-    let mut vars = symbols(schema)?;
-    vars.extend(
-        env.parameter_shapes
-            .iter()
-            .map(|(name, shape)| (name.clone(), shape_type(schema, shape))),
-    );
-    visit(&compiled.ast, parameters, schema, &vars, remaining, env)
+    visit(
+        &compiled.ast,
+        parameters,
+        schema,
+        &compiled.vars,
+        remaining,
+        env,
+        providers_only,
+    )
 }
 struct ProviderFunction {
     name: &'static str,

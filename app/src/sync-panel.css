@@ -1,12 +1,14 @@
 .sync-panel { width: min(960px, 92vw); max-height: 88vh; overflow: auto; border: 1px solid #aaa; border-radius: 12px; padding: 24px; color: var(--text, #222); background: var(--bg, #fff); font: inherit; line-height: 1.5; }
-.sync-panel input, .sync-panel textarea, .sync-panel button { font: inherit; }
+.sync-panel input, .sync-panel textarea, .sync-panel button, .sync-panel select { font: inherit; }
 .sync-panel::backdrop { background: #0006; }
 .sync-panel label { display: block; margin: 12px 0; }
-.sync-panel input:not([type=checkbox]), .sync-panel textarea { display: block; width: 100%; box-sizing: border-box; padding: 8px; margin-top: 5px; }
+.sync-panel input:not([type=checkbox]), .sync-panel textarea, .sync-panel select { display: block; width: 100%; box-sizing: border-box; padding: 8px; margin-top: 5px; }
 .sync-panel button { padding: 7px 10px; margin: 4px; cursor: pointer; }
 .sync-panel button:disabled { cursor: default; opacity: .55; }
 .sync-panel pre, .sync-panel code { white-space: pre-wrap; overflow-wrap: anywhere; }
 .sync-panel li { overflow-wrap: anywhere; }
+.sync-panel table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+.sync-panel td, .sync-panel th { text-align: left; vertical-align: top; border-bottom: 1px solid #aaa7; padding: 6px; overflow-wrap: anywhere; }
 .sync-object { border-top: 1px solid #aaa7; padding: 10px 0; }
 .sync-object input { margin-right: 8px; }
 .sync-object p { margin: 6px 0; font-size: 13px; overflow-wrap: anywhere; }

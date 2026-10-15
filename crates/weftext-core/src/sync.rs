@@ -22,7 +22,13 @@ mod compound;
 mod compound_tests;
 mod install;
 mod relocate;
+pub(crate) mod revalidation;
+mod revalidation_evidence;
+pub(crate) mod revalidation_writer;
 pub use apply::SyncResolution;
+pub use revalidation::{
+    SyncRevalidation, SyncRevalidationCut, SyncRevalidationDecision, SyncRevalidationReview,
+};
 pub(crate) mod replica;
 pub use replica::SyncBindingInfo;
 const MAX_CHANGES: usize = 5_000;

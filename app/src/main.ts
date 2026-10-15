@@ -535,10 +535,17 @@ function renderWelcome(): void {
   const footnote = el("div", "welcome-footnote"); footnote.append(el("span", "footnote-dot"), document.createTextNode("本机运行 · 中文默认支持 · 草稿自动留存")); welcome.append(footnote); content.append(welcome);
 }
 
+function documentComparisonMessage(doc: LiveDocument): string | null {
+  if (sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget)) return sourceMoveComparisonMessage;
+  return doc.comparisonTarget && doc.comparisonTarget.source !== doc.session.baseSource
+    ? "磁盘内容已改变。当前草稿与撤销记录保留，请比较后继续保存。" : null;
+}
+
 function renderDocument(): void {
   if (!current) return;
   const doc = current;
-  if (sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget)) doc.session.error = sourceMoveComparisonMessage;
+  const comparisonMessage = documentComparisonMessage(doc);
+  if (comparisonMessage) doc.session.error = comparisonMessage;
   const controls = el("div", "document-controls");
   const viewSwitch = el("div", "view-switch"); viewSwitch.setAttribute("role", "group"); viewSwitch.setAttribute("aria-label", "文档视图");
   for (const mode of modes) { const choice = button(mode.title, () => changeMode(mode.id), doc.mode === mode.id ? "view-choice active" : "view-choice"); choice.title = `${mode.short} · ${mode.hint}`; choice.setAttribute("aria-pressed", String(doc.mode === mode.id)); viewSwitch.append(choice); }
@@ -601,13 +608,14 @@ function renderContent(): void {
   renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus();
 }
 function refreshChrome(): void {
-  if (current && sourceConsumerNeedsComparison(current.session.opened, current.comparisonTarget)) {
-    current.session.error = sourceMoveComparisonMessage;
+  const comparisonMessage = current && documentComparisonMessage(current);
+  if (current && comparisonMessage) {
+    current.session.error = comparisonMessage;
     let notice = content.querySelector<HTMLElement>(".document-error:not(.document-conflict)");
     if (!notice) {
-      notice = el("div", "document-error"); notice.append(icon("alert"), el("span", "", sourceMoveComparisonMessage), button("比较磁盘内容", showDraftComparison, "text-button"));
+      notice = el("div", "document-error"); notice.append(icon("alert"), el("span", "", comparisonMessage), button("比较磁盘内容", showDraftComparison, "text-button"));
       content.querySelector(".document-body")?.before(notice);
-    } else { const message = notice.querySelector("span"); if (message) message.textContent = sourceMoveComparisonMessage; }
+    } else { const message = notice.querySelector("span"); if (message) message.textContent = comparisonMessage; }
   }
   renderTopbar(); renderTabs(); renderStatus();
   if (current && !current.session.recovered) content.querySelector(".recovery-caption")?.remove();

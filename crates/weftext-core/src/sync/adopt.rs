@@ -473,6 +473,7 @@ impl Core {
             expected_versions: vec![],
             selection: BTreeSet::new(),
             blobs,
+            semantic_evidence: None,
         });
         plan.transaction = Some(FrozenOperation {
             backup_private_digest: None,

@@ -131,7 +131,12 @@ impl Core {
         } else {
             parent.join(&state.name)
         };
-        let kind = if publication.is_some() {
+        let kind = if matches!(
+            request.intent,
+            crate::OperationIntent::RevalidateSync { .. }
+        ) {
+            "revalidateSync"
+        } else if publication.is_some() {
             "mergeSync"
         } else {
             "applySync"
@@ -449,6 +454,7 @@ impl Core {
             expected_versions,
             selection,
             blobs,
+            semantic_evidence: None,
         });
         plan.sync_publication = publication;
         plan.transaction = Some(FrozenOperation {
@@ -464,6 +470,8 @@ impl Core {
             absent_dependencies: vec![],
             write_parents,
         });
+        self.freeze_sync_revalidation_if_needed(&mut plan)?;
+        let preview = plan.transaction.as_ref().unwrap().preview.clone();
         self.stage(plan)?;
         Ok(preview)
     }

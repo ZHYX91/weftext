@@ -353,6 +353,18 @@ impl Core {
     ) -> Result<()> {
         Self::merge_snapshot_witnesses(pool, witness.dependencies.clone())
     }
+    pub(crate) fn merge_query_scope_feature_witness(
+        pool: &mut Vec<SnapshotWitness>,
+        witness: &QueryScopeWitness,
+    ) -> Result<()> {
+        Self::merge_feature_witnesses(pool, witness.dependencies.clone())
+    }
+    pub(crate) fn merge_query_node_feature_witness(
+        pool: &mut Vec<SnapshotWitness>,
+        witness: &QueryNodeWitness,
+    ) -> Result<()> {
+        Self::merge_feature_witnesses(pool, witness.dependencies.clone())
+    }
     fn query_validate_dependencies(
         &self,
         root: &Path,

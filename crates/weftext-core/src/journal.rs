@@ -185,6 +185,7 @@ impl Core {
         Ok(())
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
+        self.validate_operation_pending(&plan)?;
         self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
         private_create(

@@ -177,7 +177,12 @@ impl Core {
                 }
             }
         }
-        let kind = if publication.is_some() {
+        let kind = if matches!(
+            request.intent,
+            crate::OperationIntent::RevalidateSync { .. }
+        ) {
+            "revalidateSync"
+        } else if publication.is_some() {
             "mergeSync"
         } else {
             "applySync"
@@ -817,6 +822,7 @@ impl Core {
             expected_versions,
             selection,
             blobs,
+            semantic_evidence: None,
         });
         plan.sync_publication = publication;
         plan.transaction = Some(FrozenOperation {
@@ -832,6 +838,7 @@ impl Core {
             absent_dependencies: vec![],
             write_parents,
         });
+        self.freeze_sync_revalidation_if_needed(&mut plan)?;
         let transaction = plan.transaction.as_ref().unwrap();
         let mut originals = BTreeSet::new();
         let mut finals = BTreeSet::new();
@@ -858,6 +865,7 @@ impl Core {
         }
         crate::operations::compound::validate_compound_namespace(transaction)?;
         self.validate_compound_pending(&plan)?;
+        let preview = transaction.preview.clone();
         self.stage(plan)?;
         Ok(preview)
     }

@@ -34,6 +34,8 @@ pub(crate) struct SyncApplication {
     #[serde(default)]
     pub selection: BTreeSet<ObjectKey>,
     pub blobs: BTreeMap<String, Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_evidence: Option<super::revalidation_writer::FrozenSemanticEvidence>,
 }
 
 impl Core {
@@ -47,6 +49,7 @@ impl Core {
             transaction.request.intent,
             OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
+                | OperationIntent::RevalidateSync { .. }
                 | OperationIntent::CloneSync { .. }
                 | OperationIntent::AdoptSyncExternal { .. }
         ) {
@@ -71,6 +74,7 @@ impl Core {
             transaction.request.intent,
             OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
+                | OperationIntent::RevalidateSync { .. }
                 | OperationIntent::CloneSync { .. }
                 | OperationIntent::AdoptSyncExternal { .. }
         ) {
@@ -110,6 +114,24 @@ impl Core {
                 ));
             }
             return self.operation_details(&request.operation_id);
+        }
+        if let OperationIntent::RevalidateSync {
+            identity,
+            expected_installed,
+            reviewed_versions,
+            resolutions,
+            blobs,
+        } = &request.intent
+        {
+            let input = self.prepare_sync_revalidation_input(
+                &request,
+                identity,
+                expected_installed,
+                reviewed_versions,
+                resolutions,
+                blobs,
+            )?;
+            return self.prepare_sync_application_input(input);
         }
         let root = absolute_path(Path::new(&request.root))?;
         let setup = self.sync_setup_for(&root)?;
@@ -215,6 +237,18 @@ impl Core {
                         "syncConflictChanged",
                         "Review the exact current conflict branches before resolving",
                     ));
+                }
+                for version in &view.versions {
+                    if graph
+                        .unsettled_dependencies(&version.commit)?
+                        .iter()
+                        .any(|dependency| dependency != key)
+                    {
+                        return Err(CoreError::new(
+                            "syncSemanticDecisionRequired",
+                            "The reviewed conflict has changed semantic dependencies; use an explicit typed revalidation decision",
+                        ));
+                    }
                 }
             } else if view.versions.len() != 1 {
                 return Err(CoreError::new(
@@ -326,6 +360,36 @@ impl Core {
                 locations: vec![],
             })
         };
+        let identity = identity.clone();
+        self.prepare_sync_application_input(super::relocate::RelocationInput {
+            request,
+            identity,
+            fingerprint,
+            local,
+            states,
+            expected_versions,
+            selection: requested,
+            publication,
+            graph,
+        })
+    }
+
+    pub(crate) fn prepare_sync_application_input(
+        &mut self,
+        input: super::relocate::RelocationInput,
+    ) -> Result<OperationPreview> {
+        let super::relocate::RelocationInput {
+            request,
+            identity,
+            fingerprint,
+            local,
+            states,
+            expected_versions,
+            selection: requested,
+            publication,
+            graph,
+        } = input;
+        let root = absolute_path(Path::new(&request.root))?;
         if states.iter().any(|(key, version)| {
             local
                 .get(key)
@@ -343,7 +407,9 @@ impl Core {
                 graph,
             });
         }
-        let kind = if publication.is_some() {
+        let kind = if matches!(request.intent, OperationIntent::RevalidateSync { .. }) {
+            "revalidateSync"
+        } else if publication.is_some() {
             "mergeSync"
         } else {
             "applySync"
@@ -619,6 +685,7 @@ impl Core {
             expected_versions,
             selection: requested,
             blobs,
+            semantic_evidence: None,
         });
         plan.sync_publication = publication;
         let mutation = if !births.is_empty()
@@ -665,8 +732,20 @@ impl Core {
             absent_dependencies: vec![],
             write_parents,
         });
+        self.freeze_sync_revalidation_if_needed(&mut plan)?;
+        let preview = plan.transaction.as_ref().unwrap().preview.clone();
         self.stage(plan)?;
         Ok(preview)
+    }
+
+    pub(crate) fn freeze_sync_revalidation_if_needed(&mut self, plan: &mut Plan) -> Result<()> {
+        let resolutions = match &plan.transaction.as_ref().unwrap().request.intent {
+            OperationIntent::RevalidateSync { resolutions, .. } => resolutions.clone(),
+            _ => return Ok(()),
+        };
+        let evidence = self.freeze_sync_revalidation_plan(plan, &resolutions)?;
+        plan.sync_application.as_mut().unwrap().semantic_evidence = Some(evidence);
+        Ok(())
     }
 
     pub(crate) fn validate_sync_application(&self, plan: &Plan) -> Result<()> {
@@ -675,7 +754,7 @@ impl Core {
         };
         self.validate_sync_application_basis(application)?;
         self.publish_sync(&application.root)?;
-        self.validate_sync_application_versions(application)
+        self.validate_sync_application_versions(&plan.operation_id, application)
     }
     /// Inspect the same original replica cut without publishing a fresh outbox.
     /// Committed decisions are handled by the recovery caller before this gate.
@@ -684,7 +763,7 @@ impl Core {
             return Ok(());
         };
         self.validate_sync_application_basis(application)?;
-        self.validate_sync_application_versions(application)
+        self.validate_sync_application_versions(&plan.operation_id, application)
     }
     fn validate_sync_application_basis(&self, application: &SyncApplication) -> Result<()> {
         self.sync_local_owner()?;
@@ -709,7 +788,11 @@ impl Core {
         }
         Ok(())
     }
-    fn validate_sync_application_versions(&self, application: &SyncApplication) -> Result<()> {
+    fn validate_sync_application_versions(
+        &self,
+        operation_id: &str,
+        application: &SyncApplication,
+    ) -> Result<()> {
         let current = self.read_sync_history(&application.identity)?.objects()?;
         if application.expected_versions.iter().any(|expected| {
             current
@@ -720,6 +803,9 @@ impl Core {
                 "syncConflictChanged",
                 "Received versions changed after review; retain the original proposal and review again",
             ));
+        }
+        if let Some(evidence) = &application.semantic_evidence {
+            self.validate_sync_semantic_evidence(operation_id, application, evidence)?;
         }
         Ok(())
     }

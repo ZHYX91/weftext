@@ -8,6 +8,12 @@ use cel::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod definition_preflight;
+pub use definition_preflight::{
+    QueryDefinitionInvocation, QueryDefinitionInvocationSource, QueryDefinitionPreflight,
+    preflight_query_definition,
+};
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryAdvanced {

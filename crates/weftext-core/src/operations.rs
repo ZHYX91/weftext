@@ -6,6 +6,9 @@ use backend::NamespaceGuard;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod owner_backup;
+mod pending;
+#[cfg(all(test, windows))]
+mod pending_tests;
 
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
@@ -85,6 +88,13 @@ pub enum OperationIntent {
     MergeSync {
         identity: crate::sync::SyncIdentity,
         resolutions: Vec<crate::sync::SyncResolution>,
+        blobs: BTreeMap<String, Vec<u8>>,
+    },
+    RevalidateSync {
+        identity: crate::sync::SyncIdentity,
+        expected_installed: Vec<crate::sync::Dependency>,
+        reviewed_versions: Vec<crate::sync::Dependency>,
+        resolutions: Vec<crate::sync::SyncRevalidation>,
         blobs: BTreeMap<String, Vec<u8>>,
     },
     CloneSync {
@@ -1265,6 +1275,51 @@ impl Core {
         {
             if self.hosted_definition_key_admitted(p, &owner, key)? {
                 return Ok(true);
+            }
+            if p.workspace_id.as_deref() == Some(owner.workspace_id.as_str())
+                && let Some(application) = &p.sync_application
+                && let Some(evidence) = &application.semantic_evidence
+                && let Some(after) = application
+                    .after
+                    .iter()
+                    .find(|after| after.object == sync::ObjectKey::Node(owner.node_id.clone()))
+            {
+                let name = format!("{}.typ", after.state.name);
+                let mut sources = Vec::new();
+                if let (Some(revision), Some(digest)) = (
+                    after.state.file_revisions.get(&name),
+                    after.state.files.get(&name),
+                ) {
+                    sources.push((revision.clone(), digest.clone()));
+                }
+                for value in &evidence.historical_inputs {
+                    let input: sync::revalidation::HistoricalSemanticInput =
+                        serde_json::from_value(value.clone())?;
+                    if input.object == after.object {
+                        sources.push((input.file_revision, input.digest));
+                    }
+                }
+                for (revision, digest) in sources {
+                    let proof = serde_json::json!({"kind":"definition","owner":owner,"key":key,"sourceRevision":revision});
+                    if evidence
+                        .discharged
+                        .iter()
+                        .any(|discharged| discharged == &proof)
+                        && application.identity.workspace_id == owner.workspace_id
+                        && let Some(bytes) = application.blobs.get(&digest)
+                        && hash(bytes) == digest
+                        && std::str::from_utf8(bytes).is_ok_and(|source| {
+                            weftext_engine::inspect_metadata(source).id.as_deref() == Some(owner_id)
+                                && weftext_knowledge::definition_slots(source, &owner).is_ok_and(
+                                    |slots| {
+                                        slots.iter().filter(|slot| slot.key == key).count() == 1
+                                    },
+                                )
+                        })
+                    {
+                        return Ok(true);
+                    }
+                }
             }
             let reservation =
                 fs::read(self.journal_path(&p.operation_id, "definition-reservation"))
@@ -2762,7 +2817,9 @@ impl Core {
         }
         if matches!(
             request.intent,
-            OperationIntent::ApplySync { .. } | OperationIntent::MergeSync { .. }
+            OperationIntent::ApplySync { .. }
+                | OperationIntent::MergeSync { .. }
+                | OperationIntent::RevalidateSync { .. }
         ) {
             return self.prepare_sync_application(request);
         }
@@ -3217,6 +3274,7 @@ impl Core {
             OperationIntent::CloneSync { .. }
             | OperationIntent::ApplySync { .. }
             | OperationIntent::MergeSync { .. }
+            | OperationIntent::RevalidateSync { .. }
             | OperationIntent::AdoptSyncExternal { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
@@ -4255,6 +4313,7 @@ impl Core {
             OperationIntent::CloneSync { .. }
                 | OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
+                | OperationIntent::RevalidateSync { .. }
                 | OperationIntent::AdoptSyncExternal { .. }
         ) {
             self.sync_local_owner()?;
@@ -4274,6 +4333,7 @@ impl Core {
                 "The original operation may have effects; inspect it and do not execute again",
             ));
         }
+        self.validate_operation_pending(&plan)?;
         self.validate_sync_application(&plan)?;
         let root = Path::new(&t.request.root);
         if let OperationIntent::CloneSync { identity, .. } = &t.request.intent
@@ -4313,6 +4373,7 @@ impl Core {
                     | OperationIntent::ConfigureStyle { .. }
                     | OperationIntent::ApplySync { .. }
                     | OperationIntent::MergeSync { .. }
+                    | OperationIntent::RevalidateSync { .. }
                     | OperationIntent::AdoptSyncExternal { .. }
             )
         {
@@ -4716,7 +4777,9 @@ impl Core {
                 if *existing_target {
                     if !matches!(
                         t.request.intent,
-                        OperationIntent::ApplySync { .. } | OperationIntent::MergeSync { .. }
+                        OperationIntent::ApplySync { .. }
+                            | OperationIntent::MergeSync { .. }
+                            | OperationIntent::RevalidateSync { .. }
                     ) || Path::new(target) != root
                     {
                         return Err(CoreError::new(
@@ -5685,6 +5748,7 @@ fn intent_kind(intent: &OperationIntent) -> &'static str {
         OperationIntent::CloneSync { .. } => "cloneSync",
         OperationIntent::ApplySync { .. } => "applySync",
         OperationIntent::MergeSync { .. } => "mergeSync",
+        OperationIntent::RevalidateSync { .. } => "revalidateSync",
         OperationIntent::RenameNode { .. } => "renameNode",
         OperationIntent::MoveNode { .. } => "moveNode",
         OperationIntent::CopyNode { .. } => "copyNode",
