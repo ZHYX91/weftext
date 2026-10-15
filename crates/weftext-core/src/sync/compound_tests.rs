@@ -37,6 +37,9 @@ fn save(core: &mut Core, root: &Path, relative: &str, suffix: &str) {
     .unwrap();
 }
 fn fixture() -> Pair {
+    fixture_with_child(true)
+}
+fn fixture_with_child(child: bool) -> Pair {
     let temp = tempfile::tempdir().unwrap();
     let ar = temp.path().join("a");
     let br = temp.path().join("b");
@@ -49,12 +52,14 @@ fn fixture() -> Pair {
             a.create_note(&ar, &ar, name).unwrap().node_id.unwrap(),
         ));
     }
-    keys.insert(ObjectKey::Node(
-        a.create_note(&ar, ar.join("Left"), "Child")
-            .unwrap()
-            .node_id
-            .unwrap(),
-    ));
+    if child {
+        keys.insert(ObjectKey::Node(
+            a.create_note(&ar, ar.join("Left"), "Child")
+                .unwrap()
+                .node_id
+                .unwrap(),
+        ));
+    }
     for name in ["Left", "Right"] {
         let preview = a
             .prepare_import_resource(
@@ -140,6 +145,9 @@ fn fixture() -> Pair {
         keys,
     }
 }
+
+#[path = "compound_config_tests.rs"]
+mod config_tests;
 fn request(pair: &Pair) -> OperationRequest {
     OperationRequest {
         operation_id: fresh(),

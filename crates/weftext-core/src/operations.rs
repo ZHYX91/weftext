@@ -476,6 +476,8 @@ pub(crate) enum Mutation {
     Compound {
         relocations: Vec<RelocationStep>,
         updates: Vec<FileChange>,
+        #[serde(default)]
+        created_files: Vec<FileChange>,
     },
     Relocate {
         source: String,
@@ -596,6 +598,13 @@ impl FrozenOperation {
             })
             .collect();
         files.extend(updates.iter().map(|f| (f.path.clone(), f.clone())));
+        if let Mutation::Compound { created_files, .. } = &self.mutation {
+            files.extend(
+                created_files
+                    .iter()
+                    .map(|file| (file.path.clone(), file.clone())),
+            );
+        }
         files.into_values().collect()
     }
     fn updated_resource_owner(
@@ -630,11 +639,15 @@ impl FrozenOperation {
             Mutation::Compound {
                 relocations,
                 updates,
+                created_files,
             } => {
                 relocations
                     .iter()
                     .any(|step| within(&step.source) || within(&step.target))
-                    || updates.iter().any(|change| Path::new(&change.path) == path)
+                    || updates
+                        .iter()
+                        .chain(created_files)
+                        .any(|change| Path::new(&change.path) == path)
             }
             Mutation::Relocate {
                 source,
@@ -1123,9 +1136,12 @@ impl Core {
             Mutation::CreateTree { files, updates, .. } => {
                 files.iter().chain(updates).cloned().collect()
             }
-            Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => {
-                updates.clone()
-            }
+            Mutation::Relocate { updates, .. } => updates.clone(),
+            Mutation::Compound {
+                updates,
+                created_files,
+                ..
+            } => updates.iter().chain(created_files).cloned().collect(),
         })
     }
     pub fn committed_operation_receipt(
@@ -4869,7 +4885,7 @@ impl Core {
         }
         Ok(t.receipt.clone())
     }
-    fn install_record(&self, plan: &journal::Plan) -> Result<()> {
+    pub(crate) fn install_record(&self, plan: &journal::Plan) -> Result<()> {
         journal::private_create(
             &self.journal_path(&plan.operation_id, "install"),
             &serde_json::to_vec(
@@ -5163,7 +5179,7 @@ impl Core {
         namespace.release_source_descendants();
         Ok(members)
     }
-    fn validate_update(&self, root: &Path, path: &Path, after: &[u8]) -> Result<()> {
+    pub(crate) fn validate_update(&self, root: &Path, path: &Path, after: &[u8]) -> Result<()> {
         if !path.starts_with(root) || path.components().any(|c| c.as_os_str() == ".weftext-trash") {
             return Err(CoreError::new(
                 "outsideRoot",

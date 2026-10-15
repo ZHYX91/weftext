@@ -416,10 +416,15 @@ impl Core {
             }
             if let Some(t) = &p.transaction {
                 let files = match &t.mutation {
-                    Mutation::Update { files } | Mutation::CreateTree { files, .. } => files,
-                    Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => {
-                        updates
+                    Mutation::Update { files } | Mutation::CreateTree { files, .. } => {
+                        files.iter().collect::<Vec<_>>()
                     }
+                    Mutation::Relocate { updates, .. } => updates.iter().collect(),
+                    Mutation::Compound {
+                        updates,
+                        created_files,
+                        ..
+                    } => updates.iter().chain(created_files).collect(),
                 };
                 parents.extend(
                     files

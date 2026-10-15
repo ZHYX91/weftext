@@ -1,6 +1,7 @@
 //! Independent installed placements and content share one original sync decision.
 use super::apply::SyncApplication;
 use super::relocate::{RelocationInput, placement_changed};
+use super::replica::LocalObject;
 use super::*;
 use crate::backend::ParentGuard;
 use crate::journal::Plan;
@@ -67,7 +68,13 @@ impl Core {
             .collect();
         if changed.len() < 2
             || changed.len() > MAX_FILES
-            || states.keys().any(|object| !local.contains_key(object))
+            || states.keys().any(|object| {
+                !local.contains_key(object)
+                    && !matches!(
+                        object,
+                        ObjectKey::Rules | ObjectKey::Schema | ObjectKey::Settings
+                    )
+            })
         {
             return Err(structure_required());
         }
@@ -173,6 +180,7 @@ impl Core {
         };
         let mut write_parents = Vec::new();
         let mut updates = Vec::new();
+        let mut created_files = Vec::new();
         let mut blobs = BTreeMap::new();
         let mut file_paths = BTreeSet::new();
         let mut resource_ids = BTreeSet::new();
@@ -428,9 +436,81 @@ impl Core {
             before.push(old.clone());
             after.push(new);
         }
-        if files.len() + updates.iter().filter(|c| c.before.is_none()).count() > MAX_FILES
+        // New non-identity configuration roles have the same create-only root
+        // parent and materialization contract as the original CreateTree writer.
+        // New Node/Directory/registry identities remain gated until their birth
+        // and namespace payload has been integrated into this original Plan.
+        for (object, version) in states
+            .iter()
+            .filter(|(object, _)| !local.contains_key(*object))
+        {
+            let name = match object {
+                ObjectKey::Rules => ".weftext-rules",
+                ObjectKey::Schema => ".weftext-schema.json",
+                ObjectKey::Settings => ".weftext-settings.json",
+                _ => return Err(structure_required()),
+            };
+            super::apply::validate_state(&graph, object, &version.state)?;
+            if version.state.retired
+                || version.state.parent.is_some()
+                || version.state.files.len() != 1
+                || !version.state.files.contains_key(name)
+            {
+                return Err(structure_required());
+            }
+            let path = root.join(name);
+            if matches!(object, ObjectKey::Rules) && self.query_rules_ever_committed(&root)? {
+                return Err(CoreError::new(
+                    "rulesUnavailable",
+                    "Previously committed Rules cannot be reconstructed as a new missing configuration",
+                ));
+            }
+            self.check_pending(&path)?;
+            crate::operations::ensure_absent(&path)?;
+            let digest = &version.state.files[name];
+            let bytes = graph.blob(digest).ok_or_else(structure_required)?;
+            budget.charge(bytes.len(), 1)?;
+            self.validate_update(&root, &path, bytes)?;
+            if matches!(object, ObjectKey::Schema) {
+                weftext_data::Schema::from_author_json(&crate::decode(bytes)?)
+                    .map_err(|error| CoreError::new("invalidSchema", error.to_string()))?;
+            }
+            if !file_paths.insert(display(&path).replace('/', "\\").to_ascii_lowercase()) {
+                return Err(invalid("New configuration overlaps a compound participant"));
+            }
+            write_parents.push((
+                display(&path),
+                ParentGuard::acquire(&path)?.directory_identity()?,
+            ));
+            preview
+                .changes
+                .push(change(&path, "receiveCreate", bytes.len()));
+            preview
+                .revisions
+                .insert(display(&path), version.state.file_revisions[name].clone());
+            created_files.push(FileChange {
+                path: display(&path),
+                base_id: None,
+                before: None,
+                after: bytes.to_vec(),
+            });
+            blobs.insert(digest.clone(), bytes.to_vec());
+            after.push(LocalObject {
+                object: object.clone(),
+                directory: display(&root),
+                commit: version.commit.clone(),
+                revision: version.revision.clone(),
+                state: version.state.clone(),
+            });
+        }
+        if files.len() + updates.iter().filter(|c| c.before.is_none()).count() + created_files.len()
+            > MAX_FILES
             || files.iter().map(|f| f.bytes.len()).sum::<usize>()
                 + updates.iter().map(|f| f.after.len()).sum::<usize>()
+                + created_files
+                    .iter()
+                    .map(|file| file.after.len())
+                    .sum::<usize>()
                 > MAX_BLOB_BYTES
         {
             return Err(CoreError::new(
@@ -498,11 +578,16 @@ impl Core {
                 .iter()
                 .filter(|change| change.before.is_none())
                 .count()
+            + created_files.len()
             > MAX_FILES
             || files.iter().map(|file| file.bytes.len()).sum::<usize>()
                 + updates
                     .iter()
                     .map(|change| change.after.len())
+                    .sum::<usize>()
+                + created_files
+                    .iter()
+                    .map(|file| file.after.len())
                     .sum::<usize>()
                 > MAX_BLOB_BYTES
         {
@@ -514,6 +599,7 @@ impl Core {
         let mutation = Mutation::Compound {
             relocations,
             updates,
+            created_files,
         };
         let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id: preview.plan_id.clone(), status: "committed".into(), path: display(&root), node_ids: preview.node_map.keys().cloned().collect(), message: "Independent received placements and content committed through one original namespace decision; drafts retained".into() };
         let mut plan = Plan::file(
@@ -562,6 +648,15 @@ impl Core {
                 return Err(invalid(
                     "Compound original/final participant addresses overlap",
                 ));
+            }
+        }
+        if let Mutation::Compound { created_files, .. } = &transaction.mutation {
+            for file in created_files {
+                if !finals.insert(file.path.replace('/', "\\").to_ascii_lowercase()) {
+                    return Err(invalid(
+                        "Compound create-only output overlaps an original participant",
+                    ));
+                }
             }
         }
         self.stage(plan)?;

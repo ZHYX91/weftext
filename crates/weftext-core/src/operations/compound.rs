@@ -355,15 +355,21 @@ impl Core {
             outside_handles.push((index, handle));
             outside_guards.push(guard);
         }
-        let Mutation::Compound { updates, .. } = &t.mutation else {
+        let Mutation::Compound {
+            updates,
+            created_files,
+            ..
+        } = &t.mutation
+        else {
             unreachable!()
         };
-        for change in updates.iter().filter(|change| {
+        for change in updates.iter().chain(created_files).filter(|change| {
             change.before.is_none()
                 && !relocations
                     .iter()
                     .any(|step| relative(&change.path, &step.target).is_some())
         }) {
+            self.check_pending(Path::new(&change.path))?;
             ensure_absent(Path::new(&change.path))?;
         }
         self.install_record(plan)?;
@@ -410,7 +416,11 @@ impl Core {
             compound_failpoint(&format!("move{index}"))?;
         }
         let mut created = Vec::new();
-        for change in updates.iter().filter(|change| change.before.is_none()) {
+        for change in updates
+            .iter()
+            .chain(created_files)
+            .filter(|change| change.before.is_none())
+        {
             let mut file = if let Some((index, step)) = relocations
                 .iter()
                 .enumerate()
@@ -429,6 +439,13 @@ impl Core {
             };
             self.record_materialized(&plan.operation_id, Path::new(&change.path), &file)?;
             write_blob(&mut file, &change.after)?;
+            compound_failpoint(&format!(
+                "create:{}",
+                Path::new(&change.path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+            ))?;
             created.push((change.path.clone(), file));
         }
         let changes = t.relocated_files();
