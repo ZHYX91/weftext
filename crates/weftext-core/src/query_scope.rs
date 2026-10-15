@@ -417,7 +417,9 @@ impl Core {
             if let Some(t) = &p.transaction {
                 let files = match &t.mutation {
                     Mutation::Update { files } | Mutation::CreateTree { files, .. } => files,
-                    Mutation::Relocate { updates, .. } => updates,
+                    Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => {
+                        updates
+                    }
                 };
                 parents.extend(
                     files

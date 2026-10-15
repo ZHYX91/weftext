@@ -670,6 +670,11 @@ impl Core {
                 }
             }
             match &transaction.mutation {
+                Mutation::Compound { .. } => {
+                    return Err(invalid(
+                        "Compound namespace decisions require their original SyncApplication",
+                    ));
+                }
                 Mutation::Update { files } => {
                     for file in files {
                         register_directory(&mut objects, root, file)?;

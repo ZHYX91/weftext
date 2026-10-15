@@ -5,13 +5,14 @@ use journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use operations::{FileChange, Mutation, read_blob, write_blob};
 use std::collections::BTreeSet;
 
-struct RecoveryCapture {
-    members: Vec<RecoveryMember>,
-    guards: Vec<ParentGuard>,
-    files: Vec<(usize, File)>,
-    placement_files: Vec<File>,
-    changes: Vec<FileChange>,
-    coherence: String,
+pub(crate) struct RecoveryCapture {
+    pub(crate) members: Vec<RecoveryMember>,
+    pub(crate) guards: Vec<ParentGuard>,
+    pub(crate) files: Vec<(usize, File)>,
+    pub(crate) placement_files: Vec<File>,
+    pub(crate) changes: Vec<FileChange>,
+    pub(crate) coherence: String,
+    pub(crate) compound: Option<operations::compound::CompoundCapture>,
 }
 impl RecoveryCapture {
     fn complete(&mut self) {
@@ -59,7 +60,12 @@ impl Core {
             if installing && capture.members.iter().all(|m| m.matches_after) {
                 allowed_actions.push("adoptAfterImages".into());
             }
-            if installing && capture.coherence == "mixedKnown" && can_resume_content(t, &capture) {
+            if installing
+                && (capture.coherence == "mixedKnown"
+                    || (capture.coherence == "knownBefore"
+                        && matches!(t.mutation, Mutation::Compound { .. })))
+                && can_resume_content(t, &capture)
+            {
                 allowed_actions.push("resumeOriginalPlan".into());
             }
         }
@@ -117,7 +123,10 @@ impl Core {
                 && match action {
                     "adoptAfterImages" => capture.members.iter().all(|m| m.matches_after),
                     "resumeOriginalPlan" => {
-                        capture.coherence == "mixedKnown" && can_resume_content(t, &capture)
+                        (capture.coherence == "mixedKnown"
+                            || (capture.coherence == "knownBefore"
+                                && matches!(t.mutation, Mutation::Compound { .. })))
+                            && can_resume_content(t, &capture)
                     }
                     _ => false,
                 };
@@ -156,10 +165,17 @@ impl Core {
                     ));
                 }
             }
+            if plan.sync_application.is_some() {
+                self.validate_sync_recovery_cut(plan)?;
+            }
             if action == "resumeOriginalPlan" {
+                if matches!(t.mutation, Mutation::Compound { .. }) {
+                    self.resume_compound_namespaces(plan, &mut capture)
+                        .map_err(|e| recovery_failure(plan, e))?;
+                }
                 // The read set and every existing write member are protected
                 // before the first continuation write. No new ID/plan is made.
-                for change in &capture.changes {
+                for change in capture.changes.clone() {
                     let index = capture
                         .members
                         .iter()
@@ -173,10 +189,22 @@ impl Core {
                     if let Some((_, file)) = capture.files.iter_mut().find(|(i, _)| *i == index) {
                         write_blob(file, &change.after).map_err(|e| recovery_failure(plan, e))?;
                     } else {
-                        let guard = ParentGuard::acquire(Path::new(&change.path))?;
-                        let mut file = guard
-                            .open_file(true, true)
-                            .map_err(|e| recovery_failure(plan, e))?;
+                        let compound_file = if matches!(t.mutation, Mutation::Compound { .. }) {
+                            self.create_compound_recovery_output(plan, &mut capture, &change.path)?
+                        } else {
+                            None
+                        };
+                        let mut new_guard = None;
+                        let mut file = if let Some(file) = compound_file {
+                            file
+                        } else {
+                            let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                            let file = guard
+                                .open_file(true, true)
+                                .map_err(|e| recovery_failure(plan, e))?;
+                            new_guard = Some(guard);
+                            file
+                        };
                         self.record_materialized(
                             &plan.operation_id,
                             Path::new(&change.path),
@@ -186,7 +214,9 @@ impl Core {
                         write_blob(&mut file, &change.after)
                             .map_err(|e| recovery_failure(plan, e))?;
                         capture.files.push((index, file));
-                        capture.guards.push(guard);
+                        if let Some(guard) = new_guard {
+                            capture.guards.push(guard);
+                        }
                     }
                     capture.members[index].matches_after = true;
                 }
@@ -195,8 +225,10 @@ impl Core {
             for (index, file) in &mut capture.files {
                 let member = &capture.members[*index];
                 if member.role == "write"
-                    || (matches!(t.mutation, Mutation::Relocate { .. })
-                        && t.preview.revisions.contains_key(&member.path))
+                    || (matches!(
+                        t.mutation,
+                        Mutation::Relocate { .. } | Mutation::Compound { .. }
+                    ) && t.preview.revisions.contains_key(&member.path))
                 {
                     let change = capture
                         .changes
@@ -216,6 +248,13 @@ impl Core {
                     }
                     materialized.push((member.path.clone(), stamp(file)?));
                 }
+            }
+            if plan.sync_application.is_some() {
+                self.validate_sync_recovery_cut(plan)?;
+            }
+            if matches!(t.mutation, Mutation::Compound { .. }) {
+                self.verify_compound_final(plan, &mut capture)
+                    .map_err(|e| recovery_failure(plan, e))?;
             }
             self.publish_recovery_facts(plan, &materialized)
                 .map_err(|e| recovery_failure(plan, e))?;
@@ -237,7 +276,30 @@ impl Core {
             placement_files: Vec::new(),
             changes: Vec::new(),
             coherence: String::new(),
+            compound: None,
         };
+        if plan.sync_application.is_some()
+            && !self.committed(&plan.operation_id)
+            && !self.resolved(&plan.operation_id)
+            && let Err(error) = self.validate_sync_recovery_cut(plan)
+        {
+            capture.members.push(RecoveryMember {
+                kind: "syncCut".into(),
+                role: "readDependency".into(),
+                path: t.request.root.clone(),
+                target_path: None,
+                before: RecoveryBlob::from_bytes(None),
+                after: RecoveryBlob::from_bytes(None),
+                current: RecoveryBlob::from_bytes(None),
+                state: "unavailable".into(),
+                matches_before: false,
+                matches_after: false,
+                identity_binding: "unavailable".into(),
+                expected_identity: None,
+                current_identity: None,
+                message: format!("Original replica cut no longer qualifies: {}", error.code),
+            });
+        }
         if let Err(error) = self.validate_recovery_scope(t) {
             let third = matches!(
                 error.code.as_str(),
@@ -336,6 +398,33 @@ impl Core {
             }
         }
         match &t.mutation {
+            Mutation::Compound { .. } => {
+                if let Err(error) = self.capture_compound_recovery(plan, &mut capture, write) {
+                    let third = matches!(
+                        error.code.as_str(),
+                        "thirdState" | "scopeChanged" | "exists" | "conflict"
+                    );
+                    capture.members.push(RecoveryMember {
+                        kind: "barrier".into(),
+                        role: "readDependency".into(),
+                        path: t.request.root.clone(),
+                        target_path: None,
+                        before: RecoveryBlob::from_bytes(None),
+                        after: RecoveryBlob::from_bytes(None),
+                        current: RecoveryBlob::from_bytes(None),
+                        state: if third { "thirdState" } else { "unavailable" }.into(),
+                        matches_before: false,
+                        matches_after: false,
+                        identity_binding: "unavailable".into(),
+                        expected_identity: None,
+                        current_identity: None,
+                        message: error.message,
+                    });
+                    capture.compound = None;
+                    capture.complete();
+                    return Ok(capture);
+                }
+            }
             Mutation::Update { files } => capture.changes = files.clone(),
             Mutation::CreateTree {
                 target,
@@ -371,6 +460,13 @@ impl Core {
             self.capture_bound_directory(&display(parent), expected_parent, &mut capture)?;
         }
         for change in &capture.changes {
+            if capture
+                .members
+                .iter()
+                .any(|member| member.role == "write" && member.path == change.path)
+            {
+                continue;
+            }
             let is_created_output = matches!(&t.mutation, Mutation::CreateTree { files, .. } if files.iter().any(|c|c.path==change.path));
             if !is_created_output && !t.write_parents.iter().any(|(path, _)| path == &change.path) {
                 capture.members.push(RecoveryMember {
@@ -383,6 +479,13 @@ impl Core {
             }
         }
         for change in capture.changes.clone() {
+            if capture
+                .members
+                .iter()
+                .any(|member| member.role == "write" && member.path == change.path)
+            {
+                continue;
+            }
             let original = t
                 .files
                 .iter()
@@ -400,7 +503,11 @@ impl Core {
             )?;
         }
         for file in &t.files {
-            if !capture.changes.iter().any(|c| c.path == file.path) {
+            if !capture
+                .changes
+                .iter()
+                .any(|c| c.path == t.relocated_path(&file.path))
+            {
                 self.capture_recovery_file(
                     plan,
                     &file.path,
@@ -445,6 +552,17 @@ impl Core {
             }
         }
         for directory in &t.directories {
+            if matches!(t.mutation, Mutation::Compound { .. })
+                && t.relocations().iter().any(|step| {
+                    crate::history::history_relative_path(
+                        Path::new(&directory.path),
+                        Path::new(step.source),
+                    )
+                    .is_some()
+                })
+            {
+                continue;
+            }
             let mut member = directory_member(
                 &directory.path,
                 "readDependency",
@@ -533,11 +651,18 @@ impl Core {
                 };
                 match opened {
                     Ok(mut file) => {
-                        let observed: Result<(FileIdentity, Vec<u8>)> =
-                            (|| Ok((stamp(&file)?.identity, read_blob(&mut file)?)))();
+                        let observed: Result<(FileStamp, Vec<u8>)> =
+                            (|| Ok((stamp(&file)?, read_blob(&mut file)?)))();
                         match observed {
-                            Ok((identity, bytes)) => {
+                            Ok((observed_stamp, bytes)) => {
+                                let identity = observed_stamp.identity.clone();
                                 let bound = expected == Some(&identity);
+                                let exact_before_stamp = plan
+                                    .transaction
+                                    .as_ref()
+                                    .filter(|t| matches!(t.mutation, Mutation::Compound { .. }))
+                                    .and_then(|t| t.files.iter().find(|f| f.path == path))
+                                    .is_none_or(|f| f.stamp == observed_stamp);
                                 member.current = RecoveryBlob::from_bytes(Some(&bytes));
                                 member.current_identity = Some((&identity).into());
                                 member.identity_binding = if !bound {
@@ -548,8 +673,11 @@ impl Core {
                                     "materialized"
                                 }
                                 .into();
-                                member.matches_before = bound && before == Some(bytes.as_slice());
-                                member.matches_after = bound && after == Some(bytes.as_slice());
+                                member.matches_before =
+                                    bound && exact_before_stamp && before == Some(bytes.as_slice());
+                                member.matches_after = bound
+                                    && (before != after || exact_before_stamp)
+                                    && after == Some(bytes.as_slice());
                                 member.state = if member.matches_before {
                                     "knownBefore"
                                 } else if member.matches_after {
@@ -1010,6 +1138,13 @@ impl Core {
 fn can_resume_content(t: &operations::FrozenOperation, capture: &RecoveryCapture) -> bool {
     match &t.mutation {
         Mutation::Update { .. } => true,
+        Mutation::Compound { .. } => {
+            capture.compound.is_some()
+                && !capture
+                    .members
+                    .iter()
+                    .any(|member| matches!(member.state.as_str(), "thirdState" | "unavailable"))
+        }
         Mutation::Relocate { updates, .. } if !updates.is_empty() => {
             capture.members.iter().all(|m| {
                 if m.role == "write" {

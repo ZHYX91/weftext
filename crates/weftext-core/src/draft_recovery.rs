@@ -1,7 +1,7 @@
 //! Draft paths follow committed same-object relocations, independently of UI
 //! session rebinding. Migration retains every original private draft record.
 use super::*;
-use operations::Mutation;
+
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,44 +132,46 @@ impl Core {
                 .values()
                 .filter(|p| self.committed(&p.operation_id))
             {
-                if let Some(t) = &plan.transaction
-                    && let Mutation::Relocate {
-                        source,
-                        target,
-                        old_leaf,
-                        new_leaf,
-                        source_identity,
-                        leaf_identity,
-                        ..
-                    } = &t.mutation
-                {
-                    let mut predecessors = Vec::new();
-                    for prior in &lineage {
-                        let Some(relative) =
-                            relative_draft_path(Path::new(prior), Path::new(target))
-                        else {
-                            continue;
-                        };
-                        let Some(actual_root) = path.ancestors().nth(relative.components().count())
-                        else {
-                            continue;
-                        };
-                        let actual_guard =
-                            ParentGuard::acquire(&actual_root.join(".draft-prospective"))?;
-                        if actual_guard.directory_identity()? != *source_identity {
-                            continue;
-                        }
-                        let previous = if relative == Path::new(new_leaf) {
-                            if leaf_identity != identity {
+                if let Some(t) = &plan.transaction {
+                    for relocation in t.relocations() {
+                        let operations::RelocationRef {
+                            source,
+                            target,
+                            old_leaf,
+                            new_leaf,
+                            source_identity,
+                            leaf_identity,
+                            ..
+                        } = relocation;
+                        let mut predecessors = Vec::new();
+                        for prior in &lineage {
+                            let Some(relative) =
+                                relative_draft_path(Path::new(prior), Path::new(target))
+                            else {
+                                continue;
+                            };
+                            let Some(actual_root) =
+                                path.ancestors().nth(relative.components().count())
+                            else {
+                                continue;
+                            };
+                            let actual_guard =
+                                ParentGuard::acquire(&actual_root.join(".draft-prospective"))?;
+                            if actual_guard.directory_identity()? != *source_identity {
                                 continue;
                             }
-                            Path::new(source).join(old_leaf)
-                        } else {
-                            Path::new(source).join(&relative)
-                        };
-                        predecessors.push(display(&previous));
+                            let previous = if relative == Path::new(new_leaf) {
+                                if leaf_identity != identity {
+                                    continue;
+                                }
+                                Path::new(source).join(old_leaf)
+                            } else {
+                                Path::new(source).join(&relative)
+                            };
+                            predecessors.push(display(&previous));
+                        }
+                        lineage.extend(predecessors);
                     }
-                    lineage.extend(predecessors);
                 }
             }
             if lineage.len() == prior_len {

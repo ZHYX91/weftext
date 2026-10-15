@@ -37,6 +37,20 @@ impl Core {
         &mut self,
         input: RelocationInput,
     ) -> Result<OperationPreview> {
+        if input
+            .states
+            .iter()
+            .filter(|(key, incoming)| {
+                input
+                    .local
+                    .get(key)
+                    .is_some_and(|old| placement_changed(&old.state, &incoming.state))
+            })
+            .count()
+            > 1
+        {
+            return self.prepare_sync_compound(input);
+        }
         let RelocationInput {
             request,
             identity,

@@ -286,7 +286,10 @@ impl Core {
             .filter(|p| self.committed(&p.operation_id))
         {
             if let Some(t) = &p.transaction
-                && matches!(t.mutation, Mutation::Relocate { .. })
+                && matches!(
+                    t.mutation,
+                    Mutation::Relocate { .. } | Mutation::Compound { .. }
+                )
             {
                 let sequence = self.history_commit_time(p)?.1;
                 if let Some(limit) = through {
@@ -307,64 +310,71 @@ impl Core {
         }
         edges.sort_by_key(|e| e.0);
         for (_, t) in edges {
-            let Mutation::Relocate {
-                source,
-                target,
-                old_leaf,
-                new_leaf,
-                leaf_identity,
-                source_identity,
-                members,
-                ..
-            } = &t.mutation
-            else {
-                unreachable!()
-            };
-            for prior in places.iter().cloned().collect::<Vec<_>>() {
-                let Some(relative) = history_relative_path(Path::new(&prior), Path::new(source))
-                else {
-                    continue;
-                };
-                let exact = if node.is_some() && relative == Path::new(old_leaf) {
-                    leaf_identity == identity
-                } else if directory.is_some() && relative.as_os_str().is_empty() {
-                    source_identity == identity
-                } else {
-                    members.iter().any(|m| {
-                        if let Some(id) = node {
-                            m.node_id.as_deref() == Some(id)
-                                && &m.identity == identity
-                                && Path::new(&m.relative_path) == relative
-                        } else {
-                            m.directory_id.as_deref() == directory
-                                && &m.parent == identity
-                                && Path::new(&m.relative_path).parent() == Some(relative.as_path())
-                        }
-                    }) || (node.is_some()
-                        && t.files.iter().any(|f| {
-                            &f.stamp.identity == identity
-                                && history_relative_path(Path::new(&f.path), Path::new(source))
-                                    .as_ref()
-                                    == Some(&relative)
-                        }))
-                        || (directory.is_some()
-                            && t.directories.iter().any(|d| {
-                                &d.identity == identity
-                                    && history_relative_path(Path::new(&d.path), Path::new(source))
+            // Each original step maps its own before coordinates once. A
+            // final location is never fed through another step in the same Plan.
+            let original_places = places.clone();
+            for relocation in t.relocations() {
+                let operations::RelocationRef {
+                    source,
+                    target,
+                    old_leaf,
+                    new_leaf,
+                    leaf_identity,
+                    source_identity,
+                    members,
+                    ..
+                } = relocation;
+                for prior in original_places.iter().cloned().collect::<Vec<_>>() {
+                    let Some(relative) =
+                        history_relative_path(Path::new(&prior), Path::new(source))
+                    else {
+                        continue;
+                    };
+                    let exact = if node.is_some() && relative == Path::new(old_leaf) {
+                        leaf_identity == identity
+                    } else if directory.is_some() && relative.as_os_str().is_empty() {
+                        source_identity == identity
+                    } else {
+                        members.iter().any(|m| {
+                            if let Some(id) = node {
+                                m.node_id.as_deref() == Some(id)
+                                    && &m.identity == identity
+                                    && Path::new(&m.relative_path) == relative
+                            } else {
+                                m.directory_id.as_deref() == directory
+                                    && &m.parent == identity
+                                    && Path::new(&m.relative_path).parent()
+                                        == Some(relative.as_path())
+                            }
+                        }) || (node.is_some()
+                            && t.files.iter().any(|f| {
+                                &f.stamp.identity == identity
+                                    && history_relative_path(Path::new(&f.path), Path::new(source))
                                         .as_ref()
                                         == Some(&relative)
                             }))
-                };
-                if !exact {
-                    continue;
+                            || (directory.is_some()
+                                && t.directories.iter().any(|d| {
+                                    &d.identity == identity
+                                        && history_relative_path(
+                                            Path::new(&d.path),
+                                            Path::new(source),
+                                        )
+                                        .as_ref()
+                                            == Some(&relative)
+                                }))
+                    };
+                    if !exact {
+                        continue;
+                    }
+                    let moved = if node.is_some() && relative == Path::new(old_leaf) {
+                        Path::new(target).join(new_leaf)
+                    } else {
+                        Path::new(target).join(relative)
+                    };
+                    places.remove(&prior);
+                    places.insert(display(&moved));
                 }
-                let moved = if node.is_some() && relative == Path::new(old_leaf) {
-                    Path::new(target).join(new_leaf)
-                } else {
-                    Path::new(target).join(relative)
-                };
-                places.remove(&prior);
-                places.insert(display(&moved));
             }
         }
         Ok(places)
@@ -436,7 +446,7 @@ impl Core {
                                 })
                                 .map(|f| (f.path.clone(), f.after.clone()))
                         }
-                        Mutation::Relocate { updates, .. } => identity_path.and_then(|original| {
+                        Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => identity_path.and_then(|original| {
                             let path = t.relocated_path(original);
                             let changed_revision = p.sync_application.as_ref().is_some_and(|application| {
                                 application.before.iter().any(|object| {

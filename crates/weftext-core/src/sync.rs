@@ -17,6 +17,9 @@ pub use transport::SyncTransfer;
 mod adopt;
 pub(crate) mod apply;
 pub use adopt::SyncAdoptionCut;
+mod compound;
+#[cfg(all(test, windows))]
+mod compound_tests;
 mod install;
 mod relocate;
 pub use apply::SyncResolution;

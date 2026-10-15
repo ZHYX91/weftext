@@ -673,6 +673,20 @@ impl Core {
         let Some(application) = &plan.sync_application else {
             return Ok(());
         };
+        self.validate_sync_application_basis(application)?;
+        self.publish_sync(&application.root)?;
+        self.validate_sync_application_versions(application)
+    }
+    /// Inspect the same original replica cut without publishing a fresh outbox.
+    /// Committed decisions are handled by the recovery caller before this gate.
+    pub(crate) fn validate_sync_recovery_cut(&self, plan: &Plan) -> Result<()> {
+        let Some(application) = &plan.sync_application else {
+            return Ok(());
+        };
+        self.validate_sync_application_basis(application)?;
+        self.validate_sync_application_versions(application)
+    }
+    fn validate_sync_application_basis(&self, application: &SyncApplication) -> Result<()> {
         self.sync_local_owner()?;
         let setup = self.sync_setup_for(Path::new(&application.root))?;
         if setup.identity != application.identity {
@@ -693,7 +707,9 @@ impl Core {
                 "A local commit changed the reviewed replica basis",
             ));
         }
-        self.publish_sync(&application.root)?;
+        Ok(())
+    }
+    fn validate_sync_application_versions(&self, application: &SyncApplication) -> Result<()> {
         let current = self.read_sync_history(&application.identity)?.objects()?;
         if application.expected_versions.iter().any(|expected| {
             current

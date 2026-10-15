@@ -501,7 +501,8 @@ impl Core {
                 let updates = match &transaction.mutation {
                     operations::Mutation::Update { files } => files,
                     operations::Mutation::CreateTree { updates, .. }
-                    | operations::Mutation::Relocate { updates, .. } => updates,
+                    | operations::Mutation::Relocate { updates, .. }
+                    | operations::Mutation::Compound { updates, .. } => updates,
                 };
                 let registry = display(&root.join(TAG_REGISTRY));
                 if transaction

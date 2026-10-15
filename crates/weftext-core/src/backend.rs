@@ -562,6 +562,7 @@ mod platform {
         dirs: std::collections::BTreeMap<PathBuf, File>,
         source: PathBuf,
         target_parent: PathBuf,
+        canonical_keys: bool,
     }
     impl NamespaceGuard {
         pub fn acquire(source: &Path, target_parent: &Path) -> Result<Self> {
@@ -626,6 +627,7 @@ mod platform {
                 dirs,
                 source,
                 target_parent,
+                canonical_keys: false,
             })
         }
         pub fn source_identity(&self) -> Result<FileIdentity> {
@@ -655,7 +657,11 @@ mod platform {
                         "Expected relative source descendant",
                     ));
                 };
-                let next = path.join(name);
+                let next = if self.canonical_keys {
+                    namespace_key(&path.join(name))?
+                } else {
+                    path.join(name)
+                };
                 if !self.dirs.contains_key(&next) {
                     let directory = nt_open(self.dirs.get(&path), name, true, false, false)?;
                     self.dirs.insert(next.clone(), directory);
@@ -728,6 +734,153 @@ mod platform {
                 false,
                 false,
             )
+        }
+    }
+    fn namespace_key(path: &Path) -> Result<PathBuf> {
+        let mut key = PathBuf::new();
+        for component in path.components() {
+            let text = component
+                .as_os_str()
+                .to_str()
+                .ok_or_else(|| CoreError::new("invalidPath", "Non-UTF8 namespace component"))?;
+            key.push(text.to_ascii_lowercase());
+        }
+        Ok(key)
+    }
+    /// All moving roots share one ancestor closure. Every moving directory has
+    /// DELETE access from the outset; unrelated roots are never reopened while
+    /// another participant denies delete on the same ancestor.
+    pub(crate) struct MultiNamespaceGuard {
+        inner: NamespaceGuard,
+        sources: Vec<PathBuf>,
+        parents: Vec<PathBuf>,
+    }
+    impl MultiNamespaceGuard {
+        pub(crate) fn acquire(participants: &[(&Path, &Path)]) -> Result<Self> {
+            if participants.is_empty() || participants.len() > 5000 {
+                return Err(CoreError::new(
+                    "invalidPlan",
+                    "Invalid namespace participant count",
+                ));
+            }
+            let actual = participants
+                .iter()
+                .map(|(source, parent)| {
+                    Ok((crate::absolute_path(source)?, crate::absolute_path(parent)?))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let sources = actual
+                .iter()
+                .map(|(source, _)| namespace_key(source))
+                .collect::<Result<Vec<_>>>()?;
+            let parents = actual
+                .iter()
+                .map(|(_, parent)| namespace_key(parent))
+                .collect::<Result<Vec<_>>>()?;
+            let text = actual[0].0.to_string_lossy();
+            if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
+                return Err(CoreError::new(
+                    "unsupportedVolume",
+                    "Explicit local NTFS paths required",
+                ));
+            }
+            for (index, (source, parent)) in actual.iter().enumerate() {
+                let source_text = source.to_string_lossy();
+                let parent_text = parent.to_string_lossy();
+                if !source_text
+                    .get(..2)
+                    .is_some_and(|drive| drive.eq_ignore_ascii_case(&text[..2]))
+                    || !parent_text
+                        .get(..2)
+                        .is_some_and(|drive| drive.eq_ignore_ascii_case(&text[..2]))
+                {
+                    return Err(CoreError::new(
+                        "crossVolume",
+                        "Compound placement requires one NTFS volume",
+                    ));
+                }
+                for (other, root) in sources.iter().enumerate() {
+                    if parents[index].starts_with(root)
+                        || (index != other && sources[index].starts_with(root))
+                    {
+                        return Err(CoreError::new(
+                            "recursiveMove",
+                            "Compound roots and target parents must be independent",
+                        ));
+                    }
+                }
+                // Establish the existing NTFS qualification without retaining a
+                // second closure that would block the union's DELETE handles.
+                drop(ParentGuard::acquire(source)?);
+                drop(ParentGuard::acquire(
+                    &parent.join(".namespace-prospective"),
+                )?);
+            }
+            let drive = PathBuf::from(format!("{}\\", &text[..2]));
+            let drive_key = namespace_key(&drive)?;
+            let root_nt = format!("\\??\\{}", drive.display());
+            let root = nt_open(None, std::ffi::OsStr::new(&root_nt), true, false, false)?;
+            let volume = stamp(&root)?.identity.volume;
+            let mut dirs = std::collections::BTreeMap::new();
+            dirs.insert(drive_key.clone(), root);
+            for (source, parent) in &actual {
+                for leaf in [source, parent] {
+                    let mut current = drive_key.clone();
+                    for part in leaf.components().skip(2) {
+                        let next = namespace_key(&current.join(part.as_os_str()))?;
+                        if !dirs.contains_key(&next) {
+                            let file = nt_open_access(
+                                dirs.get(&current),
+                                part.as_os_str(),
+                                true,
+                                false,
+                                false,
+                                sources.contains(&next),
+                            )?;
+                            if stamp(&file)?.identity.volume != volume {
+                                return Err(CoreError::new(
+                                    "crossVolume",
+                                    "Compound directory crossed the protected volume",
+                                ));
+                            }
+                            dirs.insert(next.clone(), file);
+                        }
+                        current = next;
+                    }
+                }
+            }
+            Ok(Self {
+                inner: NamespaceGuard {
+                    dirs,
+                    source: sources[0].clone(),
+                    target_parent: parents[0].clone(),
+                    canonical_keys: true,
+                },
+                sources,
+                parents,
+            })
+        }
+        pub(crate) fn select(&mut self, index: usize) -> Result<&mut NamespaceGuard> {
+            self.inner.source = self
+                .sources
+                .get(index)
+                .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace participant"))?
+                .clone();
+            self.inner.target_parent = self.parents[index].clone();
+            Ok(&mut self.inner)
+        }
+        pub(crate) fn source_parent_identity(&self, index: usize) -> Result<FileIdentity> {
+            let parent = self
+                .sources
+                .get(index)
+                .and_then(|source| source.parent())
+                .ok_or_else(|| CoreError::new("invalidPlan", "Missing source parent"))?;
+            Ok(stamp(
+                self.inner.dirs.get(parent).ok_or_else(|| {
+                    CoreError::new("invalidPlan", "Source parent is not retained")
+                })?,
+            )?
+            .identity)
         }
     }
     fn rename_handle(file: &File, parent: &File, name: &str) -> Result<()> {
@@ -917,6 +1070,27 @@ mod platform {
             ))
         }
     }
+    pub(crate) struct MultiNamespaceGuard;
+    impl MultiNamespaceGuard {
+        pub(crate) fn acquire(_: &[(&Path, &Path)]) -> Result<Self> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn select(&mut self, _: usize) -> Result<&mut NamespaceGuard> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn source_parent_identity(&self, _: usize) -> Result<FileIdentity> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+    }
     pub(crate) fn file_coordinates(_: &File) -> Result<PathBuf> {
         Err(CoreError::new(
             "unsupportedPlatform",
@@ -937,7 +1111,8 @@ mod platform {
     }
 }
 pub(crate) use platform::{
-    NamespaceGuard, ParentGuard, file_coordinates, publish_private_create, stamp,
+    MultiNamespaceGuard, NamespaceGuard, ParentGuard, file_coordinates, publish_private_create,
+    stamp,
 };
 pub(crate) fn same_directory(a: &Path, b: &Path) -> Result<bool> {
     let a = ParentGuard::acquire(&a.join(".directory-identity-prospective"))?;

@@ -9,6 +9,44 @@ mod owner_backup;
 
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
+#[path = "operations/compound.rs"]
+pub(crate) mod compound;
+
+/// One original namespace participant. Physical evidence belongs to this Plan,
+/// while portable object versions remain in its original SyncApplication.
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct RelocationStep {
+    pub(crate) source: String,
+    pub(crate) target: String,
+    pub(crate) source_identity: FileIdentity,
+    pub(crate) source_parent_identity: FileIdentity,
+    pub(crate) target_parent_identity: FileIdentity,
+    pub(crate) old_leaf: String,
+    pub(crate) new_leaf: String,
+    pub(crate) leaf_identity: FileIdentity,
+    pub(crate) members: Vec<RelocationMember>,
+}
+pub(crate) struct RelocationRef<'a> {
+    pub(crate) source: &'a str,
+    pub(crate) target: &'a str,
+    pub(crate) source_identity: &'a FileIdentity,
+    pub(crate) old_leaf: &'a str,
+    pub(crate) new_leaf: &'a str,
+    pub(crate) leaf_identity: &'a FileIdentity,
+    pub(crate) members: &'a [RelocationMember],
+}
+impl RelocationRef<'_> {
+    pub(crate) fn map(&self, path: &Path) -> Option<PathBuf> {
+        let relative = crate::history::history_relative_path(path, Path::new(self.source))?;
+        Some(
+            Path::new(self.target).join(if relative == Path::new(self.old_leaf) {
+                Path::new(self.new_leaf)
+            } else {
+                &relative
+            }),
+        )
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -435,6 +473,10 @@ pub(crate) struct RelocationMember {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) enum Mutation {
+    Compound {
+        relocations: Vec<RelocationStep>,
+        updates: Vec<FileChange>,
+    },
     Relocate {
         source: String,
         target: String,
@@ -485,33 +527,57 @@ pub(crate) struct FrozenOperation {
     pub(crate) write_parents: Vec<(String, FileIdentity)>,
 }
 impl FrozenOperation {
+    pub(crate) fn relocations(&self) -> Vec<RelocationRef<'_>> {
+        match &self.mutation {
+            Mutation::Relocate {
+                source,
+                target,
+                source_identity,
+                old_leaf,
+                new_leaf,
+                leaf_identity,
+                members,
+                ..
+            } => vec![RelocationRef {
+                source,
+                target,
+                source_identity,
+                old_leaf,
+                new_leaf,
+                leaf_identity,
+                members,
+            }],
+            Mutation::Compound { relocations, .. } => relocations
+                .iter()
+                .map(|s| RelocationRef {
+                    source: &s.source,
+                    target: &s.target,
+                    source_identity: &s.source_identity,
+                    old_leaf: &s.old_leaf,
+                    new_leaf: &s.new_leaf,
+                    leaf_identity: &s.leaf_identity,
+                    members: &s.members,
+                })
+                .collect(),
+            _ => vec![],
+        }
+    }
     pub(crate) fn is_trash(&self) -> bool {
         matches!(&self.mutation, Mutation::Relocate { source, target, .. }
             if source != target && Path::new(target).parent() == Some(Path::new(&self.request.root).join(".weftext-trash").as_path()))
     }
 
     pub(crate) fn relocated_path(&self, path: &str) -> String {
-        let Mutation::Relocate {
-            source,
-            target,
-            old_leaf,
-            new_leaf,
-            ..
-        } = &self.mutation
-        else {
-            return path.into();
-        };
-        match Path::new(path).strip_prefix(source) {
-            Ok(relative) if relative == Path::new(old_leaf) => {
-                display(&Path::new(target).join(new_leaf))
-            }
-            Ok(relative) => display(&Path::new(target).join(relative)),
-            Err(_) => path.into(),
-        }
+        self.relocations()
+            .iter()
+            .find_map(|step| step.map(Path::new(path)))
+            .map(|path| display(&path))
+            .unwrap_or_else(|| path.into())
     }
     pub(crate) fn relocated_files(&self) -> Vec<FileChange> {
-        let Mutation::Relocate { updates, .. } = &self.mutation else {
-            return vec![];
+        let updates = match &self.mutation {
+            Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => updates,
+            _ => return vec![],
         };
         let mut files: BTreeMap<_, _> = self
             .files
@@ -561,6 +627,15 @@ impl FrozenOperation {
             target == p || target.starts_with(&(p + "\\"))
         };
         match &self.mutation {
+            Mutation::Compound {
+                relocations,
+                updates,
+            } => {
+                relocations
+                    .iter()
+                    .any(|step| within(&step.source) || within(&step.target))
+                    || updates.iter().any(|change| Path::new(&change.path) == path)
+            }
             Mutation::Relocate {
                 source,
                 target,
@@ -600,6 +675,14 @@ impl FrozenOperation {
     }
     pub(crate) fn has_identity(&self, identity: &FileIdentity) -> bool {
         self.files.iter().any(|f| &f.stamp.identity == identity)
+            || self.relocations().iter().any(|step| {
+                step.source_identity == identity
+                    || step.leaf_identity == identity
+                    || step
+                        .members
+                        .iter()
+                        .any(|member| &member.identity == identity || &member.parent == identity)
+            })
     }
 }
 impl Core {
@@ -834,7 +917,7 @@ impl Core {
         let output = match &t.mutation {
             Mutation::Update { files } => files.iter().collect::<Vec<_>>(),
             Mutation::CreateTree { files, updates, .. } => files.iter().chain(updates).collect(),
-            Mutation::Relocate { .. } => relocated.iter().collect(),
+            Mutation::Relocate { .. } | Mutation::Compound { .. } => relocated.iter().collect(),
         };
         let facts = output
             .iter()
@@ -935,7 +1018,7 @@ impl Core {
                     .filter(|b| Path::new(path).starts_with(Path::new(&b.path).parent().unwrap()))
                     .max_by_key(|b| Path::new(&b.path).components().count())
                     .map(|b| b.node_id.clone()),
-                Mutation::Update { .. } | Mutation::Relocate { .. } => {
+                Mutation::Update { .. } | Mutation::Relocate { .. } | Mutation::Compound { .. } => {
                     t.updated_resource_owner(Path::new(path), plan.sync_application.as_ref())
                 }
             }
@@ -1040,7 +1123,9 @@ impl Core {
             Mutation::CreateTree { files, updates, .. } => {
                 files.iter().chain(updates).cloned().collect()
             }
-            Mutation::Relocate { updates, .. } => updates.clone(),
+            Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => {
+                updates.clone()
+            }
         })
     }
     pub fn committed_operation_receipt(
@@ -1342,7 +1427,7 @@ impl Core {
                     .chain(updates)
                     .find(|f| f.path == fact.path)
                     .map(|f| &f.after),
-                Mutation::Relocate { .. } => relocated
+                Mutation::Relocate { .. } | Mutation::Compound { .. } => relocated
                     .iter()
                     .find(|f| f.path == fact.path)
                     .map(|f| &f.after),
@@ -3956,6 +4041,12 @@ impl Core {
             }
         }
         let result_path = match &mutation {
+            Mutation::Compound { .. } => {
+                return Err(CoreError::new(
+                    "invalidIntent",
+                    "Compound must originate from its original sync planner",
+                ));
+            }
             Mutation::Relocate { target, .. } | Mutation::CreateTree { target, .. } => {
                 target.clone()
             }
@@ -3979,7 +4070,9 @@ impl Core {
                 .iter()
                 .map(|file| file.path.clone())
                 .collect::<BTreeSet<_>>(),
-            Mutation::CreateTree { updates, .. } | Mutation::Relocate { updates, .. } => {
+            Mutation::CreateTree { updates, .. }
+            | Mutation::Relocate { updates, .. }
+            | Mutation::Compound { updates, .. } => {
                 updates.iter().map(|file| file.path.clone()).collect()
             }
         };
@@ -4186,6 +4279,17 @@ impl Core {
                 }
             }
         }
+        if matches!(t.mutation, Mutation::Compound { .. }) {
+            self.execute_compound(&plan)?;
+            for session in self
+                .sessions
+                .values_mut()
+                .filter(|session| t.affects(&session.path))
+            {
+                session.base_id = fresh();
+            }
+            return Ok(t.receipt.clone());
+        }
         // All existing files are guarded together before the first write. This
         // gives a consistent bounded source set and prevents current reads of a
         // partially written annotation/source pair.
@@ -4263,6 +4367,9 @@ impl Core {
             }
         }
         match &t.mutation {
+            Mutation::Compound { .. } => {
+                unreachable!("compound has one dedicated original execution above")
+            }
             Mutation::Relocate {
                 source,
                 target,
