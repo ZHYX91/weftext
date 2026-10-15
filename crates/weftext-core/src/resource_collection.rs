@@ -318,9 +318,19 @@ impl Core {
                     Mutation::CreateTree { files, updates, .. } => {
                         paths.extend(files.iter().chain(updates).map(|file| file.path.clone()))
                     }
-                    Mutation::Relocate { updates, .. } | Mutation::Compound { updates, .. } => {
+                    Mutation::Relocate { updates, .. } => {
                         paths.extend(updates.iter().map(|file| file.path.clone()))
                     }
+                    Mutation::Compound {
+                        updates,
+                        created_files,
+                        ..
+                    } => paths.extend(
+                        updates
+                            .iter()
+                            .chain(created_files)
+                            .map(|file| file.path.clone()),
+                    ),
                 }
             }
             paths.extend(

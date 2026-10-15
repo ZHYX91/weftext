@@ -12,13 +12,13 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
 const only = process.argv.slice(4).find(argument => argument.startsWith('--only='));
-const selected = only ? only.slice(7).split(',').map(Number) : [1, 2, 3, 4, 5];
-assert.ok(selected.length && selected.every(id => Number.isInteger(id) && id >= 1 && id <= 5) && new Set(selected).size === selected.length, 'invalid case selection');
+const selected = only ? only.slice(7).split(',').map(Number) : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+assert.ok(selected.length && selected.every(id => Number.isInteger(id) && id >= 1 && id <= 9) && new Set(selected).size === selected.length, 'invalid case selection');
 await mkdir(out, { recursive: false });
 const result = {
   exe, sha256: createHash('sha256').update(await readFile(exe)).digest('hex'),
   version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(),
-  selectedCases: selected, plannedCases: 5, cases: [], pageErrors: [], routeErrors: [],
+  selectedCases: selected, plannedCases: 9, cases: [], pageErrors: [], routeErrors: [],
   completed: false, ownedProcessesClosed: false,
 };
 const servers = [], scenarios = [], taps = new Set();
@@ -104,6 +104,23 @@ async function onlyNodes(panel, nodes) {
   for (const node of nodes) await rows.filter({ hasText: node.nodeId }).locator('input[type=checkbox]').check();
   assert.equal(await rows.locator('input:checked').count(), nodes.length);
 }
+const objectKey = key => `${key.kind}:${key.id ?? ''}`;
+const afterRelative = node => node.afterRelative ?? path.join(node.nextName, `${node.nextName}.typ`);
+async function selectedObjects(panel, objects) {
+  const rows = panel.locator('.sync-object');
+  for (let index = 0; index < await rows.count(); index++) await rows.nth(index).locator('input[type=checkbox]').uncheck();
+  for (const key of objects) {
+    const row = rows.filter({ hasText: `(${objectKey(key)})` }); assert.equal(await row.count(), 1);
+    await row.locator('input[type=checkbox]').check();
+  }
+  assert.equal(await rows.locator('input:checked').count(), objects.length);
+}
+async function physicalIdentity(location) {
+  assert.equal(process.platform, 'win32', 'physical-object evidence uses the Windows candidate');
+  const value = await stat(location, { bigint: true });
+  assert.notEqual(value.ino, 0n, 'owned NTFS object must expose its real file index');
+  return { dev: value.dev.toString(), ino: value.ino.toString(), birthtimeNs: value.birthtimeNs.toString() };
+}
 async function responseOnce(page, routeName, { drop = false, expected = 200 } = {}) {
   const observed = deferred(), finished = deferred(), pattern = `**${routeName}`;
   let captured = false;
@@ -155,6 +172,19 @@ async function setup(id) {
   await api(s.b, '/api/sync/receive', { identity: s.identity, directory: s.exchange });
   await commit(s.b, await api(s.b, '/api/operations/prepare', { root: s.rb, operationId: randomUUID(), intent: { kind: 'cloneSync', identity: s.identity, objects: s.nodes.map(node => node.key) } }));
   s.before = await api(s.b, '/api/sync/binding', { root: s.rb });
+  if (id >= 6) {
+    assert.equal(s.before.partial, true);
+    assert.ok(!s.before.installedObjects.some(key => key.kind === 'rules'));
+    await assert.rejects(stat(path.join(s.rb, '.weftext-rules')), { code: 'ENOENT' });
+    s.rulesBytes = await readFile(path.join(s.ra, '.weftext-rules'));
+    s.rulesSha256 = createHash('sha256').update(s.rulesBytes).digest('hex');
+    s.originalPhysical = {};
+    for (const node of s.nodes) s.originalPhysical[node.name] = {
+      directory: await physicalIdentity(path.join(s.rb, node.name)),
+      source: await physicalIdentity(path.join(s.rb, node.name, `${node.name}.typ`)),
+    };
+    s.observations.push({ point: 'real-partial-clone-without-rules', binding: s.before, rulesAbsent: true, senderRulesSha256: s.rulesSha256, physical: s.originalPhysical });
+  }
   const right = s.nodes[1];
   const rightOpened = await api(s.b, '/api/open', { root: s.rb, path: path.join(s.rb, right.name, `${right.name}.typ`) });
   s.rightDraft = right.source + '\n右节点个人草稿仍保留';
@@ -193,19 +223,89 @@ async function produce(s) {
     const saved = await api(s.a, '/api/save', saveRequest);
     s.producers.push({ request, plan, receipt, saveRequest, saved });
   }
-  await api(s.a, '/api/sync/export', { root: s.ra, directory: s.exchange, objects: s.nodes.map(node => node.key) });
+  await api(s.a, '/api/sync/export', { root: s.ra, directory: s.exchange, objects: s.selectionObjects ?? s.nodes.map(node => node.key) });
+}
+async function produceNewParent(s) {
+  const creation = { root: s.ra, parent: s.ra, name: 'NewParent', operationId: randomUUID() };
+  const created = await api(s.a, '/api/note/create', creation);
+  const parentSource = created.source + '\n= 真实新父节点\n\nA 新父正文 中文😀\n';
+  const saveRequest = { sessionId: created.sessionId, baseId: created.baseId, source: parentSource, operationId: randomUUID() };
+  const saved = await api(s.a, '/api/save', saveRequest);
+  s.newParent = { name: creation.name, relative: path.join(creation.name, `${creation.name}.typ`), nodeId: created.nodeId, key: { kind: 'node', id: created.nodeId }, source: parentSource };
+  s.newParent.senderPhysical = {
+    directory: await physicalIdentity(path.join(s.ra, creation.name)),
+    source: await physicalIdentity(path.join(s.ra, s.newParent.relative)),
+  };
+  s.producers.push({ creation, created, saveRequest, saved });
+  const left = s.nodes[0]; left.nextName = left.name; left.afterRelative = path.join(creation.name, left.name, `${left.name}.typ`);
+  for (const node of s.nodes) {
+    const intent = node === left
+      ? { kind: 'moveNode', source: path.join(s.ra, node.name), parent: path.join(s.ra, creation.name) }
+      : { kind: 'renameNode', source: path.join(s.ra, node.name), name: node.nextName };
+    const request = { root: s.ra, operationId: randomUUID(), intent };
+    const plan = await api(s.a, '/api/operations/prepare', request), receipt = await commit(s.a, plan);
+    const opened = await api(s.a, '/api/open', { root: s.ra, path: path.join(s.ra, afterRelative(node)) });
+    assert.equal(opened.nodeId, node.nodeId);
+    node.afterSource = opened.source + `\nA 新父组合保存 ${node.name} 中文😀\n`;
+    const saveRequest = { sessionId: opened.sessionId, baseId: opened.baseId, source: node.afterSource, operationId: randomUUID() };
+    const saved = await api(s.a, '/api/save', saveRequest);
+    s.producers.push({ request, plan, receipt, saveRequest, saved });
+  }
+  s.selectionObjects = [...s.nodes.map(node => node.key), s.newParent.key, { kind: 'rules' }];
+  await api(s.a, '/api/sync/export', { root: s.ra, directory: s.exchange, objects: s.selectionObjects });
+}
+async function rulesInstalled(s) {
+  const binding = await api(s.b, '/api/sync/binding', { root: s.rb });
+  assert.ok(binding.installedObjects.some(key => key.kind === 'rules'));
+  const history = await api(s.b, '/api/sync/history', { identity: s.identity, object: { kind: 'rules' } });
+  assert.equal(history.coverage, 'complete'); assert.ok(history.versions.length);
+  for (const version of history.versions) {
+    const file = await api(s.b, '/api/sync/file', { identity: s.identity, object: { kind: 'rules' }, revision: version.revision, path: '.weftext-rules' });
+    assert.deepEqual(Buffer.from(file.text, 'utf8'), s.rulesBytes);
+  }
+  s.observations.push({ point: 'rules-installed-in-original-compound', rulesSha256: s.rulesSha256, versions: history.versions.map(version => version.revision), operationId: s.originalRequest.operationId });
+}
+async function originalPhysicalObjectsRetained(s) {
+  for (const node of s.nodes) {
+    const source = path.join(s.rb, afterRelative(node));
+    assert.deepEqual(await physicalIdentity(path.dirname(source)), s.originalPhysical[node.name].directory);
+    assert.deepEqual(await physicalIdentity(source), s.originalPhysical[node.name].source);
+  }
+  assert.deepEqual(await readFile(path.join(s.rb, '.weftext-rules')), s.rulesBytes);
+  assert.notDeepEqual(await physicalIdentity(path.join(s.rb, '.weftext-rules')), await physicalIdentity(path.join(s.ra, '.weftext-rules')));
+}
+async function newParentInstalled(s) {
+  const parent = await api(s.b, '/api/data/open', { root: s.rb, entityKey: `weftext-node://${s.identity.workspaceId}/${s.newParent.nodeId}` });
+  assert.equal(parent.nodeId, s.newParent.nodeId); assert.equal(parent.workspaceId, s.identity.workspaceId);
+  assert.equal(parent.source, s.newParent.source); assert.equal(path.normalize(parent.path), path.join(s.rb, s.newParent.relative));
+  const binding = await api(s.b, '/api/sync/binding', { root: s.rb });
+  assert.ok(binding.installedObjects.some(key => objectKey(key) === objectKey(s.newParent.key)));
+  s.observations.push({ point: 'new-parent-portable-identity', reference: `weftext-node://${s.identity.workspaceId}/${s.newParent.nodeId}`, source: parent.source, path: parent.path });
+}
+async function finalNewParent(s, checkTrees) {
+  await checkTrees(); await originalPhysicalObjectsRetained(s);
+  assert.equal(await readFile(path.join(s.rb, s.newParent.relative), 'utf8'), s.newParent.source);
+  assert.notDeepEqual(await physicalIdentity(path.join(s.rb, s.newParent.name)), s.newParent.senderPhysical.directory);
+  assert.notDeepEqual(await physicalIdentity(path.join(s.rb, s.newParent.relative)), s.newParent.senderPhysical.source);
+  if (s.materializedNewParent) {
+    assert.deepEqual(await physicalIdentity(path.join(s.rb, s.newParent.name)), s.materializedNewParent.directory);
+    assert.deepEqual(await physicalIdentity(path.join(s.rb, s.newParent.relative)), s.materializedNewParent.source);
+    assert.deepEqual(await physicalIdentity(path.join(s.rb, '.weftext-rules')), s.materializedNewParent.rules);
+  }
 }
 async function receive(s) {
   const panel = await sync(s.page);
   await panel.getByLabel('交换目录路径（新目录或已配对目录）', { exact: true }).fill(s.exchange);
-  await clickDone(panel, '接收交换目录'); await onlyNodes(panel, s.nodes); return panel;
+  await clickDone(panel, '接收交换目录');
+  if (s.selectionObjects) await selectedObjects(panel, s.selectionObjects); else await onlyNodes(panel, s.nodes);
+  return panel;
 }
 async function prepare(s, panel, options) {
   const tap = await responseOnce(s.page, '/api/operations/prepare', options);
   await panel.getByRole('button', { name: '预览应用所选对象', exact: true }).click();
   const observed = await tap.wait(); await tap.dispose();
   assert.equal(observed.request.intent.kind, 'applySync'); assert.equal(observed.request.root, s.rb);
-  assert.deepEqual(new Set(observed.request.intent.objects.map(key => key.id)), new Set(s.nodes.map(node => node.nodeId)));
+  assert.deepEqual(new Set(observed.request.intent.objects.map(objectKey)), new Set((s.selectionObjects ?? s.nodes.map(node => node.key)).map(objectKey)));
   s.originalRequest = observed.request;
   if (!options?.drop && observed.status === 200) {
     await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor();
@@ -225,8 +325,8 @@ async function apply(s, panel, options) {
 }
 async function restartB(s, committed) {
   const port = s.b.port; await stop(s.b);
-  const left = s.nodes[0], name = committed ? left.nextName : left.name;
-  s.b = await start(s.folder, 'b-restarted', ['--data-dir', s.db, '--port', port, '--open', path.join(s.rb, name, `${name}.typ`), '--root', s.rb]);
+  const left = s.nodes[0], relative = committed ? afterRelative(left) : path.join(left.name, `${left.name}.typ`);
+  s.b = await start(s.folder, 'b-restarted', ['--data-dir', s.db, '--port', port, '--open', path.join(s.rb, relative), '--root', s.rb]);
   // A new hash alone is same-document navigation and does not consume the
   // restarted program's token. Change the query, preserving the true origin.
   await s.page.goto(`${s.b.base}/?restart=${randomUUID()}#token=${s.b.token}`); s.editor = await sourceEditor(s.page);
@@ -249,7 +349,7 @@ async function verifyApplied(s) {
   for (const node of s.nodes) {
     const reference = `weftext-node://${s.identity.workspaceId}/${node.nodeId}`;
     const current = await api(s.b, '/api/data/open', { root: s.rb, entityKey: reference });
-    assert.equal(path.normalize(current.path), path.join(s.rb, node.nextName, `${node.nextName}.typ`));
+    assert.equal(path.normalize(current.path), path.join(s.rb, afterRelative(node)));
     assert.equal(current.source, node.afterSource);
     assert.equal(current.recoveredDraft, node.name === 'Left' ? s.leftDraft : s.rightDraft);
     const installed = binding.installedVersions.find(([key]) => key.kind === 'node' && key.id === node.nodeId);
@@ -262,17 +362,17 @@ async function verifyApplied(s) {
 async function sidebarHasCurrentPaths(s) {
   // The visible title is author-controlled and need not change with a leaf
   // rename. Assert the actual refreshed navigation coordinates in row titles.
-  const wanted = s.nodes.map(node => path.join(s.rb, node.nextName, `${node.nextName}.typ`).replaceAll('\\', '/').toLowerCase());
+  const wanted = [...s.nodes.map(node => path.join(s.rb, afterRelative(node))), ...(s.newParent ? [path.join(s.rb, s.newParent.relative)] : [])].map(value => value.replaceAll('\\', '/').toLowerCase());
   await until(() => s.page.locator('.tree-row[title]').evaluateAll(rows => rows.map(row => row.title.replaceAll('\\', '/').toLowerCase())),
     titles => wanted.every(value => titles.some(title => title.split('\n')[0] === value)), 'sidebar current paths');
 }
 async function finalTrees(s, applied, externalRight, occupant) {
   // Read owned physical fixtures only after both Core processes have stopped.
   for (const node of s.nodes) {
-    assert.equal(await readFile(path.join(s.ra, node.nextName, `${node.nextName}.typ`), 'utf8'), node.afterSource);
+    assert.equal(await readFile(path.join(s.ra, afterRelative(node)), 'utf8'), node.afterSource);
     const name = applied ? node.nextName : node.name;
     const expected = applied ? s.receiverSources?.[node.name] ?? node.afterSource : node.name === 'Right' && externalRight ? externalRight : node.source;
-    assert.equal(await readFile(path.join(s.rb, name, `${name}.typ`), 'utf8'), expected);
+    assert.equal(await readFile(path.join(s.rb, applied ? afterRelative(node) : path.join(name, `${name}.typ`)), 'utf8'), expected);
     const absent = applied ? node.name : node.nextName;
     if (!(occupant && absent === occupant.name)) await assert.rejects(stat(path.join(s.rb, absent)), { code: 'ENOENT' });
   }
@@ -316,7 +416,7 @@ async function runCase(id, description, action) {
     for (const tap of [...taps]) await tap.dispose().catch(error => result.routeErrors.push(`cleanup: ${String(error)}`));
     await bounded(Promise.all([...s.responseReads]), 5000, 'diagnostic response bodies');
     await s.context.close(); await stop(s.a); await stop(s.b);
-    await writeFile(path.join(s.folder, 'fixture.json'), JSON.stringify({ nodes: s.nodes, identity: s.identity, before: s.before, producers: s.producers, originalRequest: s.originalRequest }, null, 2));
+    await writeFile(path.join(s.folder, 'fixture.json'), JSON.stringify({ nodes: s.nodes, identity: s.identity, before: s.before, producers: s.producers, originalRequest: s.originalRequest, rulesSha256: s.rulesSha256, originalPhysical: s.originalPhysical, newParent: s.newParent }, null, 2));
     await writeFile(path.join(s.folder, 'browser-requests.json'), JSON.stringify(s.requests, null, 2));
     await writeFile(path.join(s.folder, 'browser-responses.json'), JSON.stringify(s.responses, null, 2));
     await writeFile(path.join(s.folder, 'observations.json'), JSON.stringify(s.observations, null, 2));
@@ -325,7 +425,8 @@ async function runCase(id, description, action) {
 }
 const cases = [
   [1, 'Two real rename+save versions installed through one original ApplySync Plan; same editor/Draft/Undo, both private Drafts and histories retained; sidebar and current stable refs refreshed', async s => {
-    await produce(s); const panel = await receive(s), prepared = await prepare(s, panel);
+    await (s.producer ?? produce)(s); const panel = await receive(s), prepared = await prepare(s, panel);
+    await s.inspectPrepared?.(prepared);
     await panel.screenshot({ path: path.join(s.folder, 'success-compound-preview.png') });
     const committed = await apply(s, panel); assert.equal(committed.response.status, 'committed');
     const consumerStart = s.requests.length, originalSession = s.requests.find(call => call.route === '/api/draft' && call.body.source === s.leftDraft).body.sessionId;
@@ -361,7 +462,8 @@ const cases = [
     return () => finalTrees(s, true);
   }],
   [2, 'Lost actual prepared response: persisted exact original request survives same-origin program/browser restart, retries original ID and obtains identical Plan before explicit commit', async s => {
-    await produce(s); let panel = await receive(s), prepared = await prepare(s, panel, { drop: true });
+    await (s.producer ?? produce)(s); let panel = await receive(s), prepared = await prepare(s, panel, { drop: true });
+    await s.inspectPrepared?.(prepared);
     const before = await pending(s.page); assert.equal(before.plan, undefined); assert.equal(before.attempted, false);
     assert.deepEqual(before.request, prepared.request);
     panel = await restartB(s, false); assert.equal((await pending(s.page)).request.operationId, prepared.request.operationId);
@@ -377,8 +479,10 @@ const cases = [
     return () => finalTrees(s, true);
   }],
   [3, 'Lost actual compound commit response: restart checks original operation/Plan only, both target trees already installed once and personal Drafts recovered without a new commit', async s => {
-    await produce(s); let panel = await receive(s), prepared = await prepare(s, panel);
+    await (s.producer ?? produce)(s); let panel = await receive(s), prepared = await prepare(s, panel);
+    await s.inspectPrepared?.(prepared);
     const committed = await apply(s, panel, { drop: true }); assert.equal(committed.response.status, 'committed');
+    await s.inspectCommitted?.(committed);
     const before = await pending(s.page); assert.equal(before.status, 'unknown'); assert.equal(before.attempted, true);
     panel = await restartB(s, true);
     const statusResponse = s.page.waitForResponse(response => response.url().endsWith('/api/operations/status') && response.request().postDataJSON()?.operationId === prepared.request.operationId, { timeout: 30000 }); statusResponse.catch(() => {});
@@ -416,6 +520,56 @@ const cases = [
     await panel.screenshot({ path: path.join(s.folder, 'success-external-refusal.png') });
     await closePanel(panel); await assertDraftAndUndo(s);
     return () => finalTrees(s, false, external);
+  }],
+  [6, 'Real partial clone without Rules receives sender Rules and two rename/save versions; one explicit Rules+Nodes Apply installs the exact Rules and both relocations, preserving Draft/Undo and explicit comparison consumers', async s => {
+    s.selectionObjects = [...s.nodes.map(node => node.key), { kind: 'rules' }];
+    s.inspectPrepared = async prepared => {
+      assert.ok(prepared.response.changes.some(change => change.path.endsWith('.weftext-rules')));
+      await assert.rejects(stat(path.join(s.rb, '.weftext-rules')), { code: 'ENOENT' });
+      for (const node of s.nodes) await assert.rejects(stat(path.join(s.rb, node.nextName)), { code: 'ENOENT' });
+    };
+    const checkTrees = await cases[0][2](s); await rulesInstalled(s);
+    return async () => { await checkTrees(); await originalPhysicalObjectsRetained(s); };
+  }],
+  [7, 'Real create/save makes a missing Node parent; one Apply installs that parent and Rules, moves an original Node into it and renames/updates the other; portable IDs, physical objects, Draft/Undo and explicit compare/merge/save survive', async s => {
+    s.producer = produceNewParent;
+    s.inspectPrepared = async prepared => {
+      assert.equal(prepared.response.nodeMap[s.newParent.nodeId], s.newParent.nodeId);
+      assert.ok(prepared.response.changes.some(change => change.path.includes(s.newParent.name)));
+      await assert.rejects(stat(path.join(s.rb, s.newParent.name)), { code: 'ENOENT' });
+      await assert.rejects(stat(path.join(s.rb, '.weftext-rules')), { code: 'ENOENT' });
+    };
+    const checkTrees = await cases[0][2](s); await rulesInstalled(s);
+    await newParentInstalled(s);
+    return () => finalNewParent(s, checkTrees);
+  }],
+  [8, 'New parent and Rules compound loses its actual prepare response: original persisted request retries the identical Plan after restart, then materializes the parent once and retains both personal Drafts and history', async s => {
+    s.producer = produceNewParent;
+    s.inspectPrepared = async prepared => {
+      assert.equal(prepared.response.nodeMap[s.newParent.nodeId], s.newParent.nodeId);
+      await assert.rejects(stat(path.join(s.rb, s.newParent.name)), { code: 'ENOENT' });
+      await assert.rejects(stat(path.join(s.rb, '.weftext-rules')), { code: 'ENOENT' });
+    };
+    const checkTrees = await cases[1][2](s); await rulesInstalled(s); await newParentInstalled(s);
+    return () => finalNewParent(s, checkTrees);
+  }],
+  [9, 'New parent and Rules compound loses its actual commit response: the original pending operation survives restart and status recovers the same committed receipt without reprepare or recommit; parent and child identities and personal Drafts remain', async s => {
+    s.producer = produceNewParent;
+    s.inspectPrepared = async prepared => {
+      assert.equal(prepared.response.nodeMap[s.newParent.nodeId], s.newParent.nodeId);
+      await assert.rejects(stat(path.join(s.rb, s.newParent.name)), { code: 'ENOENT' });
+      await assert.rejects(stat(path.join(s.rb, '.weftext-rules')), { code: 'ENOENT' });
+    };
+    s.inspectCommitted = async () => {
+      s.materializedNewParent = {
+        directory: await physicalIdentity(path.join(s.rb, s.newParent.name)),
+        source: await physicalIdentity(path.join(s.rb, s.newParent.relative)),
+        rules: await physicalIdentity(path.join(s.rb, '.weftext-rules')),
+      };
+      s.observations.push({ point: 'original-materialized-new-parent-before-committed-restart', physical: s.materializedNewParent });
+    };
+    const checkTrees = await cases[2][2](s); await rulesInstalled(s); await newParentInstalled(s);
+    return () => finalNewParent(s, checkTrees);
   }],
 ];
 try {

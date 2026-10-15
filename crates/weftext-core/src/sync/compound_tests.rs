@@ -148,6 +148,8 @@ fn fixture_with_child(child: bool) -> Pair {
 
 #[path = "compound_config_tests.rs"]
 mod config_tests;
+#[path = "compound_creation_tests.rs"]
+mod creation_tests;
 fn request(pair: &Pair) -> OperationRequest {
     OperationRequest {
         operation_id: fresh(),

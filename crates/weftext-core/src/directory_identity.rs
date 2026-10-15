@@ -169,6 +169,18 @@ fn same_path(locator: &str, path: &Path) -> bool {
         Path::new(locator) == path
     }
 }
+fn is_navigation_marker_output(
+    transaction: &operations::FrozenOperation,
+    file: &operations::FileChange,
+) -> bool {
+    Path::new(&file.path)
+        .file_name()
+        .is_some_and(|name| name == DIRECTORY_MARKER)
+        && !transaction.preview.resource_map.keys().any(|path| {
+            crate::history::history_relative_path(Path::new(path), Path::new(&file.path))
+                .is_some_and(|relative| relative.as_os_str().is_empty())
+        })
+}
 
 pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
     let (prefix, rest) = reference.split_once("://").ok_or_else(|| {
@@ -332,17 +344,19 @@ impl Core {
                     transaction.request.intent,
                     OperationIntent::CopyNode { .. }
                         | OperationIntent::TemplateNode { .. }
+                        | OperationIntent::ImportNative { .. }
+                        | OperationIntent::ImportBibliography { .. }
+                        | OperationIntent::ImportDocx { .. }
                         | OperationIntent::CloneSync { .. }
                         | OperationIntent::ApplySync { .. }
                         | OperationIntent::MergeSync { .. }
                 )
-                && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
             {
-                for file in files.iter().filter(|file| {
-                    Path::new(&file.path)
-                        .file_name()
-                        .is_some_and(|name| name == DIRECTORY_MARKER)
-                }) {
+                for file in transaction
+                    .created_files()
+                    .iter()
+                    .filter(|file| is_navigation_marker_output(transaction, file))
+                {
                     if serde_json::from_slice::<DirectoryMarker>(&file.after)
                         .is_ok_and(|marker| marker.directory_id == id)
                         && self
@@ -420,14 +434,12 @@ impl Core {
             )? {
                 candidates.push((r.path, r.directory_id, r.identity));
             }
-            if let Some(t) = &p.transaction
-                && let operations::Mutation::CreateTree { files, .. } = &t.mutation
-            {
-                for f in files.iter().filter(|f| {
-                    Path::new(&f.path)
-                        .file_name()
-                        .is_some_and(|n| n == DIRECTORY_MARKER)
-                }) {
+            if let Some(t) = &p.transaction {
+                for f in t
+                    .created_files()
+                    .iter()
+                    .filter(|f| is_navigation_marker_output(t, f))
+                {
                     if let Ok(m) = serde_json::from_slice::<DirectoryMarker>(&f.after) {
                         let parent = Path::new(&f.path).parent().unwrap();
                         if let Some(identity) =

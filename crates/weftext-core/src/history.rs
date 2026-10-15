@@ -239,11 +239,9 @@ impl Core {
                 if p.kind == "createNote" {
                     places.insert(p.path.clone());
                 }
-                if let Some(t) = &p.transaction
-                    && let Mutation::CreateTree { births, .. } = &t.mutation
-                {
+                if let Some(t) = &p.transaction {
                     places.extend(
-                        births
+                        t.births()
                             .iter()
                             .filter(|b| b.node_id == birth.node_id)
                             .map(|b| b.path.clone()),
@@ -422,6 +420,10 @@ impl Core {
                         .iter()
                         .find(|f| f.stamp.identity == birth.identity)
                         .map(|f| f.path.as_str());
+                    if let Some(born) = t.births().iter().find(|b| b.node_id == birth.node_id)
+                        && let Some(file) = t.created_files().iter().find(|file| file.path == born.path) {
+                        return Some((file.path.clone(), file.after.clone()));
+                    }
                     match &t.mutation {
                         Mutation::Update { files } => files
                             .iter()

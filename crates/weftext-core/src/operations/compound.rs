@@ -13,12 +13,13 @@ pub(crate) enum StepPhase {
 pub(crate) struct CompoundCapture {
     namespace: MultiNamespaceGuard,
     phases: Vec<StepPhase>,
+    directory_keys: BTreeMap<String, PathBuf>,
 }
 
 fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
     match &t.mutation {
         Mutation::Compound { relocations, .. }
-            if relocations.len() >= 2 && relocations.len() <= MAX_OPERATION_FILES =>
+            if !relocations.is_empty() && relocations.len() <= MAX_OPERATION_FILES =>
         {
             Ok(relocations)
         }
@@ -27,6 +28,178 @@ fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
             "Compound requires bounded independent original placements",
         )),
     }
+}
+fn creation_directories(t: &FrozenOperation) -> &[String] {
+    match &t.mutation {
+        Mutation::Compound {
+            created_directories,
+            ..
+        } => created_directories,
+        _ => &[],
+    }
+}
+pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
+    // Component ordering puts a path immediately before its descendants, so a
+    // file can never secretly become the parent of a later output. Exact update
+    // paths coalesce; distinct Windows-equivalent namespace slots do not.
+    let mut slots = BTreeMap::<PathBuf, bool>::new();
+    for file in t.relocated_files() {
+        slots.insert(PathBuf::from(file.path), false);
+    }
+    for directory in &t.directories {
+        let path = PathBuf::from(t.relocated_path(&directory.path));
+        if slots.insert(path, true).is_some() {
+            return Err(CoreError::new(
+                "invalidPlan",
+                "A compound file and directory share a final namespace slot",
+            ));
+        }
+    }
+    for directory in creation_directories(t) {
+        if slots.insert(PathBuf::from(directory), true).is_some() {
+            return Err(CoreError::new(
+                "invalidPlan",
+                "A create-only directory overlaps an original final namespace slot",
+            ));
+        }
+    }
+    let mut slots = slots.into_iter().collect::<Vec<_>>();
+    let mut failure = None;
+    slots.sort_by(|(left, _), (right, _)| {
+        match crate::backend::namespace_path_compare(left, right) {
+            Ok(order) => order,
+            Err(error) => {
+                failure = Some(error);
+                std::cmp::Ordering::Equal
+            }
+        }
+    });
+    if let Some(error) = failure {
+        return Err(error);
+    }
+    for adjacent in slots.windows(2) {
+        let (left, directory) = &adjacent[0];
+        let (right, _) = &adjacent[1];
+        if crate::backend::namespace_path_compare(left, right)? == std::cmp::Ordering::Equal
+            || (!directory && crate::backend::namespace_relative_path(right, left)?.is_some())
+        {
+            return Err(CoreError::new(
+                "invalidPlan",
+                "Compound final namespace slots collide or a file is used as a directory",
+            ));
+        }
+    }
+    Ok(())
+}
+fn physical_path(t: &FrozenOperation, path: &str, phases: &[StepPhase]) -> PathBuf {
+    t.relocations()
+        .iter()
+        .zip(phases)
+        .find_map(|(step, phase)| {
+            relative(path, step.target).map(|relative| {
+                Path::new(if *phase == StepPhase::After {
+                    step.target
+                } else {
+                    step.source
+                })
+                .join(relative)
+            })
+        })
+        .unwrap_or_else(|| PathBuf::from(path))
+}
+fn directory_keys(t: &FrozenOperation, phases: &[StepPhase]) -> BTreeMap<String, PathBuf> {
+    creation_directories(t)
+        .iter()
+        .map(|path| (path.clone(), physical_path(t, path, phases)))
+        .collect()
+}
+fn expected_parent(
+    core: &Core,
+    plan: &Plan,
+    step: &RelocationStep,
+) -> Result<Option<FileIdentity>> {
+    match &step.target_parent_identity {
+        RelocationParent::Existing(identity) => Ok(Some(identity.clone())),
+        RelocationParent::Created { created_directory } => {
+            if Path::new(&step.target).parent() != Some(Path::new(created_directory))
+                || !creation_directories(plan.transaction.as_ref().unwrap())
+                    .contains(created_directory)
+            {
+                return Err(CoreError::new(
+                    "invalidPlan",
+                    "Created target parent is not in this original Plan",
+                ));
+            }
+            core.materialized_identity(&plan.operation_id, Path::new(created_directory))
+        }
+    }
+}
+fn verify_created_membership(
+    t: &FrozenOperation,
+    union: &MultiNamespaceGuard,
+    keys: &BTreeMap<String, PathBuf>,
+) -> Result<()> {
+    for (path, key) in keys {
+        if union.directory_identity(key)?.is_none() {
+            continue;
+        }
+        let (_, entries, complete) = union.directory_snapshot(key, MAX_OPERATION_FILES)?;
+        if !complete {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "Created directory membership exceeds its bounded proof",
+            ));
+        }
+        let mut allowed = BTreeSet::new();
+        for child in creation_directories(t)
+            .iter()
+            .chain(t.created_files().iter().map(|file| &file.path))
+        {
+            if Path::new(child).parent() == Some(Path::new(path)) {
+                allowed.insert(
+                    Path::new(child)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+        if let Mutation::Compound { updates, .. } = &t.mutation {
+            for file in updates.iter().filter(|file| file.before.is_none()) {
+                if Path::new(&file.path).parent() == Some(Path::new(path)) {
+                    allowed.insert(
+                        Path::new(&file.path)
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned(),
+                    );
+                }
+            }
+        }
+        for step in t.relocations() {
+            if Path::new(step.target).parent() == Some(Path::new(path)) {
+                allowed.insert(
+                    Path::new(step.target)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+        if entries
+            .iter()
+            .any(|(name, _)| !allowed.contains(name.to_string_lossy().as_ref()))
+        {
+            return Err(CoreError::new(
+                "thirdState",
+                "Created directory has an unplanned member",
+            ));
+        }
+    }
+    Ok(())
 }
 fn relative(path: &str, root: &str) -> Option<PathBuf> {
     crate::history::history_relative_path(Path::new(path), Path::new(root))
@@ -140,15 +313,28 @@ fn check_membership(
             }
             expected.sort();
         }
-        if include_creations && let Mutation::Compound { updates, .. } = &t.mutation {
+        if include_creations
+            && let Mutation::Compound {
+                updates,
+                created_files,
+                created_directories,
+                ..
+            } = &t.mutation
+        {
             let final_directory = Path::new(&step.target).join(&path);
-            for change in updates.iter().filter(|change| {
+            for change in updates.iter().chain(created_files).filter(|change| {
                 change.before.is_none()
                     && Path::new(&change.path).parent() == Some(final_directory.as_path())
             }) {
                 let name = Path::new(&change.path).file_name().unwrap();
                 // Missing is a known create-only before state; existing names
                 // remain subject to original materialization/bytes checks.
+                entries.retain(|(actual, _)| actual != name);
+            }
+            for directory in created_directories.iter().filter(|directory| {
+                Path::new(directory).parent() == Some(final_directory.as_path())
+            }) {
+                let name = Path::new(directory).file_name().unwrap();
                 entries.retain(|(actual, _)| actual != name);
             }
         }
@@ -165,21 +351,21 @@ fn check_membership(
     Ok(())
 }
 fn check_step_identity(
+    core: &Core,
+    plan: &Plan,
     union: &mut MultiNamespaceGuard,
     index: usize,
     step: &RelocationStep,
     phase: StepPhase,
 ) -> Result<()> {
     let parent = union.source_parent_identity(index)?;
+    let expected = expected_parent(core, plan, step)?;
+    let target_parent = union.target_parent_identity(index)?;
     let namespace = union.select(index)?;
     if namespace.source_identity()? != step.source_identity
-        || namespace.parent_identity()? != step.target_parent_identity
-        || parent
-            != if phase == StepPhase::After {
-                step.target_parent_identity.clone()
-            } else {
-                step.source_parent_identity.clone()
-            }
+        || target_parent != expected
+        || (phase == StepPhase::After && expected.as_ref() != Some(&parent))
+        || (phase != StepPhase::After && parent != step.source_parent_identity)
     {
         return Err(CoreError::new(
             "thirdState",
@@ -201,7 +387,7 @@ fn open_tree(
     step: &RelocationStep,
     phase: StepPhase,
 ) -> Result<Vec<(usize, File)>> {
-    check_membership(namespace, t, step, phase, false)?;
+    check_membership(namespace, t, step, phase, phase == StepPhase::After)?;
     let mut handles = Vec::new();
     for (index, file) in t.files.iter().enumerate() {
         let Some(path) = source_relative(file, step, phase) else {
@@ -260,8 +446,17 @@ fn verify_creation_absence(
             }
         }
     }
-    if let Mutation::Compound { updates, .. } = &t.mutation {
-        for change in updates.iter().filter(|change| change.before.is_none()) {
+    if let Mutation::Compound {
+        updates,
+        created_files,
+        ..
+    } = &t.mutation
+    {
+        for change in updates
+            .iter()
+            .chain(created_files)
+            .filter(|change| change.before.is_none())
+        {
             if let Some(path) = relative(&change.path, &step.target) {
                 match namespace.open_source_descendant(&path) {
                     Err(error) if error.code == "missing" => {}
@@ -280,15 +475,209 @@ fn verify_creation_absence(
 }
 
 impl Core {
+    pub(crate) fn validate_compound_pending(&self, plan: &Plan) -> Result<()> {
+        let t = plan.transaction.as_ref().unwrap();
+        let relocations = steps(t)?;
+        let mut roots = relocations
+            .iter()
+            .flat_map(|step| [PathBuf::from(&step.source), PathBuf::from(&step.target)])
+            .collect::<Vec<_>>();
+        roots.extend(creation_directories(t).iter().map(PathBuf::from));
+        let except = Some(plan.operation_id.as_str());
+        for file in &t.files {
+            self.check_pending_except(Path::new(&file.path), except)?;
+            self.check_pending_except(Path::new(&t.relocated_path(&file.path)), except)?;
+            if relocations
+                .iter()
+                .any(|step| relative(&file.path, &step.source).is_some())
+            {
+                self.check_pending_identity_except(&file.stamp.identity, except)?;
+            }
+        }
+        let phases = vec![StepPhase::Before; relocations.len()];
+        for change in t.relocated_files() {
+            self.check_pending_except(Path::new(&change.path), except)?;
+            self.check_pending_except(&physical_path(t, &change.path, &phases), except)?;
+        }
+        for root in &roots {
+            self.check_pending_except(root, except)?;
+        }
+        // A pending child can still be absent and therefore absent from this
+        // Plan's captured tree. Compare the original unfinished writer's frozen
+        // addresses against both namespace scopes, rather than scanning current
+        // files or treating absent children as unowned slots.
+        for other in self.operations.values().filter(|other| {
+            other.operation_id != plan.operation_id
+                && !self.committed(&other.operation_id)
+                && !self.resolved(&other.operation_id)
+                && (other.transaction.is_none()
+                    || self.journal_path(&other.operation_id, "install").exists())
+        }) {
+            let mut paths = Vec::new();
+            if let Some(transaction) = &other.transaction {
+                paths.extend(
+                    transaction
+                        .files
+                        .iter()
+                        .map(|file| PathBuf::from(&file.path)),
+                );
+                paths.extend(
+                    transaction
+                        .created_files()
+                        .iter()
+                        .map(|file| PathBuf::from(&file.path)),
+                );
+                paths.extend(
+                    transaction
+                        .relocated_files()
+                        .iter()
+                        .map(|file| PathBuf::from(&file.path)),
+                );
+                paths.extend(
+                    transaction
+                        .relocations()
+                        .iter()
+                        .flat_map(|step| [PathBuf::from(step.source), PathBuf::from(step.target)]),
+                );
+                match &transaction.mutation {
+                    Mutation::Update { files } => {
+                        paths.extend(files.iter().map(|file| PathBuf::from(&file.path)))
+                    }
+                    Mutation::CreateTree {
+                        target,
+                        existing_target,
+                        directories,
+                        updates,
+                        ..
+                    } => {
+                        if !existing_target {
+                            paths.push(PathBuf::from(target));
+                        }
+                        paths.extend(
+                            directories
+                                .iter()
+                                .map(|directory| Path::new(target).join(directory)),
+                        );
+                        paths.extend(updates.iter().map(|file| PathBuf::from(&file.path)));
+                    }
+                    Mutation::Compound {
+                        created_directories,
+                        ..
+                    } => paths.extend(created_directories.iter().map(PathBuf::from)),
+                    Mutation::Relocate { .. } => {}
+                }
+            } else {
+                paths.push(PathBuf::from(&other.path));
+            }
+            for path in paths {
+                for root in &roots {
+                    if crate::backend::namespace_relative_path(&path, root)?.is_some()
+                        || crate::backend::namespace_relative_path(root, &path)?.is_some()
+                    {
+                        return Err(CoreError::new(
+                            "recoveryPending",
+                            "An original unfinished writer overlaps this compound namespace; inspect its retained operation before any effect",
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn materialize_compound_directories(
+        &self,
+        plan: &Plan,
+        union: &mut MultiNamespaceGuard,
+        keys: &BTreeMap<String, PathBuf>,
+    ) -> Result<()> {
+        let mut paths = keys.iter().collect::<Vec<_>>();
+        paths.sort_by_key(|(_, path)| path.components().count());
+        for (final_path, key) in paths {
+            let expected = self.materialized_identity(&plan.operation_id, Path::new(final_path))?;
+            match union.directory_identity(key)? {
+                Some(actual) if expected.as_ref() == Some(&actual) => {}
+                Some(_) => {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Created directory is not its original materialized object",
+                    ));
+                }
+                None if expected.is_some() => {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Original created directory disappeared",
+                    ));
+                }
+                None => {
+                    let directory = union.create_directory(key)?;
+                    self.record_materialized(&plan.operation_id, Path::new(final_path), directory)?;
+                    compound_failpoint(&format!(
+                        "directory:{}",
+                        Path::new(final_path).file_name().unwrap().to_string_lossy()
+                    ))?;
+                }
+            }
+        }
+        Ok(())
+    }
+    fn retain_compound_directories(
+        &self,
+        plan: &Plan,
+        union: &mut MultiNamespaceGuard,
+        keys: &BTreeMap<String, PathBuf>,
+    ) -> Result<()> {
+        let mut paths = keys.iter().collect::<Vec<_>>();
+        paths.sort_by_key(|(_, path)| path.components().count());
+        for (final_path, key) in paths {
+            let file = union.retain_directory(key)?;
+            if self
+                .materialized_identity(&plan.operation_id, Path::new(final_path))?
+                .as_ref()
+                != Some(&stamp(file)?.identity)
+            {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "Created directory changed across its original namespace step",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn execute_compound(&mut self, plan: &Plan) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let relocations = steps(t)?;
+        validate_compound_namespace(t)?;
+        self.validate_compound_pending(plan)?;
+        for (index, step) in relocations.iter().enumerate() {
+            for (other, another) in relocations.iter().enumerate() {
+                let within = |path: &str, root: &str| {
+                    crate::backend::namespace_relative_path(Path::new(path), Path::new(root))
+                        .map(|relative| relative.is_some())
+                };
+                if index != other
+                    && (within(&step.source, &another.source)?
+                        || within(&step.target, &another.target)?)
+                    || crate::backend::namespace_relative_path(
+                        Path::new(&step.target).parent().unwrap(),
+                        Path::new(&another.source),
+                    )?
+                    .is_some()
+                {
+                    return Err(CoreError::new(
+                        "invalidPlan",
+                        "Compound namespace targets overlap under the Windows ordinal name comparison",
+                    ));
+                }
+            }
+        }
         for step in relocations {
             self.check_subtree_boundary(Path::new(&t.request.root), Path::new(&step.source))?;
-            self.owned_parent(
-                Path::new(&t.request.root),
-                Path::new(&step.target).parent().unwrap(),
-            )?;
+            if matches!(step.target_parent_identity, RelocationParent::Existing(_)) {
+                self.owned_parent(
+                    Path::new(&t.request.root),
+                    Path::new(&step.target).parent().unwrap(),
+                )?;
+            }
         }
         let pairs = relocations
             .iter()
@@ -299,7 +688,16 @@ impl Core {
                 )
             })
             .collect::<Vec<_>>();
-        let mut union = MultiNamespaceGuard::acquire(&pairs)?;
+        let initial_phases = vec![StepPhase::Before; relocations.len()];
+        let keys = directory_keys(t, &initial_phases);
+        let mut union = if keys.is_empty() {
+            MultiNamespaceGuard::acquire(&pairs)?
+        } else {
+            MultiNamespaceGuard::acquire_planned(
+                &pairs,
+                &keys.values().cloned().collect::<Vec<_>>(),
+            )?
+        };
         let mut outside_guards = Vec::new();
         let mut outside_handles = Vec::new();
         for (path, expected) in &t.write_parents {
@@ -325,7 +723,7 @@ impl Core {
         }
         let mut tree_handles = Vec::new();
         for (index, step) in relocations.iter().enumerate() {
-            check_step_identity(&mut union, index, step, StepPhase::Before)?;
+            check_step_identity(self, plan, &mut union, index, step, StepPhase::Before)?;
             let namespace = union.select(index)?;
             tree_handles.extend(open_tree(namespace, t, step, StepPhase::Before)?);
             verify_creation_absence(namespace, t, step)?;
@@ -370,10 +768,20 @@ impl Core {
                     .any(|step| relative(&change.path, &step.target).is_some())
         }) {
             self.check_pending(Path::new(&change.path))?;
-            ensure_absent(Path::new(&change.path))?;
+            ensure_absent(&physical_path(t, &change.path, &initial_phases))?;
+        }
+        for (path, key) in &keys {
+            self.check_pending(Path::new(path))?;
+            if union.directory_identity(key)?.is_some() {
+                return Err(CoreError::new(
+                    "exists",
+                    "Create-only directory is occupied",
+                ));
+            }
         }
         self.install_record(plan)?;
         compound_failpoint("installed")?;
+        self.materialize_compound_directories(plan, &mut union, &keys)?;
         for (index, step) in relocations.iter().enumerate() {
             // Releasing only this root's descendants is required by NTFS parent
             // rename. All other roots and the union ancestor closure stay held.
@@ -412,6 +820,10 @@ impl Core {
                     .to_str()
                     .unwrap(),
             )?;
+            // Source descendants had to be released for NTFS rename. Rebind
+            // only through the same original root and retained materialization.
+            self.retain_compound_directories(plan, &mut union, &keys)?;
+            let namespace = union.select(index)?;
             tree_handles.extend(open_tree(namespace, t, step, StepPhase::After)?);
             compound_failpoint(&format!("move{index}"))?;
         }
@@ -438,6 +850,13 @@ impl Core {
                 file
             };
             self.record_materialized(&plan.operation_id, Path::new(&change.path), &file)?;
+            compound_failpoint(&format!(
+                "materialize:{}",
+                Path::new(&change.path)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+            ))?;
             write_blob(&mut file, &change.after)?;
             compound_failpoint(&format!(
                 "create:{}",
@@ -476,6 +895,7 @@ impl Core {
         for (index, step) in relocations.iter().enumerate() {
             check_membership(union.select(index)?, t, step, StepPhase::After, true)?;
         }
+        verify_created_membership(t, &union, &keys)?;
         self.publish_recovery_facts(plan, &materialized)?;
         compound_failpoint("facts")?;
         self.commit(plan)?;
@@ -489,6 +909,8 @@ impl Core {
         write: bool,
     ) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
+        validate_compound_namespace(t)?;
+        self.validate_compound_pending(plan)?;
         let relocations = steps(t)?;
         let phases = relocations.iter().map(phase).collect::<Result<Vec<_>>>()?;
         let pairs = relocations
@@ -505,11 +927,51 @@ impl Core {
                 )
             })
             .collect::<Vec<_>>();
-        let mut union = MultiNamespaceGuard::acquire(&pairs)?;
+        let keys = directory_keys(t, &phases);
+        let mut union = if keys.is_empty() {
+            MultiNamespaceGuard::acquire(&pairs)?
+        } else {
+            MultiNamespaceGuard::acquire_planned(
+                &pairs,
+                &keys.values().cloned().collect::<Vec<_>>(),
+            )?
+        };
+        for (path, key) in &keys {
+            let expected = self.materialized_identity(&plan.operation_id, Path::new(path))?;
+            let actual = union.directory_identity(key)?;
+            let mut directory = member(
+                path,
+                "write",
+                None,
+                Some(b"createdDirectory"),
+                expected.as_ref(),
+            );
+            directory.kind = "directory".into();
+            directory.target_path = Some(display(key));
+            if actual.is_some() && actual == expected {
+                directory.matches_after = true;
+                directory.state = "knownAfter".into();
+                directory.identity_binding = "materialized".into();
+                directory.current_identity = actual.as_ref().map(RecoveryIdentity::from);
+            } else if actual.is_none() && expected.is_none() {
+                directory.matches_before = true;
+                directory.state = "knownBefore".into();
+                directory.identity_binding = "missing".into();
+            } else {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "Create-only directory lost its exact original materialization",
+                ));
+            }
+            directory.message =
+                "Only this Plan's create-only directory may supply the planned parent".into();
+            capture.members.push(directory);
+        }
+        verify_created_membership(t, &union, &keys)?;
         capture.changes = t.relocated_files();
         for (index, step) in relocations.iter().enumerate() {
             let phase = phases[index];
-            check_step_identity(&mut union, index, step, phase)?;
+            check_step_identity(self, plan, &mut union, index, step, phase)?;
             let namespace = union.select(index)?;
             check_membership(namespace, t, step, phase, true)?;
             let evidence = serde_json::to_vec(&step.source_identity)?;
@@ -617,8 +1079,13 @@ impl Core {
                     ));
                 }
             }
-            if let Mutation::Compound { updates, .. } = &t.mutation {
-                for change in updates.iter().filter(|change| {
+            if let Mutation::Compound {
+                updates,
+                created_files,
+                ..
+            } = &t.mutation
+            {
+                for change in updates.iter().chain(created_files).filter(|change| {
                     change.before.is_none() && relative(&change.path, &step.target).is_some()
                 }) {
                     let path = relative(&change.path, &step.target).unwrap();
@@ -680,6 +1147,7 @@ impl Core {
         capture.compound = Some(CompoundCapture {
             namespace: union,
             phases,
+            directory_keys: keys,
         });
         Ok(())
     }
@@ -697,6 +1165,18 @@ impl Core {
                 "Original compound namespace proof is unavailable",
             )
         })?;
+        self.materialize_compound_directories(
+            plan,
+            &mut compound.namespace,
+            &compound.directory_keys,
+        )?;
+        for directory in capture
+            .members
+            .iter_mut()
+            .filter(|member| member.kind == "directory" && member.role == "write")
+        {
+            directory.matches_after = true;
+        }
         for (index, step) in relocations.iter().enumerate() {
             let phase = compound.phases[index];
             if phase == StepPhase::After {
@@ -738,6 +1218,12 @@ impl Core {
                     .unwrap(),
             )?;
             compound.phases[index] = StepPhase::After;
+            self.retain_compound_directories(
+                plan,
+                &mut compound.namespace,
+                &compound.directory_keys,
+            )?;
+            let namespace = compound.namespace.select(index)?;
             // Open through the same original root, then bind each held file to
             // its original recovery member. No target-path namesake is authority.
             check_membership(namespace, t, step, StepPhase::After, true)?;
@@ -808,6 +1294,7 @@ impl Core {
                 true,
             )?;
         }
+        verify_created_membership(t, &compound.namespace, &compound.directory_keys)?;
         Ok(())
     }
     pub(crate) fn create_compound_recovery_output(
@@ -836,7 +1323,11 @@ impl Core {
                 ));
             }
         }
-        Ok(None)
+        Ok(Some(compound.namespace.open_output(
+            Path::new(path),
+            true,
+            true,
+        )?))
     }
 }
 

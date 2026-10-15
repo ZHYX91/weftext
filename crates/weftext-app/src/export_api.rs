@@ -488,7 +488,7 @@ async fn download(
     Ok(response)
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ImportRequest {
     operation_id: String,
@@ -517,15 +517,29 @@ async fn prepare_import(
             "请选择 Word、Weftext 原生资料包或支持的文献格式",
         ));
     }
-    let loc = location(&state, &req.session_id)?;
-    if std::path::Path::new(&req.root) != loc.root {
-        return Err(ApiError::bad("目标库与当前会话不一致"));
+    let lookup_id = req.operation_id.clone();
+    let new_import = core_call(&state, move |core| {
+        match core.operation_details(&lookup_id) {
+            Ok(_) => Ok(false),
+            Err(error) if error.code == "operationMissing" => Ok(true),
+            Err(error) => Err(error),
+        }
+    })
+    .await?;
+    if new_import {
+        let loc = location(&state, &req.session_id)?;
+        if std::path::Path::new(&req.root) != loc.root {
+            return Err(ApiError::bad("目标库与当前会话不一致"));
+        }
     }
     let bytes = decode(&req.bytes_base64)?;
     let is_docx = req.format == "docx";
     let (preview, files) = core_call(&state, move |core| {
         let operation_id = req.operation_id.clone();
-        if core.operation_details(&req.operation_id).is_err() {
+        // Retained imports still pass the original full Core request through
+        // its fingerprint check. Session/base are only transient admission
+        // prerequisites for a new proposal, not a second durable authority.
+        if new_import {
             core.check_session_base(&req.session_id, &req.base_id)?;
         }
         let preview = if req.format == "docx" {
@@ -633,21 +647,139 @@ mod tests {
     fn state() -> (tempfile::TempDir, AppState) {
         let dir = tempfile::tempdir().unwrap();
         let core = Core::new(dir.path().join("state")).unwrap();
-        (
-            dir,
-            AppState {
-                core: Arc::new(Mutex::new(core)),
-                token: Arc::from("test-output"),
-                port: 12345,
-                locations: Arc::new(Mutex::new(HashMap::new())),
-                renders: Arc::new(Mutex::new(HashMap::new())),
-                editor_versions: Arc::new(Mutex::new(HashMap::new())),
-                exports: Arc::new(Mutex::new(ExportStore::default())),
-                render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
-                sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
-                initial: None,
-            },
+        (dir, state_with_core(core))
+    }
+    fn state_with_core(core: Core) -> AppState {
+        AppState {
+            core: Arc::new(Mutex::new(core)),
+            token: Arc::from("test-output"),
+            port: 12345,
+            locations: Arc::new(Mutex::new(HashMap::new())),
+            renders: Arc::new(Mutex::new(HashMap::new())),
+            editor_versions: Arc::new(Mutex::new(HashMap::new())),
+            exports: Arc::new(Mutex::new(ExportStore::default())),
+            render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+            sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
+            initial: None,
+        }
+    }
+    #[tokio::test]
+    async fn native_import_retry_after_restart_uses_exact_plan_without_old_session() {
+        let (dir, state) = state();
+        let root = dir.path().join("Library");
+        let (opened, bytes) = {
+            let mut core = state.core.lock().unwrap();
+            core.create_library(&root).unwrap();
+            let opened = core.create_note(&root, &root, "Original").unwrap();
+            let bytes = core.export_native_package(&root).unwrap();
+            (opened, bytes)
+        };
+        remember(&state, &serde_json::to_value(&opened).unwrap()).unwrap();
+        let request = ImportRequest {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            session_id: opened.session_id,
+            base_id: opened.base_id,
+            root: root.to_string_lossy().into_owned(),
+            parent: root.to_string_lossy().into_owned(),
+            name: "Imported".into(),
+            format: "native".into(),
+            bytes_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        };
+        let Json(first) = prepare_import(State(state.clone()), Json(request.clone()))
+            .await
+            .unwrap();
+        assert_eq!(first["status"], "prepared");
+        assert!(!root.join("Imported").exists());
+        for changed_field in ["base", "root"] {
+            let mut fresh_request = request.clone();
+            fresh_request.operation_id = uuid::Uuid::new_v4().to_string();
+            if changed_field == "base" {
+                fresh_request.base_id = "not-the-session-base".into();
+            } else {
+                fresh_request.root.push_str("-another-library");
+            }
+            let error = prepare_import(State(state.clone()), Json(fresh_request.clone()))
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.code,
+                if changed_field == "base" {
+                    "staleBase"
+                } else {
+                    "invalid_request"
+                }
+            );
+            assert_eq!(
+                state
+                    .core
+                    .lock()
+                    .unwrap()
+                    .operation_details(&fresh_request.operation_id)
+                    .unwrap_err()
+                    .code,
+                "operationMissing"
+            );
+        }
+        drop(state);
+        let state = state_with_core(Core::new(dir.path().join("state")).unwrap());
+        let Json(retry) = prepare_import(State(state.clone()), Json(request.clone()))
+            .await
+            .unwrap();
+        assert_eq!(retry, first);
+        for field in ["root", "parent", "name", "format", "bytes"] {
+            let mut changed = request.clone();
+            match field {
+                "root" => changed.root.push_str("-changed"),
+                "parent" => changed.parent.push_str("-changed"),
+                "name" => changed.name.push_str("-changed"),
+                "format" => changed.format = "docx".into(),
+                "bytes" => {
+                    changed.bytes_base64 =
+                        base64::engine::general_purpose::STANDARD.encode(b"changed exact bytes")
+                }
+                _ => unreachable!(),
+            }
+            let error = prepare_import(State(state.clone()), Json(changed))
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, "operationConflict", "changed {field}");
+        }
+        let mut new_request = request.clone();
+        new_request.operation_id = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            prepare_import(State(state.clone()), Json(new_request.clone()))
+                .await
+                .unwrap_err()
+                .code,
+            "invalid_request"
+        );
+        assert_eq!(
+            state
+                .core
+                .lock()
+                .unwrap()
+                .operation_details(&new_request.operation_id)
+                .unwrap_err()
+                .code,
+            "operationMissing"
+        );
+        assert!(!root.join("Imported").exists());
+        let Json(committed) = commit_import(
+            State(state.clone()),
+            Json(ImportCommit {
+                operation_id: request.operation_id.clone(),
+                plan_id: first["planId"].as_str().unwrap().into(),
+                accept_losses: true,
+            }),
         )
+        .await
+        .unwrap();
+        assert_eq!(committed["status"], "committed");
+        let Json(replayed) = prepare_import(State(state.clone()), Json(request))
+            .await
+            .unwrap();
+        assert_eq!(replayed["planId"], first["planId"]);
+        assert_eq!(replayed["status"], "committed");
     }
     fn artifact(state: &AppState, bytes: &[u8], loss: bool) -> String {
         let id = uuid::Uuid::new_v4().to_string();

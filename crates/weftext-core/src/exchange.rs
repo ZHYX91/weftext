@@ -17,6 +17,31 @@ pub use native_export::{NativeExport, NativeExportWitness};
 fn native_error(error: weftext_export::exchange::NativeError) -> CoreError {
     CoreError::new(&error.code, error.message)
 }
+#[cfg(test)]
+thread_local! {
+    // Tests use this only to reproduce previously valid native inputs. It skips
+    // the new role/name preflight, never original execution or recovery guards.
+    static LEGACY_NATIVE_MARKER_INPUT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+fn validate_native_navigation_roles(package: &NativePackage) -> Result<()> {
+    #[cfg(test)]
+    if LEGACY_NATIVE_MARKER_INPUT.with(std::cell::Cell::get) {
+        return Ok(());
+    }
+    if package.manifest.entries.iter().any(|(path, entry)| {
+        matches!(entry.role, Role::Resource | Role::Style)
+            && path
+                .rsplit('/')
+                .next()
+                .is_some_and(|leaf| leaf.eq_ignore_ascii_case("weftext.directory.json"))
+    }) {
+        return Err(CoreError::new(
+            "nativeControlConflict",
+            "A native Resource or Style cannot occupy the reserved directory marker name; retain the original package and explicitly rename that resource before importing",
+        ));
+    }
+    Ok(())
+}
 fn relative(root: &Path, path: &str) -> Result<String> {
     Path::new(path)
         .strip_prefix(root)
@@ -261,6 +286,7 @@ impl Core {
         let target = parent.join(name);
         ensure_absent(&target)?;
         validate_native_package(&package).map_err(native_error)?;
+        validate_native_navigation_roles(&package)?;
         let workspace = self.require_workspace(root)?;
         let source_schema = weftext_data::Schema::from_author_json(&decode(
             &package.files[&package.manifest.schema_path],
@@ -622,6 +648,34 @@ impl Core {
                 file.after = bytes;
             }
         }
+        // The imported wrapper and ordinary ancestors are new Directory objects.
+        // Allocate their markers in this same CreateTree; the original creation
+        // handles supply admission, and publication can register parents before
+        // their Node children. Resource-only folders remain owned Node members.
+        let node_directories: BTreeSet<_> = births
+            .iter()
+            .map(|birth| Path::new(&birth.path).parent().unwrap().to_path_buf())
+            .collect();
+        let mut navigation_directories = BTreeSet::from([target.clone()]);
+        for directory in &node_directories {
+            let mut ancestor = directory.parent();
+            while let Some(path) = ancestor.filter(|path| path.starts_with(&target)) {
+                if !node_directories.contains(path) {
+                    navigation_directories.insert(path.to_path_buf());
+                }
+                ancestor = path.parent();
+            }
+        }
+        for directory in navigation_directories {
+            output.push(FileChange {
+                path: display(&directory.join("weftext.directory.json")),
+                base_id: None,
+                before: None,
+                after: serde_json::to_vec_pretty(&serde_json::json!({
+                    "directoryId": fresh(),
+                }))?,
+            });
+        }
         // Always preserve the complete original ZIP, including manifest/config,
         // source identities and unsupported discussions. It receives no admission.
         if let Some(original) = original_native {
@@ -651,6 +705,15 @@ impl Core {
                 "Native outputs plus retained original exceed the Core operation budget",
             ));
         }
+        // Every portable output, including navigation markers and the retained
+        // original, needs its original physical observation under the exact
+        // revision published by this same Plan.
+        for file in &output {
+            preview
+                .revisions
+                .entry(file.path.clone())
+                .or_insert_with(fresh);
+        }
         preview.changes.extend(
             output
                 .iter()
@@ -670,6 +733,456 @@ impl Core {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    fn native_marker_resource_is_not_a_directory_birth(style: bool, placement: u8, alias: bool) {
+        let temp = tempfile::tempdir().unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let origin = temp.path().join("Origin");
+        core.create_library(&origin).unwrap();
+        let parent = core.create_note(&origin, &origin, "Parent").unwrap();
+        if placement == 2 {
+            core.create_note(&origin, origin.join("Parent"), "Child")
+                .unwrap();
+        }
+        let claimed = fresh();
+        let bytes = serde_json::to_vec(&serde_json::json!({"directoryId":claimed})).unwrap();
+        let leaf = if alias {
+            "WEFTEXT.DIRECTORY.JSON"
+        } else {
+            "weftext.directory.json"
+        };
+        let resource = core
+            .prepare_import_resource(&origin, &parent.path, leaf, bytes.clone(), &fresh())
+            .unwrap();
+        core.execute_operation(&resource.operation_id, &resource.plan_id)
+            .unwrap();
+        // Start with the real owned-resource producer and export. A native
+        // package may place owned resources below nested folders and may carry
+        // Style roles; these remain untrusted author content, not directory
+        // allocation requests. The standard package validator checks this input.
+        let mut package =
+            read_native_package(&core.export_native_package(&origin).unwrap()).unwrap();
+        let old_path = format!("Parent/{leaf}");
+        let target_path = if placement == 0 {
+            old_path.clone()
+        } else {
+            format!("Parent/assets/{leaf}")
+        };
+        let mut entry = package.manifest.entries.remove(&old_path).unwrap();
+        if style {
+            entry.role = Role::Style;
+        }
+        package.manifest.entries.insert(target_path.clone(), entry);
+        let payload = package.files.remove(&old_path).unwrap();
+        package.files.insert(target_path.clone(), payload);
+        if placement != 0 {
+            let path = "Parent/weftext.resources.json";
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&package.files[path]).unwrap();
+            value["resources"][0]["path"] = format!("assets/{leaf}").into();
+            let after = serde_json::to_vec(&value).unwrap();
+            let mut entry = NativeEntry::new(Role::ResourceManifest, &after);
+            entry.owner_node_id = package.manifest.entries[path].owner_node_id.clone();
+            entry.revision = Some(fresh());
+            package.manifest.entries.insert(path.into(), entry);
+            package.files.insert(path.into(), after);
+        }
+        if placement == 2 {
+            let members = package
+                .files
+                .keys()
+                .filter(|path| path.starts_with("Parent/Child/"))
+                .cloned()
+                .collect::<Vec<_>>();
+            for path in members {
+                let target = path.replacen("Parent/Child/", "Parent/assets/Child/", 1);
+                let entry = package.manifest.entries.remove(&path).unwrap();
+                let bytes = package.files.remove(&path).unwrap();
+                package.manifest.entries.insert(target.clone(), entry);
+                package.files.insert(target, bytes);
+            }
+        }
+        let package = write_native_package(&package).unwrap();
+        let root = temp.path().join("Library");
+        core.create_library(&root).unwrap();
+        let operation = fresh();
+        let error = core
+            .prepare_native_import(&root, &root, "Imported", package.clone(), &operation, false)
+            .unwrap_err();
+        assert_eq!(error.code, "nativeControlConflict");
+        assert!(!root.join("Imported").exists());
+        assert!(!core.journal_path(&operation, "install").exists());
+        assert_eq!(fs::read(origin.join(&old_path)).unwrap(), bytes);
+        assert_eq!(
+            read_native_package(&package).unwrap().files[&target_path],
+            bytes
+        );
+    }
+
+    #[test]
+    fn native_marker_resource_at_node_root_cannot_allocate_a_directory() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(false, 0, alias);
+        }
+    }
+    #[test]
+    fn native_marker_style_at_node_root_cannot_allocate_a_directory() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(true, 0, alias);
+        }
+    }
+    #[test]
+    fn native_marker_resource_in_owned_folder_cannot_allocate_a_directory() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(false, 1, alias);
+        }
+    }
+    #[test]
+    fn native_marker_style_in_owned_folder_cannot_allocate_a_directory() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(true, 1, alias);
+        }
+    }
+    #[test]
+    fn native_marker_resource_at_nested_node_ancestor_cannot_replace_allocated_marker() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(false, 2, alias);
+        }
+    }
+    #[test]
+    fn native_marker_style_at_nested_node_ancestor_cannot_replace_allocated_marker() {
+        for alias in [false, true] {
+            native_marker_resource_is_not_a_directory_birth(true, 2, alias);
+        }
+    }
+
+    fn legacy_native_marker_resource_keeps_its_original_role(
+        style: bool,
+        nested: bool,
+        recover: bool,
+    ) {
+        let temp = tempfile::tempdir().unwrap();
+        let private = temp.path().join("private");
+        let mut core = Core::new(&private).unwrap();
+        let origin = temp.path().join("Origin");
+        core.create_library(&origin).unwrap();
+        let parent = core.create_note(&origin, &origin, "Parent").unwrap();
+        let claimed = fresh();
+        let bytes = serde_json::to_vec(&serde_json::json!({"directoryId":claimed})).unwrap();
+        let resource = core
+            .prepare_import_resource(
+                &origin,
+                &parent.path,
+                "weftext.directory.json",
+                bytes.clone(),
+                &fresh(),
+            )
+            .unwrap();
+        core.execute_operation(&resource.operation_id, &resource.plan_id)
+            .unwrap();
+        let mut package =
+            read_native_package(&core.export_native_package(&origin).unwrap()).unwrap();
+        let path = if nested {
+            "Parent/assets/weftext.directory.json"
+        } else {
+            "Parent/weftext.directory.json"
+        };
+        let mut entry = package
+            .manifest
+            .entries
+            .remove("Parent/weftext.directory.json")
+            .unwrap();
+        if style {
+            entry.role = Role::Style;
+        }
+        let payload = package
+            .files
+            .remove("Parent/weftext.directory.json")
+            .unwrap();
+        package.files.insert(path.into(), payload);
+        package.manifest.entries.insert(path.into(), entry);
+        if nested {
+            let manifest = "Parent/weftext.resources.json";
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&package.files[manifest]).unwrap();
+            value["resources"][0]["path"] = "assets/weftext.directory.json".into();
+            let after = serde_json::to_vec(&value).unwrap();
+            let mut entry = NativeEntry::new(Role::ResourceManifest, &after);
+            entry.owner_node_id = package.manifest.entries[manifest].owner_node_id.clone();
+            entry.revision = Some(fresh());
+            package.files.insert(manifest.into(), after);
+            package.manifest.entries.insert(manifest.into(), entry);
+        }
+        let package = write_native_package(&package).unwrap();
+        let root = temp.path().join("Library");
+        let workspace = core.create_library(&root).unwrap().workspace_id;
+        // Reproduce a previously allowed input with the same real public
+        // producer, creation handles and original Plan. Only the newly added
+        // preflight is disabled during fixture preparation; no API/env flag or
+        // execution/recovery/identity bypass exists in a product build.
+        LEGACY_NATIVE_MARKER_INPUT.with(|flag| flag.set(true));
+        let prepared =
+            core.prepare_native_import(&root, &root, "Imported", package.clone(), &fresh(), false);
+        LEGACY_NATIVE_MARKER_INPUT.with(|flag| flag.set(false));
+        let preview = prepared.unwrap();
+        core.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        if recover {
+            fs::rename(
+                core.journal_path(&preview.operation_id, "commit"),
+                temp.path().join("retained-original-commit"),
+            )
+            .unwrap();
+        }
+        drop(core);
+        let mut core = Core::new(&private).unwrap();
+        if recover {
+            let inspection = core.inspect_recovery(&preview.operation_id).unwrap();
+            assert_eq!(inspection.coherence, "knownAfter");
+            core.resolve_recovery(&preview.operation_id, "adoptAfterImages")
+                .unwrap();
+        }
+        let resource_path = root.join("Imported").join(path);
+        let physical = ParentGuard::acquire(&resource_path)
+            .unwrap()
+            .directory_identity()
+            .unwrap();
+        assert!(
+            !core
+                .directory_admitted(&workspace, &claimed, &physical)
+                .unwrap()
+        );
+        assert!(
+            core.directory_admission_candidates(&workspace)
+                .unwrap()
+                .iter()
+                .all(|(_, id, _)| id != &claimed)
+        );
+        let claimed_ref = format!("weftext-directory://{workspace}/{claimed}");
+        assert_ne!(
+            core.resolve_navigation_target(&root, &claimed_ref)
+                .unwrap()
+                .status,
+            "managed"
+        );
+        let marker: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join("Imported/weftext.directory.json")).unwrap(),
+        )
+        .unwrap();
+        let wrapper = format!(
+            "weftext-directory://{workspace}/{}",
+            marker["directoryId"].as_str().unwrap()
+        );
+        assert_eq!(
+            core.resolve_navigation_target(&root, &wrapper)
+                .unwrap()
+                .status,
+            "managed"
+        );
+        assert_eq!(fs::read(&resource_path).unwrap(), bytes);
+        assert_eq!(
+            fs::read(root.join("Imported/.weftext-import-originals/original.weftext")).unwrap(),
+            package
+        );
+        let resources = core
+            .managed_resource_snapshot(&root, root.join("Imported/Parent/Parent.typ"))
+            .unwrap();
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0].identity_status, "admitted");
+        assert_eq!(resources[0].bytes, bytes);
+        assert!(
+            preview
+                .resource_map
+                .values()
+                .any(|reference| reference == &resources[0].resource_ref)
+        );
+        assert!(core.committed(&preview.operation_id));
+    }
+
+    #[test]
+    fn legacy_native_marker_resource_at_node_root_never_gains_navigation_after_commit_or_recovery()
+    {
+        for recover in [false, true] {
+            legacy_native_marker_resource_keeps_its_original_role(false, false, recover);
+        }
+    }
+    #[test]
+    fn legacy_native_marker_style_at_node_root_never_gains_navigation_after_commit_or_recovery() {
+        for recover in [false, true] {
+            legacy_native_marker_resource_keeps_its_original_role(true, false, recover);
+        }
+    }
+    #[test]
+    fn legacy_native_marker_resource_in_owned_folder_never_gains_navigation_after_commit_or_recovery()
+     {
+        for recover in [false, true] {
+            legacy_native_marker_resource_keeps_its_original_role(false, true, recover);
+        }
+    }
+    #[test]
+    fn legacy_native_marker_style_in_owned_folder_never_gains_navigation_after_commit_or_recovery()
+    {
+        for recover in [false, true] {
+            legacy_native_marker_resource_keeps_its_original_role(true, true, recover);
+        }
+    }
+
+    #[test]
+    fn native_import_after_sync_enabled_admits_wrapper_in_original_plan_and_clones_its_typed_parent()
+     {
+        let temp = tempfile::tempdir().unwrap();
+        let private = temp.path().join("private");
+        let mut core = Core::new(&private).unwrap();
+        let origin = temp.path().join("Origin");
+        core.create_library(&origin).unwrap();
+        let original = core.create_note(&origin, &origin, "Note").unwrap();
+        let imported = core
+            .prepare_import_resource(
+                &origin,
+                &original.path,
+                "data.bin",
+                vec![0, 255, 7],
+                &fresh(),
+            )
+            .unwrap();
+        core.execute_operation(&imported.operation_id, &imported.plan_id)
+            .unwrap();
+        let package = core.export_native_package(&origin).unwrap();
+        let root = temp.path().join("Library");
+        core.create_library(&root).unwrap();
+        let identity = core.enable_sync(&root, &fresh()).unwrap().identity;
+        let request = OperationRequest {
+            operation_id: fresh(),
+            root: display(&root),
+            intent: OperationIntent::ImportNative {
+                parent: display(&root),
+                name: "Imported".into(),
+                bytes: package.clone(),
+                allow_losses: false,
+            },
+        };
+        let preview = core.prepare_operation(request.clone()).unwrap();
+        let node_id = preview.node_map[original.node_id.as_ref().unwrap()].clone();
+        assert_ne!(Some(&node_id), original.node_id.as_ref());
+        let transaction = core.operations[&preview.operation_id]
+            .transaction
+            .as_ref()
+            .unwrap();
+        let wrapper_marker = transaction
+            .created_files()
+            .iter()
+            .find(|file| Path::new(&file.path) == root.join("Imported/weftext.directory.json"))
+            .unwrap();
+        let marker: serde_json::Value = serde_json::from_slice(&wrapper_marker.after).unwrap();
+        let directory_id = marker["directoryId"].as_str().unwrap().to_owned();
+        let directory = crate::sync::ObjectKey::Directory(directory_id.clone());
+        let node = crate::sync::ObjectKey::Node(node_id.clone());
+        let publication = core.operations[&preview.operation_id]
+            .sync_publication
+            .as_ref()
+            .unwrap();
+        assert!(publication.manifest.changes.iter().any(|change| {
+            change.object == node && change.after.parent.as_ref() == Some(&directory)
+        }));
+        assert!(!root.join("Imported").exists());
+        drop(core);
+        let mut core = Core::new(&private).unwrap();
+        let repeated = core.prepare_operation(request).unwrap();
+        assert_eq!(repeated.plan_id, preview.plan_id);
+        assert_eq!(repeated.node_map, preview.node_map);
+        assert_eq!(repeated.resource_map, preview.resource_map);
+        core.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        assert_eq!(
+            fs::read(root.join("Imported/.weftext-import-originals/original.weftext")).unwrap(),
+            package
+        );
+        let reference = format!(
+            "weftext-directory://{}/{directory_id}",
+            identity.workspace_id
+        );
+        assert_eq!(
+            core.resolve_navigation_target(&root, &reference)
+                .unwrap()
+                .status,
+            "managed"
+        );
+        assert!(
+            core.sync_binding_info(&root)
+                .unwrap()
+                .installed_objects
+                .contains(&directory)
+        );
+        core.publish_sync(&root).unwrap();
+        let original_cut = BTreeSet::from([node.clone(), directory.clone()]);
+        assert_eq!(
+            core.read_sync_adoption_cut(&root, &original_cut)
+                .unwrap_err()
+                .code,
+            "noChange"
+        );
+        drop(core);
+        let mut core = Core::new(&private).unwrap();
+        assert_eq!(
+            core.read_sync_adoption_cut(&root, &original_cut)
+                .unwrap_err()
+                .code,
+            "noChange"
+        );
+        let selected = BTreeSet::from([node]);
+        let target = temp.path().join("Replica");
+        let mut receiver = Core::new(temp.path().join("receiver-private")).unwrap();
+        receiver
+            .receive_sync(
+                &identity,
+                core.export_sync_objects(&identity, &selected).unwrap(),
+            )
+            .unwrap();
+        let clone = receiver
+            .prepare_operation(OperationRequest {
+                operation_id: fresh(),
+                root: display(&target),
+                intent: OperationIntent::CloneSync {
+                    identity,
+                    objects: selected,
+                },
+            })
+            .unwrap();
+        receiver
+            .execute_operation(&clone.operation_id, &clone.plan_id)
+            .unwrap();
+        let source = receiver
+            .open(target.join("Imported/Note/Note.typ"), Some(target.clone()))
+            .unwrap();
+        assert_eq!(source.node_id.as_ref(), Some(&node_id));
+        assert_eq!(
+            fs::read(&source.path).unwrap(),
+            fs::read(root.join("Imported/Note/Note.typ")).unwrap()
+        );
+        assert_eq!(
+            receiver
+                .resolve_navigation_target(&target, &reference)
+                .unwrap()
+                .status,
+            "managed"
+        );
+        let resources = receiver
+            .managed_resource_snapshot(&target, &source.path)
+            .unwrap();
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0].identity_status, "admitted");
+        assert_eq!(resources[0].bytes, [0, 255, 7]);
+        assert!(
+            preview
+                .resource_map
+                .values()
+                .any(|reference| reference == &resources[0].resource_ref)
+        );
+        let replay = core
+            .execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        assert_eq!(replay.node_ids, vec![node_id]);
+    }
 
     #[test]
     fn native_library_round_trip_uses_fresh_core_identities_and_retains_original() {

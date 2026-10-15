@@ -120,6 +120,13 @@ mod platform {
     }
     #[link(name = "kernel32")]
     unsafe extern "system" {
+        fn CompareStringOrdinal(
+            left: *const u16,
+            left_length: i32,
+            right: *const u16,
+            right_length: i32,
+            ignore_case: i32,
+        ) -> i32;
         fn MoveFileExW(from: *const u16, to: *const u16, flags: u32) -> i32;
         fn GetFileInformationByHandle(handle: Handle, info: *mut Info) -> i32;
         fn GetFinalPathNameByHandleW(
@@ -138,6 +145,31 @@ mod platform {
             filesystem: *mut u16,
             filesystem_len: u32,
         ) -> i32;
+    }
+    pub(crate) fn namespace_component_compare(
+        left: &std::ffi::OsStr,
+        right: &std::ffi::OsStr,
+    ) -> Result<std::cmp::Ordering> {
+        let left = left.encode_wide().collect::<Vec<_>>();
+        let right = right.encode_wide().collect::<Vec<_>>();
+        let left_length = i32::try_from(left.len())
+            .map_err(|_| CoreError::new("budget", "Namespace component is too long"))?;
+        let right_length = i32::try_from(right.len())
+            .map_err(|_| CoreError::new("budget", "Namespace component is too long"))?;
+        // Windows ordinal comparison uses the OS uppercase table, without
+        // language sorting, normalization or Rust Unicode case expansion.
+        match unsafe {
+            CompareStringOrdinal(left.as_ptr(), left_length, right.as_ptr(), right_length, 1)
+        } {
+            0 => Err(std::io::Error::last_os_error().into()),
+            1 => Ok(std::cmp::Ordering::Less),
+            2 => Ok(std::cmp::Ordering::Equal),
+            3 => Ok(std::cmp::Ordering::Greater),
+            _ => Err(CoreError::new(
+                "io",
+                "Invalid Windows ordinal comparison result",
+            )),
+        }
     }
     fn native_error(status: i32) -> CoreError {
         let code = unsafe { RtlNtStatusToDosError(status) };
@@ -757,6 +789,14 @@ mod platform {
     }
     impl MultiNamespaceGuard {
         pub(crate) fn acquire(participants: &[(&Path, &Path)]) -> Result<Self> {
+            Self::acquire_planned(participants, &[])
+        }
+        /// Retain existing ancestors without inventing identities for absent
+        /// create-only directories. Only this exact planned set may be absent.
+        pub(crate) fn acquire_planned(
+            participants: &[(&Path, &Path)],
+            planned: &[PathBuf],
+        ) -> Result<Self> {
             if participants.is_empty() || participants.len() > 5000 {
                 return Err(CoreError::new(
                     "invalidPlan",
@@ -777,6 +817,17 @@ mod platform {
                 .iter()
                 .map(|(_, parent)| namespace_key(parent))
                 .collect::<Result<Vec<_>>>()?;
+            if planned.len() > 5000 {
+                return Err(CoreError::new("budget", "Too many planned directories"));
+            }
+            let planned = planned
+                .iter()
+                .map(|path| crate::absolute_path(path))
+                .collect::<Result<Vec<_>>>()?;
+            let planned_keys = planned
+                .iter()
+                .map(|path| namespace_key(path))
+                .collect::<Result<std::collections::BTreeSet<_>>>()?;
             let text = actual[0].0.to_string_lossy();
             if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
                 return Err(CoreError::new(
@@ -812,8 +863,14 @@ mod platform {
                 // Establish the existing NTFS qualification without retaining a
                 // second closure that would block the union's DELETE handles.
                 drop(ParentGuard::acquire(source)?);
+                let mut anchor = parent.as_path();
+                while planned_keys.contains(&namespace_key(anchor)?) {
+                    anchor = anchor.parent().ok_or_else(|| {
+                        CoreError::new("invalidPlan", "Planned directory lacks an anchor")
+                    })?;
+                }
                 drop(ParentGuard::acquire(
-                    &parent.join(".namespace-prospective"),
+                    &anchor.join(".namespace-prospective"),
                 )?);
             }
             let drive = PathBuf::from(format!("{}\\", &text[..2]));
@@ -823,30 +880,40 @@ mod platform {
             let volume = stamp(&root)?.identity.volume;
             let mut dirs = std::collections::BTreeMap::new();
             dirs.insert(drive_key.clone(), root);
-            for (source, parent) in &actual {
-                for leaf in [source, parent] {
-                    let mut current = drive_key.clone();
-                    for part in leaf.components().skip(2) {
-                        let next = namespace_key(&current.join(part.as_os_str()))?;
-                        if !dirs.contains_key(&next) {
-                            let file = nt_open_access(
-                                dirs.get(&current),
-                                part.as_os_str(),
-                                true,
-                                false,
-                                false,
-                                sources.contains(&next),
-                            )?;
-                            if stamp(&file)?.identity.volume != volume {
-                                return Err(CoreError::new(
-                                    "crossVolume",
-                                    "Compound directory crossed the protected volume",
-                                ));
+            for leaf in actual
+                .iter()
+                .flat_map(|(source, parent)| [source, parent])
+                .chain(&planned)
+            {
+                let mut current = drive_key.clone();
+                for part in leaf.components().skip(2) {
+                    let next = namespace_key(&current.join(part.as_os_str()))?;
+                    if !dirs.contains_key(&next) {
+                        let opened = nt_open_access(
+                            dirs.get(&current),
+                            part.as_os_str(),
+                            true,
+                            false,
+                            false,
+                            sources.contains(&next),
+                        );
+                        let file = match opened {
+                            Err(error)
+                                if error.code == "missing" && planned_keys.contains(&next) =>
+                            {
+                                break;
                             }
-                            dirs.insert(next.clone(), file);
+                            other => other?,
+                        };
+                        if stamp(&file)?.identity.volume != volume {
+                            return Err(CoreError::new(
+                                "crossVolume",
+                                "Compound directory crossed the protected volume",
+                            ));
                         }
-                        current = next;
+                        dirs.insert(next.clone(), file);
                     }
+                    current = next;
                 }
             }
             Ok(Self {
@@ -881,6 +948,85 @@ mod platform {
                 })?,
             )?
             .identity)
+        }
+        pub(crate) fn directory_identity(&self, path: &Path) -> Result<Option<FileIdentity>> {
+            self.inner
+                .dirs
+                .get(&namespace_key(path)?)
+                .map(|file| Ok(stamp(file)?.identity))
+                .transpose()
+        }
+        pub(crate) fn directory_file(&self, path: &Path) -> Result<&File> {
+            self.inner.dirs.get(&namespace_key(path)?).ok_or_else(|| {
+                CoreError::new("missing", "Planned directory has not been materialized")
+            })
+        }
+        pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&File> {
+            let key = namespace_key(path)?;
+            if !self.inner.dirs.contains_key(&key) {
+                let parent = key
+                    .parent()
+                    .and_then(|parent| self.inner.dirs.get(parent))
+                    .ok_or_else(|| {
+                        CoreError::new("missing", "Directory parent is not protected")
+                    })?;
+                let file = nt_open(Some(parent), path.file_name().unwrap(), true, false, false)?;
+                self.inner.dirs.insert(key.clone(), file);
+            }
+            Ok(&self.inner.dirs[&key])
+        }
+        pub(crate) fn target_parent_identity(&self, index: usize) -> Result<Option<FileIdentity>> {
+            self.directory_identity(
+                self.parents
+                    .get(index)
+                    .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace parent"))?,
+            )
+        }
+        pub(crate) fn create_directory(&mut self, path: &Path) -> Result<&File> {
+            let key = namespace_key(path)?;
+            if self.inner.dirs.contains_key(&key) {
+                return Err(CoreError::new(
+                    "exists",
+                    "Planned directory is already occupied",
+                ));
+            }
+            let parent = key
+                .parent()
+                .and_then(|parent| self.inner.dirs.get(parent))
+                .ok_or_else(|| {
+                    CoreError::new("invalidPlan", "Created directory parent is not protected")
+                })?;
+            let file = ParentGuard::child_directory(
+                parent,
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| CoreError::new("invalidPath", "Invalid directory name"))?,
+            )?;
+            self.inner.dirs.insert(key.clone(), file);
+            Ok(&self.inner.dirs[&key])
+        }
+        pub(crate) fn open_output(&self, path: &Path, write: bool, create: bool) -> Result<File> {
+            let key = namespace_key(path)?;
+            let parent = key
+                .parent()
+                .and_then(|parent| self.inner.dirs.get(parent))
+                .ok_or_else(|| CoreError::new("missing", "Output parent is not protected"))?;
+            nt_open(
+                Some(parent),
+                path.file_name().unwrap(),
+                false,
+                write,
+                create,
+            )
+        }
+        pub(crate) fn directory_snapshot(
+            &self,
+            path: &Path,
+            max: usize,
+        ) -> Result<DirectorySnapshot> {
+            let directory = self.directory_file(path)?;
+            let (entries, complete) = directory_entries(directory, max)?;
+            Ok((stamp(directory)?.identity, entries, complete))
         }
     }
     fn rename_handle(file: &File, parent: &File, name: &str) -> Result<()> {
@@ -1078,6 +1224,54 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn acquire_planned(_: &[(&Path, &Path)], _: &[PathBuf]) -> Result<Self> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn directory_identity(&self, _: &Path) -> Result<Option<FileIdentity>> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn directory_file(&self, _: &Path) -> Result<&File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn retain_directory(&mut self, _: &Path) -> Result<&File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn create_directory(&mut self, _: &Path) -> Result<&File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn target_parent_identity(&self, _: usize) -> Result<Option<FileIdentity>> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn open_output(&self, _: &Path, _: bool, _: bool) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn directory_snapshot(&self, _: &Path, _: usize) -> Result<DirectorySnapshot> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub(crate) fn select(&mut self, _: usize) -> Result<&mut NamespaceGuard> {
             Err(CoreError::new(
                 "unsupportedPlatform",
@@ -1114,6 +1308,45 @@ pub(crate) use platform::{
     MultiNamespaceGuard, NamespaceGuard, ParentGuard, file_coordinates, publish_private_create,
     stamp,
 };
+pub(crate) fn namespace_relative_path(path: &Path, prefix: &Path) -> Result<Option<PathBuf>> {
+    let mut path = path.components();
+    for expected in prefix.components() {
+        let Some(actual) = path.next() else {
+            return Ok(None);
+        };
+        #[cfg(windows)]
+        let equal =
+            platform::namespace_component_compare(actual.as_os_str(), expected.as_os_str())?
+                == std::cmp::Ordering::Equal;
+        #[cfg(not(windows))]
+        let equal = actual == expected;
+        if !equal {
+            return Ok(None);
+        }
+    }
+    Ok(Some(path.collect()))
+}
+pub(crate) fn namespace_path_compare(left: &Path, right: &Path) -> Result<std::cmp::Ordering> {
+    let mut left = left.components();
+    let mut right = right.components();
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return Ok(std::cmp::Ordering::Equal),
+            (None, Some(_)) => return Ok(std::cmp::Ordering::Less),
+            (Some(_), None) => return Ok(std::cmp::Ordering::Greater),
+            (Some(left), Some(right)) => {
+                #[cfg(windows)]
+                let order =
+                    platform::namespace_component_compare(left.as_os_str(), right.as_os_str())?;
+                #[cfg(not(windows))]
+                let order = left.as_os_str().cmp(right.as_os_str());
+                if order != std::cmp::Ordering::Equal {
+                    return Ok(order);
+                }
+            }
+        }
+    }
+}
 pub(crate) fn same_directory(a: &Path, b: &Path) -> Result<bool> {
     let a = ParentGuard::acquire(&a.join(".directory-identity-prospective"))?;
     let b = ParentGuard::acquire(&b.join(".directory-identity-prospective"))?;

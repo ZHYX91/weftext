@@ -15,12 +15,21 @@ pub(crate) mod compound;
 /// One original namespace participant. Physical evidence belongs to this Plan,
 /// while portable object versions remain in its original SyncApplication.
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum RelocationParent {
+    /// Legacy Compound plans retain this exact serialized FileIdentity shape.
+    Existing(FileIdentity),
+    Created {
+        created_directory: String,
+    },
+}
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct RelocationStep {
     pub(crate) source: String,
     pub(crate) target: String,
     pub(crate) source_identity: FileIdentity,
     pub(crate) source_parent_identity: FileIdentity,
-    pub(crate) target_parent_identity: FileIdentity,
+    pub(crate) target_parent_identity: RelocationParent,
     pub(crate) old_leaf: String,
     pub(crate) new_leaf: String,
     pub(crate) leaf_identity: FileIdentity,
@@ -478,6 +487,10 @@ pub(crate) enum Mutation {
         updates: Vec<FileChange>,
         #[serde(default)]
         created_files: Vec<FileChange>,
+        #[serde(default)]
+        created_directories: Vec<String>,
+        #[serde(default)]
+        births: Vec<NewBirth>,
     },
     Relocate {
         source: String,
@@ -529,6 +542,19 @@ pub(crate) struct FrozenOperation {
     pub(crate) write_parents: Vec<(String, FileIdentity)>,
 }
 impl FrozenOperation {
+    pub(crate) fn births(&self) -> &[NewBirth] {
+        match &self.mutation {
+            Mutation::CreateTree { births, .. } | Mutation::Compound { births, .. } => births,
+            _ => &[],
+        }
+    }
+    pub(crate) fn created_files(&self) -> &[FileChange] {
+        match &self.mutation {
+            Mutation::CreateTree { files, .. } => files,
+            Mutation::Compound { created_files, .. } => created_files,
+            _ => &[],
+        }
+    }
     pub(crate) fn relocations(&self) -> Vec<RelocationRef<'_>> {
         match &self.mutation {
             Mutation::Relocate {
@@ -640,6 +666,8 @@ impl FrozenOperation {
                 relocations,
                 updates,
                 created_files,
+                created_directories,
+                ..
             } => {
                 relocations
                     .iter()
@@ -648,6 +676,9 @@ impl FrozenOperation {
                         .iter()
                         .chain(created_files)
                         .any(|change| Path::new(&change.path) == path)
+                    || created_directories
+                        .iter()
+                        .any(|directory| within(directory))
             }
             Mutation::Relocate {
                 source,
@@ -964,7 +995,8 @@ impl Core {
         } else {
             journal::private_create(&record, &serde_json::to_vec(&facts)?)?;
         }
-        if let Mutation::CreateTree { births, .. } = &t.mutation {
+        if !t.births().is_empty() {
+            let births = t.births();
             let mut actual = Vec::new();
             for birth in births {
                 let observed = stamps.get(&birth.path).ok_or_else(|| {
@@ -1266,8 +1298,7 @@ impl Core {
             }
             if let Some(t) = &p.transaction
                 && t.preview.node_map.values().any(|n| n == owner_id)
-                && let Mutation::CreateTree { files, .. } = &t.mutation
-                && files
+                && t.created_files()
                     .iter()
                     .filter_map(|f| std::str::from_utf8(&f.after).ok())
                     .any(|s| {
@@ -5768,7 +5799,7 @@ pub(crate) fn change(path: &Path, action: &str, bytes: usize) -> OperationChange
         bytes,
     }
 }
-fn node_name(directory: &Path) -> Result<String> {
+pub(crate) fn node_name(directory: &Path) -> Result<String> {
     let name = directory
         .file_name()
         .and_then(|n| n.to_str())

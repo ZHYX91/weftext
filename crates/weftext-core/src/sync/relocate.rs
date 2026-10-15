@@ -48,6 +48,10 @@ impl Core {
             })
             .count()
             > 1
+            || input
+                .states
+                .keys()
+                .any(|object| !input.local.contains_key(object))
         {
             return self.prepare_sync_compound(input);
         }

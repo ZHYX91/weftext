@@ -27,6 +27,16 @@ import zlib
 from test_hosted import Server, uid
 
 
+def evidence_directory(prefix):
+    """Allow each run to retain evidence at an explicit fresh workspace path."""
+    selected = os.environ.get('WEFTEXT_SYNC_EVIDENCE_DIR')
+    if not selected:
+        return Path(tempfile.mkdtemp(prefix=prefix))
+    directory = Path(selected).resolve()
+    directory.mkdir(parents=True, exist_ok=False)
+    return directory
+
+
 def png(rgb):
     """A valid two-by-two RGB input, requiring no external imaging tool."""
     def chunk(kind, data):
@@ -93,17 +103,26 @@ class SyncCompound(unittest.TestCase):
     def setUpClass(cls):
         if os.name != 'nt':
             raise RuntimeError('This harness requires the Windows candidate and physical identity API')
-        cls.evidence = Path(tempfile.mkdtemp(prefix='weftext-sync-compound-'))
+        cls.evidence = evidence_directory('weftext-sync-compound-')
         print('Retained compound sync evidence:', cls.evidence, flush=True)
+
+    def initial_objects(self):
+        """The first slice installs the original complete published baseline."""
+        objects = self.binding['installedObjects']
+        self.assertTrue(any(key['kind'] == 'rules' for key in objects))
+        return objects
+
+    def prepare_source_before_sync(self):
+        """Optional real source producers; the original fixture has none."""
+        return None
 
     def setUp(self):
         self.folder = self.evidence / self._testMethodName
         self.folder.mkdir()
         self.transfer_number = 0
-        self.a = Server(['--no-browser', '--data-dir', str(self.folder / 'state-a')])
-        self.addCleanup(lambda: self.a.close())
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
-        self.addCleanup(lambda: self.b.close())
+        self.servers = []
+        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')
+        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B')
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.docs = {}
@@ -120,15 +139,15 @@ class SyncCompound(unittest.TestCase):
                                  'baseline.png', self.baseline_png)
             self.annotate(self.a, self.ra, Path(name) / f'{name}.typ',
                           f'初始 {name} 原讨论😀')
+        self.prepare_source_before_sync()
         self.binding = self.call(self.a, '/api/sync/enable', root=str(self.ra), operationId=uid())
         self.identity = self.binding['identity']
         # The first slice starts with every participant already installed,
         # including Rules used by the later full external-adoption cut. A
         # Node-only clone plus new Rules hydration and two relocations is a
         # separate, intentionally unsupported combination in this phase.
-        all_objects = self.binding['installedObjects']
+        all_objects = self.initial_objects()
         self.assertTrue(all(key in all_objects for key in self.keys.values()))
-        self.assertTrue(any(key['kind'] == 'rules' for key in all_objects))
         self.transfer(self.a, self.ra, self.b, all_objects)
         clone = self.call(self.b, '/api/operations/prepare', operationId=uid(), root=str(self.rb),
                           intent={'kind': 'cloneSync', 'identity': self.identity,
@@ -188,9 +207,35 @@ class SyncCompound(unittest.TestCase):
         self.expected = {}
         self.received = None
 
+    def start_server(self, args, label):
+        server = Server(args)
+        server.evidence_name = label
+        server.evidence_index = len(self.servers)
+        server.evidence_closed = False
+        self.servers.append(server)
+        self.addCleanup(self.close_server, server)
+        return server
+
+    def close_server(self, server):
+        if server.evidence_closed:
+            return
+        if server.process.poll() is None:
+            server.process.terminate()
+        stdout, stderr = server.process.communicate(timeout=15)
+        server.evidence_closed = True
+        stem = f'server-{server.evidence_index:02}-{server.evidence_name}'
+        (self.folder / f'{stem}.stdout.log').write_text(stdout, encoding='utf-8')
+        (self.folder / f'{stem}.stderr.log').write_text(stderr, encoding='utf-8')
+        with (self.folder / 'processes.ndjson').open('a', encoding='utf-8') as log:
+            log.write(json.dumps({'program': server.evidence_name, 'pid': server.process.pid,
+                                  'closed': server.process.poll() is not None,
+                                  'stderrBytes': len(stderr.encode())}) + '\n')
+        self.assertIsNotNone(server.process.poll(), 'Owned HTTP server must be closed')
+        self.assertEqual(stderr, '', f'{server.evidence_name} server stderr')
+
     def call(self, server, route, expected=200, **data):
         code, result, _ = server.call(route, data)
-        record = {'program': 'A' if server is self.a else 'B', 'route': route,
+        record = {'program': server.evidence_name, 'route': route,
                   'request': data, 'status': code,
                   'response': result if not isinstance(result, bytes)
                   else {'base64': base64.b64encode(result).decode()}}
@@ -351,8 +396,8 @@ class SyncCompound(unittest.TestCase):
         return plan
 
     def restart_b(self):
-        self.b.close()
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
+        self.close_server(self.b)
+        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B-restart')
 
     def retain_original(self, source, retained):
         """Move only the current test's originals to an unused owned path."""

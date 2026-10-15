@@ -263,7 +263,13 @@ impl Core {
         )
     }
     pub(crate) fn check_pending(&self, path: &Path) -> Result<()> {
+        self.check_pending_except(path, None)
+    }
+    pub(crate) fn check_pending_except(&self, path: &Path, except: Option<&str>) -> Result<()> {
         for p in self.operations.values() {
+            if Some(p.operation_id.as_str()) == except {
+                continue;
+            }
             let pending_path = Path::new(&p.path);
             let a = display(pending_path).to_lowercase();
             let b = display(path).to_lowercase();
@@ -289,7 +295,17 @@ impl Core {
         Ok(())
     }
     pub(crate) fn check_pending_identity(&self, identity: &FileIdentity) -> Result<()> {
+        self.check_pending_identity_except(identity, None)
+    }
+    pub(crate) fn check_pending_identity_except(
+        &self,
+        identity: &FileIdentity,
+        except: Option<&str>,
+    ) -> Result<()> {
         for plan in self.operations.values() {
+            if Some(plan.operation_id.as_str()) == except {
+                continue;
+            }
             if (plan.identity.as_ref() == Some(identity)
                 || plan
                     .transaction

@@ -467,7 +467,12 @@ impl Core {
             {
                 continue;
             }
-            let is_created_output = matches!(&t.mutation, Mutation::CreateTree { files, .. } if files.iter().any(|c|c.path==change.path));
+            let is_created_output = t
+                .created_files()
+                .iter()
+                .any(|file| file.path == change.path)
+                || matches!(&t.mutation, Mutation::Compound { created_directories, .. }
+                    if change.before.is_none() && created_directories.iter().any(|directory| Path::new(directory) == Path::new(&change.path).parent().unwrap()));
             if !is_created_output && !t.write_parents.iter().any(|(path, _)| path == &change.path) {
                 capture.members.push(RecoveryMember {
                     kind: "barrier".into(), role: "readDependency".into(), path: change.path.clone(), target_path: None,
@@ -673,8 +678,16 @@ impl Core {
                                     "materialized"
                                 }
                                 .into();
-                                member.matches_before =
-                                    bound && exact_before_stamp && before == Some(bytes.as_slice());
+                                let empty_materialization = original.is_none()
+                                    && materialized.is_some()
+                                    && before.is_none()
+                                    && bytes.is_empty()
+                                    && plan.transaction.as_ref().is_some_and(|t| {
+                                        matches!(t.mutation, Mutation::Compound { .. })
+                                    });
+                                member.matches_before = bound
+                                    && exact_before_stamp
+                                    && (before == Some(bytes.as_slice()) || empty_materialization);
                                 member.matches_after = bound
                                     && (before != after || exact_before_stamp)
                                     && after == Some(bytes.as_slice());
