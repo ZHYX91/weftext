@@ -79,14 +79,36 @@ let authorizationEpoch = 0;
 let compareRequired = false;
 let installingDocument = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
+let expiredSessionId: string | undefined;
 const retiredStructureSessions = new Set<string>();
 const retiredStructureSources = new Set<string>();
 function sessionAudience() { return { authorization: authorizationEpoch, credential: token, actor: identity?.actor, generation: identity?.generation, deployment: identity?.deployment }; }
 async function closeOwnedSession(sessionId: string, captured: Pick<HostedNodeAudience, "authorization" | "credential" | "actor" | "generation" | "deployment">): Promise<void> {
-  const current = sessionAudience(); if ((["authorization", "credential", "actor", "generation", "deployment"] as const).some(key => captured[key] !== current[key])) return;
   // Disposing a former coordinate must never be interpreted as revoking a
-  // different view. Use the captured audience and no global error delivery.
-  try { const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store" }); await response.arrayBuffer(); } catch { /* No alternate source is installed by cleanup. */ }
+  // different view. Even after logout, use only the original credential, never
+  // the next actor's token. Cleanup has no global error or content delivery.
+  if (!captured.credential) return;
+  try { const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store", keepalive: true, signal: AbortSignal.timeout(10_000) }); await response.arrayBuffer(); } catch { /* The server lease also bounds abandoned sessions when delivery fails. */ }
+}
+function releaseViewSessions() {
+  const captured = sessionAudience(), sessions = new Set(retiredStructureSessions);
+  if (doc) sessions.add(doc.sessionId);
+  for (const id of sessions) void closeOwnedSession(id, captured);
+}
+async function refreshOpenSession() {
+  const selected = doc, captured = sessionAudience();
+  if (!selected || !identity || selected.sessionId === expiredSessionId) return;
+  try { await request("session/keepalive", { sessionId: selected.sessionId }, false, 0, AbortSignal.timeout(10_000)); }
+  catch (error) {
+    const current = sessionAudience();
+    if (doc !== selected || (["authorization", "credential", "actor", "generation", "deployment"] as const).some(key => captured[key] !== current[key])) return;
+    if (error instanceof HostedError && error.http === 410 && error.code === "sessionExpired") {
+      expiredSessionId = selected.sessionId; compareRequired = true; clearTimeout(draftTimer);
+      try { retain(); status("连接会话已到期，本页草稿与 Undo 保留；请点击“重新读取与核对”后继续保存。"); }
+      catch { status("连接会话已到期，浏览器无法保留恢复稿；请先复制当前输入，再重新读取与核对。"); }
+      controls();
+    }
+  }
 }
 const status = (message: string) => { el("status").textContent = message; };
 const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
@@ -286,6 +308,8 @@ async function openQueryResource(resource: string) { const epoch = requestEpoch;
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
+  releaseViewSessions();
+  clearTimeout(draftTimer); expiredSessionId = undefined;
   retiredStructureSessions.clear(); retiredStructureSources.clear(); structureDocuments = [];
   clearNodeNavigation();
   requestEpoch++; authorizationEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
@@ -530,12 +554,18 @@ el("history").onclick = () => void history.open();
 el("copy-reference").onclick = () => void run(async () => { const selected = stableReference, epoch = requestEpoch; if (!selected || selected.sessionId !== doc?.sessionId) return; const latest = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || stableReference !== selected || latest.resource !== selected.resource || latest.reference !== selected.reference) return; await navigator.clipboard.writeText(latest.reference); if (epoch === requestEpoch) status("已复制当前获权稳定笔记链接。"); });
 window.addEventListener("offline",()=>status("连接中断，本页草稿仍保留；不会自动提交。"));
 window.addEventListener("beforeunload", e=>{if(structures.hasPending || media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
+window.addEventListener("pagehide", e=>{
+  if (e.persisted) return;
+  try { retain(); } catch { /* A storage refusal must not prevent session release. */ }
+  releaseViewSessions();
+});
 setInterval(()=>{
   if(!identity || busy) return;
   const old=identity, epoch=requestEpoch, credential=token;
   void request<Me>("me").then(next=>{
     if(epoch!==requestEpoch || credential!==token || identity!==old) return;
     if(next.generation!==old.generation || next.actor!==old.actor || next.deployment!==old.deployment){clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。");identity=next;sessionStorage.setItem("weftext-hosted-identity",JSON.stringify(next));}
+    else void refreshOpenSession();
   }).catch(()=>{});
 },5000);
 if(token) void run(connect);
