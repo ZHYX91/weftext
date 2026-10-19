@@ -29,7 +29,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         )
         .await;
         assert_eq!(foreign.unwrap_err().status, StatusCode::GONE);
-        keepalive(
+        let Json(renewed) = keepalive(
             State(state.clone()),
             Extension(auth.clone()),
             Json(SessionRequest {
@@ -38,13 +38,15 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         )
         .await
         .unwrap();
-        close(
+        assert_eq!(renewed["active"], true);
+        let Json(closed) = close(
             State(state.clone()),
             Extension(auth.clone()),
             Json(SessionRequest { session_id: id }),
         )
         .await
         .unwrap();
+        assert_eq!(closed["closed"], true);
     }
     let inner = state.inner.lock().unwrap();
     assert_eq!(inner.sessions.len(), 1);
@@ -140,7 +142,7 @@ async fn close_does_not_require_a_document_read_grant() {
             .read = false;
         assert!(inner.session(&auth, &id).is_err());
     }
-    close(
+    let Json(closed) = close(
         State(state.clone()),
         Extension(auth),
         Json(SessionRequest {
@@ -149,5 +151,6 @@ async fn close_does_not_require_a_document_read_grant() {
     )
     .await
     .unwrap();
+    assert_eq!(closed["closed"], true);
     assert!(!state.inner.lock().unwrap().sessions.contains_key(&id));
 }
