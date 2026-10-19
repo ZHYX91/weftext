@@ -762,12 +762,15 @@ mod platform {
                 .retain(|path, _| path == &self.source || !path.starts_with(&self.source));
         }
         pub fn rename_leaf(&self, file: &File, name: &str) -> Result<()> {
-            rename_handle(file, self.dirs.get(&self.source).unwrap(), name)
+            // A basename-only rename uses the file's current directory. Supplying
+            // our DELETE directory guard as RootDirectory would make Windows
+            // reopen that same directory and conflict with the retained guard.
+            rename_handle(file, None, name)
         }
         pub fn move_source(&self, name: &str) -> Result<()> {
             rename_handle(
                 self.dirs.get(&self.source).unwrap(),
-                self.dirs.get(&self.target_parent).unwrap(),
+                Some(self.dirs.get(&self.target_parent).unwrap()),
                 name,
             )
         }
@@ -1029,7 +1032,7 @@ mod platform {
                 })?;
             rename_handle(
                 file,
-                parent,
+                Some(parent),
                 target
                     .file_name()
                     .and_then(|name| name.to_str())
@@ -1150,7 +1153,7 @@ mod platform {
             Ok((stamp(directory)?.identity, entries, complete))
         }
     }
-    fn rename_handle(file: &File, parent: &File, name: &str) -> Result<()> {
+    fn rename_handle(file: &File, parent: Option<&File>, name: &str) -> Result<()> {
         #[repr(C)]
         struct RenameInfo {
             replace: u8,
@@ -1166,7 +1169,7 @@ mod platform {
         // SAFETY: aligned allocation is large enough for the fixed header and UTF-16 name.
         unsafe {
             (*ptr).replace = 0;
-            (*ptr).parent = parent.as_raw_handle();
+            (*ptr).parent = parent.map_or(null_mut(), |parent| parent.as_raw_handle());
             (*ptr).length = (wide.len() * 2) as u32;
             std::ptr::copy_nonoverlapping(
                 wide.as_ptr(),
