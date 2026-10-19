@@ -15,6 +15,8 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
+Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业按锁文件安装前端依赖，运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
+
 ## 按影响选择验证环境
 
 常规改动优先使用纯引擎、HTTP 和可用的无头／后台浏览器，避免占用宿主焦点。按本轮改动和实际消费者选择下表中的最小范围；仅有窄屏视口不算 Mobile，HTTP 或 DOM 赋值也不算真实输入法、触屏或辅助技术操作。

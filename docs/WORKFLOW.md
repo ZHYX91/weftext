@@ -16,6 +16,8 @@ The earlier fixed design baseline was accepted; [REVIEW](design/REVIEW.md) §8 r
 
 For prose changes run `python scripts/check.py`. For schema, type/time algorithms or model changes add `--models`. Implementation slices add their own formatting, static analysis and meaningful tests. Choose platform, filesystem-failure, authorization, editing and Office scenarios based on actual impact. Record failures honestly rather than weakening assertions or expectations.
 
+Pull requests and updates to main also run [Product checks](../.github/workflows/product.yml). The Linux job installs locked frontend dependencies, then runs TypeScript tests, type checking and the Vite build. The Windows job uses pinned Node.js 24.19.0, Rust 1.99.1 and Python 3.11 with the existing `python scripts/mvp.py check` entry point. It builds once, then checks fonts, Rust formatting/Clippy/tests and actual-program local, hosted and synchronization HTTP scenarios. Design checks remain independent, and product jobs have no allow-failure or assertion-skipping fallback. CI does not publish or replace product acceptance for real desktop input, system IME, assistive technology, NAS or other operating systems.
+
 ## Choose environments by impact
 
 Routine changes favor engine tests, HTTP and available headless/background browsers to avoid taking host focus. Select the smallest relevant scope below from the change and actual consumers. A narrow viewport does not establish Mobile support; HTTP or DOM value assignment does not establish real IME, touch or assistive-technology interaction.
