@@ -615,6 +615,70 @@ fn parent_chain_guards_block_ancestor_rename_and_leaf_replacement() {
 }
 
 #[test]
+fn namespace_leaf_rename_keeps_guards_and_identity_through_directory_move() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("Original");
+    let target_parent = temp.path().join("Target");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&target_parent).unwrap();
+    fs::write(source.join("Original.typ"), "original content").unwrap();
+
+    let guard = backend::NamespaceGuard::acquire(&source, &target_parent).unwrap();
+    let directory_id = guard.source_identity().unwrap();
+    let leaf = guard.open_source_file("Original.typ", true).unwrap();
+    let file_id = backend::stamp(&leaf).unwrap().identity;
+    assert!(fs::rename(&source, temp.path().join("External")).is_err());
+    assert!(fs::rename(source.join("Original.typ"), source.join("External.typ")).is_err());
+
+    guard.rename_leaf(&leaf, "改名.typ").unwrap();
+    assert_eq!(backend::stamp(&leaf).unwrap().identity, file_id);
+    assert_eq!(guard.source_identity().unwrap(), directory_id);
+    assert!(!source.join("Original.typ").exists());
+    drop(leaf);
+    // The directory's own protection remains after releasing the leaf for the move.
+    assert!(fs::rename(&source, temp.path().join("External")).is_err());
+    assert!(fs::rename(&target_parent, temp.path().join("ExternalTarget")).is_err());
+
+    guard.move_source("改名").unwrap();
+    assert_eq!(guard.source_identity().unwrap(), directory_id);
+    let moved = guard.open_moved_file("改名.typ").unwrap();
+    assert_eq!(backend::stamp(&moved).unwrap().identity, file_id);
+    assert!(!source.exists());
+    drop(moved);
+    assert!(fs::rename(target_parent.join("改名"), temp.path().join("External")).is_err());
+    drop(guard);
+    assert_eq!(
+        fs::read_to_string(target_parent.join("改名/改名.typ")).unwrap(),
+        "original content"
+    );
+}
+
+#[test]
+fn namespace_leaf_rename_refuses_an_occupied_name_without_replacing_either_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("Original");
+    fs::create_dir(&source).unwrap();
+    fs::write(source.join("Original.typ"), "original content").unwrap();
+    fs::write(source.join("Occupied.typ"), "other content").unwrap();
+    let guard = backend::NamespaceGuard::acquire(&source, temp.path()).unwrap();
+    let leaf = guard.open_source_file("Original.typ", true).unwrap();
+    let file_id = backend::stamp(&leaf).unwrap().identity;
+
+    assert!(guard.rename_leaf(&leaf, "Occupied.typ").is_err());
+    assert_eq!(backend::stamp(&leaf).unwrap().identity, file_id);
+    drop(leaf);
+    drop(guard);
+    assert_eq!(
+        fs::read_to_string(source.join("Original.typ")).unwrap(),
+        "original content"
+    );
+    assert_eq!(
+        fs::read_to_string(source.join("Occupied.typ")).unwrap(),
+        "other content"
+    );
+}
+
+#[test]
 fn hard_link_alias_is_refused() {
     let mut f = Fixture::new("before");
     let alias = f.temp.path().join("alias.typ");
