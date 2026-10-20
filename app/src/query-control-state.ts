@@ -12,7 +12,7 @@ export function updateQueryChoices(select: HTMLSelectElement, choices: QueryChoi
   const existing = new Map(Array.from(select.options, option => [option.value, option])), wanted = new Set(retained.choices.map(choice => choice.value));
   for (let index = 0; index < retained.choices.length; index++) {
     const choice = retained.choices[index], option = existing.get(choice.value) ?? document.createElement("option");
-    if (option.value !== choice.value) option.value = choice.value;
+    if (option.getAttribute("value") !== choice.value) option.value = choice.value;
     if (option.textContent !== choice.label) option.textContent = choice.label;
     option.disabled = !!choice.disabled;
     if (select.options[index] !== option) select.insertBefore(option, select.options[index] ?? null);
