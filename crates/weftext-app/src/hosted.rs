@@ -22,6 +22,8 @@ mod query_providers;
 mod query_scopes;
 mod resource_collections;
 mod review;
+#[cfg(all(test, windows))]
+mod session_tests;
 mod structure;
 mod sync_transport;
 use axum::Extension;
@@ -184,7 +186,9 @@ struct HostedSession {
     actor: String,
     generation: u64,
     resource: String,
+    expires: Arc<Mutex<Instant>>,
 }
+const SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 struct Download {
     actor: String,
     generation: u64,
@@ -505,7 +509,6 @@ impl HostedInner {
             .sessions
             .get(id)
             .filter(|s| s.actor == actor && s.generation == self.actor_generation(&actor))
-            .cloned()
             .ok_or_else(|| {
                 ApiError::new(
                     StatusCode::GONE,
@@ -514,7 +517,54 @@ impl HostedInner {
                 )
             })?;
         let rights = self.rights(&actor, &session.resource)?;
-        Ok((actor, session, rights))
+        let now = Instant::now();
+        let mut expires = session
+            .expires
+            .lock()
+            .map_err(|_| ApiError::internal("会话不可用"))?;
+        if *expires <= now {
+            return Err(ApiError::new(
+                StatusCode::GONE,
+                "sessionExpired",
+                "会话已失效，请重新读取并核对草稿",
+            ));
+        }
+        *expires = now + SESSION_IDLE_TIMEOUT;
+        Ok((actor, session.clone(), rights))
+    }
+    /// Release only the in-memory coordinate. Core's persisted personal draft
+    /// and original-operation recovery records keep their existing ownership.
+    fn release_session(&mut self, id: &str) -> Result<(), ApiError> {
+        let Some(session) = self.sessions.get(id) else {
+            return Ok(());
+        };
+        let scope = self.actor_scope(&session.actor);
+        match self
+            .core
+            .with_actor_for_root(&scope, &self.config.root, |c| c.close_session(id))
+        {
+            Ok(()) => {}
+            Err(error) if error.code == "sessionMissing" => {}
+            Err(error) => return Err(Self::core_error(error)),
+        }
+        self.sessions.remove(id);
+        self.editor_versions.remove(id);
+        Ok(())
+    }
+    fn reap_idle_sessions(&mut self, now: Instant) -> Result<(), ApiError> {
+        let expired = self
+            .sessions
+            .iter()
+            .filter_map(|(id, session)| match session.expires.lock() {
+                Ok(expires) if *expires <= now => Some(Ok(id.clone())),
+                Ok(_) => None,
+                Err(_) => Some(Err(ApiError::internal("会话不可用"))),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for id in expired {
+            self.release_session(&id)?;
+        }
+        Ok(())
     }
     fn core_error(error: CoreError) -> ApiError {
         // OS errors and recovery paths can contain absolute server locations.
@@ -545,6 +595,7 @@ impl HostedInner {
     fn open(&mut self, actor: &str, resource: &str) -> Result<Value, ApiError> {
         let rights = self.rights(actor, resource)?;
         let file = author_file(self, resource)?;
+        self.reap_idle_sessions(Instant::now())?;
         if self.sessions.len() >= 128
             || self.sessions.values().filter(|s| s.actor == actor).count() >= 32
         {
@@ -563,6 +614,7 @@ impl HostedInner {
                 actor: actor.into(),
                 generation: self.actor_generation(actor),
                 resource: resource.into(),
+                expires: Arc::new(Mutex::new(Instant::now() + SESSION_IDLE_TIMEOUT)),
             },
         );
         Ok(
@@ -694,16 +746,29 @@ async fn close(
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
-            let (actor, _, _) = inner.session(&auth, &req.session_id)?;
+            let actor = inner.actor(&auth)?;
             inner
-                .core
-                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
-                    c.close_session(&req.session_id)
+                .sessions
+                .get(&req.session_id)
+                .filter(|session| {
+                    session.actor == actor && session.generation == inner.actor_generation(&actor)
                 })
-                .map_err(HostedInner::core_error)?;
-            inner.sessions.remove(&req.session_id);
-            inner.editor_versions.remove(&req.session_id);
+                .ok_or_else(|| ApiError::new(StatusCode::GONE, "sessionExpired", "会话已失效"))?;
+            inner.release_session(&req.session_id)?;
             Ok(json!({"closed":true}))
+        })
+        .await?,
+    ))
+}
+async fn keepalive(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SessionRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            inner.session(&auth, &req.session_id)?;
+            Ok(json!({"active":true}))
         })
         .await?,
     ))
@@ -1003,14 +1068,8 @@ async fn update_policy(
                 .filter(|(_, s)| s.generation != inner.actor_generation(&s.actor))
                 .map(|(id, s)| (id.clone(), s.clone()))
                 .collect::<Vec<_>>();
-            for (id, session) in expired_sessions {
-                inner.sessions.remove(&id);
-                inner.editor_versions.remove(&id);
-                let scope = format!("{}:{}", inner.config.deployment, session.actor);
-                inner
-                    .core
-                    .with_actor_for_root(&scope, &inner.config.root, |c| c.close_session(&id))
-                    .map_err(HostedInner::core_error)?;
+            for (id, _) in expired_sessions {
+                inner.release_session(&id)?;
             }
             inner.downloads.retain(|_, d| {
                 inner
@@ -1224,6 +1283,7 @@ pub(super) async fn serve(
         host: host.into(),
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
     };
+    let reaper_state = state.clone();
     let app = Router::new()
         .merge(sync_transport::router())
         .merge(editor::router())
@@ -1249,6 +1309,7 @@ pub(super) async fn serve(
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))
         .route("/api/hosted/close", post(close))
+        .route("/api/hosted/session/keepalive", post(keepalive))
         .route("/api/hosted/save", post(save))
         .route("/api/hosted/draft", post(draft))
         .route("/api/hosted/draft/resolve", post(resolve_draft))
@@ -1270,10 +1331,27 @@ pub(super) async fn serve(
         "Weftext {} hosted\n{origin}/\nBound to {address}; operator-managed resources only.",
         env!("CARGO_PKG_VERSION")
     );
-    axum::serve(listener, app)
+    let reaper = tokio::spawn(async move {
+        let mut ticks = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            ticks.tick().await;
+            if locked(&reaper_state, |inner| {
+                inner.reap_idle_sessions(Instant::now())
+            })
+            .await
+            .is_err()
+            {
+                eprintln!("Hosted session cleanup did not complete; it will be retried.");
+            }
+        }
+    });
+    let result = axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })
-        .await?;
+        .await;
+    reaper.abort();
+    let _ = reaper.await;
+    result?;
     Ok(())
 }
