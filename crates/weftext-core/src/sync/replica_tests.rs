@@ -35,6 +35,196 @@ fn source(graph: &ReplicaGraph, object: &ObjectKey) -> String {
 }
 
 #[test]
+fn sync_setup_releases_private_captures_and_retries_owned_original_bytes_after_restart() {
+    for installed_tags in [false, true] {
+        for blocker in [None, Some("plan"), Some("commit")] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("library");
+            let data = temp.path().join("private");
+            let mut core = Core::new(&data).unwrap();
+            core.create_library(&root).unwrap();
+            let note = core.create_note(&root, &root, "Note").unwrap();
+            let retired = core.create_note(&root, &root, "Retired").unwrap();
+            operation(
+                &mut core,
+                &root,
+                OperationIntent::TrashNode {
+                    source: display(&root.join("Retired")),
+                },
+            );
+            if installed_tags {
+                let tags = core.read_tag_registry(&root).unwrap();
+                let prepared = core
+                    .prepare_create_tag(&root, "Root", &tags.base_id, &fresh())
+                    .unwrap();
+                core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                    .unwrap();
+            }
+            let independent = core.admitted_snapshot(&root).unwrap();
+            let bases = core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
+            let cut_count = core.admitted_cuts.len();
+            let compile_count = core.compile_dependency_cuts.len();
+            let enable = fresh();
+            let blocked_path = blocker.map(|kind| core.journal_path(&enable, kind));
+            if let Some(path) = &blocked_path {
+                fs::create_dir(path).unwrap();
+            }
+            let first = core.enable_sync(&root, &enable);
+            if blocker.is_some() {
+                assert!(first.is_err());
+            } else {
+                first.unwrap();
+            }
+            assert_eq!(
+                core.snapshots.keys().cloned().collect::<BTreeSet<_>>(),
+                bases
+            );
+            assert_eq!(core.admitted_cuts.len(), cut_count);
+            assert_eq!(core.compile_dependency_cuts.len(), compile_count);
+            let original_source = &independent.files[0];
+            core.validate_snapshot(&root, &original_source.path, &original_source.base_id)
+                .unwrap();
+            let original_plan = fs::read(core.journal_path(&enable, "plan")).ok();
+            if let Some(path) = blocked_path {
+                fs::remove_dir(path).unwrap();
+            }
+            drop(core);
+            let mut core = Core::new(&data).unwrap();
+            let info = core.enable_sync(&root, &enable).unwrap();
+            assert!(core.snapshots.is_empty());
+            assert!(core.admitted_cuts.is_empty());
+            assert!(core.compile_dependency_cuts.is_empty());
+            if let Some(original) = original_plan {
+                assert_eq!(
+                    fs::read(core.journal_path(&enable, "plan")).unwrap(),
+                    original
+                );
+            }
+            let objects = core
+                .read_sync_history(&info.identity)
+                .unwrap()
+                .objects()
+                .unwrap();
+            assert!(
+                !objects[&ObjectKey::Node(note.node_id.unwrap())].versions[0]
+                    .state
+                    .retired
+            );
+            assert!(
+                objects[&ObjectKey::Node(retired.node_id.unwrap())].versions[0]
+                    .state
+                    .retired
+            );
+            assert_eq!(objects.contains_key(&ObjectKey::Tags), installed_tags);
+        }
+    }
+}
+
+#[test]
+fn sync_setup_cannot_launder_forged_replaced_or_lost_tag_registry_identity() {
+    for change in ["forged", "modified", "replacement", "missing"] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        core.create_library(&root).unwrap();
+        let note = core.create_note(&root, &root, "Note").unwrap();
+        let path = root.join(".weftext-tags.json");
+        if change == "forged" {
+            fs::write(
+                &path,
+                serde_json::to_vec(&serde_json::json!({
+                    "version": 2,
+                    "tags": [{"tagId": fresh(), "displayName": "Forged", "parentTagId": null}]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        } else {
+            let tags = core.read_tag_registry(&root).unwrap();
+            let prepared = core
+                .prepare_create_tag(&root, "Original", &tags.base_id, &fresh())
+                .unwrap();
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .unwrap();
+            let raw = fs::read(&path).unwrap();
+            match change {
+                "modified" => {
+                    let mut value: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+                    value["tags"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(serde_json::json!({
+                            "tagId": fresh(), "displayName": "Unadmitted", "parentTagId": null
+                        }));
+                    fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+                }
+                "replacement" | "missing" => {
+                    fs::rename(&path, temp.path().join("retained-original-tags.json")).unwrap();
+                    if change == "replacement" {
+                        fs::write(&path, raw).unwrap();
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        let original = path.exists().then(|| fs::read(&path).unwrap());
+        let bases = core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
+        let cut_count = core.admitted_cuts.len();
+        let operation_count = core.operations.len();
+        let enable = fresh();
+        let error = core.enable_sync(&root, &enable).unwrap_err();
+        assert!(matches!(
+            error.code.as_str(),
+            "externalPending" | "identityConflict"
+        ));
+        assert_eq!(core.operations.len(), operation_count);
+        assert!(!core.journal_path(&enable, "plan").exists());
+        assert!(
+            core.sync_setups()
+                .iter()
+                .all(|setup| setup.root != display(&root))
+        );
+        assert_eq!(
+            core.snapshots.keys().cloned().collect::<BTreeSet<_>>(),
+            bases
+        );
+        assert_eq!(core.admitted_cuts.len(), cut_count);
+        assert!(core.compile_dependency_cuts.is_empty());
+        assert_eq!(path.exists().then(|| fs::read(&path).unwrap()), original);
+        assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
+    }
+}
+
+#[test]
+fn rejected_incomplete_sync_setup_does_not_leave_private_cut_tokens() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("library");
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note(&root, &root, "Note").unwrap();
+    let independent = core.admitted_snapshot(&root).unwrap();
+    let bases = core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
+    let cut_count = core.admitted_cuts.len();
+    fs::write(
+        &note.path,
+        note.source
+            .replace(note.node_id.as_ref().unwrap(), &fresh()),
+    )
+    .unwrap();
+    assert_eq!(
+        core.enable_sync(&root, &fresh()).unwrap_err().code,
+        "coverageIncomplete"
+    );
+    assert_eq!(
+        core.snapshots.keys().cloned().collect::<BTreeSet<_>>(),
+        bases
+    );
+    assert_eq!(core.admitted_cuts.len(), cut_count);
+    assert!(core.admitted_cuts.contains_key(&independent.cut_id));
+    assert!(core.compile_dependency_cuts.is_empty());
+}
+
+#[test]
 fn saved_offline_versions_publish_original_outbox_after_restart() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("library");

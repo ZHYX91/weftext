@@ -101,7 +101,8 @@ async function source() { return cm().evaluate(element => { const view = element
 async function expectSource(expected) { await until(async () => { assert.equal(await source(), expected); return true; }, 'exact current author Draft'); }
 async function disk(file) { for (let attempt = 0; attempt < 20; attempt++) { try { return await readFile(file, 'utf8'); } catch (error) { if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 19) throw error; (result.fileReadRetries ??= []).push({ phase, file, attempt, code: error.code }); await pause(100); } } }
 async function command(label) { await page.keyboard.press('Control+Shift+p'); const dialog = page.getByRole('dialog', { name: '命令', exact: true }); await dialog.getByRole('searchbox').fill(label); await dialog.getByRole('searchbox').press('Enter'); }
-async function quick(name) { await page.keyboard.press('Control+p'); const dialog = page.getByRole('dialog', { name: '快捷打开', exact: true }); await dialog.getByRole('searchbox').fill(name); await dialog.getByRole('searchbox').press('Enter'); }
+async function knowledgeCommand(label, tab) { await command(label); await until(async () => { const control = knowledge().getByRole('tab', { name: tab, exact: true }); return await control.isVisible() && await control.getAttribute('aria-selected') === 'true'; }, 'explicit knowledge command visibly selects ' + tab); }
+async function quick(name) { await page.keyboard.press('Control+p'); const dialog = page.getByRole('dialog', { name: '快捷打开', exact: true }); await dialog.getByRole('searchbox').fill(name.endsWith('.typ') ? name : name + '.typ'); await dialog.getByRole('searchbox').press('Enter'); }
 async function panelDetails(label, host = queryPanel()) { const summary = host.getByText(label, { exact: true }); const details = summary.locator('..'); if (!await details.evaluate(element => element.open)) await summary.click(); return details; }
 async function showQuery() { if (!await queryPanel().isVisible()) await click('查询与视图'); }
 async function pass(message) { const now = performance.now(); result.cases.push({ phase, message, elapsedMs: Math.round((now - caseStartedAt) * 100) / 100, input: 'Actual DOM mouse and keyboard; automation and observable waits included' }); caseStartedAt = now; await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); console.log('PASS', message); }
@@ -195,6 +196,34 @@ try {
   await page.close(); page = originalPage; await expectSource(dirtyImage); await cm().click(); await page.keyboard.press('Control+z'); await expectSource(savedImage); await page.keyboard.press('Control+y'); await expectSource(dirtyImage);
   await pass('A separately reopened embedded client restores exact/subtree shortcut meaning without implicit mode memory; the original retained document keeps its own Draft/Undo.');
 
+  phase = 'cancel-rejected-first-assignment'; await quick('B-Plain'); await click('源码'); await expectSource(plain.source); await showQuery();
+  const rejectedName = 'TEST Rejected Untyped Assignment', navigation = await panelDetails('登记标签与目录入口');
+  await click('读取登记标签', navigation); await navigation.getByLabel('新标签父级', { exact: true }).waitFor();
+  await navigation.getByLabel('新标签显示名称', { exact: true }).fill(rejectedName);
+  await navigation.getByLabel('新标签父级 · 搜索名称或身份', { exact: true }).fill(''); await navigation.getByLabel('新标签父级', { exact: true }).selectOption('');
+  const failedPrepare = page.waitForResponse(response => new URL(response.url()).pathname === '/api/navigation/create-tag');
+  await click('新建并赋给当前已保存笔记', navigation); const rejection = await failedPrepare, rejectedBody = rejection.request().postDataJSON(), rejectedResult = await rejection.json();
+  assert.equal(rejection.status(), 409); assert.equal(rejectedResult.error?.code, 'invalidField'); assert.equal(rejectedBody.assignment.path, plain.path);
+  assert.ok(!await page.locator('dialog[open]').count(), 'A rejected preparation must never become a committable confirmation');
+  const originalPrepareCount = mutations.filter(item => item.route === '/api/navigation/create-tag' && item.body.operationId === rejectedBody.operationId).length; assert.equal(originalPrepareCount, 1);
+  const cancelResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/navigation/cancel' && response.request().postDataJSON().operationId === rejectedBody.operationId);
+  await click('取消原未提交导航操作', navigation); const cancellation = await cancelResponse, cancelBody = cancellation.request().postDataJSON(), cancelResult = await cancellation.json();
+  assert.equal(cancellation.status(), 200); assert.deepEqual(cancelBody, { root, operationId: rejectedBody.operationId, planId: null });
+  assert.deepEqual(cancelResult, { operationId: rejectedBody.operationId, planId: null, status: 'resolved' });
+  await until(() => navigation.innerText().then(text => text.includes('原操作已在服务端实际结束')));
+  assert.equal(mutations.filter(item => item.route === '/api/navigation/create-tag' && item.body.operationId === rejectedBody.operationId).length, originalPrepareCount, 'Cancellation must not silently reprepare the rejected operation');
+  const fences = [];
+  for (const [intent, body] of [['original invalid assignment', rejectedBody], ['otherwise valid creation with the same cancelled ID', Object.fromEntries(Object.entries(rejectedBody).filter(([key]) => key !== 'assignment'))]]) {
+    const reply = await fetch(base + '/api/navigation/create-tag', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json();
+    assert.equal(reply.status, 409, JSON.stringify(value)); assert.equal(value.error?.code, 'operationCancelled'); fences.push({ intent, request: body, status: reply.status, response: value });
+  }
+  const tagsAfterCancel = (await api('/api/navigation/tags', { root })).tags; assert.ok(!tagsAfterCancel.some(tag => tag.displayName === rejectedName));
+  const afterCancelledTag = await createTag('TEST After Cancel'); const newRequest = mutations.findLast(item => item.route === '/api/navigation/create-tag' && item.body.displayName === afterCancelledTag.displayName);
+  assert.ok(newRequest && newRequest.body.operationId !== rejectedBody.operationId); await expectSource(plain.source); assert.equal(await disk(plain.path), plain.source);
+  await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyImage);
+  result.rejectedPrepareCancellation = { request: rejectedBody, rejectedResult, cancelBody, cancelResult, fences, newOperationId: newRequest.body.operationId };
+  await pass('A real untyped-note first assignment rejects before preparation; UI cancellation sends the same ID with no plan and never reprepares. The original and changed late intents stay fenced, while a new UI operation succeeds and both source/Draft remain exact.');
+
   phase = 'authored-order'; await quick('TEST-Parent'); await click('源码'); await expectSource(savedParent);
   await cm().click(); await page.keyboard.press('Control+End'); await page.keyboard.insertText(' UNSAVED PARENT DRAFT😀'); dirtyParent = savedParent + ' UNSAVED PARENT DRAFT😀'; await expectSource(dirtyParent);
   await page.getByRole('button', { name: '仅浏览 TEST-Parent 文件夹', exact: true }).click(); await contents().waitFor();
@@ -217,27 +246,30 @@ try {
   const rowFor = doc => contents().locator(`[data-entry-path=${JSON.stringify(path.dirname(doc.path))}]`);
   await rowFor(image).scrollIntoViewIfNeeded(); await until(() => rowFor(image).locator('.node-content-thumbnail').getAttribute('data-preview-state').then(state => state === 'ready'), 'visible actual image pixels');
   assert.equal(await rowFor(image).locator('img,canvas').count(), 1);
+  const decodedPixels = doc => rowFor(doc).locator('img,canvas').evaluate(element => element instanceof HTMLImageElement ? element.complete && element.naturalWidth > 0 && element.naturalHeight > 0 : element instanceof HTMLCanvasElement && element.width > 0 && element.height > 0);
+  await until(() => decodedPixels(image), 'visible thumbnail decodes real pixel dimensions');
   assert.ok(!previewRequests.slice(previewStart).some(request => request.entityKey === reference(farImage)), 'An offscreen row must not read its preview before it becomes visible');
   await rowFor(plain).scrollIntoViewIfNeeded(); await until(() => rowFor(plain).locator('.node-content-thumbnail').getAttribute('data-preview-state').then(state => state === 'absent'), 'explicit no-image row'); assert.equal(await rowFor(plain).locator('img,canvas').count(), 0);
   await rowFor(farImage).scrollIntoViewIfNeeded(); await until(() => rowFor(farImage).locator('.node-content-thumbnail').getAttribute('data-preview-state').then(state => state === 'ready'), 'newly visible far image');
+  await until(() => decodedPixels(farImage), 'newly visible thumbnail decodes real pixel dimensions'); await page.screenshot({ path: path.join(out, 'lazy-thumbnails.png'), fullPage: false });
   assert.ok(previewRequests.slice(previewStart).some(request => request.entityKey === reference(farImage)));
   await contents().getByLabel('节点内容缩略图', { exact: true }).uncheck(); assert.equal(await contents().locator('.node-content-thumbnail,img,canvas').count(), 0); await expectSource(dirtyParent); assert.equal(await disk(image.path), savedImage); assert.equal(await disk(parent.path), savedParent);
   await pass('Only visible rows read actual exact-basis media; visible PNG pixels and explicit absent state are distinct; scrolling starts the distant image and disabling thumbnails disposes pixels without author edits.');
 
-  phase = 'actual-graph'; await command('打开二维关系图谱'); const receipt = await refreshKnowledge(dirtyParent), snapshot = receipt.result;
+  phase = 'actual-graph'; await knowledgeCommand('打开二维关系图谱', '二维图谱'); await knowledgeCommand('打开二维关系图谱', '二维图谱'); const receipt = await refreshKnowledge(dirtyParent), snapshot = receipt.result;
   assert.equal(snapshot.graph.scope, 'authorizedNativeSourcesAndTypedReferences'); assert.ok(snapshot.graph.generation); const parentKey = `${parent.workspaceId}/${parent.nodeId}`, imageKey = `${image.workspaceId}/${image.nodeId}`;
   const duplicateEdges = snapshot.graph.edges.filter(edge => edge.source === parentKey && edge.target === imageKey && !edge.fieldId); assert.equal(duplicateEdges.length, 2); assert.notEqual(duplicateEdges[0].key, duplicateEdges[1].key);
   const graph = () => knowledge().locator('.knowledge-graph-view'); await graph().locator('g[data-graph-key]').first().waitFor();
   await graph().getByLabel('在当前图范围搜索定位', { exact: true }).fill('A-Image'); await click('定位 A-Image', graph()); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent);
   await graph().getByLabel('方向', { exact: true }).selectOption('out'); await graph().getByLabel('范围', { exact: true }).selectOption('global'); await click('放大', graph()); await click('向右平移', graph()); await click('适应视口', graph());
   const graphNode = graph().locator(`g[data-graph-key=${JSON.stringify(imageKey)}]`); await graphNode.focus(); await page.keyboard.press('Enter'); await click('源码'); await expectSource(dirtyImage);
-  await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent); await command('打开二维关系图谱'); await refreshKnowledge(dirtyParent);
+  await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent); await knowledgeCommand('打开二维关系图谱', '二维图谱'); await refreshKnowledge(dirtyParent);
   const edge = duplicateEdges[1]; await graph().locator(`path[data-graph-key=${JSON.stringify(edge.key)}]`).focus(); await page.keyboard.press('Space'); await click('打开准确作者来源', graph());
   await until(async () => { const actual = await cm().evaluate(element => { const range = element.cmTile.root.view.state.selection.main; return { from: range.from, to: range.to }; }); return actual.from === edge.range.utf16From && actual.to === edge.range.utf16To; }, 'accurate original graph occurrence source range'); await expectSource(dirtyParent);
   result.snapshots.push({ graph: snapshot.graph, headingStructure: snapshot.headingStructure });
   await pass('Actual same-Draft knowledge receipt reaches the embedded graph with two distinct body occurrences; search/filter/pan/zoom do not write, keyboard opens the accurate retained note, Back restores Draft, and edge navigation selects its exact author occurrence.');
 
-  phase = 'actual-heading-structure'; await command('打开只读标题结构／大纲'); const headingsReceipt = await refreshKnowledge(dirtyParent), headings = headingsReceipt.result.headingStructure;
+  phase = 'actual-heading-structure'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); const headingsReceipt = await refreshKnowledge(dirtyParent), headings = headingsReceipt.result.headingStructure;
   assert.ok(headings); const repeated = headings.items.filter(heading => heading.text === 'TEST Duplicate'); assert.equal(repeated.length, 2); assert.ok(repeated.every(heading => heading.range)); assert.notEqual(repeated[0].key, repeated[1].key);
   const heading = repeated[1], structure = () => knowledge().locator('.knowledge-heading-structure');
   await structure().getByLabel('搜索真实标题', { exact: true }).fill('TEST Duplicate'); await structure().getByLabel('搜索真实标题', { exact: true }).press('Enter');
@@ -247,9 +279,15 @@ try {
   await cm().click(); await page.keyboard.press('Control+z'); await expectSource(savedParent); await page.keyboard.press('Control+y'); await expectSource(dirtyParent);
   await quick('A-Image'); await expectSource(dirtyImage); await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent);
   await pass('Native duplicate headings retain distinct accurate keys/ranges; keyboard search/jump chooses the second exact heading and all new read-only views preserve the original document Undo and navigation Draft.');
+
+  phase = 'explicit-inspector-commands'; await knowledgeCommand('导入或浏览图片与资源', '文件'); await knowledgeCommand('导入或浏览图片与资源', '文件');
+  await expectSource(dirtyParent); await click('链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
+  await click('链接与批注'); await knowledge().waitFor({ state: 'visible' }); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
+  await pass('Repeated explicit graph, heading and resource commands keep the requested inspector visible; the original toolbar keeps its close/reopen behavior and neither path saves or changes the retained author Draft.');
   result.expectedHttpStates = []; result.unexpectedHttpErrors = [];
   for (const event of result.httpErrors) { let code; try { code = JSON.parse(event.body).error?.code; } catch { /* An unclassified response stays unexpected. */ }
-    const expected = event.status === 409 && code === 'stale_draft' && ['/api/render', '/api/knowledge/read'].includes(event.route);
+    const expected = event.status === 409 && (code === 'stale_draft' && ['/api/render', '/api/knowledge/read'].includes(event.route)
+      || code === 'invalidField' && event.phase === 'cancel-rejected-first-assignment' && event.route === '/api/navigation/create-tag');
     (expected ? result.expectedHttpStates : result.unexpectedHttpErrors).push({ ...event, code });
   }
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.unexpectedHttpErrors, []); assert.deepEqual(result.observerErrors ?? [], []);
@@ -262,7 +300,7 @@ try {
 } finally {
   await browser?.close(); await stop(); result.finishedAt = new Date().toISOString();
   result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected());
-  result.previewRequests = previewRequests; result.mutations = mutations; result.queryReceipts = queryReceipts;
+  result.previewRequests = previewRequests; result.mutations = mutations; result.queryReceipts = queryReceipts; result.knowledgeReceipts = knowledgeReceipts;
   await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   console.log(JSON.stringify({ out, completed: result.completed, failedPhase: result.failedPhase, cases: result.cases.length, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

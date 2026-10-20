@@ -248,12 +248,8 @@ impl Core {
     /// Release private read evidence only. This is idempotent and never removes
     /// a file, directory, Plan, author Draft, operation or admission fact.
     pub fn release_compile_dependency_cut(&mut self, cut_id: &str) {
-        if self.compile_dependency_cuts.remove(cut_id).is_some()
-            && let Some(cut) = self.admitted_cuts.remove(cut_id)
-        {
-            for base in cut.bases {
-                self.snapshots.remove(&base);
-            }
+        if self.compile_dependency_cuts.contains_key(cut_id) {
+            self.release_admitted_cut(cut_id);
         }
     }
 

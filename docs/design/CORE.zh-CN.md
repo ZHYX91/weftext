@@ -351,6 +351,8 @@ Type/Value、Query/CEL/参数、View/Action和导出共用SOURCE语义，原spel
 
 GC保当前已接纳revision/schema facts、仍可达source/Query/trash/history binding、active cut/run、未决plan/conflict/Job责任的准确roots。cut lease登记与journal snapshot读取同事务，不能先GC再注册；TTL结束明确expired，缺旧blob/config不取latest。current文件唯一authority保持，保留cut/history blobs只服务历史/冻结读与恢复，不作为raw current fallback。当前source/Query schema baseline在仍可达期间保其原配置版本，不永久保无消费者的所有版本。
 
+私有读取 cut 的显式释放统一回收其全部 basis，包括未绑定结构读集的可选 Tags 捕获；只回收本次读取依据，不改作者文件、接纳事实、原 Plan 或独立 witness。纯验证、临时成员比较、构建失败及已返回的未发布 Query 错误在可靠收尾处释放。强写 Plan 已拥有准确文件／目录／缺席及成员集后，可结束其临时读取；成功 Query 的观察版行打开和原 strong cut 仍有实际消费者，不能因为输出缓存只存 JSON 就提前释放。此边界不引入全局 GC 或后台回收服务。
+
 
 Job 固定输入版本/输出/loss/确认/预算/actor，保存步骤、attempt/effect key、批准消费、费用结算与 stop。建议应用把目标源+annotation accepted 状态同 Plan 提交；转换输出 staged 不代表文档已保存或下载交付。下载固定确认的 exact output，续传不换内容，逐交付授权。外部请求 unknown 保存原 attempt，先查询 provider；只有被证明同 key 幂等/条件写才可安全重试，不声称跨网络 exactly-once。stop 阻止之后获权步骤，不撤回已发生效果。
 

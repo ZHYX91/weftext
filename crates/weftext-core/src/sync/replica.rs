@@ -115,14 +115,62 @@ impl Core {
         }
         self.check_sync_setup_pending(&workspace.workspace_id)?;
         let captured = self.admitted_compile_snapshot(&root, "live")?;
-        let trash = self.trash_admitted_snapshot(&root)?;
+        let trash = match self.trash_admitted_snapshot(&root) {
+            Ok(trash) => trash,
+            Err(error) => {
+                self.release_admitted_cut(&captured.snapshot.cut_id);
+                return Err(error);
+            }
+        };
+        let setup = self.initial_sync_setup(
+            &root,
+            &workspace.workspace_id,
+            operation_id,
+            &captured,
+            &trash,
+        );
+        self.release_admitted_cut(&captured.snapshot.cut_id);
+        self.release_admitted_cut(&trash.cut_id);
+        let setup = setup?;
+        let mut plan = Plan::file(
+            operation_id.into(),
+            fingerprint,
+            &root,
+            None,
+            vec![],
+            None,
+            "enableSync",
+        );
+        plan.workspace_id = Some(workspace.workspace_id);
+        plan.sync_setup = Some(setup.clone());
+        self.stage(plan.clone())?;
+        self.receive_sync(&setup.identity, setup.bundle)?;
+        self.commit(&plan)?;
+        self.sync_binding_info(&root)
+    }
+
+    fn initial_sync_setup(
+        &self,
+        root: &Path,
+        workspace_id: &str,
+        operation_id: &str,
+        captured: &crate::AdmittedCompileSnapshot,
+        trash: &crate::AdmittedSnapshot,
+    ) -> Result<SyncSetup> {
         if !captured.snapshot.complete || !trash.complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
                 "Sync setup requires a qualified content inventory",
             ));
         }
-        let trash_roots = self.original_trash_roots(&root)?;
+        let tags = captured.snapshot.tags.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "coverageIncomplete",
+                "Sync setup requires its original complete Tags capture",
+            )
+        })?;
+        self.qualified_tag_document_from_snapshot(root, tags)?;
+        let trash_roots = self.original_trash_roots(root)?;
         let retired_root = |directory: &Path| -> Result<bool> {
             for original in &trash_roots {
                 if crate::backend::namespace_path_compare(directory, &original.path)?
@@ -136,7 +184,7 @@ impl Core {
         let replica_id = fresh();
         let genesis = Manifest {
             version: 1,
-            workspace_id: workspace.workspace_id.clone(),
+            workspace_id: workspace_id.into(),
             replica_id: replica_id.clone(),
             operation_id: operation_id.into(),
             parents: BTreeSet::new(),
@@ -144,7 +192,7 @@ impl Core {
             dependencies: vec![],
         };
         let identity = SyncIdentity {
-            workspace_id: workspace.workspace_id.clone(),
+            workspace_id: workspace_id.into(),
             genesis: genesis.id()?,
         };
         let mut bundle = SyncBundle {
@@ -199,14 +247,14 @@ impl Core {
                 let id = value["directoryId"]
                     .as_str()
                     .ok_or_else(|| invalid("Directory marker lacks an identity"))?;
-                let reference = format!("weftext-directory://{}/{id}", workspace.workspace_id);
-                let resolved = self.resolve_navigation_target(&root, &reference)?;
+                let reference = format!("weftext-directory://{workspace_id}/{id}");
+                let resolved = self.resolve_navigation_target(root, &reference)?;
                 if resolved.status != "managed"
                     || resolved.path.as_deref() != Some(&display(path.parent().unwrap()))
                 {
                     return Err(invalid("A directory marker is not currently admitted"));
                 }
-                let object = if path.parent() == Some(&root) {
+                let object = if path.parent() == Some(root) {
                     ObjectKey::RootDirectory(id.into())
                 } else {
                     ObjectKey::Directory(id.into())
@@ -237,16 +285,13 @@ impl Core {
         }
         for (relative, bytes) in &captured.files {
             let path = root.join(relative);
-            if let Some(object) = config_key(&root, &path) {
+            if let Some(object) = config_key(root, &path) {
                 if matches!(object, ObjectKey::Tags) {
                     crate::directory_identity::validate_sync_tags(bytes)?;
                 }
                 if matches!(object, ObjectKey::Settings) {
                     crate::author_order::validate_workspace_settings(bytes)?;
-                    crate::author_order::validate_workspace_settings_scope(
-                        bytes,
-                        &workspace.workspace_id,
-                    )?;
+                    crate::author_order::validate_workspace_settings_scope(bytes, workspace_id)?;
                 }
                 if matches!(object, ObjectKey::Rules) {
                     crate::validate_library_rules(bytes)?;
@@ -256,7 +301,7 @@ impl Core {
                     object.clone(),
                     LocalObject {
                         object,
-                        directory: display(&root),
+                        directory: display(root),
                         commit: String::new(),
                         revision: fresh(),
                         state: ObjectState {
@@ -269,7 +314,7 @@ impl Core {
                     },
                 );
             }
-            if let Some(object) = owner(&objects, &root, &path) {
+            if let Some(object) = owner(&objects, root, &path) {
                 let tracked = objects.get_mut(&object).unwrap();
                 let name = relative_to(&path, Path::new(&tracked.directory))?;
                 super::relative(&name)?;
@@ -310,7 +355,7 @@ impl Core {
                 } else {
                     parent_id(
                         &parent_lookup,
-                        &root,
+                        root,
                         Path::new(&tracked.directory).parent().unwrap(),
                     )?
                 };
@@ -358,7 +403,7 @@ impl Core {
             birth_state.retired = false;
             let manifest = Manifest {
                 version: 1,
-                workspace_id: workspace.workspace_id.clone(),
+                workspace_id: workspace_id.into(),
                 replica_id: replica_id.clone(),
                 operation_id: fresh(),
                 parents,
@@ -375,7 +420,7 @@ impl Core {
             if tracked.state.retired {
                 let retirement = Manifest {
                     version: 1,
-                    workspace_id: workspace.workspace_id.clone(),
+                    workspace_id: workspace_id.into(),
                     replica_id: replica_id.clone(),
                     operation_id: fresh(),
                     parents: BTreeSet::from([tracked.commit.clone()]),
@@ -392,30 +437,15 @@ impl Core {
             }
             birth_commits.insert(tracked.object.clone(), tracked.commit.clone());
         }
-        let setup = SyncSetup {
-            root: display(&root),
+        Ok(SyncSetup {
+            root: display(root),
             replica_id,
             identity,
             initial,
             bundle,
             selection: None,
             physical_bindings,
-        };
-        let mut plan = Plan::file(
-            operation_id.into(),
-            fingerprint,
-            &root,
-            None,
-            vec![],
-            None,
-            "enableSync",
-        );
-        plan.workspace_id = Some(workspace.workspace_id);
-        plan.sync_setup = Some(setup.clone());
-        self.stage(plan.clone())?;
-        self.receive_sync(&setup.identity, setup.bundle)?;
-        self.commit(&plan)?;
-        self.sync_binding_info(&root)
+        })
     }
 
     pub fn sync_binding_info(&self, root: impl AsRef<Path>) -> Result<SyncBindingInfo> {

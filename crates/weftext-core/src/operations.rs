@@ -3117,6 +3117,20 @@ impl Core {
             raw_pending,
         })
     }
+    /// Release this cut's private read tokens only, including optional captures.
+    /// Owned witnesses and prepared Plans remain valid; this never changes
+    /// author files, operations, admission facts or other independently read cuts.
+    pub fn release_admitted_cut(&mut self, cut_id: &str) {
+        self.compile_dependency_cuts.remove(cut_id);
+        if let Some(cut) = self.admitted_cuts.remove(cut_id) {
+            // Optional Tags capture is owned by the cut even when no structural
+            // Query binds it into the operation's actual dependency read set.
+            for base in cut.bases.into_iter().chain(cut.tag_base) {
+                self.snapshots.remove(&base);
+            }
+        }
+    }
+
     /// Bind only the Tags file captured with this admitted cut. Unrelated
     /// operations keep their original read set when they never use structure.
     pub fn bind_admitted_tag_structure(
@@ -3301,9 +3315,24 @@ impl Core {
                 ));
             }
         };
+        let cut_id = snapshot.cut_id.clone();
+        let result =
+            self.capture_admitted_compile_snapshot(&root, &workspace.workspace_id, snapshot);
+        if result.is_err() {
+            self.release_admitted_cut(&cut_id);
+        }
+        result
+    }
+
+    fn capture_admitted_compile_snapshot(
+        &mut self,
+        root: &Path,
+        workspace_id: &str,
+        snapshot: AdmittedSnapshot,
+    ) -> Result<AdmittedCompileSnapshot> {
         let mut captured = Vec::new();
         let mut directories = Vec::new();
-        snapshot_tree(&root, &mut captured, &mut directories, false)?;
+        snapshot_tree(root, &mut captured, &mut directories, false)?;
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         for f in &captured {
@@ -3384,7 +3413,7 @@ impl Core {
                     )
                 })?;
             let resource_id = selected
-                .strip_prefix(&format!("weftext-resource://{}/", workspace.workspace_id))
+                .strip_prefix(&format!("weftext-resource://{workspace_id}/"))
                 .ok_or_else(|| {
                     CoreError::new("styleSelection", "Style belongs to another workspace")
                 })?;
@@ -3438,7 +3467,7 @@ impl Core {
                 })?;
             if !self.admitted_resource(
                 resource_id,
-                &workspace.workspace_id,
+                workspace_id,
                 &owner.node_id,
                 &module.stamp.identity,
             ) {
@@ -3449,7 +3478,7 @@ impl Core {
             }
             Some(weftext_engine::StyleModule {
                 path: Path::new(&module.path)
-                    .strip_prefix(&root)
+                    .strip_prefix(root)
                     .map_err(|_| {
                         CoreError::new("outsideRoot", "Selected style is outside selected library")
                     })?
@@ -3464,12 +3493,13 @@ impl Core {
         };
         let mut files = BTreeMap::new();
         let mut bases = Vec::new();
+        let mut bindings = Vec::new();
         for f in captured {
             let path = Path::new(&f.path);
             let base_id = fresh();
             let parent = ParentGuard::acquire(path)?.directory_identity()?;
             files.insert(
-                path.strip_prefix(&root)
+                path.strip_prefix(root)
                     .map_err(|_| {
                         CoreError::new("outsideRoot", "Compile input is outside selected library")
                     })?
@@ -3477,20 +3507,21 @@ impl Core {
                     .replace('\\', "/"),
                 f.bytes.clone(),
             );
-            self.snapshots.insert(
+            bindings.push((
                 base_id.clone(),
                 SnapshotBinding {
                     path: f.path.clone(),
                     captured: Some(f),
                     parent,
                 },
-            );
+            ));
             bases.push(base_id);
         }
         if let Some(cut) = self.admitted_cuts.get_mut(&snapshot.cut_id) {
             cut.bases.extend(bases);
         }
-        self.retain_compile_dependency_cut(&root, &snapshot.cut_id, &directories)?;
+        self.snapshots.extend(bindings);
+        self.retain_compile_dependency_cut(root, &snapshot.cut_id, &directories)?;
         drop(handles);
         drop(guards);
         Ok(AdmittedCompileSnapshot {
@@ -3724,14 +3755,15 @@ impl Core {
         }
         if let Some(cut) = &cut {
             let current = self.admitted_snapshot(&root)?;
-            if !current.complete
-                || current
+            let same = current.complete
+                && current
                     .membership_ids
                     .iter()
                     .cloned()
                     .collect::<BTreeSet<_>>()
-                    != cut.members
-            {
+                    == cut.members;
+            self.release_admitted_cut(&current.cut_id);
+            if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
                     "Admitted set membership changed before planning",
@@ -4906,9 +4938,15 @@ impl Core {
         self.validate_tag_plan_changes(&plan)?;
         if let Some(expected) = &t.expected_membership {
             let current = self.admitted_snapshot(root)?;
-            if !current.complete
-                || current.membership_ids.into_iter().collect::<BTreeSet<_>>() != *expected
-            {
+            let same = current.complete
+                && current
+                    .membership_ids
+                    .iter()
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+                    == *expected;
+            self.release_admitted_cut(&current.cut_id);
+            if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
                     "Admitted set membership changed after the reviewed strong plan",
@@ -4917,9 +4955,15 @@ impl Core {
         }
         if let Some(expected) = &t.expected_trash_membership {
             let current = self.trash_admitted_snapshot(root)?;
-            if !current.complete
-                || current.membership_ids.into_iter().collect::<BTreeSet<_>>() != *expected
-            {
+            let same = current.complete
+                && current
+                    .membership_ids
+                    .iter()
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+                    == *expected;
+            self.release_admitted_cut(&current.cut_id);
+            if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
                     "Admitted Trash membership changed after the reviewed original plan",

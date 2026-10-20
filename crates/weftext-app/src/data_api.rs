@@ -601,90 +601,97 @@ async fn check_relation_proposal(
             Err(error) if error.code == "unadmittedLibrary" => None,
             Err(error) => return Err(error),
         };
-        let targets = frozen
+        let cuts = frozen
             .as_ref()
-            .map(|frozen| relation_targets(&frozen.input.notes, &schema))
+            .map(frozen_query_cut_ids)
             .unwrap_or_default();
-        let complete = frozen
-            .as_ref()
-            .is_some_and(|frozen| frozen.input.coverage == "complete");
-        let proposed = weftext_data::project(&after, &schema);
-        let owner = frozen
-            .as_ref()
-            .and_then(|frozen| {
-                frozen.input.notes.iter().find(|note| {
+        let result = (|| {
+            let targets = frozen
+                .as_ref()
+                .map(|frozen| relation_targets(&frozen.input.notes, &schema))
+                .unwrap_or_default();
+            let complete = frozen
+                .as_ref()
+                .is_some_and(|frozen| frozen.input.coverage == "complete");
+            let proposed = weftext_data::project(&after, &schema);
+            let owner = frozen
+                .as_ref()
+                .and_then(|frozen| {
+                    frozen.input.notes.iter().find(|note| {
+                        proposed.id.as_ref().is_some_and(|id| {
+                            note.entity_key.rsplit('/').next() == Some(id.as_str())
+                        })
+                    })
+                })
+                .map(|note| note.entity_key.clone());
+            let check = match (&owner, &frozen) {
+                (Some(owner), Some(frozen)) => weftext_data::validate_relation_change_with_graph(
+                    owner,
+                    &before,
+                    &after,
+                    &schema,
+                    &targets,
+                    &relation_sources(&frozen.input.notes),
+                    complete,
+                ),
+                _ => weftext_data::validate_relation_change(
+                    &before, &after, &schema, &targets, complete,
+                ),
+            };
+            if !check.is_valid() {
+                return Err(CoreError::new(
+                    "invalidRelation",
+                    format!(
+                        "{}{}",
+                        check.diagnostics.join("; "),
+                        check.unavailable.join("; ")
+                    ),
+                ));
+            }
+            let mut context = weftext_data::ValidationContext::default();
+            if let Some(frozen) = frozen
+                && let Some(note) = frozen.input.notes.iter().find(|note| {
                     proposed
                         .id
                         .as_ref()
                         .is_some_and(|id| note.entity_key.rsplit('/').next() == Some(id.as_str()))
                 })
-            })
-            .map(|note| note.entity_key.clone());
-        let check = match (&owner, &frozen) {
-            (Some(owner), Some(frozen)) => weftext_data::validate_relation_change_with_graph(
-                owner,
-                &before,
-                &after,
-                &schema,
-                &targets,
-                &relation_sources(&frozen.input.notes),
-                complete,
-            ),
-            _ => {
-                weftext_data::validate_relation_change(&before, &after, &schema, &targets, complete)
+            {
+                let resources = core.managed_resource_snapshot(&frozen.root, &note.path)?;
+                context.owner = Some(note.entity_key.clone());
+                context.resources_complete = resources
+                    .iter()
+                    .all(|resource| resource.identity_status == "admitted");
+                context.resources = resources
+                    .into_iter()
+                    .filter(|resource| resource.identity_status == "admitted")
+                    .map(|resource| weftext_data::ResourceMetadata {
+                        resource_ref: resource.resource_ref,
+                        owner: note.entity_key.clone(),
+                        lifecycle: "live".into(),
+                    })
+                    .collect();
             }
-        };
-        if !check.is_valid() {
-            return Err(CoreError::new(
-                "invalidRelation",
-                format!(
-                    "{}{}",
-                    check.diagnostics.join("; "),
-                    check.unavailable.join("; ")
+            let validation = match selected_field {
+                Some(field_id) => weftext_data::validate_field_change(
+                    &before, &after, &schema, &field_id, &context,
                 ),
-            ));
-        }
-        let mut context = weftext_data::ValidationContext::default();
-        if let Some(frozen) = frozen
-            && let Some(note) = frozen.input.notes.iter().find(|note| {
-                proposed
-                    .id
-                    .as_ref()
-                    .is_some_and(|id| note.entity_key.rsplit('/').next() == Some(id.as_str()))
-            })
-        {
-            let resources = core.managed_resource_snapshot(&frozen.root, &note.path)?;
-            context.owner = Some(note.entity_key.clone());
-            context.resources_complete = resources
-                .iter()
-                .all(|resource| resource.identity_status == "admitted");
-            context.resources = resources
-                .into_iter()
-                .filter(|resource| resource.identity_status == "admitted")
-                .map(|resource| weftext_data::ResourceMetadata {
-                    resource_ref: resource.resource_ref,
-                    owner: note.entity_key.clone(),
-                    lifecycle: "live".into(),
-                })
-                .collect();
-        }
-        let validation = match selected_field {
-            Some(field_id) => {
-                weftext_data::validate_field_change(&before, &after, &schema, &field_id, &context)
+                None => weftext_data::validate_note(&after, &schema, &context),
+            };
+            if !validation.is_valid() {
+                return Err(CoreError::new(
+                    "invalidData",
+                    format!(
+                        "{}{}",
+                        validation.diagnostics.join("; "),
+                        validation.unavailable.join("; ")
+                    ),
+                ));
             }
-            None => weftext_data::validate_note(&after, &schema, &context),
-        };
-        if !validation.is_valid() {
-            return Err(CoreError::new(
-                "invalidData",
-                format!(
-                    "{}{}",
-                    validation.diagnostics.join("; "),
-                    validation.unavailable.join("; ")
-                ),
-            ));
-        }
-        Ok(())
+            Ok(())
+        })();
+        release_query_cuts(core, &cuts);
+        result
     })
     .await
 }
@@ -740,6 +747,16 @@ fn capture_from_frozen(
     core: &mut Core,
     req: &CaptureRequest,
     frozen: FrozenQuery,
+) -> Result<weftext_core::OpenedDocument, CoreError> {
+    with_temporary_frozen_query(core, frozen, |core, frozen| {
+        capture_from_frozen_inner(core, req, frozen)
+    })
+}
+
+fn capture_from_frozen_inner(
+    core: &mut Core,
+    req: &CaptureRequest,
+    frozen: &FrozenQuery,
 ) -> Result<weftext_core::OpenedDocument, CoreError> {
     let source = capture_template(req, &frozen.schema)
         .map_err(|error| CoreError::new("invalidData", error.to_string()))?;
@@ -819,7 +836,7 @@ fn capture_from_frozen(
             .find(|field| field.field_id == "calendar/period")
             .and_then(|field| field.cell.native())
         {
-            let (plan, policy) = period_plan(&frozen, period)?;
+            let (plan, policy) = period_plan(frozen, period)?;
             let matched = weftext_data::execute_query(&frozen.input, &plan, &frozen.schema)
                 .map_err(|error| CoreError::new("invalidPeriod", error.to_string()))?;
             if let Some(directory) = &plan.scope.directory
@@ -1058,19 +1075,21 @@ async fn resolve_period(
 ) -> ApiResult {
     let output = core_call(&state, move |core| {
         let frozen = query_snapshot(core,&req.root,weftext_data::QueryPlan::default())?;
+        with_temporary_frozen_query(core, frozen, |_core, frozen| {
         let value = period_value(&frozen.schema,&req.series_key,&req.kind,&req.key)?;
         let period = weftext_data::period_step(&value,req.steps,&frozen.schema)
             .map_err(|error| CoreError::new("invalidPeriod",error.to_string()))?;
         let bounds = weftext_data::period_bounds(&period,&frozen.schema)
             .map_err(|error| CoreError::new("invalidPeriod",error.to_string()))?;
-        let (plan,policy) = period_plan(&frozen,&period)?;
+        let (plan,policy) = period_plan(frozen,&period)?;
         let mut result = weftext_data::execute_query(&frozen.input,&plan,&frozen.schema)
             .map_err(|error| CoreError::new("invalidQuery",error.to_string()))?;
-        result.diagnostics.extend(frozen.diagnostics);
+        result.diagnostics.append(&mut frozen.diagnostics);
         let can_create = result.coverage == "complete" && (policy.multiplicity == "many" || result.rows.is_empty());
         Ok(json!({"period":period,"bounds":bounds,"policy":policy,"matches":result.rows,"coverage":result.coverage,
             "canCreate":can_create,"cutId":result.cut_id,"diagnostics":result.diagnostics,"snapshotMode":"admittedFrozen",
             "snapshotLabel":"已纳管笔记快照","rawScope":{"complete":frozen.raw_complete,"pendingCount":frozen.raw_pending}}))
+        })
     }).await?;
     Ok(Json(output))
 }
@@ -1081,18 +1100,20 @@ async fn create_period(
 ) -> ApiResult {
     let document = core_call(&state, move |core| {
         let frozen = query_snapshot(core, &req.root, weftext_data::QueryPlan::default())?;
-        let period = period_value(&frozen.schema, &req.series_key, &req.kind, &req.key)?;
-        let capture = CaptureRequest {
-            root: req.root,
-            parent: req.parent,
-            name: req.name,
-            types: vec!["period-note".into()],
-            title: req.title,
-            fields: BTreeMap::from([("calendar/period".into(), period)]),
-            body: req.body,
-            operation_id: req.operation_id,
-        };
-        capture_from_frozen(core, &capture, frozen)
+        with_temporary_frozen_query(core, frozen, |core, frozen| {
+            let period = period_value(&frozen.schema, &req.series_key, &req.kind, &req.key)?;
+            let capture = CaptureRequest {
+                root: req.root,
+                parent: req.parent,
+                name: req.name,
+                types: vec!["period-note".into()],
+                title: req.title,
+                fields: BTreeMap::from([("calendar/period".into(), period)]),
+                body: req.body,
+                operation_id: req.operation_id,
+            };
+            capture_from_frozen_inner(core, &capture, frozen)
+        })
     })
     .await?;
     let document = value(document)?;
@@ -1196,62 +1217,68 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                     )
                 })?;
             let captured = core.trash_admitted_snapshot(&req.root)?;
-            if !captured.complete {
-                return Err(CoreError::new(
-                    "coverageIncomplete",
-                    "The current owned trash set cannot prove a unique identity",
-                ));
-            }
-            let workspace = captured.inventory.workspace_id.as_deref().ok_or_else(|| {
-                CoreError::new(
-                    "unadmittedLibrary",
-                    "Trash opening needs the original library",
-                )
-            })?;
-            let mut files = captured.files.iter().filter(|file| {
-                file.node_id
-                    .as_ref()
-                    .is_some_and(|id| req.entity_key == format!("weftext-node://{workspace}/{id}"))
-            });
-            let file = files.next().ok_or_else(|| {
-                CoreError::new(
-                    "nodeUnavailable",
-                    "The exact node is absent from the owned trash set",
-                )
-            })?;
-            if files.next().is_some() {
-                return Err(CoreError::new(
-                    "identityConflict",
-                    "The owned trash node identity is ambiguous",
-                ));
-            }
-            if let Some(base) = revision.strip_prefix("observed-source:") {
-                core.validate_snapshot(&req.root, &file.path, base)?;
-            } else if file.revision.as_deref() != Some(revision) {
-                return Err(CoreError::new(
-                    "staleBase",
-                    "The trash row source changed since the query",
-                ));
-            }
-            let expected_source = file.bytes.as_deref().ok_or_else(|| {
-                CoreError::new("sourceUnavailable", "The trash source is unavailable")
-            })?;
-            let document = core.open(&file.path, Some(PathBuf::from(&captured.inventory.root)))?;
-            if document.kind != "managedTrash"
-                || document.node_id != file.node_id
-                || document.workspace_id != captured.inventory.workspace_id
-                || document.source.as_bytes() != expected_source
-                || weftext_engine::inspect_metadata(&document.source).id != file.node_id
-            {
-                return Err(CoreError::new(
-                    "identityConflict",
-                    "The exact trash source changed before opening",
-                ));
-            }
-            if let Some(base) = revision.strip_prefix("observed-source:") {
-                core.validate_snapshot(&req.root, &file.path, base)?;
-            }
-            return Ok(document);
+            let temporary_cut = captured.cut_id.clone();
+            let result = (|| {
+                if !captured.complete {
+                    return Err(CoreError::new(
+                        "coverageIncomplete",
+                        "The current owned trash set cannot prove a unique identity",
+                    ));
+                }
+                let workspace = captured.inventory.workspace_id.as_deref().ok_or_else(|| {
+                    CoreError::new(
+                        "unadmittedLibrary",
+                        "Trash opening needs the original library",
+                    )
+                })?;
+                let mut files = captured.files.iter().filter(|file| {
+                    file.node_id.as_ref().is_some_and(|id| {
+                        req.entity_key == format!("weftext-node://{workspace}/{id}")
+                    })
+                });
+                let file = files.next().ok_or_else(|| {
+                    CoreError::new(
+                        "nodeUnavailable",
+                        "The exact node is absent from the owned trash set",
+                    )
+                })?;
+                if files.next().is_some() {
+                    return Err(CoreError::new(
+                        "identityConflict",
+                        "The owned trash node identity is ambiguous",
+                    ));
+                }
+                if let Some(base) = revision.strip_prefix("observed-source:") {
+                    core.validate_snapshot(&req.root, &file.path, base)?;
+                } else if file.revision.as_deref() != Some(revision) {
+                    return Err(CoreError::new(
+                        "staleBase",
+                        "The trash row source changed since the query",
+                    ));
+                }
+                let expected_source = file.bytes.as_deref().ok_or_else(|| {
+                    CoreError::new("sourceUnavailable", "The trash source is unavailable")
+                })?;
+                let document =
+                    core.open(&file.path, Some(PathBuf::from(&captured.inventory.root)))?;
+                if document.kind != "managedTrash"
+                    || document.node_id != file.node_id
+                    || document.workspace_id != captured.inventory.workspace_id
+                    || document.source.as_bytes() != expected_source
+                    || weftext_engine::inspect_metadata(&document.source).id != file.node_id
+                {
+                    return Err(CoreError::new(
+                        "identityConflict",
+                        "The exact trash source changed before opening",
+                    ));
+                }
+                if let Some(base) = revision.strip_prefix("observed-source:") {
+                    core.validate_snapshot(&req.root, &file.path, base)?;
+                }
+                Ok(document)
+            })();
+            core.release_admitted_cut(&temporary_cut);
+            return result;
         }
         if req
             .lifecycle
@@ -1277,6 +1304,7 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
 async fn references(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
     let output = core_call(&state,move|core| {
         let frozen = query_snapshot(core,&req.root,weftext_data::QueryPlan::default())?;
+        with_temporary_frozen_query(core, frozen, |_core, frozen| {
         let nodes = frozen.input.notes.iter().map(|note| {
             let projection = weftext_data::project(&note.source,&frozen.schema);
             json!({"ref":note.entity_key,"path":note.path,"displayLabel":Path::new(&note.path).file_stem().unwrap_or_default().to_string_lossy(),
@@ -1284,6 +1312,7 @@ async fn references(State(state): State<AppState>, Json(req): Json<RootRequest>)
         }).collect::<Vec<_>>();
         Ok(json!({"nodes":nodes,"complete":frozen.input.coverage == "complete","diagnostics":frozen.diagnostics,
             "snapshotLabel":"已纳管笔记快照","tagsEndpoint":"/api/navigation/tags"}))
+        })
     }).await?;
     Ok(Json(output))
 }
@@ -1305,6 +1334,29 @@ struct FrozenQuery {
     scope_bindings: BTreeMap<String, String>,
     render_files: Option<BTreeMap<String, Vec<u8>>>,
     render_style: Option<weftext_engine::StyleModule>,
+}
+
+fn frozen_query_cut_ids(frozen: &FrozenQuery) -> Vec<String> {
+    frozen.scope_cuts.values().cloned().collect()
+}
+
+fn release_query_cuts(core: &mut Core, cuts: &[String]) {
+    for cut in cuts {
+        core.release_admitted_cut(cut);
+    }
+}
+
+/// Only callers that publish no reusable read basis use this wrapper. A
+/// successful Query result retains its original cuts for observed-source rows;
+/// strong creation keeps its cut until the operation owns the frozen plan.
+fn with_temporary_frozen_query<T>(
+    core: &mut Core,
+    mut frozen: FrozenQuery,
+    operation: impl FnOnce(&mut Core, &mut FrozenQuery) -> Result<T, CoreError>,
+) -> Result<T, CoreError> {
+    let result = operation(core, &mut frozen);
+    release_query_cuts(core, &frozen_query_cut_ids(&frozen));
+    result
 }
 
 fn query_snapshot(
@@ -1382,218 +1434,226 @@ fn query_snapshot_impl(
     } else {
         (core.admitted_snapshot(root)?, None, None)
     };
-    let mut complete = captured.complete;
-    let cut_id = captured.cut_id;
-    let raw_complete = captured.raw_complete;
-    let raw_pending = captured.raw_pending;
-    let membership_ids = captured.membership_ids;
-    let inventory = captured.inventory;
-    if let Some((reference, expected_path)) = &stable_scope {
-        let target = core.resolve_navigation_target(root, reference)?;
-        if target.status != "managed" || target.path.as_ref() != Some(expected_path) {
-            return Err(CoreError::new(
-                "queryScopeUnavailable",
-                "The stable scope changed during capture; refresh its identity before querying",
-            ));
+    let unpublished_cut = captured.cut_id.clone();
+    let result = (|| {
+        let mut complete = captured.complete;
+        let cut_id = captured.cut_id;
+        let raw_complete = captured.raw_complete;
+        let raw_pending = captured.raw_pending;
+        let membership_ids = captured.membership_ids;
+        let inventory = captured.inventory;
+        if let Some((reference, expected_path)) = &stable_scope {
+            let target = core.resolve_navigation_target(root, reference)?;
+            if target.status != "managed" || target.path.as_ref() != Some(expected_path) {
+                return Err(CoreError::new(
+                    "queryScopeUnavailable",
+                    "The stable scope changed during capture; refresh its identity before querying",
+                ));
+            }
+            plan.scope.directory = Some(expected_path.clone());
         }
-        plan.scope.directory = Some(expected_path.clone());
-    }
-    let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
-        CoreError::new(
-            "unadmittedLibrary",
-            "Structured Query needs the original managed library",
-        )
-    })?;
-    let mut scope_directories = BTreeSet::from([inventory.root.clone()]);
-    for entry in &inventory.entries {
-        if entry.kind == "directory" {
-            scope_directories.insert(entry.path.clone());
-        }
-        if entry.kind == "node" && entry.identity_status == "admitted" {
-            scope_directories.insert(entry.parent_path.clone());
-        }
-    }
-    // Bind directory scope to the current Core inventory, never a title or an
-    // arbitrary prefix that happens to make an empty result look successful.
-    if let Some(directory) = &plan.scope.directory {
-        let supplied = PathBuf::from(directory);
-        if supplied
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
-            return Err(CoreError::new(
-                "outsideRoot",
-                "Query directory cannot contain parent traversal",
-            ));
-        }
-        let selected = if supplied.is_absolute() {
-            supplied
-        } else {
-            PathBuf::from(&inventory.root).join(supplied)
-        };
-        let selected = selected.to_string_lossy().to_string();
-        let target = if Path::new(&selected) == Path::new(&inventory.root) {
-            inventory.root.clone()
-        } else {
-            inventory
-                .entries
-                .iter()
-                .find(|entry| {
-                    (entry.kind == "directory" && Path::new(&entry.path) == Path::new(&selected))
-                        || (entry.kind == "node"
-                            && entry.identity_status == "admitted"
-                            && Path::new(&entry.path).parent() == Some(Path::new(&selected)))
-                })
-                .map(|_| selected.clone())
-                .ok_or_else(|| {
-                    CoreError::new(
-                        "queryScopeUnavailable",
-                        "The requested directory is not available in this inventory",
-                    )
-                })?
-        };
-        plan.scope.directory = Some(target);
-    }
-    let (config, schema) = match baseline {
-        Some(baseline) => baseline,
-        None => {
-            let schema_file = captured.schema.ok_or_else(|| {
-                CoreError::new("schemaUnavailable", "Core did not freeze the schema role")
-            })?;
-            let (schema, _) = knowledge_schema_from_snapshot(&schema_file)
-                .map_err(|error| CoreError::new("invalidSchema", error.message))?;
-            let source = schema_file
-                .bytes
-                .as_ref()
-                .map(|bytes| String::from_utf8(bytes.clone()))
-                .transpose()
-                .map_err(|_| CoreError::new("invalidSchema", "Frozen schema must be UTF-8"))?
-                .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
-            (
-                SchemaSource {
-                    source,
-                    before: schema_file.bytes,
-                    role_ref: Some(format!("weftext-config://{workspace}/schema")),
-                    revision: schema_file.revision,
-                    can_install: true,
-                    base_id: Some(schema_file.base_id),
-                },
-                schema,
+        let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "unadmittedLibrary",
+                "Structured Query needs the original managed library",
             )
+        })?;
+        let mut scope_directories = BTreeSet::from([inventory.root.clone()]);
+        for entry in &inventory.entries {
+            if entry.kind == "directory" {
+                scope_directories.insert(entry.path.clone());
+            }
+            if entry.kind == "node" && entry.identity_status == "admitted" {
+                scope_directories.insert(entry.parent_path.clone());
+            }
         }
-    };
-    let schema_revision = config.revision.clone().unwrap_or_else(|| {
-        if config.before.is_none() {
-            "bundled-schema-v0.3".into()
-        } else {
-            format!(
-                "observed-config:{}",
-                config.base_id.as_deref().unwrap_or("unavailable")
-            )
+        // Bind directory scope to the current Core inventory, never a title or an
+        // arbitrary prefix that happens to make an empty result look successful.
+        if let Some(directory) = &plan.scope.directory {
+            let supplied = PathBuf::from(directory);
+            if supplied
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(CoreError::new(
+                    "outsideRoot",
+                    "Query directory cannot contain parent traversal",
+                ));
+            }
+            let selected = if supplied.is_absolute() {
+                supplied
+            } else {
+                PathBuf::from(&inventory.root).join(supplied)
+            };
+            let selected = selected.to_string_lossy().to_string();
+            let target = if Path::new(&selected) == Path::new(&inventory.root) {
+                inventory.root.clone()
+            } else {
+                inventory
+                    .entries
+                    .iter()
+                    .find(|entry| {
+                        (entry.kind == "directory"
+                            && Path::new(&entry.path) == Path::new(&selected))
+                            || (entry.kind == "node"
+                                && entry.identity_status == "admitted"
+                                && Path::new(&entry.path).parent() == Some(Path::new(&selected)))
+                    })
+                    .map(|_| selected.clone())
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "queryScopeUnavailable",
+                            "The requested directory is not available in this inventory",
+                        )
+                    })?
+            };
+            plan.scope.directory = Some(target);
         }
-    });
-    let mut versions = vec![
-        json!({"role":"schema","roleRef":config.role_ref,"revision":config.revision,
-        "baseId":config.base_id,"sourceHash":weftext_engine::source_hash(&config.source),
-        "builtinDefault":config.before.is_none()}),
-    ];
-    let mut diagnostics = captured.warnings;
-    diagnostics.push("已纳管笔记快照以 Core 私有准入集合为范围，同时冻结源码与模式配置；完整计数属于该冻结范围。未经准入的外部文件单独显示，结果未取得持续订阅的当前性。".into());
-    if inventory
-        .entries
-        .iter()
-        .any(|entry| entry.kind == "node" && entry.identity_status != "admitted")
-    {
-        diagnostics.push("未准入或身份有冲突的源码不提供结构化查询身份。".into());
-    }
-    let mut notes = Vec::new();
-    for file in captured.files {
-        let Some(entry) = inventory
-            .entries
-            .iter()
-            .find(|entry| entry.path == file.path)
-        else {
-            return Err(CoreError::new(
-                "invalidState",
-                "Snapshot returned an unexpected source path",
-            ));
-        };
-        if file.node_id != entry.node_id {
-            complete = false;
-            diagnostics.push("读取期间文件身份发生变化；相关行未发布。".into());
-            continue;
-        }
-        let Some(bytes) = file.bytes else {
-            complete = false;
-            diagnostics.push("读取期间源码已不可用；相关行未发布。".into());
-            continue;
-        };
-        let source = match String::from_utf8(bytes) {
-            Ok(source) => source,
-            Err(_) => {
-                complete = false;
-                diagnostics.push("非 UTF-8 源码无法投影。".into());
-                continue;
+        let (config, schema) = match baseline {
+            Some(baseline) => baseline,
+            None => {
+                let schema_file = captured.schema.ok_or_else(|| {
+                    CoreError::new("schemaUnavailable", "Core did not freeze the schema role")
+                })?;
+                let (schema, _) = knowledge_schema_from_snapshot(&schema_file)
+                    .map_err(|error| CoreError::new("invalidSchema", error.message))?;
+                let source = schema_file
+                    .bytes
+                    .as_ref()
+                    .map(|bytes| String::from_utf8(bytes.clone()))
+                    .transpose()
+                    .map_err(|_| CoreError::new("invalidSchema", "Frozen schema must be UTF-8"))?
+                    .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
+                (
+                    SchemaSource {
+                        source,
+                        before: schema_file.bytes,
+                        role_ref: Some(format!("weftext-config://{workspace}/schema")),
+                        revision: schema_file.revision,
+                        can_install: true,
+                        base_id: Some(schema_file.base_id),
+                    },
+                    schema,
+                )
             }
         };
-        let expected = entry.node_id.as_deref().unwrap();
-        let projection = weftext_data::project(&source, &schema);
-        if projection.id.as_deref() != Some(expected) {
-            complete = false;
-            diagnostics.push("观察到的源码不再符合准入身份；相关行未发布。".into());
-            continue;
-        }
-        let entity_key = format!("weftext-node://{workspace}/{expected}");
-        if entry.source.as_ref() != Some(&source) {
-            diagnostics.push(format!(
-                "{entity_key}：目录观察与逐文件快照之间源码已变化。"
-            ));
-        }
-        versions.push(json!({"entityKey":entity_key,"path":file.path,"baseId":file.base_id,
-                "revision":file.revision,"currentness":file.currentness,"sourceHash":weftext_engine::source_hash(&source)}));
-        notes.push(weftext_data::FrozenNote {
-            entity_key,
-            path: file.path,
-            source,
-            revision: file
-                .revision
-                .unwrap_or_else(|| format!("observed-source:{}", file.base_id)),
-            lifecycle: lifecycle.into(),
-            title: None,
-            body: None,
-            authorized_fields: None,
-            products: None,
+        let schema_revision = config.revision.clone().unwrap_or_else(|| {
+            if config.before.is_none() {
+                "bundled-schema-v0.3".into()
+            } else {
+                format!(
+                    "observed-config:{}",
+                    config.base_id.as_deref().unwrap_or("unavailable")
+                )
+            }
         });
+        let mut versions = vec![
+            json!({"role":"schema","roleRef":config.role_ref,"revision":config.revision,
+        "baseId":config.base_id,"sourceHash":weftext_engine::source_hash(&config.source),
+        "builtinDefault":config.before.is_none()}),
+        ];
+        let mut diagnostics = captured.warnings;
+        diagnostics.push("已纳管笔记快照以 Core 私有准入集合为范围，同时冻结源码与模式配置；完整计数属于该冻结范围。未经准入的外部文件单独显示，结果未取得持续订阅的当前性。".into());
+        if inventory
+            .entries
+            .iter()
+            .any(|entry| entry.kind == "node" && entry.identity_status != "admitted")
+        {
+            diagnostics.push("未准入或身份有冲突的源码不提供结构化查询身份。".into());
+        }
+        let mut notes = Vec::new();
+        for file in captured.files {
+            let Some(entry) = inventory
+                .entries
+                .iter()
+                .find(|entry| entry.path == file.path)
+            else {
+                return Err(CoreError::new(
+                    "invalidState",
+                    "Snapshot returned an unexpected source path",
+                ));
+            };
+            if file.node_id != entry.node_id {
+                complete = false;
+                diagnostics.push("读取期间文件身份发生变化；相关行未发布。".into());
+                continue;
+            }
+            let Some(bytes) = file.bytes else {
+                complete = false;
+                diagnostics.push("读取期间源码已不可用；相关行未发布。".into());
+                continue;
+            };
+            let source = match String::from_utf8(bytes) {
+                Ok(source) => source,
+                Err(_) => {
+                    complete = false;
+                    diagnostics.push("非 UTF-8 源码无法投影。".into());
+                    continue;
+                }
+            };
+            let expected = entry.node_id.as_deref().unwrap();
+            let projection = weftext_data::project(&source, &schema);
+            if projection.id.as_deref() != Some(expected) {
+                complete = false;
+                diagnostics.push("观察到的源码不再符合准入身份；相关行未发布。".into());
+                continue;
+            }
+            let entity_key = format!("weftext-node://{workspace}/{expected}");
+            if entry.source.as_ref() != Some(&source) {
+                diagnostics.push(format!(
+                    "{entity_key}：目录观察与逐文件快照之间源码已变化。"
+                ));
+            }
+            versions.push(json!({"entityKey":entity_key,"path":file.path,"baseId":file.base_id,
+                "revision":file.revision,"currentness":file.currentness,"sourceHash":weftext_engine::source_hash(&source)}));
+            notes.push(weftext_data::FrozenNote {
+                entity_key,
+                path: file.path,
+                source,
+                revision: file
+                    .revision
+                    .unwrap_or_else(|| format!("observed-source:{}", file.base_id)),
+                lifecycle: lifecycle.into(),
+                title: None,
+                body: None,
+                authorized_fields: None,
+                products: None,
+            });
+        }
+        Ok(FrozenQuery {
+            tags: captured
+                .tags
+                .into_iter()
+                .map(|tags| (cut_id.clone(), tags))
+                .collect(),
+            input: weftext_data::FrozenQueryInput {
+                cut_id: cut_id.clone(),
+                schema_revision,
+                coverage: if complete { "complete" } else { "partial" }.into(),
+                freshness: "stale".into(),
+                notes,
+                advanced: None,
+            },
+            schema,
+            plan,
+            versions,
+            diagnostics,
+            raw_complete,
+            raw_pending,
+            membership_ids,
+            root: inventory.root,
+            scope_cuts: BTreeMap::from([(lifecycle.into(), cut_id)]),
+            schema_source: config,
+            scope_directories,
+            scope_bindings: stable_scope.into_iter().collect(),
+            render_files,
+            render_style,
+        })
+    })();
+    if result.is_err() {
+        core.release_admitted_cut(&unpublished_cut);
     }
-    Ok(FrozenQuery {
-        tags: captured
-            .tags
-            .into_iter()
-            .map(|tags| (cut_id.clone(), tags))
-            .collect(),
-        input: weftext_data::FrozenQueryInput {
-            cut_id: cut_id.clone(),
-            schema_revision,
-            coverage: if complete { "complete" } else { "partial" }.into(),
-            freshness: "stale".into(),
-            notes,
-            advanced: None,
-        },
-        schema,
-        plan,
-        versions,
-        diagnostics,
-        raw_complete,
-        raw_pending,
-        membership_ids,
-        root: inventory.root,
-        scope_cuts: BTreeMap::from([(lifecycle.into(), cut_id)]),
-        schema_source: config,
-        scope_directories,
-        scope_bindings: stable_scope.into_iter().collect(),
-        render_files,
-        render_style,
-    })
+    result
 }
 
 async fn query(State(state): State<AppState>, Json(req): Json<QueryRequest>) -> ApiResult {
@@ -1615,6 +1675,19 @@ fn freeze_query_definitions(
 }
 
 fn freeze_query_definitions_with_draft(
+    core: &mut Core,
+    frozen: &mut FrozenQuery,
+    parameters: BTreeMap<String, NativeValue>,
+    draft: Option<(&str, &str)>,
+) -> Result<(), CoreError> {
+    let result = freeze_query_definitions_with_draft_inner(core, frozen, parameters, draft);
+    if result.is_err() {
+        release_query_cuts(core, &frozen_query_cut_ids(frozen));
+    }
+    result
+}
+
+fn freeze_query_definitions_with_draft_inner(
     core: &mut Core,
     frozen: &mut FrozenQuery,
     parameters: BTreeMap<String, NativeValue>,
@@ -1941,80 +2014,88 @@ fn extend_query_lifecycle(
         Some((frozen.schema_source.clone(), frozen.schema.clone())),
         false,
     )?;
-    if extra.root != frozen.root || extra.input.schema_revision != frozen.input.schema_revision {
-        return Err(CoreError::new(
-            "queryScopeUnavailable",
-            "The lifecycle capture does not share the original library/schema baseline",
-        ));
-    }
-    frozen.tags.extend(extra.tags);
-    let count = frozen
-        .input
-        .notes
-        .len()
-        .saturating_add(extra.input.notes.len());
-    let bytes = frozen
-        .input
-        .notes
-        .iter()
-        .chain(&extra.input.notes)
-        .map(|note| note.source.len())
-        .sum::<usize>();
-    if count > 5_000 || bytes > 64 * 1024 * 1024 {
-        return Err(CoreError::new(
-            "queryBudget",
-            "The combined lifecycle snapshot exceeds 5000 notes / 64 MiB",
-        ));
-    }
-    let owners = frozen
-        .input
-        .notes
-        .iter()
-        .map(|note| note.entity_key.as_str())
-        .collect::<BTreeSet<_>>();
-    let paths = frozen
-        .input
-        .notes
-        .iter()
-        .map(|note| note.path.as_str())
-        .collect::<BTreeSet<_>>();
-    for note in &extra.input.notes {
-        if owners.contains(note.entity_key.as_str()) || paths.contains(note.path.as_str()) {
+    let unpublished_cuts = frozen_query_cut_ids(&extra);
+    let result = (|| {
+        if extra.root != frozen.root || extra.input.schema_revision != frozen.input.schema_revision
+        {
             return Err(CoreError::new(
                 "queryScopeUnavailable",
-                "A Node appears in competing original lifecycle captures",
+                "The lifecycle capture does not share the original library/schema baseline",
             ));
         }
-        if let Some(files) = &frozen.render_files {
-            let relative = Path::new(&note.path)
-                .strip_prefix(&frozen.root)
-                .map_err(|_| {
-                    CoreError::new("outsideRoot", "A lifecycle source escaped its library")
-                })?
-                .to_string_lossy()
-                .replace('\\', "/");
-            if files.get(&relative).map(Vec::as_slice) != Some(note.source.as_bytes()) {
+        let count = frozen
+            .input
+            .notes
+            .len()
+            .saturating_add(extra.input.notes.len());
+        let bytes = frozen
+            .input
+            .notes
+            .iter()
+            .chain(&extra.input.notes)
+            .map(|note| note.source.len())
+            .sum::<usize>();
+        if count > 5_000 || bytes > 64 * 1024 * 1024 {
+            return Err(CoreError::new(
+                "queryBudget",
+                "The combined lifecycle snapshot exceeds 5000 notes / 64 MiB",
+            ));
+        }
+        let owners = frozen
+            .input
+            .notes
+            .iter()
+            .map(|note| note.entity_key.as_str())
+            .collect::<BTreeSet<_>>();
+        let paths = frozen
+            .input
+            .notes
+            .iter()
+            .map(|note| note.path.as_str())
+            .collect::<BTreeSet<_>>();
+        for note in &extra.input.notes {
+            if owners.contains(note.entity_key.as_str()) || paths.contains(note.path.as_str()) {
                 return Err(CoreError::new(
-                    "scopeChanged",
-                    "A required lifecycle source differs from the original native World",
+                    "queryScopeUnavailable",
+                    "A Node appears in competing original lifecycle captures",
                 ));
             }
+            if let Some(files) = &frozen.render_files {
+                let relative = Path::new(&note.path)
+                    .strip_prefix(&frozen.root)
+                    .map_err(|_| {
+                        CoreError::new("outsideRoot", "A lifecycle source escaped its library")
+                    })?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if files.get(&relative).map(Vec::as_slice) != Some(note.source.as_bytes()) {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "A required lifecycle source differs from the original native World",
+                    ));
+                }
+            }
         }
+        if extra.input.coverage != "complete" {
+            frozen.input.coverage = "partial".into();
+        }
+        frozen.tags.extend(extra.tags);
+        frozen.scope_cuts.extend(extra.scope_cuts);
+        frozen.input.notes.extend(extra.input.notes);
+        frozen.versions.extend(extra.versions.into_iter().skip(1));
+        frozen.diagnostics.extend(extra.diagnostics);
+        frozen.scope_directories.extend(extra.scope_directories);
+        frozen.raw_complete &= extra.raw_complete;
+        frozen.raw_pending = frozen.raw_pending.saturating_add(extra.raw_pending);
+        frozen.membership_ids.extend(extra.membership_ids);
+        frozen.membership_ids.sort();
+        frozen.membership_ids.dedup();
+        Ok(())
+    })();
+    if result.is_err() {
+        release_query_cuts(core, &unpublished_cuts);
     }
-    if extra.input.coverage != "complete" {
-        frozen.input.coverage = "partial".into();
-    }
-    frozen.scope_cuts.extend(extra.scope_cuts);
-    frozen.input.notes.extend(extra.input.notes);
-    frozen.versions.extend(extra.versions.into_iter().skip(1));
-    frozen.diagnostics.extend(extra.diagnostics);
-    frozen.scope_directories.extend(extra.scope_directories);
-    frozen.raw_complete &= extra.raw_complete;
-    frozen.raw_pending = frozen.raw_pending.saturating_add(extra.raw_pending);
-    frozen.membership_ids.extend(extra.membership_ids);
-    frozen.membership_ids.sort();
-    frozen.membership_ids.dedup();
-    Ok(())
+    result
 }
 
 fn unavailable_products(identity: String, reason: &str) -> weftext_data::NoteProducts {
@@ -2147,7 +2228,23 @@ async fn qualify_query_products(
     Ok(demands)
 }
 
-async fn evaluate_frozen(state: &AppState, mut frozen: FrozenQuery) -> Result<Value, ApiError> {
+async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value, ApiError> {
+    let cuts = frozen_query_cut_ids(&frozen);
+    let result = evaluate_frozen_inner(state, frozen).await;
+    if result.is_err() {
+        core_call(state, move |core| {
+            release_query_cuts(core, &cuts);
+            Ok(())
+        })
+        .await?;
+    }
+    result
+}
+
+async fn evaluate_frozen_inner(
+    state: &AppState,
+    mut frozen: FrozenQuery,
+) -> Result<Value, ApiError> {
     let products = qualify_query_products(state, &mut frozen).await?;
     let export_root = frozen.root.clone();
     let export_schema = value(&frozen.schema)?;
@@ -2393,8 +2490,11 @@ async fn draft_definition(
             .remove(0);
         let key =
             core.reserve_definition_key(&loc.root, &loc.path, &current.base_id, &req.operation_id)?;
-        let mut context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
-        freeze_query_definitions(core, &mut context, BTreeMap::new())?;
+        let context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
+        let context = with_temporary_frozen_query(core, context, |core, context| {
+            freeze_query_definitions(core, context, BTreeMap::new())?;
+            Ok(context.input.advanced.take().unwrap_or_default())
+        })?;
         let patch = weftext_data::upsert_saved_query_with_context(
             &req.source,
             None,
@@ -2403,7 +2503,7 @@ async fn draft_definition(
             &binding,
             &req.plan,
             &schema,
-            &context.input.advanced.unwrap_or_default(),
+            &context,
         )
         .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?;
         writing_api::check_snapshot(
@@ -2466,9 +2566,11 @@ async fn save_definition(
             Some(_) => return Err(CoreError::new("definitionUnavailable", "This owner has no admitted definition key")),
             None => core.reserve_definition_key(&loc.root, &loc.path, &current.base_id, &req.operation_id)?,
         };
-        let mut definition_context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
-        freeze_query_definitions(core, &mut definition_context, BTreeMap::new())?;
-        let definition_context = definition_context.input.advanced.unwrap_or_default();
+        let definition_context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
+        let definition_context = with_temporary_frozen_query(core, definition_context, |core, context| {
+            freeze_query_definitions(core, context, BTreeMap::new())?;
+            Ok(context.input.advanced.take().unwrap_or_default())
+        })?;
         let patch = weftext_data::upsert_saved_query_with_context(&req.source, req.key.as_deref(), &key, &req.label, &binding, &req.plan, &resolved, &definition_context)
             .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?;
         let next_config = schema_source(core, &loc.root)?;
@@ -2737,12 +2839,14 @@ pub(crate) async fn validate_embedded_query_plan(
     core_call(state, move |core| {
         let frozen =
             freeze_embedded_query(core, &root, &path, &source, plan, binding, BTreeMap::new())?;
-        weftext_data::validate_query_plan_with_context(
-            &frozen.plan,
-            &frozen.schema,
-            frozen.input.advanced.as_ref().unwrap(),
-        )
-        .map_err(|e| CoreError::new("invalidQuery", e.to_string()))
+        with_temporary_frozen_query(core, frozen, |_core, frozen| {
+            weftext_data::validate_query_plan_with_context(
+                &frozen.plan,
+                &frozen.schema,
+                frozen.input.advanced.as_ref().unwrap(),
+            )
+            .map_err(|e| CoreError::new("invalidQuery", e.to_string()))
+        })
     })
     .await
 }
@@ -2972,6 +3076,182 @@ mod tests {
             initial: None,
         };
         (directory, state, root.to_string_lossy().to_string())
+    }
+
+    #[cfg(windows)]
+    fn query_base_ids(frozen: &FrozenQuery) -> Vec<String> {
+        frozen
+            .versions
+            .iter()
+            .filter_map(|version| version["baseId"].as_str().map(str::to_owned))
+            .chain(frozen.tags.values().map(|file| file.base_id.clone()))
+            .collect()
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn temporary_query_cuts_release_all_lifecycles_on_success_and_error() {
+        let (_directory, state, root) = fixture();
+        let mut core = state.core.lock().unwrap();
+        core.create_note(&root, &root, "Retained").unwrap();
+        let retained = query_snapshot(&mut core, &root, Default::default()).unwrap();
+        let retained_bases = query_base_ids(&retained);
+        for fail in [false, true] {
+            let temporary = query_snapshot(&mut core, &root, Default::default()).unwrap();
+            let mut temporary_bases = query_base_ids(&temporary);
+            let result = with_temporary_frozen_query(&mut core, temporary, |core, frozen| {
+                extend_query_lifecycle(core, frozen, "trash".into())?;
+                temporary_bases.extend(query_base_ids(frozen));
+                assert_eq!(frozen.scope_cuts.len(), 2);
+                for base in &temporary_bases {
+                    core.snapshot_witness(base)?;
+                }
+                if fail {
+                    Err(CoreError::new(
+                        "invalidQuery",
+                        "Rejected temporary validation",
+                    ))
+                } else {
+                    Ok(())
+                }
+            });
+            assert_eq!(result.is_err(), fail);
+            for base in &temporary_bases {
+                assert!(core.snapshot_witness(base).is_err());
+            }
+            for base in &retained_bases {
+                assert!(core.snapshot_witness(base).is_ok());
+            }
+        }
+        let mut invalid = query_snapshot(
+            &mut core,
+            &root,
+            weftext_data::QueryPlan {
+                r#where: Some("(".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let invalid_bases = query_base_ids(&invalid);
+        assert!(freeze_query_definitions(&mut core, &mut invalid, BTreeMap::new()).is_err());
+        for base in invalid_bases {
+            assert!(core.snapshot_witness(&base).is_err());
+        }
+        for base in retained_bases {
+            assert!(core.snapshot_witness(&base).is_ok());
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn failed_query_evaluation_releases_unpublished_basis_but_success_retains_strong_cut() {
+        let (_directory, state, root) = fixture();
+        state
+            .core
+            .lock()
+            .unwrap()
+            .create_note(&root, &root, "One")
+            .unwrap();
+        let (retained, retained_bases, invalid, invalid_bases) = {
+            let mut core = state.core.lock().unwrap();
+            let retained = query_snapshot(&mut core, &root, Default::default()).unwrap();
+            let retained_bases = query_base_ids(&retained);
+            let invalid = query_snapshot(
+                &mut core,
+                &root,
+                weftext_data::QueryPlan {
+                    r#where: Some("(".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let invalid_bases = query_base_ids(&invalid);
+            (retained, retained_bases, invalid, invalid_bases)
+        };
+        assert!(evaluate_frozen(&state, invalid).await.is_err());
+        let output = evaluate_frozen(&state, retained).await.unwrap();
+        let mut core = state.core.lock().unwrap();
+        for base in invalid_bases {
+            assert!(core.snapshot_witness(&base).is_err());
+        }
+        for base in retained_bases {
+            assert!(core.snapshot_witness(&base).is_ok());
+        }
+        core.prepare_admitted_operation(
+            CoreOperationRequest {
+                operation_id: uuid::Uuid::new_v4().to_string(),
+                root: root.clone(),
+                intent: OperationIntent::NewNode {
+                    parent: root,
+                    name: "Strong".into(),
+                    source: None,
+                },
+            },
+            output["cutId"].as_str().unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn successful_trash_query_retains_observed_row_basis_for_exact_opening() {
+        let (_directory, state, root) = fixture();
+        let (path, source) = {
+            let mut core = state.core.lock().unwrap();
+            let note = core.create_note(&root, &root, "Observed").unwrap();
+            let preview = core
+                .prepare_operation(CoreOperationRequest {
+                    root: root.clone(),
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    intent: OperationIntent::TrashNode {
+                        source: Path::new(&note.path)
+                            .parent()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into(),
+                    },
+                })
+                .unwrap();
+            core.execute_operation(&preview.operation_id, &preview.plan_id)
+                .unwrap();
+            let temporary = core.trash_admitted_snapshot(&root).unwrap();
+            let path = temporary.files[0].path.clone();
+            core.release_admitted_cut(&temporary.cut_id);
+            (path, format!("{}\n// observed external edit", note.source))
+        };
+        std::fs::write(&path, &source).unwrap();
+        let Json(rows) = ok(query(
+            State(state.clone()),
+            Json(QueryRequest {
+                root: root.clone(),
+                parameters: BTreeMap::new(),
+                plan: weftext_data::QueryPlan {
+                    scope: weftext_data::QueryScope {
+                        lifecycle: "trash".into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            }),
+        )
+        .await);
+        let row = &rows["rows"][0];
+        let revision = row["revision"].as_str().unwrap();
+        let base = revision.strip_prefix("observed-source:").unwrap();
+        assert!(state.core.lock().unwrap().snapshot_witness(base).is_ok());
+        let Json(opened) = ok(open_entity(
+            State(state.clone()),
+            Json(ResolveRequest {
+                root,
+                entity_key: row["entityKey"].as_str().unwrap().into(),
+                lifecycle: Some("trash".into()),
+                revision: Some(revision.into()),
+            }),
+        )
+        .await);
+        assert_eq!(opened["source"], source);
+        assert_eq!(opened["readOnly"], true);
+        assert!(state.core.lock().unwrap().snapshot_witness(base).is_ok());
     }
 
     #[cfg(windows)]

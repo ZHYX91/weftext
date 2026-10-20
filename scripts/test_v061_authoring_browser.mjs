@@ -15,6 +15,20 @@ let server, browser, page, base, token, stderr = '';
 let originals = [];
 const root = path.join(out, 'library'), data = path.join(out, 'state');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Core/Typst may briefly hold an ordinary Windows sharing lock while the
+// asynchronous current-preview scan completes. Retry only the owned fixture
+// original read, preserving exact-byte assertions and every HTTP failure.
+async function readOwnedOriginal(file) {
+  assert.ok(path.resolve(file).startsWith(root + path.sep), 'Only this test fixture library can use the sharing-lock read retry');
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try { return await readFile(file, 'utf8'); }
+    catch (error) {
+      if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 39) throw error;
+      (result.ownedOriginalReadRetries ??= []).push({ path: file, code: error.code, attempt: attempt + 1 });
+      await pause(50);
+    }
+  }
+}
 async function start(args = []) {
   const child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
@@ -111,7 +125,7 @@ try {
   await page.getByLabel('关系分类', { exact: true }).selectOption('citations'); await page.getByLabel('将 browserRenamed 改名为', { exact: true }).waitFor(); assert.equal(await inspector().getByRole('button', { name: '定位源码：browserRenamed', exact: true }).count(), 1); assert.equal(await source(), current);
   await passed('Relationship classification distinguishes native document references, ordinary note links and the actual publication-backed authored citation.');
   await click('阅读'); await page.getByRole('tab', { name: '插入引用', exact: true }).click(); await page.getByLabel('插入引用类型', { exact: true }).selectOption('citation'); assert.equal(await inspector().getByRole('button', { name: '插入正式文献引用', exact: true }).isEnabled(), false); assert.equal(await inspector().getByRole('button', { name: '预览完整改键范围', exact: true }).isEnabled(), false); assert.equal(await page.locator('.source-host').count(), 0);
-  await click('源码'); await waitSource(current); assert.equal(await readFile(doc.path, 'utf8'), initial); assert.equal(await readFile(work.path, 'utf8'), workSource);
+  await click('源码'); await waitSource(current); assert.equal(await readOwnedOriginal(doc.path), initial); assert.equal(await readOwnedOriginal(work.path), workSource);
   await passed('Read view disables citation mutations and hides the source editor; all authoring tasks preserve both saved originals.');
   await page.screenshot({ path: path.join(out, 'authoring-complete.png'), fullPage: true }); assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) {

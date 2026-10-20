@@ -35,6 +35,110 @@ fn request(doc: &OpenedDocument, source: &str) -> SaveRequest {
 }
 
 #[test]
+fn temporary_admitted_membership_checks_release_cuts_on_rejection_commit_and_restart() {
+    let mut f = Fixture::new("plain");
+    let root = f.temp.path().join("library");
+    f.core.create_library(&root).unwrap();
+    f.core.create_note(&root, &root, "Note").unwrap();
+    let cut = f.core.admitted_snapshot(&root).unwrap();
+    let make_request = |name: &str| OperationRequest {
+        operation_id: fresh(),
+        root: display(&root),
+        intent: OperationIntent::NewNode {
+            parent: display(&root),
+            name: name.into(),
+            source: None,
+        },
+    };
+    let bases = f
+        .core
+        .snapshots
+        .keys()
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    let cuts = f.core.admitted_cuts.len();
+    let preview = f
+        .core
+        .prepare_admitted_operation(make_request("First"), &cut.cut_id)
+        .unwrap();
+    assert_eq!(f.core.admitted_cuts.len(), cuts);
+    assert_eq!(
+        f.core
+            .snapshots
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>(),
+        bases
+    );
+    // The original prepared Plan owns its evidence across restart; temporary
+    // membership-check captures are neither original input nor new authority.
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert!(f.core.snapshots.is_empty());
+    assert!(f.core.admitted_cuts.is_empty());
+    assert!(root.join("First/First.typ").exists());
+
+    let cut = f.core.admitted_snapshot(&root).unwrap();
+    let late = f
+        .core
+        .prepare_admitted_operation(make_request("Late"), &cut.cut_id)
+        .unwrap();
+    f.core.create_note(&root, &root, "Concurrent").unwrap();
+    let bases = f
+        .core
+        .snapshots
+        .keys()
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    let cuts = f.core.admitted_cuts.len();
+    let operation_count = f.core.operations.len();
+    assert_eq!(
+        f.core
+            .prepare_admitted_operation(make_request("Rejected"), &cut.cut_id)
+            .unwrap_err()
+            .code,
+        "scopeChanged"
+    );
+    assert_eq!(
+        f.core
+            .execute_operation(&late.operation_id, &late.plan_id)
+            .unwrap_err()
+            .code,
+        "scopeChanged"
+    );
+    assert_eq!(f.core.operations.len(), operation_count);
+    assert_eq!(f.core.admitted_cuts.len(), cuts);
+    assert_eq!(
+        f.core
+            .snapshots
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>(),
+        bases
+    );
+    let original_source = &cut.files[0];
+    f.core
+        .validate_snapshot(&root, &original_source.path, &original_source.base_id)
+        .unwrap();
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    assert_eq!(
+        f.core
+            .execute_operation(&late.operation_id, &late.plan_id)
+            .unwrap_err()
+            .code,
+        "scopeChanged"
+    );
+    assert!(f.core.snapshots.is_empty());
+    assert!(f.core.admitted_cuts.is_empty());
+    assert!(!root.join("Late").exists());
+    assert!(!root.join("Rejected").exists());
+}
+
+#[test]
 fn owned_read_witness_releases_core_storage_but_keeps_exact_validation() {
     let mut f = Fixture::new("plain");
     let root = f.temp.path().join("library");
