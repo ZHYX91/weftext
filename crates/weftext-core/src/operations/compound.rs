@@ -613,7 +613,31 @@ fn move_final(
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
-    union.select(index)?.move_source(name)
+    union.select(index)?.move_source(name)?;
+    protect_final_source(union, index, plan.transaction.as_ref().unwrap(), step)
+}
+
+fn protect_final_source(
+    union: &mut MultiNamespaceGuard,
+    index: usize,
+    t: &FrozenOperation,
+    step: &RelocationStep,
+) -> Result<()> {
+    let original = t
+        .files
+        .iter()
+        .find(|file| {
+            locator_equal(
+                &file.path,
+                &display(&Path::new(&step.source).join(&step.old_leaf)),
+            )
+        })
+        .ok_or_else(|| CoreError::new("invalidPlan", "Final source canonical input is missing"))?;
+    let name = Path::new(&step.target)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+    union.finish_source_move(index, name, &step.new_leaf, &original.stamp.identity)
 }
 
 fn rename_original_leaf(
@@ -1298,6 +1322,11 @@ impl Core {
         for (index, step) in relocations.iter().enumerate() {
             let phase = phases[index];
             check_step_identity(self, plan, &mut union, index, step, phase, &phases)?;
+            if phase == StepPhase::After {
+                // Recovery reacquired every moving root with DELETE, including
+                // already placed parents whose remaining children must enter.
+                protect_final_source(&mut union, index, t, step)?;
+            }
             let namespace = union.select(index)?;
             check_membership(namespace, t, step, phase, true, &mut raw_budget)?;
             let evidence = serde_json::to_vec(&step.source_identity)?;

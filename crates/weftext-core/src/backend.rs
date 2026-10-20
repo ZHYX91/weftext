@@ -762,12 +762,15 @@ mod platform {
                 .retain(|path, _| path == &self.source || !path.starts_with(&self.source));
         }
         pub fn rename_leaf(&self, file: &File, name: &str) -> Result<()> {
-            rename_handle(file, self.dirs.get(&self.source).unwrap(), name)
+            // A basename-only rename uses the file's current directory. Supplying
+            // our DELETE directory guard as RootDirectory would make Windows
+            // reopen that same directory and conflict with the retained guard.
+            rename_handle(file, None, name)
         }
         pub fn move_source(&self, name: &str) -> Result<()> {
             rename_handle(
                 self.dirs.get(&self.source).unwrap(),
-                self.dirs.get(&self.target_parent).unwrap(),
+                Some(self.dirs.get(&self.target_parent).unwrap()),
                 name,
             )
         }
@@ -1006,6 +1009,90 @@ mod platform {
                 .retain(|path, _| self.sources.contains(path) || !path.starts_with(source));
             Ok(())
         }
+        /// A final source that is also another participant's target parent no
+        /// longer needs DELETE access. Retain continuous namespace protection
+        /// through its original canonical file while changing the directory
+        /// guard; Windows otherwise conflicts with its own target-parent open.
+        pub(crate) fn finish_source_move(
+            &mut self,
+            index: usize,
+            name: &str,
+            canonical: &str,
+            canonical_identity: &FileIdentity,
+        ) -> Result<()> {
+            self.finish_source_move_with(index, name, canonical, canonical_identity, || {})
+        }
+        fn finish_source_move_with(
+            &mut self,
+            index: usize,
+            name: &str,
+            canonical: &str,
+            canonical_identity: &FileIdentity,
+            during_handoff: impl FnOnce(),
+        ) -> Result<()> {
+            let source = self
+                .sources
+                .get(index)
+                .ok_or_else(|| CoreError::new("invalidPlan", "Missing final source root"))?
+                .clone();
+            if !self.parents.contains(&source) {
+                return Ok(());
+            }
+            for component in [name, canonical] {
+                if component.is_empty()
+                    || matches!(component, "." | "..")
+                    || component.contains(['/', '\\', ':'])
+                {
+                    return Err(CoreError::new("invalidPath", "Final guard needs basenames"));
+                }
+            }
+            let parent = self.parents[index].clone();
+            if source == parent || !self.inner.dirs.contains_key(&parent) {
+                return Err(CoreError::new(
+                    "invalidPlan",
+                    "Final parent is not retained",
+                ));
+            }
+            let original = self.inner.dirs.get(&source).ok_or_else(|| {
+                CoreError::new("invalidPlan", "Original final source is not retained")
+            })?;
+            let identity = stamp(original)?.identity;
+            let witness = nt_open(
+                Some(original),
+                std::ffi::OsStr::new(canonical),
+                false,
+                false,
+                false,
+            )?;
+            if &stamp(&witness)?.identity != canonical_identity {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "Final source canonical witness is not its original file",
+                ));
+            }
+            // The ordinary READ/share0 child prevents NTFS from renaming its
+            // parent during this handoff. All ancestor guards remain retained.
+            // If reacquisition fails, the caller must stop without more writes.
+            drop(self.inner.dirs.remove(&source));
+            during_handoff();
+            let directory = nt_open(
+                self.inner.dirs.get(&parent),
+                std::ffi::OsStr::new(name),
+                true,
+                false,
+                false,
+            )?;
+            if stamp(&directory)?.identity != identity {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "Final source directory changed during guard handoff",
+                ));
+            }
+            // Preserve capture-time keys even though the directory has moved.
+            self.inner.dirs.insert(source, directory);
+            drop(witness);
+            Ok(())
+        }
         pub(crate) fn move_source_to(&self, index: usize, target: &Path) -> Result<()> {
             let source = self
                 .sources
@@ -1029,7 +1116,7 @@ mod platform {
                 })?;
             rename_handle(
                 file,
-                parent,
+                Some(parent),
                 target
                     .file_name()
                     .and_then(|name| name.to_str())
@@ -1150,7 +1237,7 @@ mod platform {
             Ok((stamp(directory)?.identity, entries, complete))
         }
     }
-    fn rename_handle(file: &File, parent: &File, name: &str) -> Result<()> {
+    fn rename_handle(file: &File, parent: Option<&File>, name: &str) -> Result<()> {
         #[repr(C)]
         struct RenameInfo {
             replace: u8,
@@ -1166,7 +1253,7 @@ mod platform {
         // SAFETY: aligned allocation is large enough for the fixed header and UTF-16 name.
         unsafe {
             (*ptr).replace = 0;
-            (*ptr).parent = parent.as_raw_handle();
+            (*ptr).parent = parent.map_or(null_mut(), |parent| parent.as_raw_handle());
             (*ptr).length = (wide.len() * 2) as u32;
             std::ptr::copy_nonoverlapping(
                 wide.as_ptr(),
@@ -1185,6 +1272,159 @@ mod platform {
             return Err(native_error(status));
         }
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod final_source_guard_tests {
+        use super::*;
+        use std::fs;
+        use std::os::windows::fs::OpenOptionsExt;
+
+        struct Fixture {
+            union: MultiNamespaceGuard,
+            final_parent: PathBuf,
+            child: PathBuf,
+            canonical_identity: FileIdentity,
+            parent_identity: FileIdentity,
+            _temp: tempfile::TempDir,
+        }
+        impl Fixture {
+            fn new() -> Self {
+                let temp = tempfile::tempdir().unwrap();
+                let parent = temp.path().join("Parent");
+                let child = temp.path().join("Child");
+                let container = temp.path().join("Container");
+                for path in [&parent, &child, &container] {
+                    fs::create_dir(path).unwrap();
+                }
+                fs::write(parent.join("Parent.typ"), "original parent").unwrap();
+                fs::write(child.join("Child.typ"), "original child").unwrap();
+                let canonical_identity = stamp(&File::open(parent.join("Parent.typ")).unwrap())
+                    .unwrap()
+                    .identity;
+                let mut union = MultiNamespaceGuard::acquire_forest_with_ancestors(
+                    &[(&parent, &container), (&child, &parent)],
+                    &[],
+                    &[],
+                )
+                .unwrap();
+                let namespace = union.select(0).unwrap();
+                let parent_identity = namespace.source_identity().unwrap();
+                namespace.move_source("Placed").unwrap();
+                Self {
+                    _temp: temp,
+                    union,
+                    final_parent: container.join("Placed"),
+                    child,
+                    canonical_identity,
+                    parent_identity,
+                }
+            }
+        }
+
+        #[test]
+        fn final_parent_handoff_keeps_continuous_protection_and_allows_nested_no_replace_move() {
+            let mut f = Fixture::new();
+            let external = f.final_parent.with_file_name("External");
+            fs::create_dir(f.final_parent.join("Occupied")).unwrap();
+            fs::write(f.final_parent.join("Occupied/foreign.raw"), "foreign").unwrap();
+            f.union
+                .finish_source_move_with(0, "Placed", "Parent.typ", &f.canonical_identity, || {
+                    assert!(fs::rename(&f.final_parent, &external).is_err());
+                    assert!(
+                        fs::rename(
+                            f.final_parent.join("Parent.typ"),
+                            f.final_parent.join("External.typ"),
+                        )
+                        .is_err()
+                    );
+                    assert!(f.final_parent.is_dir() && !external.exists());
+                })
+                .unwrap();
+            assert_eq!(
+                f.union.select(0).unwrap().source_identity().unwrap(),
+                f.parent_identity
+            );
+            assert!(fs::rename(&f.final_parent, &external).is_err());
+            assert!(f.union.select(1).unwrap().move_source("Occupied").is_err());
+            assert_eq!(
+                fs::read_to_string(f.final_parent.join("Occupied/foreign.raw")).unwrap(),
+                "foreign"
+            );
+            assert_eq!(
+                fs::read_to_string(f.child.join("Child.typ")).unwrap(),
+                "original child"
+            );
+            f.union.select(1).unwrap().move_source("Child").unwrap();
+            assert!(!f.child.exists());
+            assert_eq!(
+                fs::read_to_string(f.final_parent.join("Child/Child.typ")).unwrap(),
+                "original child"
+            );
+            assert_eq!(
+                stamp(&File::open(f.final_parent.join("Parent.typ")).unwrap())
+                    .unwrap()
+                    .identity,
+                f.canonical_identity
+            );
+        }
+
+        #[test]
+        fn final_parent_handoff_refuses_a_foreign_canonical_before_releasing_directory() {
+            let mut f = Fixture::new();
+            let wrong = stamp(&File::open(f.child.join("Child.typ")).unwrap())
+                .unwrap()
+                .identity;
+            assert_eq!(
+                f.union
+                    .finish_source_move(0, "Placed", "Parent.typ", &wrong)
+                    .unwrap_err()
+                    .code,
+                "thirdState"
+            );
+            assert_eq!(
+                f.union.select(0).unwrap().source_identity().unwrap(),
+                f.parent_identity
+            );
+            assert!(
+                fs::rename(&f.final_parent, f.final_parent.with_file_name("External")).is_err()
+            );
+            assert!(f.child.is_dir());
+        }
+
+        #[test]
+        fn final_parent_handoff_busy_reacquisition_stops_before_child_placement() {
+            let mut f = Fixture::new();
+            let mut external_guard = None;
+            let error = f
+                .union
+                .finish_source_move_with(0, "Placed", "Parent.typ", &f.canonical_identity, || {
+                    external_guard = Some(
+                        fs::OpenOptions::new()
+                            .access_mode(READ | READ_ATTR | SYNCHRONIZE | DELETE)
+                            .share_mode(SHARE_RW)
+                            .custom_flags(0x02000000 | 0x00200000)
+                            .open(&f.final_parent)
+                            .unwrap(),
+                    );
+                    assert!(
+                        fs::rename(&f.final_parent, f.final_parent.with_file_name("External"))
+                            .is_err()
+                    );
+                })
+                .unwrap_err();
+            assert_eq!(error.code, "busy");
+            assert!(f.child.is_dir());
+            assert!(!f.final_parent.join("Child").exists());
+            assert_eq!(
+                fs::read_to_string(f.child.join("Child.typ")).unwrap(),
+                "original child"
+            );
+            assert_eq!(
+                stamp(external_guard.as_ref().unwrap()).unwrap().identity,
+                f.parent_identity
+            );
+        }
     }
 }
 
@@ -1396,6 +1636,18 @@ mod platform {
             ))
         }
         pub(crate) fn release_source_descendants(&mut self, _: usize) -> Result<()> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn finish_source_move(
+            &mut self,
+            _: usize,
+            _: &str,
+            _: &str,
+            _: &FileIdentity,
+        ) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 "Windows backend required",

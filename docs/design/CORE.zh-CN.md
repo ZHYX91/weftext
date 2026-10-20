@@ -128,7 +128,7 @@ Windows 的分享模式会检查现存访问并限制后续 write/delete，包�
 4. 按相邻父handle的实际directory entry核child的volume/file object/type，再核child handle对象；核完整当前链和原 source binding。打开时`OPEN_REPARSE_POINT`并拒不获准重解析，后续操作按guard证明的实际父/名称执行。任何guard无法取得或链不等就释放全部、保Draft有限重试/冲突；不丢保护后仍沿旧字符串写。
 5. 目标名称是prospective，不靠先前扫描证明空。最终create/rename使用原子create-if-absent/no-replace；名称被抢占就冲突，两边保。目录guard不阻止普通child新增；它稳定的是目录本身及其祖先定位。
 
-所有guard保持到实际操作/验证/durable commit完成。通过source自己有DELETE权限的同一handle执行rename，不关闭source guard后按path移动；目标父guard保留。若API需要目标父handle相对名称则用实际父handle；已验证的volume路径API可在整条链被保护时使用。后端需分别验证该API组合，不从SQL锁推导。
+完整 namespace 保护须连续保持到实际操作／验证／durable commit 完成。通过source自己有DELETE权限的同一handle执行rename，不关闭source guard后按path移动；目标父guard保留。只有已完成最终移动的 source 可以使用 §5.2 的受保护 guard 交接。若API需要目标父handle相对名称则用实际父handle；已验证的volume路径API可在整条链被保护时使用。后端需分别验证该API组合，不从SQL锁推导。
 
 ### 5.2 重叠、移动和Node改名
 
@@ -137,6 +137,10 @@ Windows 的分享模式会检查现存访问并限制后续 write/delete，包�
 destination parent等于source对象或在source后代链中时拒绝，不能递归搬进自己。source/target实际同位置是qualified no-op；同名另一对象不是no-op。共享父只一个guard。源/目标卷不同进入明确copy+有条件Trash组合，不把跨卷包装成同对象rename。
 
 Node `A/A.typ→B/B.typ`仍两步：为目录与canonical leaf保存准确对象/名称/恢复责任，leaf rename no-replace后关闭妨碍outer rename的leaf handle；目录guard和完整祖先/目标父闭包保持。outer rename后重新取得实际canonical file guard，验证原对象/控制角色和公开声明的外部改变。新leaf/新root第三态只pending；no-replace回退绝不覆盖。这个释放leaf的窗口不持久授予旧source写资格，也不声称全树内容固定。
+
+Windows 同目录 leaf 改名使用原文件 handle、简单 basename 与 `FILE_RENAME_INFORMATION.RootDirectory = NULL`；不能把已持有 DELETE 权限的源目录 guard 再作为相对目标，造成内部重新打开目录时的共享冲突。跨目录移动仍使用已保留的实际目标父 handle，完整目录闭包和 no-replace 保证继续有效。参见 [Windows 改名调用约定](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)。
+
+Compound root 已到达原计划最终位置，且将作为另一参与者的目标父目录时，不再需要 DELETE 权限。在重新打开成员前，从仍持有的原 source handle 相对打开原 canonical leaf，使用普通 READ／share0 并核文件身份。保持该 leaf 与完整祖先／目标父 guards，再关闭 source DELETE handle；通过已持有的实际最终父 handle 和最终 basename，重新取得 LIST_DIRECTORY／READ_ATTRIBUTES、share READ|WRITE 且不 share DELETE 的目录 guard。核原目录身份并按捕获时的 source key 回填后，才释放 leaf。打开的 canonical 文件在交接期间阻止其父目录改名。witness 缺失、busy、身份不符或目录 guard 重取失败时立即停止后续写入，保留原 Plan 的 pending 责任；before／leaf-renamed／parked root 仍保留 DELETE。恢复对已经 final 的 root 也须在捕获文件前交接，覆盖父已 final、子仍 parked 的状态。后续完整成员、文件身份和 before／after 内容检查继续执行。
 
 后代的历史／Query 身份续接还须有原 Relocate 内的准确成员位置证据：从已有出生／目录接纳事实选出相关成员，记录相对位置、稳定 ID、实际文件／目录对象及父对象，不扫描私有正文，也不另建位置账本。这是位置证据，不给普通 move 增加全树字节 CAS；合法晚改和新增仍随原树保留。执行及原操作恢复必须核对成员实际对象，再承认相应位置延续。只有旧路径前缀的祖先移动日志不能证明后代随行；另一对象占用旧地址后的移动不得被原后代借用，无法证明时明确身份待处理。
 
@@ -208,7 +212,7 @@ manifest 的每个文件现在必须同时携带准确 blob 摘要与 `fileRevis
 
 接收端现可用原 Relocate 事务应用单个 Node 子树的改名、移动、回收与恢复，包括携带未单独选中的本机子节点。该同一计划可同时更新正文、批注、现有资源，创建已有父目录下的新批注／资源文件，并更新事务中未移动的其他对象；不能先提交目录移动再另外保存内容。实际文件、Node／资源／目录身份、源树成员、目标父目录及未移动的依赖先核对；移动用保留的原目录 handle，提交前再从该 handle 核对完整结果并持有全部文件。接收端本机伴随文件保留，不因发送端未携带而删除；子节点的本机安装位置一起改变，不制造独立内容提交。已安装源码修订、草稿找回和历史连续保留；历史入口同时认可原 CreateLibrary 与 CloneSync 的库资格。接收回收树进入原回收站列表与 Query 范围，可以在接收端恢复后继续同步。完整 after images 的原操作恢复核对全部子树与依赖，同字节替换对象或外部第三状态不能接纳。只有原目录移动已全部成立、每个内容参与者仍是原 before／after 对象时，才允许 `resumeOriginalPlan` 补完内容；仍使用原 operationId、plan 和最终提交决定，不重发 namespace 步骤。目录尚未完成、无法确认或遇到第三版内容时保留原计划及现场。并发改名仍须显式选择全部冲突分支，历史保双方。
 
-Core 现将多个已安装 Node／Directory 的移动、改名和内容更新组成一个内部 Compound mutation，并可组合 Node 的回收／恢复，仍沿原 `ApplySync`／`MergeSync` 的 request、Plan、install、commit 和回执。原计划可表达交换／循环重排、祖先抽取及嵌套最终位置；最终 parent 图仍须闭合且无环，原对象和中间位置必须可证明，不能把任意重叠视为已获准。可同时更新树外参与者及新增资源／批注文件。首效前核对全部原物理身份、完整成员、内容、目标资格与依赖；共享祖先 guard 去重，原 root handle 与重新打开的成员持有至提交结束。恢复按原 namespace phase 聚合证明原位、主文件改名、parking 和最终位置，沿同一 Plan 只续做剩余步骤。第三状态、同字节替换或同步基线变化保留现场并拒绝续交，已提交回执不因后来版本变化而失效。参与者与内容逐项计入有界预算；历史、草稿、安装事实及 Pending 覆盖全部参与者，普通本地单树移动的原语义不变。
+Core 现将多个已安装 Node／Directory 的移动、改名和内容更新组成一个内部 Compound mutation，并可组合 Node 的回收／恢复，仍沿原 `ApplySync`／`MergeSync` 的 request、Plan、install、commit 和回执。原计划可表达交换／循环重排、祖先抽取及嵌套最终位置；最终 parent 图仍须闭合且无环，原对象和中间位置必须可证明，不能把任意重叠视为已获准。可同时更新树外参与者及新增资源／批注文件。首效前核对全部原物理身份、完整成员、内容、目标资格与依赖；共享祖先 guard 去重，原 root 与重新打开的成员保护持续至提交结束；只有已完成最终移动的 parent 使用 §5.2 的连续 guard 交接。恢复按原 namespace phase 聚合证明原位、主文件改名、parking 和最终位置，沿同一 Plan 只续做剩余步骤。第三状态、同字节替换或同步基线变化保留现场并拒绝续交，已提交回执不因后来版本变化而失效。参与者与内容逐项计入有界预算；历史、草稿、安装事实及 Pending 覆盖全部参与者，普通本地单树移动的原语义不变。
 
 该 Compound 计划进一步允许部分副本补入尚未安装的根 Rules、Schema 与 settings 文件，在移动树内外创建新 Node／普通 Directory 父节点和自有资源嵌套目录，并应用普通 Directory 的独立移动。全部新目标先证明缺席并冻结已有父目录身份；首次创建沿原 materialized 记录保留物理身份、发送端准确文件修订和 Node／Resource／Directory 身份，并接入原出生、历史与恢复消费者。创建与各树移动、内容更新仍只有一个最终提交，恢复不能把同字节的新文件当成本操作原件。曾提交后丢失的 Rules 仍不可当作首次缺席自动补建。首效前和恢复时，Pending 覆盖原位、最终位、parking 和未物化子目标；名称交叠与别名按宿主文件系统比较规则核对。
 
