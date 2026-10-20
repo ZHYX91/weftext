@@ -596,6 +596,7 @@ export class QueryPanel {
       updateQueryChoices(branch, variants.map(item => ({ value: queryRefreshKey(item), label: item.kind === "scalar" ? item.semantic : "enum" }))); branchLabel.hidden = shape?.kind !== "union";
     };
     branch.onchange = () => this.renderControls();
+    operator.onchange = () => this.renderControls();
     field.onchange = () => { branch.value = ""; updateBranch(true); this.renderControls(); };
     const add = ui("button", "data-button", "添加筛选"); add.type = "submit"; filterForm.append(labeled("字段", field), labeled("条件", operator), branchLabel, value, add); builder.append(filterForm, filterMessage);
     filterForm.onsubmit = event => { event.preventDefault(); try {
@@ -660,7 +661,7 @@ export class QueryPanel {
       const viewChoices = derived ? [...new Set([...(this.resultPlan?.select ?? this.getPlan().select).map(item => item.name), ...Object.keys(this.result?.rows[0]?.cells ?? {})])].filter(name => !["title", "summary", "types"].includes(name)).map(name => ({ value: name, label: fieldNames[name] ?? name })) : [...(this.preference.view === "chart" ? [{ value: "@count", label: "汇总 count" }] : []), ...choices];
       updateQueryChoices(viewField, viewChoices, derived ? selectedViewField : selectedViewField === "count" ? "@count" : this.preference.fieldBindings?.[selectedViewField] ?? this.fieldByKey(selectedViewField) ?? selectedViewField);
       for (const control of builder.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button")) if (!control.classList.contains("query-view-field") && !columns.contains(control)) control.disabled = locked;
-      add.disabled = locked || !fieldValid || !field.value || !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
+      add.disabled = locked || !fieldValid || !field.value || operator.value !== "absent" && operator.value !== "null" && !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
       aggregateSubmit.disabled = locked || !groupValid || op.value !== "count" && (!amountValid || !amount.value); grouped.hidden = !this.group;
       if (reset || priorLimit !== this.take) { limit.value = String(this.take); priorLimit = this.take; }
     });

@@ -375,9 +375,35 @@ try {
   for (const edge of [forward, symmetric, inverse]) {
     await typedView().getByLabel('关系类型', { exact: true }).selectOption(edge.relation);
     const visibleEdge = typedView().locator(`path[data-graph-key=${JSON.stringify(edge.key)}]`);
-    await visibleEdge.waitFor(); assert.equal(await typedView().locator('path[data-graph-key]').count(), 1);
+    // A painted vertical/horizontal SVG stroke can have a zero-width/height
+    // fill box. Check its actual paint and on-screen stroke, not that box.
+    await visibleEdge.waitFor({ state: 'attached' }); assert.equal(await typedView().locator('path[data-graph-key]').count(), 1);
+    const drawing = typedView().locator('.knowledge-graph-canvas svg'); await drawing.waitFor({ state: 'visible' }); await drawing.scrollIntoViewIfNeeded();
+    await until(async () => {
+      const paint = await visibleEdge.evaluate(element => {
+        const svg = element.ownerSVGElement, style = getComputedStyle(element), matrix = element.getScreenCTM(), length = element.getTotalLength();
+        const rect = svg.getBoundingClientRect(), clip = { left: Math.max(0, rect.left), top: Math.max(0, rect.top), right: Math.min(innerWidth, rect.right), bottom: Math.min(innerHeight, rect.bottom) };
+        const ancestors = []; let opacity = 1, displayed = true;
+        for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+          const current = getComputedStyle(ancestor); opacity *= Number(current.opacity); displayed &&= current.display !== 'none' && current.visibility === 'visible' && current.contentVisibility !== 'hidden';
+          ancestors.push({ tag: ancestor.tagName, display: current.display, visibility: current.visibility, opacity: current.opacity });
+          const bounds = ancestor.getBoundingClientRect(), left = bounds.left + ancestor.clientLeft, top = bounds.top + ancestor.clientTop;
+          if (/(auto|scroll|hidden|clip|overlay)/.test(current.overflowX)) { clip.left = Math.max(clip.left, left); clip.right = Math.min(clip.right, left + ancestor.clientWidth); }
+          if (/(auto|scroll|hidden|clip|overlay)/.test(current.overflowY)) { clip.top = Math.max(clip.top, top); clip.bottom = Math.min(clip.bottom, top + ancestor.clientHeight); }
+        }
+        const scale = matrix ? Math.min(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d)) : 0, strokeWidth = parseFloat(style.strokeWidth), strokeOpacity = Number(style.strokeOpacity);
+        const alpha = style.stroke.match(/(?:rgba|hsla)\([^)]*[,/]\s*([\d.]+)(%)?\s*\)$/i), paintedStroke = style.stroke !== 'none' && style.stroke !== 'transparent' && (!alpha || Number(alpha[1]) > 0);
+        const samples = matrix && Number.isFinite(length) && length > 0 ? [0.1, 0.25, 0.5, 0.75, 0.9, 0.95].map(fraction => {
+          const local = element.getPointAtLength(length * fraction), screen = new DOMPoint(local.x, local.y).matrixTransform(matrix), inside = screen.x > clip.left && screen.x < clip.right && screen.y > clip.top && screen.y < clip.bottom;
+          return { fraction, x: screen.x, y: screen.y, inside, onStroke: element.isPointInStroke(local), hit: inside && document.elementFromPoint(screen.x, screen.y) === element };
+        }) : [];
+        return { key: element.dataset.graphKey, d: element.getAttribute('d'), stroke: style.stroke, strokeWidth, strokeOpacity, effectiveOpacity: opacity, displayed, ancestors, length, scale, screenStrokeWidth: strokeWidth * scale, clip, samples, painted: element.isConnected && displayed && opacity > 0 && paintedStroke && strokeOpacity > 0 && Number.isFinite(strokeWidth * scale) && strokeWidth * scale > 0 && samples.some(sample => sample.inside && sample.onStroke && sample.hit) };
+      });
+      const checks = result.typedGraphStrokeChecks ??= [], index = checks.findIndex(check => check.key === paint.key); if (index < 0) checks.push(paint); else checks[index] = paint;
+      assert.equal(paint.painted, true, 'Actual SVG stroke must be painted, unclipped and hit-testable on screen: ' + JSON.stringify(paint)); return true;
+    }, 'actual visible SVG relation stroke');
     assert.equal(await visibleEdge.getAttribute('marker-end') !== null, edge.direction === 'directed');
-    await visibleEdge.focus(); await page.keyboard.press('Space');
+    await visibleEdge.focus(); assert.equal(await visibleEdge.evaluate(element => document.activeElement === element), true); await page.keyboard.press('Space');
     const detail = typedView().locator('.knowledge-card');
     assert.equal(await detail.getByRole('heading', { name: edge.relation, exact: true }).count(), 1);
     const text = await detail.innerText(); assert.ok(text.includes(`来源：M-00 · 字段 ${edge.fieldId}`));
