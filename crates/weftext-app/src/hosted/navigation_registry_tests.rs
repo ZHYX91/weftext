@@ -1,5 +1,157 @@
 use super::*;
 
+#[tokio::test]
+async fn atomic_tag_assignment_uses_real_narrow_basis_and_portable_configured_path_after_restart() {
+    let (temp, state, auth, _doc, _version, _original) = history_api::test_fixture();
+    let original_source = {
+        let mut inner = state.inner.lock().unwrap();
+        let sessions = inner.sessions.keys().cloned().collect::<Vec<_>>();
+        for session in sessions {
+            inner.release_session(&session).unwrap();
+        }
+        let root = inner.config.root.clone();
+        let before = inner
+            .core
+            .read_config(&root, weftext_core::ConfigRole::Schema)
+            .unwrap();
+        let schema = inner
+            .core
+            .prepare_config_save(
+                &root,
+                weftext_core::ConfigRole::Schema,
+                before.bytes,
+                include_bytes!("../../../../docs/design/examples/schema.authoring.json").to_vec(),
+                &uuid::Uuid::new_v4().to_string(),
+            )
+            .unwrap();
+        inner
+            .core
+            .execute_operation(&schema.operation_id, &schema.plan_id)
+            .unwrap();
+        let opened = inner
+            .core
+            .open(root.join("Shared").join("Shared.typ"), Some(root.clone()))
+            .unwrap();
+        let source = opened.source.replace(
+            "types: ()",
+            "types: (\"task\",), status: \"open\", privateNote: \"retained private field\"",
+        ) + "\nPrivate body stays intact.\n";
+        inner
+            .core
+            .save(weftext_core::SaveRequest {
+                session_id: opened.session_id.clone(),
+                base_id: opened.base_id,
+                source: source.clone(),
+                operation_id: uuid::Uuid::new_v4().to_string(),
+            })
+            .unwrap();
+        inner.core.close_session(&opened.session_id).unwrap();
+        allow(&mut inner, "alice");
+        let grant = inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Shared")
+            .unwrap();
+        grant.read = false;
+        grant.write = false;
+        grant.history = false;
+        grant.fields.insert(
+            "core/tags".into(),
+            FieldRights {
+                read: true,
+                write: true,
+            },
+        );
+        // Operator configuration deliberately uses portable separators. This
+        // must retain the exact source identity without requiring its spelling.
+        assert_eq!(inner.config.files["Shared"].path, "Shared/Shared.typ");
+        source
+    };
+    let field =
+        fields::test_read_assignment_field(state.clone(), auth.clone(), "Shared", "core/tags")
+            .await
+            .unwrap()
+            .0;
+    assert!(field["basis"].is_string(), "{field:?}");
+    let request = {
+        let mut inner = state.inner.lock().unwrap();
+        let (registry, bytes) = tag_cut(&mut inner).unwrap();
+        let basis = retain(&mut inner, "alice", registry, bytes).unwrap();
+        Prepare {
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            intent: Intent::CreateTag {
+                basis,
+                display_name: "Created and assigned once".into(),
+                parent_ref: None,
+                assign_to: Some(
+                    serde_json::from_value(
+                        json!({"resource":"Shared","fieldId":"core/tags","basis":field["basis"]}),
+                    )
+                    .unwrap(),
+                ),
+            },
+        }
+    };
+    let prepared = prepare(
+        State(state.clone()),
+        Extension(auth.clone()),
+        Json(request.clone()),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(prepared["commitAllowed"], true, "{prepared:?}");
+    {
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        assert_eq!(
+            std::fs::read_to_string(root.join("Shared/Shared.typ")).unwrap(),
+            original_source
+        );
+        assert!(!root.join(".weftext-tags.json").exists());
+        let serialized = serde_json::to_string(&prepared).unwrap();
+        assert!(
+            !serialized.contains("Private body") && !serialized.contains("retained private field")
+        );
+        assert!(!serialized.contains(root.to_str().unwrap()));
+        let placeholder = Core::new(temp.path().join("restart-placeholder")).unwrap();
+        let previous = std::mem::replace(&mut inner.core, placeholder);
+        drop(previous);
+        inner.core = Core::new(temp.path().join("state")).unwrap();
+        inner.fields = Default::default();
+        inner.navigation_registry = Default::default();
+    }
+    let committed = commit(
+        State(state.clone()),
+        Extension(auth.clone()),
+        Json(Commit {
+            operation_id: request.operation_id.clone(),
+            plan_id: prepared["planId"].as_str().unwrap().into(),
+        }),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(committed["status"], "committed", "{committed:?}");
+    let retried = prepare(State(state.clone()), Extension(auth.clone()), Json(request))
+        .await
+        .unwrap()
+        .0;
+    assert_eq!(retried, committed);
+    let mut inner = state.inner.lock().unwrap();
+    let source = std::fs::read_to_string(inner.config.root.join("Shared/Shared.typ")).unwrap();
+    assert!(source.contains(committed["navigationRef"].as_str().unwrap()));
+    assert!(
+        source.contains("retained private field") && source.contains("Private body stays intact.")
+    );
+    let root = inner.config.root.clone();
+    assert_eq!(inner.core.read_tag_registry(&root).unwrap().tags.len(), 1);
+    assert!(!inner.policy.users["alice"].grants["Shared"].read);
+}
+
 #[test]
 fn explicit_empty_path_admits_library_root_and_root_read_does_not_grant_source_or_query_scope() {
     let (_temp, state, _, _, _, _) = history_api::test_fixture();
@@ -101,6 +253,7 @@ fn allow(inner: &mut HostedInner, actor: &str) {
             read: true,
             create: true,
             rename: true,
+            move_tag: false,
         },
     };
 }
@@ -299,6 +452,8 @@ fn tag_basis_is_exact_actor_epoch_and_registry_object_and_retry_never_reallocate
     let req = Prepare {
         operation_id: operation.clone(),
         intent: Intent::CreateTag {
+            parent_ref: None,
+            assign_to: None,
             basis,
             display_name: "Same name".into(),
         },
@@ -330,6 +485,8 @@ fn tag_basis_is_exact_actor_epoch_and_registry_object_and_retry_never_reallocate
     let second = Prepare {
         operation_id: uuid::Uuid::new_v4().to_string(),
         intent: Intent::CreateTag {
+            parent_ref: None,
+            assign_to: None,
             basis: stale_basis,
             display_name: "Copy must not bind".into(),
         },

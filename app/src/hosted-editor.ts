@@ -11,6 +11,7 @@ import { mountDocumentNotes, openDocumentNotes, retireDocumentNotes, type Docume
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
+import { headingMatchesDisplay, type StructureHeading } from "./heading-structure-state";
 import "./document-notes.css";
 import { nativeElement } from "./native-node";
 import { OfflineFontLoader } from "./font-readiness";
@@ -28,6 +29,7 @@ export interface HostedEditorQueryHost {
   openOwner(origin: Origin): Promise<void>;
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   modeChanged?(): void;
+  showHeadingStructure?(): void | Promise<void>;
   navigateReference?(reference: string): Promise<void>;
   navigateResource?(reference: string): Promise<void>;
   dependencies?(): HostedQueryDependencies;
@@ -82,6 +84,14 @@ export class HostedEditor {
   get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
   get pausedSession(): boolean { return this.paused; }
   get composing(): boolean { return !!this.editor?.composing || !!this.writing?.state.composing; }
+  revealRendered(key: string, expected?: StructureHeading): boolean {
+    if (this.paused || !this.current() || !this.flow.isConnected || !this.flow.getClientRects().length) return false;
+    if (expected && !headingMatchesDisplay(this.projection?.tree, expected)) return false;
+    const target = Array.from(this.flow.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(node => node.dataset.documentNodeKey === key);
+    if (!target) return false;
+    if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }); target.focus({ preventScroll: true }); return true;
+  }
   checkNavigationCapacity(resource:string): void { if(this.resource!==resource&&!this.retained.has(resource)&&this.retained.size>=15)throw new Error("本页已保留 16 个正文编辑会话及其 Undo。请先保存所需正文，再刷新页面释放会话；个人恢复稿仍由原缓存保留。"); }
   commands(insertQuery?: () => Promise<void>): EverydayCommand[] { return everydayWritingCommands(this.writing, !this.blocked && !this.paused && this.mode !== "read" && !this.composing, insertQuery); }
   pauseSession(): void { clearTimeout(this.timer); this.generation++; this.paused = true; this.sessionId = ""; this.projection = undefined; this.authoringAssets.invalidate(); if (this.writing) retireDocumentNotes(this.writing); this.queries?.invalidate(); this.mode = "source"; this.editor?.clearTokens(); this.editor?.readOnly(this.blocked); this.paint(true); this.message.textContent = "原对象的结构会话已暂停；当前草稿与 Undo 保留，请明确打开新位置核对后继续。"; }
@@ -305,7 +315,7 @@ export class HostedEditor {
     if (!this.sourceHost.hidden && editor.view.dom.parentElement !== this.sourceHost) editor.mount(this.sourceHost);
     const options = { onError: this.error, revealSource: (range: WritingRange) => this.reveal(range), insertLink: () => insertWritingLink(writing) };
     this.toolbar.replaceChildren();
-    this.notesMount?.dispose(); const notes = node("div", "", "document-notes-summary"); this.toolbar.append(this.button("编号控制", () => this.openNumbering()), notes); this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
+    this.notesMount?.dispose(); const notes = node("div", "", "document-notes-summary"); this.toolbar.append(this.button("编号控制", () => this.openNumbering()), this.button("大纲／标题结构", () => this.queryHost?.showHeadingStructure?.()), notes); this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
     if (!this.blocked && this.mode !== "read" && (!this.paused || this.mode === "source")) {
       if (this.mode === "write") this.toolbar.append(createWritingToolbar(writing, options));
       else this.toolbar.append(this.button("撤销", () => writing.undo()), this.button("重做", () => writing.redo()));

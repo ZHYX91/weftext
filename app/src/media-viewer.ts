@@ -36,7 +36,7 @@ export function mountResourceViewer(container: HTMLElement, host: MediaViewerHos
 
 /** An opt-in list preview reads the exact resource version independently of
  * opening a note. It does not change the editor, selection, or query ordering. */
-export function renderQueryThumbnail(container: HTMLElement, descriptor: MediaResource, read: () => Promise<Blob>): { dispose(): void } {
+export function renderQueryThumbnail(container: HTMLElement, descriptor: MediaResource, read: () => Promise<Blob>, report?: (state: "ready" | "failed") => void): { dispose(): void } {
   let disposed = false, objectUrl: string | null = null, loading: PDFDocumentLoadingTask | null = null, rendering: RenderTask | null = null;
   container.classList.add("media-thumbnail"); container.setAttribute("aria-label", `${descriptor.name} 的准确资源缩略图`); container.textContent = "正在生成预览…";
   void (async () => {
@@ -60,7 +60,8 @@ export function renderQueryThumbnail(container: HTMLElement, descriptor: MediaRe
         const renderTask = page.render({ canvas, viewport, annotationMode: 0 }); rendering = renderTask; await renderTask.promise; rendering = null; if (disposed) return;
         container.replaceChildren(canvas); await document.cleanup();
       } else throw new Error("此资源尚不支持真实缩略图");
-    } catch (error) { if (!disposed) { container.textContent = error instanceof Error ? error.message : "预览未能生成"; container.classList.add("media-thumbnail-error"); } }
+      if (!disposed) report?.("ready");
+    } catch (error) { if (!disposed) { container.textContent = error instanceof Error ? error.message : "预览未能生成"; container.classList.add("media-thumbnail-error"); report?.("failed"); } }
   })();
   return { dispose: () => { disposed = true; rendering?.cancel(); if (loading) void loading.destroy(); if (objectUrl) URL.revokeObjectURL(objectUrl); container.replaceChildren(); } };
 }

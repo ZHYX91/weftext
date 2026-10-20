@@ -72,6 +72,9 @@ pub struct QueryCall {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FrozenAdvancedInput {
+    /// Trusted Core-qualified, same-cut structure. JSON cannot supply authority.
+    #[serde(skip)]
+    pub tag_structure: Option<FrozenTagStructure>,
     #[serde(default)]
     pub parameters: BTreeMap<String, NativeValue>,
     #[serde(default)]
@@ -291,6 +294,7 @@ pub fn validate_query_plan_with_context(
     context: &FrozenAdvancedInput,
 ) -> Result<()> {
     definition_dependencies(plan, &context.definitions)?;
+    preflight_tag_structure(plan, schema, context)?;
     let input = FrozenQueryInput {
         cut_id: "validation-only".into(),
         schema_revision: "validation-only".into(),
@@ -383,6 +387,7 @@ fn validate_plan_static(
                     &mut remaining,
                     &QueryBudget::default(),
                     None,
+                    None,
                 );
             }
             if !plan.select.is_empty()
@@ -437,6 +442,7 @@ fn validate_plan_static(
                 &mut remaining,
                 &QueryBudget::default(),
                 None,
+                None,
             );
         }
         if let Some(related) = &a.related {
@@ -471,6 +477,7 @@ fn validate_plan_static(
                 &shapes,
                 &mut remaining,
                 None,
+                None,
             )?;
         }
         distinct_terminal(
@@ -481,6 +488,7 @@ fn validate_plan_static(
             &parameters,
             &shapes,
             &mut remaining,
+            None,
             None,
         )
     }
@@ -675,6 +683,7 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
 
 #[derive(Debug, Clone, Default)]
 pub struct QueryReadRequirements {
+    pub tag_structure: bool,
     pub fields: BTreeSet<String>,
     pub products: BTreeSet<String>,
     pub relations: BTreeSet<String>,
@@ -761,6 +770,11 @@ pub fn query_read_requirements(
                         return Err(DataError("Unknown canonical FieldId".into()));
                     }
                     out.fields.insert(id);
+                }
+                Expr::Call(c) if c.func_name == "tagInSubtree" => {
+                    out.tag_structure = true;
+                    let mut child = ast.clone();
+                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
                 }
                 Expr::Comprehension(c) => {
                     walk(&c.iter_range, schema, bound, out)?;
@@ -935,6 +949,307 @@ fn validate_parameter(
     Ok(())
 }
 
+/// Validate every structural root in the exact static call closure before rows
+/// are scanned. Empty scans and short-circuit CEL cannot erase this read.
+pub fn prepare_tag_structure(
+    plan: &QueryPlan,
+    schema: &Schema,
+    context: &FrozenAdvancedInput,
+) -> Result<()> {
+    check_tag_structure(plan, schema, context, true)
+}
+
+/// Definition-time structural proof uses actual supplied/default parameters.
+/// An unbound required typed parameter stays deferred; it never supplies a
+/// fabricated TagRef or suppresses the complete Tags read dependency.
+pub fn preflight_tag_structure(
+    plan: &QueryPlan,
+    schema: &Schema,
+    context: &FrozenAdvancedInput,
+) -> Result<()> {
+    check_tag_structure(plan, schema, context, false)
+}
+
+fn check_tag_structure(
+    plan: &QueryPlan,
+    schema: &Schema,
+    context: &FrozenAdvancedInput,
+    require_parameters: bool,
+) -> Result<()> {
+    fn needs(
+        plan: &QueryPlan,
+        owners: &[FrozenDefinitionOwner],
+        depth: usize,
+        nodes: &mut usize,
+    ) -> Result<bool> {
+        *nodes += 1;
+        if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
+            return Err(DataError("Tag structure closure budget exhausted".into()));
+        }
+        fn ast_needs(ast: &IdedExpr) -> Result<bool> {
+            if matches!(&ast.expr, Expr::Call(c) if c.func_name == "tagInSubtree") {
+                return Ok(true);
+            }
+            let mut child = ast.clone();
+            let mut found = false;
+            visit_children_mut(&mut child, |e| {
+                found |= ast_needs(e)?;
+                Ok(())
+            })?;
+            Ok(found)
+        }
+        let a = plan.advanced.clone().unwrap_or_default();
+        let mut found = false;
+        for source in plan
+            .r#where
+            .iter()
+            .map(String::as_str)
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|c| c.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
+            .chain(plan.group.iter().flat_map(|g| {
+                g.keys
+                    .iter()
+                    .map(|c| c.expr.as_str())
+                    .chain(g.aggregates.iter().filter_map(|a| a.expr.as_deref()))
+            }))
+            .chain(a.distinct.iter().flatten().map(|c| c.expr.as_str()))
+            .chain(
+                a.call
+                    .iter()
+                    .flat_map(|c| c.arguments.values().map(String::as_str)),
+            )
+        {
+            if source.len() > 16384 {
+                return Err(DataError("CEL source exceeds profile budget".into()));
+            }
+            found |= ast_needs(
+                Program::compile(source)
+                    .map_err(|e| DataError(e.to_string()))?
+                    .expression(),
+            )?;
+        }
+        for child in &a.union_all {
+            found |= needs(child, owners, depth + 1, nodes)?;
+        }
+        if let Some(r) = &a.related {
+            found |= needs(&r.from, owners, depth + 1, nodes)?;
+        }
+        if let Some(call) = &a.call {
+            found |= needs(&selected(call, owners)?.1.plan, owners, depth + 1, nodes)?;
+        }
+        Ok(found)
+    }
+    if !needs(plan, &context.definitions, 0, &mut 0)? {
+        return Ok(());
+    }
+    let tags = context
+        .tag_structure
+        .as_ref()
+        .ok_or_else(|| DataError("Frozen qualified tag structure unavailable".into()))?;
+    fn roots(
+        ast: &IdedExpr,
+        parameters: &BTreeMap<String, Cell>,
+        tags: &FrozenTagStructure,
+        locals: &BTreeSet<String>,
+        deferred: bool,
+    ) -> Result<()> {
+        if let Expr::Call(call) = &ast.expr
+            && call.func_name == "tagInSubtree"
+        {
+            if call.target.is_some() || call.args.len() != 2 {
+                return Err(DataError("tagInSubtree arity".into()));
+            }
+            let reference = match &call.args[1].expr {
+                Expr::Call(root)
+                    if root.func_name == "tagRef"
+                        && root.target.is_none()
+                        && root.args.len() == 1 =>
+                {
+                    literal_text(&root.args[0])
+                }
+                Expr::Ident(name) if !locals.contains(name) => match parameters.get(name) {
+                    Some(Cell::Absent) if deferred => None,
+                    Some(Cell::Value {
+                        value: NativeValue::Text(s),
+                    }) => Some(s.clone()),
+                    _ => {
+                        return Err(DataError(
+                            "tagInSubtree root requires a frozen typed parameter".into(),
+                        ));
+                    }
+                },
+                _ => {
+                    return Err(DataError(
+                        "tagInSubtree root requires a frozen typed parameter or literal TagRef"
+                            .into(),
+                    ));
+                }
+            };
+            if let Some(reference) = reference {
+                tags.validate_root(&reference)?;
+            }
+        }
+        if let Expr::Comprehension(c) = &ast.expr {
+            roots(&c.iter_range, parameters, tags, locals, deferred)?;
+            roots(&c.accu_init, parameters, tags, locals, deferred)?;
+            let mut bound = locals.clone();
+            bound.insert(c.iter_var.clone());
+            bound.insert(c.accu_var.clone());
+            if let Some(name) = &c.iter_var2 {
+                bound.insert(name.clone());
+            }
+            for child in [&c.loop_cond, &c.loop_step, &c.result] {
+                roots(child, parameters, tags, &bound, deferred)?;
+            }
+            return Ok(());
+        }
+        let mut child = ast.clone();
+        visit_children_mut(&mut child, |e| roots(e, parameters, tags, locals, deferred))
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn visit(
+        plan: &QueryPlan,
+        schema: &Schema,
+        context: &FrozenAdvancedInput,
+        values: &BTreeMap<String, NativeValue>,
+        unknown: &BTreeSet<String>,
+        tags: &FrozenTagStructure,
+        require_parameters: bool,
+        depth: usize,
+        nodes: &mut usize,
+    ) -> Result<()> {
+        *nodes += 1;
+        if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
+            return Err(DataError("Tag structure closure budget exhausted".into()));
+        }
+        let (mut parameters, shapes) =
+            parameter_bindings(plan, schema, values, require_parameters)?;
+        for name in unknown {
+            if let Some(value) = parameters.get_mut(name) {
+                *value = Cell::Absent;
+            }
+        }
+        let advanced = plan.advanced.clone().unwrap_or_default();
+        for expression in plan
+            .r#where
+            .iter()
+            .map(String::as_str)
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|c| c.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
+            .chain(plan.group.iter().flat_map(|g| {
+                g.keys
+                    .iter()
+                    .map(|c| c.expr.as_str())
+                    .chain(g.aggregates.iter().filter_map(|a| a.expr.as_deref()))
+            }))
+            .chain(advanced.distinct.iter().flatten().map(|c| c.expr.as_str()))
+            .chain(
+                advanced
+                    .call
+                    .iter()
+                    .flat_map(|c| c.arguments.values().map(String::as_str)),
+            )
+        {
+            if expression.len() > 16384 {
+                return Err(DataError("CEL source exceeds profile budget".into()));
+            }
+            let program = Program::compile(expression).map_err(|e| DataError(e.to_string()))?;
+            roots(
+                program.expression(),
+                &parameters,
+                tags,
+                &BTreeSet::new(),
+                !require_parameters,
+            )?;
+        }
+        let inherited_unknown = parameters
+            .iter()
+            .filter(|(_, cell)| matches!(cell, Cell::Absent))
+            .map(|(name, _)| name.clone())
+            .collect::<BTreeSet<_>>();
+        for child in &advanced.union_all {
+            visit(
+                child,
+                schema,
+                context,
+                &parameter_subset(child, &parameters),
+                &inherited_unknown,
+                tags,
+                require_parameters,
+                depth + 1,
+                nodes,
+            )?;
+        }
+        if let Some(related) = &advanced.related {
+            visit(
+                &related.from,
+                schema,
+                context,
+                &parameter_subset(&related.from, &parameters),
+                &inherited_unknown,
+                tags,
+                require_parameters,
+                depth + 1,
+                nodes,
+            )?;
+        }
+        if let Some(call) = &advanced.call {
+            let (_, definition) = selected(call, &context.definitions)?;
+            let baseline = exact_definition_schema(context, &definition, schema)?;
+            let vars = shapes
+                .iter()
+                .map(|(n, s)| (n.clone(), shape_type(schema, s)))
+                .collect();
+            let mut env = query_env_traced(schema, None)?;
+            env.parameter_shapes = shapes;
+            env.tag_structure = Some(tags.clone());
+            let mut budget = QueryBudget::default().max_steps;
+            let mut arguments = BTreeMap::new();
+            let mut undecided = BTreeSet::new();
+            for (name, expression) in &call.arguments {
+                let compiled = compile(expression, schema, &vars)?;
+                if !require_parameters && expression_uses_unknown_parameters(&compiled, &parameters)
+                {
+                    undecided.insert(name.clone());
+                    continue;
+                }
+                let cell = evaluate(&compiled, &parameters, schema, &mut budget, &env)?;
+                let value = match cell {
+                    Cell::Value { value } => value,
+                    Cell::Null => NativeValue::None,
+                    _ => return Err(DataError("Saved-call argument is undecided".into())),
+                };
+                arguments.insert(name.clone(), value);
+            }
+            visit(
+                &definition.plan,
+                baseline,
+                context,
+                &arguments,
+                &undecided,
+                tags,
+                require_parameters,
+                depth + 1,
+                nodes,
+            )?;
+        }
+        Ok(())
+    }
+    visit(
+        plan,
+        schema,
+        context,
+        &context.parameters,
+        &BTreeSet::new(),
+        tags,
+        require_parameters,
+        0,
+        &mut 0,
+    )
+}
+
 /// Conservative semantic proof: aliases can change display tokens, while
 /// authored field keys, shapes, relation contracts and provider data must agree.
 pub fn baseline_contract_compatible(old: &Schema, current: &Schema) -> Result<bool> {
@@ -993,11 +1308,18 @@ pub(crate) fn execute_advanced_query_traced(
         .iter()
         .flat_map(|o| &o.history)
         .try_fold(0usize, |bytes, r| bytes.checked_add(r.source.len()))
-        .ok_or_else(|| DataError("host-budget-exhausted".into()))?;
+        .ok_or_else(|| DataError("host-budget-exhausted".into()))?
+        .saturating_add(
+            context
+                .tag_structure
+                .as_ref()
+                .map_or(0, FrozenTagStructure::retained_bytes),
+        );
     if definition_bytes > limits.max_source_bytes {
         return Err(DataError("host-budget-exhausted".into()));
     }
     definition_dependencies(plan, &context.definitions)?;
+    prepare_tag_structure(plan, schema, context)?;
     let mut runner = Runner {
         input,
         context,
@@ -1061,6 +1383,7 @@ impl Runner<'_> {
                 .map(|(n, s)| (n.clone(), shape_type(schema, s)))
                 .collect();
             let mut env = query_env_traced(schema, trace.as_ref())?;
+            env.tag_structure = self.context.tag_structure.clone();
             env.parameter_shapes = shapes.clone();
             let mut args = BTreeMap::new();
             for (name, expression) in &call.arguments {
@@ -1102,6 +1425,7 @@ impl Runner<'_> {
                 &mut self.remaining,
                 self.limits,
                 trace.as_ref(),
+                self.context.tag_structure.as_ref(),
             );
         }
         if !advanced.union_all.is_empty() {
@@ -1145,6 +1469,7 @@ impl Runner<'_> {
                 &mut self.remaining,
                 self.limits,
                 trace.as_ref(),
+                self.context.tag_structure.as_ref(),
             );
         }
         if let Some(related) = &advanced.related {
@@ -1205,6 +1530,7 @@ impl Runner<'_> {
                 &shapes,
                 &mut self.remaining,
                 trace.as_ref(),
+                self.context.tag_structure.as_ref(),
             );
         }
         let mut leaf = plan.clone();
@@ -1231,6 +1557,7 @@ impl Runner<'_> {
                 &shapes,
                 &mut self.remaining,
                 trace.as_ref(),
+                self.context.tag_structure.as_ref(),
             )?;
         }
         Ok(result)
@@ -1291,6 +1618,7 @@ impl Runner<'_> {
                 shapes,
                 &mut self.remaining,
                 trace,
+                self.context.tag_structure.as_ref(),
             )?;
             if let Some(t) = grouped_take {
                 result.limited |= t < result.rows.len();
@@ -1512,6 +1840,7 @@ fn terminal_env(
     parameters: &BTreeMap<String, Cell>,
     shapes: &BTreeMap<String, Shape>,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    tags: Option<&FrozenTagStructure>,
 ) -> Result<(BTreeMap<String, QType>, QueryRuntime)> {
     let mut vars = result.terminal_schema.clone();
     for (name, shape) in shapes {
@@ -1523,6 +1852,7 @@ fn terminal_env(
         }
     }
     let mut env = query_env_traced(schema, trace)?;
+    env.tag_structure = tags.cloned();
     env.parameter_shapes = shapes.clone();
     // Type adapters for terminal exact text products follow their declared type,
     // including nested list/record members, never a first row's representation.
@@ -1569,6 +1899,7 @@ pub(crate) fn type_shape(ty: &QType) -> Option<Shape> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sort_terminal(
     result: &mut QueryResult,
     order: &[QueryOrder],
@@ -1577,8 +1908,9 @@ fn sort_terminal(
     shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    tags: Option<&FrozenTagStructure>,
 ) -> Result<()> {
-    let (vars, env) = terminal_env(result, schema, parameters, shapes, trace)?;
+    let (vars, env) = terminal_env(result, schema, parameters, shapes, trace, tags)?;
     if !order.is_empty() {
         let compiled_order = order
             .iter()
@@ -1647,6 +1979,9 @@ fn sort_terminal(
             "native-decoder traversal budget exhausted in consumed field",
         );
     }
+    if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
+        mark_partial(result, "tag structure input unavailable");
+    }
     if env
         .provider_partial
         .load(std::sync::atomic::Ordering::Relaxed)
@@ -1665,6 +2000,7 @@ fn distinct_terminal(
     shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    tags: Option<&FrozenTagStructure>,
 ) -> Result<QueryResult> {
     let take = plan.take;
     let order = &plan.order;
@@ -1676,7 +2012,7 @@ fn distinct_terminal(
             "distinct requires explicit typed equality keys".into(),
         ));
     }
-    let (vars, env) = terminal_env(&result, schema, parameters, shapes, trace)?;
+    let (vars, env) = terminal_env(&result, schema, parameters, shapes, trace, tags)?;
     let compiled = keys
         .iter()
         .map(|k| compile(&k.expr, schema, &vars))
@@ -1758,6 +2094,7 @@ fn distinct_terminal(
         shapes,
         remaining,
         trace,
+        tags,
     )?;
     if env
         .native_budget_partial
@@ -1767,6 +2104,9 @@ fn distinct_terminal(
             &mut result,
             "native-decoder traversal budget exhausted in consumed field",
         );
+    }
+    if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
+        mark_partial(&mut result, "tag structure input unavailable");
     }
     if env
         .provider_partial
@@ -1793,8 +2133,9 @@ fn transform(
     remaining: &mut u64,
     limits: &QueryBudget,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    tags: Option<&FrozenTagStructure>,
 ) -> Result<QueryResult> {
-    let (mut vars, env) = terminal_env(&result, schema, parameters, shapes, trace)?;
+    let (mut vars, env) = terminal_env(&result, schema, parameters, shapes, trace, tags)?;
     let unnest = plan
         .unnest
         .as_ref()
@@ -2083,6 +2424,9 @@ fn transform(
             "native-decoder traversal budget exhausted in consumed field",
         );
     }
+    if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
+        mark_partial(&mut result, "tag structure input unavailable");
+    }
     if env
         .provider_partial
         .load(std::sync::atomic::Ordering::Relaxed)
@@ -2098,13 +2442,14 @@ fn transform(
             shapes,
             remaining,
             trace,
+            tags,
         )?;
     }
     result.total_known = result.rows.len();
     let distinct = plan.advanced.as_ref().and_then(|a| a.distinct.as_deref());
     if distinct.is_some() {
         return distinct_terminal(
-            result, distinct, plan, schema, parameters, shapes, remaining, trace,
+            result, distinct, plan, schema, parameters, shapes, remaining, trace, tags,
         );
     }
     if let Some(t) = plan.take {

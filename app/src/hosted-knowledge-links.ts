@@ -5,6 +5,9 @@ import { hostedLinksPatch, requireHostedLinksBasis, sameHostedLinksContext, same
 import type { SourcePatch } from "./editor";
 import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
 import type { HostedLinksNode } from "./hosted-knowledge-links-state";
+import { RelationshipGraphView } from "./relationship-graph-view";
+import { HeadingStructureView } from "./heading-structure-view";
+import type { StructureHeading } from "./heading-structure-state";
 
 type Request = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 export interface HostedKnowledgeLinksHost {
@@ -14,6 +17,7 @@ export interface HostedKnowledgeLinksHost {
   apply(patches: SourcePatch[], basis: { sessionId: string; source: string; serial: number }, event: string): Promise<void>;
   navigate(reference: string): Promise<void>;
   select(from: number, to: number): void;
+  revealRendered?(heading: StructureHeading): boolean;
   authorizationChanged(message: string, identity: { actor: string; deployment: string; generation: number }): void;
 }
 const states: Record<string, string> = { resolved: "目标有效", unavailable: "目标当前不可用", missing: "在本次获权范围未找到目标", ambiguous: "目标或片段有歧义", fragmentMissing: "目标片段缺失", invalid: "原地址无效", external: "外部地址", inDocument: "文内引用" };
@@ -35,6 +39,9 @@ export class HostedKnowledgeLinks {
   private exclusionScope = "note";
   private rules = new PersonalRelationRules();
   private diagnostics = this.diagnosticView();
+  private graph = new RelationshipGraphView();
+  private headings = new HeadingStructureView();
+  private viewSession = "";
   private diagnosticView(): RelationshipDiagnosticsView {
     return new RelationshipDiagnosticsView(this.rules, async node => { const { context, epoch } = this.current(); if (await this.audience(context, epoch)) await this.owner.navigate(node.reference); }, async issue => {
       const { context, epoch } = this.current(); if (!await this.audience(context, epoch)) return;
@@ -51,9 +58,15 @@ export class HostedKnowledgeLinks {
   private readonly refresh = action("读取链接与潜在提及", () => this.run(() => this.read()));
   private readonly stop = action("停止等待链接扫描", () => { this.epoch++; this.controller?.abort(); this.controller = undefined; this.busy = false; this.profile = undefined; this.content.replaceChildren(); this.refresh.disabled = false; this.stop.disabled = true; this.message.textContent = "已停止等待只读扫描；服务端计算可能继续，正文与个人规则保留。"; });
   constructor(private readonly host: HTMLElement, private readonly request: Request, private readonly owner: HostedKnowledgeLinksHost) { this.clear(); host.addEventListener("compositionstart", () => { this.composing = true; }); host.addEventListener("compositionend", () => { this.composing = false; if (this.deferredPaint) { this.deferredPaint = false; this.paint(); } }); }
-  clear(): void { this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = false; this.rules = new PersonalRelationRules(); this.diagnostics = this.diagnosticView(); this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
+  clear(): void { this.graph.clear(); this.headings.clear(); this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = false; this.rules = new PersonalRelationRules(); this.diagnostics = this.diagnosticView(); this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
   connect(): void { this.clear(); this.documentChanged(); }
+  async showStructure(kind: "graph" | "headings"): Promise<void> {
+    if (!this.profile) await this.run(() => this.read());
+    const target = this.content.querySelector<HTMLDetailsElement>(`details[data-knowledge-view="${kind}"]`);
+    if (target) { target.open = true; target.scrollIntoView({ block: "start", behavior: "instant" }); target.querySelector<HTMLElement>("summary")?.focus(); }
+  }
   documentChanged(): void {
+    if (this.viewSession !== (this.owner.context()?.sessionId ?? "")) { this.viewSession = this.owner.context()?.sessionId ?? ""; this.graph.clear(); this.headings.clear(); }
     this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.content.replaceChildren();
     this.host.hidden = !this.owner.context();
     if (!this.host.hidden) { this.message.textContent = "读取当前草稿与明确获权对象；结果完整性仅指本次获权范围。"; this.host.replaceChildren(ui("h2", "", "链接与潜在提及"), this.refresh, this.stop, this.message, this.content); } this.stop.disabled = true;
@@ -158,6 +171,14 @@ export class HostedKnowledgeLinks {
     const active = document.activeElement;
     const focus = active instanceof HTMLInputElement && this.content.contains(active) ? { label: active.getAttribute("aria-label"), start: active.selectionStart, end: active.selectionEnd } : null;
     this.content.replaceChildren();
+    const graphSection = ui("details"), graphTitle = ui("summary", "", "二维关系图谱"); graphSection.dataset.knowledgeView = "graph"; graphSection.append(graphTitle);
+    const root = profile.graph?.root ?? "";
+    this.graph.render(graphSection, profile.graph, root, {
+      open: async node => { const { context, epoch } = this.current(); if (await this.audience(context, epoch)) await this.owner.navigate(node.reference); },
+      source: async (edge, node) => { const { context, epoch } = this.current(); if (!await this.audience(context, epoch)) return; await this.owner.navigate(node.reference); const opened = this.owner.context(); if (!opened || await nodeSourceHash(opened.source) !== edge.sourceHash) { this.message.textContent = "已打开作者来源；正文已变化，没有采用旧精确位置。"; return; } if (edge.range) this.owner.select(edge.range.utf16From, edge.range.utf16To); else this.message.textContent = `已打开作者来源，请在独立获权属性入口编辑 ${edge.fieldId ?? ""}。`; }, error: error => { this.message.textContent = error instanceof Error ? error.message : String(error); },
+    }); this.content.append(graphSection);
+    const headingSection = ui("details"); headingSection.dataset.knowledgeView = "headings"; headingSection.append(ui("summary", "", "只读标题结构"));
+    this.headings.render(headingSection, profile.headingStructure, heading => { void this.run(async () => { const { context, epoch } = this.current(); if (!await this.audience(context, epoch)) return; if (heading.range) this.owner.select(heading.range.utf16From, heading.range.utf16To); else if (!this.owner.revealRendered?.(heading)) this.message.textContent = "此生成标题没有唯一作者地址；当前原生显示位置未匹配，请更新阅读预览后刷新，不按文字猜测源码。"; }); }); this.content.append(headingSection);
     const d = profile.diagnostics;
     this.diagnostics.render(this.content, d && { ...d, issues: d.issues.map<RelationIssue>(i => ({ source: this.relationNode(i.source), target: i.resolution.target ? this.relationNode(i.resolution.target) : undefined, address: i.occurrence.target, status: i.resolution.status, from: i.occurrence.utf16From, to: i.occurrence.utf16To, sourceHash: i.sourceHash })).concat((d.propertyIssues ?? []).map(p => ({ source: this.relationNode(p.source), target: p.resolution.target ? this.relationNode(p.resolution.target) : undefined, address: p.address, status: p.resolution.status, from: undefined, to: undefined, sourceHash: undefined, field: [p.fieldId, ...p.itemPath].join(" / ") }))), nodes: d.nodes.map(n => ({ ...n, node: this.relationNode(n.node) })) });
     for (const [label, edges, outgoing] of [["出链", profile.links.outgoing, true], ["稳定 ID 反链", profile.links.incomingId, false], ["当前路径入链", profile.links.incomingPath, false]] as const) {

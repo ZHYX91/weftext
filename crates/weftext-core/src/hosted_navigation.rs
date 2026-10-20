@@ -15,11 +15,19 @@ pub enum HostedNavigationIntent {
     },
     CreateTag {
         display_name: String,
+        parent_ref: Option<String>,
+        assignment: Option<crate::TagAssignment>,
         base_id: String,
     },
     RenameTag {
         reference: String,
         display_name: String,
+        base_id: String,
+    },
+    MoveTag {
+        reference: String,
+        #[serde(deserialize_with = "weftext_data::deserialize_required_tag_parent")]
+        parent_ref: Option<String>,
         base_id: String,
     },
 }
@@ -29,6 +37,10 @@ pub enum HostedNavigationIntent {
 pub(super) struct NavigationFeature {
     root: String,
     intent: HostedNavigationIntent,
+    /// Preserve the exact author fingerprint when reading real pre-hierarchy
+    /// actor records. Historical outcomes do not authorize installing v1.
+    #[serde(default)]
+    original_author_intent: Option<serde_json::Value>,
 }
 impl NavigationFeature {
     pub(super) fn kind(&self) -> FeatureIntentKind {
@@ -36,18 +48,35 @@ impl NavigationFeature {
             HostedNavigationIntent::AdmitDirectory { .. } => FeatureIntentKind::AdmitDirectory,
             HostedNavigationIntent::CreateTag { .. } => FeatureIntentKind::CreateTag,
             HostedNavigationIntent::RenameTag { .. } => FeatureIntentKind::RenameTag,
+            HostedNavigationIntent::MoveTag { .. } => FeatureIntentKind::MoveTag,
         }
     }
     fn canonical(&self) -> serde_json::Value {
+        if let Some(original) = &self.original_author_intent {
+            return original.clone();
+        }
+        if let HostedNavigationIntent::CreateTag {
+            display_name,
+            base_id,
+            ..
+        } = &self.intent
+        {
+            return serde_json::json!({"kind":"createTag","root":self.root,"displayName":display_name,"baseId":base_id});
+        }
+        self.current_canonical()
+    }
+    fn current_canonical(&self) -> serde_json::Value {
         match &self.intent {
             HostedNavigationIntent::AdmitDirectory { path } => {
                 serde_json::json!({"kind":"admitDirectory","root":self.root,"path":path})
             }
             HostedNavigationIntent::CreateTag {
                 display_name,
+                parent_ref,
+                assignment,
                 base_id,
             } => {
-                serde_json::json!({"kind":"createTag","root":self.root,"displayName":display_name,"baseId":base_id})
+                serde_json::json!({"kind":"createTag","root":self.root,"displayName":display_name,"parentRef":parent_ref,"baseId":base_id,"assignment":assignment})
             }
             HostedNavigationIntent::RenameTag {
                 reference,
@@ -55,6 +84,13 @@ impl NavigationFeature {
                 base_id,
             } => {
                 serde_json::json!({"kind":"renameTag","root":self.root,"tagRef":reference,"displayName":display_name,"baseId":base_id})
+            }
+            HostedNavigationIntent::MoveTag {
+                reference,
+                parent_ref,
+                base_id,
+            } => {
+                serde_json::json!({"kind":"moveTag","root":self.root,"tagRef":reference,"parentRef":parent_ref,"baseId":base_id})
             }
         }
     }
@@ -72,13 +108,33 @@ impl NavigationFeature {
             }
             HostedNavigationIntent::CreateTag {
                 display_name,
+                parent_ref,
+                assignment,
                 base_id,
-            } => core.prepare_create_tag(&self.root, display_name, base_id, operation),
+            } => core.prepare_create_tag_with_assignment(
+                &self.root,
+                display_name,
+                parent_ref.as_deref(),
+                base_id,
+                assignment.clone(),
+                operation,
+            ),
             HostedNavigationIntent::RenameTag {
                 reference,
                 display_name,
                 base_id,
             } => core.prepare_rename_tag(&self.root, reference, display_name, base_id, operation),
+            HostedNavigationIntent::MoveTag {
+                reference,
+                parent_ref,
+                base_id,
+            } => core.prepare_move_tag(
+                &self.root,
+                reference,
+                parent_ref.as_deref(),
+                base_id,
+                operation,
+            ),
         }
     }
 }
@@ -103,7 +159,12 @@ impl Core {
         if let HostedNavigationIntent::AdmitDirectory { path } = &mut intent {
             *path = display(&absolute_path(Path::new(path))?);
         }
-        let navigation = NavigationFeature { root, intent };
+        let mut navigation = NavigationFeature {
+            root,
+            intent,
+            original_author_intent: None,
+        };
+        navigation.original_author_intent = Some(navigation.current_canonical());
         let bytes = serde_json::to_vec(&navigation)?;
         if bytes.len() > 256 * 1024 || !preview.is_object() {
             return Err(CoreError::new(

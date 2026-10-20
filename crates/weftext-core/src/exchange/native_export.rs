@@ -128,6 +128,7 @@ impl Core {
             ".weftext-rules",
             ".weftext-schema.json",
             ".weftext-settings.json",
+            ".weftext-tags.json",
         ] {
             let input = self.native_export_file(&witness, &root.join(name))?;
             if name == ".weftext-rules" {
@@ -324,7 +325,10 @@ impl Core {
             });
         weftext_data::Schema::from_author_json(&decode(&schema)?)
             .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
-        let schema_entry = NativeEntry::new(Role::Schema, &schema);
+        let mut schema_entry = NativeEntry::new(Role::Schema, &schema);
+        if let Some(file) = captured_named(&witness, ".weftext-schema.json") {
+            schema_entry.revision = self.accepted_revision(file);
+        }
         put(
             &mut package,
             ".weftext-schema.json".into(),
@@ -339,6 +343,20 @@ impl Core {
                 settings.bytes.clone(),
                 entry,
             )?;
+        }
+        if let Some(tags) = captured_named(&witness, ".weftext-tags.json") {
+            self.qualified_tag_document_from_captured(&root, tags)?;
+            // Current portable packages carry v2. Historical v1 bytes stay in
+            // the original library; upgrade them explicitly before exporting.
+            crate::directory_identity::validate_sync_tags(&tags.bytes)?;
+            put(
+                &mut package,
+                ".weftext-tags.json".into(),
+                tags.bytes.clone(),
+                NativeEntry::new(Role::Tags, &tags.bytes),
+            )?;
+        } else {
+            self.validate_tag_registry_absence(&root)?;
         }
         native_style(&mut package)?;
         let empty_rules = captured_named(&witness, ".weftext-rules").is_none_or(|file| {

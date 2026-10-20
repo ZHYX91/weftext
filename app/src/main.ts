@@ -1,6 +1,7 @@
 import "./style.css";
 import { RecognitionPanel } from "./recognition-panel";
-import { api, ApiError, operationId } from "./api";
+import { api, apiBlob, ApiError, operationId } from "./api";
+import { mountNodeContents } from "./node-contents";
 import { SourceEditor, applySourcePatches } from "./editor";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
@@ -23,6 +24,7 @@ import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
+import { headingMatchesDisplay } from "./heading-structure-state";
 import { NoteInputRecovery } from "./note-input-recovery";
 import { openLibraryCreation, type LibraryCreationReceipt } from "./library-creation";
 import "./document-notes.css";
@@ -122,13 +124,13 @@ let renderedMode: ViewMode | null = null;
 const everydayNavigation = new EverydayNavigation();
 let navigatingHistory = false;
 let navigationGeneration = 0;
-const navigationContexts = new Map<LiveDocument, { inventory: Inventory | null; query: string; folder: string | null; collapsed: string[]; scroll: number; contentScroll:number; selection:string[]; sort:"name"|"path" }>();
+const navigationContexts = new Map<LiveDocument, { inventory: Inventory | null; query: string; folder: string | null; collapsed: string[]; scroll: number; contentScroll:number; selection:string[] }>();
 const everydayBar = el("nav", "everyday-bar"); everydayBar.setAttribute("aria-label", "日常导航与命令"); workspace.insertBefore(everydayBar, tabs);
 let query = "";
 let selectedFolder: string | null = null;
 let sidebarComposing = false;
 const contentSelections = new Set<string>();
-let contentSort: "name" | "path" = "name";
+let nodeContents: { dispose(): void } | undefined;
 const folderViews = new Map<string, { query: string; scroll: number }>();
 const collapsed = new Set<string>();
 let previewVisible = localStorage.getItem("weftext-preview") !== "false";
@@ -142,13 +144,13 @@ let pendingCreation: { route: string; payload: Record<string, unknown> } | null 
 let pagedPreview: PagedPreview | null = null;
 function captureNavigation(): void {
   if (!current) return;
-  navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll:sidebar.querySelector(".node-contents")?.scrollTop??0, selection:[...contentSelections], sort:contentSort });
+  navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll:sidebar.querySelector(".node-contents")?.scrollTop??0, selection:[...contentSelections] });
 }
 function restoreNavigation(doc: LiveDocument): void {
   const saved = navigationContexts.get(doc); if (!saved) return;
   inventory = saved.inventory; query = saved.query; selectedFolder = saved.folder;
   collapsed.clear(); saved.collapsed.forEach(path => collapsed.add(path));
-  contentSelections.clear();saved.selection.forEach(path=>contentSelections.add(path));contentSort=saved.sort;
+  contentSelections.clear();saved.selection.forEach(path=>contentSelections.add(path));
 }
 function everydayEntries(): EverydayEntry[] {
   const entries = new Map<string, EverydayEntry>();
@@ -178,6 +180,8 @@ function everydayCommands(): EverydayCommand[] {
     { id: "open-file", label: "打开库外 Typst 文件", run: openOutsideFile },
     { id: "save", label: "保存当前笔记", unavailable: !doc ? "请先打开笔记。" : undefined, run: () => saveDocument(doc!) },
     { id: "resources", label: "导入或浏览图片与资源", run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); } },
+    { id: "relationship-graph", label: "打开二维关系图谱", unavailable: !doc ? "请先打开笔记。" : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); } },
+    { id: "heading-structure", label: "打开只读标题结构／大纲", unavailable: !doc ? "请先打开笔记。" : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); } },
     ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
   ];
 }
@@ -248,6 +252,7 @@ const recognitionPanel = new RecognitionPanel({
 let recognitionSession = "";
 
 const workspaceTools = new WorkspaceTools({
+  revealHeading: heading => { const doc = current; if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !renderHost || !renderHost.isConnected || !renderHost.getClientRects().length || !headingMatchesDisplay(doc.session.projection?.tree, heading)) return false; const target = Array.from(renderHost.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(node => node.dataset.documentNodeKey === heading.key); if (!target) return false; if (!target.hasAttribute("tabindex")) target.tabIndex = -1; target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }); target.focus({ preventScroll: true }); return true; },
   embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
   getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
   selection: () => {
@@ -513,6 +518,7 @@ async function pathDialog(kind: "openLibrary" | "createLibrary" | "file" | "save
 
 function renderSidebar(): void {
   if (sidebarComposing) return;
+  nodeContents?.dispose(); nodeContents = undefined;
   navigationLayout.captureSidebarState();
   navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId, scope: selectedFolder ? { kind: "directory", key: `path:${normalize(selectedFolder)}` } : undefined } : null);
   workspaceTools.setLibrary(inventory, selectedFolder);
@@ -596,19 +602,13 @@ function nodeMenu(entries: InventoryEntry[], folder?: string): void {
 }
 async function previewNodes(entries:InventoryEntry[]):Promise<void>{await modal("项目预览","只读显示当前目录扫描中的摘要；不保存正文。",(form,close)=>{for(const entry of entries)form.append(el("strong","",entry.title||entry.name),el("pre","",`${entry.relativePath}\n${labelStatus[entry.identityStatus]??entry.identityStatus}\n${entry.excerpt??"当前扫描没有摘要，可明确打开正文查看。"}`));form.append(button("关闭",()=>close(null)));});}
 function renderNodeContents(host: HTMLElement, folder: string): void {
-  if(!inventory)return;const panel=el("section","node-contents");panel.setAttribute("aria-label","节点内容");
-  const header=el("header");header.append(button(basename(inventory.root),()=>browseFolder(null)));
-  const relative=folder.slice(inventory.root.length).replaceAll("\\","/").split("/").filter(Boolean);let parent=inventory.root;
-  for(const name of relative){parent+="/"+name;const target=parent;header.append(el("span","","›"),button(name,()=>browseFolder(target)));}
-  const sorting=el("select");sorting.setAttribute("aria-label","节点内容个人排序");for(const[value,label]of[["name","名称"],["path","路径"]]){const option=el("option","",label);option.value=value;sorting.append(option);}sorting.value=contentSort;sorting.onchange=()=>{contentSort=sorting.value as typeof contentSort;renderSidebar();};header.append(sorting);panel.append(header,el("p","","个人列表排序；作者结构顺序不受影响。"));
-  const entries=inventory.entries.filter(entry=>normalize(entry.parentPath)===normalize(folder)&&normalize(entry.path)!==normalize(folder)).filter(entry=>!query||`${entry.title??""} ${entry.name} ${entry.relativePath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>(contentSort==="name"?(a.title||a.name):(a.relativePath)).localeCompare(contentSort==="name"?(b.title||b.name):b.relativePath,"zh-CN"));
-  const more=button("所选项目操作",()=>nodeMenu(entries.filter(entry=>contentSelections.has(entry.path))));more.disabled=!entries.some(entry=>contentSelections.has(entry.path));panel.append(more);
-  const updateSelection=()=>{panel.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row=>{const selected=contentSelections.has(row.dataset.entryPath!);row.setAttribute("aria-selected",String(selected));row.querySelector<HTMLInputElement>("input")!.checked=selected;});more.disabled=!entries.some(entry=>contentSelections.has(entry.path));};
-  for(const entry of entries){const row=el("div","node-content-row");row.tabIndex=0;row.dataset.entryPath=entry.path;row.setAttribute("aria-selected",String(contentSelections.has(entry.path)));const check=el("input");check.type="checkbox";check.checked=contentSelections.has(entry.path);check.setAttribute("aria-label",`选择 ${entry.name}`);check.onchange=()=>{check.checked?contentSelections.add(entry.path):contentSelections.delete(entry.path);updateSelection();};
-    const open=()=>entry.kind==="directory"?browseFolder(entry.path):openInventoryEntry(entry,inventory!.root,inventory!.workspaceId);const title=button(`${entry.title||entry.name} · ${labelStatus[entry.identityStatus]??entry.identityStatus}`,()=>{contentSelections.clear();contentSelections.add(entry.path);updateSelection();});title.ondblclick=()=>{void Promise.resolve(open()).catch(showError);};
-    const menu=()=>{if(!contentSelections.has(entry.path)){contentSelections.clear();contentSelections.add(entry.path);}nodeMenu(entries.filter(item=>contentSelections.has(item.path)),entry.kind==="directory"?entry.path:undefined);};row.oncontextmenu=event=>{event.preventDefault();menu();};row.onkeydown=event=>{if(event.isComposing)return;if(event.key==="Enter"&&event.target===row){event.preventDefault();void Promise.resolve(open()).catch(showError);}if(event.key==="ContextMenu"||event.shiftKey&&event.key==="F10"){event.preventDefault();menu();}};
-    row.append(check,title,button("打开",open),button("预览",()=>previewNodes([entry])));panel.append(row);}
-  if(!entries.length)panel.append(el("p","",query?"当前筛选没有匹配项目。":"此节点暂无内容。"));host.append(panel);
+  if (!inventory) return;
+  const selected = inventory, panel = el("section", "node-contents"); panel.setAttribute("aria-label", "节点内容"); host.append(panel);
+  nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
+    request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
+    open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
+    changed: async () => { if (inventory === selected) { inventory = await api<Inventory>("/api/library/open", { path: selected.root }); renderSidebar(); } },
+  });
 }
 
 function renderTopbar(): void {
@@ -767,7 +767,7 @@ function renderDocument(): void {
   if (doc.session.recovered) caption.append(button("已恢复上次草稿 · 查看", showDraftComparison, "recovery-caption"));
   if (noteInputRecovery.count(localPersonalAudience())) caption.append(button("取回未应用的注释输入", showRecovery, "recovery-caption"));
   content.append(caption);
-  doc.notesMount?.dispose(); const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary"); authoring.append(button("编号控制", () => openLocalNumbering(doc), "text-button"), notes); content.append(authoring); doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
+  doc.notesMount?.dispose(); const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary"); authoring.append(button("编号控制", () => openLocalNumbering(doc), "text-button"), button("大纲／标题结构", async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }, "text-button"), notes); content.append(authoring); doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
   if (doc.session.opened.recoveredDraftConflict) {
     const conflict = el("div", "document-error document-conflict"); conflict.append(icon("alert"), el("span", "", "恢复草稿与当前磁盘内容不同。请比较并明确合并后再保存。"), button("比较并合并", showDraftComparison, "button-secondary compact")); content.append(conflict);
   }

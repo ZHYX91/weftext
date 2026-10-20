@@ -706,6 +706,8 @@ fn copy_input(files: Vec<CopyFile>, nodes: Vec<NodeSnapshot>) -> CopyInput {
         })
         .collect();
     CopyInput {
+        tag_map: BTreeMap::new(),
+        schema_map: BTreeMap::new(),
         files,
         node_map,
         resource_map: BTreeMap::new(),
@@ -728,6 +730,89 @@ fn copy_file(node: &NodeSnapshot, target: &str) -> CopyFile {
         definition_references: vec![],
         typed_refs_complete: true,
     }
+}
+
+#[test]
+fn foreign_copy_maps_complete_tag_refs_and_query_constructors_but_preserves_literals() {
+    let target_workspace = "00000000-0000-4000-8000-000000000009";
+    let old = format!("weftext-tag://{WORKSPACE}/{B}");
+    let foreign = format!("weftext-tag://{target_workspace}/{B}");
+    let new = format!("weftext-tag://{target_workspace}/{D}");
+    let expression =
+        format!("tagInSubtree(tagRef('{old}'), tagRef('{old}')) || '{old}' == '{old}'");
+    let query = format!(
+        "#metadata((kind: \"weftext.query\", key: \"{B}\", binding: (schema: \"weftext-config://{WORKSPACE}/schema\", revision: \"{D}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), advanced: (parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{old}\"),),))) <weftext-query-tree>",
+        serde_json::to_string(&expression).unwrap()
+    );
+    let a = node(
+        A,
+        "A/A.typ",
+        &format!("#metadata((tags: (\"{old}\", \"{foreign}\"))) <tags>\n{query}"),
+        "A",
+    );
+    let mut file = copy_file(&a, "file:///D:/notes/import/A.typ");
+    file.typed_refs.extend(
+        saved_query_reference_slots(
+            &a.source,
+            &weftext_data::Schema::bundled().unwrap(),
+            &a.owner,
+        )
+        .unwrap()
+        .typed_refs,
+    );
+    for reference in [&old, &foreign] {
+        let encoded = serde_json::to_string(reference).unwrap();
+        let from = a.source.find(&encoded).unwrap();
+        file.typed_refs.push(TypedRefSlot {
+            from,
+            to: from + encoded.len(),
+            target: reference.clone(),
+            kind: "tag_ref".into(),
+        });
+    }
+    let mut input = copy_input(vec![file], vec![a.clone()]);
+    input.node_map.get_mut(&a.owner).unwrap().workspace_id = target_workspace.into();
+    input
+        .definition_map
+        .insert(definition_identity(&a.owner, B), C.into());
+    input.tag_map.insert(old.clone(), new.clone());
+    input.schema_map.insert(
+        (format!("weftext-config://{WORKSPACE}/schema"), D.into()),
+        (
+            format!("weftext-config://{target_workspace}/schema"),
+            C.into(),
+        ),
+    );
+    let plan = plan_copy(input.clone()).unwrap();
+    let source = String::from_utf8(plan.files[0].after.clone()).unwrap();
+    let definition = weftext_data::saved_queries(&source).unwrap().remove(0);
+    assert_eq!(
+        definition.binding.schema,
+        format!("weftext-config://{target_workspace}/schema")
+    );
+    assert!(
+        definition
+            .plan
+            .r#where
+            .as_ref()
+            .unwrap()
+            .contains(&format!("tagRef(\"{new}\")"))
+    );
+    assert!(
+        definition
+            .plan
+            .r#where
+            .as_ref()
+            .unwrap()
+            .contains(&format!("'{old}' == '{old}'"))
+    );
+    assert!(source.contains(&format!("tags: (\"{new}\", \"{foreign}\")")));
+    assert!(
+        matches!(&definition.plan.advanced.unwrap().parameters[0].default,Some(weftext_data::NativeValue::Text(value)) if value==&new)
+    );
+    input.tag_map.clear();
+    input.allow_losses = true;
+    assert_eq!(plan_copy(input).unwrap_err().code, "tagMap");
 }
 #[test]
 fn copy_rewrites_all_mutual_native_links_and_ids_without_touching_phone_text() {

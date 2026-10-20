@@ -171,6 +171,7 @@ impl Core {
             package,
             None,
             allow_losses,
+            None,
             preview,
             dependencies,
             absent,
@@ -230,6 +231,7 @@ impl Core {
         name: &str,
         original: &[u8],
         allow_losses: bool,
+        fingerprint: &str,
         preview: &mut OperationPreview,
         dependencies: &mut Vec<CapturedFile>,
         absent: &mut Vec<AbsentDependency>,
@@ -242,6 +244,7 @@ impl Core {
             package,
             Some(original),
             allow_losses,
+            Some(fingerprint),
             preview,
             dependencies,
             absent,
@@ -282,6 +285,7 @@ impl Core {
             package,
             None,
             allow_losses,
+            None,
             preview,
             dependencies,
             absent,
@@ -297,6 +301,7 @@ impl Core {
         package: NativePackage,
         original_native: Option<&[u8]>,
         allow_losses: bool,
+        tag_import_fingerprint: Option<&str>,
         preview: &mut OperationPreview,
         dependencies: &mut Vec<CapturedFile>,
         absent: &mut Vec<AbsentDependency>,
@@ -309,6 +314,49 @@ impl Core {
         validate_native_package(&package).map_err(native_error)?;
         validate_native_navigation_roles(&package)?;
         let workspace = self.require_workspace(root)?;
+        let mut tag_updates = Vec::new();
+        let mut tag_map = BTreeMap::new();
+        if let Some(bytes) = package.files.get(".weftext-tags.json") {
+            let document: weftext_data::TagDocument = serde_json::from_slice(bytes)?;
+            document
+                .forest()
+                .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+            if !document.tags.is_empty() {
+                let fingerprint = tag_import_fingerprint.ok_or_else(|| {
+                    CoreError::new(
+                        "tagImport",
+                        "Only the original native import may allocate portable tag identities",
+                    )
+                })?;
+                let (file, mappings) = self.prepare_import_tag_changes(
+                    root,
+                    &package.manifest.workspace_id,
+                    &document,
+                    &preview.operation_id,
+                    fingerprint,
+                )?;
+                let basis = self.snapshots[file.base_id.as_ref().ok_or_else(|| {
+                    CoreError::new("tagImport", "Tag import lacks its original registry basis")
+                })?]
+                .clone();
+                if let Some(captured) = basis.captured {
+                    dependencies.push(captured);
+                } else {
+                    absent.push(AbsentDependency {
+                        path: basis.path,
+                        parent: basis.parent,
+                    });
+                }
+                preview.revisions.insert(file.path.clone(), fresh());
+                preview.changes.push(change(
+                    Path::new(&file.path),
+                    "importTags",
+                    file.after.len(),
+                ));
+                tag_updates.push(file);
+                tag_map = mappings;
+            }
+        }
         let source_schema = weftext_data::Schema::from_author_json(&decode(
             &package.files[&package.manifest.schema_path],
         )?)
@@ -324,6 +372,64 @@ impl Core {
                 "schemaMappingRequired",
                 "The package's permanent schema IDs/shapes differ; explicit schema mapping is required before importing author sources",
             ));
+        }
+        let source_schema_ref =
+            format!("weftext-config://{}/schema", package.manifest.workspace_id);
+        let source_schema_revision = package.manifest.entries[&package.manifest.schema_path]
+            .revision
+            .as_ref();
+        let mut query_bindings = BTreeSet::new();
+        for (path, entry) in &package.manifest.entries {
+            if entry.role != Role::Source {
+                continue;
+            }
+            for definition in weftext_data::saved_queries(&decode(&package.files[path])?)
+                .map_err(|e| CoreError::new("schemaMappingRequired", e.to_string()))?
+            {
+                if definition.binding.schema != source_schema_ref
+                    || source_schema_revision != Some(&definition.binding.revision)
+                {
+                    return Err(CoreError::new(
+                        "schemaMappingRequired",
+                        "The package does not retain the exact schema revision bound by a saved Query; export its actual basis before importing",
+                    ));
+                }
+                query_bindings.insert((definition.binding.schema, definition.binding.revision));
+            }
+        }
+        let mut schema_map = BTreeMap::new();
+        if !query_bindings.is_empty() {
+            let revision = match (&config.bytes, &config.revision) {
+                (Some(_), Some(revision)) => revision.clone(),
+                (Some(_), None) => {
+                    return Err(CoreError::new(
+                        "schemaUnavailable",
+                        "The target schema requires explicit original Core acceptance before importing saved Queries",
+                    ));
+                }
+                (None, _) => {
+                    let revision = fresh();
+                    preview
+                        .revisions
+                        .insert(config.path.clone(), revision.clone());
+                    let after = package.files[&package.manifest.schema_path].clone();
+                    preview.changes.push(change(
+                        Path::new(&config.path),
+                        "initializeSchema",
+                        after.len(),
+                    ));
+                    tag_updates.push(FileChange {
+                        path: config.path.clone(),
+                        base_id: Some(config.base_id.clone()),
+                        before: None,
+                        after,
+                    });
+                    revision
+                }
+            };
+            for binding in query_bindings {
+                schema_map.insert(binding, (config.role_ref.clone(), revision.clone()));
+            }
         }
         let basis = self.snapshots[&config.base_id].clone();
         if let Some(captured) = basis.captured {
@@ -531,7 +637,7 @@ impl Core {
         for (path, entry) in &package.manifest.entries {
             if matches!(
                 entry.role,
-                Role::Schema | Role::Settings | Role::GeneratedBibliography
+                Role::Schema | Role::Settings | Role::Tags | Role::GeneratedBibliography
             ) {
                 continue;
             }
@@ -598,6 +704,8 @@ impl Core {
             files: transfer,
             node_map,
             resource_map,
+            tag_map,
+            schema_map,
             annotation_map,
             definition_map,
             revision_map,
@@ -718,8 +826,13 @@ impl Core {
                 parent = path.parent();
             }
         }
-        if output.len() > 5000
-            || output.iter().map(|f| f.after.len()).sum::<usize>() > 64 * 1024 * 1024
+        if output.len() + tag_updates.len() > 5000
+            || output
+                .iter()
+                .chain(&tag_updates)
+                .map(|f| f.after.len())
+                .sum::<usize>()
+                > 64 * 1024 * 1024
         {
             return Err(CoreError::new(
                 "budget",
@@ -746,7 +859,7 @@ impl Core {
             directories: directories.into_iter().collect(),
             files: output,
             births,
-            updates: vec![],
+            updates: tag_updates,
         })
     }
 }
@@ -754,6 +867,188 @@ impl Core {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_tag_forest_import_maps_ancestors_source_and_query_in_one_original_plan() {
+        let temp = tempfile::tempdir().unwrap();
+        let private = temp.path().join("private");
+        let mut core = Core::new(&private).unwrap();
+        let origin = temp.path().join("Origin");
+        let origin_info = core.create_library(&origin).unwrap();
+        let note = core.create_note(&origin, &origin, "Note").unwrap();
+        let config = core.read_config(&origin, ConfigRole::Schema).unwrap();
+        let schema_bytes =
+            include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec();
+        let schema = core
+            .prepare_config_save(
+                &origin,
+                ConfigRole::Schema,
+                config.bytes,
+                schema_bytes,
+                &fresh(),
+            )
+            .unwrap();
+        core.execute_operation(&schema.operation_id, &schema.plan_id)
+            .unwrap();
+        let source_schema = core.read_config(&origin, ConfigRole::Schema).unwrap();
+        let mut source_tags: Vec<String> = Vec::new();
+        for parent in [None, Some(0)] {
+            let basis = core.read_tag_registry(&origin).unwrap();
+            let prepared = core
+                .prepare_create_tag_under(
+                    &origin,
+                    "same/name",
+                    parent.map(|i| source_tags[i].as_str()),
+                    &basis.base_id,
+                    &fresh(),
+                )
+                .unwrap();
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .unwrap();
+            source_tags.push(prepared.target_ref);
+        }
+        let opened = core.open(&note.path, Some(origin.clone())).unwrap();
+        let key = fresh();
+        let expression = format!(
+            "tags.exists(t, has(t.ref) ? tagInSubtree(t.ref, tagRef('{}')) : false) && '{}' == '{}'",
+            source_tags[0], source_tags[1], source_tags[1]
+        );
+        let source = format!(
+            "#metadata((id: \"{}\", types: (\"person\",), tags: ((ref: \"{}\"), (text: \"{}\")))) <weftext>\n#metadata((kind: \"weftext.query\", key: \"{key}\", binding: (schema: \"{}\", revision: \"{}\", language: \"weftext.query.cel.v1\"), where: {})) <weftext-query-tree>\n",
+            note.node_id.unwrap(),
+            source_tags[1],
+            source_tags[1],
+            source_schema.role_ref,
+            source_schema.revision.unwrap(),
+            serde_json::to_string(&expression).unwrap()
+        );
+        core.save(SaveRequest {
+            session_id: opened.session_id,
+            base_id: opened.base_id,
+            operation_id: fresh(),
+            source,
+        })
+        .unwrap();
+        let original = core.export_native_package(&origin).unwrap();
+        let package = read_native_package(&original).unwrap();
+        assert_eq!(
+            package.manifest.entries[".weftext-tags.json"].role,
+            Role::Tags
+        );
+        let destination = temp.path().join("Destination");
+        let destination_info = core.create_library(&destination).unwrap();
+        let mut existing: Vec<String> = Vec::new();
+        for parent in [None, Some(0)] {
+            let basis = core.read_tag_registry(&destination).unwrap();
+            let prepared = core
+                .prepare_create_tag_under(
+                    &destination,
+                    "same/name",
+                    parent.map(|i| existing[i].as_str()),
+                    &basis.base_id,
+                    &fresh(),
+                )
+                .unwrap();
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .unwrap();
+            existing.push(prepared.target_ref);
+        }
+        let before = core.read_tag_registry(&destination).unwrap().tags;
+        let registry_before = fs::read(destination.join(".weftext-tags.json")).unwrap();
+        let operation = fresh();
+        let preview = core
+            .prepare_native_import(
+                &destination,
+                &destination,
+                "Imported",
+                original.clone(),
+                &operation,
+                false,
+            )
+            .unwrap();
+        assert!(
+            preview
+                .changes
+                .iter()
+                .any(|change| change.action == "initializeSchema")
+        );
+        let retried = core
+            .prepare_native_import(
+                &destination,
+                &destination,
+                "Imported",
+                original.clone(),
+                &operation,
+                false,
+            )
+            .unwrap();
+        assert_eq!(retried.plan_id, preview.plan_id);
+        assert_eq!(
+            fs::read(destination.join(".weftext-tags.json")).unwrap(),
+            registry_before
+        );
+        core.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        drop(core);
+        let mut core = Core::new(&private).unwrap();
+        let tags = core.read_tag_registry(&destination).unwrap();
+        assert!(tags.complete);
+        assert_eq!(tags.tags.len(), 4);
+        for original in before {
+            let current = tags
+                .tags
+                .iter()
+                .find(|tag| tag.tag_ref == original.tag_ref)
+                .unwrap();
+            assert_eq!(current.parent_tag_id, original.parent_tag_id);
+        }
+        let imported: Vec<_> = tags
+            .tags
+            .iter()
+            .filter(|tag| !existing.contains(&tag.tag_ref))
+            .collect();
+        let root = imported
+            .iter()
+            .find(|tag| tag.parent_tag_id.is_none())
+            .unwrap();
+        let leaf = imported
+            .iter()
+            .find(|tag| tag.parent_tag_id.is_some())
+            .unwrap();
+        assert_eq!(leaf.parent_tag_id.as_ref(), Some(&root.tag_id));
+        assert!(
+            imported
+                .iter()
+                .all(|tag| tag.display_name == "same/name" && !source_tags.contains(&tag.tag_ref))
+        );
+        let source = core
+            .open(
+                destination.join("Imported/Note/Note.typ"),
+                Some(destination.clone()),
+            )
+            .unwrap()
+            .source;
+        assert!(source.contains(&format!("ref: \"{}\"", leaf.tag_ref)));
+        assert!(source.contains(&format!("text: \"{}\"", source_tags[1])));
+        let definition = weftext_data::saved_queries(&source).unwrap().remove(0);
+        assert_ne!(definition.key, key);
+        let target_schema = core.read_config(&destination, ConfigRole::Schema).unwrap();
+        assert_eq!(definition.binding.schema, target_schema.role_ref);
+        assert_eq!(Some(definition.binding.revision), target_schema.revision);
+        assert!(
+            definition
+                .plan
+                .r#where
+                .unwrap()
+                .contains(&format!("tagRef(\"{}\")", root.tag_ref))
+        );
+        assert_eq!(
+            fs::read(destination.join("Imported/.weftext-import-originals/original.weftext"))
+                .unwrap(),
+            original
+        );
+        assert_ne!(destination_info.workspace_id, origin_info.workspace_id);
+    }
 
     fn native_marker_resource_is_not_a_directory_birth(style: bool, placement: u8, alias: bool) {
         let temp = tempfile::tempdir().unwrap();

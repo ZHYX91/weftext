@@ -18,6 +18,7 @@ import { DiagramPanel } from "./diagram-ui";
 import { openProcessingSettingsPanel, type ProcessingRead } from "./processing-settings-panel";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
+import type { StructureHeading } from "./heading-structure-state";
 
 export interface WorkspaceToolsHost {
   embeddedQueries?(): EmbeddedQuerySelection[];
@@ -31,6 +32,7 @@ export interface WorkspaceToolsHost {
   savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
   navigate(target: string | KnowledgeNodeRef): Promise<void>;
   selectSource(from: number, to: number): void;
+  revealHeading?(heading: StructureHeading): boolean;
   beforeAction(): Promise<void>;
   canEditSource(): boolean;
   notify(message: string, error?: boolean): void;
@@ -68,6 +70,7 @@ export class WorkspaceTools {
       request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
       openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
       savedDefinition: host.savedDefinition,
+      applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),
       prepareAction: host.beforeAction,
       openTemplates: async () => {
         if (this.active !== "knowledge") await this.show("knowledge");
@@ -101,6 +104,7 @@ export class WorkspaceTools {
       navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
       inspectOperation: async (id, context) => { const receipt = await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }); await host.applyReceipt(receipt, context); return receipt; },
       selectSource: host.selectSource,
+      revealHeading: host.revealHeading,
       previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
       linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
       mountMedia: (container, selected, initial) => mountMediaViewer(container, {

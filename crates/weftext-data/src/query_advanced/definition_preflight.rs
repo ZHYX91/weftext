@@ -155,6 +155,7 @@ impl Preflight<'_> {
                 .map(|(name, shape)| (name.clone(), shape_type(schema, shape)))
                 .collect();
             let mut env = query_env_traced(schema, Some(&trace))?;
+            env.tag_structure = self.context.tag_structure.clone();
             env.parameter_shapes = shapes.clone();
             let mut args = BTreeMap::new();
             let mut undecided = BTreeSet::new();
@@ -273,6 +274,7 @@ impl Preflight<'_> {
                     &shapes,
                     &mut self.remaining,
                     Some(&trace),
+                    self.context.tag_structure.as_ref(),
                 )?;
             }
             result = distinct_terminal(
@@ -284,6 +286,7 @@ impl Preflight<'_> {
                 &shapes,
                 &mut self.remaining,
                 Some(&trace),
+                self.context.tag_structure.as_ref(),
             )?;
             self.expressions(
                 plan,
@@ -602,6 +605,7 @@ impl Preflight<'_> {
             &mut self.remaining,
             self.budget,
             Some(trace),
+            self.context.tag_structure.as_ref(),
         )?;
         // A global group may generate an empty-input count row. It is a type
         // witness only and must not select a provider or validate a runtime row.
@@ -636,6 +640,7 @@ impl Preflight<'_> {
                 .map(|(name, shape)| (name.clone(), shape_type(schema, shape))),
         );
         let mut env = query_env_traced(schema, Some(trace))?;
+        env.tag_structure = self.context.tag_structure.clone();
         env.parameter_shapes = shapes.clone();
         if let Some(unnest) = &plan.unnest {
             let compiled =

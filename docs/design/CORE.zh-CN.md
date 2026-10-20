@@ -23,7 +23,7 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 根 `.weftext-format` 精确字节为 `weftext.typst.v1\n`；一个 `.weftext-workspace.json` 记录 WorkspaceId、当前 schema 与存储合同选择。标记选择格式，不授予身份、权限或历史连续性。没有有效合同的目录作为未管理/不兼容/不完整内容处理，不猜格式或自动转换。
 
-目录树是 live Node 的唯一 parent/name/path 权威。portable metadata 不另存可独立修改的 parent/children 列表。父的排序策略与子的稀疏手动 rank 只记录树无法表达的排序；自然名称顺序为默认。Trash 的实际目录树决定其内部结构；回收记录可保存原位置、回收批次和恢复成员，因为这些是历史与恢复事实，不能反向覆盖 live 树。恢复目标已占用则冲突，不覆盖。
+目录树是 live Node 的唯一 parent/name/path 权威。portable metadata 不另存可独立修改的 parent/children 列表。同级作者导航顺序依 §2.4 使用原 Settings，不改变 parent 或个人列表排序。Trash 的实际目录树决定其内部结构；回收记录可保存原位置、回收批次和恢复成员，因为这些是历史与恢复事实，不能反向覆盖 live 树。恢复目标已占用则冲突，不覆盖。
 
 `.weftext-rules` 不继承 `.gitignore`。Core 的单一库存分别记录文件存在/可见性、Folder Node 资格及显式节点识别边界：ignored 从普通列表隐藏并排除节点发现，字节仍备份；unmanaged 可见、可展开并可打开普通文件，不获得 Node/typed Query 资格。无同名主文件的目录与非配对 `.typ` 默认标“不管理”，不因此停止向下普通枚举或发现未被显式排除的后代配对。用户显式将目录子树设为不管理时，节点发现/批量整理不重入该子树，普通文件浏览仍可进入。完整节点的 canonical `.typ` 不可独立设为不管理；显式退出节点管理须预览身份/引用后果，不自动移动或删除文件。
 
@@ -31,7 +31,7 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
 
-多级标签的 v2 父关系、操作边界、旧资料与同步接纳目标见 §2.3；当前 alpha.3 实现仍是 v1 扁平登记。
+多级标签的 v2 父关系、操作边界、旧资料与同步接纳合同见 §2.3。该通路已接入 0.6.3-rc.1 工作树，整版验收中；原 alpha.3 的 v1 扁平登记只保留为旧候选事实。
 
 portable 控制资料只保存无法从当前文件恢复的事实：身份创建与退休、schema 历史、已提交版本/因果关系、资源文件绑定、Trash 恢复信息。资源的稳定 Ref 通过节点内 `weftext.resources.json` 的资源 ID 与相对文件定位绑定；该文件不决定 Node parentage。普通非 canonical 文件仍可见；未登记资源不被自动授予稳定 ID，原始改名若无法证明原对象则显式重新绑定或冲突。批注 JSON 中的 annotation ID 与其 target/lifecycle 分域。
 
@@ -46,6 +46,10 @@ portable 控制资料只保存无法从当前文件恢复的事实：身份创�
 原生内容包另用 `capture_native_export` 在一次捕获中生成包字节、manifest 与内存 `NativeExportWitness`，消费方交付前复验同一见证，不另读一份当前树来证明旧包。获权的纳管正文、登记资源、批注、Schema、设置和样式按原角色收集；未纳管、忽略和 Trash 内容只记录必要的省略路径及物理元数据，不读其正文后再过滤。当前最多 5,000 个命名空间成员与 64 MiB 保留输入，见证核实际观察到的成员及对象，不承诺任意未来原始文件的强负范围。该包不包含私有 journal、草稿或凭据，不能替代完整恢复备份。
 
 v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。
+
+v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.json` 的完整合法 v2 森林；导出捕获原 Core 已接纳完整树和同一见证，当前 v1 表须先显式升级，不能在导出／复制时改写原 blob。跨库导入默认通过目标 Core 为全树创建新身份并保必要祖先，在同一个 ImportNative／CreateTree Plan 的 updates 中写 Tags。以完整源 TagRef 建本次映射，统一改父级、正文 typed 引用、Query CEL 的 tagRef 字面及按 Shape 证明的 typed 参数默认值；普通 literal 原样保留。不按同名或裸 UUID 合并，不顺带改挂已有目标标签，不另存永久别名表，完整原 ZIP 继续保留。
+
+导入 Query 的 Schema 基线仅在完整源 schemaRef／revision 与包中准确 Schema entry.revision 一致、且目标 Schema 语义一致时重绑为目标合法 revision。目标尚无 Schema 而实际 bundled Schema 相等时，在同一 Plan 初始化并固定新 revision。包未保准确的 Query Schema 历史时以 `schemaMappingRequired` 拒绝，不能用包的 latest 或目标当前定义冒原基线。托管导入依据实际计划副作用另查 tags.create／schema.write 及原读取权限；原导入槽权不隐含共享标签／Schema 写权，重试、提交及恢复仍核同一原计划。
 
 ### 2.1 普通文件会话
 
@@ -71,11 +75,13 @@ v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source
 
 ### 2.3 标签森林、原身份与版本升级
 
-2026-10-20 目标合同，尚未实现。根 `.weftext-tags.json` 是标签身份声明、显示名和共享父关系的唯一当前权威；它与真实目录树分域。v2 文档闭合为 `{version: 2, tags: [{tagId, displayName, parentTagId}, ...]}`，各成员必有，根 `parentTagId: null`，其余为同表的裸 TagId。API 中的父级选择使用完整 TagRef 并核 WorkspaceId、实际登记资格及准确版本，不能把外库 UUID 或客户端父链当本库依据。保留现有 UUID、名称和 5,000 条预算，同名合法；不存独立路径、children 或祖先权威，也不设置同级硬唯一。
+2026-10-20 定版并接入 0.6.3-rc.1 工作树的当前合同，整版验收中。根 `.weftext-tags.json` 是标签身份声明、显示名和共享父关系的唯一当前权威；它与真实目录树分域。v2 文档闭合为 `{version: 2, tags: [{tagId, displayName, parentTagId}, ...]}`，各成员必有，根 `parentTagId: null`，其余为同表的裸 TagId。API 中的父级选择使用完整 TagRef 并核 WorkspaceId、实际登记资格及准确版本，不能把外库 UUID 或客户端父链当本库依据。保留现有 UUID、名称和 5,000 条预算，同名合法；不存独立路径、children 或祖先权威，也不设置同级硬唯一。
 
 同一个 Core 解码／校验入口供普通读取、prepare、恢复、同步接纳、历史及交换消费者使用，按用途区分读取旧内容与接纳当前后继。完整 after 森林必须通过严格版本／成员、唯一 ID、父级存在、非自身和无环检查；父链终止于根。JSON 合法还须证明原注册表对象及每个标签的 Core 登记资格。缺父、未登记或观察缺口不把节点临时当根。从未出生的表可凭原缺席依据初始化；已经登记的表缺失或被替换属于诊断／恢复事件，不能按空表重新出生。可用迭代遍历作有界全表校验，不依赖调用栈深度；错误或超预算不安装部分树。
 
 `createTag` 可指定合格父级，并与首次 typed TagRef 赋值在同一原 Plan 出生；`renameTag` 只改名称；新增 `moveTag` 只改变既有标签的父级，包括置 null。后代随父链派生，不批改笔记或重分配 ID。三种动作统一沿原 operationId、准确 before／after、实际文件身份、CAS、actor／授权代次及原结果恢复；预览明确所选标签和目标父级。服务端生成修改，所有能写注册表的路径按实际差异执行操作授权，不能用 rename 或通用文件写绕过 move。前像变化则按原资格重验或重新准备，不盲重试未知结果。
+
+本地取消无需重做失败或丢响应的准备。已有原计划按准确 root／Plan 及尚未安装条件终结；尚无计划时沿原 resolution journal 持久终结原 operationId，不分配替代操作或另建取消权威。重启、迟到准备及将同号用于其它意图都不能复活已取消请求。已提交只回原事实，可能安装的操作仍保现场交原恢复；界面只有读到准确终态才清本机待决记录。
 
 直接赋予已有 TagRef 与换父通常在业务上可交换，但不因此使旧 Plan 的文件／身份／授权依据继续有效。保留原提交条件，也不因层级新增就强迫每次直接赋值读取当前父链。依实际读集决定重验证／重准备；仅由查询或归组产生的结果不成为 writer。未裁决的 Tags 分支只限制真正依赖树的操作，不自动阻止无关笔记编辑。
 
@@ -83,7 +89,15 @@ v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source
 
 仅标签文档版本明确升 v2，不改 WorkspaceId、TagRef 或原生 Typst 格式标记；实际资料盘点决定旧支持范围，不由“尚未发布”推定没有真实资料。活动 v1 经原 Core 更新路径转换为根 parent=null，保原标签资格、注册表连续性和因果历史；不能重建同名文件或重新登记旧 UUID 冒充升级。转换准备按原 journal 核本注册表的未决安装及真实前像；旧 prepared／unknown 不改指纹、不由升级器重跑，原操作恢复也不能安装过期的 v1 after 覆盖 v2。raw 外部改动仍按 external_pending／显式接纳处理，不以 JSON 校验成功冒当前已决树。真正留存的 v1 历史／分支／base／备份按相应读取入口解码，在内存解释为全根，证据仍绑定原 v1 blob，不重写历史；未存在的旧资料不建立假想兼容层。可解码不等于可作为当前合法后继：旧离线整表不能补 null 后覆盖 v2 层级；保分支与 base，需要保留的旧意图在确定的 v2 basis 上显式重准备。无额外版本协商或迁移事实库。
 
-跨库导入通过目标 Core 新建合格身份，或显式选择已有目标身份；按完整源 TagRef 建立本次映射，同一映射处理父 ID、笔记及 Query 中的 typed 引用。选择子树须包含必要祖先，或明确预览并选择在目标库重新挂接；不静默补根、不因映射顺便移动既有目标标签、不按同名／裸 UUID 合并。先验证完整目标森林及预算再在原 Plan 提交。literal 原样保留；映射不是永久别名表。保持身份的同库恢复继续要求原恢复证据，不与跨库导入混用。
+当前 Native 跨库导入通过目标 Core 为完整森林新建合格身份并保必要祖先；按完整源 TagRef 建立本次映射，同一映射处理父 ID、笔记及 Query 中的 typed 引用。不静默补根、不因映射顺便移动既有目标标签、不按同名／裸 UUID 合并。将来如增加已有目标身份或仅子树选择，须另有明确选择／重新挂接预览，不据本合同声称当前 UI 已具备这些选项。先验证完整目标森林及预算再在原 Plan 提交。literal 原样保留；映射不是永久别名表。保持身份的同库恢复继续要求原恢复证据，不与跨库导入混用。
+
+### 2.4 作者导航顺序
+
+作者同级手动顺序使用原 `.weftext-settings.json`／`ObjectKey::Settings`，不新增顺序文件、注册表或目录名前缀。version:1 设置可含 `navigationOrders: {"<完整父 NodeRef 或 DirectoryRef>": ["<完整直接子级 NodeRef 或 DirectoryRef>", ...]}`。这里只记录已接纳容器之间的顺序，不改变真实 parent、正文、标签树或个人列表排序；普通文件和父节点自己的主文件不成为子容器。顶层其他设置成员原样保留；该成员严格检查类型、规范完整引用、同库、重复、自身及合计 5,000 项预算。
+
+读取先按当前真实目录和原身份资格取得直接子级，按已保存顺序投影仍在该父下的成员，再按默认名称顺序追加新建或移入成员。失效／移走成员只从显示投影略去，不按同名替代、不自行写回清理。扫描不完整、未接纳容器或身份有歧义时仍可浏览，但禁止作者重排。明确写入须提供准确设置 Base 和完整当前直接子级集合，展示前后顺序，并以原 UpdateFiles Plan 进行整设置 CAS；通用配置写入也复用同一校验。父级、成员及其目录／主文件／登记标记的原证明进入计划依赖，准备后移动、替换或新增成员不能使旧计划错误应用到别的父下。
+
+准备、取消、未知结果查询、安装／恢复及设置同步沿原 Core 操作与对象链。同步传完整 Settings 对象，不按列表项自动合并；历史或部分副本的引用不授予当前导航身份。取消仅能终结未安装的准确原计划，已可能安装则保现场交原恢复；重启不分配替代操作。托管通用设置写入若实际改变该成员，除设置读写权外另需当前 `library.reorderNodes`，并须对每个变更父级有准确匹配的 `navigation.directories` 获权配置；目录成员披露不由重排权扩展到全库，也不授正文／字段／媒体读取。提交及未决操作重验两项资格，成员权撤销也清除旧预览；设置权、字段权或个人排序均不隐含作者重排权。
 
 ## 3. 身份、版本与当前读取
 

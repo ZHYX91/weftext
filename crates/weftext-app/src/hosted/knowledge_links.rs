@@ -309,12 +309,17 @@ struct Captured {
     config_hash: String,
     schema_witness: Option<(String, SnapshotWitness)>,
     semantic_fields: BTreeMap<String, BTreeSet<String>>,
+    semantic_relations: BTreeMap<String, BTreeSet<String>>,
+    tag_witness: Option<(String, SnapshotWitness)>,
+    tag_tree: Option<Vec<knowledge::GraphTag>>,
+    tag_membership_known: BTreeSet<String>,
     candidates: Vec<Candidate>,
     assets: Vec<Asset>,
     collections: Vec<weftext_core::QualifiedResourceCollection>,
     inventory: knowledge::InventorySnapshot,
     resource_fragments: Vec<knowledge::ResourceFragmentQualification>,
     properties: Vec<knowledge::PropertyReferenceInput>,
+    graph_relations: Vec<knowledge::GraphRelation>,
     property_complete: bool,
     dictionary_complete: bool,
     selected: usize,
@@ -489,11 +494,43 @@ fn capture(
                 .map_err(|_| changed())?,
         );
     }
+    let mut tag_witness = None;
+    let mut tag_tree = None;
+    if navigation_registry::authorize_tag_read(inner, &actor).is_ok() {
+        let path = root
+            .join(".weftext-tags.json")
+            .to_string_lossy()
+            .into_owned();
+        if let Ok(mut snapshot) = inner.core.read_snapshot(&root, std::slice::from_ref(&path)) {
+            let file = snapshot.files.remove(0);
+            if let Ok(document) = inner
+                .core
+                .qualified_tag_document_from_snapshot(&root, &file)
+            {
+                let witness = inner
+                    .core
+                    .take_snapshot_witness(&file.base_id)
+                    .map_err(|_| changed())?;
+                bytes = bytes.saturating_add(witness.retained_bytes());
+                let workspace = &candidates
+                    .first()
+                    .ok_or_else(changed)?
+                    .qualified
+                    .owner
+                    .workspace_id;
+                tag_tree = Some(knowledge::graph_tag_tree(workspace, &document));
+                tag_witness = Some((path, witness));
+            }
+        }
+    }
     let mut nodes = vec![];
     let mut dictionary_complete = complete;
     let mut properties = vec![];
     let mut property_complete = complete;
     let mut semantic_keys = BTreeMap::new();
+    let mut graph_relations = Vec::new();
+    let mut tag_membership_known = BTreeSet::new();
+    let mut semantic_relations = BTreeMap::new();
     for candidate in &candidates {
         let actual = frozen.get(&candidate.file.path).ok_or_else(changed)?;
         if digest(actual) != candidate.qualified.source_hash {
@@ -516,6 +553,12 @@ fn capture(
         )?;
         dictionary_complete &= semantic.complete;
         property_complete &= semantic.complete;
+        if semantic.fingerprint["fields"]
+            .as_array()
+            .is_some_and(|fields| fields.iter().any(|field| field["fieldId"] == "core/tags"))
+        {
+            tag_membership_known.insert(knowledge::graph_key(&candidate.qualified.owner));
+        }
         if semantic_fields.contains_key(&candidate.resource) {
             semantic_keys.insert(candidate.resource.clone(), semantic.fingerprint);
         }
@@ -545,6 +588,24 @@ fn capture(
             labels: vec![],
             labels_complete: false,
         });
+        if let (Some(schema), Some(fields)) =
+            (schema.as_ref(), semantic_fields.get(&candidate.resource))
+        {
+            let rights = inner.grant(&actor, &candidate.resource)?;
+            let qualified = knowledge::graph_relations(
+                nodes.last().unwrap(),
+                schema,
+                Some(fields),
+                Some(&rights.query.relations),
+            );
+            if !qualified.is_empty() {
+                semantic_relations.insert(
+                    candidate.resource.clone(),
+                    qualified.iter().map(|r| r.id.clone()).collect(),
+                );
+            }
+            graph_relations.extend(qualified);
+        }
     }
     let mut assets = vec![];
     let mut collections = vec![];
@@ -624,6 +685,10 @@ fn capture(
         return Err(ApiError::bad("本次链接与词典准确依据超过 32 MiB 预算"));
     }
     let generation = digest(&serde_json::to_vec(&json!({"binding":binding(inner,&actor)?,"actor":actor,"epoch":inner.actor_generation(&actor),"source":req.source_hash,"serial":req.serial,"semanticFields":semantic_keys,"nodes":candidates.iter().map(|c|json!({"resource":c.resource,"owner":c.qualified.owner,"hash":c.qualified.source_hash,"revision":c.qualified.revision})).collect::<Vec<_>>(),"resources":assets.iter().map(|a|json!({"asset":a.id,"hash":a.qualified.content_hash,"revision":a.qualified.revision})).collect::<Vec<_>>(),"collections":collections.iter().map(|c|json!({"owner":c.owner,"revision":c.revision})).collect::<Vec<_>>(),"complete":complete})).map_err(|_| changed())?);
+    let generation = digest(
+        &serde_json::to_vec(&json!({"knowledge": generation, "tagTree": tag_tree}))
+            .map_err(|_| changed())?,
+    );
     let mut captured = Captured {
         actor: actor.clone(),
         epoch: inner.actor_generation(&actor),
@@ -633,6 +698,10 @@ fn capture(
         config_hash: binding(inner, &actor)?,
         schema_witness,
         semantic_fields,
+        semantic_relations,
+        tag_witness,
+        tag_tree,
+        tag_membership_known,
         candidates,
         assets,
         collections,
@@ -648,6 +717,7 @@ fn capture(
         },
         resource_fragments: vec![],
         properties,
+        graph_relations,
         property_complete: property_complete && complete,
         dictionary_complete,
         selected: 0,
@@ -753,6 +823,18 @@ fn recheck(
         {
             return Err(unavailable());
         }
+    }
+    for (resource, relations) in &captured.semantic_relations {
+        if !relations.is_subset(&inner.grant(&actor, resource)?.query.relations) {
+            return Err(unavailable());
+        }
+    }
+    if let Some((path, witness)) = &captured.tag_witness {
+        navigation_registry::authorize_tag_read(inner, &actor)?;
+        inner
+            .core
+            .validate_snapshot_witness(&root, Path::new(path), witness)
+            .map_err(|_| changed())?;
     }
     if let Some((path, witness)) = &captured.schema_witness {
         inner
@@ -1029,7 +1111,18 @@ async fn read(
         let rendered=captured.compilations.iter().find(|c|c.index==captured.selected).and_then(|c|c.output.as_ref()).filter(|o|o["ok"]==true).and_then(|o|serde_json::from_value::<weftext_engine::RenderNode>(o["tree"].clone()).ok()).map(|tree|knowledge::rendered_links(&tree,&format!("html:{}:{}",captured.request.session_id,captured.request.serial),"html",&captured.inventory.generation)).unwrap_or_default().into_iter().take(MAX_EDGES).map(|r|public_rendered(&captured,r)).collect::<Vec<_>>();
 let diagnostic = knowledge::link_diagnostics(&captured.inventory, &captured.properties, captured.property_complete, MAX_EDGES);
         let diagnostics = json!({"generation":diagnostic.generation,"scope":diagnostic.scope,"coverage":diagnostic.coverage,"scannedNodes":diagnostic.scanned_nodes,"propertyIssues":diagnostic.property_issues.into_iter().map(|p|json!({"source":public_node(&captured,&p.source),"fieldId":p.field_id,"itemPath":p.item_path,"address":p.address,"resolution":public_resolution(&captured,&p.resolution,&p.address)})).collect::<Vec<_>>(),"issues":diagnostic.issues.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"nodes":diagnostic.nodes.into_iter().map(|n|json!({"node":public_node(&captured,&n.node),"incoming":n.incoming,"outgoing":n.outgoing,"invalidOutgoing":n.invalid_outgoing,"state":n.state})).collect::<Vec<_>>()});
-let response=json!({"diagnostics":diagnostics,"basis":captured.basis(),"scope":"configuredAuthorizedManagedSources","links":{"coverage":index.coverage,"outgoing":index.outgoing.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingId":index.incoming_id.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingPath":index.incoming_path.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>()},"renderedLinks":rendered,"propertyReferences":{"scope":"explicitAuthorizedFields","coverage":if captured.property_complete{"complete"}else{"partial"},"items":properties},"mentions":{"scope":"nativeTitlesAndAuthorizedNameFields","coverage":scan.coverage,"fragments":mentions},"writable":writable,"fileConversion":false});
+        let mut graph=knowledge::relationship_graph(&captured.inventory,&captured.properties,&captured.graph_relations,captured.property_complete,512,MAX_EDGES);
+        graph.root=Some(knowledge::graph_key(&captured.source().owner));
+        graph.tag_tree=captured.tag_tree.clone();
+        // Only logical configured resource groups are public. Physical server
+        // paths remain private even when the source itself is readable.
+        for node in &mut graph.nodes {
+            node.tags_known=captured.tag_membership_known.contains(&node.key);
+            node.directory=captured.candidates.iter().find(|c|knowledge::graph_key(&c.qualified.owner)==node.key).and_then(|c|c.resource.rsplit_once('/').map(|(group,_)|group.to_owned())).unwrap_or_default();
+        }
+        let heading_tree=captured.compilations.iter().find(|c|c.index==captured.selected).and_then(|c|c.output.as_ref()).filter(|o|o["ok"]==true).and_then(|o|serde_json::from_value::<weftext_engine::RenderNode>(o["tree"].clone()).ok());
+        let heading_structure=knowledge::heading_structure(heading_tree.as_ref(),&captured.request.source,5_000);
+let response=json!({"graph":graph,"headingStructure":heading_structure,"diagnostics":diagnostics,"basis":captured.basis(),"scope":"configuredAuthorizedManagedSources","links":{"coverage":index.coverage,"outgoing":index.outgoing.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingId":index.incoming_id.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingPath":index.incoming_path.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>()},"renderedLinks":rendered,"propertyReferences":{"scope":"explicitAuthorizedFields","coverage":if captured.property_complete{"complete"}else{"partial"},"items":properties},"mentions":{"scope":"nativeTitlesAndAuthorizedNameFields","coverage":scan.coverage,"fragments":mentions},"writable":writable,"fileConversion":false});
         if serde_json::to_vec(&response).map_err(|_|changed())?.len()>MAX_OUTPUT {return Err(ApiError::bad("本次链接结果超过 8 MiB 交付预算；请缩小部署的获权范围。"));}
         Ok(Json(response))
     }).await

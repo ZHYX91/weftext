@@ -3,18 +3,22 @@
 mod annotations;
 mod copy;
 mod diagnostics;
+mod heading_structure;
 mod links;
 mod mentions;
 mod processing_settings;
 mod proofreading;
+mod relationship_graph;
 
 pub use annotations::*;
 pub use copy::*;
 pub use diagnostics::*;
+pub use heading_structure::*;
 pub use links::*;
 pub use mentions::*;
 pub use processing_settings::*;
 pub use proofreading::*;
+pub use relationship_graph::*;
 
 use serde::{Deserialize, Serialize};
 

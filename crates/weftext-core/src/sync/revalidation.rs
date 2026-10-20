@@ -699,6 +699,7 @@ struct Validator<'a> {
     invocations: Vec<InvocationValidation>,
     query_members: &'a BTreeSet<ObjectKey>,
     annotation_targets: Vec<SyncAnnotationTargetStatus>,
+    tag_structure: Option<(String, weftext_data::FrozenTagStructure)>,
 }
 impl Validator<'_> {
     fn retired(&mut self, object: &ObjectKey) -> Result<bool> {
@@ -1012,12 +1013,11 @@ impl Validator<'_> {
                 let id = self.target(reference, "tag")?;
                 let version = self.need(&ObjectKey::Tags)?;
                 let (_, bytes) = self.file(&ObjectKey::Tags, &version, ".weftext-tags.json")?;
-                crate::directory_identity::validate_sync_tags(&bytes)?;
-                let tags: serde_json::Value = serde_json::from_slice(&bytes)?;
-                if tags["tags"]
-                    .as_array()
-                    .is_none_or(|a| a.iter().filter(|r| r["tagId"] == id).count() != 1)
-                {
+                // This is a read of the chosen semantic basis, not acceptance
+                // of a new current registry. Retained v1 history is all-root
+                // in memory; its original exact bytes/revision remain bound.
+                let tags = crate::directory_identity::decode_historical_tag_document(&bytes)?;
+                if !tags.tags.iter().any(|tag| tag.tag_id == id) {
                     return Err(refuse(
                         "syncSemanticUnavailable",
                         "The chosen tag registry has no unique typed target",
@@ -1333,6 +1333,48 @@ impl Validator<'_> {
                     "schemaBasisChanged",
                     "Original Query baseline is incompatible with the chosen current Schema",
                 ));
+            }
+            let reads =
+                weftext_data::query_read_requirements(&definition.plan, &baseline, &context)
+                    .map_err(|_| {
+                        refuse(
+                            "invalidQuery",
+                            "The complete static Query read closure cannot be proved",
+                        )
+                    })?;
+            if reads.tag_structure {
+                // A pinned definition still reads the tree at this selected
+                // semantic cut. Never substitute the latest local registry or
+                // interpret a missing/partial tree as an empty result.
+                let version = self.need(&ObjectKey::Tags)?;
+                if self
+                    .tag_structure
+                    .as_ref()
+                    .is_none_or(|(revision, _)| revision != &version.revision)
+                {
+                    let (_, bytes) = self.file(&ObjectKey::Tags, &version, ".weftext-tags.json")?;
+                    let document =
+                        crate::directory_identity::decode_historical_tag_document(&bytes)?;
+                    let structure = weftext_data::FrozenTagStructure::new(
+                        self.graph.workspace_id.clone(),
+                        document,
+                    )
+                    .map_err(|e| refuse("tagStructureUnavailable", &e.to_string()))?;
+                    self.retained_metadata = self
+                        .retained_metadata
+                        .checked_add(structure.retained_bytes())
+                        .ok_or_else(|| {
+                            refuse("budget", "Tag structure retained budget overflow")
+                        })?;
+                    if self.bytes.saturating_add(self.retained_metadata) > MAX_BLOB_BYTES {
+                        return Err(refuse(
+                            "budget",
+                            "Retained semantic closure plus tag structure exceeds 64 MiB",
+                        ));
+                    }
+                    self.tag_structure = Some((version.revision.clone(), structure));
+                }
+                context.tag_structure = self.tag_structure.as_ref().map(|(_, tree)| tree.clone());
             }
             weftext_data::validate_query_plan_with_context(&definition.plan, &baseline, &context)
                 .map_err(|_| {
@@ -1860,6 +1902,7 @@ fn check_revalidation_at_cut(
         invocations: vec![],
         query_members,
         annotation_targets: vec![],
+        tag_structure: None,
     };
     for version in chosen.values() {
         for digest in version.state.files.values() {

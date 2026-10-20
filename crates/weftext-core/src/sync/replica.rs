@@ -238,6 +238,16 @@ impl Core {
         for (relative, bytes) in &captured.files {
             let path = root.join(relative);
             if let Some(object) = config_key(&root, &path) {
+                if matches!(object, ObjectKey::Tags) {
+                    crate::directory_identity::validate_sync_tags(bytes)?;
+                }
+                if matches!(object, ObjectKey::Settings) {
+                    crate::author_order::validate_workspace_settings(bytes)?;
+                    crate::author_order::validate_workspace_settings_scope(
+                        bytes,
+                        &workspace.workspace_id,
+                    )?;
+                }
                 if matches!(object, ObjectKey::Rules) {
                     crate::validate_library_rules(bytes)?;
                 }

@@ -1038,11 +1038,11 @@ class LocalFeatures(unittest.TestCase):
         doc = self.note(root, '导航原名', '= 导航正文\n', directory)
         self.note(root, '范围外条目')
         registry = self.api('/api/navigation/tags', {'root': str(root)})
-        first = self.api('/api/navigation/create-tag', {'root': str(root), 'displayName': '同名标签',
+        first = self.api('/api/navigation/create-tag', {'root': str(root), 'parentRef': None, 'displayName': '同名标签',
                          'baseId': registry['baseId'], 'operationId': uid()})
         self.commit(first['preview'])
         registry = self.api('/api/navigation/tags', {'root': str(root)})
-        second = self.api('/api/navigation/create-tag', {'root': str(root), 'displayName': '同名标签',
+        second = self.api('/api/navigation/create-tag', {'root': str(root), 'parentRef': None, 'displayName': '同名标签',
                           'baseId': registry['baseId'], 'operationId': uid()})
         self.commit(second['preview'])
         self.assertNotEqual(first['targetRef'], second['targetRef'])

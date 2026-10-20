@@ -25,6 +25,8 @@ pub enum NativeFileRole {
     Annotations,
     Schema,
     Settings,
+    /// Complete source tag forest. Target identities are allocated by Core.
+    Tags,
     /// A frozen derived citation input, never an admitted author Resource.
     GeneratedBibliography,
 }
@@ -413,11 +415,11 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                     ));
                 }
             }
-            NativeFileRole::Schema | NativeFileRole::Settings => {
-                let expected = if entry.role == NativeFileRole::Schema {
-                    ".weftext-schema.json"
-                } else {
-                    ".weftext-settings.json"
+            NativeFileRole::Schema | NativeFileRole::Settings | NativeFileRole::Tags => {
+                let expected = match entry.role {
+                    NativeFileRole::Schema => ".weftext-schema.json",
+                    NativeFileRole::Settings => ".weftext-settings.json",
+                    _ => ".weftext-tags.json",
                 };
                 if path != expected
                     || entry.node_id.is_some()
@@ -428,6 +430,13 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                         "packageControl",
                         "Invalid portable config path",
                     ));
+                }
+                if entry.role == NativeFileRole::Tags {
+                    let document: weftext_data::TagDocument = serde_json::from_slice(bytes)
+                        .map_err(|e| NativeError::new("packageTags", e.to_string()))?;
+                    document
+                        .forest()
+                        .map_err(|e| NativeError::new("packageTags", e.to_string()))?;
                 }
             }
             NativeFileRole::Annotations | NativeFileRole::ResourceManifest => {
@@ -465,6 +474,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
         // There are no local admission/control/journal slots in this format.
         if path != ".weftext-schema.json"
             && path != ".weftext-settings.json"
+            && path != ".weftext-tags.json"
             && path.split('/').any(|p| p.starts_with(".weftext-"))
         {
             return Err(NativeError::new(
@@ -729,6 +739,40 @@ mod tests {
         let decoded = read_native_package(&first).unwrap();
         assert_eq!(decoded.files, package.files);
         assert_eq!(write_native_package(&decoded).unwrap(), first);
+    }
+
+    #[test]
+    fn native_tag_role_requires_one_complete_v2_forest() {
+        let mut package = fixture();
+        let a = "00000000-0000-4000-8000-000000000005";
+        let b = "00000000-0000-4000-8000-000000000006";
+        let valid = serde_json::json!({"version":2,"tags":[
+            {"tagId":a,"displayName":"same/path","parentTagId":null},
+            {"tagId":b,"displayName":"same/path","parentTagId":a}
+        ]});
+        for (value, accepted) in [
+            (valid, true),
+            (
+                serde_json::json!({"version":1,"tags":[{"tagId":a,"displayName":"a"}]}),
+                false,
+            ),
+            (
+                serde_json::json!({"version":2,"tags":[{"tagId":b,"displayName":"b","parentTagId":a}]}),
+                false,
+            ),
+            (
+                serde_json::json!({"version":2,"tags":[{"tagId":a,"displayName":"a","parentTagId":b},{"tagId":b,"displayName":"b","parentTagId":a}]}),
+                false,
+            ),
+        ] {
+            let bytes = serde_json::to_vec(&value).unwrap();
+            package.manifest.entries.insert(
+                ".weftext-tags.json".into(),
+                NativeEntry::new(NativeFileRole::Tags, &bytes),
+            );
+            package.files.insert(".weftext-tags.json".into(), bytes);
+            assert_eq!(validate_native_package(&package).is_ok(), accepted);
+        }
     }
     #[test]
     fn generated_bibliography_is_exact_owned_derived_input() {

@@ -420,6 +420,7 @@ pub struct AdmittedSnapshot {
     pub inventory: Inventory,
     pub files: Vec<SnapshotFile>,
     pub schema: Option<SnapshotFile>,
+    pub tags: Option<SnapshotFile>,
     pub complete: bool,
     pub warnings: Vec<String>,
     pub raw_complete: bool,
@@ -502,6 +503,7 @@ pub(crate) struct AdmittedBasis {
     pub(crate) lifecycle: String,
     members: BTreeSet<String>,
     pub(crate) bases: Vec<String>,
+    tag_base: Option<String>,
     complete: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -2756,6 +2758,11 @@ impl Core {
             .read_snapshot(&root, &[display(&path)])?
             .files
             .remove(0);
+        if matches!(role, ConfigRole::WorkspaceSettings)
+            && let Some(bytes) = &snapshot.bytes
+        {
+            crate::author_order::validate_workspace_settings_scope(bytes, &workspace.workspace_id)?;
+        }
         if matches!(role, ConfigRole::Rules)
             && snapshot.bytes.is_none()
             && self.query_rules_ever_committed(&root)?
@@ -3030,10 +3037,27 @@ impl Core {
         }
         let schema_path = display(&root.join(ConfigRole::Schema.filename()));
         paths.push(schema_path.clone());
+        paths.push(display(&root.join(".weftext-tags.json")));
         // All selected share-zero source/config handles coexist during capture.
         // Core commit cannot run between members because this authority is mutably
         // borrowed; new raw files cannot fabricate committed birth membership.
-        let mut cut = self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?;
+        let (mut cut, tags) =
+            match self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 2) {
+                Ok(mut cut) => {
+                    let tags = cut.files.pop();
+                    (cut, tags)
+                }
+                Err(_) => {
+                    // Tags are an optional structural effect. A pending/busy tree
+                    // must not block an unrelated exact query or ordinary capture.
+                    // No failed cut is published; retry the source/schema set.
+                    paths.pop();
+                    (
+                        self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?,
+                        None,
+                    )
+                }
+            };
         let schema = cut.files.pop().unwrap();
         for f in &cut.files {
             let expected_node = inventory
@@ -3076,6 +3100,7 @@ impl Core {
                     .chain(std::iter::once(&schema))
                     .map(|f| f.base_id.clone())
                     .collect(),
+                tag_base: tags.as_ref().map(|file| file.base_id.clone()),
                 complete,
             },
         );
@@ -3085,11 +3110,38 @@ impl Core {
             inventory,
             files: cut.files,
             schema: Some(schema),
+            tags,
             complete,
             warnings,
             raw_complete,
             raw_pending,
         })
+    }
+    /// Bind only the Tags file captured with this admitted cut. Unrelated
+    /// operations keep their original read set when they never use structure.
+    pub fn bind_admitted_tag_structure(
+        &mut self,
+        root: impl AsRef<Path>,
+        cut_id: &str,
+        file: &SnapshotFile,
+    ) -> Result<weftext_data::TagDocument> {
+        let root = absolute_path(root.as_ref())?;
+        let basis = self
+            .admitted_cuts
+            .get(cut_id)
+            .ok_or_else(|| CoreError::new("staleBase", "Original admitted cut expired"))?;
+        if basis.root != display(&root) || basis.tag_base.as_ref() != Some(&file.base_id) {
+            return Err(CoreError::new(
+                "staleBase",
+                "Tag structure does not belong to the original admitted cut",
+            ));
+        }
+        let document = self.qualified_tag_document_from_snapshot(&root, file)?;
+        let basis = self.admitted_cuts.get_mut(cut_id).unwrap();
+        if !basis.bases.contains(&file.base_id) {
+            basis.bases.push(file.base_id.clone());
+        }
+        Ok(document)
     }
     pub fn trash_admitted_snapshot(&mut self, root: impl AsRef<Path>) -> Result<AdmittedSnapshot> {
         let root = absolute_path(root.as_ref())?;
@@ -3148,7 +3200,21 @@ impl Core {
         }
         let mut paths = source_files.values().cloned().collect::<Vec<_>>();
         paths.push(display(&root.join(ConfigRole::Schema.filename())));
-        let mut snapshot = self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?;
+        paths.push(display(&root.join(".weftext-tags.json")));
+        let (mut snapshot, tags) =
+            match self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 2) {
+                Ok(mut snapshot) => {
+                    let tags = snapshot.files.pop();
+                    (snapshot, tags)
+                }
+                Err(_) => {
+                    paths.pop();
+                    (
+                        self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 1)?,
+                        None,
+                    )
+                }
+            };
         let schema = snapshot.files.pop().unwrap();
         for f in &snapshot.files {
             if let Some(entry) = entries.iter_mut().find(|e| e.path == f.path) {
@@ -3181,6 +3247,7 @@ impl Core {
                     .chain(std::iter::once(&schema))
                     .map(|file| file.base_id.clone())
                     .collect(),
+                tag_base: tags.as_ref().map(|file| file.base_id.clone()),
                 complete,
             },
         );
@@ -3190,6 +3257,7 @@ impl Core {
             inventory,
             files: snapshot.files,
             schema: Some(schema),
+            tags,
             complete,
             warnings,
             raw_complete: complete,
@@ -3251,7 +3319,12 @@ impl Core {
             guards.push(guard);
             handles.push(handle);
         }
-        for original in snapshot.files.iter().chain(snapshot.schema.iter()) {
+        for original in snapshot
+            .files
+            .iter()
+            .chain(snapshot.schema.iter())
+            .chain(snapshot.tags.iter())
+        {
             let basis = self
                 .snapshots
                 .get(&original.base_id)
@@ -3442,6 +3515,12 @@ impl Core {
             }
             return self.operation_details(operation_id).map(Some);
         }
+        if self.resolved(operation_id) {
+            return Err(CoreError::new(
+                "operationCancelled",
+                "The original operation was cancelled before preparation",
+            ));
+        }
         Ok(None)
     }
     pub fn prepare_feature_operation(
@@ -3565,6 +3644,12 @@ impl Core {
                 ));
             }
             return self.operation_details(&request.operation_id);
+        }
+        if self.resolved(&request.operation_id) {
+            return Err(CoreError::new(
+                "operationCancelled",
+                "The original operation was cancelled before preparation",
+            ));
         }
         let root = absolute_path(Path::new(&request.root))?;
         let workspace = self.require_workspace(&root)?;
@@ -3735,6 +3820,7 @@ impl Core {
                 name,
                 bytes,
                 *allow_losses,
+                &fingerprint,
                 &mut preview,
                 &mut files,
                 &mut absent_dependencies,
@@ -3901,6 +3987,13 @@ impl Core {
                         ));
                     }
                     self.validate_update(&root, &path, &c.after)?;
+                    self.validate_navigation_order_update(&root, c)?;
+                    self.capture_navigation_order_dependencies(
+                        &root,
+                        c,
+                        &mut files,
+                        &mut directories,
+                    )?;
                     if path
                         .file_name()
                         .is_some_and(|n| n == "weftext.directory.json")
@@ -4574,6 +4667,13 @@ impl Core {
                 Mutation::Update { files: changes }
             }
         };
+        self.validate_tag_mutation_changes(
+            &root,
+            &request.operation_id,
+            &fingerprint,
+            &mutation,
+            false,
+        )?;
         // Owned membership is an original committed dependency too. Reserve
         // its version in this same Plan before installation, so both normal
         // execution and original-plan recovery publish its exact observation.
@@ -4803,6 +4903,7 @@ impl Core {
             self.require_workspace(root)?;
         }
         self.validate_resource_collection_initialization(t)?;
+        self.validate_tag_plan_changes(&plan)?;
         if let Some(expected) = &t.expected_membership {
             let current = self.admitted_snapshot(root)?;
             if !current.complete
@@ -4842,6 +4943,7 @@ impl Core {
         {
             for c in changes {
                 self.validate_update(root, Path::new(&c.path), &c.after)?;
+                self.validate_navigation_order_update(root, c)?;
                 if Path::new(&c.path)
                     .file_name()
                     .is_some_and(|n| n == "weftext.directory.json")
@@ -4928,7 +5030,18 @@ impl Core {
                     ParentGuard::acquire(&Path::new(&d.path).join(".snapshot-prospective"))?;
                 let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
                 let names = sorted_entries(entries, Path::new(&d.path));
-                if !complete || guard.directory_identity()? != d.identity || names != d.entries {
+                if !complete
+                    || guard.directory_identity()? != d.identity
+                    || crate::author_order::navigation_order_directory_entries(
+                        t,
+                        Path::new(&d.path),
+                        names,
+                    ) != crate::author_order::navigation_order_directory_entries(
+                        t,
+                        Path::new(&d.path),
+                        d.entries.clone(),
+                    )
+                {
                     return Err(CoreError::new(
                         "scopeChanged",
                         "Frozen directory membership changed or became incomplete",
@@ -5771,6 +5884,12 @@ impl Core {
         if path.parent() == Some(root) && name == ".weftext-rules" {
             return crate::validate_library_rules(after);
         }
+        if path.parent() == Some(root) && name == ".weftext-settings.json" {
+            return crate::author_order::validate_workspace_settings_scope(
+                after,
+                &self.require_workspace(root)?.workspace_id,
+            );
+        }
         if name == "weftext.directory.json" {
             return crate::directory_identity::validate_directory_marker(after).map(|_| ());
         }
@@ -6160,6 +6279,8 @@ impl Core {
             files: transfer,
             node_map,
             resource_map,
+            tag_map: BTreeMap::new(),
+            schema_map: BTreeMap::new(),
             annotation_map: annotations,
             definition_map: definitions,
             revision_map: revisions,

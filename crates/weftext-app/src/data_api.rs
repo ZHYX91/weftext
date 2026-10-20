@@ -1289,6 +1289,7 @@ async fn references(State(state): State<AppState>, Json(req): Json<RootRequest>)
 }
 
 struct FrozenQuery {
+    tags: BTreeMap<String, weftext_core::SnapshotFile>,
     input: weftext_data::FrozenQueryInput,
     schema: Schema,
     plan: weftext_data::QueryPlan,
@@ -1565,6 +1566,11 @@ fn query_snapshot_impl(
         });
     }
     Ok(FrozenQuery {
+        tags: captured
+            .tags
+            .into_iter()
+            .map(|tags| (cut_id.clone(), tags))
+            .collect(),
         input: weftext_data::FrozenQueryInput {
             cut_id: cut_id.clone(),
             schema_revision,
@@ -1795,6 +1801,49 @@ fn freeze_query_definitions_with_draft(
         }
         if !progress {
             qualify_query_context(core, frozen, &mut context)?;
+            let demands =
+                weftext_data::query_read_requirements(&frozen.plan, &frozen.schema, &context)
+                    .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
+            if demands.tag_structure {
+                if !frozen
+                    .scope_cuts
+                    .values()
+                    .all(|cut| frozen.tags.contains_key(cut))
+                {
+                    return Err(CoreError::new(
+                        "tagsUnavailable",
+                        "Every selected lifecycle requires its original Tags capture",
+                    ));
+                }
+                let tags = frozen.tags.get(&frozen.input.cut_id).ok_or_else(|| {
+                    CoreError::new("tagsUnavailable", "Core did not freeze the tag structure")
+                })?;
+                for (cut, selected) in &frozen.tags {
+                    if selected.bytes != tags.bytes || selected.revision != tags.revision {
+                        return Err(CoreError::new(
+                            "tagsUnavailable",
+                            "Lifecycle inputs do not share the frozen tag structure",
+                        ));
+                    }
+                    core.bind_admitted_tag_structure(&frozen.root, cut, selected)?;
+                }
+                let document = core.qualified_tag_document_from_snapshot(&frozen.root, tags)?;
+                let workspace = frozen
+                    .schema_source
+                    .role_ref
+                    .as_deref()
+                    .and_then(|role| role.strip_prefix("weftext-config://"))
+                    .and_then(|role| role.strip_suffix("/schema"))
+                    .ok_or_else(|| {
+                        CoreError::new("tagsUnavailable", "Frozen tag workspace unavailable")
+                    })?
+                    .to_owned();
+                context.tag_structure = Some(
+                    weftext_data::FrozenTagStructure::new(workspace, document)
+                        .map_err(|error| CoreError::new("tagsUnavailable", error.to_string()))?,
+                );
+                frozen.versions.push(json!({"role":"tags","path":tags.path,"revision":tags.revision,"baseId":tags.base_id}));
+            }
             frozen.input.advanced = Some(context);
             return Ok(());
         }
@@ -1898,6 +1947,7 @@ fn extend_query_lifecycle(
             "The lifecycle capture does not share the original library/schema baseline",
         ));
     }
+    frozen.tags.extend(extra.tags);
     let count = frozen
         .input
         .notes
@@ -2922,6 +2972,183 @@ mod tests {
             initial: None,
         };
         (directory, state, root.to_string_lossy().to_string())
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn definition_save_rejects_short_circuited_missing_tag_root_with_deferred_parameters() {
+        let (_directory, state, root) = fixture();
+        install_bundled_schema(&state, &root).await;
+        let initial_root = root.clone();
+        let (tag, document) = ok(core_call(&state, move |core| {
+            let basis = core.read_tag_registry(&initial_root)?;
+            let prepared = core.prepare_create_tag(
+                &initial_root,
+                "root",
+                &basis.base_id,
+                &uuid::Uuid::new_v4().to_string(),
+            )?;
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)?;
+            let document = core.create_note(&initial_root, &initial_root, "Definition")?;
+            Ok((prepared.target_ref, document))
+        })
+        .await);
+        let original = document.source.clone();
+        let document = serde_json::to_value(document).unwrap();
+        remember(&state, &document).unwrap();
+        let missing = format!(
+            "weftext-tag://{}/{}",
+            tag.split('/').nth(2).unwrap(),
+            uuid::Uuid::new_v4()
+        );
+        let parameter = weftext_data::QueryParameter {
+            name: "root".into(),
+            shape: weftext_data::Shape::Scalar {
+                semantic: "tag_ref".into(),
+            },
+            nullable: false,
+            default: None,
+        };
+        let plan = weftext_data::QueryPlan {
+            r#where: Some(format!(
+                "false && tagInSubtree(tagRef('{tag}'), tagRef('{missing}'))"
+            )),
+            select: vec![weftext_data::QueryColumn {
+                name: "value".into(),
+                expr: "true".into(),
+            }],
+            advanced: Some(weftext_data::QueryAdvanced {
+                parameters: vec![parameter],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut request = definition_request(&document, original.clone(), None, "open");
+        request.plan = plan.clone();
+        let error = save_definition(State(state.clone()), Json(request))
+            .await
+            .unwrap_err();
+        assert!(
+            error.message.contains("Tag root unavailable"),
+            "{}: {}",
+            error.code,
+            error.message
+        );
+        assert_eq!(
+            std::fs::read_to_string(document["path"].as_str().unwrap()).unwrap(),
+            original
+        );
+        let mut request = definition_request(&document, original, None, "open");
+        request.plan = plan;
+        request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)"));
+        let Json(saved) = ok(save_definition(State(state), Json(request)).await);
+        assert!(saved["definitionRevision"].is_string());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn tag_query_keeps_the_original_core_cut_after_move_and_zero_rows_still_validate_root() {
+        let (_directory, state, root) = fixture();
+        let mut core = state.core.lock().unwrap();
+        let create = |core: &mut Core, parent: Option<&str>| {
+            let basis = core.read_tag_registry(&root).unwrap();
+            let prepared = core
+                .prepare_create_tag_under(
+                    &root,
+                    "same/name",
+                    parent,
+                    &basis.base_id,
+                    &uuid::Uuid::new_v4().to_string(),
+                )
+                .unwrap();
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .unwrap();
+            prepared.target_ref
+        };
+        let parent = create(&mut core, None);
+        let leaf = create(&mut core, Some(&parent));
+        let plan = weftext_data::QueryPlan {
+            r#where: Some(format!(
+                "tagInSubtree(tagRef('{leaf}'), tagRef('{parent}'))"
+            )),
+            select: vec![weftext_data::QueryColumn {
+                name: "value".into(),
+                expr: "true".into(),
+            }],
+            ..Default::default()
+        };
+        let mut zero = query_snapshot(&mut core, &root, plan.clone()).unwrap();
+        freeze_query_definitions(&mut core, &mut zero, BTreeMap::new()).unwrap();
+        assert!(zero.versions.iter().any(|v| v["role"] == "tags"));
+        let result = weftext_data::execute_query(&zero.input, &zero.plan, &zero.schema).unwrap();
+        assert!(result.rows.is_empty());
+        assert_eq!(result.coverage, "complete");
+        let invalid = weftext_data::QueryPlan {
+            r#where: Some(format!(
+                "true || tagInSubtree(tagRef('{leaf}'), tagRef('weftext-tag://{}/{}'))",
+                parent.split('/').nth(2).unwrap(),
+                uuid::Uuid::new_v4()
+            )),
+            ..plan.clone()
+        };
+        let mut invalid = query_snapshot(&mut core, &root, invalid).unwrap();
+        freeze_query_definitions(&mut core, &mut invalid, BTreeMap::new()).unwrap();
+        assert!(
+            weftext_data::execute_query(&invalid.input, &invalid.plan, &invalid.schema).is_err()
+        );
+        core.create_note(&root, &root, "one").unwrap();
+        let mut original = query_snapshot(&mut core, &root, plan.clone()).unwrap();
+        let basis = core.read_tag_registry(&root).unwrap();
+        let moved = core
+            .prepare_move_tag(
+                &root,
+                &leaf,
+                None,
+                &basis.base_id,
+                &uuid::Uuid::new_v4().to_string(),
+            )
+            .unwrap();
+        core.execute_operation(&moved.preview.operation_id, &moved.preview.plan_id)
+            .unwrap();
+        freeze_query_definitions(&mut core, &mut original, BTreeMap::new()).unwrap();
+        assert_eq!(
+            weftext_data::execute_query(&original.input, &original.plan, &original.schema)
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        let mut current = query_snapshot(&mut core, &root, plan.clone()).unwrap();
+        freeze_query_definitions(&mut core, &mut current, BTreeMap::new()).unwrap();
+        assert!(
+            weftext_data::execute_query(&current.input, &current.plan, &current.schema)
+                .unwrap()
+                .rows
+                .is_empty()
+        );
+        use std::os::windows::fs::OpenOptionsExt;
+        let busy = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(Path::new(&root).join(".weftext-tags.json"))
+            .unwrap();
+        let exact = weftext_data::QueryPlan {
+            r#where: Some(format!("tagRef('{leaf}') == tagRef('{leaf}')")),
+            ..plan.clone()
+        };
+        let mut unrelated = query_snapshot(&mut core, &root, exact).unwrap();
+        assert!(unrelated.tags.is_empty());
+        freeze_query_definitions(&mut core, &mut unrelated, BTreeMap::new()).unwrap();
+        assert_eq!(
+            weftext_data::execute_query(&unrelated.input, &unrelated.plan, &unrelated.schema)
+                .unwrap()
+                .rows
+                .len(),
+            1
+        );
+        let mut structural = query_snapshot(&mut core, &root, plan).unwrap();
+        assert!(freeze_query_definitions(&mut core, &mut structural, BTreeMap::new()).is_err());
+        drop(busy);
     }
 
     #[cfg(windows)]

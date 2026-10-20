@@ -24,6 +24,7 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/resources/prepare-import", post(prepare_import))
         .route("/api/query/preview", post(query_preview))
         .route("/api/query/preview-resource", post(query_preview_resource))
+        .route("/api/navigation/preview", post(navigation_preview))
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -188,6 +189,48 @@ struct QueryPreviewRequest {
     root: String,
     entity_key: String,
     revision: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NavigationPreviewRequest {
+    root: String,
+    entity_key: String,
+    source_hash: String,
+}
+/// Browsing never opens an editor or replaces a row's source with latest data.
+/// The admitted NodeRef and original displayed source hash qualify a read basis;
+/// subsequent pixels use the same exact-source/resource preview path as Query.
+async fn navigation_preview(
+    State(state): State<AppState>,
+    Json(request): Json<NavigationPreviewRequest>,
+) -> ApiResult {
+    let proof = core_call(&state, move |core| {
+        let inventory = core.inventory(&request.root)?;
+        let entity = crate::data_api::resolve_entity(&inventory, &request.entity_key)?;
+        let cut = core.read_snapshot(&request.root, std::slice::from_ref(&entity.path))?;
+        let file = &cut.files[0];
+        let source = file
+            .bytes
+            .as_ref()
+            .and_then(|bytes| std::str::from_utf8(bytes).ok());
+        if request.source_hash.len() != 64
+            || file.node_id != entity.node_id
+            || source
+                .is_none_or(|source| weftext_engine::source_hash(source) != request.source_hash)
+        {
+            return Err(CoreError::new(
+                "stalePreview",
+                "笔记内容或身份已变化，请刷新当前列表；未采用新版缩略图",
+            ));
+        }
+        Ok(QueryPreviewRequest {
+            root: request.root,
+            entity_key: request.entity_key,
+            revision: format!("observed-source:{}", file.base_id),
+        })
+    })
+    .await?;
+    query_preview(State(state), Json(proof)).await
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

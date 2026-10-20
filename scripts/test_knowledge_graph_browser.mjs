@@ -1,0 +1,45 @@
+// Real headless pointer/keyboard checks of the shared graph and heading views.
+// Uses public display fixtures only: no Core/HTTP/OS-IME acceptance is implied.
+import { createRequire } from 'node:module';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
+const require = createRequire(import.meta.url), { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
+const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), out = path.resolve(process.argv[2]);
+await mkdir(out, { recursive: false });
+const { createServer } = await import(pathToFileURL(path.join(repo, 'app/node_modules/vite/dist/node/index.js')).href);
+const vite = await createServer({ root: path.join(repo, 'app'), configFile: false, server: { host: '127.0.0.1', port: 0, hmr: false } });
+let browser, page; const result = { cases: [], pageErrors: [], completed: false, scope: 'shared frontend actual browser display fixtures; no backend or real-user data' };
+try {
+  await vite.listen(); browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version(); page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' }); page.on('pageerror', error => result.pageErrors.push(String(error)));
+  await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/`);
+  await page.evaluate(async () => {
+    const { RelationshipGraphView } = await import('/src/relationship-graph-view.ts'), { HeadingStructureView } = await import('/src/heading-structure-view.ts');
+    document.head.append(Object.assign(document.createElement('link'), { rel: 'stylesheet', href: '/src/knowledge-view.css' }));
+    document.body.innerHTML = '<main id="graph"></main><main id="headings"></main>'; window.graphEvents = [];
+    const node = key => ({ key, title: key, reference: key, directory: 'notes', tags: key === 'B' ? ['weftext-tag://w/child'] : [], tagsKnown: true });
+    const edge = (key, source, target, relation, direction = 'directed', derived = false) => ({ key, source, target, relation, direction, derived, authorSource: 'A', fieldId: key.startsWith('body') ? null : 'tasks/dependencies', itemPath: [], sourceHash: 'basis', range: null });
+    window.graphFixture = { generation: 'same-cut', scope: 'authorizedNativeSourcesAndTypedReferences', coverage: 'partial', truncated: false, tagTree: [{ reference: 'weftext-tag://w/root', tagId: 'root', displayName: '父标签', parentTagId: null }, { reference: 'weftext-tag://w/child', tagId: 'child', displayName: '直接标签', parentTagId: 'root' }], nodes: ['A', 'B', 'C'].map(node), edges: [edge('body1', 'A', 'B', '正文链接'), edge('body2', 'A', 'B', '正文链接'), edge('typed', 'A', 'B', 'tasks/dependency'), edge('inverse', 'B', 'A', 'dependent', 'directed', true), edge('sym', 'B', 'C', 'sibling', 'symmetric')] };
+    window.originalGraph = JSON.stringify(window.graphFixture);
+    window.graphView = new RelationshipGraphView(); window.graphView.render(document.querySelector('#graph'), window.graphFixture, 'A', { open: node => window.graphEvents.push(['open', node.key]), source: (edge, node) => window.graphEvents.push(['source', node.key, edge.derived]), error: error => { throw error; } });
+    const headings = ['文档根', '深层', '命中', '命中', '生成标题'].map((text, index) => ({ key: `h${index}`, text, level: [1, 4, 5, 2, 1][index], generated: index === 4, range: index === 4 ? null : { utf16From: index * 10, utf16To: index * 10 + 4 } }));
+    window.headingView = new HeadingStructureView(); window.headingView.render(document.querySelector('#headings'), { coverage: 'complete', truncated: false, items: headings }, heading => window.graphEvents.push(['heading', heading.key, heading.generated]));
+  });
+  const graph = page.locator('#graph'), headings = page.locator('#headings');
+  await graph.getByText(/已展示 2 个节点、4 条关系/).waitFor();
+  await graph.getByLabel('在当前图范围搜索定位', { exact: true }).fill('C'); await graph.getByText('当前范围没有匹配；需要扩大范围时请明确修改范围或筛选。', { exact: true }).waitFor(); assert.equal(await graph.getByLabel('范围', { exact: true }).inputValue(), 'local');
+  await graph.getByLabel('范围', { exact: true }).selectOption('global'); await graph.getByText(/已展示 3 个节点、5 条关系/).waitFor(); await graph.getByRole('button', { name: '定位 C', exact: true }).click(); await graph.getByRole('heading', { name: 'C', exact: true }).waitFor();
+  await graph.getByText('键盘与完整结果列表', { exact: true }).click(); await graph.locator('details').getByRole('button', { name: 'B → A · dependent（派生反向）', exact: true }).click(); await graph.getByText(/派生反向；作者事实保存在原来源/).waitFor(); await graph.getByRole('button', { name: '打开准确作者来源', exact: true }).click(); assert.deepEqual(await page.evaluate(() => window.graphEvents.pop()), ['source', 'A', true]); result.cases.push('local/global, search without implicit range expansion and parallel/derived-edge author provenance');
+  const nodeB = graph.locator('g.knowledge-graph-node[data-graph-key="B"]');
+  await nodeB.focus(); await nodeB.press(' '); await graph.getByRole('heading', { name: 'B', exact: true }).waitFor(); await nodeB.press('Enter'); assert.deepEqual(await page.evaluate(() => window.graphEvents.pop()), ['open', 'B']);
+  await graph.getByRole('button', { name: '适应视口', exact: true }).click(); await nodeB.dblclick(); assert.deepEqual(await page.evaluate(() => window.graphEvents.pop()), ['open', 'B']);
+  await page.setViewportSize({ width: 480, height: 900 });
+  const beforeDrag = await nodeB.getAttribute('transform'), box = await nodeB.boundingBox(); await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 + 35, box.y + box.height / 2 + 24, { steps: 4 }); await page.mouse.up(); assert.notEqual(await nodeB.getAttribute('transform'), beforeDrag); const moved = await nodeB.boundingBox(); assert.ok(Math.abs(moved.x - box.x - 35) < 2 && Math.abs(moved.y - box.y - 24) < 2, 'SVG viewBox/letterbox drag stays under pointer'); assert.equal(await page.evaluate(() => JSON.stringify(window.graphFixture) === window.originalGraph), true); await page.setViewportSize({ width: 1440, height: 1100 }); result.cases.push('mouse double-open and keyboard selection/open preserve live canvas; narrow viewBox dragging follows pointer and changes only personal layout');
+  assert.equal(await graph.getByLabel('标签匹配模式', { exact: true }).inputValue(), 'subtree'); await graph.getByLabel('图谱标签条件', { exact: true }).selectOption('weftext-tag://w/root'); await graph.getByText(/已展示 1 个节点、0 条关系/).waitFor(); await graph.getByLabel('标签匹配模式', { exact: true }).selectOption('exact'); await graph.getByText(/已展示 0 个节点、0 条关系/).waitFor(); await graph.getByRole('button', { name: '清除标签条件', exact: true }).click(); await graph.getByText(/已展示 3 个节点、5 条关系/).waitFor(); assert.equal(await page.evaluate(() => JSON.stringify(window.graphFixture) === window.originalGraph), true); result.cases.push('shared complete TagTree picker defaults to subtree; exact switch and clearing only change personal graph conditions');
+  const rootRow = headings.locator('li[data-heading-key="@weftext-document-root"]'); await rootRow.getByRole('button', { name: '折叠分支', exact: true }).click(); assert.equal(await headings.locator('li').count(), 1);
+  await headings.getByLabel('搜索真实标题', { exact: true }).fill('命中'); await headings.getByRole('button', { name: '查找', exact: true }).click(); assert.equal(await headings.locator('li').count(), 5); await headings.getByText('2 个标题命中', { exact: true }).waitFor(); await headings.getByLabel('搜索真实标题', { exact: true }).fill(''); await headings.getByRole('button', { name: '查找', exact: true }).click(); assert.equal(await headings.locator('li').count(), 1);
+  await headings.getByRole('button', { name: '全部展开', exact: true }).click(); const generated = headings.locator('li[data-heading-key="h4"]'); await generated.getByRole('button', { name: '跳转', exact: true }).click(); assert.deepEqual(await page.evaluate(() => window.graphEvents.pop()), ['heading', 'h4', true]); result.cases.push('independent document root, native skipped levels, search reveal/clear restores folding and generated heading navigation');
+  await page.screenshot({ path: path.join(out, 'knowledge-structure.png'), fullPage: true }); assert.deepEqual(result.pageErrors, []); result.completed = true;
+} catch (error) { result.failure = String(error.stack ?? error); await page?.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
+finally { await browser?.close(); await vite.close(); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result)); }

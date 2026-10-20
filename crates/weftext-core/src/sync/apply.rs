@@ -938,6 +938,10 @@ pub(crate) fn validate_state(
         if matches!(key, ObjectKey::Tags) {
             crate::directory_identity::validate_sync_tags(bytes)?;
         }
+        if matches!(key, ObjectKey::Settings) {
+            crate::author_order::validate_workspace_settings(bytes)?;
+            crate::author_order::validate_workspace_settings_scope(bytes, &graph.workspace_id)?;
+        }
         if matches!(key, ObjectKey::Rules) {
             crate::validate_library_rules(bytes)?;
         }

@@ -39,6 +39,7 @@ impl Core {
             package,
             None,
             allow_losses,
+            None,
             preview,
             dependencies,
             absent,

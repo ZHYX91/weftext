@@ -30,6 +30,8 @@ pub(super) struct TagRights {
     create: bool,
     #[serde(default)]
     rename: bool,
+    #[serde(default, rename = "move")]
+    move_tag: bool,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -89,7 +91,7 @@ pub(super) fn valid_rights(config: &super::Config, rights: &Rights) -> bool {
             .admit_directories
             .iter()
             .all(|id| config.navigation.directory_admissions.contains_key(id))
-        && (!rights.tags.create && !rights.tags.rename || rights.tags.read)
+        && (!rights.tags.create && !rights.tags.rename && !rights.tags.move_tag || rights.tags.read)
 }
 fn rights<'a>(inner: &'a HostedInner, actor: &str) -> Result<&'a Rights, ApiError> {
     inner
@@ -99,6 +101,33 @@ fn rights<'a>(inner: &'a HostedInner, actor: &str) -> Result<&'a Rights, ApiErro
         .filter(|u| u.enabled)
         .map(|u| &u.navigation)
         .ok_or_else(expired)
+}
+pub(super) fn authorize_tag_read(inner: &HostedInner, actor: &str) -> Result<(), ApiError> {
+    if rights(inner, actor)?.tags.read {
+        Ok(())
+    } else {
+        Err(unavailable())
+    }
+}
+pub(super) fn authorize_tag_effect(
+    inner: &HostedInner,
+    actor: &str,
+    effect: &str,
+) -> Result<(), ApiError> {
+    let tags = &rights(inner, actor)?.tags;
+    if tags.read
+        && match effect {
+            "tags.read" => true,
+            "tags.create" => tags.create,
+            "tags.rename" => tags.rename,
+            "tags.move" => tags.move_tag,
+            _ => false,
+        }
+    {
+        Ok(())
+    } else {
+        Err(unavailable())
+    }
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
     format!("{}:navigation", inner.actor_scope(actor))
@@ -150,11 +179,20 @@ enum Intent {
     CreateTag {
         basis: String,
         display_name: String,
+        #[serde(deserialize_with = "weftext_data::deserialize_required_tag_parent")]
+        parent_ref: Option<String>,
+        assign_to: Option<fields::TagAssignmentTarget>,
     },
     RenameTag {
         basis: String,
         reference: String,
         display_name: String,
+    },
+    MoveTag {
+        basis: String,
+        reference: String,
+        #[serde(deserialize_with = "weftext_data::deserialize_required_tag_parent")]
+        parent_ref: Option<String>,
     },
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -237,6 +275,18 @@ fn authorize(inner: &HostedInner, actor: &str, intent: &Intent) -> Result<(), Ap
             {
                 return Err(ApiError::bad("标签显示名须为 1 至 256 个字符"));
             }
+            if let Intent::CreateTag {
+                assign_to: Some(target),
+                ..
+            } = intent
+            {
+                fields::authorize_tag_assignment(inner, actor, target)?;
+            }
+        }
+        Intent::MoveTag { .. } => {
+            if !r.tags.read || !r.tags.move_tag {
+                return Err(unavailable());
+            }
         }
     }
     Ok(())
@@ -244,13 +294,26 @@ fn authorize(inner: &HostedInner, actor: &str, intent: &Intent) -> Result<(), Ap
 fn any_access(inner: &HostedInner, actor: &str, write: bool) -> Result<(), ApiError> {
     let r = rights(inner, actor)?;
     let allowed = if write {
-        !r.admit_directories.is_empty() || r.tags.read && (r.tags.create || r.tags.rename)
+        !r.admit_directories.is_empty()
+            || r.tags.read && (r.tags.create || r.tags.rename || r.tags.move_tag)
     } else {
         !r.directories.is_empty() || !r.admit_directories.is_empty() || r.tags.read
     };
     if allowed { Ok(()) } else { Err(unavailable()) }
 }
 fn binding(inner: &HostedInner, intent: &Intent) -> Result<String, ApiError> {
+    let assignment_binding = if let Intent::CreateTag {
+        assign_to: Some(target),
+        ..
+    } = intent
+    {
+        Some(office::binding_hash(
+            inner,
+            &BTreeSet::from([target.resource.clone()]),
+        )?)
+    } else {
+        None
+    };
     let slot = match intent {
         Intent::AdmitDirectory { slot } => Some(
             inner
@@ -264,7 +327,7 @@ fn binding(inner: &HostedInner, intent: &Intent) -> Result<String, ApiError> {
     };
     Ok(digest(
         &serde_json::to_vec(
-            &json!({"root":inner.config.root,"slot":slot,"tagRole":".weftext-tags.json"}),
+            &json!({"root":inner.config.root,"slot":slot,"tagRole":".weftext-tags.json","assignmentBinding":assignment_binding}),
         )
         .map_err(|_| changed())?,
     ))
@@ -275,6 +338,8 @@ fn tag_binding(inner: &HostedInner) -> Result<String, ApiError> {
         &Intent::CreateTag {
             basis: String::new(),
             display_name: String::new(),
+            parent_ref: None,
+            assign_to: None,
         },
     )
 }
@@ -388,6 +453,24 @@ fn tag_cut(inner: &mut HostedInner) -> Result<(TagRegistrySnapshot, usize), ApiE
         }
     }
 }
+pub(super) fn authorize_order_parent_read(
+    inner: &HostedInner,
+    actor: &str,
+    parent_ref: &str,
+) -> Result<(), ApiError> {
+    let r = rights(inner, actor)?;
+    let mut matching = inner.config.directories.iter().filter(|(id, directory)| {
+        r.directories.contains(*id)
+            && directory.reference == parent_ref
+            && directory.lifecycle == "live"
+    });
+    let (id, _) = matching.next().ok_or_else(unavailable)?;
+    if matching.next().is_some() {
+        return Err(unavailable());
+    }
+    configured_directory(inner, actor, id).map(|_| ())
+}
+
 fn configured_directory(
     inner: &HostedInner,
     actor: &str,
@@ -487,7 +570,15 @@ fn safe_status(
     let d = decision(inner, actor, &status);
     let mut preview = json!({});
     if d.is_some() {
-        for key in ["kind", "title", "displayName", "beforeName"] {
+        for key in [
+            "kind",
+            "title",
+            "displayName",
+            "beforeName",
+            "reference",
+            "parentRef",
+            "beforeParentRef",
+        ] {
             if let Some(value) = status.preview.get(key) {
                 preview[key] = value.clone();
             }
@@ -542,6 +633,7 @@ fn build(inner: &mut HostedInner, actor: &str, req: Prepare) -> Result<Value, Ap
         Intent::CreateTag {
             basis,
             display_name,
+            ..
         }
         | Intent::RenameTag {
             basis,
@@ -589,11 +681,73 @@ fn build(inner: &mut HostedInner, actor: &str, req: Prepare) -> Result<Value, Ap
                 _ => (
                     HostedNavigationIntent::CreateTag {
                         display_name: display_name.clone(),
+                        parent_ref: match &req.intent {
+                            Intent::CreateTag { parent_ref, .. } => parent_ref.clone(),
+                            _ => None,
+                        },
+                        assignment: match &req.intent {
+                            Intent::CreateTag {
+                                assign_to: Some(target),
+                                ..
+                            } => Some(fields::prepare_tag_assignment(
+                                inner,
+                                actor,
+                                target,
+                                &req.operation_id,
+                            )?),
+                            _ => None,
+                        },
                         base_id: cut.registry.base_id,
                     },
-                    json!({"kind":"createTag","displayName":display_name}),
+                    json!({"kind":"createTag","displayName":display_name,"parentRef":match &req.intent { Intent::CreateTag { parent_ref, .. } => parent_ref.clone(), _ => None }}),
                 ),
             }
+        }
+        Intent::MoveTag {
+            basis,
+            reference,
+            parent_ref,
+        } => {
+            let cut = inner
+                .navigation_registry
+                .bases
+                .get(basis)
+                .filter(|b| {
+                    b.actor == actor
+                        && b.epoch == inner.actor_generation(actor)
+                        && b.expires > Instant::now()
+                        && b.binding == tag_binding(inner).unwrap_or_default()
+                        && b.registry.complete
+                })
+                .cloned()
+                .ok_or_else(changed)?;
+            inner
+                .core
+                .validate_snapshot(
+                    &inner.config.root,
+                    inner.config.root.join(".weftext-tags.json"),
+                    &cut.registry.base_id,
+                )
+                .map_err(core_error)?;
+            let tag = cut
+                .registry
+                .tags
+                .iter()
+                .find(|t| &t.tag_ref == reference)
+                .ok_or_else(unavailable)?;
+            let before_parent_ref = tag
+                .parent_tag_id
+                .as_ref()
+                .and_then(|id| cut.registry.tags.iter().find(|t| &t.tag_id == id))
+                .map(|t| t.tag_ref.clone());
+            (
+                HostedNavigationIntent::MoveTag {
+                    reference: reference.clone(),
+                    parent_ref: parent_ref.clone(),
+                    base_id: cut.registry.base_id,
+                },
+                json!({"kind":"moveTag","reference":reference,"displayName":tag.display_name,"beforeParentRef":before_parent_ref,"parentRef":parent_ref}),
+            )
         }
     };
     preview["_navigation"] = serde_json::to_value(Decision {
@@ -644,15 +798,15 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         let tags = if r.tags.read {
             match tag_cut(inner) {
                 Ok((registry, bytes)) => {
-                    let items = registry.tags.iter().map(|tag|json!({"reference":tag.tag_ref,"displayName":tag.display_name})).collect::<Vec<_>>();
+                    let items = registry.tags.iter().map(|tag|json!({"reference":tag.tag_ref,"displayName":tag.display_name,"tagId":tag.tag_id,"parentTagId":tag.parent_tag_id})).collect::<Vec<_>>();
                     let complete = registry.complete;
-                    let basis = if complete && (r.tags.create || r.tags.rename) { Some(retain(inner, &actor, registry, bytes)?) }
+                    let basis = if complete && (r.tags.create || r.tags.rename || r.tags.move_tag) { Some(retain(inner, &actor, registry, bytes)?) }
                         else { let _ = inner.core.take_snapshot_witness(&registry.base_id); None };
-                    json!({"read":true,"create":r.tags.create,"rename":r.tags.rename,"coverage":if complete{"complete"}else{"partial"},"items":items,"basis":basis})
+                    json!({"read":true,"create":r.tags.create,"rename":r.tags.rename,"move":r.tags.move_tag,"coverage":if complete{"complete"}else{"partial"},"items":items,"basis":basis})
                 }
-                Err(_) => json!({"read":true,"create":r.tags.create,"rename":r.tags.rename,"coverage":"unavailable","items":[],"basis":null}),
+                Err(_) => json!({"read":true,"create":r.tags.create,"rename":r.tags.rename,"move":r.tags.move_tag,"coverage":"unavailable","items":[],"basis":null}),
             }
-        } else { json!({"read":false,"create":false,"rename":false,"coverage":"unavailable","items":[],"basis":null}) };
+        } else { json!({"read":false,"create":false,"rename":false,"move":false,"coverage":"unavailable","items":[],"basis":null}) };
         Ok(json!({"directoryScope":"configuredAuthorizedDirectories","directoryCoverage":if partial{"partial"}else{"complete"},"directories":directories,"admissionSlots":admission_slots,"tags":tags}))
     }).await?))
 }

@@ -185,6 +185,12 @@ impl Core {
         Ok(())
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
+        if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id) {
+            return Err(CoreError::new(
+                "operationCancelled",
+                "The original operation was cancelled before preparation",
+            ));
+        }
         self.validate_operation_pending(&plan)?;
         self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.

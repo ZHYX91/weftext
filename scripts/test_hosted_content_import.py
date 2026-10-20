@@ -18,7 +18,7 @@ from test_hosted_media import HostedMedia
 from test_local_features import tiny_png
 
 
-def native_upload(schema, *, derived=False):
+def native_upload(schema, *, derived=False, tags=False, query=False):
     """Two linked native nodes, one exact registered PNG, and no local custody."""
     workspace, first, second, resource = (uid() for _ in range(4))
     files = {
@@ -43,6 +43,30 @@ def native_upload(schema, *, derived=False):
         'One/pixel.png': {'role': 'resource', 'ownerNodeId': first, 'resourceId': resource},
         'One/weftext.resources.json': {'role': 'resourceManifest', 'ownerNodeId': first},
     }
+    if tags:
+        parent, child = uid(), uid()
+        files['.weftext-tags.json'] = json.dumps({'version': 2, 'tags': [
+            {'tagId': parent, 'displayName': 'same/name', 'parentTagId': None},
+            {'tagId': child, 'displayName': 'same/name', 'parentTagId': parent},
+        ]}).encode()
+        roles['.weftext-tags.json'] = {'role': 'tags'}
+        reference = f'weftext-tag://{workspace}/{child}'
+        files['One/One.typ'] = files['One/One.typ'].replace(
+            b'status: "open"',
+            f'status: "open", tags: ((ref: "{reference}"), (text: "{reference}"))'.encode())
+    if query:
+        schema_revision = uid()
+        roles['.weftext-schema.json']['revision'] = schema_revision
+        expression = (f"tagInSubtree(tagRef('weftext-tag://{workspace}/{child}'), "
+                      f"tagRef('weftext-tag://{workspace}/{parent}'))" if tags else 'true')
+        declaration = (
+            f'\n#metadata((kind: "weftext.query", key: "{uid()}", '
+            f'binding: (schema: "weftext-config://{workspace}/schema", '
+            f'revision: "{schema_revision}", language: "weftext.query.cel.v1"), '
+            f'where: {json.dumps(expression)}, '
+            'select: ((name: "value", expr: "true"),))) <weftext-query-imported>\n').encode()
+        first_line, body = files['One/One.typ'].split(b'\n', 1)
+        files['One/One.typ'] = first_line + b'\n' + declaration + body
     if derived:
         files['One/weftext.citations.bib'] = b'@article{retainedOnly,title={Derived input}}\n'
         roles['One/weftext.citations.bib'] = {'role': 'generatedBibliography', 'ownerNodeId': first}
@@ -70,14 +94,15 @@ def bibliography_upload(format, title='Imported Publication'):
 
 
 class HostedContentImport(HostedHistory):
-    def prepare_imports(self):
+    def prepare_imports(self, *, install_schema=True):
         def provision(api):
             schema = api('/api/data/schema', {'root': str(self.root)})
             self.schema_source = schema['source']
-            plan = api('/api/data/schema/prepare', {
-                'root': str(self.root), 'source': schema['source'], 'beforeSource': schema['source'],
-                'beforeRevision': schema['revision'], 'operationId': uid()})
-            api('/api/data/schema/install', {'operationId': plan['operationId'], 'planId': plan['planId']})
+            if install_schema:
+                plan = api('/api/data/schema/prepare', {
+                    'root': str(self.root), 'source': schema['source'], 'beforeSource': schema['source'],
+                    'beforeRevision': schema['revision'], 'operationId': uid()})
+                api('/api/data/schema/install', {'operationId': plan['operationId'], 'planId': plan['planId']})
             admitted = api('/api/navigation/admit-directory', {
                 'root': str(self.root), 'path': str(self.root), 'operationId': uid()})
             plan = admitted['preview']
@@ -100,6 +125,19 @@ class HostedContentImport(HostedHistory):
                                 'resources': copy.deepcopy(resources or {})}
             users[actor].setdefault('library', {})['schema'] = {'read': schema}
         self.policy(edit)
+
+    def grant_shared_import(self, *, tag_read=True, tag_create=True, schema_write=False, status=200):
+        def edit(users):
+            user = users['alice']
+            user.setdefault('navigation', {})['tags'] = {'read': tag_read, 'create': tag_create}
+            user.setdefault('library', {})['schema'] = {'read': True, 'write': schema_write}
+        if status == 200:
+            self.policy(edit)
+        else:
+            old = self.call('admin/policy', actor='admin')
+            users = copy.deepcopy(old['users'])
+            edit(users)
+            self.call('admin/policy', {'expectedGeneration': old['generation'], 'users': users}, 'admin', status)
 
     def request(self, slot='Native', format='native', payload=None):
         if payload is None:
@@ -155,6 +193,106 @@ class HostedContentImport(HostedHistory):
         self.call('open', {'resource': member}, status=404)
         self.assertEqual(self.call('media')['resources'], [])
         self.assertEqual(self.call('import', actor='bob')['targets'], [])
+
+    def test_content_import_native_tags_do_not_inherit_shared_rights_from_destination_slot(self):
+        self.prepare_imports()
+        self.grant_import(members={'read': True})
+        payload, manifest = native_upload(self.schema_source, tags=True)
+        request = self.request(payload=payload)
+        self.grant_shared_import(tag_read=False, tag_create=True, status=400)
+        for read, create in [(False, False), (True, False)]:
+            self.grant_shared_import(tag_read=read, tag_create=create)
+            self.inspect(request, status=404)
+            self.prepare(request, status=404)
+            self.assertEqual(self.original(request)['status'], 'notRegistered')
+            self.assertFalse((self.root / 'Native').exists())
+            self.assertFalse((self.root / '.weftext-tags.json').exists())
+        self.grant_shared_import()
+        prepared = self.prepare(request)
+        self.assertTrue(prepared['commitAllowed'])
+        self.assertEqual(set(prepared['preview']['sharedWrites']), {'tags.read', 'tags.create'})
+        # A matching installed Schema causes no Schema write and grants no
+        # unrelated rename/move action merely because it imports a hierarchy.
+        policy = self.call('admin/policy', actor='admin')
+        self.assertFalse(policy['users']['alice']['library']['schema']['write'])
+        self.assertFalse(policy['users']['alice']['navigation']['tags']['move'])
+        self.assertFalse((self.root / 'Native').exists())
+        result = self.commit(prepared)
+        self.assertEqual(result['status'], 'committed')
+        self.assertEqual(self.call('admin/policy', actor='admin'), policy)
+        registry = self.call('navigation/registry')['tags']
+        self.assertEqual(registry['coverage'], 'complete')
+        self.assertEqual(len(registry['items']), 2)
+        parent = next(tag for tag in registry['items'] if tag['parentTagId'] is None)
+        child = next(tag for tag in registry['items'] if tag['parentTagId'] is not None)
+        self.assertEqual(child['parentTagId'], parent['tagId'])
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            original_ids = {tag['tagId'] for tag in json.loads(archive.read('.weftext-tags.json'))['tags']}
+        self.assertTrue(original_ids.isdisjoint({tag['tagId'] for tag in registry['items']}))
+        self.assertEqual((self.root / 'Native/.weftext-import-originals/original.weftext').read_bytes(), payload)
+        members = [self.open(member['resource']) for member in self.member_list()['members']]
+        one = next(member for member in members if 'NATIVE ORIGINAL ONE' in member['source'])
+        self.assertIn(f'ref: "{child["reference"]}"', one['source'])
+        self.assertIn(f'text: "weftext-tag://{manifest["workspaceId"]}/', one['source'])
+        hidden = self.call('navigation/registry', actor='bob')['tags']
+        self.assertFalse(hidden['read'])
+        self.assertEqual(hidden['items'], [])
+
+    def test_content_import_native_schema_initialization_and_shared_role_revoke_fence(self):
+        self.prepare_imports(install_schema=False)
+        self.grant_import(members={'read': True})
+        self.grant_shared_import()
+        payload, manifest = native_upload(self.schema_source, tags=True, query=True)
+        denied = self.request(payload=payload)
+        self.inspect(denied, status=404)
+        self.prepare(denied, status=404)
+        self.assertEqual(self.original(denied)['status'], 'notRegistered')
+        self.assertFalse((self.root / '.weftext-schema.json').exists())
+        self.assertFalse((self.root / '.weftext-tags.json').exists())
+        for revoked in ['tags.read', 'tags.create', 'schema.write']:
+            self.grant_shared_import(schema_write=True)
+            request = self.request(payload=payload)
+            prepared = self.prepare(request)
+            self.assertEqual(set(prepared['preview']['sharedWrites']),
+                             {'tags.read', 'tags.create', 'schema.write'})
+            options = {'schema_write': True}
+            options[{'tags.read': 'tag_read', 'tags.create': 'tag_create',
+                     'schema.write': 'schema_write'}[revoked]] = False
+            if revoked == 'tags.read':
+                options['tag_create'] = False
+            self.grant_shared_import(**options)
+            retained = self.original(request)
+            self.assertEqual(retained['status'], 'prepared')
+            self.assertFalse(retained['commitAllowed'])
+            self.assertIsNone(retained['planId'])
+            self.assertEqual(retained['preview'], {})
+            self.assertEqual(retained['nodeRefs'], [])
+            self.commit(prepared, status=409)
+            self.grant_shared_import(schema_write=True)
+            self.commit(prepared, status=409)
+            self.assertFalse(self.prepare(request)['commitAllowed'])
+            self.assertEqual(self.original(request, 'settle')['status'], 'cancelled')
+            self.assertFalse((self.root / 'Native').exists())
+            self.assertFalse((self.root / '.weftext-schema.json').exists())
+            self.assertFalse((self.root / '.weftext-tags.json').exists())
+        request = self.request(payload=payload)
+        prepared = self.prepare(request)
+        self.server.close()
+        self.start()
+        replay = self.prepare(request)
+        self.assertEqual(replay['planId'], prepared['planId'])
+        self.assertTrue(replay['commitAllowed'])
+        result = self.commit(replay)
+        self.assertEqual(result['status'], 'committed')
+        self.assertTrue((self.root / '.weftext-schema.json').exists())
+        self.assertTrue(self.call('library/read', {'role': 'schema'})['installed'])
+        self.assertEqual(self.call('navigation/registry')['tags']['coverage'], 'complete')
+        members = [self.open(member['resource']) for member in self.member_list()['members']]
+        one = next(member for member in members if 'NATIVE ORIGINAL ONE' in member['source'])
+        workspace = result['nodeRefs'][0]['workspaceId']
+        self.assertIn(f'binding: (schema: "weftext-config://{workspace}/schema"', one['source'])
+        self.assertNotIn(f'binding: (schema: "weftext-config://{manifest["workspaceId"]}/schema"', one['source'])
+        self.assertEqual((self.root / 'Native/.weftext-import-originals/original.weftext').read_bytes(), payload)
 
     def test_content_import_native_members_remap_resources_and_actual_consumers(self):
         self.prepare_imports()

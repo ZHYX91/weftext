@@ -1,5 +1,7 @@
 /** Schema forms operate on native value trees; only the source owner writes Typst. */
 import type { OpenedDocument } from "./types";
+import { TagTree } from "./tag-tree";
+import { tagPicker } from "./tag-picker";
 export type NativeValue =
   | { kind: "none" }
   | { kind: "text" | "int" | "float" | "decimal" | "date" | "time" | "localDatetime" | "duration"; value: string }
@@ -18,10 +20,10 @@ export interface SchemaType { id: string; fields: { id: string; required: boolea
 export interface DataSchema { definitions: Record<string, Shape>; fields: SchemaField[]; types: SchemaType[]; aliases: Record<string, string>; series_policies?: { key: string; kinds: string[]; scope: { kind: string }; multiplicity: string }[] }
 export interface Cell { state: "value" | "absent" | "null" | "invalid" | "unavailable"; value?: NativeValue; diagnostics?: unknown[]; reason?: string }
 interface ReferenceChoice { ref: string; label: string }
-export interface FormReferences { nodes: ReferenceChoice[]; tags: ReferenceChoice[]; state: "loading" | "ready" | "partial" | "unavailable"; messages: string[] }
+export interface FormReferences { nodes: ReferenceChoice[]; tagTree?: TagTree; state: "loading" | "ready" | "partial" | "unavailable"; messages: string[] }
 export interface FieldProjection { fieldId: string; key: string; cell: Cell; sourceRange?: { from: number; to: number }; writable: boolean; raw?: string | null; unbound?: string[] }
 export interface NoteProjection { qualification: string; id?: string; types: string[]; fields: FieldProjection[]; unknownFields: { key: string; raw: string; range?: { from: number; to: number } }[]; diagnostics: unknown[]; readOnly?: boolean }
-export interface DocumentBasis { sessionId: string; source: string; serial: number; baseId: string; path: string; root: string; nodeId?: string; workspaceId?: string }
+export interface DocumentBasis { sessionId: string; source: string; serial: number; baseId: string; path: string; root: string; nodeId?: string; workspaceId?: string; dirty?: boolean }
 export interface SourcePatch { from: number; to: number; text: string }
 export interface SchemaRead { schema: DataSchema; source: string; roleRef?: string; revision: string | null; builtinDefault: boolean; canInstall: boolean }
 export function decodeProjection(result: NoteProjection | { projection: NoteProjection; readOnly?: boolean }): NoteProjection { return "projection" in result ? result.readOnly === undefined ? result.projection : { ...result.projection, readOnly: result.readOnly } : result; }
@@ -50,6 +52,8 @@ export interface PanelHost {
   created?(result: unknown): Promise<void>;
   /** Explicitly acknowledges the Core save of a query and its owning note. */
   savedDefinition?(result: unknown, basis: DocumentBasis): Promise<void>;
+  /** Reconcile one committed original Core operation without replacing later input. */
+  applyOperationReceipt?(receipt: unknown, basis: DocumentBasis): Promise<void>;
 }
 
 export const fieldNames: Record<string, string> = { status: "状态", due: "截止日期", start: "开始日期", priority: "优先级", project: "项目", completed_at: "完成时间", title: "标题", names: "姓名 / 名称", phones: "电话", emails: "邮箱", addresses: "地址", websites: "网站", accounts: "账号", tags: "标签", publication: "出版与引用", contributors: "作者与贡献者", resources: "资源", note: "备注", notes: "备注", label: "标签", number: "号码", value: "值", text: "文字", ref: "笔记引用", kind: "种类", role: "角色", agent: "作者", credited_as: "署名", date: "日期", amount: "金额", currency: "币种", unit: "单位", during: "有效期间", source: "来源", validity: "有效期间", period: "周期", range: "时间区间", event: "事件", dependency: "依赖任务" };
@@ -149,15 +153,23 @@ export function action(label: string, run: () => void | Promise<void>, className
 let nextInputId = 0;
 function labelFor(label: string, input: HTMLElement): HTMLLabelElement { const result = ui("label", "data-label", label); input.id ||= `data-input-${++nextInputId}`; result.htmlFor = input.id; return result; }
 const cloneValue = (value: NativeValue): NativeValue => structuredClone(value);
-const emptyReferences = (): FormReferences => ({ nodes: [], tags: [], state: "loading", messages: [] });
-function populateReferenceChoices(select: HTMLSelectElement, references: FormReferences): void { const kind = select.dataset.refKind; const choices = kind === "tag_ref" ? references.tags : references.nodes; const current = select.value; select.replaceChildren(); const option = ui("option", "", references.state === "loading" ? "正在读取实际引用对象…" : choices.length ? "选择实际对象…" : "没有可选对象（保留已有地址）"); option.value = ""; select.append(option); for (const choice of choices) { const item = ui("option", "", choice.label); item.value = choice.ref; select.append(item); } select.value = choices.some(choice => choice.ref === current) ? current : ""; }
+const emptyReferences = (): FormReferences => ({ nodes: [], state: "loading", messages: [] });
+const refreshTagPickers = new WeakMap<HTMLElement, () => void>();
+export async function loadTagFormReferences(host: PanelHost, root: string, references: FormReferences, container: HTMLElement, accepts = (): boolean => true): Promise<void> {
+  references.tagTree = undefined;
+  try { const result = await host.request<{ tags: { tagRef: string; tagId: string; displayName: string; parentTagId: string | null }[]; complete: boolean }>("/api/navigation/tags", { root }); if (!accepts()) return; references.tagTree = new TagTree(result.tags.map(tag => ({ ...tag, reference: tag.tagRef })), result.complete === true); references.state = "ready"; }
+  catch (error) { if (!accepts()) return; references.state = "unavailable"; references.messages.push(String(error)); }
+  for (const picker of container.querySelectorAll<HTMLElement>(".data-tag-reference-picker")) refreshTagPickers.get(picker)?.();
+}
+function populateReferenceChoices(select: HTMLSelectElement, references: FormReferences): void { const choices = references.nodes; const current = select.value; select.replaceChildren(); const option = ui("option", "", references.state === "loading" ? "正在读取实际引用对象…" : choices.length ? "选择实际对象…" : "没有可选对象（保留已有地址）"); option.value = ""; select.append(option); for (const choice of choices) { const item = ui("option", "", choice.label); item.value = choice.ref; select.append(item); } select.value = choices.some(choice => choice.ref === current) ? current : ""; }
 function referenceStatus(references: FormReferences): string { return ({ loading: "引用列表读取中；已有值保留。", ready: "选择实际对象后才修改引用，也可保留准确地址。", partial: "仅显示已知引用对象，列表尚不完整；已有引用保留。", unavailable: "引用列表不可用；已有引用保留，可输入准确地址。" })[references.state]; }
 async function loadFormReferences(host: PanelHost, root: string, references: FormReferences, container: HTMLElement, accepts = (): boolean => true): Promise<void> {
-  references.state = "loading"; const results = await Promise.allSettled([host.request<{ nodes: { ref: string; displayLabel: string }[]; complete: boolean; diagnostics?: unknown[] }>("/api/data/references", { root }), host.request<{ tags: { tagRef: string; displayName: string }[]; complete?: boolean; warnings?: unknown[] }>("/api/navigation/tags", { root })]); if (!accepts()) return; references.messages = [];
+  references.state = "loading"; const results = await Promise.allSettled([host.request<{ nodes: { ref: string; displayLabel: string }[]; complete: boolean; diagnostics?: unknown[] }>("/api/data/references", { root }), host.request<{ tags: { tagRef: string; tagId: string; displayName: string; parentTagId: string | null }[]; complete: boolean; warnings?: unknown[] }>("/api/navigation/tags", { root })]); if (!accepts()) return; references.messages = []; references.tagTree = undefined;
   if (results[0].status === "fulfilled") { references.nodes = results[0].value.nodes.map(node => ({ ref: node.ref, label: `${node.displayLabel}（文件名回退）` })); results[0].value.diagnostics?.forEach(item => references.messages.push(diagnosticText(item))); } else references.messages.push("笔记引用列表不可用，已有引用保留。");
-  if (results[1].status === "fulfilled") { references.tags = results[1].value.tags.map(tag => ({ ref: tag.tagRef, label: tag.displayName })); results[1].value.warnings?.forEach(item => references.messages.push(diagnosticText(item))); } else references.messages.push("标签注册表不可用，已有引用保留。");
+  if (results[1].status === "fulfilled") { try { references.tagTree = new TagTree(results[1].value.tags.map(tag => ({ ...tag, reference: tag.tagRef })), results[1].value.complete === true); } catch (error) { references.messages.push(String(error)); } results[1].value.warnings?.forEach(item => references.messages.push(diagnosticText(item))); } else references.messages.push("标签注册表不可用，已有引用保留。");
   references.state = results.every(result => result.status === "rejected") ? "unavailable" : results.some(result => result.status === "rejected") || results.some(result => result.status === "fulfilled" && "complete" in result.value && result.value.complete === false) ? "partial" : "ready";
   for (const select of container.querySelectorAll<HTMLSelectElement>("select[data-ref-kind]")) populateReferenceChoices(select, references);
+  for (const picker of container.querySelectorAll<HTMLElement>(".data-tag-reference-picker")) refreshTagPickers.get(picker)?.();
   for (const message of container.querySelectorAll<HTMLElement>(".data-reference-status")) message.textContent = referenceStatus(references);
 }
 
@@ -223,7 +235,8 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
   if (["int", "float", "decimal", "exact_decimal", "duration", "exact_seconds"].includes(scalar)) input.setAttribute("inputmode", "decimal");
   input.placeholder = ({ date: "2026-10-13", time: "12:30:00", local_datetime: "2026-10-13T12:30:00", instant: "2026-10-13T12:30:00+08:00", node_ref: "weftext-node://资料库 ID/笔记 ID", phone: "+86 138…（原样保留）", exact_decimal: "0.30（精确小数）" } as Record<string, string>)[scalar] ?? "";
   input.oninput = () => { try { const next = scalarFromInput(resolved, schema, input.value); input.setCustomValidity(""); changed(next); } catch (error) { input.setCustomValidity(error instanceof Error ? error.message : String(error)); } };
-  if (["node_ref", "tag_ref"].includes(scalar) && references) { const picker = ui("select", "data-input data-ref-picker"); picker.dataset.refKind = scalar; populateReferenceChoices(picker, references); picker.setAttribute("aria-label", `${label} · 选择实际${scalar === "tag_ref" ? "标签" : "笔记"}`); picker.onchange = () => { if (!picker.value) return; input.value = picker.value; input.dispatchEvent(new Event("input", { bubbles: true })); }; host.append(picker, ui("p", "data-help data-reference-status", referenceStatus(references))); }
+  if (scalar === "tag_ref" && references) { const pickerHost = ui("div", "data-tag-reference-picker"); const renderPicker = () => { pickerHost.replaceChildren(); if (references.tagTree) pickerHost.append(tagPicker(references.tagTree, { label: `${label} · 选择直接标签`, value: input.value, changed: ref => { if (!ref) return; input.value = ref; input.dispatchEvent(new Event("input", { bubbles: true })); } })); else pickerHost.append(ui("p", "data-help", "完整标签结构不可用；已有准确引用保留，可直接输入地址。")); }; refreshTagPickers.set(pickerHost, renderPicker); renderPicker(); host.append(pickerHost); }
+  if (scalar === "node_ref" && references) { const picker = ui("select", "data-input data-ref-picker"); picker.dataset.refKind = scalar; populateReferenceChoices(picker, references); picker.setAttribute("aria-label", `${label} · 选择实际笔记`); picker.onchange = () => { if (!picker.value) return; input.value = picker.value; input.dispatchEvent(new Event("input", { bubbles: true })); }; host.append(picker, ui("p", "data-help data-reference-status", referenceStatus(references))); }
   host.append(input); if (["date", "time", "local_datetime", "instant"].includes(scalar)) host.append(ui("p", "data-help", scalar === "instant" ? "瞬间需显式时区偏移；保留输入精度。" : "民用日期 / 时间；不会自动添加本机时区。")); return host;
 }
 

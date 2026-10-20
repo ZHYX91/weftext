@@ -137,6 +137,96 @@ impl Fixture {
 }
 
 #[test]
+fn subtree_query_revalidation_requires_complete_tags_at_the_chosen_cut_even_when_false() {
+    let mut f = Fixture::new();
+    let id = fresh();
+    let node = ObjectKey::Node(id.clone());
+    let tag = fresh();
+    let schema = f.schema(&Schema::bundled().unwrap());
+    let baseline = schema.file_revisions[".weftext-schema.json"].clone();
+    let expression = format!(
+        "false && tagInSubtree(tagRef('weftext-tag://{}/{tag}'), tagRef('weftext-tag://{}/{tag}'))",
+        f.workspace, f.workspace
+    );
+    let definition = f.definition(
+        &fresh(),
+        &baseline,
+        &format!("where: {}, ", serde_json::to_string(&expression).unwrap()),
+        "",
+    );
+    let source = f.node(&id, "Note", &definition);
+    let registry = serde_json::to_vec(&serde_json::json!({"version":2,"tags":[{"tagId":tag,"displayName":"Root","parentTagId":null}]})).unwrap();
+    let tags = f.state(".weftext-tags.json", ".weftext-tags.json", &registry);
+    f.offer(
+        &[f.head.clone()],
+        vec![
+            Fixture::change(ObjectKey::Schema, schema, &[]),
+            Fixture::change(ObjectKey::Tags, tags, &[]),
+            Fixture::change(node.clone(), source, &[]),
+        ],
+        vec![],
+    );
+    let chosen = f.chosen();
+    let review = f.reviewed(
+        &node,
+        chosen[&node].state.clone(),
+        &[ObjectKey::Schema, ObjectKey::Tags],
+    );
+    let checked = validate_revalidation(
+        &f.graph,
+        &chosen,
+        &BTreeMap::new(),
+        std::slice::from_ref(&review),
+    )
+    .unwrap();
+    assert!(
+        checked.dependency_reads[&node]
+            .iter()
+            .any(|read| read.object == ObjectKey::Tags)
+    );
+    assert!(checked.required_evidence.iter().any(|item| matches!(
+        item,
+        RequiredSemanticEvidence::Object {
+            object: ObjectKey::Tags,
+            ..
+        }
+    )));
+    let mut incomplete = chosen;
+    incomplete.remove(&ObjectKey::Tags);
+    assert_eq!(
+        validate_revalidation(&f.graph, &incomplete, &BTreeMap::new(), &[review])
+            .err()
+            .unwrap()
+            .code,
+        "syncDependencyRequired"
+    );
+    let original = &incomplete[&node];
+    let source_digest = &original.state.files["Note.typ"];
+    let source = String::from_utf8(f.graph.blob(source_digest).unwrap().to_vec()).unwrap();
+    let missing_root_source = source.replace(&tag, &fresh());
+    let missing_root = f.state("Note", "Note.typ", missing_root_source.as_bytes());
+    f.offer(
+        &[f.head.clone()],
+        vec![Fixture::change(
+            node.clone(),
+            missing_root,
+            std::slice::from_ref(&original.revision),
+        )],
+        vec![],
+    );
+    let chosen = f.chosen();
+    let review = f.reviewed(
+        &node,
+        chosen[&node].state.clone(),
+        &[ObjectKey::Schema, ObjectKey::Tags],
+    );
+    assert!(
+        validate_revalidation(&f.graph, &chosen, &BTreeMap::new(), &[review]).is_err(),
+        "A short-circuit false predicate cannot waive a missing structural root"
+    );
+}
+
+#[test]
 fn single_head_changed_schema_dependency_is_reviewed_without_bool_approval() {
     let mut f = Fixture::new();
     let node = ObjectKey::Node(fresh());

@@ -6,12 +6,15 @@ import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHost
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
 import { mediaCellReferences } from "./hosted-media-state";
+import { TagTree, tagPredicate, type TagMatchMode } from "./tag-tree";
+import { tagPicker } from "./tag-picker";
+import type { RegistryCatalog } from "./hosted-navigation-registry-state";
 
 type Product = "title" | "body" | "headings" | "types" | "self";
 type Resource = { resource: string; title: string; fields: string[]; products: Record<Product, boolean>; relations: string[]; definitions: boolean; definitionHistory: boolean };
 type Definition = { resource?: string; key: string; label: string; revision?: string; plan?: QueryPlan; binding?: unknown };
 type Catalog = HostedScopeCatalog & { formSchema?: DataSchema | null; resources: Resource[]; definitions: Definition[]; providers?: HostedProviderDescriptor[]; seriesPolicies?: HostedSeriesPolicyDescriptor[]; coverage?: "complete" | "partial"; providerCoverage?: "complete" | "partial"; unavailableDefinitions?: { resource: string; status: "unavailable" }[]; unavailableProviders?: { id: string; status: "unavailable" }[]; unavailableSeriesPolicies?: { id: string; status: "unavailable" }[] };
-type Draft = HostedQueryDependencies & { resources: string[]; fields: string[]; products: Product[]; relations: string[]; plan: string; parameters: string; owner: string; definition: string; selection: "current" | "pinned"; revision: string; scopeDraft?: QueryPlan["scope"]; visual?: { where: string; columns: string; order: string } };
+type Draft = HostedQueryDependencies & { resources: string[]; fields: string[]; products: Product[]; relations: string[]; plan: string; parameters: string; owner: string; definition: string; selection: "current" | "pinned"; revision: string; scopeDraft?: QueryPlan["scope"]; visual?: { where: string; columns: string; order: string }; tagFilter?: { reference: string; mode: TagMatchMode } };
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
 const productNames: Record<Product, string> = { title: "标题", body: "呈现正文", headings: "真实深标题", types: "笔记类型", self: "自身稳定身份" };
 const basePlan = (): QueryPlan => ({ scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [] });
@@ -37,12 +40,14 @@ export class HostedQuery {
   private controls = ui("section");
   private results = ui("section");
   private scopeControls = ui("section");
+  private tagTree?: TagTree;
+  private tagReadSerial = 0;
   private definitions?: HostedQueryDefinitions;
   constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void, private openMedia?: (reference: string) => Promise<void>, private fieldActions?: { canEdit(resource: string, fieldId: string): boolean; open(resource: string, fieldId: string): Promise<void> }) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
   dependencies(): HostedQueryDependencies { return exactHostedDependencies(this.draft, this.catalog); }
   get version() { return this.inputRevision; }
   refuseResult(message: string) { this.gate.clear(); this.result = undefined; this.resultInput = undefined; this.message.textContent = message; this.renderResults(); }
-  environmentChanged() { this.inputRevision++; this.gate.changed(); if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = "库配置已变化，原冻结结果保留为旧依据；计划和参数未改，请明确重新运行。"; this.renderResults(); }
+  environmentChanged(message = "库配置已变化，原冻结结果保留为旧依据；计划和参数未改，请明确重新运行。") { this.tagReadSerial++; this.tagTree = undefined; this.inputRevision++; this.gate.changed(); if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = message; this.renderResults(); }
   private dependencyBasis() { return JSON.stringify([this.draft.providers, this.draft.seriesPolicies, ...(["providers", "seriesPolicies"] as const).map(kind => Object.keys(this.draft[kind]).map(id => [id, this.catalog[kind]?.find(item => item.id === id)?.fingerprint ?? null]))]); }
   authorChanged(force = false) { void this.definitions?.authorChanged(force); }
   async refreshCatalog(): Promise<void> {
@@ -51,7 +56,7 @@ export class HostedQuery {
     catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "当前定义目录刷新失败，原计划和冻结结果保留。"; }
   }
   clear(removeCache = true) {
-    this.view = initialOccurrenceView();
+    this.view = initialOccurrenceView(); this.tagReadSerial++; this.tagTree = undefined;
     this.epoch++; this.inputRevision++; this.gate.clear(); this.definitions?.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
     this.host.replaceChildren(); this.host.hidden = true; this.controls.replaceChildren(); this.results.replaceChildren(); this.scopeControls.replaceChildren(); this.message.textContent = ""; this.key = "";
     this.dependenciesChanged?.();
@@ -60,7 +65,7 @@ export class HostedQuery {
   async connect(deployment: string, actor: string, generation: number) {
     this.clear(false); const epoch = this.epoch; this.key = hostedCachePrefix("query", deployment, actor, generation) + "controls";
     let raw: string | null = null;
-    try { raw = sessionStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw) as Draft; if (!Array.isArray(parsed.resources) || !Array.isArray(parsed.fields) || !Array.isArray(parsed.products) || !Array.isArray(parsed.relations) || typeof parsed.plan !== "string" || typeof parsed.parameters !== "string" || !["current", "pinned"].includes(parsed.selection)) throw new Error(); this.draft = { ...parsed, providers: hostedDependencyMap(parsed.providers), seriesPolicies: hostedDependencyMap(parsed.seriesPolicies), scopeDraft: hostedScopeDraft(parsed.scopeDraft) }; } }
+    try { raw = sessionStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw) as Draft; if (!Array.isArray(parsed.resources) || !Array.isArray(parsed.fields) || !Array.isArray(parsed.products) || !Array.isArray(parsed.relations) || typeof parsed.plan !== "string" || typeof parsed.parameters !== "string" || !["current", "pinned"].includes(parsed.selection) || parsed.tagFilter !== undefined && (!parsed.tagFilter || typeof parsed.tagFilter.reference !== "string" || !["exact", "subtree"].includes(parsed.tagFilter.mode))) throw new Error(); this.draft = { ...parsed, providers: hostedDependencyMap(parsed.providers), seriesPolicies: hostedDependencyMap(parsed.seriesPolicies), scopeDraft: hostedScopeDraft(parsed.scopeDraft) }; } }
     catch { this.unreadable = raw ?? ""; }
     this.host.hidden = false; this.host.replaceChildren(ui("h2", "", "托管高级 Query"), ui("p", "hint", "字段、正文产品、关系与保存定义分别授权。这里编辑临时计划；运行和结果导航均不保存正文。"), this.message, this.controls, this.results);
     this.renderControls();
@@ -145,10 +150,16 @@ export class HostedQuery {
       else { const relation = draft.relations[0]; if (!relation) throw new Error("请先选择独立获权的关系。"); advanced.related = { relation, from: structuredClone(current), direction: "forward" }; }
       this.writePlan({ ...current, advanced });
     } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }), ui("p", "hint", "示例仍是原生 Query 计划；运行由同一执行器核验完整 CEL、类型、关系和定义授权。参数、union、distinct、group、unnest 与保存定义调用可直接在完整计划中组合。"));
-    this.controls.append(visual); this.renderDefinitions();
+    this.controls.append(visual); this.renderTags(); this.renderDefinitions();
     const run = action(this.busy ? "正在运行托管 Query…" : "运行托管高级查询", () => this.run()); run.disabled = this.busy || !draft.resources.length; this.controls.append(run);
     for (const item of this.controls.querySelectorAll<HTMLDetailsElement>("details[data-query-disclosure]")) item.open = disclosures.get(item.dataset.queryDisclosure) ?? false;
     if (focus) { const restored = this.controls.querySelector<HTMLElement>(`[aria-label="${CSS.escape(focus)}"]`); restored?.focus({ preventScroll: true }); if (selection && selection.from !== null && selection.to !== null && (restored instanceof HTMLInputElement || restored instanceof HTMLTextAreaElement)) restored.setSelectionRange(selection.from, selection.to); }
+  }
+  private renderTags(): void {
+    const section = ui("details"); section.dataset.queryDisclosure = "tags"; section.append(ui("summary", "", "标签范围 · 独立获权完整结构"));
+    section.append(action("读取获权标签树", async () => { const epoch = this.epoch, serial = ++this.tagReadSerial; this.tagTree = undefined; try { const registry = await this.request<RegistryCatalog>("navigation/registry"); if (epoch !== this.epoch || serial !== this.tagReadSerial) return; this.tagTree = new TagTree(registry.tags.items, registry.tags.read && registry.tags.coverage === "complete"); this.renderControls(); } catch (error) { if (epoch === this.epoch && serial === this.tagReadSerial) this.message.textContent = String(error); } }));
+    if (this.tagTree) { const chosen = this.draft.tagFilter ??= { reference: "", mode: "subtree" }; const mode = select("标签匹配模式", [["subtree", "此标签及子级"], ["exact", "仅此标签"]], chosen.mode); mode.onchange = () => { chosen.mode = mode.value as TagMatchMode; this.persist(); }; section.append(tagPicker(this.tagTree, { label: "查询标签", value: chosen.reference, changed: reference => { chosen.reference = reference ?? ""; this.persist(); } }), mode, action("将明确标签条件加入临时计划", () => { try { if (!chosen.reference || !this.tagTree?.byRef.has(chosen.reference)) throw new Error("请明确选择当前合格标签。"); const plan = parseQueryPlan(this.draft.plan); if (plan.advanced?.call || plan.advanced?.unionAll) throw new Error("保存定义调用／union 的条件须在实际扫描定义内修改，原计划保留。"); const field = this.catalog.formSchema?.fields.find(field => field.key === "tags"); if (!field) throw new Error("当前获权 Schema 没有可用的 tags 字段。"); const predicate = tagPredicate(chosen.reference, chosen.mode, `field(${JSON.stringify(field.id)})`); plan.where = plan.where ? `(${plan.where}) && (${predicate})` : predicate; this.writePlan(plan); } catch (error) { this.message.textContent = String(error); } }), ui("p", "hint", "默认包含自身及子级；模式写入原 Query 条件，保存和重开保持语义。注册表可读不授予笔记、字段或结果读取权。")); }
+    this.controls.append(section);
   }
   private renderDefinitions() {
     const draft = this.draft, section = ui("details"); section.dataset.queryDisclosure = "saved"; section.append(ui("summary", "", "保存定义 · current / pinned / 调用"));

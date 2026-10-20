@@ -32,6 +32,8 @@ pub(super) struct Rights {
     style: RoleRights,
     #[serde(default)]
     pub(super) style_use: bool,
+    #[serde(default)]
+    reorder_nodes: bool,
 }
 impl Rights {
     fn role(&self, role: &str) -> Option<&RoleRights> {
@@ -48,6 +50,7 @@ pub(super) fn valid_rights(rights: &Rights) -> bool {
     ROLES
         .iter()
         .all(|r| rights.role(r).is_some_and(|p| !p.write || p.read))
+        && (!rights.reorder_nodes || rights.settings.read && rights.settings.write)
 }
 #[derive(Clone)]
 enum Document {
@@ -74,6 +77,11 @@ pub(super) struct Store {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Read {
     role: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OrderRead {
+    parent_ref: String,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -106,12 +114,50 @@ struct Decision {
     workspace: String,
     expires_at: u64,
     style_write: bool,
+    #[serde(default)]
+    reorder_nodes: bool,
+    #[serde(default)]
+    order_parents: BTreeSet<String>,
+}
+
+fn authorize_reorder(
+    inner: &HostedInner,
+    actor: &str,
+    before: &str,
+    after: &str,
+) -> Result<BTreeSet<String>, ApiError> {
+    let changed =
+        weftext_core::navigation_orders_changed(Some(before.as_bytes()), after.as_bytes())
+            .map_err(core_error)?;
+    if changed && !rights(inner, actor)?.reorder_nodes {
+        return Err(unavailable());
+    }
+    if !changed {
+        return Ok(BTreeSet::new());
+    }
+    let before =
+        weftext_core::validate_workspace_settings(before.as_bytes()).map_err(core_error)?;
+    let after = weftext_core::validate_workspace_settings(after.as_bytes()).map_err(core_error)?;
+    let mut parents = BTreeSet::new();
+    for value in [&before, &after] {
+        if let Some(orders) = value["navigationOrders"].as_object() {
+            parents.extend(orders.keys().cloned());
+        }
+    }
+    parents.retain(|parent| {
+        before["navigationOrders"].get(parent) != after["navigationOrders"].get(parent)
+    });
+    for parent in &parents {
+        navigation_registry::authorize_order_parent_read(inner, actor, parent)?;
+    }
+    Ok(parents)
 }
 
 pub(super) fn router() -> Router<HostedState> {
     Router::new()
         .route("/api/hosted/library", get(catalog))
         .route("/api/hosted/library/read", post(read))
+        .route("/api/hosted/library/order/read", post(order_read))
         .route("/api/hosted/library/prepare", post(prepare))
         .route("/api/hosted/library/commit", post(commit))
         .route("/api/hosted/library/operation", post(operation))
@@ -428,7 +474,14 @@ fn status(
         d.actor_epoch == inner.actor_generation(actor)
             && config_hash(inner).is_ok_and(|h| h == d.config_hash)
     });
+    let order_authorized = decision.as_ref().is_some_and(|d| {
+        (!d.reorder_nodes || rights(inner, actor).is_ok_and(|r| r.reorder_nodes))
+            && d.order_parents.iter().all(|parent| {
+                navigation_registry::authorize_order_parent_read(inner, actor, parent).is_ok()
+            })
+    });
     let same = same
+        && order_authorized
         && decision
             .as_ref()
             .is_some_and(|d| workspace(inner).is_ok_and(|w| w == d.workspace));
@@ -443,7 +496,8 @@ fn status(
     let writable = access(inner, actor, role, true).is_ok()
         && decision
             .as_ref()
-            .is_none_or(|d| !d.style_write || access(inner, actor, "style", true).is_ok());
+            .is_none_or(|d| !d.style_write || access(inner, actor, "style", true).is_ok())
+        && order_authorized;
     let allowed = old.status == "prepared"
         && same
         && writable
@@ -457,7 +511,23 @@ fn status(
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;let r=rights(inner,&actor)?;
         let roles=ROLES.iter().filter_map(|role|r.role(role).filter(|g|g.read).map(|g|json!({"role":role,"title":match *role {"schema"=>"Schema","settings"=>"库设置","rules"=>"库规则",_=>"库样式"},"read":g.read,"write":g.write}))).collect::<Vec<_>>();
-        Ok(json!({"roles":roles,"styleUse":r.style_use}))}).await?))
+        let order_parents=if r.reorder_nodes {inner.config.directories.values().filter(|directory|navigation_registry::authorize_order_parent_read(inner,&actor,&directory.reference).is_ok()).map(|directory|json!({"reference":directory.reference,"title":directory.title})).collect::<Vec<_>>()}else{vec![]};
+        Ok(json!({"roles":roles,"styleUse":r.style_use,"reorderNodes":r.reorder_nodes,"orderParents":order_parents}))}).await?))
+}
+async fn order_read(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<OrderRead>,
+) -> ApiResult {
+    Ok(Json(locked(&state,move|inner| {
+        let actor=inner.actor(&auth)?;access(inner,&actor,"settings",true)?;
+        if !rights(inner,&actor)?.reorder_nodes{return Err(unavailable());}
+        navigation_registry::authorize_order_parent_read(inner,&actor,&req.parent_ref)?;
+        let order=inner.core.read_navigation_order(&inner.config.root,&req.parent_ref).map_err(core_error)?;
+        let _=inner.core.take_snapshot_witness(&order.base_id);
+        let settings_source=order.before_source.as_deref().unwrap_or("{\"version\":1}");
+        Ok(json!({"parentRef":order.parent_ref,"settingsSourceHash":digest(settings_source.as_bytes()),"orderedRefs":order.ordered_refs,"members":order.members.iter().map(|member|json!({"targetRef":member.target_ref,"name":member.name})).collect::<Vec<_>>(),"complete":order.complete}))
+    }).await?))
 }
 async fn read(
     State(state): State<HostedState>,
@@ -553,7 +623,9 @@ async fn prepare(
                 let intent=OperationIntent::UpdateFiles {changes:vec![FileChange {path:doc.path.clone(),base_id:Some(doc.base_id.clone()),before:doc.bytes.clone(),after:after.as_bytes().to_vec()}]};(after,None,intent,extra)
             }
         };
-        let decision=Decision {actor_epoch:inner.actor_generation(&actor),config_hash:config_hash(inner)?,workspace:workspace(inner)?,expires_at:now()+TTL.as_secs(),style_write};
+        let order_parents=if req.role=="settings" {authorize_reorder(inner,&actor,&basis.source,&after)?}else{BTreeSet::new()};
+        let reorder_nodes=!order_parents.is_empty();
+        let decision=Decision {actor_epoch:inner.actor_generation(&actor),config_hash:config_hash(inner)?,workspace:workspace(inner)?,expires_at:now()+TTL.as_secs(),style_write,reorder_nodes,order_parents};
         let mut preview=json!({"beforeSource":basis.source,"afterSource":after,"summary":"按原准确依据应用此库配置；不会改写正文或个人草稿。","_library":decision});
         if let Some(enabled)=enabled {preview["enabled"]=enabled.into();}
         // Core's durable preview budget applies before creating an original ID.
@@ -617,6 +689,25 @@ async fn settle(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
             access(inner, &actor, &req.role, true)?;
+            if req.role == "settings" {
+                let original = inner
+                    .core
+                    .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
+                        core.actor_feature_status(&resource(&req.role), &req.operation_id)
+                    })
+                    .map_err(core_error)?;
+                if let Some(original) = original
+                    && original.status != "committed"
+                {
+                    let before = original.preview["beforeSource"]
+                        .as_str()
+                        .ok_or_else(changed)?;
+                    let after = original.preview["afterSource"]
+                        .as_str()
+                        .ok_or_else(changed)?;
+                    authorize_reorder(inner, &actor, before, after)?;
+                }
+            }
             let old = inner
                 .core
                 .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |c| {
@@ -988,6 +1079,13 @@ mod tests {
             serde_json::from_value(json!({"schema":{"write":true},"style":{"read":true}})).unwrap();
         assert!(!valid_rights(&invalid));
         assert!(serde_json::from_value::<Rights>(json!({"unknown":{"read":true}})).is_err());
+        let order: Rights = serde_json::from_value(json!({"reorderNodes":true})).unwrap();
+        assert!(!valid_rights(&order));
+        let order: Rights = serde_json::from_value(
+            json!({"settings":{"read":true,"write":true},"reorderNodes":true}),
+        )
+        .unwrap();
+        assert!(valid_rights(&order));
     }
     #[test]
     fn settings_unknown_members_stay_native_but_selector_needs_extra_permission() {
@@ -1039,6 +1137,7 @@ mod tests {
                     write: true,
                 },
                 style_use: true,
+                reorder_nodes: false,
             };
         }
         (temp, state, auth)
@@ -1053,6 +1152,157 @@ mod tests {
         .await
         .unwrap()
         .0
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn settings_write_cannot_reorder_without_independent_current_authority() {
+        let (_temp, state, auth) = fixture();
+        let reference = {
+            let inner = state.inner.lock().unwrap();
+            inner
+                .core
+                .capture_navigation_target(&inner.config.root, inner.config.root.join("Shared"))
+                .unwrap()
+                .target_ref
+                .unwrap()
+        };
+        let mut settings = json!({"version":1,"navigationOrders":{}});
+        settings["navigationOrders"][&reference] = json!([]);
+        let source = settings.to_string();
+        let before = read_role(&state, &auth, "settings").await;
+        let request = Prepare {
+            role: "settings".into(),
+            basis: before["basis"].as_str().unwrap().into(),
+            operation_id: uuid::Uuid::new_v4().to_string(),
+            source: Some(source.clone()),
+            changes: None,
+            enabled: None,
+        };
+        let cloned =
+            || serde_json::from_value::<Prepare>(serde_json::to_value(&request).unwrap()).unwrap();
+        assert_eq!(
+            prepare(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(cloned())
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::NOT_FOUND
+        );
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .library
+                .reorder_nodes = true;
+        }
+        assert_eq!(
+            prepare(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(cloned())
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            order_read(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(OrderRead {
+                    parent_ref: reference.clone()
+                })
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::NOT_FOUND
+        );
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.config.directories.insert(
+                "shared-order".into(),
+                query_scopes::Directory {
+                    path: "Shared".into(),
+                    title: "Shared".into(),
+                    reference: reference.clone(),
+                    lifecycle: "live".into(),
+                },
+            );
+            inner.policy.users.get_mut("alice").unwrap().navigation =
+                serde_json::from_value(json!({"directories":["shared-order"]})).unwrap();
+        }
+        let members = order_read(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(OrderRead {
+                parent_ref: reference.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(members["parentRef"], reference);
+        assert_eq!(members["complete"], true);
+        let prepared = prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(cloned()),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(prepared["commitAllowed"], true);
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.policy.users.get_mut("alice").unwrap().navigation = Default::default();
+        }
+        let original = operation(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Operation {
+                role: "settings".into(),
+                operation_id: request.operation_id.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(original["status"], "prepared");
+        assert_eq!(original["commitAllowed"], false);
+        assert_eq!(original["preview"], json!({}));
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .library
+                .reorder_nodes = false;
+        }
+        assert!(
+            commit(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(Commit {
+                    role: "settings".into(),
+                    operation_id: request.operation_id,
+                    plan_id: prepared["planId"].as_str().unwrap().into()
+                })
+            )
+            .await
+            .is_err()
+        );
+        let inner = state.inner.lock().unwrap();
+        assert!(!inner.config.root.join(".weftext-settings.json").exists());
     }
     #[cfg(windows)]
     async fn prepare_source(

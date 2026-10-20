@@ -3,10 +3,13 @@ import { nativeStyleControlInput, nativeStyleControlReason, type NativeStyleCont
 import { decodeProcessingDocument, defaultProcessingDocument } from "./processing-settings-panel";
 import { parseProcessingLanguages, processingLanguageTag } from "./processing-settings";
 import { hostedCachePrefix } from "./hosted-state";
+import { nodeSourceHash } from "./hosted-navigation-state";
+import { movedSibling } from "./node-contents-state";
 import { decodeLibraryDraft, freezeLibraryPrepare, libraryCanCommit, libraryInput, libraryReceipt, libraryRoles, libraryTerminal, type LibraryDraft, type LibraryProfile, type LibraryReceipt, type LibraryRole } from "./hosted-library-state";
 
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
-type Catalog = { roles: { role: LibraryRole; title: string; read: boolean; write: boolean }[]; styleUse: boolean };
+type Catalog = { roles: { role: LibraryRole; title: string; read: boolean; write: boolean }[]; styleUse: boolean; reorderNodes?: boolean; orderParents?: {reference:string;title:string}[] };
+interface HostedOrder { parentRef:string;settingsSourceHash:string;orderedRefs:string[];members:{targetRef:string;name:string}[];complete:boolean }
 const labelSource = "托管库配置完整源码";
 /** Role drafts are proposals; only the original Core operation installs bytes. */
 export class HostedLibrary {
@@ -27,10 +30,13 @@ export class HostedLibrary {
   private enabled = ui("input");
   private comparison?: HTMLButtonElement;
   private inputs: { control: NativeStyleControl; input: HTMLInputElement | HTMLSelectElement }[] = [];
+  private orderParent = "";
+  private order?: HostedOrder;
+  private orderHost = ui("section");
   constructor(private host: HTMLElement, private request: Request, private changed: (role: LibraryRole) => void | Promise<void>) { this.clear(false); }
   get hasPending() { return !!this.draft?.pending || this.pendingRoles.size > 0; }
   clear(remove = true) {
-    this.epoch++; this.catalog = { roles: [], styleUse: false }; this.role = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false; this.pendingRoles.clear(); this.prefix = "";
+    this.epoch++; this.catalog = { roles: [], styleUse: false }; this.role = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false; this.pendingRoles.clear(); this.prefix = ""; this.order = undefined; this.orderParent = ""; this.orderHost.replaceChildren();
     this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.actions.replaceChildren(); this.picker.replaceChildren(); this.message.textContent = ""; this.source.value = ""; this.enabled.checked = false; this.inputs = []; this.comparison = undefined;
     const failures: unknown[] = [];
     if (remove) { try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-library:")) { try { sessionStorage.removeItem(key); } catch (error) { failures.push(error); } } } catch (error) { failures.push(error); } }
@@ -52,7 +58,7 @@ export class HostedLibrary {
   private select(role: LibraryRole) {
     if (!this.catalog.roles.some(item => item.role === role && item.read)) throw new Error("配置角色当前不可读取。");
     try { this.retain(); } catch (error) { if (this.role) this.picker.value = this.role; throw error; }
-    this.role = role; this.picker.hidden = false; this.picker.value = role; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.editor.replaceChildren(); this.actions.replaceChildren(); this.source.value = ""; this.inputs = []; this.comparison = undefined;
+    this.role = role; this.picker.hidden = false; this.picker.value = role; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.editor.replaceChildren(); this.actions.replaceChildren(); this.source.value = ""; this.inputs = []; this.comparison = undefined; this.order=undefined;
     sessionStorage.setItem(this.prefix + "selection", role); const raw = sessionStorage.getItem(this.key());
     if (raw !== null) { try { this.draft = decodeLibraryDraft(raw, role); } catch { this.unreadable = raw; } }
     this.message.textContent = this.draft?.pending ? "原配置操作待核对；无需当前读取依据也可查询原编号。" : "选择角色后读取准确配置。恢复输入不会被读取覆盖。"; this.render();
@@ -60,7 +66,7 @@ export class HostedLibrary {
   private async run(work: () => void | Promise<void>) {
     if (this.busy) return; const epoch = this.epoch; this.busy = true; this.renderActions(); this.picker.disabled = true;
     try { await work(); } catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "配置操作未完成，原输入与原操作保留。"; }
-    finally { if (epoch === this.epoch) { this.busy = false; this.picker.disabled = false; this.renderActions(); } }
+    finally { if (epoch === this.epoch) { this.busy = false; this.picker.disabled = false; this.renderActions(); if(this.role==="settings")this.renderOrder(); } }
   }
   private async read() {
     const role = this.role, epoch = this.epoch, revision = this.draft?.revision; if (!role || this.unreadable !== undefined) return;
@@ -68,14 +74,16 @@ export class HostedLibrary {
     if (profile.role !== role || typeof profile.source !== "string" || !profile.basis || typeof profile.installed !== "boolean") throw new Error("配置读取不对应原角色或准确源码，输入保留。");
     const draft = this.draft;
     this.profile = profile;
+    this.order = undefined;
     if (!draft || draft.revision === revision && !draft.pending && draft.source === draft.baseSource && !Object.keys(draft.changes).length && draft.enabled === draft.baseEnabled) this.draft = { source: profile.source, baseSource: profile.source, changes: {}, enabled: profile.enabled, baseEnabled: profile.enabled, revision: (draft?.revision ?? 0) + 1, lastReceipt: draft?.lastReceipt };
     else if (draft.source === profile.source && !Object.keys(draft.changes).length && draft.enabled === profile.enabled && !draft.pending) { draft.baseSource = profile.source; draft.baseEnabled = profile.enabled; }
     this.message.textContent = this.needsComparison() ? "服务端配置依据已变化；原输入保留，请比较双方再确认新依据。" : "已读取准确配置，改动尚未提交。"; this.render();
     try { this.retain(); } catch { throw new Error("准确配置已读取，本页原文可复制；浏览器无法保留恢复缓存，尚未发送写操作。"); }
   }
   private needsComparison() { return !!this.draft && !!this.profile && (this.draft.baseSource !== this.profile.source || this.draft.baseEnabled !== this.profile.enabled); }
-  private edited() {
+  private edited(keepOrder = false) {
     if (!this.draft) return; this.draft.revision++;
+    if(this.role==="settings"&&!keepOrder){this.order=undefined;this.renderOrder();}
     try { this.retain(); this.message.textContent = this.draft.pending ? "新配置输入已保留；原操作请求冻结，不能提交为这份新输入。请先核对或结束原操作。" : "配置输入已保留，尚未准备或提交。"; }
     catch { this.message.textContent = "浏览器无法保留配置输入，请先复制；原操作发送前必须成功保留恢复记录。"; }
     const advanced = this.draft.source !== this.draft.baseSource; for (const { control, input } of this.inputs) input.disabled = !this.writable() || !control.editable || advanced;
@@ -133,6 +141,8 @@ export class HostedLibrary {
       if (Object.keys(draft.changes).length) this.editor.append(action("放弃控件输入，使用完整源码", () => { draft.changes = {}; this.edited(); this.render(); }));
     }
     if (this.role === "settings") {
+      this.editor.append(ui("p", "hint", this.catalog.reorderNodes ? "具备独立作者同级重排资格；navigationOrders 的变更按整份库设置预览和提交。个人列表排序不会写入此处。" : "没有独立作者同级重排资格；普通库设置写权不能修改 navigationOrders。"));
+      this.editor.append(this.orderHost); this.renderOrder();
       const processing = ui("section"); processing.setAttribute("aria-label", "共享处理默认建议");
       processing.append(ui("h3", "共享处理默认与词表"), ui("p", "hint", "这里是导入／校对的共享建议，只有用户在本次处理明确采用才启用；文档语言仍由原生 Typst 决定。保存复用当前库设置的权限、历史与同步。"));
       try {
@@ -150,6 +160,40 @@ export class HostedLibrary {
     const sourceLabel = ui("label", "", this.role === "style" ? "完整原生 Typst 样式源码" : "完整 JSON 配置源码"); this.source.rows = 14; this.source.spellcheck = false; this.source.setAttribute("aria-label", labelSource); if (this.source.value !== draft.source) this.source.value = draft.source; this.source.readOnly = !this.writable(); this.source.oninput = () => { draft.source = this.source.value; this.edited(); }; sourceLabel.append(this.source); this.editor.append(sourceLabel);
     if (this.needsComparison()) { this.editor.append(ui("h3", "", "配置依据已变化，保留双方原文"), ui("p", "", "原读取依据"), ui("pre", "", draft.baseSource), ui("p", "", "当前服务端配置"), ui("pre", "", profile!.source)); const compare = action("已核对配置，以当前原文作为新依据", () => this.run(() => { if (draft.pending) throw new Error("先核对或结束原操作，再确认新依据。"); draft.baseSource = profile!.source; draft.baseEnabled = profile!.enabled; this.edited(); this.render(); })); this.comparison = compare; this.editor.append(compare); }
     this.renderActions(); if (selection) { this.source.focus(); this.source.setSelectionRange(selection[0], selection[1]); }
+  }
+  private renderOrder() {
+    this.orderHost.replaceChildren(); const draft=this.draft, profile=this.profile;
+    if(this.role!=="settings" || !this.catalog.reorderNodes || !draft || !profile)return;
+    this.orderHost.setAttribute("aria-label","托管作者同级顺序");this.orderHost.append(ui("h3","","作者同级顺序"),ui("p","hint","仅列独立获权的导航父级。读取完整直接子级后调整顺序，再通过下方同一库设置准备与确认；本控件不移动目录、不保存正文。"));
+    const parents=this.catalog.orderParents??[], picker=ui("select");picker.setAttribute("aria-label","作者顺序父级");
+    for(const parent of parents){const option=ui("option","",`${parent.title} · ${parent.reference}`);option.value=parent.reference;picker.append(option);}
+    if(!parents.some(parent=>parent.reference===this.orderParent))this.orderParent=parents[0]?.reference??"";picker.value=this.orderParent;
+    picker.disabled=this.busy||!!draft.pending;picker.onchange=()=>{this.orderParent=picker.value;this.order=undefined;this.renderOrder();};
+    const read=action("读取完整作者子级",()=>this.run(async()=>{
+      const parent=this.orderParent,epoch=this.epoch,basis=profile.basis;
+      const result=await this.request<HostedOrder>("library/order/read",{parentRef:parent});
+      if(epoch!==this.epoch||this.profile?.basis!==basis||this.draft!==draft||this.orderParent!==parent)return;
+      if(result.parentRef!==parent||!Array.isArray(result.members)||!Array.isArray(result.orderedRefs)||typeof result.complete!=="boolean"||result.settingsSourceHash!==await nodeSourceHash(profile.source))throw new Error("子级或库设置依据已变化，请保留输入并重新读取配置。");
+      this.order=result;this.renderOrder();
+    }));read.disabled=this.busy||!!draft.pending||!this.orderParent;this.orderHost.append(picker,read);
+    if(!parents.length)this.orderHost.append(ui("p","hint","没有独立获权的导航父级；作者重排权不授予全库成员读取。"));
+    const order=this.order;if(!order||order.parentRef!==this.orderParent)return;
+    if(!order.complete){this.orderHost.append(ui("p","hint","直接子级未完整接纳或观察，不能准备作者重排。"));return;}
+    let settings:Record<string,unknown>;try{settings=JSON.parse(draft.source);if(!settings||Array.isArray(settings)||settings.version!==1)throw Error();}catch{this.orderHost.append(ui("p","hint","当前JSON尚未完成，原输入保留。"));return;}
+    const orders=settings.navigationOrders as Record<string,unknown>|undefined,stored=orders?.[order.parentRef];
+    if(stored!==undefined&&(!Array.isArray(stored)||stored.some(ref=>typeof ref!=="string"))){this.orderHost.append(ui("p","hint","当前父级顺序不是完整引用数组，请核对原JSON。"));return;}
+    const actual=new Set(order.orderedRefs),refs=(stored as string[]|undefined)?.filter(ref=>actual.has(ref))??[...order.orderedRefs];
+    for(const ref of order.orderedRefs)if(!refs.includes(ref))refs.push(ref);
+    for(const[ordinal,ref]of refs.entries()){
+      const row=ui("div","hosted-order-row"),name=order.members.find(member=>member.targetRef===ref)?.name??"原稳定对象";row.append(ui("span","",`${ordinal+1}. ${name} · ${ref}`));
+      for(const[direction,label]of[[-1,"上移"],[1,"下移"]]as const){const move=action(label,()=>{
+        if(this.draft!==draft||this.order!==order||draft.pending||this.busy)return;
+        const latest=JSON.parse(draft.source)as Record<string,unknown>;if(!latest||Array.isArray(latest)||latest.version!==1)throw new Error("JSON已变化，未覆盖原输入");
+        if(latest.navigationOrders===undefined)latest.navigationOrders={};
+        if(!latest.navigationOrders||typeof latest.navigationOrders!=="object"||Array.isArray(latest.navigationOrders))throw new Error("原navigationOrders格式无效，未覆盖原输入");
+        (latest.navigationOrders as Record<string,unknown>)[order.parentRef]=movedSibling(refs,ref,direction);draft.source=JSON.stringify(latest,null,2);this.source.value=draft.source;this.edited(true);this.renderOrder();
+      });move.setAttribute("aria-label",`${name} 作者顺序${label}`);move.disabled=this.busy||!!draft.pending||direction===-1&&ordinal===0||direction===1&&ordinal===refs.length-1;row.append(move);}this.orderHost.append(row);
+    }
   }
   private renderActions() {
     if (this.comparison) this.comparison.disabled = this.busy || !!this.draft?.pending;

@@ -8,10 +8,15 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/api/navigation/capture", post(capture))
         .route("/api/navigation/resolve", post(resolve))
+        .route("/api/navigation/order/read", post(order_read))
+        .route("/api/navigation/order/prepare", post(order_prepare))
+        .route("/api/navigation/order/cancel", post(order_cancel))
         .route("/api/navigation/admit-directory", post(admit_directory))
         .route("/api/navigation/tags", post(tags))
         .route("/api/navigation/create-tag", post(create_tag))
         .route("/api/navigation/rename-tag", post(rename_tag))
+        .route("/api/navigation/move-tag", post(move_tag))
+        .route("/api/navigation/cancel", post(cancel))
 }
 
 #[derive(Deserialize)]
@@ -30,6 +35,67 @@ struct ResolveRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OrderReadRequest {
+    root: String,
+    parent_ref: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OrderPrepareRequest {
+    root: String,
+    parent_ref: String,
+    children: Vec<String>,
+    base_id: String,
+    operation_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OrderCancelRequest {
+    root: String,
+    operation_id: String,
+    plan_id: String,
+}
+
+async fn order_cancel(
+    State(state): State<AppState>,
+    Json(req): Json<OrderCancelRequest>,
+) -> ApiResult {
+    let result = core_call(&state, move |core| {
+        core.cancel_navigation_reorder(req.root, &req.operation_id, &req.plan_id)
+    })
+    .await?;
+    Ok(Json(value(result)?))
+}
+
+async fn order_read(State(state): State<AppState>, Json(req): Json<OrderReadRequest>) -> ApiResult {
+    let result = core_call(&state, move |core| {
+        core.read_navigation_order(req.root, &req.parent_ref)
+    })
+    .await?;
+    Ok(Json(value(result)?))
+}
+
+async fn order_prepare(
+    State(state): State<AppState>,
+    Json(req): Json<OrderPrepareRequest>,
+) -> ApiResult {
+    let result = core_call(&state, move |core| {
+        core.prepare_navigation_reorder(
+            req.root,
+            &req.parent_ref,
+            &req.children,
+            &req.base_id,
+            &req.operation_id,
+        )
+    })
+    .await?;
+    Ok(Json(value(result)?))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AdmitRequest {
     root: String,
     path: String,
@@ -44,9 +110,40 @@ struct TagsRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CancelRequest {
+    root: String,
+    operation_id: String,
+    plan_id: Option<String>,
+}
+
+async fn cancel(State(state): State<AppState>, Json(req): Json<CancelRequest>) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.cancel_navigation_attempt(req.root, &req.operation_id, req.plan_id.as_deref())
+        })
+        .await?,
+    )?))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CreateTagRequest {
     root: String,
     display_name: String,
+    #[serde(deserialize_with = "weftext_data::deserialize_required_tag_parent")]
+    parent_ref: Option<String>,
+    assignment: Option<weftext_core::TagAssignment>,
+    base_id: String,
+    operation_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MoveTagRequest {
+    root: String,
+    tag_ref: String,
+    #[serde(deserialize_with = "weftext_data::deserialize_required_tag_parent")]
+    parent_ref: Option<String>,
     base_id: String,
     operation_id: String,
 }
@@ -95,7 +192,28 @@ async fn tags(State(state): State<AppState>, Json(req): Json<TagsRequest>) -> Ap
 
 async fn create_tag(State(state): State<AppState>, Json(req): Json<CreateTagRequest>) -> ApiResult {
     let result = core_call(&state, move |core| {
-        core.prepare_create_tag(req.root, &req.display_name, &req.base_id, &req.operation_id)
+        core.prepare_create_tag_with_assignment(
+            req.root,
+            &req.display_name,
+            req.parent_ref.as_deref(),
+            &req.base_id,
+            req.assignment,
+            &req.operation_id,
+        )
+    })
+    .await?;
+    Ok(Json(value(result)?))
+}
+
+async fn move_tag(State(state): State<AppState>, Json(req): Json<MoveTagRequest>) -> ApiResult {
+    let result = core_call(&state, move |core| {
+        core.prepare_move_tag(
+            req.root,
+            &req.tag_ref,
+            req.parent_ref.as_deref(),
+            &req.base_id,
+            &req.operation_id,
+        )
     })
     .await?;
     Ok(Json(value(result)?))

@@ -1,7 +1,10 @@
-import { action, cellLabels, decodeProjection, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, nativeFormControls, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, valueEditor, type Cell, type DataSchema, type NativeValue, type NoteProjection, type PanelHost, type Shape, type SourcePatch, type SchemaField } from "./data-panel";
-import type { MediaResource } from "./media-viewer";
+import { action, cellLabels, decodeProjection, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, nativeFormControls, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, valueEditor, loadTagFormReferences, type FormReferences, type Cell, type DataSchema, type DocumentBasis, type NativeValue, type NoteProjection, type PanelHost, type Shape, type SourcePatch, type SchemaField } from "./data-panel";
+import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery } from "./export-state";
+import { TagTree, tagPredicate, decodeTagShortcutCollection, type TagMatchMode } from "./tag-tree";
+import { tagPicker } from "./tag-picker";
+import { tagCancellationStatus, tagOperationStatus } from "./tag-navigation-state";
 
 export interface QueryPlan {
   scope: { directory?: string; descendants: boolean; lifecycle: "live" | "trash" };
@@ -105,25 +108,67 @@ class PeriodNavigator {
     finally { this.loading = false; this.createButton.disabled = !this.pending && !this.result?.canCreate; this.createButton.textContent = this.pending ? "确认上次周期创建并打开" : "创建周期笔记并打开"; }
   }
 }
-interface TagRegistry { tags: { tagRef: string; tagId: string; displayName: string }[]; baseId: string; complete?: boolean; warnings?: unknown[] }
+interface TagRegistry { tags: { tagRef: string; tagId: string; displayName: string; parentTagId: string | null }[]; baseId: string; complete: boolean; warnings?: unknown[] }
 interface NavigationPreparation { targetRef: string; preview: { operationId: string; planId: string; kind?: string; changes?: unknown[] } }
 class NavigationControls {
   readonly element = ui("details", "query-registered-navigation");
   private readonly tagsHost = ui("div", "registered-tag-list");
   private readonly status = ui("p", "data-help");
   private readonly createName = ui("input", "data-input");
+  private readonly parentHost = ui("div");
+  private parentRef: string | null = null;
+  private tree: TagTree | null = null;
+  private search = "";
+  private offset = 0;
+  private expanded = new Set<string>();
+  private recoveryError?: string;
+  private busy = false;
+  private registryRead = 0;
   private registry: TagRegistry | null = null;
-  private pending: { route: string; body: Record<string, unknown>; prepared?: NavigationPreparation; addKind?: "directory" | "tag"; label: string } | null = null;
-  constructor(private host: PanelHost, private root: string, private scopePath: () => string, private chooseTag: (ref: string, label: string) => void, private saveShortcut: (ref: string, label: string, kind: "directory" | "tag") => void) {
+  private pending: { route: string; body: Record<string, unknown>; prepared?: NavigationPreparation; addKind?: "directory" | "tag"; label: string; confirmed?: boolean; context?: DocumentBasis; cancelRequested?: boolean; recoveredPlanId?: string } | null = null;
+  constructor(private host: PanelHost, private root: string, private workspaceId: string, private scopePath: () => string, private chooseTag: (ref: string, label: string, mode: TagMatchMode) => void, private saveShortcut: (ref: string, label: string, kind: "directory" | "tag", matchMode?: TagMatchMode) => void, private tagField: () => string | undefined, private registryChanged: () => void) {
     this.element.append(ui("summary", "", "登记标签与目录入口"), action("读取登记标签", () => this.loadTags()), action("把当前目录添加为快捷入口", () => this.addDirectory()));
-    this.createName.placeholder = "新标签显示名称"; this.createName.setAttribute("aria-label", "新标签显示名称"); this.element.append(this.tagsHost, this.createName, action("新建登记标签", async () => { if (!this.createName.value) return; if (!this.registry) await this.loadTags(); if (!this.registry) return; await this.mutate("/api/navigation/create-tag", { displayName: this.createName.value, baseId: this.registry.baseId }, this.createName.value, "tag"); }), action("确认上次导航登记操作", () => this.resume()), this.status, ui("p", "data-help", "登记标签按稳定身份导航。文字标签按笔记中的原文查询；入口与排列保存在本机。"));
+    try { const raw = localStorage.getItem(this.pendingKey()); if (raw) { const saved = JSON.parse(raw); if (!saved || !["/api/navigation/create-tag", "/api/navigation/rename-tag", "/api/navigation/move-tag", "/api/navigation/admit-directory"].includes(saved.route) || saved.body?.root !== root || typeof saved.body.operationId !== "string" || typeof saved.label !== "string" || saved.prepared && (saved.prepared.preview?.operationId !== saved.body.operationId || typeof saved.prepared.preview?.planId !== "string") || saved.recoveredPlanId !== undefined && (typeof saved.recoveredPlanId !== "string" || !saved.recoveredPlanId || saved.prepared && saved.prepared.preview.planId !== saved.recoveredPlanId)) throw new Error("导航恢复记录无效，请保留原记录。"); this.pending = saved; } } catch (error) { this.recoveryError = String(error); this.status.textContent = this.recoveryError; }
+    this.createName.placeholder = "新标签显示名称"; this.createName.setAttribute("aria-label", "新标签显示名称"); this.element.append(this.tagsHost, this.createName, this.parentHost, action("新建登记标签", () => this.createTag(false)), action("新建并赋给当前已保存笔记", () => this.createTag(true)), action("确认上次导航登记操作", () => this.resume()), action("取消原未提交导航操作", async () => { if (this.busy || !this.pending) return; this.pending.cancelRequested = true; this.persistPending(); await this.resume(); }), this.status, ui("p", "data-help", "完整标签树独立于笔记范围；树项默认含此标签及子级。赋值只写直接标签。名称中的斜杠不拆层级，入口保存明确筛选模式。"));
   }
+  private async createTag(assign: boolean): Promise<void> {
+    try {
+      if (!this.createName.value) return; if (!this.registry) await this.loadTags(); if (!this.registry || !this.tree) return;
+      const basis = assign ? this.host.getDocument() : null, fieldId = this.tagField();
+      if (assign && (!basis || basis.root !== this.root || basis.dirty !== false || this.host.canEdit?.() === false || !fieldId || !this.host.applyOperationReceipt)) throw new Error("首次赋值需要当前可写、已保存的准确笔记。请先明确保存草稿；本操作不会自动保存整篇草稿。");
+      await this.mutate("/api/navigation/create-tag", { displayName: this.createName.value, parentRef: this.parentRef, baseId: this.registry.baseId, ...(assign && basis ? { assignment: { path: basis.path, baseId: basis.baseId, fieldId } } : {}) }, this.createName.value, "tag", basis ?? undefined);
+    } catch (error) { this.status.textContent = String(error); }
+  }
+  private pendingKey(): string { return `weftext-navigation-operation:${JSON.stringify([this.workspaceId, this.root])}`; }
+  private persistPending(): void { if (this.pending) localStorage.setItem(this.pendingKey(), JSON.stringify(this.pending)); else localStorage.removeItem(this.pendingKey()); }
   private async loadTags(): Promise<void> {
+    const read = ++this.registryRead;
     this.status.textContent = "正在读取实际标签注册表…";
-    try { this.registry = await this.host.request<TagRegistry>("/api/navigation/tags", { root: this.root }); this.tagsHost.replaceChildren(); if (!this.registry.tags.length) this.tagsHost.append(ui("p", "data-empty", "注册表目前没有登记标签。"));
-      for (const tag of this.registry.tags) { const row = ui("div", "registered-tag-row"); row.append(action(`${tag.displayName} · ${tag.tagId.slice(0, 8)}`, () => this.chooseTag(tag.tagRef, tag.displayName), "query-facet"), action("添加快捷入口", () => this.saveShortcut(tag.tagRef, tag.displayName, "tag"), "data-button compact"), action("改名", async () => { const name = window.prompt("标签的新显示名称", tag.displayName); if (name == null || name === tag.displayName || !name) return; await this.mutate("/api/navigation/rename-tag", { tagRef: tag.tagRef, displayName: name, baseId: this.registry!.baseId }, name); }, "data-button compact")); this.tagsHost.append(row); }
-      this.registry.warnings?.forEach(item => this.tagsHost.append(ui("p", "data-warning", diagnosticText(item)))); this.status.textContent = this.registry.complete === false ? "注册表读取不完整，显示已知标签。" : "已读取实际标签注册表。";
-    } catch (error) { this.registry = null; this.status.textContent = `标签注册表不可用：${error instanceof Error ? error.message : String(error)}`; }
+    this.tree = null; this.createName.oninput = null; this.parentHost.replaceChildren(); this.tagsHost.replaceChildren();
+    try { const registry = await this.host.request<TagRegistry>("/api/navigation/tags", { root: this.root }); if (read !== this.registryRead) return; this.registry = registry; this.tree = new TagTree(registry.tags.map(tag => ({ ...tag, reference: tag.tagRef })), registry.complete === true); this.renderTags(); this.parentHost.append(tagPicker(this.tree, { label: "新标签父级", value: this.parentRef ?? "", root: true, changed: ref => { this.parentRef = ref; } })); const duplicates = ui("div", "data-help"); const showNames = () => { duplicates.replaceChildren(); const same = this.registry!.tags.filter(tag => tag.displayName === this.createName.value); if (same.length) duplicates.append(ui("p", "", `已有 ${same.length} 个同名标签。请核对，仍创建将产生新身份。`), ...same.slice(0, 100).map(tag => ui("p", "", this.tree!.label(tag.tagRef)))); }; this.createName.oninput = showNames; showNames(); this.parentHost.append(duplicates); this.status.textContent = this.recoveryError ?? "已读取完整标签结构；笔记结果仍按自己的获权范围判断。";
+    } catch (error) { if (read !== this.registryRead) return; this.registry = null; this.tagsHost.replaceChildren(); this.status.textContent = `标签注册表不可用：${error instanceof Error ? error.message : String(error)}`; }
+  }
+  private renderTags(): void {
+    const tree = this.tree; this.tagsHost.replaceChildren(); if (!tree) return;
+    const search = ui("input", "data-input"); search.type = "search"; search.value = this.search; search.setAttribute("aria-label", "标签树搜索名称或身份"); const rows = ui("div");
+    const render = () => { rows.replaceChildren(); const page = this.search ? tree.page(this.search, this.offset) : tree.visible(this.expanded, this.offset); this.offset = page.offset; rows.append(ui("p", "data-help", `完整结构 ${tree.byId.size} 项 · ${this.search ? "搜索命中" : "已展开"} ${page.total} 项 · 当前 ${page.total ? page.offset + 1 : 0}–${page.offset + page.items.length} · 每段最多 100`));
+      for (const tag of page.items) {
+        const row = ui("div", "registered-tag-row"), label = tree.label(tag.reference); row.setAttribute("role", "group"); row.setAttribute("aria-label", label);
+        if (tree.children.get(tag.tagId)?.length) {
+          const expand = action(this.expanded.has(tag.tagId) ? "收起子级" : "展开子级", () => { if (this.expanded.has(tag.tagId)) this.expanded.delete(tag.tagId); else this.expanded.add(tag.tagId); render(); rows.querySelector<HTMLButtonElement>(`[data-expand-tag="${CSS.escape(tag.tagId)}"]`)?.focus({ preventScroll: true }); }, "data-button compact"); expand.dataset.expandTag = tag.tagId; expand.setAttribute("aria-expanded", String(this.expanded.has(tag.tagId))); row.append(expand);
+        }
+        row.append(action(`${label} · 此标签及子级`, () => this.chooseTag(tag.reference, label, "subtree"), "query-facet"), action("仅此标签", () => this.chooseTag(tag.reference, label, "exact"), "data-button compact"), action("保存含子级入口", () => this.saveShortcut(tag.reference, label, "tag", "subtree"), "data-button compact"), action("保存精确入口", () => this.saveShortcut(tag.reference, label, "tag", "exact"), "data-button compact"), action("改名", async () => { const name = window.prompt("标签的新显示名称", tag.displayName); if (name == null || name === tag.displayName || !name) return; await this.mutate("/api/navigation/rename-tag", { tagRef: tag.reference, displayName: name, baseId: this.registry!.baseId }, name); }, "data-button compact"), action("换父／移至根", () => this.move(tag.reference), "data-button compact"));
+        const full = ui("details"); full.append(ui("summary", "", "完整分段路径")); full.ontoggle = () => { if (full.open && full.childElementCount === 1) full.append(ui("p", "", tree.label(tag.reference, true))); }; row.append(full); rows.append(row);
+      }
+      const focusPage = (direction: string) => (rows.querySelector<HTMLButtonElement>(`.tag-page-${direction}:not(:disabled)`) ?? rows.querySelector<HTMLButtonElement>(".tag-page-previous:not(:disabled), .tag-page-next:not(:disabled)") ?? search).focus({ preventScroll: true });
+      const previous = action("上一段标签", () => { this.offset -= 100; render(); focusPage("previous"); }, "data-button tag-page-previous"), next = action("下一段标签", () => { this.offset += 100; render(); focusPage("next"); }, "data-button tag-page-next"); previous.disabled = page.offset === 0; next.disabled = page.offset + page.items.length >= page.total; rows.append(previous, next);
+    }; search.oninput = () => { this.search = search.value; this.offset = 0; render(); }; this.tagsHost.append(search, rows); render();
+  }
+  private async move(reference: string): Promise<void> {
+    const tree = this.tree, tag = tree?.byRef.get(reference); if (!tree || !tag || !this.registry) return;
+    const parent = tag.parentTagId === null ? null : tree.byId.get(tag.parentTagId)!.reference;
+    const chosen = await new Promise<{ parent: string | null } | null>(resolve => { const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form"); form.method = "dialog"; let next = parent; form.append(ui("h2", "", "标签换父／移至根"), ui("p", "", tree.label(reference)), tagPicker(tree, { label: "新父标签", value: parent ?? "", root: true, excludedRoot: tag.tagId, changed: ref => { next = ref; } })); const cancel = ui("button", "data-button", "取消"); cancel.value = "cancel"; const prepare = ui("button", "data-button primary", "预览换父"); prepare.value = "prepare"; form.append(cancel, prepare); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "prepare"; dialog.remove(); resolve(accepted ? { parent: next } : null); }, { once: true }); dialog.showModal(); });
+    if (chosen && chosen.parent !== parent) await this.mutate("/api/navigation/move-tag", { tagRef: reference, parentRef: chosen.parent, baseId: this.registry.baseId }, tree.label(reference));
   }
   private async addDirectory(): Promise<void> {
     try {
@@ -133,19 +178,56 @@ class NavigationControls {
       await this.mutate("/api/navigation/admit-directory", { path: target.path }, target.label, "directory");
     } catch (error) { this.status.textContent = error instanceof Error ? error.message : String(error); }
   }
-  private async mutate(route: string, payload: Record<string, unknown>, label: string, addKind?: "directory" | "tag"): Promise<void> {
-    if (this.pending) { await this.resume(); return; } this.pending = { route, body: { root: this.root, ...payload, operationId: crypto.randomUUID() }, label, addKind }; await this.resume();
+  private async mutate(route: string, payload: Record<string, unknown>, label: string, addKind?: "directory" | "tag", context?: DocumentBasis): Promise<void> {
+    if (this.recoveryError) { this.status.textContent = this.recoveryError; return; }
+    if (this.pending) { await this.resume(); return; } this.pending = { route, body: { root: this.root, ...payload, operationId: crypto.randomUUID() }, label, addKind, context }; try { this.persistPending(); await this.resume(); } catch (error) { this.status.textContent = `原操作记录无法可靠保存，未发送新操作：${String(error)}`; }
   }
   private async resume(): Promise<void> {
-    if (!this.pending) { this.status.textContent = "目前没有结果待确认的导航登记操作。"; return; } const pending = this.pending;
+    if (this.busy) return;
+    if (!this.pending) { this.status.textContent = this.recoveryError ?? "目前没有结果待确认的导航登记操作。"; return; } const pending = this.pending; this.busy = true;
     try {
-      if (!pending.prepared) { pending.prepared = await this.host.request<NavigationPreparation>(pending.route, pending.body); if (!await this.confirm(pending)) { this.pending = null; this.status.textContent = "已取消登记；现有输入与入口保留。"; return; } }
-      const output = await this.host.request<{ status?: string; receipt?: { status?: string } }>("/api/operations/commit", { operationId: pending.prepared.preview.operationId, planId: pending.prepared.preview.planId }); const status = output.status ?? output.receipt?.status; if (!status || !["committed", "complete", "saved", "success"].includes(status)) throw new Error(`导航登记尚未确认：${status ?? "未知"}`);
-      if (pending.addKind) this.saveShortcut(pending.prepared.targetRef, pending.label, pending.addKind); if (pending.route.endsWith("create-tag") && this.createName.value === pending.body.displayName) this.createName.value = ""; this.pending = null; this.status.textContent = "导航登记已完成。"; await this.loadTags();
-    } catch (error) { const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown"; if (!["unknown", "pending", "resultUnknown"].includes(code)) this.pending = null; this.status.textContent = `${error instanceof Error ? error.message : String(error)}${this.pending ? " 原操作与输入保留，可确认同一操作。" : " 原输入与现有入口保留。"}`; }
+      this.persistPending(); // A retry must satisfy the same durable-before-effect boundary.
+      let recovering = !!pending.confirmed;
+      if (!pending.cancelRequested) {
+        if (!pending.prepared) { pending.prepared = await this.host.request<NavigationPreparation>(pending.route, structuredClone(pending.body)); if (pending.prepared.preview.operationId !== pending.body.operationId) throw new Error("准备结果不属于原操作。"); this.persistPending(); }
+        if (!pending.confirmed) { if (!await this.confirm(pending)) pending.cancelRequested = true; else pending.confirmed = true; this.persistPending(); }
+      }
+      if (pending.cancelRequested) {
+        const expected = { operationId: String(pending.body.operationId), planId: pending.prepared?.preview.planId ?? pending.recoveredPlanId ?? null };
+        const cancelled = await this.host.request<{ operationId: string; planId: string | null; status: string }>("/api/navigation/cancel", { root: this.root, ...expected });
+        if (tagCancellationStatus(expected, cancelled) === "resolved") { this.pending = null; this.persistPending(); this.status.textContent = "原操作已在服务端实际结束；原输入与现有入口保留。"; return; }
+        if (typeof cancelled.planId !== "string") throw new Error("原已提交操作缺少准确计划编号，记录保留。");
+        pending.recoveredPlanId = cancelled.planId; this.persistPending(); recovering = true;
+      }
+      const planId = pending.prepared?.preview.planId ?? pending.recoveredPlanId;
+      if (!planId) throw new Error("原导航操作没有准确计划编号，记录保留。");
+      const expected = { operationId: String(pending.body.operationId), planId }; let committed = false, receipt: { operationId?: string; planId?: string; status?: string; receipt?: { status?: string } } | undefined;
+      if (recovering) { receipt = await this.host.request("/api/operations/status", { operationId: expected.operationId, context: pending.context }); committed = tagOperationStatus(expected, receipt!) === "committed"; }
+      if (pending.cancelRequested && !committed) throw new Error("原取消报告已提交，但回读未确认提交；记录保留，未再次执行原计划。");
+      if (!committed) { receipt = await this.host.request("/api/operations/commit", { ...expected, context: pending.context }); const status = receipt?.receipt?.status ?? receipt?.status; if (!status || status !== "committed") throw new Error(`导航登记尚未确认：${status ?? "未知"}`); }
+      if (pending.context) {
+        await this.host.applyOperationReceipt?.(receipt, pending.context);
+        const current = this.host.getDocument();
+        if (current && current.root === pending.context.root && current.path === pending.context.path && current.sessionId !== pending.context.sessionId) this.host.notify("原标签创建与首次赋值已提交；笔记会话已重开，当前草稿和撤销记录保留。请比较或重新打开原笔记确认磁盘结果。");
+      }
+      if (!pending.route.endsWith("admit-directory")) this.registryChanged();
+      if (pending.addKind && pending.prepared) this.saveShortcut(pending.prepared.targetRef, pending.label, pending.addKind, pending.addKind === "tag" ? "subtree" : undefined);
+      else if (pending.addKind) this.host.notify("原操作已提交。首次准备回执未保留，未猜测导航目标；请从完整登记目录选择并添加入口。");
+      if (pending.route.endsWith("create-tag") && this.createName.value === pending.body.displayName) this.createName.value = ""; this.pending = null; this.persistPending(); this.status.textContent = "导航登记已完成。"; await this.loadTags();
+    } catch (error) { let persistence = ""; try { this.persistPending(); } catch (storageError) { persistence = ` 恢复记录目前不可写：${String(storageError)}`; } this.status.textContent = `${error instanceof Error ? error.message : String(error)} 原操作与输入保留，可确认同一操作。${persistence}`; }
+    finally { this.busy = false; }
   }
   private async confirm(pending: NonNullable<NavigationControls["pending"]>): Promise<boolean> {
-    return await new Promise(resolve => { const dialog = ui("dialog", "data-confirm-dialog"); const form = ui("form"); form.method = "dialog"; form.append(ui("h2", "", pending.route.endsWith("admit-directory") ? "登记目录导航身份" : pending.route.endsWith("rename-tag") ? "修改登记标签名称" : "登记新标签"), ui("p", "", pending.label)); if (pending.route.endsWith("admit-directory")) form.append(ui("p", "data-help", "为选定目录登记稳定导航身份，并添加本机快捷入口。")); const preview = ui("details"); preview.append(ui("summary", "", "查看准确登记计划"), ui("pre", "", JSON.stringify(pending.prepared?.preview, null, 2))); form.append(preview); const cancel = ui("button", "data-button", "取消"); cancel.value = "cancel"; const commit = ui("button", "data-button primary", "执行已预览的登记"); commit.value = "apply"; form.append(cancel, commit); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true }); dialog.showModal(); });
+    return await new Promise(resolve => {
+      const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form"); form.method = "dialog";
+      const title = pending.route.endsWith("admit-directory") ? "登记目录导航身份" : pending.route.endsWith("rename-tag") ? "修改登记标签名称" : pending.route.endsWith("move-tag") ? "标签换父／移至根" : pending.context ? "新建标签并首次赋值" : "登记新标签";
+      form.append(ui("h2", "", title), ui("p", "", pending.label));
+      if (pending.route.endsWith("admit-directory")) form.append(ui("p", "data-help", "为选定目录登记稳定导航身份，并添加本机快捷入口。"));
+      if (pending.context) form.append(ui("p", "data-help", `同时将新标签直接赋给已保存笔记：${pending.context.path}。新建与首次赋值为同一原计划，取消会一起取消。`));
+      const preview = ui("details"); preview.append(ui("summary", "", "查看准确登记计划"), ui("pre", "", JSON.stringify(pending.prepared?.preview, null, 2))); form.append(preview);
+      const cancel = ui("button", "data-button", "取消"); cancel.value = "cancel"; const commit = ui("button", "data-button primary", "执行已预览的登记"); commit.value = "apply"; form.append(cancel, commit); dialog.append(form); document.body.append(dialog);
+      dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true }); dialog.showModal();
+    });
   }
 }
 
@@ -154,14 +236,14 @@ export function queryRowLifecycle(row: QueryRow, plan: QueryPlan | null): "live"
 export interface QueryResult { rows: QueryRow[]; columns?: string[]; coverage: "complete" | "partial"; freshness: "current" | "stale"; diagnostics: unknown[]; totalKnown: number; limited: boolean; queryId?: string; cutId?: string; schemaRevision?: string; facets?: QueryFacet[]; snapshotMode?: string; snapshotLabel?: string; externalPending?: boolean; aggregateExact?: boolean; rawScope?: { complete?: boolean; pendingCount?: number }; superseded?: boolean }
 export interface QueryFacet { fieldId: string; key: string; label?: string; value?: NativeValue; expr?: string; count: number; missing?: boolean }
 export type ResultView = "list" | "table" | "board" | "calendar" | "chart";
-interface Condition { id: string; label: string; expr: string }
+interface Condition { id: string; label: string; expr: string; tag?: { reference: string; label: string; mode: TagMatchMode } }
 export interface ViewPreference { view: ResultView; density: "compact" | "comfortable"; summaries: boolean; thumbnails: boolean; columns: string[]; pinned: string[]; sort: string; descending: boolean; groupField: string; dateField: string; chartField: string; fieldBindings?: Record<string, string> }
-interface Shortcut { id: string; label: string; kind: "query" | "node" | "savedQuery" | "directory" | "tag"; plan?: QueryPlan; entityKey?: string; path?: string; targetRef?: string; definition?: SavedSelection }
+interface Shortcut { id: string; label: string; kind: "query" | "node" | "savedQuery" | "directory" | "tag"; plan?: QueryPlan; entityKey?: string; path?: string; targetRef?: string; definition?: SavedSelection; matchMode?: TagMatchMode }
 interface NavigationTarget { targetRef?: string | null; path?: string | null; status: string; kind: string; label: string; displayName?: string }
 interface SavedQuery { key: string; label: string; plan: QueryPlan }
 interface SavedDefinitions { definitions: SavedQuery[]; ownerRevision: string | null; unavailable?: unknown[] }
 interface SavedSelection { owner: string; key: string; mode: "current" | "pinned"; revision?: string; label: string }
-interface RowPreview { state: "absent" | "building" | "ready" | "failed" | "unsupported" | "unavailable"; descriptor?: MediaResource; previewBasis?: string; sourceRevision?: string; sourceBaseId?: string; sourceBasisKind?: "observed" | "committed"; message?: string }
+type RowPreview = ListPreview;
 
 export const defaultPreference = (): ViewPreference => ({ view: "list", density: "comfortable", summaries: true, thumbnails: false, columns: ["status", "due", "project", "tags"], pinned: [], sort: "title", descending: false, groupField: "status", dateField: "due", chartField: "count" });
 export function queryResultState(result: QueryResult): string {
@@ -260,6 +342,8 @@ export class QueryPanel {
   private types: string[] = [];
   private preference = defaultPreference();
   private shortcuts: Shortcut[] = [];
+  private shortcutError?: string;
+  private tagReferences: FormReferences = { nodes: [], state: "unavailable", messages: [] };
   private recent: { entityKey: string; path: string; label: string; lifecycle?: "live" | "trash"; revision?: string }[] = [];
   private selected: string | null = null;
   private generation = 0;
@@ -279,8 +363,6 @@ export class QueryPanel {
   private savedPending: { body: Record<string, unknown>; basis: NonNullable<ReturnType<PanelHost["getDocument"]>> } | null = null;
   private definitionRevision: string | null = null;
   private definitionName = "";
-  private thumbnailGeneration = 0;
-  private thumbnailObservers: IntersectionObserver[] = [];
   private thumbnailDisposers: (() => void)[] = [];
   private previewCache = new Map<string, Promise<RowPreview>>();
   private searchTimer?: ReturnType<typeof setTimeout>;
@@ -291,6 +373,7 @@ export class QueryPanel {
   private readonly navigationHost = ui("nav", "query-facets");
   constructor(private readonly host: PanelHost, private readonly exportResult?: (query: FrozenQuery) => void | Promise<void>) { this.element.setAttribute("aria-label", "查询与列表"); this.navigationHost.setAttribute("aria-label", "类型、标签与属性值导航"); this.element.append(this.controlsHost, this.navigationHost, this.resultsHost); this.renderControls(); this.renderResults(); }
   setLibrary(library: { root: string; workspaceId?: string } | null): void {
+    if (this.root !== library?.root || this.workspaceId !== library?.workspaceId) this.tagReferences = { nodes: [], state: "unavailable", messages: [] };
     if (this.root === library?.root && this.workspaceId === library?.workspaceId) return; this.generation++; this.captureDialog?.close(); this.root = library?.root ?? null; this.captureDialog = this.root ? this.captureDialogs.get(this.root) ?? null : null; this.workspaceId = library?.workspaceId; this.directory = null; this.scopeIdentity = null; this.navigationDirectory = null; this.navigationScopeIdentity = null; this.schema = null; this.result = null; this.conditions = []; this.types = []; this.selected = null; this.savedSelection = null; this.savedPlan = null; this.exactPlan = null; this.advancedDraft = ""; this.parameterDraft = "{}"; this.expression = ""; this.group = undefined; this.definitionRevision = null; this.loadPreferences(); this.renderControls(); this.renderResults(); if (this.root && this.workspaceId) void this.refresh();
   }
   setScope(directory: string | null, identity?: string): void { if (directory === this.navigationDirectory && (identity ?? null) === this.navigationScopeIdentity) return; this.navigationDirectory = directory; this.navigationScopeIdentity = identity ?? null; this.applyScope(directory, identity); }
@@ -303,12 +386,10 @@ export class QueryPanel {
   private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...((this.exactPlan?.where ?? this.expression).trim() ? [(this.exactPlan?.where ?? this.expression).trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
   private contextChanged(): void { this.loadPreferences(); this.renderControls(); void this.refresh(); }
   private loadPreferences(): void {
-    this.preference = defaultPreference(); this.shortcuts = []; this.recent = [];
-    try {
-      this.preference = decodeViewPreference(JSON.parse(localStorage.getItem(this.preferenceKey()) ?? "null"));
-      const shortcuts: unknown = JSON.parse(localStorage.getItem(`weftext-query-shortcuts:${this.libraryIdentity()}`) ?? "[]"); if (Array.isArray(shortcuts)) this.shortcuts = shortcuts.filter((item): item is Shortcut => item && typeof item.id === "string" && typeof item.label === "string" && ["query", "node", "savedQuery", "directory", "tag"].includes(item.kind));
-      const recent: unknown = JSON.parse(localStorage.getItem(`weftext-query-recents:${this.libraryIdentity()}`) ?? "[]"); if (Array.isArray(recent)) this.recent = recent.filter((item): item is typeof this.recent[number] => item && typeof item.entityKey === "string" && typeof item.path === "string" && typeof item.label === "string");
-    } catch { /* Corrupt local preferences reset safely; author source is unaffected. */ }
+    this.preference = defaultPreference(); this.shortcuts = []; this.recent = []; this.shortcutError = undefined;
+    try { this.preference = decodeViewPreference(JSON.parse(localStorage.getItem(this.preferenceKey()) ?? "null")); } catch { /* Display preferences do not change author semantics. */ }
+    try { const shortcutKey = `weftext-query-shortcuts:${this.libraryIdentity()}`, raw = localStorage.getItem(shortcutKey), collection = decodeTagShortcutCollection(raw ? JSON.parse(raw) : { version: 2, items: [] }); if (collection.items.some(item => !item || typeof item.id !== "string" || typeof item.label !== "string" || !["query", "node", "savedQuery", "directory", "tag"].includes(String(item.kind)))) throw new Error("快捷入口项目格式无效。"); this.shortcuts = collection.items as unknown as Shortcut[]; if (raw) localStorage.setItem(shortcutKey, JSON.stringify({ version: 2, items: this.shortcuts })); } catch (error) { this.shortcutError = `快捷入口恢复失败，原记录保留，暂停入口写入：${String(error)}`; }
+    try { const recent: unknown = JSON.parse(localStorage.getItem(`weftext-query-recents:${this.libraryIdentity()}`) ?? "[]"); if (Array.isArray(recent)) this.recent = recent.filter((item): item is typeof this.recent[number] => item && typeof item.entityKey === "string" && typeof item.path === "string" && typeof item.label === "string"); } catch { /* Recent navigation is independent from the original shortcuts. */ }
   }
   private savePreferences(): void { this.preference.fieldBindings ??= {}; for (const key of [...this.preference.columns, this.preference.sort, this.preference.groupField, this.preference.dateField, this.preference.chartField]) { const id = this.fieldByKey(key); if (id && !this.preference.fieldBindings[key]) this.preference.fieldBindings[key] = id; } localStorage.setItem(this.preferenceKey(), JSON.stringify(this.preference)); }
   private bindPreferenceField(key: string): void { const id = this.fieldByKey(key); if (id) { this.preference.fieldBindings ??= {}; this.preference.fieldBindings[key] = id; } }
@@ -349,7 +430,7 @@ export class QueryPanel {
     const descendants = ui("input"); descendants.type = "checkbox"; descendants.checked = this.descendants; descendants.onchange = () => { this.descendants = descendants.checked; void this.refresh(); }; scopeRow.append(labeled("包含子目录", descendants));
     const body = ui("input"); body.type = "checkbox"; body.checked = this.includeBody; body.onchange = () => { this.includeBody = body.checked; void this.refresh(); }; scopeRow.append(labeled("搜索正文", body));
     const lifecycle = selectControl([["live", "在库笔记"], ["trash", "回收站（只读）"]], this.lifecycle); lifecycle.onchange = () => { this.lifecycle = lifecycle.value as "live" | "trash"; void this.refresh(); }; scopeRow.append(labeled("范围", lifecycle)); this.controlsHost.append(scopeRow);
-    const chips = ui("div", "query-chips"); this.types.forEach(token => chips.append(action(`类型：${typeNames[token] ?? token} ×`, () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip"))); this.conditions.forEach(condition => chips.append(action(`${condition.label} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip"))); this.controlsHost.append(chips);
+    const chips = ui("div", "query-chips"); this.types.forEach(token => chips.append(action(`类型：${typeNames[token] ?? token} ×`, () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip"))); this.conditions.forEach(condition => { chips.append(action(`${condition.label} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip")); if (condition.tag) chips.append(action(condition.tag.mode === "subtree" ? "改为仅此标签" : "改为此标签及子级", () => { const tag = condition.tag!; this.conditions = this.conditions.filter(item => item.id !== condition.id); this.applyTag(tag.reference, tag.label, tag.mode === "subtree" ? "exact" : "subtree"); }, "data-button compact")); }); this.controlsHost.append(chips);
     const presentation = ui("div", "query-presentation"); const view = selectControl([["list", "列表"], ["table", "表格"], ["board", "看板"], ["calendar", "日历"], ["chart", "图表"]], this.preference.view); view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(); this.renderControls(); void this.refresh(); }; presentation.append(labeled("视图", view));
     const density = selectControl([["comfortable", "详细"], ["compact", "紧凑"]], this.preference.density); density.onchange = () => { this.preference.density = density.value as ViewPreference["density"]; this.savePreferences(); this.renderResults(); }; presentation.append(labeled("密度", density));
     const sort = selectControl([["title", "标题"], ...(this.schema?.fields.filter(field => { const shape = resolveShape(field.shape, this.schema!); return shape.kind === "scalar" || shape.kind === "enum"; }).map(field => [field.key, fieldNames[field.key] ?? field.key] as [string, string]) ?? [])], this.preference.sort); sort.disabled = !!this.savedSelection || !!this.exactPlan; sort.onchange = () => { this.preference.sort = sort.value; this.bindPreferenceField(sort.value); this.savePreferences(); void this.refresh(); }; presentation.append(labeled("排序", sort)); const descending = action(this.preference.descending ? "降序 ↓" : "升序 ↑", () => { this.preference.descending = !this.preference.descending; this.savePreferences(); this.renderControls(); void this.refresh(); }, "data-button compact"); descending.disabled = !!this.savedSelection || !!this.exactPlan; presentation.append(descending);
@@ -411,16 +492,30 @@ export class QueryPanel {
   }
   private renderShortcuts(): void {
     const shortcuts = ui("details", "query-shortcuts"); shortcuts.append(ui("summary", "", "本机快捷入口与最近打开"));
+    if (this.shortcutError) { const key = `weftext-query-shortcuts:${this.libraryIdentity()}`, raw = localStorage.getItem(key); shortcuts.append(ui("p", "data-warning", this.shortcutError), ui("pre", "", raw ?? ""), action("备份原记录并重置无效入口", () => { if (raw !== null) localStorage.setItem(`${key}:preserved:${crypto.randomUUID()}`, raw); localStorage.setItem(key, JSON.stringify({ version: 2, items: [] })); this.loadPreferences(); this.renderControls(); })); }
     shortcuts.append(action("把当前条件添加为本机快捷入口", () => { const label = window.prompt("快捷入口名称", this.savedSelection?.label || this.search || "当前查询"); if (!label) return; this.shortcuts.push(this.savedSelection ? { id: crypto.randomUUID(), label, kind: "savedQuery", definition: { ...this.savedSelection } } : { id: crypto.randomUUID(), label, kind: "query", plan: this.getPlan() }); this.saveShortcuts(); this.renderControls(); }));
-    this.shortcuts.forEach((shortcut, index) => { const row = ui("div", "query-shortcut-row"); row.append(action(shortcut.label, async () => { if (shortcut.kind === "directory" || shortcut.kind === "tag") await this.openNavigationShortcut(shortcut); else if (shortcut.kind === "savedQuery" && shortcut.definition) await this.runSaved(shortcut.definition); else if (shortcut.kind === "query" && shortcut.plan) this.setPlan(shortcut.plan); else if (shortcut.path) await this.openTarget(shortcut.path, shortcut.entityKey); }, "data-button")); const up = action("上移", () => { if (index === 0) return; [this.shortcuts[index - 1], this.shortcuts[index]] = [this.shortcuts[index], this.shortcuts[index - 1]]; this.saveShortcuts(); this.renderControls(); }, "data-button compact"); up.disabled = index === 0; row.append(up, action("移除入口", () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact")); shortcuts.append(row); });
+    this.shortcuts.forEach((shortcut, index) => { const row = ui("div", "query-shortcut-row"), label = shortcut.kind === "tag" ? `${shortcut.label} · ${shortcut.matchMode === "subtree" ? "此标签及子级" : "仅此标签"}` : shortcut.label; row.append(action(label, async () => { if (shortcut.kind === "directory" || shortcut.kind === "tag") await this.openNavigationShortcut(shortcut); else if (shortcut.kind === "savedQuery" && shortcut.definition) await this.runSaved(shortcut.definition); else if (shortcut.kind === "query" && shortcut.plan) this.setPlan(shortcut.plan); else if (shortcut.path) await this.openTarget(shortcut.path, shortcut.entityKey); }, "data-button")); const up = action("上移", () => { if (index === 0) return; [this.shortcuts[index - 1], this.shortcuts[index]] = [this.shortcuts[index], this.shortcuts[index - 1]]; this.saveShortcuts(); this.renderControls(); }, "data-button compact"); up.disabled = index === 0; row.append(up, action("移除入口", () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact")); shortcuts.append(row); });
     for (const item of this.recent) shortcuts.append(action(`最近：${item.label}${item.lifecycle === "trash" ? " · 回收站只读" : ""}`, () => this.openTarget(item.path, item.entityKey, item.lifecycle, item.revision), "query-recent")); shortcuts.append(ui("p", "data-help", "入口、置顶与视图偏好保存在本机，不修改笔记内容。移除入口不删除目标。")); this.controlsHost.append(shortcuts);
   }
-  private saveShortcuts(): void { localStorage.setItem(`weftext-query-shortcuts:${this.libraryIdentity()}`, JSON.stringify(this.shortcuts)); }
+  private saveShortcuts(): void { if (this.shortcutError) { this.host.notify(this.shortcutError, true); throw new Error(this.shortcutError); } decodeTagShortcutCollection({ version: 2, items: this.shortcuts }); localStorage.setItem(`weftext-query-shortcuts:${this.libraryIdentity()}`, JSON.stringify({ version: 2, items: this.shortcuts })); }
   private renderRegisteredNavigation(): void {
-    if (!this.root || !this.workspaceId) return; let controls = this.navigationControls.get(this.root); if (!controls) { controls = new NavigationControls(this.host, this.root, () => this.scopeIdentity ?? this.directory ?? this.root!, (targetRef, label) => this.applyTag(targetRef, label), (targetRef, label, kind) => { if (!this.shortcuts.some(item => item.targetRef === targetRef && item.kind === kind)) this.shortcuts.push({ id: crypto.randomUUID(), label, kind, targetRef }); this.saveShortcuts(); this.renderControls(); }); this.navigationControls.set(this.root, controls); } this.controlsHost.append(controls.element);
+    if (!this.root || !this.workspaceId) return;
+    const root = this.root, workspaceId = this.workspaceId, identity = JSON.stringify([root, workspaceId]), current = () => this.root === root && this.workspaceId === workspaceId;
+    let controls = this.navigationControls.get(identity);
+    if (!controls) {
+      controls = new NavigationControls(this.host, root, workspaceId, () => this.scopeIdentity ?? this.directory ?? root, (targetRef, label, mode) => { if (current()) this.applyTag(targetRef, label, mode); }, (targetRef, label, kind, matchMode) => {
+        if (!current()) throw new Error("原资料库的导航操作已保留，请返回原库核对后添加入口。");
+        if (kind === "tag" && matchMode !== "exact" && matchMode !== "subtree") throw new Error("新标签入口必须明确筛选模式。");
+        if (!this.shortcuts.some(item => item.targetRef === targetRef && item.kind === kind && item.matchMode === matchMode)) this.shortcuts.push({ id: crypto.randomUUID(), label, kind, targetRef, ...(kind === "tag" ? { matchMode } : {}) });
+        this.saveShortcuts(); this.renderControls();
+      }, () => current() ? this.fieldByKey("tags") : undefined, () => { if (current()) this.tagRegistryChanged(); });
+      this.navigationControls.set(identity, controls);
+    }
+    this.controlsHost.append(controls.element);
   }
-  private applyTag(targetRef: string, label: string): void { try { const field = this.schema?.fields.find(field => field.key === "tags"); if (!field || !this.schema) throw new Error("当前 schema 没有可用的 tags 字段。"); const shape = resolveShape(field.shape, this.schema); const value: NativeValue = shape.kind === "list" && resolveShape(shape.items, this.schema).kind === "scalar" || shape.kind === "scalar" ? { kind: "text", value: targetRef } : { kind: "record", value: [{ key: "ref", value: { kind: "text", value: targetRef } }] }; const expr = facetPredicate({ fieldId: field.id, key: field.key, value, count: 0 }, this.schema); this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; if (!this.conditions.some(condition => condition.expr === expr)) this.conditions.push({ id: crypto.randomUUID(), label: `标签：${label}`, expr }); this.contextChanged(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }
-  private async openNavigationShortcut(shortcut: Shortcut): Promise<void> { try { if (!shortcut.targetRef) throw new Error("快捷入口缺少稳定目标身份。"); const target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root: this.root, targetRef: shortcut.targetRef }); if (target.status !== "managed" || target.targetRef !== shortcut.targetRef) throw new Error(`目标${target.status === "missing" ? "已缺失" : "身份不可用"}`); if (shortcut.kind === "tag") this.applyTag(shortcut.targetRef, target.displayName ?? target.label); else if (target.path) this.applyScope(target.path, shortcut.targetRef); else throw new Error("目录当前位置不可用。"); } catch (error) { this.host.notify(`快捷目标不可用：${error instanceof Error ? error.message : String(error)}。入口保留，未猜测同名目标。`, true); } }
+  private tagRegistryChanged(): void { this.generation++; this.loading = false; this.tagReferences.tagTree = undefined; if (this.result) this.result = { ...this.result, freshness: "stale" }; this.renderResults(); }
+  private applyTag(targetRef: string, label: string, mode: TagMatchMode): void { try { const field = this.schema?.fields.find(field => field.key === "tags"); if (!field || !this.schema) throw new Error("当前 schema 没有可用的 tags 字段。"); const expr = tagPredicate(targetRef, mode, fieldExpr(field.id)); this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; if (!this.conditions.some(condition => condition.expr === expr)) this.conditions.push({ id: crypto.randomUUID(), label: `标签：${label} · ${mode === "subtree" ? "此标签及子级" : "仅此标签"}`, expr, tag: { reference: targetRef, label, mode } }); this.contextChanged(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }
+  private async openNavigationShortcut(shortcut: Shortcut): Promise<void> { try { if (!shortcut.targetRef) throw new Error("快捷入口缺少稳定目标身份。"); const root = this.root, workspace = this.workspaceId, target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: shortcut.targetRef }); if (root !== this.root || workspace !== this.workspaceId) return; if (target.status !== "managed" || target.targetRef !== shortcut.targetRef) throw new Error(`目标${target.status === "missing" ? "已缺失" : "身份不可用"}`); if (shortcut.kind === "tag") { if (!shortcut.matchMode) throw new Error("标签入口没有明确模式。"); this.applyTag(shortcut.targetRef, `${target.displayName ?? target.label} · ${shortcut.targetRef.slice(shortcut.targetRef.lastIndexOf("/") + 1)}`, shortcut.matchMode); } else if (target.path) this.applyScope(target.path, shortcut.targetRef); else throw new Error("目录当前位置不可用。"); } catch (error) { this.host.notify(`快捷目标不可用：${error instanceof Error ? error.message : String(error)}。入口保留，未猜测同名目标。`, true); } }
   private renderSavedQueries(): void {
     const section = ui("details", "query-saved-definitions"); section.append(ui("summary", "", "原生保存 Query · 当前 / 固定定义")); const document = this.host.getDocument();
     if (!document?.nodeId || !this.workspaceId || document.root !== this.root) { section.append(ui("p", "data-help", "打开当前资料库中的笔记，才能读取或保存该笔记拥有的 Query 定义。")); this.controlsHost.append(section); return; }
@@ -457,7 +552,7 @@ export class QueryPanel {
     finally { if (generation === this.generation) { this.loading = false; this.renderControls(); this.renderResults(); } }
   }
   private renderResults(): void {
-    this.thumbnailGeneration++; this.thumbnailObservers.forEach(observer => observer.disconnect()); this.thumbnailObservers = []; this.thumbnailDisposers.forEach(dispose => dispose()); this.thumbnailDisposers = [];
+    this.thumbnailDisposers.forEach(dispose => dispose()); this.thumbnailDisposers = [];
     const scrollTop = this.resultsHost.scrollTop; this.resultsHost.replaceChildren(); this.resultsHost.className = `query-results ${this.preference.density}`; this.resultsHost.setAttribute("aria-busy", String(this.loading));
     if (!this.root) { this.resultsHost.append(ui("p", "data-empty", "打开资料库后搜索与浏览笔记。")); return; }
     if (!this.workspaceId) { this.resultsHost.append(ui("p", "data-help", "当前是普通文件夹。结构化查询需要已创建的资料库；文件仍可从导航直接打开。")); return; }
@@ -503,11 +598,12 @@ export class QueryPanel {
       const edit = ui("details", "query-inline-fields"); edit.append(ui("summary", "", "就地编辑真实属性"), ui("p", "data-help", "每次重新核对实际笔记与字段，修改进入该笔记草稿，可撤销；保存仍由原保存按钮完成。"));
       for (const [column, cell] of Object.entries(row.cells)) {
         const field = directQueryField(this.resultPlan, this.schema, column); if (!field || cell.state !== "value" || !cell.value) continue;
-        const section = ui("section"), shape = resolveShape(field.shape, this.schema); if (!["scalar", "enum", "union"].includes(shape.kind)) continue;
+        const section = ui("section"), shape = resolveShape(field.shape, this.schema); if (!["scalar", "enum", "union"].includes(shape.kind) && field.key !== "tags") continue;
         const key = JSON.stringify([this.root, row.entityKey, field.id]), binding = JSON.stringify([field.shape, this.schema.definitions]), draft = this.inlineDrafts.get(key) ?? { value: structuredClone(cell.value), raw: {}, binding };
         section.append(ui("strong", "", fieldNames[field.key] ?? field.key));
         if (draft.binding !== binding) { section.append(ui("p", "data-warning", "字段形状已变化，原输入保留，未绑定同名新字段。"), ui("pre", "", JSON.stringify(draft, null, 2)), action("放弃此字段的旧输入", () => { this.inlineDrafts.delete(key); this.renderResults(); })); edit.append(section); continue; }
-        section.append(valueEditor(field.shape, draft.value, this.schema, next => { draft.value = next; this.inlineDrafts.set(key, draft); }, `结果属性：${fieldNames[field.key] ?? field.key}`));
+        section.append(valueEditor(field.shape, draft.value, this.schema, next => { draft.value = next; this.inlineDrafts.set(key, draft); }, `结果属性：${fieldNames[field.key] ?? field.key}`, 0, this.tagReferences));
+        if (field.key === "tags" && this.root) section.append(action("读取完整标签选择目录", async () => { const root = this.root!, generation = this.generation; await loadTagFormReferences(this.host, root, this.tagReferences, this.element, () => root === this.root && generation === this.generation); }));
         for (const [id, control] of nativeFormControls(section)) if (id in draft.raw) { control.value = draft.raw[id]; control.dispatchEvent(new Event("input", { bubbles: true })); }
         const retain = () => { draft.raw = Object.fromEntries(nativeFormControls(section).filter(([, control]) => !control.validity.valid).map(([id, control]) => [id, control.value])); this.inlineDrafts.set(key, draft); }; section.addEventListener("input", retain); section.addEventListener("change", retain);
         section.append(action("应用此字段到笔记草稿", async () => { const invalid = section.querySelector<HTMLInputElement>(":invalid"); if (invalid) { invalid.reportValidity(); return; } await this.changeTaskField(row, field.key, draft.value, field.id, () => { this.inlineDrafts.delete(key); }); })); edit.append(section);
@@ -527,23 +623,13 @@ export class QueryPanel {
       card.append(this.rowControls(row)); list.append(card); } container.append(list);
   }
   private renderThumbnail(container: HTMLElement, row: QueryRow): void {
-    const labels: Record<RowPreview["state"], string> = { absent: "没有图片或 PDF 资源", building: "缩略图生成中", ready: "缩略图就绪", failed: "缩略图生成失败", unsupported: "此格式暂无缩略图", unavailable: "缩略图不可用" };
     if (queryRowLifecycle(row, this.resultPlan) !== "live") { container.append(ui("p", "query-preview-state", "缩略图不可用；此入口仅提供已确认当前生命周期的资源预览。")); return; }
     if (!row.entityKey || !row.revision || !this.root || !this.host.requestBlob) { container.append(ui("p", "query-preview-state", "缩略图不可用（缺少准确笔记版本或资源读取入口）")); return; }
-    const generation = this.thumbnailGeneration; const root = this.root; const key = `${root}:${row.entityKey}:${row.revision}`; const status = ui("p", "query-preview-state", "缩略图等待可见时读取…"); container.append(status);
-    const build = async (): Promise<void> => {
-      if (generation !== this.thumbnailGeneration || !container.isConnected) return; status.textContent = labels.building;
-      try {
-        let pending = this.previewCache.get(key); if (!pending) { pending = this.host.request<RowPreview>("/api/query/preview", { root, entityKey: row.entityKey, revision: row.revision }); this.previewCache.set(key, pending); }
-        const preview = await pending; if (generation !== this.thumbnailGeneration || !container.isConnected) return;
-        if (preview.state !== "ready" || !preview.descriptor?.revision) { status.textContent = `${labels[preview.state]}${preview.message ? `：${preview.message}` : ""}`; return; }
-        const descriptor = preview.descriptor; const media = await import("./media-viewer"); if (generation !== this.thumbnailGeneration || !container.isConnected) return;
-        container.replaceChildren(); const renderingHost = ui("div", "query-thumbnail-pixels"); container.append(renderingHost, ui("p", "query-preview-state", `当前资源预览 · ${preview.sourceBasisKind === "observed" ? "已观察源依据与此行相同" : "已提交源版本与此行相同"} · 资源版本 ${descriptor.revision}`));
-        const renderer = media.renderQueryThumbnail(renderingHost, descriptor, () => this.host.requestBlob!("/api/query/preview-resource", { root, entityKey: row.entityKey, revision: row.revision, resource: descriptor.resource, resourceRevision: descriptor.revision })); this.thumbnailDisposers.push(() => renderer.dispose());
-      } catch (error) { if (generation === this.thumbnailGeneration && container.isConnected) { status.textContent = `缩略图不可用：${error instanceof Error ? error.message : String(error)}`; } }
-    };
-    if (typeof IntersectionObserver === "undefined") { queueMicrotask(() => { void build(); }); return; }
-    const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); void build(); } }, { root: this.resultsHost, rootMargin: "120px" }); observer.observe(container); this.thumbnailObservers.push(observer);
+    const root = this.root, key = `${root}:${row.entityKey}:${row.revision}`;
+    const thumbnail = mountListThumbnail(container, { viewport:this.resultsHost,
+      resolve: () => { let pending=this.previewCache.get(key); if(!pending){pending=this.host.request<RowPreview>("/api/query/preview",{root,entityKey:row.entityKey,revision:row.revision});this.previewCache.set(key,pending);}return pending; },
+      read: (descriptor, revision) => this.host.requestBlob!("/api/query/preview-resource",{root,entityKey:row.entityKey,revision,resource:descriptor.resource,resourceRevision:descriptor.revision}),
+    }); this.thumbnailDisposers.push(() => thumbnail.dispose());
   }
   private renderTable(rows: QueryRow[], container: HTMLElement): void {
     const columns = [...new Set([...(this.result?.columns ?? []), ...rows.flatMap(row => Object.keys(row.cells))])].filter(column => column !== "summary"); const table = ui("table", "query-table"); const caption = ui("caption", "", `${this.result?.coverage === "partial" ? "已知部分" : "当前"}查询数据 · ${rows.length} 行`); table.append(caption); const head = ui("thead"); const heading = ui("tr"); heading.append(ui("th", "", "笔记 / 行")); columns.filter(column => column !== "title").forEach(column => { const cell = ui("th", "", fieldNames[column] ?? column); cell.scope = "col"; heading.append(cell); }); heading.append(ui("th", "", "操作")); head.append(heading); table.append(head); const body = ui("tbody");

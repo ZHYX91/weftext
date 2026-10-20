@@ -34,6 +34,12 @@ pub struct DefinitionReferenceSlots {
 pub struct SavedQueryReferenceSlots {
     pub typed_refs: Vec<TypedRefSlot>,
     pub definition_references: Vec<DefinitionReferenceSlots>,
+    #[serde(skip)]
+    tag_expressions: Vec<(ExactRange, String)>,
+    #[serde(skip)]
+    tag_defaults: Vec<(ExactRange, String)>,
+    #[serde(skip)]
+    schema_bindings: Vec<(ExactRange, ExactRange, String, String)>,
 }
 
 /// Slot discovery follows the data engine's qualified saved Query structures,
@@ -41,8 +47,29 @@ pub struct SavedQueryReferenceSlots {
 /// arbitrary records, and URI-looking text never become rewrite slots.
 pub fn saved_query_reference_slots(
     source: &str,
-    _schema: &weftext_data::Schema,
+    schema: &weftext_data::Schema,
     owner: &NodeRef,
+) -> Result<SavedQueryReferenceSlots> {
+    let mut slots = saved_query_slots(source, owner, Some(schema))?;
+    slots.typed_refs.extend(
+        slots
+            .tag_defaults
+            .drain(..)
+            .map(|(range, reference)| TypedRefSlot {
+                from: range.from,
+                to: range.to,
+                target: reference,
+                kind: "tag_ref".into(),
+            }),
+    );
+    slots.typed_refs.sort_by_key(|slot| (slot.from, slot.to));
+    Ok(slots)
+}
+
+fn saved_query_slots(
+    source: &str,
+    owner: &NodeRef,
+    schema: Option<&weftext_data::Schema>,
 ) -> Result<SavedQueryReferenceSlots> {
     use typst_syntax::{
         Source,
@@ -167,6 +194,7 @@ pub fn saved_query_reference_slots(
         source: &str,
         out: &mut SavedQueryReferenceSlots,
         depth: usize,
+        schema: Option<&weftext_data::Schema>,
     ) -> Result<()> {
         if depth > 64 {
             return Err(KnowledgeError::new(
@@ -175,6 +203,232 @@ pub fn saved_query_reference_slots(
             ));
         }
         let fields = members(expr)?;
+        fn array(expr: ast::Expr<'_>) -> Result<Vec<ast::Expr<'_>>> {
+            expr.to_untyped()
+                .cast::<ast::Array>()
+                .ok_or_else(|| {
+                    KnowledgeError::new(
+                        "definitionReferenceSlot",
+                        "A Query array must have exact native members",
+                    )
+                })?
+                .items()
+                .map(|item| match item {
+                    ast::ArrayItem::Pos(expr) => Ok(expr),
+                    _ => Err(KnowledgeError::new(
+                        "definitionReferenceSlot",
+                        "Spread Query array",
+                    )),
+                })
+                .collect()
+        }
+        fn expression(
+            expr: ast::Expr<'_>,
+            expected: &str,
+            parsed: &Source,
+            source: &str,
+            out: &mut SavedQueryReferenceSlots,
+        ) -> Result<()> {
+            out.tag_expressions
+                .push((text_slot(expr, expected, parsed, source)?, expected.into()));
+            Ok(())
+        }
+        fn columns(
+            expr: ast::Expr<'_>,
+            columns: &[weftext_data::QueryColumn],
+            parsed: &Source,
+            source: &str,
+            out: &mut SavedQueryReferenceSlots,
+        ) -> Result<()> {
+            let entries = array(expr)?;
+            if entries.len() != columns.len() {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceSlot",
+                    "Query columns no longer match their exact plan",
+                ));
+            }
+            for (expr, column) in entries.into_iter().zip(columns) {
+                expression(
+                    member(&members(expr)?, "expr")?,
+                    &column.expr,
+                    parsed,
+                    source,
+                    out,
+                )?;
+            }
+            Ok(())
+        }
+        struct DefaultContext<'a> {
+            schema: &'a weftext_data::Schema,
+            parsed: &'a Source,
+            source: &'a str,
+        }
+        fn defaults(
+            shape: &weftext_data::Shape,
+            value: &weftext_data::NativeValue,
+            expr: ast::Expr<'_>,
+            context: &DefaultContext<'_>,
+            out: &mut SavedQueryReferenceSlots,
+            depth: usize,
+        ) -> Result<()> {
+            if depth > 64 {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceBudget",
+                    "Query default shape exceeds depth budget",
+                ));
+            }
+            use weftext_data::{NativeValue, Shape};
+            let DefaultContext {
+                schema,
+                parsed,
+                source,
+            } = context;
+            fn contains_tag(shape: &Shape, schema: &weftext_data::Schema, depth: usize) -> bool {
+                if depth > 64 {
+                    return true;
+                }
+                match schema.resolve(shape) {
+                    Shape::Scalar { semantic } => semantic == "tag_ref",
+                    Shape::List { items, .. } => contains_tag(items, schema, depth + 1),
+                    Shape::Record { members, .. } => members
+                        .values()
+                        .any(|member| contains_tag(&member.shape, schema, depth + 1)),
+                    Shape::Union { variants, .. } => variants
+                        .iter()
+                        .any(|variant| contains_tag(variant, schema, depth + 1)),
+                    _ => false,
+                }
+            }
+            if !contains_tag(shape, schema, depth) {
+                return Ok(());
+            }
+            match (schema.resolve(shape), value) {
+                (Shape::Scalar { semantic }, NativeValue::Text(reference))
+                    if semantic == "tag_ref" =>
+                {
+                    out.tag_defaults.push((
+                        text_slot(expr, reference, parsed, source)?,
+                        reference.clone(),
+                    ));
+                }
+                (Shape::List { items, .. }, NativeValue::Array(values)) => {
+                    let entries = array(expr)?;
+                    if entries.len() != values.len() {
+                        return Err(KnowledgeError::new(
+                            "definitionReferenceSlot",
+                            "Query list default differs from its exact native value",
+                        ));
+                    }
+                    for (expr, value) in entries.into_iter().zip(values) {
+                        defaults(items, value, expr, context, out, depth + 1)?;
+                    }
+                }
+                (
+                    Shape::Record {
+                        members: shapes, ..
+                    },
+                    NativeValue::Record(values),
+                ) => {
+                    let fields = members(expr)?;
+                    for value in values {
+                        if let Some(member_shape) = shapes.get(&value.key) {
+                            defaults(
+                                &member_shape.shape,
+                                &value.value,
+                                member(&fields, &value.key)?,
+                                context,
+                                out,
+                                depth + 1,
+                            )?;
+                        }
+                    }
+                }
+                (Shape::Union { variants, .. }, _) => {
+                    let choices: Vec<_> = variants
+                        .iter()
+                        .filter(|variant| schema.validate(variant, value).is_valid())
+                        .collect();
+                    if choices.len() != 1 {
+                        return Err(KnowledgeError::new(
+                            "definitionReferenceSlot",
+                            "A Query default requires one unambiguous typed union variant",
+                        ));
+                    }
+                    defaults(choices[0], value, expr, context, out, depth + 1)?;
+                }
+                _ => {}
+            }
+            Ok(())
+        }
+        if let Some(filter) = &plan.r#where {
+            expression(member(&fields, "where")?, filter, parsed, source, out)?;
+        }
+        if !plan.select.is_empty() {
+            columns(
+                member(&fields, "select")?,
+                &plan.select,
+                parsed,
+                source,
+                out,
+            )?;
+        }
+        if !plan.order.is_empty() {
+            let orders = array(member(&fields, "order")?)?;
+            if orders.len() != plan.order.len() {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceSlot",
+                    "Query order no longer matches its exact plan",
+                ));
+            }
+            for (expr, order) in orders.into_iter().zip(&plan.order) {
+                expression(
+                    member(&members(expr)?, "expr")?,
+                    &order.expr,
+                    parsed,
+                    source,
+                    out,
+                )?;
+            }
+        }
+        if let Some(unnest) = &plan.unnest {
+            expression(
+                member(&members(member(&fields, "unnest")?)?, "array")?,
+                &unnest.array,
+                parsed,
+                source,
+                out,
+            )?;
+        }
+        if let Some(group) = &plan.group {
+            let group_fields = members(member(&fields, "group")?)?;
+            if !group.keys.is_empty() {
+                columns(
+                    member(&group_fields, "keys")?,
+                    &group.keys,
+                    parsed,
+                    source,
+                    out,
+                )?;
+            }
+            let aggregates = array(member(&group_fields, "aggregates")?)?;
+            if aggregates.len() != group.aggregates.len() {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceSlot",
+                    "Query aggregates no longer match their exact plan",
+                ));
+            }
+            for (expr, aggregate) in aggregates.into_iter().zip(&group.aggregates) {
+                if let Some(expected) = &aggregate.expr {
+                    expression(
+                        member(&members(expr)?, "expr")?,
+                        expected,
+                        parsed,
+                        source,
+                        out,
+                    )?;
+                }
+            }
+        }
         if let Some(directory) = &plan.scope.directory
             && node_ref(directory).is_some()
         {
@@ -191,8 +445,42 @@ pub fn saved_query_reference_slots(
             return Ok(());
         };
         let fields = members(member(&fields, "advanced")?)?;
+        if let Some(distinct) = &advanced.distinct {
+            columns(member(&fields, "distinct")?, distinct, parsed, source, out)?;
+        }
+        if !advanced.parameters.is_empty() {
+            let parameters = array(member(&fields, "parameters")?)?;
+            if parameters.len() != advanced.parameters.len() {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceSlot",
+                    "Query parameters no longer match their exact plan",
+                ));
+            }
+            for (expr, parameter) in parameters.into_iter().zip(&advanced.parameters) {
+                if let (Some(schema), Some(value)) = (schema, &parameter.default) {
+                    defaults(
+                        &parameter.shape,
+                        value,
+                        member(&members(expr)?, "default")?,
+                        &DefaultContext {
+                            schema,
+                            parsed,
+                            source,
+                        },
+                        out,
+                        0,
+                    )?;
+                }
+            }
+        }
         if let Some(call) = &advanced.call {
             let controls = members(member(&fields, "call")?)?;
+            if !call.arguments.is_empty() {
+                let arguments = members(member(&controls, "arguments")?)?;
+                for (name, expected) in &call.arguments {
+                    expression(member(&arguments, name)?, expected, parsed, source, out)?;
+                }
+            }
             let referenced_owner = node_ref(&call.owner).ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionReferenceSlot",
@@ -253,7 +541,7 @@ pub fn saved_query_reference_slots(
                 ));
             }
             for (plan, expr) in advanced.union_all.iter().zip(branches) {
-                visit(plan, expr, parsed, source, out, depth + 1)?;
+                visit(plan, expr, parsed, source, out, depth + 1, schema)?;
             }
         }
         if let Some(related) = &advanced.related {
@@ -265,6 +553,7 @@ pub fn saved_query_reference_slots(
                 source,
                 out,
                 depth + 1,
+                schema,
             )?;
         }
         Ok(())
@@ -272,6 +561,9 @@ pub fn saved_query_reference_slots(
     let mut out = SavedQueryReferenceSlots {
         typed_refs: vec![],
         definition_references: vec![],
+        tag_expressions: vec![],
+        tag_defaults: vec![],
+        schema_bindings: vec![],
     };
     for definition in definitions {
         let certified = weftext_engine::certify_metadata_declaration(source, &definition.label)
@@ -312,7 +604,24 @@ pub fn saved_query_reference_slots(
                     "Saved Query declaration has no exact dictionary",
                 )
             })?;
-        visit(&definition.plan, expr, &parsed, source, &mut out, 0)?;
+        let binding = members(member(&members(expr)?, "binding")?)?;
+        out.schema_bindings.push((
+            text_slot(
+                member(&binding, "schema")?,
+                &definition.binding.schema,
+                &parsed,
+                source,
+            )?,
+            text_slot(
+                member(&binding, "revision")?,
+                &definition.binding.revision,
+                &parsed,
+                source,
+            )?,
+            definition.binding.schema.clone(),
+            definition.binding.revision.clone(),
+        ));
+        visit(&definition.plan, expr, &parsed, source, &mut out, 0, schema)?;
     }
     out.typed_refs.sort_by_key(|s| (s.from, s.to));
     out.definition_references.sort_by_key(|s| s.owner_slot.from);
@@ -349,6 +658,11 @@ pub struct CopyInput {
     pub files: Vec<CopyFile>,
     pub node_map: BTreeMap<NodeRef, NodeRef>,
     pub resource_map: BTreeMap<String, String>,
+    /// Complete typed TagRef keys. Empty for same-library copies; a foreign
+    /// import must supply mappings created by the target Core operation.
+    pub tag_map: BTreeMap<String, String>,
+    /// Exact source schema role/revision to an equivalent frozen target basis.
+    pub schema_map: BTreeMap<(String, String), (String, String)>,
     pub annotation_map: BTreeMap<String, String>,
     pub definition_map: BTreeMap<String, String>,
     pub revision_map: BTreeMap<NodeRef, String>,
@@ -991,6 +1305,24 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
             "Every copied note must receive one independent fresh identity",
         ));
     }
+    fn tag_identity(reference: &str) -> Option<(&str, &str)> {
+        let (workspace, id) = reference.strip_prefix("weftext-tag://")?.split_once('/')?;
+        (fresh_uuid(workspace) && fresh_uuid(id)).then_some((workspace, id))
+    }
+    let mut mapped_tags = BTreeSet::new();
+    for (source, target) in &input.tag_map {
+        if tag_identity(source).is_none()
+            || tag_identity(target).is_none()
+            || source == target
+            || !mapped_tags.insert(target)
+            || input.tag_map.contains_key(target)
+        {
+            return Err(KnowledgeError::new(
+                "tagMap",
+                "Tag mappings require complete typed references and distinct target identities",
+            ));
+        }
+    }
     let resource_ids: BTreeSet<_> = input.resource_map.values().collect();
     if resource_ids.len() != input.resource_map.len()
         || input
@@ -1156,6 +1488,45 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         "The installed schema has not proved complete typed-ref slots; originals are preserved and unknown references remain unchanged",
                     );
                 }
+                if !input.tag_map.is_empty()
+                    || input
+                        .node_map
+                        .get(owner)
+                        .is_some_and(|target| target.workspace_id != owner.workspace_id)
+                {
+                    let slots = saved_query_slots(source, owner, None)?;
+                    for (schema_range, revision_range, reference, revision) in slots.schema_bindings
+                    {
+                        let (target, target_revision) = input.schema_map.get(&(reference,revision)).ok_or_else(|| KnowledgeError::new("schemaMap", "A foreign Query requires an exact equivalent target schema role and revision"))?;
+                        patches.push((schema_range, encode_string(target)?));
+                        patches.push((revision_range, encode_string(target_revision)?));
+                    }
+                    for (range, expression) in slots.tag_expressions {
+                        let after = weftext_data::remap_cel_tag_literals(
+                            &expression,
+                            &input.tag_map,
+                            &owner.workspace_id,
+                        )
+                        .map_err(|e| KnowledgeError::new("tagMap", e.to_string()))?;
+                        if after != expression {
+                            patches.push((range, encode_string(&after)?));
+                        }
+                    }
+                    for (range, reference) in slots.tag_defaults {
+                        if let Some(target) = input.tag_map.get(&reference) {
+                            patches.push((range, encode_string(target)?));
+                        } else if reference
+                            .strip_prefix("weftext-tag://")
+                            .and_then(|r| r.split_once('/'))
+                            .is_some_and(|(workspace, _)| workspace == owner.workspace_id)
+                        {
+                            return Err(KnowledgeError::new(
+                                "tagMap",
+                                "A typed source Query tag default requires its exact complete import mapping",
+                            ));
+                        }
+                    }
+                }
                 for slot in &file.typed_refs {
                     if file.definition_references.iter().any(|reference| {
                         reference.revision.is_some()
@@ -1196,11 +1567,29 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                                 .and_then(|resource| input.resource_map.get(&resource).cloned())
                         }
                         "tag_ref" | "tagRef" => {
-                            lose(
-                                "externalTag",
-                                "Tag reference preserved as an external definition; no new tag identity was fabricated",
-                            );
-                            None
+                            let normalized = crate::links::normalized_uri_scheme(&slot.target);
+                            if let Some(mapped) = input.tag_map.get(normalized.as_ref()) {
+                                Some(mapped.clone())
+                            } else {
+                                let local = normalized
+                                    .strip_prefix("weftext-tag://")
+                                    .and_then(|r| r.split_once('/'))
+                                    .is_some_and(|(workspace, id)| {
+                                        workspace == original.owner.workspace_id
+                                            && uuid::Uuid::parse_str(id).is_ok()
+                                    });
+                                let same_workspace =
+                                    input.node_map.get(&original.owner).is_some_and(|target| {
+                                        target.workspace_id == original.owner.workspace_id
+                                    });
+                                if local && !same_workspace {
+                                    return Err(KnowledgeError::new(
+                                        "tagMap",
+                                        "A foreign import requires an exact target mapping for every source-workspace typed TagRef",
+                                    ));
+                                }
+                                None
+                            }
                         }
                         _ => {
                             lose(

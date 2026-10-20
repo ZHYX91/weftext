@@ -14,13 +14,17 @@ pub use query_advanced::*;
 mod recurrence;
 mod relations;
 mod schema;
+mod tag_forest;
 mod temporal;
+pub use tag_forest::*;
+mod tag_remap;
 pub use native::*;
 pub use projection::*;
 pub use query::*;
 pub use recurrence::*;
 pub use relations::*;
 pub use schema::*;
+pub use tag_remap::*;
 pub use temporal::*;
 
 use std::fmt;

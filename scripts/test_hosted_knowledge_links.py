@@ -15,6 +15,34 @@ from test_hosted_history import HostedHistory
 
 
 class HostedKnowledgeLinks(HostedHistory):
+    def test_graph_and_heading_structure_share_authorized_basis_and_never_publish_hidden_endpoints(self):
+        other = self.replace_body('Other', '关系目标', '正文')
+        target = self.call('navigation/ref', {'sessionId': other['sessionId']})['reference']
+        shared = self.replace_body('Shared', '当前图', '= 根标题\n==== 深层\n#heading(level: 7)[生成标题]\n\n#link("'+target+'")[一]\n#link("'+target+'")[二]')
+        basis = self.basis(shared, serial=3)
+        profile = self.links(basis)
+        graph = profile['graph']
+        self.assertEqual(graph['generation'], profile['basis']['snapshot'])
+        self.assertEqual(graph['scope'], 'authorizedNativeSourcesAndTypedReferences')
+        self.assertEqual(graph['root'], self.call('navigation/ref', {'sessionId': shared['sessionId']})['reference'].removeprefix('weftext-node://'))
+        edges = [edge for edge in graph['edges'] if edge['source'] == graph['root'] and edge['target'] == target.removeprefix('weftext-node://') and edge['relation'] == '正文链接']
+        self.assertEqual(len(edges), 2)
+        self.assertNotEqual(edges[0]['key'], edges[1]['key'])
+        self.assertTrue(all(edge['authorSource'] == graph['root'] and edge['sourceHash'] == basis['sourceHash'] for edge in edges))
+        structure = profile['headingStructure']
+        self.assertEqual(structure['coverage'], 'complete')
+        self.assertEqual([item['level'] for item in structure['items']], [1, 4, 7])
+        self.assertIsNotNone(structure['items'][0]['range'])
+        self.assertTrue(structure['items'][2]['generated'])
+        self.assertIsNone(structure['items'][2]['range'])
+        self.assertEqual((self.root/'Shared/Shared.typ').read_text('utf-8'), shared['source'])
+        self.policy(lambda users: users['alice']['grants'].pop('Other'))
+        self.links(basis, status=410)
+        fresh = self.open()
+        limited = self.links(self.basis(fresh, serial=4))
+        self.assertNotIn(target, json.dumps(limited['graph'], ensure_ascii=False))
+        self.assertFalse(any(edge['target'] == target.removeprefix('weftext-node://') for edge in limited['graph']['edges']))
+
     def test_links_stage_three_fragments_diagnostics_and_revoked_candidates(self):
         target=self.replace_body('Other','目标笔记','= 路线图 <route>\n\n正文')
         ref=self.call('navigation/ref',{'sessionId':target['sessionId']})['reference']
@@ -282,5 +310,5 @@ class HostedKnowledgeLinks(HostedHistory):
 if __name__ == '__main__':
     selected = set(sys.argv[2:])
     suite = unittest.TestSuite(HostedKnowledgeLinks(name) for name in sorted(HostedKnowledgeLinks.__dict__)
-        if name.startswith('test_links_') and (not selected or name in selected))
+        if name.startswith('test_') and (not selected or name in selected))
     sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
