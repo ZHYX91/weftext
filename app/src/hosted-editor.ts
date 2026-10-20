@@ -12,6 +12,7 @@ import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
 import { headingMatchesDisplay, type StructureHeading } from "./heading-structure-state";
+import { DeferredPaint } from "./deferred-paint";
 import "./document-notes.css";
 import { nativeElement } from "./native-node";
 import { OfflineFontLoader } from "./font-readiness";
@@ -49,6 +50,7 @@ export class HostedEditor {
   private paused = false;
   private mode: ViewMode = "styled";
   private projection?: Projection;
+  private deferredPaint = new DeferredPaint();
   private generation = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private toolbar = node("div");
@@ -106,7 +108,7 @@ export class HostedEditor {
     // Selecting the actual native author range changes neither source nor Undo.
     this.mode = "source"; this.editor.clearReveal(); this.editor.readOnly(this.blocked); this.paint(true); this.editor.select(origin.utf16From, origin.utf16To); this.queryHost?.modeChanged?.();
   }
-  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read" || this.paused && this.mode !== "source"); if (this.blocked === value) return; if (value) this.editor?.clearTokens(); this.blocked = value; this.paint(); }
+  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read" || this.paused && this.mode !== "source"); if (this.blocked === value) return; if (value) this.editor?.clearTokens(); this.blocked = value; this.paint(true); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
   async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {
     if (settle) await this.flush();
@@ -152,7 +154,6 @@ export class HostedEditor {
       if (saved) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); }
       this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save);
       const editor = this.editor;
-      let retained = false;
       this.writing = new WritingController({ editor,
         refreshMap: basis => this.request("editor/map",basis),
         basis: () => ({ sessionId: this.sessionId, source: editor.source, serial: editor.generation }),
@@ -160,9 +161,7 @@ export class HostedEditor {
         request: request => this.requestEdit(request), onError: this.error,
         onPendingSource: () => { this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
         onState: () => {
-          const next = this.writing?.retainInput ?? false;
-          if (retained && !next && this.mode === "write") queueMicrotask(() => { if (this.editor === editor) this.paint(); });
-          retained = next;
+          this.deferredPaint.flush(() => this.editor === editor ? this.paintBasis() : undefined, () => !!this.writing?.retainInput || !!this.editor?.composing, () => this.paint());
         },
       });
       if (this.queryHost) this.queries = new EmbeddedQueryController({
@@ -198,6 +197,7 @@ export class HostedEditor {
     return editor?.source === source ? editor.generation : 0;
   }
   clear(clearRetained = true): void {
+    this.deferredPaint.clear();
     if (clearRetained) { for (const saved of this.retained.values()) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); } this.retained.clear(); }
     this.restoredView=undefined; this.authoringAssets.invalidate(); this.notesMount?.dispose(); this.notesMount = undefined; this.personalKeys = undefined; this.personalAudience = "";
     this.sessionId = ""; this.projection = undefined; if (this.writing) retireDocumentNotes(this.writing);
@@ -303,9 +303,11 @@ export class HostedEditor {
     this.paint(true); this.editor.select(origin.utf16From, origin.utf16To);
   }
   private current(): boolean { return !!this.editor && this.projection?.source === this.editor.source && this.projection?.serial === this.editor.generation; }
+  private paintBasis(): readonly unknown[] { return [this.editor, this.sessionId, this.resource, this.editor?.source, this.editor?.generation, this.projection, this.writing?.map, this.mode, this.blocked, this.paused, this.queryPreview, this.flow]; }
   private paint(force = false): void {
     const editor = this.editor, writing = this.writing; if (!editor || !writing) return;
-    if (!force && (writing.retainInput || editor.composing)) return;
+    if (!force && (writing.retainInput || editor.composing)) { this.deferredPaint.defer(this.paintBasis()); return; }
+    this.deferredPaint.clear();
     const nav = node("div", "", "hosted-modes"); nav.setAttribute("role", "group"); nav.setAttribute("aria-label", "文档视图");
     for (const [mode, label] of modes) { const b = this.button(label, () => this.changeMode(mode)); b.setAttribute("aria-pressed", String(this.mode === mode)); nav.append(b); }
     if (this.mode === "source" && this.queries?.hasQueries) nav.append(this.button(this.queryPreview ? "收起正文查询预览" : "查看正文查询预览", () => { this.queryPreview = !this.queryPreview; this.paint(true); }));

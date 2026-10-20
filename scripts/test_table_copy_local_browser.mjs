@@ -1,0 +1,45 @@
+// Narrow real local-client counterpart of the hosted table-copy regression.
+import assert from 'node:assert/strict';
+import { spawn, execFileSync } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+import { beginTableCopyObservation, endTableCopyObservation } from './table_copy_observation.mjs';
+
+const dev = process.argv.includes('--dev');
+assert.equal(process.argv.length, dev ? 5 : 4, 'Usage: node scripts/test_table_copy_local_browser.mjs EXE NEW_OUTPUT [--dev]');
+const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]); await mkdir(out, { recursive: false });
+const { chromium } = createRequire(import.meta.url)(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
+const sha = bytes => createHash('sha256').update(bytes).digest('hex'), pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), frontend: dev ? 'current Vite development sources' : 'embedded candidate', cases: [], pageErrors: [], copyLifecycles: [], clipboard: {}, completed: false, limits: ['Owned headless Chrome. No OS IME, full AT or external application clipboard producer claim.'] };
+const root = path.join(out, 'library'), data = path.join(out, 'state'); let child, browser, page, vite, base, token, stderr = '';
+async function until(check, label, timeout = 30000) { const deadline = Date.now() + timeout; let last; while (Date.now() < deadline) { try { if (await check()) return; } catch (error) { last = error; } await pause(80); } throw last ?? new Error('Timed out: ' + label); }
+async function start(args = []) { child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); await until(() => { const match = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; token = match[2]; return true; } if (child.exitCode !== null) throw new Error(stderr); return false; }, 'owned local server'); }
+async function stop() { if (child?.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function api(route, body) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json(); assert.equal(reply.status, 200, route + ': ' + JSON.stringify(value)); return value; }
+const click = label => page.getByRole('button', { name: label, exact: true }).click(), surface = () => page.locator('.writing-table-surface').first();
+async function source() { return page.locator('.source-host .cm-content').evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual source editor unavailable'); return view.state.doc.toString(); }); }
+async function original(file, expected) { await click('源码'); await until(async () => (await source()) === expected, 'unchanged real local Draft'); assert.equal(await readFile(file, 'utf8'), expected); }
+async function selectRow() { await click('可视编辑'); await surface().getByRole('grid').waitFor(); await surface().locator('.writing-table-tools[aria-busy="false"]').waitFor(); await surface().getByRole('button', { name: '选择第 2 行', exact: true }).click(); }
+async function clipboard() { return page.evaluate(async () => { if (!navigator.clipboard?.read) throw new Error('Real Clipboard API read is required'); return Promise.all((await navigator.clipboard.read()).map(async item => ({ types: [...item.types].sort(), payloads: Object.fromEntries(await Promise.all(item.types.map(async type => [type, await (await item.getType(type)).text()]))) }))); }); }
+try {
+  await start(); await api('/api/library/create', { path: root, operationId: randomUUID() });
+  const doc = await api('/api/note/create', { root, parent: root, name: 'Local Copy', operationId: randomUUID() }), initial = doc.source + '\n表前保留。\n\n#table(columns: 3, [重复], [], [重复], [甲], [乙], [末])\n\n表后保留。\n';
+  await api('/api/save', { sessionId: doc.sessionId, baseId: doc.baseId, source: initial, operationId: randomUUID() }); await stop(); await start(['--open', doc.path, '--root', root]);
+  let frontend = base;
+  if (dev) { const app = path.resolve(import.meta.dirname, '../app'), { createServer } = await import(pathToFileURL(path.join(app, 'node_modules/vite/dist/node/index.js')).href); const proxy = { target: base, changeOrigin: true, configure(instance) { instance.on('proxyReq', (request, incoming) => { if (incoming.headers.origin) request.setHeader('Origin', base); }); } }; vite = await createServer({ root: app, configFile: false, server: { host: '127.0.0.1', port: 0, hmr: false, watch: { ignored: ['**/*'] }, proxy: { '/api': proxy, '/fonts': proxy } } }); await vite.listen(); frontend = 'http://127.0.0.1:' + vite.httpServer.address().port; }
+  browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version(); const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] }); page = await context.newPage(); page.setDefaultTimeout(30000); page.on('pageerror', error => result.pageErrors.push(String(error))); await page.goto(frontend + '/#token=' + token); await original(doc.path, initial);
+  await selectRow(); await page.evaluate(() => { window.__localOriginalWrite = navigator.clipboard.write.bind(navigator.clipboard); Object.defineProperty(navigator.clipboard, 'write', { configurable: true, value: async () => { throw new DOMException('local table clipboard failure', 'NotAllowedError'); } }); });
+  await beginTableCopyObservation(page, '剪切范围'); await surface().getByRole('button', { name: '剪切范围', exact: true }).click(); await surface().getByRole('alert').filter({ hasText: 'local table clipboard failure' }).waitFor(); result.copyLifecycles.push(await endTableCopyObservation(page)); await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'write', { configurable: true, value: window.__localOriginalWrite })); await original(doc.path, initial); result.cases.push('Actual local failed cut retains original surface/focus through busy and settlement, and preserves complete author Draft and disk.');
+  for (const format of ['HTML', 'CSV', 'TSV']) {
+    await selectRow(); await beginTableCopyObservation(page, '复制范围 ' + format); await surface().getByRole('button', { name: '复制范围 ' + format, exact: true }).click(); await surface().getByRole('status').filter({ hasText: `已复制所选范围为 ${format}，1 行 × 3 列。` }).waitFor(); result.copyLifecycles.push(await endTableCopyObservation(page));
+    const actual = await clipboard(); assert.equal(actual.length, 1); assert.deepEqual(actual[0].types, format === 'HTML' ? ['text/html', 'text/plain'] : ['text/plain']); assert.equal(actual[0].payloads['text/plain'], format === 'CSV' ? '甲,乙,末' : '甲\t乙\t末');
+    if (format === 'HTML') { const parsed = await page.evaluate(html => { const document = new DOMParser().parseFromString(html, 'text/html'), tables = [...document.querySelectorAll('table')]; return { tables: tables.length, rows: tables.length === 1 ? [...tables[0].rows].map(row => [...row.cells].map(cell => ({ text: cell.textContent, rowspan: cell.rowSpan, colspan: cell.colSpan }))) : [] }; }, actual[0].payloads['text/html']); assert.deepEqual(parsed, { tables: 1, rows: [['甲', '乙', '末'].map(text => ({ text, rowspan: 1, colspan: 1 }))] }); }
+    result.clipboard[format] = actual; await original(doc.path, initial); result.cases.push(`Actual local ${format} copy retains its same DOM/focus, reports success and returns exact real Clipboard MIME/payload without author writes.`);
+  }
+  assert.deepEqual(result.pageErrors, []); await page.screenshot({ path: path.join(out, 'local-copy.png'), fullPage: true }); result.completed = true;
+} catch (error) { result.failure = String(error.stack ?? error); if (page) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-ui.txt'), await page.locator('body').innerText().catch(() => 'unavailable')); } throw error;
+} finally { await browser?.close(); await vite?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); }
+console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, ownedProcessesClosed: result.ownedProcessesClosed }));

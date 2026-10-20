@@ -3,6 +3,7 @@ import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
 import { SourceEditor, applySourcePatches } from "./editor";
+import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
 import { everydayWritingCommands } from "./everyday-writing";
@@ -96,7 +97,7 @@ interface LiveDocument {
   scroll: Partial<Record<ViewMode, number>>;
   sourceScroll?: number;
   layout: "continuous" | "paged";
-  richRetained: boolean;
+  deferredProjection: DeferredPaint;
   sourceTrashed?: boolean;
   sourceRefreshing?: boolean;
   notesMount?: DocumentNotesMount;
@@ -827,7 +828,7 @@ function renderContent(): void {
   renderedMode = current?.mode ?? null;
   flowHasProjection=false;
   pagedPreview?.dispose(); pagedPreview = null; workspaceTools.attachSurface(null); projectionMappings = [];
-  for (const doc of documents) doc.queries.detach();
+  for (const doc of documents) { doc.queries.detach(); doc.deferredProjection.clear(); }
   renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus(); renderEverydayBar();
 }
 function refreshChrome(): void {
@@ -870,9 +871,11 @@ function refreshProjectionNotice(doc: LiveDocument): void {
     if (doc.session.error ? notice.querySelector(".projection-message")?.textContent !== doc.session.error : !notice.querySelector(".loading-ring")) fillProjectionEmpty(notice, doc);
   }
 }
+function projectionPresentation(doc: LiveDocument): readonly unknown[] { return [doc, doc.session.opened.sessionId, doc.session.source, doc.session.serial, doc.session.projection, doc.writing.map, doc.mode, doc.layout, renderHost, sourceConsumersAvailable(doc), readOnlySource(doc)]; }
 function renderProjection(doc: LiveDocument): void {
   if (doc !== current || !renderHost) return;
-  if (doc.writing.retainInput || doc.editor.composing) { renderStatus(); return; }
+  if (doc.writing.retainInput || doc.editor.composing) { doc.deferredProjection.defer(projectionPresentation(doc)); renderStatus(); return; }
+  doc.deferredProjection.clear();
   const restoreQuerySourceFocus = doc.mode === "focus" && !!doc.editor.revealed && doc.editor.view.hasFocus && !!doc.editor.view.dom.closest(".embedded-query-source-host");
   const preservedScroll=flowHasProjection?flowScroll?.scrollTop:doc.scroll[doc.mode];
   const host = renderHost; host.replaceChildren();flowHasProjection=false;
@@ -1133,9 +1136,7 @@ function addDocument(opened: OpenedDocument): void {
     editable: () => !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget) && doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
     onState: () => {
       if (!doc) return;
-      const retained = doc.writing.retainInput;
-      if (doc.richRetained && !retained && current === doc) queueMicrotask(() => { if (current === doc && !doc.writing.retainInput) renderProjection(doc); });
-      doc.richRetained = retained;
+      doc.deferredProjection.flush(() => current === doc && renderHost ? projectionPresentation(doc) : undefined, () => doc.writing.retainInput || doc.editor.composing, () => renderProjection(doc));
       if (current === doc) refreshChrome();
     }, onError: showError,
     onPendingSource: source => { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc, source).catch(showError); }, 220); },
@@ -1173,7 +1174,7 @@ function addDocument(opened: OpenedDocument): void {
     },
   });
   const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => { if (context.root) workspaceTools.invalidateQueryEnvironment(context.root); }, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
-  doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", richRetained: false }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
+  doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", deferredProjection: new DeferredPaint() }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
   if (session.recovered) toast("已恢复上次未保存的草稿。磁盘文件保持原样。");
 }
 async function activateDocument(doc: LiveDocument): Promise<void> {
