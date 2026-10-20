@@ -326,42 +326,51 @@ impl Core {
         let root = absolute_path(root.as_ref())?;
         let (members, complete) = self.navigation_members(&root, parent_ref)?;
         let config = self.read_config(&root, ConfigRole::WorkspaceSettings)?;
-        if config.bytes.is_none() && self.navigation_settings_were_committed(&root)? {
-            self.snapshots.remove(&config.base_id);
-            return Err(CoreError::new(
-                "settingsUnavailable",
-                "Previously committed Settings are missing; recover the original object before author reordering",
-            ));
-        }
-        if let Some(bytes) = &config.bytes {
-            validate_workspace_settings_scope(bytes, &self.require_workspace(&root)?.workspace_id)?;
-        }
-        let value = settings_value(config.bytes.as_deref())?;
-        let live = members
-            .iter()
-            .map(|member| member.target_ref.as_str())
-            .collect::<BTreeSet<_>>();
-        let mut ordered_refs = orders(&value)
-            .remove(parent_ref)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|reference| live.contains(reference.as_str()))
-            .collect::<Vec<_>>();
-        let retained = ordered_refs.iter().cloned().collect::<BTreeSet<_>>();
-        ordered_refs.extend(
-            members
+        let base_id = config.base_id.clone();
+        let result = (|| {
+            if config.bytes.is_none() && self.navigation_settings_were_committed(&root)? {
+                return Err(CoreError::new(
+                    "settingsUnavailable",
+                    "Previously committed Settings are missing; recover the original object before author reordering",
+                ));
+            }
+            if let Some(bytes) = &config.bytes {
+                validate_workspace_settings_scope(
+                    bytes,
+                    &self.require_workspace(&root)?.workspace_id,
+                )?;
+            }
+            let value = settings_value(config.bytes.as_deref())?;
+            let live = members
                 .iter()
-                .filter(|member| !retained.contains(&member.target_ref))
-                .map(|member| member.target_ref.clone()),
-        );
-        Ok(NavigationOrderSnapshot {
-            parent_ref: parent_ref.into(),
-            base_id: config.base_id,
-            before_source: config.bytes.as_deref().map(decode).transpose()?,
-            members,
-            ordered_refs,
-            complete,
-        })
+                .map(|member| member.target_ref.as_str())
+                .collect::<BTreeSet<_>>();
+            let mut ordered_refs = orders(&value)
+                .remove(parent_ref)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|reference| live.contains(reference.as_str()))
+                .collect::<Vec<_>>();
+            let retained = ordered_refs.iter().cloned().collect::<BTreeSet<_>>();
+            ordered_refs.extend(
+                members
+                    .iter()
+                    .filter(|member| !retained.contains(&member.target_ref))
+                    .map(|member| member.target_ref.clone()),
+            );
+            Ok(NavigationOrderSnapshot {
+                parent_ref: parent_ref.into(),
+                base_id: config.base_id,
+                before_source: config.bytes.as_deref().map(decode).transpose()?,
+                members,
+                ordered_refs,
+                complete,
+            })
+        })();
+        if result.is_err() {
+            self.snapshots.remove(&base_id);
+        }
+        result
     }
 
     pub fn prepare_navigation_reorder(

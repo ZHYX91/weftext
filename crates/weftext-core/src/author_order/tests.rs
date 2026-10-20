@@ -365,7 +365,11 @@ fn config_read_preserves_invalid_settings_without_granting_navigation_or_write_v
         assert_eq!(Path::new(&config.path), path);
         core.validate_snapshot(&root, &path, &config.base_id)
             .unwrap();
+        let before_navigation = core.snapshots.len();
         assert!(core.read_navigation_order(&root, &parent).is_err());
+        assert_eq!(core.snapshots.len(), before_navigation);
+        core.validate_snapshot(&root, &path, &config.base_id)
+            .unwrap();
         assert!(
             core.prepare_config_save(
                 &root,
@@ -380,6 +384,23 @@ fn config_read_preserves_invalid_settings_without_granting_navigation_or_write_v
         core.validate_snapshot(&root, &path, &config.base_id)
             .unwrap();
     }
+    let valid = br#"{"version":1,"navigationOrders":{}}"#;
+    fs::write(&path, valid).unwrap();
+    let config = core
+        .read_config(&root, ConfigRole::WorkspaceSettings)
+        .unwrap();
+    let before_navigation = core.snapshots.len();
+    let navigation = core.read_navigation_order(&root, &parent).unwrap();
+    assert_eq!(core.snapshots.len(), before_navigation + 1);
+    assert_ne!(navigation.base_id, config.base_id);
+    assert_eq!(
+        navigation.before_source.as_deref().unwrap().as_bytes(),
+        valid
+    );
+    core.validate_snapshot(&root, &path, &config.base_id)
+        .unwrap();
+    core.validate_snapshot(&root, &path, &navigation.base_id)
+        .unwrap();
 }
 
 #[test]

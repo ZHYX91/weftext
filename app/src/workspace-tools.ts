@@ -61,7 +61,7 @@ export class WorkspaceTools {
   private pendingImport: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
 
   constructor(private readonly host: WorkspaceToolsHost) {
-    this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify });
+    this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
     this.bar.className = "workspace-tools"; this.bar.setAttribute("aria-label", "笔记工具");
     this.inspector.className = "workspace-inspector"; this.inspector.hidden = true;
     this.header.className = "inspector-header"; this.panelBody.className = "inspector-body";
@@ -70,6 +70,7 @@ export class WorkspaceTools {
       canEdit: host.canEditSource,
       request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
       openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
+      environmentChanged: root => this.invalidateQueryEnvironment(root),
       savedDefinition: host.savedDefinition,
       applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),
       prepareAction: host.beforeAction,
@@ -127,6 +128,7 @@ export class WorkspaceTools {
       status: request => api("/api/processing/status", { root, ...request }),
       settle: request => api("/api/processing/settle", { root, ...request }),
       apply: request => api("/api/processing/apply", { request: { root, ...request.request }, planId: request.planId }),
+      committed: () => this.invalidateQueryEnvironment(root),
       onApplied: () => { this.host.notify("共享处理默认已提交；各次导入与校对仍须明确采用建议。"); },
     });
   }
@@ -138,6 +140,7 @@ export class WorkspaceTools {
   setLibrary(library: { root: string; workspaceId?: string } | null, scope: string | null = null): void {
     this.library = library; this.queryPanel.setLibrary(library); this.queryPanel.setScope(scope);
   }
+  invalidateQueryEnvironment(root = this.library?.root): void { if (root) this.queryPanel.environmentChanged(root); }
   async search(text: string, includeBody: boolean): Promise<void> {
     this.queryPanel.setSearch(text, includeBody);
     await this.show("query");
@@ -268,6 +271,7 @@ export class WorkspaceTools {
       read: () => api("/api/styles/read", { root }),
       prepare: request => api("/api/styles/prepare", { root, ...request }),
       apply: request => api("/api/styles/apply", { root, ...request }),
+      committed: () => this.invalidateQueryEnvironment(root),
       openSource: path => this.host.openDocument(path, root),
       onApplied: () => this.host.stylesChanged(root), operationId,
     }, this.styles.get(root));

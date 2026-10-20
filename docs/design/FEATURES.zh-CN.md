@@ -142,6 +142,8 @@ coverage 与 freshness 是正交的：完整旧投影也可 stale；partial curr
 
 结果行的 lineage 仅是来源说明，不是写权。直接 field 行可提出精确 intent，prepare 重新获当前 ReadBasis 和窄写资格；group/distinct/computed 值不继承代表行的 writer。跨已连接库可以 union 获权结果；定义与数据不跨授权域隐式读取；动作不因此获得跨库原子保证。回收站是显式 lifecycle 范围，获权只读，保 tombstone/不可用诊断；结果不授 restore/purge，任何经 trash 调用链输出的 view 动作禁写。
 
+本地查询面板只合并同一库、查询／定义选择、typed 参数及同一环境中的在途读取，并最多保留一个最新等待意图。schema 和目录的异步预读前固定输入；新输入或环境失效后不安装旧结果。实际保存、配置／结构写入、导入、恢复及同步确认成功即使后续打开或交付失败，也使旧环境失效；未保存 Draft 和不影响查询的密度、缩略图等个人呈现不产生这种持久变化。这里的环境序号只是页面内的退休标记，不是 Core 修订、权限、结果缓存或持久 Job。完成后的明确刷新重新取 Core cut，保存定义的 current／pinned 规则不变；服务器中已开始的隔离编译仍受原预算约束，不把丢弃 UI 结果称为服务端取消。准确冻结结果也不因此被提升为持续 current。
+
 ### 5.1 Core LogicalCut：结果不能由逐对象 current 读取拼成
 
 反例：同一Core事务把 `A.amount=10,B.amount=0` 变成 `A.amount=0,B.amount=10`。先读A旧值再读B新值会算出sum20，这在任何已决状态都不存在；给两项各自ReadBasis或最后核“都曾读过”不能修复。因此Query不是循环调用 `readEntity(current)`。

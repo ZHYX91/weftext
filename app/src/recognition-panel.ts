@@ -3,7 +3,7 @@ import "./data-view.css";
 import { action, ui } from "./data-panel";
 import { RecognitionController, decodeRecognitionLocator, recognitionTerminal, recognitionActionable, type RecognitionAuthorReview, type RecognitionCapabilities, type RecognitionLocator, type RecognitionOptions, type RecognitionPurpose, type RecognitionReceipt, type RecognitionTarget } from "./recognition-state";
 import { RecognitionReviewDraft, confidenceLabel, parseRecognitionPages, parseRecognitionRect, recognitionBlocks, recognitionReviewReady, type RecognitionPage, type RecognitionRect } from "./recognition-review";
-export interface RecognitionPanelHost { request<T>(path: string, body?: unknown): Promise<T>; identity(): string | null; target(): RecognitionTarget | null; created?(receipt: RecognitionReceipt): void | Promise<void>; notify?(message: string, error?: boolean): void }
+export interface RecognitionPanelHost { request<T>(path: string, body?: unknown): Promise<T>; identity(): string | null; target(): RecognitionTarget | null; created?(receipt: RecognitionReceipt): void | Promise<void>; notify?(message: string, error?: boolean): void; committed?(identity: string): void }
 interface Field { id: string; key: string; title: string; shape: { kind: "scalar"; semantic: string }; typeId: string }
 const mappingIdentity = (field: Field): string => JSON.stringify([field.id, field.typeId]);
 interface RegionRow { id: string; page: string; rect: string; mode: string; rotation: string; segmentation: string; scale: string }
@@ -84,7 +84,7 @@ export class RecognitionPanel {
   private readonly downloadButton = action("下载原始提取文本", () => { void this.run(() => this.download()); });
   private readonly downloadEvidenceButton = action("下载来源及损失说明", () => { void this.run(() => this.download(true)); });
   constructor(private readonly host: RecognitionPanelHost, mount: HTMLElement = document.body) {
-    this.controller = new RecognitionController({ request: (path, body) => host.request(path, body), identity: () => host.identity(), target: () => host.target(), id: () => crypto.randomUUID(), persist: locator => this.persist(locator), remove: () => { if (this.cacheKey) sessionStorage.removeItem(this.cacheKey); } });
+    this.controller = new RecognitionController({ request: (path, body) => host.request(path, body), identity: () => host.identity(), target: () => host.target(), committed: identity => host.committed?.(identity), id: () => crypto.randomUUID(), persist: locator => this.persist(locator), remove: () => { if (this.cacheKey) sessionStorage.removeItem(this.cacheKey); } });
     this.element.setAttribute("aria-label", "资料导入与识别"); this.fileInput.type = "file"; this.fileInput.accept = ".pdf,.png,.jpg,.jpeg,.docx"; this.dpi.type = "number"; this.dpi.min = "72"; this.dpi.max = "300";
     this.controls.append(label("处理目的", this.purpose), label("原件格式", this.format), label("选择原件（最多 16 MiB）", this.fileInput), label("识别模型组合", this.model), label("页码（如 1,3-5；仅处理明确所选页）", this.pages), label("区域（左,上,右,下；空白表示整页）", this.rect), label("处理方式", this.mode), label("OCR 旋转", this.rotation), label("OCR 版面", this.segmentation), label("DPI（72–300）", this.dpi), label("专用方案", this.scheme), label("方案原文语言", this.language), label("方案原文字体体系", this.script), label("方案原文地区", this.region), label("新笔记父目录", this.parent), label("新笔记名称", this.name), label("托管固定空槽", this.slot));
     const actions = ui("div", "recognition-actions"); actions.append(this.inspectButton, this.startButton, this.statusButton, this.cancelButton, this.downloadButton, this.downloadEvidenceButton);

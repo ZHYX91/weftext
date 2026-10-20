@@ -14,6 +14,7 @@ export interface LibraryTrashHost {
   request<T>(path: string, body?: unknown): Promise<T>;
   created(document: OpenedDocument): Promise<void>;
   notify(message: string, error?: boolean): void;
+  environmentChanged?(root: string): void;
 }
 export interface LibraryTrashController { open(root: string): Promise<void> }
 export interface RestoreRequest {
@@ -121,7 +122,7 @@ export class LibraryTrashRestoreFlow {
     if (receipt.operationId && receipt.operationId !== pending.request.operationId) throw new Error("恢复结果与原请求不一致，不能交付另一操作。" );
     if (pending.plan && typeof receipt.planId === "string" && receipt.planId !== pending.plan.planId) throw new Error("恢复结果与已确认准备不一致。" );
     pending.receipt = receipt;
-    if (success.has(receipt.status)) { pending.state = "committed"; pending.message = receipt.message || "恢复已完成。"; await this.deliverCommitted(); }
+    if (success.has(receipt.status)) { const changed = pending.state !== "committed"; pending.state = "committed"; pending.message = receipt.message || "恢复已完成。"; if (changed) this.host.environmentChanged?.(pending.request.root); await this.deliverCommitted(); }
     else if (failed.has(receipt.status)) { pending.state = "failed"; pending.message = receipt.message || "恢复未应用，原笔记仍需检查。"; }
     else { pending.state = "unknown"; pending.message = receipt.message || "恢复结果尚未确认。原操作已保留，不会重复恢复。"; }
   }

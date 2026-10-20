@@ -19,6 +19,7 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const result = {
   scope: 'Actual embedded candidate, owned local library; hierarchy/Query/shortcuts, graph/heading navigation, sibling order and lazy media',
+  harness: path.resolve(process.argv[1]), harnessSha256: sha(await readFile(new URL(import.meta.url))),
   exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(),
   startedAt: new Date().toISOString(), completed: false, cases: [], pageErrors: [], httpErrors: [], requests: [], snapshots: [],
   limits: ['No OS IME, assistive technology, touch, real Office host or reference-software parity acceptance.',
@@ -29,6 +30,7 @@ const root = path.join(out, 'TEST-library'), data = path.join(out, 'private-stat
 let child, browser, context, page, base, token, stderr = '', phase = 'setup';
 let image, plain, parent, farImage, savedImage, savedParent, dirtyImage, dirtyParent;
 const queryReceipts = [], knowledgeReceipts = [], previewRequests = [], mutations = [];
+const observedRequests = new Map(); let observedClient = 0;
 let caseStartedAt = performance.now();
 
 async function until(check, label = 'condition', timeout = 30000) {
@@ -74,23 +76,48 @@ async function attachImage(doc) {
   return save(doc, doc.source + '\n\n#image("TEST-pixels.png", width: 24pt)\n');
 }
 function observe(target) {
+  const client = ++observedClient;
   target.on('pageerror', error => result.pageErrors.push({ phase, error: String(error) }));
   target.on('request', request => {
     const route = new URL(request.url()).pathname; if (!route.startsWith('/api/')) return;
     const body = request.method() === 'POST' ? request.postDataJSON() : undefined;
     if (route === '/api/navigation/preview') previewRequests.push({ phase, ...body });
     if (/\/(prepare|commit|cancel)$/.test(route) || route.startsWith('/api/navigation/') && /-tag$/.test(route)) mutations.push({ phase, route, body });
-    result.requests.push({ phase, route, method: request.method() });
+    const entry = { id: `${client}.${result.requests.length + 1}`, client, phase, route, method: request.method(), at: new Date().toISOString(), startedMs: performance.now(), body: body === undefined ? undefined : JSON.parse(JSON.stringify(body, (key, value) => /token|password|authorization|credential|secret/i.test(key) ? '[REDACTED]' : value)) };
+    observedRequests.set(request, entry); result.requests.push(entry);
   });
+  target.on('requestfinished', request => { const entry = observedRequests.get(request); if (entry) { entry.finishedAt = new Date().toISOString(); entry.elapsedMs = performance.now() - entry.startedMs; entry.timing = request.timing(); } });
+  target.on('requestfailed', request => { const entry = observedRequests.get(request); if (entry) { entry.failedAt = new Date().toISOString(); entry.elapsedMs = performance.now() - entry.startedMs; entry.failure = request.failure()?.errorText; entry.timing = request.timing(); } });
   target.on('response', async response => {
     const route = new URL(response.url()).pathname, capturedPhase = phase;
     if (!route.startsWith('/api/')) return;
+    const entry = observedRequests.get(response.request()); if (entry) { entry.status = response.status(); entry.responseAt = new Date().toISOString(); entry.responseElapsedMs = performance.now() - entry.startedMs; entry.responsePhase = capturedPhase; entry.timing = response.request().timing(); }
     try {
       if (response.status() >= 400) result.httpErrors.push({ phase: capturedPhase, route, status: response.status(), body: await response.text() });
-      if (route === '/api/query/run' && response.ok()) queryReceipts.push({ phase: capturedPhase, request: response.request().postDataJSON(), result: await response.json() });
+      if (route === '/api/query/run' && response.ok()) { const value = await response.json(); queryReceipts.push({ phase: capturedPhase, requestId: entry?.id, request: response.request().postDataJSON(), result: value }); if (entry) entry.bodyRecordedAt = new Date().toISOString(); }
       if (route === '/api/knowledge/read' && response.ok()) knowledgeReceipts.push({ phase: capturedPhase, request: response.request().postDataJSON(), result: await response.json() });
     } catch (error) { if (!target.isClosed()) (result.observerErrors ??= []).push(String(error)); }
   });
+}
+async function failureSnapshot(label) {
+  const receipt = { label, at: new Date().toISOString(), backendPid: child?.pid, pages: [], pendingRequests: [] };
+  for (const [request, entry] of observedRequests) if (!entry.finishedAt && !entry.failedAt) { let timing; try { timing = request.timing(); } catch { timing = null; } receipt.pendingRequests.push({ ...entry, observedElapsedMs: performance.now() - entry.startedMs, timing }); }
+  for (const [index, target] of (context?.pages() ?? []).entries()) {
+    if (target.isClosed()) continue;
+    const item = { index, url: target.url().replace(/#.*$/, '') };
+    try {
+      item.state = await target.evaluate(() => {
+        const panel = document.querySelector('.query-panel'), source = document.querySelector('.source-host .cm-content'), view = source?.cmTile?.root?.view;
+        const buttons = Array.from(panel?.querySelectorAll('button') ?? []).filter(button => ['查询', '刷新'].includes(button.textContent.trim())).map(button => ({ text: button.textContent, disabled: button.disabled, connected: button.isConnected, type: button.type, formConnected: button.form?.isConnected ?? false, formText: button.form?.innerText }));
+        return { title: document.title, focused: { tag: document.activeElement?.tagName, label: document.activeElement?.getAttribute('aria-label'), text: document.activeElement?.textContent?.slice(0, 200) }, query: panel ? { visible: Boolean(panel.getClientRects().length), text: panel.innerText, buttons, chips: Array.from(panel.querySelectorAll('.query-chip')).map(chip => chip.textContent), inputs: Array.from(panel.querySelectorAll('input,select')).map(input => ({ tag: input.tagName, label: input.getAttribute('aria-label'), type: input.type, value: input.value, disabled: input.disabled })) } : null, editor: view?.contentDOM === source ? { source: view.state.doc.toString(), selection: { from: view.state.selection.main.from, to: view.state.selection.main.to } } : null, status: document.querySelector('.status-right')?.textContent };
+      });
+      if (item.state.editor) item.state.editor.sourceSha256 = sha(item.state.editor.source);
+      await target.screenshot({ path: path.join(out, `failure-${label}-client-${index}.png`), fullPage: true });
+      await writeFile(path.join(out, `failure-${label}-client-${index}.txt`), await target.locator('body').innerText());
+    } catch (error) { item.observationError = String(error); }
+    receipt.pages.push(item);
+  }
+  await writeFile(path.join(out, `failure-${label}-trace.json`), JSON.stringify(receipt, null, 2)); return receipt;
 }
 const click = (name, host = page) => host.getByRole('button', { name, exact: true }).click();
 const cm = () => page.locator('.source-host .cm-content');
@@ -140,10 +167,34 @@ async function moveTag(tag, parentTag, cancel = false) {
 async function taskScope() { if (!await queryPanel().locator('.query-chips .query-chip').filter({ hasText: /^类型：任务 ×$/ }).count()) { await runQuery(22); await click('任务 · 1', queryPanel()); await runQuery(1); } }
 async function clearConditions() { const chips = queryPanel().locator('.query-chips .query-chip').filter({ hasText: /^标签：/ }); while (await chips.count()) await chips.first().click(); }
 async function runQuery(count, predicate) {
-  const start = queryReceipts.length; await click('查询', queryPanel());
-  const receipt = await until(() => queryReceipts.slice(start).find(item => !predicate || JSON.stringify(item.request.plan).includes(predicate)), 'actual Query receipt');
-  assert.equal(receipt.result.rows.length, count, JSON.stringify(receipt.result)); assert.equal(receipt.result.coverage, 'complete');
+  const start = queryReceipts.length, action = { phase, at: new Date().toISOString(), expectedRows: count, predicate, receiptCountAtStart: start, requestCountAtStart: result.requests.length, pendingQueryIds: [...observedRequests.values()].filter(entry => entry.route === '/api/query/run' && !entry.finishedAt && !entry.failedAt).map(entry => entry.id) }; (result.queryActions ??= []).push(action); await click('查询', queryPanel()); action.clickedAt = new Date().toISOString();
+  const receipt = await until(async () => {
+    if (await queryPanel().locator('.query-results').getAttribute('aria-busy') !== 'false') return false;
+    if ((await queryPanel().locator('.query-results').innerText()).includes('先前读取的结果')) return false;
+    const displayedBases = await queryPanel().locator('.query-basis').allTextContents();
+    return queryReceipts.slice(start).find(item => item.result.cutId && displayedBases.includes(`读取版本：${item.result.cutId}`) && (!predicate || JSON.stringify(item.request.plan).includes(predicate)));
+  }, 'actual Query receipt');
+  action.matchedRequestId = receipt.requestId; action.matchedDisplayedCutId = receipt.result.cutId;
+  // An admitted frozen read does not continuously confirm current filesystem
+  // state. Its truthful stale marker differs from the UI's superseded result.
+  assert.equal(receipt.result.rows.length, count, JSON.stringify(receipt.result)); assert.equal(receipt.result.coverage, 'complete'); assert.equal(receipt.result.snapshotMode, 'admittedFrozen'); assert.equal(receipt.result.freshness, 'stale'); assert.notEqual(receipt.result.superseded, true);
   await until(() => queryPanel().locator('.query-card').count().then(n => n === count), 'rendered Query results'); return receipt;
+}
+async function holdNextActualQuery() {
+  const target = page, pattern = '**/api/query/run', tasks = new Set(), errors = []; let captured = false, heldValue, release;
+  const released = new Promise(resolve => { release = resolve; });
+  const handler = route => {
+    const task = (async () => {
+      if (captured) { await route.continue(); return; } captured = true;
+      const original = await route.fetch({ timeout: 30000, maxRetries: 0 }), bytes = await original.body();
+      assert.equal(original.status(), 200, bytes.toString('utf8'));
+      heldValue = { request: route.request().postDataJSON(), response: JSON.parse(bytes.toString('utf8')), status: original.status(), rawBodyBytes: bytes.length, rawBodySha256: sha(bytes), heldAt: new Date().toISOString() };
+      await released; await route.fulfill({ response: original }); heldValue.releasedAt = new Date().toISOString();
+    })().catch(async error => { errors.push(String(error)); await route.abort('failed').catch(() => {}); }).finally(() => tasks.delete(task));
+    tasks.add(task); return task;
+  };
+  await target.route(pattern, handler);
+  return { ready: () => until(() => { if (errors.length) throw new Error(errors.join('\n')); return heldValue; }, 'original actual Query response held'), release: () => release(), close: async () => { release(); await Promise.allSettled([...tasks]); await target.unroute(pattern, handler); assert.deepEqual(errors, []); } };
 }
 async function refreshKnowledge(expected) {
   await until(async () => (await page.locator('.status-right').innerText()).includes('草稿预览已更新'), 'native render ready');
@@ -224,6 +275,29 @@ try {
   result.rejectedPrepareCancellation = { request: rejectedBody, rejectedResult, cancelBody, cancelResult, fences, newOperationId: newRequest.body.operationId };
   await pass('A real untyped-note first assignment rejects before preparation; UI cancellation sends the same ID with no plan and never reprepares. The original and changed late intents stay fenced, while a new UI operation succeeds and both source/Draft remain exact.');
 
+  phase = 'query-refresh-coalescing'; await showQuery(); const baseline = await runQuery(0, otherTag.tagRef); assert.ok(baseline.request.plan.where.includes('tagInSubtree'));
+  const originalDensity = await queryPanel().getByLabel('密度', { exact: true }).inputValue(), originalThumbnails = await queryPanel().getByLabel('缩略图', { exact: true }).isChecked();
+  const sameEpochStart = result.requests.length, sameEpochMutations = mutations.length, sameEpochHold = await holdNextActualQuery(); let sameEpochWork, sameEpochHeld, sameEpochReceipt;
+  try {
+    sameEpochWork = runQuery(0, otherTag.tagRef); sameEpochWork.catch(() => {}); sameEpochHeld = await sameEpochHold.ready();
+    await queryPanel().getByLabel('密度', { exact: true }).selectOption(originalDensity === 'compact' ? 'comfortable' : 'compact'); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(!originalThumbnails); await click('查询', queryPanel());
+    assert.equal(mutations.length, sameEpochMutations); await expectSource(dirtyImage); sameEpochHold.release(); sameEpochReceipt = await sameEpochWork; await pause(250);
+    assert.equal(result.requests.slice(sameEpochStart).filter(item => item.route === '/api/query/run').length, 1, 'Presentation changes and same-epoch repeated refresh must share one actual query');
+    assert.deepEqual(sameEpochReceipt.result, sameEpochHeld.response); assert.equal(sameEpochReceipt.result.cutId, sameEpochHeld.response.cutId); assert.equal(await disk(image.path), savedImage);
+  } finally { sameEpochHold.release(); if (sameEpochWork) await Promise.allSettled([sameEpochWork]); await sameEpochHold.close(); }
+  const changedEpochStart = result.requests.length, changedEpochHold = await holdNextActualQuery(); let changedEpochHeld, changedEpochWork, changedEpochReceipt, installedCuts;
+  try {
+    await click('查询', queryPanel()); changedEpochHeld = await changedEpochHold.ready(); assert.equal(changedEpochHeld.response.rows.length, 0);
+    await page.evaluate(() => { const host = document.querySelector('.query-results'), audit = { events: [] }; const observe = () => audit.events.push({ at: Date.now(), bases: Array.from(host.querySelectorAll('.query-basis')).map(item => item.textContent), busy: host.getAttribute('aria-busy') }); audit.observer = new MutationObserver(observe); audit.observer.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-busy'] }); observe(); window.__v063QueryBasisAudit = audit; });
+    await moveTag(leaf, otherTag); changedEpochWork = runQuery(1, otherTag.tagRef); changedEpochWork.catch(() => {}); changedEpochHold.release(); changedEpochReceipt = await changedEpochWork; await pause(250);
+    const actualRequests = result.requests.slice(changedEpochStart).filter(item => item.route === '/api/query/run'); assert.equal(actualRequests.length, 2, 'A real registry commit must execute a new query rather than join its old environment');
+    installedCuts = await page.evaluate(() => window.__v063QueryBasisAudit.events); assert.ok(!installedCuts.some(event => event.bases.includes(`读取版本：${changedEpochHeld.response.cutId}`)), 'The held obsolete environment must never become the visible result basis');
+    assert.deepEqual(changedEpochHeld.request, changedEpochReceipt.request); assert.notEqual(changedEpochHeld.response.cutId, changedEpochReceipt.result.cutId); assert.equal(changedEpochReceipt.result.rows[0].entityKey, reference(image)); await expectSource(dirtyImage); assert.equal(await disk(image.path), savedImage);
+  } finally { await page.evaluate(() => { window.__v063QueryBasisAudit?.observer.disconnect(); delete window.__v063QueryBasisAudit; }).catch(() => {}); changedEpochHold.release(); if (changedEpochWork) await Promise.allSettled([changedEpochWork]); await changedEpochHold.close(); }
+  await moveTag(leaf, parentTag); await queryPanel().getByLabel('密度', { exact: true }).selectOption(originalDensity); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(originalThumbnails); await expectSource(dirtyImage);
+  result.queryRefreshCoalescing = { sameEpochHeld, sameEpochVisibleCut: sameEpochReceipt.result.cutId, changedEpochHeld, changedEpochVisibleCut: changedEpochReceipt.result.cutId, installedCuts, hook: 'Only the first original server response is held and then forwarded without changing its body; no synthetic Query result is supplied. A read-only MutationObserver records actual visible result bases.' };
+  await pass('A held actual Core response survives presentation changes and same-epoch repeated refresh as one query. A real tag-tree commit requires a second identical-plan request and a new visible cut; the old result cannot replace it. Hooks, tags and display preferences are restored.');
+
   phase = 'authored-order'; await quick('TEST-Parent'); await click('源码'); await expectSource(savedParent);
   await cm().click(); await page.keyboard.press('Control+End'); await page.keyboard.insertText(' UNSAVED PARENT DRAFT😀'); dirtyParent = savedParent + ' UNSAVED PARENT DRAFT😀'; await expectSource(dirtyParent);
   await page.getByRole('button', { name: '仅浏览 TEST-Parent 文件夹', exact: true }).click(); await contents().waitFor();
@@ -291,11 +365,19 @@ try {
     (expected ? result.expectedHttpStates : result.unexpectedHttpErrors).push({ ...event, code });
   }
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.unexpectedHttpErrors, []); assert.deepEqual(result.observerErrors ?? [], []);
-  assert.equal(sha(await readFile(exe)), result.sha256); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
+  assert.equal(sha(await readFile(exe)), result.sha256); assert.equal(sha(await readFile(new URL(import.meta.url))), result.harnessSha256); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
   await page.screenshot({ path: path.join(out, 'completion.png'), fullPage: true }); result.completed = true;
 } catch (error) {
   result.failure = String(error.stack ?? error); result.failedPhase = phase;
   if (page && !page.isClosed()) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-ui.txt'), await page.locator('body').innerText().catch(() => '')).catch(() => {}); }
+  result.failureDiagnostics = [await failureSnapshot('at-deadline')];
+  if (String(error).includes('Timed out: actual Query receipt')) {
+    const pending = [...observedRequests.values()].filter(entry => entry.route === '/api/query/run' && !entry.bodyRecordedAt && !entry.failedAt && (entry.status === undefined || entry.status < 400));
+    result.failureReadOnlyObservation = { originalAssertionFailed: true, originalDeadlineMs: 30000, additionalObservationLimitMs: 35000, pendingIds: pending.map(entry => entry.id), startedAt: new Date().toISOString(), note: 'No UI input, retry or product request is sent. Late original receipts remain diagnostic and never change the failed outcome.' };
+    const deadline = performance.now() + 35000; while (pending.some(entry => !entry.bodyRecordedAt && !entry.failedAt) && performance.now() < deadline) await pause(100);
+    result.failureReadOnlyObservation.finishedAt = new Date().toISOString(); result.failureReadOnlyObservation.originalReceipts = pending.map(entry => ({ ...entry }));
+    result.failureDiagnostics.push(await failureSnapshot('after-passive-observation'));
+  }
   throw error;
 } finally {
   await browser?.close(); await stop(); result.finishedAt = new Date().toISOString();

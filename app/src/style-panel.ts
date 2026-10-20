@@ -39,7 +39,8 @@ export interface LibraryStylePlan {
 export interface LibraryStyleHost {
   read(): Promise<LibraryStyleState>;
   prepare(request: LibraryStylePrepare): Promise<LibraryStylePlan>;
-  apply(request: { operationId: string; planId: string }): Promise<LibraryStyleState>;
+  apply(request: { operationId: string; planId: string }): Promise<LibraryStyleState & { operationReceipt: { operationId: string; planId: string; status: string } }>;
+  committed?(): void;
   openSource?(path: string): void | Promise<void>;
   onApplied?(state: LibraryStyleState): void | Promise<void>;
   operationId?(): string;
@@ -61,6 +62,7 @@ export class NativeStyleController {
   uncertain: "prepare" | "apply" | null = null;
   committedPendingRead = false;
   private request: LibraryStylePrepare | null = null;
+  private notifiedCommit: string | null = null;
 
   constructor(readonly host: LibraryStyleHost) {}
 
@@ -118,19 +120,23 @@ export class NativeStyleController {
 
   async apply(): Promise<LibraryStyleState> {
     if (!this.plan || this.busy || this.uncertain === "prepare") throw new Error("请先查看准备好的原生源码变更。");
-    this.busy = true;
+    const plan = this.plan; let confirmed = false; this.busy = true;
     try {
-      const state = await this.host.apply({ operationId: this.plan.operationId, planId: this.plan.planId });
-      this.install(state); return state;
+      const state = await this.host.apply({ operationId: plan.operationId, planId: plan.planId });
+      if (!this.originalCommit(state.operationReceipt, plan)) throw Object.assign(new Error("样式保存回执与原计划不符；保留原操作供确认。"), { code: "resultUnknown" });
+      confirmed = true; this.install(state); this.notifyCommitted(plan); return state;
     } catch (error) {
+      if (confirmed) throw error;
       if (resultUnknown(error)) {
         this.uncertain = "apply";
-        if (error && typeof error === "object" && "code" in error && error.code === "style_state_unavailable") this.committedPendingRead = true;
+        if (error && typeof error === "object" && "code" in error && error.code === "style_state_unavailable" && "details" in error && error.details && typeof error.details === "object" && "receipt" in error.details && this.originalCommit(error.details.receipt, plan)) { this.committedPendingRead = true; this.notifyCommitted(plan); }
       }
       else { this.request = null; this.plan = null; this.uncertain = null; }
       throw error;
     } finally { this.busy = false; }
   }
+  private originalCommit(value: unknown, plan: LibraryStylePlan): boolean { if (!value || typeof value !== "object") return false; const receipt = value as { operationId?: unknown; planId?: unknown; status?: unknown }; return receipt.operationId === plan.operationId && receipt.planId === plan.planId && receipt.status === "committed"; }
+  private notifyCommitted(plan: LibraryStylePlan): void { if (this.notifiedCommit === plan.operationId) return; this.notifiedCommit = plan.operationId; this.host.committed?.(); }
 
   private assertEditable(): void {
     if (!this.state || this.locked) throw new Error("操作仍在处理或结果待确认；设置草稿已保留，请确认同一操作。");

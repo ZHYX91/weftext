@@ -245,6 +245,7 @@ let readingSelection: { sessionId: string; serial: number; selection: NonNullabl
 const recognitionPanel = new RecognitionPanel({
   request: (path, body) => api(`/api/recognition${path}`, body),
   identity: () => current ? current.session.opened.root : null,
+  committed: root => workspaceTools.invalidateQueryEnvironment(root),
   target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
   notify: toast,
   created: async receipt => { const root = current?.session.opened.root, ref = receipt.nodeRefs[0]; if (!root || !ref) throw new Error("原导入的新笔记当前不可定位，请核对原操作。"); await prepareSwitch(); const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }); await acceptResolvedDocument(opened); await refreshInventory(); },
@@ -264,6 +265,7 @@ const workspaceTools = new WorkspaceTools({
   beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument,
   refreshLibrary: async root => { if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory(); },
   syncApplied: async root => {
+    workspaceTools.invalidateQueryEnvironment(root);
     if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory();
     for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
       const originalSession = doc.session.opened.sessionId;
@@ -309,6 +311,7 @@ const workspaceTools = new WorkspaceTools({
     const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
     const opened = receipt.document;
     if (!opened || typeof opened.sessionId !== "string" || typeof opened.source !== "string") throw new Error("Query 保存缺少实际文件回执，请检查原操作。");
+    workspaceTools.invalidateQueryEnvironment(basis.root);
     const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
     if (!doc) throw new Error("Query 已保存，请重新打开笔记确认。");
     if (receipt.documentSourceMatchesCommit !== true || receipt.committedSource !== opened.source) {
@@ -345,6 +348,7 @@ const workspaceTools = new WorkspaceTools({
   },
   applyReceipt: async (receipt, context) => {
     if (!["committed", "saved", "complete", "success"].includes(receipt.status)) return;
+    workspaceTools.invalidateQueryEnvironment(context.root);
     const opened = receipt.document as OpenedDocument | undefined;
     const doc = documents.find(item => item.session.opened.sessionId === context.sessionId);
     if (doc) await doc.writing.settleForSessionChange();
@@ -419,6 +423,7 @@ const historyPanel = new HistoryPanel({
     if (doc) { doc.session.savePending = pending; if (doc === current) refreshChrome(); }
   },
   restored: async (result, basis) => {
+    if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
     const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
     if (!doc) throw new Error("旧版已保存，请重新打开原笔记确认；受保护草稿仍由 Core 保留。");
     await doc.writing.settleForSessionChange();
@@ -443,6 +448,7 @@ async function refreshInventory(): Promise<void> {
 }
 
 async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
+  workspaceTools.invalidateQueryEnvironment(opened.root);
   await prepareSwitch();
   const restored = documents.find(item => item.sourceTrashed && (normalize(item.session.path) === normalize(opened.path) || Boolean(opened.nodeId && item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId)));
   if (restored && opened.source === restored.session.baseSource) {
@@ -607,7 +613,7 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
   nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
     request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
     open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
-    changed: async () => { if (inventory === selected) { inventory = await api<Inventory>("/api/library/open", { path: selected.root }); renderSidebar(); } },
+    changed: async () => { workspaceTools.invalidateQueryEnvironment(selected.root); if (inventory === selected) { inventory = await api<Inventory>("/api/library/open", { path: selected.root }); renderSidebar(); } },
   });
 }
 
@@ -1081,6 +1087,7 @@ async function createLibrary(): Promise<void> {
     ? await creation<LibraryCreationReceipt>("/api/library/create", pendingCreation.payload)
     : await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
   if (!receipt) return;
+  workspaceTools.invalidateQueryEnvironment(receipt.root);
   inventory = await api<Inventory>("/api/library/open", { path: receipt.root }); query = ""; selectedFolder = null; renderSidebar(); renderContent(); toast("资料库已创建，可以新建笔记了；文档排版默认可在库样式中查看。");
   if (receipt.rootNotePath) await openDocument(receipt.rootNotePath, receipt.root);
 }
@@ -1094,6 +1101,7 @@ async function createNote(): Promise<void> {
   });
   if (!name) return; await prepareSwitch();
   const opened = await creation<OpenedDocument>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
+  workspaceTools.invalidateQueryEnvironment(opened.root);
   addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
 }
 async function prepareSwitch(): Promise<void> { captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
@@ -1164,7 +1172,7 @@ function addDocument(opened: OpenedDocument): void {
       else throw new Error("回收站结果缺少稳定身份，不能按路径打开。");
     },
   });
-  const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience() } : null, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
+  const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => { if (context.root) workspaceTools.invalidateQueryEnvironment(context.root); }, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
   doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", richRetained: false }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
   if (session.recovered) toast("已恢复上次未保存的草稿。磁盘文件保持原样。");
 }
@@ -1221,6 +1229,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
       : { sessionId: doc.session.opened.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId });
     if (!["saved", "committed", "complete", "after", "success"].includes(receipt.status)) throw new ApiError(receipt.status, receipt.message || "保存尚未确认，草稿已保留。");
     receiptReceived = true;
+    workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
     if (request.path) {
       // Save As creates a new ordinary file. Its path, dependency root, and
       // subsequent writes belong to a newly opened Core session.
@@ -1348,7 +1357,7 @@ async function inspectRecovery(id: string): Promise<void> {
     for (const action of allowed) if (labels[action]) actions.append(button(labels[action], () => close(action), "button-primary"));
     form.append(actions);
   });
-  if (decision) { await api("/api/recovery/resolve", { operationId: id, action: decision }); toast("恢复处理已确认。请重新打开文件；原操作和各版本仍保留在恢复历史中。"); await refreshInventory(); }
+  if (decision) { await api("/api/recovery/resolve", { operationId: id, action: decision }); workspaceTools.invalidateQueryEnvironment(); toast("恢复处理已确认。请重新打开文件；原操作和各版本仍保留在恢复历史中。"); await refreshInventory(); }
 }
 
 async function insertLink(): Promise<void> {

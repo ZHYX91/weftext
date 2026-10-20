@@ -1,12 +1,13 @@
 import { EndnoteModuleInstaller, type EndnoteDistribution, type EndnoteModuleCatalog, type EndnoteModuleHost, type EndnoteModuleIdentity, type EndnoteModuleReady, type EndnoteModuleReceipt, type EndnoteModuleState } from "./endnote-module";
 
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
-export interface AuthoringAssetsContext { sessionId: string; audience: string }
+export interface AuthoringAssetsContext { sessionId: string; audience: string; root?: string }
 export interface AuthoringAssetsOptions {
   request: Request;
   prefix: string;
   context(): AuthoringAssetsContext | null;
   changed(ready?: EndnoteModuleReady): void | Promise<void>;
+  committed?(context: AuthoringAssetsContext): void;
   storage?: Pick<Storage, "getItem" | "setItem">;
 }
 interface Catalog extends EndnoteModuleCatalog { identity: EndnoteModuleIdentity }
@@ -34,6 +35,7 @@ export class AuthoringAssetsAdapter {
       commitImport: request => this.options.request(`${this.options.prefix}/commit`, { sessionId: context.sessionId, ...request }),
       importStatus: request => this.options.request(`${this.options.prefix}/status`, { sessionId: context.sessionId, ...request }),
       settleImport: request => this.options.request(`${this.options.prefix}/settle`, { sessionId: context.sessionId, ...request }),
+      committed: () => this.options.committed?.(context),
       load: () => storage.getItem(key),
       persist: (state: EndnoteModuleState) => { if (state.request.identity.scope !== selected.scope || state.request.identity.owner !== selected.owner) throw new Error("模块恢复记录归属不符。"); storage.setItem(key, JSON.stringify(state)); },
     };
