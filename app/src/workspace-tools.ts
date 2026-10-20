@@ -13,6 +13,9 @@ import { OutputPanel } from "./export-panel";
 import { mountKnowledgePanel, type KnowledgeContext, type KnowledgePlan, type KnowledgeReceipt, type KnowledgeTextMapping } from "./knowledge-panel";
 import { sameKnowledgeBasis, type KnowledgeNodeRef } from "./knowledge-state";
 import { openLibraryStylePanel, type NativeStyleController } from "./style-panel";
+import { LatexInsertionPanel } from "./latex-insertion";
+import { DiagramPanel } from "./diagram-ui";
+import { openProcessingSettingsPanel, type ProcessingRead } from "./processing-settings-panel";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 
@@ -61,6 +64,7 @@ export class WorkspaceTools {
     this.header.className = "inspector-header"; this.panelBody.className = "inspector-body";
     this.inspector.append(this.header, this.panelBody);
     const dataHost: PanelHost = {
+      canEdit: host.canEditSource,
       request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
       openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
       savedDefinition: host.savedDefinition,
@@ -77,12 +81,20 @@ export class WorkspaceTools {
       },
     };
     this.propertyPanel = new DataPanel(dataHost); this.outputPanel = new OutputPanel({ ...dataHost, embeddedQueries: host.embeddedQueries, imported: async receipt => { const root = receipt.root ?? dataHost.getDocument()?.root; if (!root) throw new Error("导入回执缺少可刷新资料库位置，实际回执已保留。"); await host.refreshLibrary?.(root); if (this.library?.root === root) await this.queryPanel.refresh(); } }); this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
+    const latex = new LatexInsertionPanel({ ...dataHost, selection: host.selection, editable: host.canEditSource });
+    const diagrams = new DiagramPanel(dataHost, host.canEditSource);
     this.knowledgePanel = mountKnowledgePanel(this.knowledgeContainer, {
       context: () => this.context(), load: context => api("/api/knowledge/read", { context }),
       proofread: async (context, options) => {
         const render = await api<{ ok: boolean }>("/api/render", { sessionId: context.sessionId, source: context.source, serial: context.serial });
         if (!render.ok) throw new Error("当前正文编译未成功，请先处理预览诊断再校对。");
         return api("/api/knowledge/proofread", { context, options });
+      },
+      processingDefaults: async () => {
+        const root = this.library?.root; if (!root) throw new Error("请先打开笔记库。");
+        const suggestion = await api<ProcessingRead>("/api/processing/read", { root });
+        if (this.library?.root !== root) throw new Error("资料库已变化，请重新读取共享建议。");
+        return { processing: suggestion.processing, source: suggestion.source, baseId: suggestion.baseId };
       },
       prepare: (intent, context) => api("/api/knowledge/prepare", { operationId: operationId(), context, intent }),
       commit: (plan, context) => this.commit(plan, context),
@@ -99,6 +111,20 @@ export class WorkspaceTools {
     });
     this.bar.append(this.button("属性", () => this.show("data")), this.button("链接与批注", () => this.show("knowledge")), this.button("查询与视图", () => this.show("query")), this.button("输出与导入", () => this.outputPanel.open()), this.button("库样式", () => this.showStyles()), this.button("回收站", async () => { if (!this.library?.workspaceId) throw new Error("请先打开笔记库。"); await this.host.beforeAction(); await this.libraryTrash.open(this.library.root); }));
     this.bar.append(this.button("同步", async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }));
+    this.bar.append(this.button("LaTeX 公式", () => latex.open()), this.button("Mermaid 图表", () => diagrams.open()), this.button("处理默认与词表", () => this.showProcessingSettings()));
+  }
+  private async showProcessingSettings(): Promise<void> {
+    await this.host.beforeAction();
+    const root = this.library?.root; if (!root) throw new Error("请先打开笔记库。");
+    await openProcessingSettingsPanel({
+      persistenceKey: `weftext-processing:${root}`,
+      read: () => api<ProcessingRead>("/api/processing/read", { root }),
+      prepare: request => api("/api/processing/prepare", { root, ...request }),
+      status: request => api("/api/processing/status", { root, ...request }),
+      settle: request => api("/api/processing/settle", { root, ...request }),
+      apply: request => api("/api/processing/apply", { request: { root, ...request.request }, planId: request.planId }),
+      onApplied: () => { this.host.notify("共享处理默认已提交；各次导入与校对仍须明确采用建议。"); },
+    });
   }
   private button(label: string, run: () => void | Promise<void>): HTMLButtonElement {
     const button = document.createElement("button"); button.type = "button"; button.className = "text-button"; button.textContent = label;
@@ -141,6 +167,7 @@ export class WorkspaceTools {
     else if (kind === "query") await this.queryPanel.refresh();
     else await this.knowledgePanel.refresh();
   }
+  selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void { this.knowledgePanel.selectTab(tab); }
   documentChanged(): void {
     clearTimeout(this.refreshTimer);
     this.knowledgePanel.attachSurface(null);
@@ -170,7 +197,10 @@ export class WorkspaceTools {
   }
   async projectionChanged(surface: HTMLElement | null, mappings: KnowledgeTextMapping[]): Promise<void> {
     this.knowledgePanel.attachSurface(surface, mappings);
-    if (this.host.getDocument()?.nodeId) await this.knowledgePanel.refresh();
+    // Knowledge discovery observes the projection; it must never delay body
+    // installation or an unrelated property/navigation action. Default-off
+    // hints also avoid compiling other notes while this panel is closed.
+    if (this.host.getDocument()?.nodeId && (this.active === "knowledge" || this.knowledgePanel.backgroundEnabled())) void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
   }
   attachSurface(surface: HTMLElement | null, mappings: KnowledgeTextMapping[] = []): void { this.knowledgePanel.attachSurface(surface, mappings); }
   private async importResource(file: File, sessionId: string): Promise<void> {

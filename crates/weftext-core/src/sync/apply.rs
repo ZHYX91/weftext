@@ -451,6 +451,19 @@ impl Core {
                     })?;
                     PathBuf::from(&original.directory)
                 } else if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                    // Preserve a previously admitted root note's physical
+                    // locator for content-only updates. Replica envelopes are
+                    // local; an unchanged portable placement is not a request
+                    // to move the original library into its own child folder.
+                    if let Some(original) = local.get(&key).filter(|old| {
+                        matches!(key, ObjectKey::Node(_))
+                            && Path::new(&old.directory) == root
+                            && !super::relocate::placement_changed(&old.state, state)
+                    }) {
+                        locations.insert(key.clone(), PathBuf::from(&original.directory));
+                        remaining.remove(&key);
+                        continue;
+                    }
                     let parent = if let Some(parent) = &state.parent {
                         let Some(parent) = locations.get(parent) else {
                             continue;

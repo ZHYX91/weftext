@@ -158,6 +158,14 @@ export function nativeStyleControlReason(reason: string): string {
 
 /** Both local and hosted panels edit the same inspected native parameter. */
 export function nativeStyleControlInput(control: NativeStyleControl, value: NativeStyleValue): HTMLInputElement | HTMLSelectElement {
+  const localeOptions = nativeLanguageOptions(control.key, value);
+  if (localeOptions.length && control.kind === "text") {
+    const select = element("select", "text-input");
+    for (const option of localeOptions) {
+      const entry = element("option", "", option.label); entry.value = option.value; entry.selected = option.value === value; select.append(entry);
+    }
+    return select;
+  }
   if (control.kind === "select") {
     const select = element("select", "text-input");
     for (const [index, option] of (control.options ?? []).entries()) {
@@ -172,6 +180,18 @@ export function nativeStyleControlInput(control: NativeStyleControl, value: Nati
   return input;
 }
 
+/** Values remain native expressions; this never creates parallel locale metadata. */
+export function nativeLanguageOptions(key: string, current: NativeStyleValue): { label: string; value: string }[] {
+  const values: [string, string][] = key === "text.lang" ? [
+    ['"zh"', "中文 · zh"], ['"en"', "English · en"], ['"ja"', "日本語 · ja"], ['"ko"', "한국어 · ko"], ['"fr"', "Français · fr"], ['"de"', "Deutsch · de"], ['"es"', "Español · es"], ['"ar"', "العربية · ar"],
+  ] : key === "text.region" ? [
+    ["none", "未指定地区 · none"], ['"CN"', "中国大陆 · CN"], ['"HK"', "香港 · HK"], ['"TW"', "台湾 · TW"], ['"US"', "美国 · US"], ['"GB"', "英国 · GB"], ['"JP"', "日本 · JP"], ['"KR"', "韩国 · KR"], ['"FR"', "法国 · FR"], ['"DE"', "德国 · DE"],
+  ] : [];
+  if (!values.length) return [];
+  if (!values.some(([value]) => value === current)) values.unshift([String(current), `保留当前原生值 · ${String(current)}`]);
+  return values.map(([value, label]) => ({ value, label }));
+}
+
 /** Import style-panel.css and retain this returned controller per library.
  * Closing an uncertain operation retains its immutable request in the controller.
  */
@@ -182,7 +202,7 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
   const heading = element("h2", "", "资料库默认样式"); heading.id = `style-heading-${crypto.randomUUID()}`;
   const close = element("button", "button-secondary compact", "关闭"); close.type = "button";
   header.append(heading, close); dialog.setAttribute("aria-labelledby", heading.id);
-  const description = element("p", "modal-description", "字体、间距和边框来自同一份原生 Typst 模块。应用时只修改库设置和样式文件，笔记正文保持原样。单篇和局部规则遵循 Typst 的原生作用域。");
+  const description = element("p", "modal-description", "字体、间距、文档语言和地区来自同一份原生 Typst 模块。地区可留为未指定；语言与地区分别选择，不自动转换简繁或推断时区。单篇和局部原生规则遵循 Typst 作用域。此处设置不改变个人界面或本次导入／校对语言。");
   const path = element("p", "style-path");
   const notices = element("div", "style-notices");
   const form = element("form", "modal-form");

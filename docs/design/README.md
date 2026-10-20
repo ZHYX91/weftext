@@ -10,6 +10,8 @@ translation_status: synced
 
 Status: **design-refinement-not-implemented**. The refinement keeps the main architecture, clarifies requirements/CEL/copy contracts and simplifies builtin configuration. [REVIEW](REVIEW.md) §§7–8 separately record earlier fixed acceptance and current checks.
 
+The 2026-10-20 hierarchical-tag addition specifies REQUIREMENTS §5.1.1: CORE §2.3 owns forests/identity/upgrades, FEATURES §§5.6,7.4 own trusted queries/interaction, with SOURCE/SERVER/INTEGRATION aligned. It requires necessary shared implementation refactoring and is not accepted alpha.3 behavior. ROADMAP TAG01–10 contains its completion gates.
+
 This directory replaces the prior `typst-native` technical solution as the current technical design. Prior files and their fixed-scope reviews remain historical evidence, not algorithms to combine with this directory. The 49 historical inputs, `inputs.json` and full review history are archived, not build or runtime dependencies of this repository. Retain user outcomes while choosing technology anew, without normal-runtime compatibility layers for undeployed protocol families.
 
 | Document | Responsibility |

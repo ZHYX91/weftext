@@ -44,6 +44,8 @@ enum Intent {
         start_scalar: usize,
         end_scalar: usize,
         target: knowledge::NodeRef,
+        #[serde(default)]
+        fragment: Option<String>,
     },
 }
 #[derive(Deserialize)]
@@ -658,7 +660,7 @@ fn capture(
     captured.add_compile(inner, 0);
     let relevant = relevant_labels(&captured);
     for index in 1..captured.inventory.nodes.len() {
-        if relevant.contains(&captured.inventory.nodes[index].owner) {
+        if index < MAX_COMPILES || relevant.contains(&captured.inventory.nodes[index].owner) {
             captured.add_compile(inner, index);
         }
     }
@@ -863,10 +865,28 @@ fn mention_scan(captured: &Captured, writable: bool) -> Result<knowledge::Mentio
     if !captured.dictionary_complete || tree.is_none() {
         inventory.coverage = knowledge::Coverage::Partial;
     }
-    let mut scan = knowledge::scan_mentions_bounded(
+    let candidates = captured
+        .compilations
+        .iter()
+        .flat_map(|c| {
+            let output = c.output.as_ref();
+            let headings: Vec<weftext_engine::HeadingInfo> = output
+                .and_then(|o| serde_json::from_value(o["sourceInfo"]["headings"].clone()).ok())
+                .unwrap_or_default();
+            let labels: Vec<weftext_engine::CompiledLabel> = output
+                .and_then(|o| serde_json::from_value(o["labels"].clone()).ok())
+                .unwrap_or_default();
+            knowledge::compiled_mention_candidates(&inventory.nodes[c.index], &headings, &labels)
+        })
+        .collect::<Vec<_>>();
+    if inventory.nodes.iter().any(|n| !n.labels_complete) {
+        inventory.coverage = knowledge::Coverage::Partial;
+    }
+    let mut scan = knowledge::scan_mentions_with_candidates(
         &inventory,
         &captured.source().owner,
         &fragments,
+        &candidates,
         500_000,
         MAX_EDGES,
     )
@@ -932,7 +952,7 @@ fn public_edge(captured: &Captured, edge: knowledge::LinkEdge) -> Value {
         &captured.inventory,
         &captured.resource_fragments,
     );
-    json!({"source":public_node(captured,&edge.source),"occurrence":edge.occurrence,"raw":raw,"resolution":public_resolution(captured,&resolution,&edge.occurrence.target),"editable":edge.source==captured.source().owner && edge.occurrence.destination_slot.is_some()})
+    json!({"source":public_node(captured,&edge.source),"occurrence":edge.occurrence,"raw":raw,"sourceHash":digest(source.source.as_bytes()),"resolution":public_resolution(captured,&resolution,&edge.occurrence.target),"editable":edge.source==captured.source().owner && edge.occurrence.destination_slot.is_some()})
 }
 fn authored_literal(source: &str, link: &knowledge::NativeLink) -> Option<String> {
     let start = if matches!(link.kind.as_str(), "native" | "nativeLabel")
@@ -1004,10 +1024,12 @@ async fn read(
         let writable=inner.rights(&captured.actor,&captured.resource)?.write && inner.file(&captured.resource)?.editable;
         let index=knowledge::link_index_bounded(&captured.inventory,&captured.source().owner,MAX_EDGES,1024*1024);
         let scan=mention_scan(&captured,writable)?;
-        let mentions=scan.fragments.into_iter().map(|f|json!({"id":f.id,"nodeKey":f.node_key,"text":f.text,"coverage":f.coverage,"partialReason":f.partial_reason,"hits":f.hits.into_iter().map(|h|json!({"startScalar":h.start_scalar,"endScalar":h.end_scalar,"startUtf16":h.start_utf16,"endUtf16":h.end_utf16,"terms":h.terms,"writable":h.writable,"sourceRange":h.source_range,"lane":h.lane,"component":h.component,"targets":h.targets.iter().filter_map(|n|public_node(&captured,n)).collect::<Vec<_>>() })).collect::<Vec<_>>() })).collect::<Vec<_>>();
+        let mentions=scan.fragments.into_iter().map(|f|json!({"id":f.id,"nodeKey":f.node_key,"text":f.text,"coverage":f.coverage,"partialReason":f.partial_reason,"hits":f.hits.into_iter().map(|h|json!({"startScalar":h.start_scalar,"endScalar":h.end_scalar,"startUtf16":h.start_utf16,"endUtf16":h.end_utf16,"terms":h.terms,"writable":h.writable,"sourceRange":h.source_range,"lane":h.lane,"component":h.component,"candidates":h.candidates.iter().filter_map(|c|public_node(&captured,&c.target).map(|target|json!({"target":target,"fragment":c.fragment,"term":c.term,"provenance":c.provenance}))).collect::<Vec<_>>(),"targets":h.targets.iter().filter_map(|n|public_node(&captured,n)).collect::<Vec<_>>() })).collect::<Vec<_>>() })).collect::<Vec<_>>();
         let properties=knowledge::property_references(&captured.inventory,&captured.properties).into_iter().map(|p|json!({"source":public_node(&captured,&p.source),"fieldId":p.field_id,"itemPath":p.item_path,"resolution":public_resolution(&captured,&p.resolution,"")})).collect::<Vec<_>>();
         let rendered=captured.compilations.iter().find(|c|c.index==captured.selected).and_then(|c|c.output.as_ref()).filter(|o|o["ok"]==true).and_then(|o|serde_json::from_value::<weftext_engine::RenderNode>(o["tree"].clone()).ok()).map(|tree|knowledge::rendered_links(&tree,&format!("html:{}:{}",captured.request.session_id,captured.request.serial),"html",&captured.inventory.generation)).unwrap_or_default().into_iter().take(MAX_EDGES).map(|r|public_rendered(&captured,r)).collect::<Vec<_>>();
-let response=json!({"basis":captured.basis(),"scope":"configuredAuthorizedManagedSources","links":{"coverage":index.coverage,"outgoing":index.outgoing.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingId":index.incoming_id.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingPath":index.incoming_path.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>()},"renderedLinks":rendered,"propertyReferences":{"scope":"explicitAuthorizedFields","coverage":if captured.property_complete{"complete"}else{"partial"},"items":properties},"mentions":{"scope":"nativeTitlesAndAuthorizedNameFields","coverage":scan.coverage,"fragments":mentions},"writable":writable,"fileConversion":false});
+let diagnostic = knowledge::link_diagnostics(&captured.inventory, &captured.properties, captured.property_complete, MAX_EDGES);
+        let diagnostics = json!({"generation":diagnostic.generation,"scope":diagnostic.scope,"coverage":diagnostic.coverage,"scannedNodes":diagnostic.scanned_nodes,"propertyIssues":diagnostic.property_issues.into_iter().map(|p|json!({"source":public_node(&captured,&p.source),"fieldId":p.field_id,"itemPath":p.item_path,"address":p.address,"resolution":public_resolution(&captured,&p.resolution,&p.address)})).collect::<Vec<_>>(),"issues":diagnostic.issues.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"nodes":diagnostic.nodes.into_iter().map(|n|json!({"node":public_node(&captured,&n.node),"incoming":n.incoming,"outgoing":n.outgoing,"invalidOutgoing":n.invalid_outgoing,"state":n.state})).collect::<Vec<_>>()});
+let response=json!({"diagnostics":diagnostics,"basis":captured.basis(),"scope":"configuredAuthorizedManagedSources","links":{"coverage":index.coverage,"outgoing":index.outgoing.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingId":index.incoming_id.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingPath":index.incoming_path.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>()},"renderedLinks":rendered,"propertyReferences":{"scope":"explicitAuthorizedFields","coverage":if captured.property_complete{"complete"}else{"partial"},"items":properties},"mentions":{"scope":"nativeTitlesAndAuthorizedNameFields","coverage":scan.coverage,"fragments":mentions},"writable":writable,"fileConversion":false});
         if serde_json::to_vec(&response).map_err(|_|changed())?.len()>MAX_OUTPUT {return Err(ApiError::bad("本次链接结果超过 8 MiB 交付预算；请缩小部署的获权范围。"));}
         Ok(Json(response))
     }).await
@@ -1066,6 +1088,7 @@ async fn proposal(
             start_scalar,
             end_scalar,
             target,
+            fragment: selected_fragment,
         } => {
             let scan = mention_scan(&captured, true)?;
             let fragment = scan
@@ -1082,8 +1105,14 @@ async fn proposal(
                         && h.targets.contains(&target)
                 })
                 .ok_or_else(changed)?;
-            knowledge::convert_mention(captured.source(), &captured.inventory, hit, &target)
-                .map_err(knowledge_error)?
+            knowledge::convert_mention_fragment(
+                captured.source(),
+                &captured.inventory,
+                hit,
+                &target,
+                selected_fragment.as_deref(),
+            )
+            .map_err(knowledge_error)?
         }
     };
     Ok((captured, patch))

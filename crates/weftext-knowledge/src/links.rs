@@ -1160,9 +1160,7 @@ pub fn link_index_bounded(
             if &source.owner == selected {
                 result.outgoing.push(edge.clone());
             }
-            if edge.resolution.status == "resolved"
-                && edge.resolution.target.as_ref() == Some(selected)
-            {
+            if edge.resolution.target.as_ref() == Some(selected) && edge.source != *selected {
                 if edge.resolution.form == Some(LinkForm::Id) {
                     result.incoming_id.push(edge);
                 } else {

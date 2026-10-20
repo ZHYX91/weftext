@@ -17,9 +17,9 @@ IGNORED = {'.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__'
 VERSION = tomllib.loads((ROOT / 'crates/weftext-app/Cargo.toml').read_text(encoding='utf-8'))['package']['version']
 
 
-def run(*args, capture=False):
+def run(*args, capture=False, env=None):
     return subprocess.run([str(x) for x in args], cwd=ROOT, check=True,
-                          capture_output=capture, text=True, encoding='utf-8').stdout
+                          capture_output=capture, text=True, encoding='utf-8', env=env).stdout
 
 
 def build(release):
@@ -106,8 +106,17 @@ def package(executable):
     (destination / 'BUILD.json').write_text(json.dumps({
         'version': f'{VERSION}-local', 'platform': sys.platform,
         'profile': executable.parent.name, 'sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+        'sourceSha256': hashlib.sha256((destination / 'source.zip').read_bytes()).hexdigest(),
         'status': 'local candidate, not a published release',
         'source': 'source.zip contains this working-tree source, including uncommitted changes',
+        'recognition': {
+            'runtimeIncluded': False,
+            'setup': 'source.zip/scripts/recognition/README.md',
+            'runtimeLockSha256': hashlib.sha256((ROOT / 'resources/recognition/runtime-lock.json').read_bytes()).hexdigest(),
+            'embeddedScripts': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in
+                                (ROOT / 'scripts/recognition').glob('*.py')
+                                if p.name in {'worker.py', 'engine.py', 'install.py', 'schemes.py', 'docx_reader.py', 'product_worker.py'}},
+        },
     }, indent=2), encoding='utf-8')
     archive = str(destination) + '.zip'
     # Registry license files can carry an epoch timestamp; ZIP's lower bound is 1980.
@@ -127,11 +136,13 @@ if __name__ == '__main__':
     exe = build(args.release)
     if args.action in {'check', 'package'}:
         run(sys.executable, 'scripts/check.py', '--models')
+        run(sys.executable, 'scripts/recognition/test_schemes.py')
+        run(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
         run(sys.executable, 'resources/fonts/verify.py')
         run(NPM, '--prefix', 'app', 'test')
         run('cargo', 'fmt', '--all', '--', '--check')
         run('cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings')
-        run('cargo', 'test', '--locked', '--workspace')
+        run('cargo', 'test', '--locked', '--workspace', env={**os.environ, 'WEFTEXT_TEST_EXECUTABLE': str(exe)})
         run(sys.executable, 'scripts/test_mvp.py', exe)
         run(sys.executable, 'scripts/test_local_features.py', exe)
         run(sys.executable, 'scripts/test_outputs.py', exe)
@@ -142,6 +153,13 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_hosted_review.py', exe)
         run(sys.executable, 'scripts/test_hosted_office.py', exe)
         run(sys.executable, 'scripts/test_hosted_citations_outputs.py', exe)
+        run(sys.executable, 'scripts/test_v061_authoring.py', exe)
+        run(sys.executable, 'scripts/test_everyday.py', exe)
+        run(sys.executable, 'scripts/test_query_organization.py', exe)
+        run(sys.executable, 'scripts/test_link_diagnostics.py', exe)
+        run(sys.executable, 'scripts/test_v061_processing.py', exe)
+        run(sys.executable, 'scripts/test_v061_processing_integration.py', exe)
+        run(sys.executable, 'scripts/test_recognition.py', exe)
         run(sys.executable, 'scripts/test_hosted_owner_backup.py', exe)
         run(sys.executable, 'scripts/test_hosted_content_import.py', exe)
         run(sys.executable, 'scripts/test_hosted_query.py', exe)

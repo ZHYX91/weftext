@@ -31,6 +31,8 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
 
+多级标签的 v2 父关系、操作边界、旧资料与同步接纳目标见 §2.3；当前 alpha.3 实现仍是 v1 扁平登记。
+
 portable 控制资料只保存无法从当前文件恢复的事实：身份创建与退休、schema 历史、已提交版本/因果关系、资源文件绑定、Trash 恢复信息。资源的稳定 Ref 通过节点内 `weftext.resources.json` 的资源 ID 与相对文件定位绑定；该文件不决定 Node parentage。普通非 canonical 文件仍可见；未登记资源不被自动授予稳定 ID，原始改名若无法证明原对象则显式重新绑定或冲突。批注 JSON 中的 annotation ID 与其 target/lifecycle 分域。
 
 `.weftext-history/` 保存不可变已提交 manifest 与需要保留的 exact blobs。它是历史、复制与恢复证据，不能被编辑成第二套 current 源。设备/session Draft、活动 SQLite journal/WAL、运行凭据与派生索引放在同步根外。durable commit 到 manifest 发布之间，原 journal 的已提交记录和完整 blobs 是该次身份/版本/结果的真实证据；启动先恢复这些待发布记录，备份必须一致包含它们，不能因 history 尚缺就重新执行。历史快照可能与 current 文件不同；当前读取仍须观察实际文件与当前权限。索引、搜索、关系反向视图、缩略图和图可删除重建，不能重建执行责任或凭空生成 ID。
@@ -67,6 +69,22 @@ v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source
 
 完整 Draft record（含 Base、提案、全部 alternatives）及迁移记录采用一致的 16 MiB 读写预算；覆写前先校验完整拟议字节，超限或读取／持久化失败保留旧可读草稿，不截断或只检查正文长度。本轮 Windows／NTFS 的定向回归及受影响 Draft、历史、owner backup、库作用域和同步 HTTP／浏览器消费者均已通过最终验收；平台和真实断电限制仍见 MVP。
 
+### 2.3 标签森林、原身份与版本升级
+
+2026-10-20 目标合同，尚未实现。根 `.weftext-tags.json` 是标签身份声明、显示名和共享父关系的唯一当前权威；它与真实目录树分域。v2 文档闭合为 `{version: 2, tags: [{tagId, displayName, parentTagId}, ...]}`，各成员必有，根 `parentTagId: null`，其余为同表的裸 TagId。API 中的父级选择使用完整 TagRef 并核 WorkspaceId、实际登记资格及准确版本，不能把外库 UUID 或客户端父链当本库依据。保留现有 UUID、名称和 5,000 条预算，同名合法；不存独立路径、children 或祖先权威，也不设置同级硬唯一。
+
+同一个 Core 解码／校验入口供普通读取、prepare、恢复、同步接纳、历史及交换消费者使用，按用途区分读取旧内容与接纳当前后继。完整 after 森林必须通过严格版本／成员、唯一 ID、父级存在、非自身和无环检查；父链终止于根。JSON 合法还须证明原注册表对象及每个标签的 Core 登记资格。缺父、未登记或观察缺口不把节点临时当根。从未出生的表可凭原缺席依据初始化；已经登记的表缺失或被替换属于诊断／恢复事件，不能按空表重新出生。可用迭代遍历作有界全表校验，不依赖调用栈深度；错误或超预算不安装部分树。
+
+`createTag` 可指定合格父级，并与首次 typed TagRef 赋值在同一原 Plan 出生；`renameTag` 只改名称；新增 `moveTag` 只改变既有标签的父级，包括置 null。后代随父链派生，不批改笔记或重分配 ID。三种动作统一沿原 operationId、准确 before／after、实际文件身份、CAS、actor／授权代次及原结果恢复；预览明确所选标签和目标父级。服务端生成修改，所有能写注册表的路径按实际差异执行操作授权，不能用 rename 或通用文件写绕过 move。前像变化则按原资格重验或重新准备，不盲重试未知结果。
+
+直接赋予已有 TagRef 与换父通常在业务上可交换，但不因此使旧 Plan 的文件／身份／授权依据继续有效。保留原提交条件，也不因层级新增就强迫每次直接赋值读取当前父链。依实际读集决定重验证／重准备；仅由查询或归组产生的结果不成为 writer。未裁决的 Tags 分支只限制真正依赖树的操作，不自动阻止无关笔记编辑。
+
+继续用整体 `ObjectKey::Tags` 和准确 blobs／因果 parents／共同 base。交叉换父 A→B 与 B→A 不按边自动合并；互不相关的改名／换父也可接受整表 CAS 冲突，在确定版本上重准备并验证完整树。首版不加逐标签 CRDT、逐边历史或自动字段合并。部分副本应取得所用版本的完整、有效且合格的 Tags 对象；不新增“已接纳半棵权威树”模型。标签树完整与笔记范围完整分别判断；移动本身无需等待全部笔记同步。后代 Query 的快照及正负范围依赖由 §9 与 FEATURES §5.6 接续。
+
+仅标签文档版本明确升 v2，不改 WorkspaceId、TagRef 或原生 Typst 格式标记；实际资料盘点决定旧支持范围，不由“尚未发布”推定没有真实资料。活动 v1 经原 Core 更新路径转换为根 parent=null，保原标签资格、注册表连续性和因果历史；不能重建同名文件或重新登记旧 UUID 冒充升级。转换准备按原 journal 核本注册表的未决安装及真实前像；旧 prepared／unknown 不改指纹、不由升级器重跑，原操作恢复也不能安装过期的 v1 after 覆盖 v2。raw 外部改动仍按 external_pending／显式接纳处理，不以 JSON 校验成功冒当前已决树。真正留存的 v1 历史／分支／base／备份按相应读取入口解码，在内存解释为全根，证据仍绑定原 v1 blob，不重写历史；未存在的旧资料不建立假想兼容层。可解码不等于可作为当前合法后继：旧离线整表不能补 null 后覆盖 v2 层级；保分支与 base，需要保留的旧意图在确定的 v2 basis 上显式重准备。无额外版本协商或迁移事实库。
+
+跨库导入通过目标 Core 新建合格身份，或显式选择已有目标身份；按完整源 TagRef 建立本次映射，同一映射处理父 ID、笔记及 Query 中的 typed 引用。选择子树须包含必要祖先，或明确预览并选择在目标库重新挂接；不静默补根、不因映射顺便移动既有目标标签、不按同名／裸 UUID 合并。先验证完整目标森林及预算再在原 Plan 提交。literal 原样保留；映射不是永久别名表。保持身份的同库恢复继续要求原恢复证据，不与跨库导入混用。
+
 ## 3. 身份、版本与当前读取
 
 保留随机 UUIDv4：WorkspaceId 与各 Node/Resource/Annotation/Directory/Tag ID 使用完整类型化 `EntityRef`，解决改名稳定引用、离线创建及复制独立身份，且不把名字/路径变成身份。UUID 的价值是稳定随机标识，不是安全凭证。Directory/Tag只补导航必需身份，不成为笔记或逐值事实ID。Core 分配新身份；源码/sidecar中的 ID 是声明。已有身份须匹配已接纳创建事实、当前唯一文件绑定和 lifecycle；重复 ID、外部复制带 ID、缺元数据或 partial sync 不自动新建或重发 ID。
@@ -74,6 +92,12 @@ v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source
 初始化也使用§5.3的create-only边界，不假装普通同用户staging可一次原子发布整库。先durable bootstrap operation、WorkspaceId、配置/源拟议版本和完整after blobs，再在获权目标父闭包中以§5.3直接返回原目录创建handle的原语create-only建立目标root及必要子目录并持续保留同handle；逐文件CreateNEW并持写保护构造root config、schema、根marker和全部计划源。外部可先看到partial文件，但Core发现installing/birth缺失时只返回incomplete，不按marker存在激活。原目标已存在则冲突，不接着初始化其中。只有所有计划对象/manifest/journal与current权限完整，单一commit marker才激活Workspace和creator grant，随后portable publication。
 
 初始化失败保原ID和可恢复计划，未知新增/对象被替换不覆盖或递归清理；仅本操作归属可证的文件和实际empty目录允许条件回退。丢响应查询原operation，不能重分Workspace/Node ID或重复赋creator权限。Server初始权限来自受权issuer配置，不来自client metadata；首次初始化后不得借重启/恢复补赋creator grant。真实已有资料目录走显式import/admit，保原件/unknown/loss，不改扩展名冒导入。
+
+本地 `create_library_with_options_and_id(path, LibraryCreateOptions, operationId)` 的闭合输入为 `LibraryCreateOptions {initialStyle?: {source,enabled}|null}`；省略／null 保留原无初始样式的建库调用。`source` 是准确 UTF-8 原生样式，须语法有效且恰有可认证的 `library-style` 入口；复杂合法规则保原文，不要求全部可由控件编辑。这项验证不承诺所有依赖或实际排版均已编译通过。提供 initialStyle 时，同一个 `CreateLibrary`／`CreateTree` Plan 创建根控制文件、普通 `Styles/Styles.typ` 节点、`Styles/library-style.typ` 资源及资源 manifest，并把 WorkspaceSettings.defaultStyle 指向该资源的 EntityRef；出生、资源接纳、版本、历史和同步发布沿原事务，不再追加第二次样式写入。语言／地区只在该原生源内，不能新增 locale 镜像。
+
+路径、完整 options 与原 operationId 在首次网络写入前保留。重试核对同一指纹，换 options 不复用原编号；已提交结果还须证明原库根物理身份，原路径上相同字节的新目录不获得原库资格。部分初始化只能按原 Plan 检查后续写：已归本操作的原对象和准确 before／after 才可继续，未知新增或第三态保留并进入恢复，不以标记或同名文件猜归属。
+
+`cancel_library_creation_with_options_and_id` 接受准确原输入：已提交保持 committed；已登记但未完成的创建沿原恢复资格，只能保留可证 before 或继续核验原安装。未登记请求用专用 `cancelLibraryCreation` 私有 Plan 的单次持久创建记录终态；仅当指纹准确匹配且没有作者文件、身份、事务、历史或同步参与者时，该记录本身即 resolved，不依赖随后另写 resolution。无效原始路径只作为有界原请求证据，不读取、写入、接纳、阻挡或发布该作者路径。重启和迟到创建仍识别同一取消事实；状态未知或权限／I/O 错误不能冒终态。
 
 `RevisionId` 是冻结 Plan 时私有分配的随机标识。commit 后才有效，manifest 一次关联 EntityRef、RevisionId、exact blob、因果父版本与事务。它不依赖包含自身的源码摘要，能在最终 `.typ` 中构造 self/cross 固定地址和批注锚点。计划私有 ID 不作为公开成功；真正 no-op 保持版本，外部同字节接纳是新的来源接纳事实。
 
@@ -282,7 +306,7 @@ Core commit marker原子更新一个journal generation及该代所有已接纳 s
 `openLogicalCut(scope,purpose,budget)`：
 
 1. 验证caller当前潜在scope与最低披露；取得短commit/read barrier，等待该scope正在installing的Core事务变成committed或明确未可用，不读取半安装state。
-2. 在同一journal读事务取已决generation `g`、完整已接纳causal heads、per-entity exact RevisionId/blob/lifecycle、目录结构历史视图和schema/rules/settings版本。scope membership/负范围只能来自该`g`可证明的完整已接纳库存；building/未知raw边界不变empty。目录/config视图来自原操作事实，source版本同时包含SourceSchemaBasis，相关原配置必须被retention保护。
+2. 在同一journal读事务取已决generation `g`、完整已接纳causal heads、per-entity exact RevisionId/blob/lifecycle、目录结构历史视图、schema/rules/settings版本，以及静态声明读取的完整 Tags 版本及原登记资格（FEATURES §5.6）。scope membership/负范围只能来自该`g`可证明的完整已接纳库存；building/未知raw边界不变empty。目录/config视图来自原操作事实，source版本同时包含SourceSchemaBasis，相关原配置必须被retention保护。
 3. 同事务注册cutHandle的audience、授权世代、依赖/coverage、有限TTL/预算及准确blob/config/history retention roots，再释放barrier。租约注册与读取之间不能被GC删除。pending manifest发布的版本从原committed journal得到，不等待网络。
 4. `readEntity(ref,at=cutHandle)`、`readScope(at=cutHandle)`、schema/World reads都只选cut固定版本。缺blob/配置返回该cut不可用/partial，不补latest。cut handle是snapshot read权上下文，不是当前write basis；Action需fresh prepare。
 
@@ -317,6 +341,18 @@ GC保当前已接纳revision/schema facts、仍可达source/Query/trash/history 
 Job 固定输入版本/输出/loss/确认/预算/actor，保存步骤、attempt/effect key、批准消费、费用结算与 stop。建议应用把目标源+annotation accepted 状态同 Plan 提交；转换输出 staged 不代表文档已保存或下载交付。下载固定确认的 exact output，续传不换内容，逐交付授权。外部请求 unknown 保存原 attempt，先查询 provider；只有被证明同 key 幂等/条件写才可安全重试，不声称跨网络 exactly-once。stop 阻止之后获权步骤，不撤回已发生效果。
 
 保留策略保护未决操作、冲突 heads/Base、精确批注历史、固定版本引用、正在消费的结果/导出与 external unknown 的必要 blobs；其它 cache 可清理。GC 不删除幂等最小事实、tombstone 或费用责任来重新执行，也不让所有投影无限保全。新已发布合同今后升级须有版本识别、保原件、显式 staged 转换、失败恢复与真实客户端兼容表；未部署旧候选不装 runtime decoder。
+
+2026-10-19 本地第一阶段 Query 插入：`/api/query/definition/draft` 只保留原 Core definition-reservation 的 key 预约，返回准确源码提案，不写作者文件。`/api/query/definition/pending` 依据准确当前源中的未接纳 key、实际已纳管所有者和私有原预约找回原保存编号；只恢复可证明的唯一原预约，不猜同名。没有原预约、查询无法解析或含多个待接纳定义时，不额外阻断原生源码的普通保存，也不因此接纳任何未知 key；界面说明查询仍不可用。普通 Save 消费唯一原编号后才产生该定义接纳。取消／Undo 不提交作者内容；源中不含新 key 的其它保存不消耗该预约。没有新持久协议、额外可编辑 Query 数据库或跨主体授权通道。
+
+2026-10-19 第二阶段：`LibraryCreateOptions.initialRoot` 为可选普通根笔记选择；未选时不编码此成员，原创建指纹不变。选查询时原冻结 create-tree Plan 同时安装准确 schema revision、出生普通 Node 并沿原 birth 接纳生成的 Query keys；没有额外预约或新持久协议。同 operationId 返回原结果，不在用户清空后重建。根笔记与库 envelope 同目录时，sync 资源所有权排除三个根控制文件；内容 apply／compound 依据接收端原纳管 Node 及未变 portable placement 保留本机根位置，不从可移植字段恢复本机路径，不建立特殊根类型。相邻 Query edit 的 action 与 plan／replacement 互斥，仍检查当前 Draft 及独立权限；最小 hosted formSchema 只披露已获字段读取权的闭包。 原生渲染依赖只由该次 World 的准确派生入口 FileId 标为 derived-source／derived-file；引用／标签消费者据此排除编译器入口，形似入口名的作者文件仍按原快照验证，不以路径前缀放行。
+
+### 9.3 识别作业与原子导入
+
+v0.6.2 识别执行资料只保存在执行端独立 private state；它不是作者树或并行提交账本。原 jobId 固定输入摘要、目的、页／区域、语言和规则、实际目标、授权 epoch、实现及模型摘要。重试只读原结果或中断事实，不因重启、过期、取消或丢响应自动重跑 OCR。预览与识别共用执行预算；缺模型不阻断保原件，读取状态、原页、结果和下载分别复核权限。模型／规则改变使未确认计划失效，不修改已保存笔记。
+
+`ImportRecognized` 复用原 `CreateTree`，在一个原 Core Plan 内创建原生源、登记原件／证据资源、目录／节点出生、schema 基准、历史和同步发布。不存在先写正文后补原件／字段的第二次提交。取消未安装提案沿原操作结束；提交未知后只检查原 operationId，不另分编号重放。安装中断沿原 Plan 的准确物理对象及 before／after 证据恢复；未知对象保留并拒绝覆盖。
+
+托管入口使用既有 `contentImportSlots` 的独立 `recognition {run,read,import,download}` 权限，默认均拒绝；这些权限不隐含未来正文、字段、历史、搜索、资源或输出权。映射字段还须目标成员的准确 FieldId 读写权，schema 读取另外获权。生成成员仍由原 slot producer 的出生事实证明，新增目录资格和每个后续消费者沿既有 Core 规则；同步保原件、来源、字段及真实身份，不传执行资格或私人作业目录。
 
 ## 10. 最小消费接口
 

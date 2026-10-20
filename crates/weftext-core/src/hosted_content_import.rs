@@ -20,7 +20,9 @@ pub struct ActorContentImportReceipt {
 fn content_import(intent: &OperationIntent) -> bool {
     matches!(
         intent,
-        OperationIntent::ImportNative { .. } | OperationIntent::ImportBibliography { .. }
+        OperationIntent::ImportNative { .. }
+            | OperationIntent::ImportBibliography { .. }
+            | OperationIntent::ImportRecognized { .. }
     )
 }
 fn same_path(a: &Path, b: &Path) -> bool {

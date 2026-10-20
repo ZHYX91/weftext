@@ -6,27 +6,43 @@ import { ChangeSet } from "@codemirror/state";
 /** Addresses are native-parser products scoped to one source, never saved IDs. */
 export interface WritingRange { from: number; to: number; utf16From: number; utf16To: number; raw: string; writable: boolean }
 export interface WritingLiteral { range: WritingRange; text: string; role: string; paragraphBreaks?: WritingRange[] }
-export interface WritingTable { columns: number; rows: number; cells: WritingRange[]; gridWritable: boolean }
+export interface WritingTableCell { row: number; column: number; rowspan: number; colspan: number; body: WritingRange; range: WritingRange; header: boolean }
+export interface WritingTable { columns: number; rows: number; cells: WritingRange[]; gridWritable: boolean; logicalCells?: WritingTableCell[]; topologyWritable?: boolean; unavailableReason?: string | null; headerRows?: number; headerColumns?: number }
 export interface WritingStructure { kind: string; range: WritingRange; body?: WritingRange | null; level?: number | null; label?: string | null; language?: string | null; runIn: boolean; table?: WritingTable | null }
 export interface WritingRole { status: string; text?: string | null; range?: WritingRange | null; construct?: WritingRange | null }
 export interface WritingMap {
+  bodyBlocks?: { kind: string; range: WritingRange; body: WritingRange }[];
   sourceHash: string; syntaxValid: boolean; literalRegions: WritingLiteral[]; structures: WritingStructure[];
   title: WritingRole; subtitle: WritingRole; bodyInsertion?: WritingRange | null; unavailableReason?: string | null;
+  notes?: import("./document-notes").NotesSourceMap;
+  headingNumbering?: import("./numbering-panel").HeadingNumberingInspection;
 }
 export type WritingBlock =
+  | { kind: "image"; path: string; alt: string }
   | { kind: "paragraph"; text: string }
   | { kind: "heading"; text: string; level: number }
   | { kind: "bulletList" | "numberedList"; items: string[] }
   | { kind: "termList"; items: { term: string; description: string }[] }
   | { kind: "math"; text: string; display: boolean }
   | { kind: "table"; columns: number; cells: string[] }
+  | { kind: "clipboardTable"; rows: number; columns: number; cells: { row: number; column: number; rowspan: number; colspan: number; text: string; header: boolean }[] }
   | { kind: "link"; target: string; text: string }
   | { kind: "raw"; text: string; language?: string | null; block: boolean };
 export type TableAction =
   | { kind: "insertRow" | "removeRow" | "insertColumn" | "removeColumn"; index: number }
-  | { kind: "moveRow"; from: number; to: number }
-  | { kind: "paste"; row: number; column: number; text: string };
+  | { kind: "moveRow" | "moveColumn"; from: number; to: number }
+  | { kind: "paste"; row: number; column: number; text: string }
+  | { kind: "clearRange" | "merge"; top: number; left: number; bottom: number; right: number }
+  | { kind: "split"; row: number; column: number }
+  | { kind: "setHeader"; rows: number; columns: number }
+  | { kind: "transpose" }
+  | { kind: "pasteRange"; row: number; column: number; text: string; expand: boolean }
+  | { kind: "pasteCells"; row: number; column: number; rows: number; columns: number; cells: { row: number; column: number; rowspan: number; colspan: number; text: string; header: boolean }[]; expand: boolean };
 export type WritingIntent =
+  | { kind: "convertBodyBlock"; range: WritingRange; target: string; level?: number }
+  | { kind: "moveBodyBlock"; range: WritingRange; direction: "up" | "down" }
+  | import("./document-notes").DocumentNotesIntent
+  | { kind: "headingNumbering"; action: import("./numbering-panel").HeadingNumberingIntent }
   | { kind: "replaceLiteral"; range: WritingRange; text: string }
   | { kind: "insertBlock"; at: number; block: WritingBlock }
   | { kind: "setHeadingLevel"; range: WritingRange; level: number }
@@ -43,6 +59,7 @@ export interface WritingSnapshot extends WritingBasis { generation: number }
 export interface WritingRequest extends WritingBasis { sourceHash: string; intent: WritingIntent }
 export interface NativeWritingPatch { from: number; to: number; utf16From: number; utf16To: number; expected: string; insert: string }
 export interface WritingResult { source: string; sourceHash: string; patches: NativeWritingPatch[]; selection: SourceSelection; map: WritingMap }
+export interface WritingTransition { before: WritingSnapshot; after: WritingSnapshot; patches: readonly SourcePatch[]; map: WritingMap }
 export interface WritingBuffer {
   readonly source: string; readonly generation: number; readonly selection: SourceSelection; readonly composing: boolean;
   applyPatches(source: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent?: string, isolated?: boolean): void;
@@ -51,6 +68,8 @@ export interface WritingBuffer {
 }
 export interface WritingState { pending: boolean; busy: boolean; composing: boolean; error: string | null; mapCurrent: boolean }
 export interface WritingHost {
+  actionAvailable?(): boolean;
+  refreshMap?(basis: WritingBasis): Promise<WritingMap>;
   editor: WritingBuffer;
   basis(): WritingBasis;
   editable(): boolean;
@@ -83,6 +102,8 @@ export function encodeWritingLiteral(text: string): string {
   }
   return encoded;
 }
+/** Table-cell newlines are visible hard breaks, rather than native soft wraps. */
+export function encodeWritingTableLiteral(text: string): string { return text.replace(/\r\n|\r/g, "\n").split("\n").map(encodeWritingLiteral).join("\\\n"); }
 /** Map a native literal caret without guessing shorthand or generated strings. */
 export function literalSourceOffset(raw: string, text: string, index: number): number | null {
   if (!Number.isSafeInteger(index) || index < 0 || index > text.length || !sourceBoundary(text, index)) return null;
@@ -115,7 +136,7 @@ function literalStops(raw: string, text: string): Map<number, number> | null {
   return decoded === text ? stops : null;
 }
 /** Recovery uses the same unchanged prefix/suffix, without normalizing trivia. */
-export function literalRecoveryRaw(raw: string, before: string, after: string): string {
+export function literalRecoveryRaw(raw: string, before: string, after: string, tableCell = false): string {
   if (before === after) return raw;
   let from = 0, oldTo = before.length, newTo = after.length;
   while (from < before.length && from < after.length && before[from] === after[from]) from++;
@@ -123,7 +144,8 @@ export function literalRecoveryRaw(raw: string, before: string, after: string): 
   while (oldTo > from && newTo > from && before[oldTo - 1] === after[newTo - 1]) { oldTo--; newTo--; }
   while (oldTo < before.length && (!sourceBoundary(before, oldTo) || !sourceBoundary(after, newTo))) { oldTo++; newTo++; }
   const sourceFrom = literalSourceOffset(raw, before, from), sourceTo = literalSourceOffset(raw, before, oldTo);
-  return sourceFrom == null || sourceTo == null ? encodeWritingLiteral(after) : raw.slice(0, sourceFrom) + encodeWritingLiteral(after.slice(from, newTo)) + raw.slice(sourceTo);
+  const encode = tableCell ? encodeWritingTableLiteral : encodeWritingLiteral;
+  return sourceFrom == null || sourceTo == null ? encode(after) : raw.slice(0, sourceFrom) + encode(after.slice(from, newTo)) + raw.slice(sourceTo);
 }
 /** Textarea normalizes EOL; preserve original raw-code bytes outside the edit. */
 export function textareaSourceDraft(source: string, text: string): string {
@@ -247,6 +269,7 @@ export class WritingController {
   private failure: Error | null = null;
   private bindings = new Set<InputBinding>();
   private focusSelection = false;
+  private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; retain?(): boolean; connected: boolean }>();
 
   constructor(private host: WritingHost) {
     this.stopObserve = host.editor.observe(event => {
@@ -273,10 +296,29 @@ export class WritingController {
   get state(): WritingState { return { pending: !!this.active && this.active.text !== this.active.acceptedText, busy: !!this.running, composing: this.host.editor.composing || !!this.active?.composing, error: this.failure?.message ?? this.active?.failure?.message ?? null, mapCurrent: !!this.currentMap() }; }
   get pendingText(): string | null { return this.state.pending ? this.active!.text : null; }
   get activeRange(): WritingRange | null { return this.active?.region.range ?? null; }
+  get sourceSelection(): SourceSelection { return this.host.editor.selection; }
+  restoreNavigationFocus(): void { this.focusSelection = true; }
+  async prepareCommand(): Promise<void> {
+    await this.flush();if(this.host.actionAvailable?.()===false)throw new Error("当前笔记已切换，未打开原笔记的旧操作。"); if(this.currentMap())return;
+    const basis=this.host.basis();
+    if(!this.host.refreshMap)throw new Error("请等待当前原生编辑地图后重试。");
+    const map=await this.host.refreshMap(basis);
+    if(this.host.actionAvailable?.()===false)throw new Error("准备期间笔记已切换，原稿保留。");
+    if(!this.installMap(map,basis.source,basis.serial))throw new Error("准备操作期间出现新输入，请重新选择；原稿已保留。");
+  }
   get snapshot(): WritingSnapshot { return { ...this.host.basis(), generation: this.host.editor.generation }; }
   isSnapshotCurrent(snapshot: WritingSnapshot): boolean { const now = this.snapshot; return now.sessionId === snapshot.sessionId && now.source === snapshot.source && now.serial === snapshot.serial && now.generation === snapshot.generation; }
   /** Focused inputs stay mounted until settled; compiling may update other UI. */
-  get retainInput(): boolean { return typeof document !== "undefined" && [...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing); }
+  get retainInput(): boolean { return typeof document !== "undefined" && ([...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input) || !!this.currentMap() && [...this.surfaces].some(surface => surface.element.isConnected && (surface.element.contains(document.activeElement) || surface.retain?.()))) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing); }
+  /** A native table surface remains mounted while its grid or text has focus. */
+  observeSurface(element: HTMLElement, update: (transition?: WritingTransition) => void, retain?: () => boolean): () => void {
+    const surface = { element, update, retain, connected: false }; this.surfaces.add(surface);
+    const blur = () => queueMicrotask(() => this.notify()); element.addEventListener("focusout", blur);
+    return () => { this.surfaces.delete(surface); element.removeEventListener("focusout", blur); };
+  }
+  /** Notify view hosts after a surface releases a non-text focus/gesture lease. */
+  surfaceStateChanged(): void { if (!this.disposed) this.notify(); }
+  selectRange(range: WritingRange): void { const basis = this.currentMap(); if (!basis || !exactWritingRange(basis.source, range)) throw new Error("表格来源已变化，请等待当前预览。"); this.host.editor.select(range.utf16From, range.utf16To, false); }
   installMap(map: WritingMap, source: string, serial: number): boolean {
     const basis = this.host.basis();
     if (basis.source !== source || basis.serial !== serial || this.host.editor.source !== source || !map || !map.sourceHash) return false;
@@ -297,7 +339,13 @@ export class WritingController {
     const current = this.host.basis();
     return !this.disposed && current.sessionId === basis.sessionId && current.serial === basis.serial && current.source === basis.source && this.host.editor.source === basis.source && this.host.editor.generation === basis.generation && this.host.editable();
   }
-  private notify(): void { this.host.onState?.(this.state); }
+  private notify(): void {
+    this.host.onState?.(this.state);
+    for (const surface of this.surfaces) {
+      if (surface.element.isConnected) { surface.connected = true; surface.update(); }
+      else if (surface.connected) this.surfaces.delete(surface);
+    }
+  }
   private report(error: unknown): Error { const failure = error instanceof Error ? error : new Error(String(error)); this.failure = failure; this.host.onError?.(failure); this.notify(); return failure; }
   private apply(basis: MapBasis, result: WritingResult, event: string, isolated: boolean, selection = result.selection): void {
     if (!this.unchanged(basis)) throw new Error("草稿在处理期间已变化，旧提案未应用；当前输入保留。");
@@ -306,6 +354,8 @@ export class WritingController {
     try { this.host.editor.applyPatches(basis.source, patches, selection, event, isolated); } finally { this.installing = false; }
     const current = this.host.basis();
     if (current.source !== result.source || this.host.editor.source !== result.source) throw new Error("共享草稿未接受原生编辑结果。");
+    const transition: WritingTransition = { before: basis, after: this.snapshot, patches, map: result.map };
+    for (const surface of this.surfaces) if (surface.element.isConnected) surface.update(transition);
     this.installMap(result.map, current.source, current.serial);
     this.refreshBindings(basis.source, patches, result.map);
     this.host.onApplied?.(result);
@@ -328,14 +378,17 @@ export class WritingController {
   }
 
   /** Factory runs after pending text settles, so it cannot use an old origin. */
-  async execute(intent: WritingIntent | (() => WritingIntent)): Promise<void> {
+  async execute(intent: WritingIntent | (() => WritingIntent), expectedSource?: string): Promise<void> {
     await this.deferUntilCompositionEnds(async () => {
       await this.flush();
+      if(this.host.actionAvailable?.()===false)throw new Error("当前对象已切换，未执行旧结构动作。");
       if (this.running) throw new Error("另一项结构修改正在处理中。");
       const basis = this.requireMap();
       const selectedIntent = typeof intent === "function" ? intent() : intent;
       const run = (async () => {
-        const result = await this.host.request({ sessionId: basis.sessionId, source: basis.source, serial: basis.serial, sourceHash: basis.map.sourceHash, intent: selectedIntent }); this.apply(basis, result, "input.structure", true);
+        const result = await this.host.request({ sessionId: basis.sessionId, source: basis.source, serial: basis.serial, sourceHash: basis.map.sourceHash, intent: selectedIntent });
+        if (expectedSource !== undefined && result.source !== expectedSource) throw new Error("原生编辑结果与已预览提案不一致；当前草稿保留，请重新预览。");
+        this.apply(basis, result, "input.structure", true);
         const input = this.active?.input; this.active = null;
         if (input && typeof document !== "undefined" && document.activeElement === input) { this.focusSelection = true; input.blur(); }
       })();
@@ -415,7 +468,7 @@ export class WritingController {
     if (active?.recoveryOnly) {
       const { basis, range, prefix } = active.recoveryOnly;
       if (!this.unchanged(basis) || !exactWritingRange(basis.source, range)) return null;
-      const encoded = literalRecoveryRaw(range.raw, prefix + active.acceptedText, prefix + active.text);
+      const encoded = literalRecoveryRaw(range.raw, prefix + active.acceptedText, prefix + active.text, active.region.role === "tableCell");
       return basis.source.slice(0, range.utf16From) + encoded + basis.source.slice(range.utf16To);
     }
     if (!active || !this.unchanged(active.basis) || !exactWritingRange(active.basis.source, active.region.range)) return null;
@@ -423,7 +476,7 @@ export class WritingController {
     const range = active.region.range;
     const source = active.basis.source;
     const prefix = active.append ? !source || source.endsWith("\n\n") ? "" : source.endsWith("\n") ? "\n" : "\n\n" : "";
-    const encoded = (active.append ? encodeWritingLiteral(active.text) : literalRecoveryRaw(range.raw, active.acceptedText, active.text)) || (["heading", "bulletListItem", "numberedListItem", "termListItem"].includes(active.region.role) ? "#box[]" : "");
+    const encoded = (active.append ? encodeWritingLiteral(active.text) : literalRecoveryRaw(range.raw, active.acceptedText, active.text, active.region.role === "tableCell")) || (["heading", "bulletListItem", "numberedListItem", "termListItem"].includes(active.region.role) ? "#box[]" : "");
     return source.slice(0, range.utf16From) + prefix + encoded + source.slice(range.utf16To);
   }
   async flush(): Promise<void> {
@@ -579,5 +632,5 @@ export class WritingController {
     if (!map.bodyInsertion?.writable) throw new Error(map.unavailableReason || "当前没有可安全添加内容的正文位置。");
     return map.bodyInsertion.from;
   }
-  dispose(): void { this.disposed = true; clearTimeout(this.timer); this.stopObserve(); this.bindings.clear(); const error = new Error("编辑会话已关闭，未应用待处理动作。"); for (const action of this.afterInput.splice(0)) action.reject(error); }
+  dispose(): void { this.disposed = true; clearTimeout(this.timer); this.stopObserve(); this.bindings.clear(); this.surfaces.clear(); const error = new Error("编辑会话已关闭，未应用待处理动作。"); for (const action of this.afterInput.splice(0)) action.reject(error); }
 }

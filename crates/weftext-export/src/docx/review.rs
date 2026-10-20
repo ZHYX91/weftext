@@ -36,6 +36,71 @@ struct Located {
     id: usize,
     start: (usize, usize),
     end: (usize, usize),
+    math_target: Option<usize>,
+}
+fn math_targets(
+    e: &Element,
+    next: &mut usize,
+    path: &mut Vec<usize>,
+    out: &mut Vec<(usize, usize, usize, Vec<usize>)>,
+) {
+    if e.name.starts_with("m:") {
+        if let Some((from, raw)) = &e.source {
+            out.push((*next, *from, *from + raw.len(), path.clone()));
+        }
+        *next += 1;
+    }
+    for (i, child) in e.children.iter().filter_map(Xml::element).enumerate() {
+        path.push(i);
+        math_targets(child, next, path, out);
+        path.pop();
+    }
+}
+fn rewrite_math(e: &mut Element, next: &mut usize, located: &[Located]) {
+    let mut out = vec![];
+    for child in std::mem::take(&mut e.children) {
+        let Xml::Element(mut node) = child else {
+            out.push(child);
+            continue;
+        };
+        let target = if node.name.starts_with("m:") {
+            let value = *next;
+            *next += 1;
+            Some(value)
+        } else {
+            None
+        };
+        let relevant: Vec<_> = located
+            .iter()
+            .filter(|r| r.math_target.is_some() && r.math_target == target)
+            .collect();
+        rewrite_math(&mut node, next, located);
+        let argument = matches!(
+            node.name.as_str(),
+            "m:num" | "m:den" | "m:e" | "m:sub" | "m:sup" | "m:deg" | "m:lim"
+        );
+        if argument {
+            for item in relevant.iter().rev() {
+                node.children
+                    .insert(0, Xml::Element(mark("w:commentRangeStart", item.id)));
+            }
+            for item in &relevant {
+                node.push(mark("w:commentRangeEnd", item.id));
+                node.push(comment_ref(item.id));
+            }
+            out.push(Xml::Element(node));
+            continue;
+        }
+        for item in &relevant {
+            out.push(Xml::Element(mark("w:commentRangeStart", item.id)));
+        }
+        out.push(Xml::Element(node));
+        for item in &relevant {
+            out.push(Xml::Element(mark("w:commentRangeEnd", item.id)));
+            out.push(Xml::Element(comment_ref(item.id)));
+        }
+    }
+    e.children = out;
 }
 fn loss(out: &mut Vec<ExportLoss>, id: &str, message: &str) {
     out.push(ExportLoss {
@@ -44,10 +109,34 @@ fn loss(out: &mut Vec<ExportLoss>, id: &str, message: &str) {
         location: Some(id.into()),
     });
 }
-fn collect(e: &Element, index: &mut usize, runs: &mut Vec<(usize, usize, String)>) {
+type TextRunSource = (usize, usize, String, String);
+fn source_boundary(run: &TextRunSource, source: usize) -> Option<usize> {
+    let offset = source.checked_sub(run.1)?;
+    if run.2 == run.3 {
+        run.2.is_char_boundary(offset).then_some(offset)
+    } else if offset == 0 {
+        Some(0)
+    } else if offset == run.2.len() {
+        Some(run.3.len())
+    } else {
+        // Native escapes/shorthands are atomic, certified literal source.
+        // An offset inside their syntax is not an editable display boundary.
+        None
+    }
+}
+fn collect(e: &Element, index: &mut usize, runs: &mut Vec<TextRunSource>) {
+    if e.name == "m:oMath" {
+        *index += 1;
+        return;
+    }
     if e.name == "w:r" {
         if let Some((from, text)) = &e.source {
-            runs.push((*index, *from, text.clone()));
+            runs.push((
+                *index,
+                *from,
+                text.clone(),
+                e.child("w:t").map(Element::text).unwrap_or_default(),
+            ));
         }
         *index += 1;
     }
@@ -93,6 +182,11 @@ fn rewrite(e: &mut Element, index: &mut usize, located: &[Located], next: &mut u
             out.push(child);
             continue;
         };
+        if n.name == "m:oMath" {
+            *index += 1;
+            out.push(Xml::Element(n));
+            continue;
+        }
         if n.name != "w:r" {
             rewrite(&mut n, index, located, next);
             out.push(Xml::Element(n));
@@ -100,10 +194,11 @@ fn rewrite(e: &mut Element, index: &mut usize, located: &[Located], next: &mut u
         }
         let run_index = *index;
         *index += 1;
-        let Some((_, text)) = n.source.clone() else {
+        if n.source.is_none() {
             out.push(Xml::Element(n));
             continue;
-        };
+        }
+        let text = n.child("w:t").map(Element::text).unwrap_or_default();
         let relevant: Vec<_> = located
             .iter()
             .filter(|r| r.start.0 <= run_index && r.end.0 >= run_index)
@@ -286,14 +381,50 @@ pub(super) fn apply(
         }
     }
     let mut located = vec![];
+    let mut mathematics = vec![];
+    math_targets(doc, &mut 0, &mut vec![], &mut mathematics);
     for review in reviews.iter().filter(|r| r.parent.is_none()) {
         if let Some(reason) = &review.downgrade_reason {
             loss(losses, &review.id, reason);
         }
+        let exact_math: Vec<_> = review
+            .range
+            .map(|(a, b)| {
+                mathematics
+                    .iter()
+                    .filter(|(_, from, to, _)| a == *from && b == *to)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let unique_math = exact_math.iter().all(|a| {
+            exact_math
+                .iter()
+                .all(|b| a.3.starts_with(&b.3) || b.3.starts_with(&a.3))
+        });
+        if !exact_math.is_empty() && unique_math && !review.whole_document {
+            let target = exact_math.iter().min_by_key(|item| item.3.len()).unwrap();
+            let mut value = review.clone();
+            if value.replacement.take().is_some() {
+                loss(
+                    losses,
+                    &value.id,
+                    "数学目标仅输出准确讨论；数学结构不是可执行的普通文字修订",
+                );
+            }
+            located.push(Located {
+                review: value,
+                id: next,
+                start: (usize::MAX, 0),
+                end: (usize::MAX, 0),
+                math_target: Some(target.0),
+            });
+            next += 1;
+            continue;
+        }
         let position = if review.whole_document {
             runs.first()
                 .zip(runs.last())
-                .map(|(a, b)| ((a.0, 0), (b.0, b.2.len())))
+                .map(|(a, b)| ((a.0, 0), (b.0, b.3.len())))
         } else {
             review.range.and_then(|(from, to)| {
                 if from > to {
@@ -301,34 +432,39 @@ pub(super) fn apply(
                 }
                 let starts: Vec<_> = runs
                     .iter()
-                    .filter(|(_, a, t)| {
-                        *a <= from && from < *a + t.len() && t.is_char_boundary(from - *a)
+                    .filter(|run| {
+                        run.1 <= from
+                            && from < run.1 + run.2.len()
+                            && source_boundary(run, from).is_some()
                     })
                     .collect();
                 let ends: Vec<_> = runs
                     .iter()
-                    .filter(|(_, a, t)| {
-                        *a < to && to <= *a + t.len() && t.is_char_boundary(to - *a)
+                    .filter(|run| {
+                        run.1 < to
+                            && to <= run.1 + run.2.len()
+                            && source_boundary(run, to).is_some()
                     })
                     .collect();
                 if from == to {
                     let empty: Vec<_> = runs
                         .iter()
-                        .filter(|(_, at, text)| {
-                            *at == from && text.is_empty() && review.empty_body_point
-                        })
+                        .filter(|run| run.1 == from && run.2.is_empty() && review.empty_body_point)
                         .collect();
                     if empty.len() == 1 {
                         return Some(((empty[0].0, 0), (empty[0].0, 0)));
                     }
                     if starts.len() == 1 {
                         return Some((
-                            (starts[0].0, from - starts[0].1),
-                            (starts[0].0, from - starts[0].1),
+                            (starts[0].0, source_boundary(starts[0], from)?),
+                            (starts[0].0, source_boundary(starts[0], from)?),
                         ));
                     }
                     if starts.is_empty() && ends.len() == 1 {
-                        return Some(((ends[0].0, to - ends[0].1), (ends[0].0, to - ends[0].1)));
+                        return Some((
+                            (ends[0].0, source_boundary(ends[0], to)?),
+                            (ends[0].0, source_boundary(ends[0], to)?),
+                        ));
                     }
                     return None;
                 }
@@ -342,7 +478,10 @@ pub(super) fn apply(
                     && span
                         .windows(2)
                         .all(|w| w[0].0 + 1 == w[1].0 && w[0].1 + w[0].2.len() <= w[1].1))
-                .then_some(((a.0, from - a.1), (b.0, to - b.1)))
+                .then_some((
+                    (a.0, source_boundary(a, from)?),
+                    (b.0, source_boundary(b, to)?),
+                ))
             })
         };
         let Some((start, end)) = position else {
@@ -380,6 +519,7 @@ pub(super) fn apply(
             id: next,
             start,
             end,
+            math_target: None,
         });
         next += 1;
     }
@@ -408,6 +548,7 @@ pub(super) fn apply(
                     id: next,
                     start: parent.start,
                     end: parent.end,
+                    math_target: parent.math_target,
                 });
                 ids.insert(r.id.clone(), next);
                 next += 1;
@@ -427,6 +568,28 @@ pub(super) fn apply(
             break;
         }
     }
+    // Word recognizes replies only when equal-position anchor endings keep
+    // each parent's replies adjacent. Independent overlapping comments must
+    // not split a thread's markers, even though commentEx names its parent.
+    // Keep the same parent-first order in both body markers and comment parts.
+    let mut order = BTreeMap::new();
+    for root in located.iter().filter(|item| item.review.parent.is_none()) {
+        let mut stack = vec![root.review.id.as_str()];
+        while let Some(id) = stack.pop() {
+            if order.contains_key(id) {
+                continue;
+            }
+            order.insert(id.to_owned(), order.len());
+            stack.extend(
+                located
+                    .iter()
+                    .rev()
+                    .filter(|item| item.review.parent.as_deref() == Some(id))
+                    .map(|item| item.review.id.as_str()),
+            );
+        }
+    }
+    located.sort_by_key(|item| order.get(&item.review.id).copied().unwrap_or(usize::MAX));
     let mut existing_paragraphs = vec![];
     comments.descendants("w:p", &mut existing_paragraphs);
     let mut used_paragraph_ids: BTreeSet<String> = existing_paragraphs
@@ -445,7 +608,8 @@ pub(super) fn apply(
             }
         }
     }
-    for review in reviews {
+    for item in &located {
+        let review = &item.review;
         let Some(&id) = ids.get(&review.id) else {
             continue;
         };
@@ -470,6 +634,7 @@ pub(super) fn apply(
         extended.push(ext);
     }
     rewrite(doc, &mut 0, &located, &mut next);
+    rewrite_math(doc, &mut 0, &located);
     package.set_xml(&comments_path, &comments);
     package.ensure_rel("comments", &format!("/{comments_path}"));
     package.content_type(
@@ -507,6 +672,66 @@ pub(super) fn apply(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn overlapping_comments_keep_parent_and_reply_endings_adjacent() {
+        let mut package = Package::load(None).unwrap();
+        let mut doc = Element::new("w:document").attr("xmlns:w", package::W);
+        let mut body = Element::new("w:body");
+        let mut paragraph = Element::new("w:p");
+        let mut run = text_run("收入增长", &Element::new("w:rPr"));
+        run.source = Some((100, "收入增长".into()));
+        paragraph.push(run);
+        body.push(paragraph);
+        doc.push(body);
+        let parent = DocxReview {
+            id: "parent".into(),
+            parent: None,
+            author: "作者".into(),
+            date: None,
+            body: "父批注".into(),
+            resolved: true,
+            range: Some((100, 106)),
+            whole_document: false,
+            replacement: None,
+            downgrade_reason: None,
+            empty_body_point: false,
+        };
+        let mut independent = parent.clone();
+        independent.id = "independent".into();
+        independent.body = "独立同范围".into();
+        let mut reply = parent.clone();
+        reply.id = "reply".into();
+        reply.parent = Some(parent.id.clone());
+        reply.body = "回复".into();
+        let mut losses = vec![];
+        apply(
+            &mut package,
+            &mut doc,
+            &[independent, reply, parent],
+            &mut losses,
+        )
+        .unwrap();
+        assert!(losses.is_empty());
+        let comments = package.xml("word/comments.xml").unwrap().unwrap();
+        let mut entries = vec![];
+        comments.descendants("w:comment", &mut entries);
+        assert_eq!(
+            entries.iter().map(|entry| entry.text()).collect::<Vec<_>>(),
+            ["独立同范围", "父批注", "回复"]
+        );
+        let mut endings = vec![];
+        doc.descendants("w:commentRangeEnd", &mut endings);
+        assert_eq!(
+            endings
+                .iter()
+                .map(|entry| entry.get("w:id").unwrap())
+                .collect::<Vec<_>>(),
+            entries
+                .iter()
+                .map(|entry| entry.get("w:id").unwrap())
+                .collect::<Vec<_>>()
+        );
+    }
     #[test]
     fn preserves_custom_comment_parts_and_declines_nonunique_intermediate_provenance() {
         let mut p = Package::load(None).unwrap();

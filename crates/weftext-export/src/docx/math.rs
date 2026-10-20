@@ -3,10 +3,49 @@ use super::xml::{Element, Xml};
 use unicode_normalization::char::decompose_compatible;
 use weftext_engine::RenderNode;
 
+#[path = "math_import.rs"]
+mod omml;
+pub(super) use omml::import_equation;
+
 pub(super) fn convert(node: &RenderNode) -> Result<Element, String> {
     let mut math = Element::new("m:oMath");
     math.children = content(node)?;
+    provenance(&mut math, node);
     Ok(math)
+}
+/// MathML's authored/generated width does not have an exact OMML space-run
+/// counterpart in this bounded converter. Preserve editable math and disclose
+/// the independent spacing loss instead of converting the equation to prose.
+pub(super) fn spacing_losses(node: &RenderNode) -> Vec<String> {
+    fn walk(node: &RenderNode, out: &mut Vec<String>) {
+        if node.tag.as_deref() == Some("mspace") {
+            out.push(format!(
+                "数学间距 {} 输出为普通数学空格；精确宽度未保留",
+                node.attrs
+                    .get("width")
+                    .map(String::as_str)
+                    .unwrap_or("（原宽度）")
+            ));
+        }
+        for child in &node.children {
+            walk(child, out);
+        }
+    }
+    let mut out = vec![];
+    walk(node, &mut out);
+    out
+}
+/// Native producer provenance belongs to mathematical objects as well as text.
+/// Consumers may attach only an exact, unique source range to this object; the
+/// source bytes are not a string to be searched in the displayed math glyphs.
+fn provenance(element: &mut Element, node: &RenderNode) {
+    if let Some(origin) = &node.origin
+        && origin.is_main
+        && origin.from < origin.to
+        && origin.to - origin.from == origin.raw.len()
+    {
+        element.source = Some((origin.from, origin.raw.clone()));
+    }
 }
 fn wrap(name: &str, nodes: Vec<Xml>) -> Element {
     let mut e = Element::new(name);
@@ -37,6 +76,70 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
             .ok_or_else(|| format!("{tag} 的参数不足"))
             .and_then(|n| content(n))
     };
+    let argument_element = |name: &str, index: usize| -> Result<Element, String> {
+        let mut element = wrap(name, argument(index)?);
+        if let Some(node) = children.get(index) {
+            provenance(&mut element, node);
+        }
+        Ok(element)
+    };
+    // Native MathML Core represents stretchy delimiters using an mrow with
+    // explicit fence operators. Retain that mathematical structure in OMML,
+    // particularly a cases matrix's one-sided left brace.
+    if tag == "mrow" && children.len() >= 2 {
+        let native_fence = node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "math-fence");
+        let fence = |node: &RenderNode| {
+            node.tag.as_deref() == Some("mo")
+                && (native_fence
+                    || node
+                        .attrs
+                        .get("fence")
+                        .is_some_and(|v| v.eq_ignore_ascii_case("true")))
+        };
+        let open = plain(children[0]);
+        let last = children.len() - 1;
+        let close = plain(children[last]);
+        let paired = fence(children[0])
+            && fence(children[last])
+            && matches!(
+                (open.as_str(), close.as_str()),
+                ("(", ")")
+                    | ("[", "]")
+                    | ("{", "}")
+                    | ("|", "|")
+                    | ("‖", "‖")
+                    | ("⌈", "⌉")
+                    | ("⌊", "⌋")
+                    | ("⟨", "⟩")
+            );
+        let cases = fence(children[0])
+            && open == "{"
+            && children.len() == 2
+            && children[1].tag.as_deref() == Some("mtable");
+        if paired || cases {
+            let mut e = Element::new("m:d");
+            let mut pr = Element::new("m:dPr");
+            pr.push(Element::new("m:begChr").attr("m:val", &open));
+            pr.push(
+                Element::new("m:endChr").attr("m:val", if paired { close.as_str() } else { "" }),
+            );
+            e.push(pr);
+            let mut body = vec![];
+            for child in &children[1..if paired { last } else { children.len() }] {
+                body.extend(content(child)?);
+            }
+            let mut argument = wrap("m:e", body);
+            if children.len() == if paired { 3 } else { 2 } {
+                provenance(&mut argument, children[1]);
+            }
+            e.push(argument);
+            provenance(&mut e, node);
+            return Ok(vec![Xml::Element(e)]);
+        }
+    }
     let result = match tag {
         "math" | "mrow" | "semantics" => {
             let mut out = vec![];
@@ -46,34 +149,89 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
             return Ok(out);
         }
         "mi" | "mn" | "mo" | "mtext" | "ms" => {
-            return tokens(
+            let mut result = tokens(
                 &plain(node),
                 node.attrs.get("mathvariant").map(String::as_str),
                 tag == "mtext" || tag == "ms",
                 tag,
-            );
+            )?;
+            // A multi-style token can create several Office runs. Only a
+            // single native producer is an exact element mapping; splitting a
+            // quoted string or macro's source by output glyphs would be false.
+            if result.len() == 1
+                && let Some(element) = result[0].element_mut()
+            {
+                provenance(element, node);
+            }
+            return Ok(result);
         }
+        "mspace" => return tokens(" ", Some("normal"), true, "mtext"),
         "mfrac" if children.len() == 2 => {
             let mut e = Element::new("m:f");
-            e.push(wrap("m:num", argument(0)?));
-            e.push(wrap("m:den", argument(1)?));
+            if let Some(thickness) = node.attrs.get("linethickness") {
+                if !matches!(thickness.as_str(), "0" | "0px" | "0em" | "0pt") {
+                    return Err("自定义分数线宽尚不能准确转换为 Office Math；原源保留".into());
+                }
+                let mut pr = Element::new("m:fPr");
+                pr.push(Element::new("m:type").attr("m:val", "noBar"));
+                e.push(pr);
+            }
+            e.push(argument_element("m:num", 0)?);
+            e.push(argument_element("m:den", 1)?);
             e
         }
         "msub" | "msup" if children.len() == 2 => {
             let mut e = Element::new(if tag == "msub" { "m:sSub" } else { "m:sSup" });
-            e.push(wrap("m:e", argument(0)?));
-            e.push(wrap(
+            e.push(argument_element("m:e", 0)?);
+            e.push(argument_element(
                 if tag == "msub" { "m:sub" } else { "m:sup" },
-                argument(1)?,
-            ));
+                1,
+            )?);
             e
         }
         "msubsup" if children.len() == 3 => {
             let mut e = Element::new("m:sSubSup");
-            e.push(wrap("m:e", argument(0)?));
-            e.push(wrap("m:sub", argument(1)?));
-            e.push(wrap("m:sup", argument(2)?));
+            e.push(argument_element("m:e", 0)?);
+            e.push(argument_element("m:sub", 1)?);
+            e.push(argument_element("m:sup", 2)?);
             e
+        }
+        "munder" | "mover" if children.len() == 2 => {
+            if node
+                .attrs
+                .get(if tag == "munder" {
+                    "accentunder"
+                } else {
+                    "accent"
+                })
+                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            {
+                return Err("数学重音需要专用 Office Math 映射，未降格成极限下标".into());
+            }
+            let mut e = Element::new(if tag == "munder" {
+                "m:limLow"
+            } else {
+                "m:limUpp"
+            });
+            e.push(argument_element("m:e", 0)?);
+            e.push(argument_element("m:lim", 1)?);
+            e
+        }
+        "munderover" if children.len() == 3 => {
+            if ["accent", "accentunder"].iter().any(|attr| {
+                node.attrs
+                    .get(*attr)
+                    .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            }) {
+                return Err("数学重音需要专用 Office Math 映射，未降格成极限上下标".into());
+            }
+            let mut lower = Element::new("m:limLow");
+            lower.push(argument_element("m:e", 0)?);
+            lower.push(argument_element("m:lim", 1)?);
+            let mut upper = Element::new("m:limUpp");
+            upper.push(wrap("m:e", vec![Xml::Element(lower)]));
+            upper.push(argument_element("m:lim", 2)?);
+            upper
         }
         "msqrt" => {
             let mut e = Element::new("m:rad");
@@ -90,8 +248,8 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
         }
         "mroot" if children.len() == 2 => {
             let mut e = Element::new("m:rad");
-            e.push(wrap("m:deg", argument(1)?));
-            e.push(wrap("m:e", argument(0)?));
+            e.push(argument_element("m:deg", 1)?);
+            e.push(argument_element("m:e", 0)?);
             e
         }
         "mfenced" => {
@@ -143,6 +301,8 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
         }
         _ => return Err(format!("公式结构 {tag} 暂不能转换为可编辑 Office Math")),
     };
+    let mut result = result;
+    provenance(&mut result, node);
     Ok(vec![Xml::Element(result)])
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -332,4 +492,156 @@ pub(super) fn plain(node: &RenderNode) -> String {
         s.push_str(&plain(c));
     }
     s
+}
+
+#[cfg(test)]
+mod provenance_tests {
+    use super::*;
+
+    #[test]
+    fn math_native_provenance_distinguishes_repeated_symbols_and_subexpressions() {
+        let source = "$frac(x, x) + x_1^2$";
+        let root = std::env::current_dir().unwrap();
+        let render = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-provenance.typ"), &root)
+            .unwrap();
+        assert!(render.ok, "{:?}", render.diagnostics);
+        fn first(n: &RenderNode) -> Option<&RenderNode> {
+            if n.tag.as_deref() == Some("math") {
+                Some(n)
+            } else {
+                n.children.iter().find_map(first)
+            }
+        }
+        let math = convert(first(render.tree.as_ref().unwrap()).unwrap()).unwrap();
+        assert_eq!(math.source.as_ref(), Some(&(0, source.to_owned())));
+        let mut runs = vec![];
+        math.descendants("m:r", &mut runs);
+        let occurrences: Vec<_> = runs
+            .into_iter()
+            .filter_map(|r| r.source.as_ref())
+            .filter(|(_, raw)| raw == "x")
+            .map(|(from, raw)| (*from, from + raw.len()))
+            .collect();
+        assert_eq!(occurrences, [(6, 7), (9, 10), (14, 15)]);
+        let mut fractions = vec![];
+        math.descendants("m:f", &mut fractions);
+        assert_eq!(fractions.len(), 1);
+        let (from, raw) = fractions[0]
+            .source
+            .as_ref()
+            .expect("native fraction source");
+        assert_eq!(&source[*from..*from + raw.len()], raw);
+        assert!(raw.contains("frac"));
+    }
+
+    #[test]
+    fn math_native_provenance_covers_fraction_argument_subexpressions() {
+        let source = "$frac(x + y, x - y)$";
+        let root = std::env::current_dir().unwrap();
+        let render = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-subexpression.typ"), &root)
+            .unwrap();
+        assert!(render.ok, "{:?}", render.diagnostics);
+        fn first(n: &RenderNode) -> Option<&RenderNode> {
+            if n.tag.as_deref() == Some("math") {
+                Some(n)
+            } else {
+                n.children.iter().find_map(first)
+            }
+        }
+        let math = convert(first(render.tree.as_ref().unwrap()).unwrap()).unwrap();
+        let mut numerators = vec![];
+        math.descendants("m:num", &mut numerators);
+        assert_eq!(
+            numerators[0].source.as_ref().map(|(_, raw)| raw.as_str()),
+            Some("x + y")
+        );
+        let mut denominators = vec![];
+        math.descendants("m:den", &mut denominators);
+        assert_eq!(
+            denominators[0].source.as_ref().map(|(_, raw)| raw.as_str()),
+            Some("x - y")
+        );
+    }
+
+    #[test]
+    fn math_native_provenance_never_invents_group_ranges_for_reordered_arguments() {
+        let source = "#let rev(a,b) = b + a\n$frac(rev(x, y), 1)$";
+        let root = std::env::current_dir().unwrap();
+        let render = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-reordered.typ"), &root)
+            .unwrap();
+        assert!(render.ok, "{:?}", render.diagnostics);
+        fn first(n: &RenderNode) -> Option<&RenderNode> {
+            if n.tag.as_deref() == Some("math") {
+                Some(n)
+            } else {
+                n.children.iter().find_map(first)
+            }
+        }
+        let math = convert(first(render.tree.as_ref().unwrap()).unwrap()).unwrap();
+        let mut numerators = vec![];
+        math.descendants("m:num", &mut numerators);
+        assert!(
+            numerators[0].source.is_none(),
+            "generated/reordered numerator acquired a source: {:?}",
+            numerators[0].source
+        );
+    }
+
+    #[test]
+    fn math_native_cases_remain_an_editable_one_sided_delimited_matrix() {
+        let source = "$cases(x & x > 0, 0 & \"其它\")$";
+        let root = std::env::current_dir().unwrap();
+        let render = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-cases.typ"), &root)
+            .unwrap();
+        assert!(render.ok, "{:?}", render.diagnostics);
+        fn first(n: &RenderNode) -> Option<&RenderNode> {
+            if n.tag.as_deref() == Some("math") {
+                Some(n)
+            } else {
+                n.children.iter().find_map(first)
+            }
+        }
+        let math = convert(first(render.tree.as_ref().unwrap()).unwrap()).unwrap();
+        let mut delimiters = vec![];
+        math.descendants("m:d", &mut delimiters);
+        assert_eq!(delimiters.len(), 1, "{math:?}");
+        let imported = import_equation(&math, 0).unwrap();
+        assert!(imported.source.contains("cases("), "{}", imported.source);
+    }
+
+    #[test]
+    fn math_native_binomial_does_not_silently_gain_a_fraction_bar() {
+        let source = "$binom(n, k)$";
+        let root = std::env::current_dir().unwrap();
+        let render = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-binomial.typ"), &root)
+            .unwrap();
+        assert!(render.ok, "{:?}", render.diagnostics);
+        fn first(n: &RenderNode) -> Option<&RenderNode> {
+            if n.tag.as_deref() == Some("math") {
+                Some(n)
+            } else {
+                n.children.iter().find_map(first)
+            }
+        }
+        let math = convert(first(render.tree.as_ref().unwrap()).unwrap()).unwrap();
+        let mut kinds = vec![];
+        math.descendants("m:type", &mut kinds);
+        assert!(
+            kinds.iter().any(|p| p.get("m:val") == Some("noBar")),
+            "{math:?}"
+        );
+        // A no-line fraction has no supported native reverse representation;
+        // retain the original rather than change it into a division fraction.
+        assert!(import_equation(&math, 0).is_err());
+    }
 }

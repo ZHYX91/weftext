@@ -46,8 +46,8 @@ pub struct StyleInspection {
 const SLOTS: [(&str, &str); 7] = [
     ("text.font", "正文字体（原生参数）"),
     ("text.size", "正文字号（pt）"),
-    ("text.lang", "语言（原生字符串）"),
-    ("text.region", "地区（原生字符串）"),
+    ("text.lang", "文档排版语言（原生 text.lang）"),
+    ("text.region", "文档排版地区（原生 text.region）"),
     ("raw.font", "代码字体（原生参数）"),
     ("para.leading", "段落行距（em）"),
     ("table.stroke", "表格线宽（pt）"),
@@ -238,7 +238,8 @@ fn slot_value_valid(key: &str, value: &str) -> bool {
     }
     match key {
         "text.font"|"raw.font"=>expr.to_untyped().cast::<ast::Str>().is_some()||expr.to_untyped().cast::<ast::Array>().is_some_and(|a|a.items().all(|i|matches!(i,ast::ArrayItem::Pos(e) if e.to_untyped().cast::<ast::Str>().is_some()))),
-        "text.lang"|"text.region"=>expr.to_untyped().cast::<ast::Str>().is_some(),
+        "text.lang"=>expr.to_untyped().cast::<ast::Str>().is_some(),
+        "text.region"=>value=="none"||expr.to_untyped().cast::<ast::Str>().is_some(),
         "text.size"|"table.stroke"=>expr.to_untyped().cast::<ast::Numeric>().is_some_and(|n|{let(value,unit)=n.get();value.is_finite()&&value>0.&&unit==ast::Unit::Pt}),
         "para.leading"=>expr.to_untyped().cast::<ast::Numeric>().is_some_and(|n|{let(value,unit)=n.get();value.is_finite()&&value>=0.&&unit==ast::Unit::Em}),
         _=>false,

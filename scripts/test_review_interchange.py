@@ -60,7 +60,7 @@ class ReviewInterchange(outputs.Outputs):
     def test_01_checks_batch_deduplicates_and_keeps_replies(self):
         root, _ = self.library()
         doc = self.note(root, '校对', '这是错字。再次错字。\n\n交叉 ([)]。\n\n`错字`\n')
-        rules = [{'id': 'typo.one', 'version': '1', 'category': 'typo', 'text': '错字', 'message': '疑似词语', 'replacement': '正字'}]
+        rules = [{'id': 'typo.one', 'version': '1', 'category': 'typo', 'text': '错字', 'message': '疑似词语', 'replacement': '正字', 'scope': {'universal': True}}]
         context, options, scan = self.scan(doc, rules)
         typos = [f for f in scan['findings'] if f['category'] == 'typo']
         self.assertEqual(len(typos), 2, scan)
@@ -105,7 +105,7 @@ class ReviewInterchange(outputs.Outputs):
     def test_02_cross_format_and_old_results(self):
         root, _ = self.library()
         doc = self.note(root, '跨格式', '中文错*别*字。\n\n独立段落错\n\n别字。')
-        rules = [{'id': 'typo.formatted', 'version': '1', 'category': 'typo', 'text': '错别字', 'message': '核对', 'replacement': '正确文字'}]
+        rules = [{'id': 'typo.formatted', 'version': '1', 'category': 'typo', 'text': '错别字', 'message': '核对', 'replacement': '正确文字', 'scope': {'universal': True}}]
         context, options, scan = self.scan(doc, rules)
         hits = [f for f in scan['findings'] if f['ruleId'] == 'typo.formatted']
         self.assertEqual(len(hits), 1, scan)
@@ -153,7 +153,7 @@ class ReviewInterchange(outputs.Outputs):
     def test_05_sensitive_selection_and_persistent_ignore(self):
         root, _ = self.library()
         doc = self.note(root, '敏感与白名单', '公开 秘密 😀秘密 秘密。\n')
-        rules = [{'id':'sensitive.one','version':'1','category':'sensitive','text':'秘密','message':'按当前词表核查','replacement':None}]
+        rules = [{'id':'sensitive.one','version':'1','category':'sensitive','text':'秘密','message':'按当前词表核查','replacement':None,'scope':{'universal':True}}]
         start = doc['source'].encode().index('😀秘密'.encode())
         context, options, scan = self.scan(doc, rules, selection=[start, start + len('😀秘密'.encode())])
         self.assertEqual(len(scan['findings']), 1, scan)
@@ -167,7 +167,7 @@ class ReviewInterchange(outputs.Outputs):
         self.assertEqual(stored[0]['reviewState'], 'resolved')
         self.assertIsNone(stored[0]['suggestion'])
         self.assertEqual(Path(doc['path']).read_text('utf-8'), doc['source'])
-        _, _, allowed = self.scan(doc, rules, allowlist=['秘密'])
+        _, _, allowed = self.scan(doc, rules, scopedAllowlist=[{'text': '秘密', 'scope': {'universal': True}}])
         self.assertFalse(allowed['findings'])
 
     def test_06_stale_insertion_requires_explicit_current_point(self):

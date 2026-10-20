@@ -37,6 +37,15 @@ pub(crate) fn compound_locations(
             let state = &states[&object].state;
             let directory = match &object {
                 ObjectKey::Node(id) | ObjectKey::Directory(id) => {
+                    if let Some(original) = local.get(&object).filter(|old| {
+                        matches!(object, ObjectKey::Node(_))
+                            && Path::new(&old.directory) == root
+                            && !placement_changed(&old.state, state)
+                    }) {
+                        locations.insert(object.clone(), PathBuf::from(&original.directory));
+                        remaining.remove(&object);
+                        continue;
+                    }
                     let parent = if let Some(parent) = &state.parent {
                         let Some(parent) = locations.get(parent) else {
                             continue;

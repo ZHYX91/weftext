@@ -31,6 +31,8 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/query/run", post(query))
         .route("/api/query/definitions", post(definitions))
         .route("/api/query/definition/save", post(save_definition))
+        .route("/api/query/definition/draft", post(draft_definition))
+        .route("/api/query/definition/pending", post(pending_definition))
         .route("/api/query/definition/run", post(run_definition))
 }
 
@@ -2237,6 +2239,140 @@ async fn definitions(
     Ok(Json(output))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DefinitionPendingRequest {
+    session_id: String,
+    source: String,
+    serial: u64,
+}
+
+async fn pending_definition(
+    State(state): State<AppState>,
+    Json(req): Json<DefinitionPendingRequest>,
+) -> ApiResult {
+    writing_api::observe_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
+    let loc = location(&state, &req.session_id)?;
+    let result = core_call(&state, move |core| {
+        // Query controls may be unavailable while the author still saves the
+        // original native source. This lookup must not add a new Save gate.
+        let Ok(definitions) = weftext_data::saved_queries(&req.source) else {
+            return Ok(json!({"operationId":null,"queryState":"unparsed"}));
+        };
+        let owner = core.inventory(&loc.root)?.entries.into_iter().find(|entry| entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted").and_then(|entry| entry.node_id);
+        let Some(owner) = owner else { return Ok(json!({"operationId":null,"queryState":"unadmitted"})); };
+        let mut pending = Vec::new();
+        let mut unadmitted = false;
+        for definition in definitions {
+            if !core.is_definition_key_admitted(&loc.root, &owner, &definition.key)? {
+                if let Some(operation) = core.pending_definition_operation(&loc.root, &loc.path, &definition.key)? { pending.push(operation); }
+                else { unadmitted = true; }
+            }
+        }
+        if pending.len() > 1 {
+            return Ok(json!({"operationId":null,"queryState":"multiplePending"}));
+        }
+        Ok(json!({"operationId":pending.first(),"queryState":if unadmitted {"unadmitted"} else if pending.is_empty() {"admitted"} else {"reserved"}}))
+    })
+    .await?;
+    Ok(Json(result))
+}
+
+async fn draft_definition(
+    State(state): State<AppState>,
+    Json(req): Json<DefinitionSaveRequest>,
+) -> ApiResult {
+    writing_api::observe_snapshot(
+        &state,
+        &req.session_id,
+        &req.source,
+        req.serial,
+        req.source_hash.as_deref(),
+    )?;
+    let loc = location(&state, &req.session_id)?;
+    deny_trash_writer(&loc.path)?;
+    let before = req.source.clone();
+    let serial = req.serial;
+    let check = state.clone();
+    let (patch, key) = core_call(&state, move |core| {
+        if req.key.is_some() {
+            return Err(CoreError::new(
+                "invalidQueryDefinition",
+                "This action creates one new draft definition",
+            ));
+        }
+        let inventory = core.inventory(&loc.root)?;
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| {
+                entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted"
+            })
+            .ok_or_else(|| CoreError::new("identityConflict", "Not the admitted owner"))?;
+        if weftext_engine::inspect_metadata(&req.source).id != entry.node_id {
+            return Err(CoreError::new("identityConflict", "Draft owner changed"));
+        }
+        for definition in weftext_data::saved_queries(&req.source)
+            .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?
+        {
+            if !core.is_definition_key_admitted(
+                &loc.root,
+                entry.node_id.as_deref().unwrap(),
+                &definition.key,
+            )? {
+                return Err(CoreError::new(
+                    "definitionUnavailable",
+                    "Please save the existing new definition first",
+                ));
+            }
+        }
+        let (config, schema) = resolved_schema(core, &loc.root)?;
+        let binding = weftext_data::SavedQueryBinding {
+            schema: config.role_ref.clone().unwrap(),
+            revision: config.revision.clone().ok_or_else(|| {
+                CoreError::new(
+                    "schemaRevisionRequired",
+                    "Explicitly install a schema before inserting Query",
+                )
+            })?,
+            language: "weftext.query.cel.v1".into(),
+        };
+        let current = core
+            .read_snapshot(&loc.root, &[loc.path.to_string_lossy().to_string()])?
+            .files
+            .remove(0);
+        let key =
+            core.reserve_definition_key(&loc.root, &loc.path, &current.base_id, &req.operation_id)?;
+        let mut context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
+        freeze_query_definitions(core, &mut context, BTreeMap::new())?;
+        let patch = weftext_data::upsert_saved_query_with_context(
+            &req.source,
+            None,
+            &key,
+            &req.label,
+            &binding,
+            &req.plan,
+            &schema,
+            &context.input.advanced.unwrap_or_default(),
+        )
+        .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?;
+        writing_api::check_snapshot(
+            &check,
+            &req.session_id,
+            &req.source,
+            req.serial,
+            req.source_hash.as_deref(),
+        )
+        .map_err(|e| CoreError::new(&e.code, e.message))?;
+        Ok((patch, key))
+    })
+    .await?;
+    let Json(mut output) = patch_response(patch, serial, &before)?;
+    output["draftOnly"] = json!(true);
+    output["key"] = json!(key);
+    Ok(Json(output))
+}
+
 async fn save_definition(
     State(state): State<AppState>,
     Json(req): Json<DefinitionSaveRequest>,
@@ -2809,7 +2945,12 @@ mod tests {
                 std::fs::write(&initial.path, &changed).unwrap();
                 (initial, draft, changed)
             };
-            state.initial = Some(serde_json::to_value(&initial).unwrap());
+            state.initial = Some(Arc::new(serde_json::to_value(&initial).unwrap()));
+            let routed_state = state.clone();
+            assert!(Arc::ptr_eq(
+                state.initial.as_ref().unwrap(),
+                routed_state.initial.as_ref().unwrap()
+            ));
             let mut previous_session = initial.session_id.clone();
             for _ in 0..2 {
                 let Json(result) = ok(crate::bootstrap(State(state.clone())).await);
@@ -2843,7 +2984,7 @@ mod tests {
             .unwrap()
             .create_note(&root, &root, "Launch")
             .unwrap();
-        state.initial = Some(serde_json::to_value(&initial).unwrap());
+        state.initial = Some(Arc::new(serde_json::to_value(&initial).unwrap()));
         let draft = format!("{}\nRetain across movement", initial.source);
         {
             let mut core = state.core.lock().unwrap();

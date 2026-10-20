@@ -1,4 +1,4 @@
-"""Eight real HTTP checks for frozen outputs and original-preserving imports.
+"""Real HTTP checks for frozen outputs and original-preserving imports.
 
 Uses only newly owned disposable fixtures. Products, templates, original uploads
 and server logs remain for independent Office application inspection. This suite
@@ -451,6 +451,9 @@ class Outputs(features.LocalFeatures):
         # enter the same fresh map as the actual paper notes and owned resources.
         _, native_output = self.prepare_output(cited, 'native')
         native_bytes = self.download_output(native_output, 'citation-library.weftext.zip')
+        native_parts = unpack(native_bytes)
+        self.assertEqual(native_parts['Citing note/Citing note.typ'], source.encode())
+        self.assertIn(b'CSL imported', native_parts['Citing note/weftext.citations.bib'])
         target, target_library = self.library()
         target_anchor = self.note(target, 'Native citation target')
         _, native_preview = self.prepare_exchange(target_anchor, target, 'Native copied citations', 'native', native_bytes)
@@ -497,6 +500,63 @@ class Outputs(features.LocalFeatures):
         self.assertEqual(failure['error']['code'], 'bibliographyConflict')
         self.assertFalse((root / 'Refused conflict').exists())
         self.assertIn('Original formal title', Path(doc['path']).read_text(encoding='utf-8'))
+
+    def test_09_native_saved_whole_library_freezes_citation_inputs_and_rejects_ambiguity(self):
+        root, library = self.library()
+        anchor = self.note(root, 'Current context')
+        upload = json.dumps([{'type': 'article-journal', 'title': 'Exact saved title',
+                             'author': [{'literal': 'Original Author'}]}]).encode()
+        _, imported = self.prepare_exchange(anchor, root, 'Saved Work', 'csl-json', upload)
+        self.commit_exchange(imported)
+        work = self.api('/api/open', {'path': str(root / 'Saved Work/paper-0001/paper-0001.typ'),
+                                     'root': str(root)})
+        citing = self.note(root, 'Other saved owner')
+        ref = f'weftext-node://{library["workspaceId"]}/{work["nodeId"]}'
+        source = citing['source'] + (
+            f'\n#metadata((kind: "weftext.citations", entries: ((key: "exact", work: "{ref}"),))) <weftext-citations>\n'
+            '@exact\n#bibliography("weftext.citations.bib")\n')
+        citing = self.saved(citing, source, root)
+        request, output = self.prepare_output(anchor, 'native')
+        payload = self.download_output(output, 'whole-library-with-derived-citations.weftext.zip')
+        parts = unpack(payload)
+        manifest = json.loads(parts['manifest.json'])
+        bib_path = 'Other saved owner/weftext.citations.bib'
+        bib = parts[bib_path]
+        self.assertEqual(parts['Other saved owner/Other saved owner.typ'], source.encode())
+        self.assertIn(b'Exact saved title', bib)
+        self.assertEqual(manifest['entries'][bib_path]['role'], 'generatedBibliography')
+        self.assertEqual(manifest['entries'][bib_path]['ownerNodeId'], citing['nodeId'])
+        self.assertEqual(manifest['entries'][bib_path]['sha256'], hashlib.sha256(bib).hexdigest())
+        self.assertFalse(Path(citing['path']).with_name('weftext.citations.bib').exists())
+        work = self.saved(work, work['source'].replace('Exact saved title', 'Later saved title'), root)
+        _, newer = self.prepare_output(anchor, 'native')
+        later = unpack(self.download_output(newer, 'later-whole-library.weftext.zip'))
+        self.assertIn(b'Later saved title', later[bib_path])
+        # Original IDs and artifacts retain their exact initial saved cut.
+        replay = self.api('/api/export/prepare', request)
+        self.assertEqual(replay['id'], output['id'])
+        self.assertEqual(replay['digest'], output['digest'])
+        _, old, _ = self.raw('/api/export/download', {'id': output['id']})
+        self.assertEqual(old, payload)
+        bad_ref = f'weftext-node://{library["workspaceId"]}/{anchor["nodeId"]}'
+        for changed, expected in [
+            (source.replace(ref, bad_ref), 'citationWorkType'),
+            (source + '\n#bibliography("external.bib")\n', 'citationDeclarationUnavailable'),
+        ]:
+            citing = self.saved(citing, changed, root)
+            failure = self.api('/api/export/prepare', {**request, 'requestId': features.uid()})
+            self.assertEqual(failure['status'], 'failed')
+            self.assertEqual(failure['code'], expected)
+            self.raw('/api/export/download', {'id': failure['id']}, status=409)
+        citing = self.saved(citing, source, root)
+        occupied = Path(citing['path']).with_name('weftext.citations.bib')
+        occupied.write_bytes(b'original author file; never replace')
+        failure = self.api('/api/export/prepare', {**request, 'requestId': features.uid()})
+        self.assertEqual(failure['status'], 'failed')
+        self.assertEqual(failure['code'], 'packagePath')
+        self.raw('/api/export/download', {'id': failure['id']}, status=409)
+        self.assertEqual(occupied.read_bytes(), b'original author file; never replace')
+        self.assertEqual(Path(citing['path']).read_bytes(), source.encode())
 
 
 if __name__ == '__main__':

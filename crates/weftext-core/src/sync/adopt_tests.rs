@@ -972,6 +972,22 @@ fn sync_adoption_missing_citation_dependency_preserves_unresolved_ordinary_links
 fn sync_adoption_legacy_without_original_physical_fact_never_fabricates_binding() {
     let mut f = fixture();
     raw(&f, "external current");
+    // LC01 creation now records Rules as an accepted physical observation.
+    // This legacy fixture must omit that fact as well as setup bindings; the
+    // unchanged portable revision alone must never recreate physical evidence.
+    let creation = f
+        .core
+        .operations
+        .values()
+        .find(|p| p.kind == "createLibrary")
+        .unwrap();
+    let observations = f.core.journal_path(&creation.operation_id, "observations");
+    let mut facts: Vec<crate::operations::RevisionFact> =
+        serde_json::from_slice(&fs::read(&observations).unwrap()).unwrap();
+    let original_count = facts.len();
+    facts.retain(|fact| Path::new(&fact.path) != f.root.join(".weftext-rules"));
+    assert_eq!(original_count - facts.len(), 1);
+    fs::write(&observations, serde_json::to_vec(&facts).unwrap()).unwrap();
     let enable = f
         .core
         .operations

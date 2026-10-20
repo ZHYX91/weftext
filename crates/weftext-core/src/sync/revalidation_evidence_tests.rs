@@ -274,6 +274,22 @@ fn registered_resource_and_whole_annotation_use_original_owner_file_revision() {
 #[test]
 fn original_node_and_negative_schema_return_real_read_bindings() {
     let f = Fixture::new();
+    // Keep this case on the original setup fallback: LC01 adds a separate
+    // accepted Rules observation, which older producers did not record.
+    // Preserve setup physical bindings and the exact portable genesis.
+    let creation = f
+        .core
+        .operations
+        .values()
+        .find(|p| p.kind == "createLibrary")
+        .unwrap();
+    let observations = f.core.journal_path(&creation.operation_id, "observations");
+    let mut facts: Vec<crate::operations::RevisionFact> =
+        serde_json::from_slice(&std::fs::read(&observations).unwrap()).unwrap();
+    let original_count = facts.len();
+    facts.retain(|fact| !same_locator(Path::new(&fact.path), &f.root.join(".weftext-rules")));
+    assert_eq!(original_count - facts.len(), 1);
+    std::fs::write(&observations, serde_json::to_vec(&facts).unwrap()).unwrap();
     let original_rules = f
         .snapshots
         .iter()

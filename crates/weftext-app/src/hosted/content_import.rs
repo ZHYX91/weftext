@@ -34,6 +34,8 @@ pub(super) struct Actions {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Rights {
     #[serde(default)]
+    pub(super) recognition: super::recognition::Rights,
+    #[serde(default)]
     pub(super) imports: Actions,
     #[serde(default)]
     pub(super) members: super::Rights,
@@ -653,6 +655,7 @@ mod tests {
             user.content_imports.insert(
                 slot.into(),
                 Rights {
+                    recognition: Default::default(),
                     imports: Actions {
                         native: true,
                         bibliography: true,

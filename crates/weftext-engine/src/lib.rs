@@ -11,6 +11,8 @@ mod font_tests;
 mod fonts;
 mod frozen;
 mod inspect;
+mod notes;
+mod numbering;
 mod paged;
 mod products;
 mod render;
@@ -30,7 +32,9 @@ pub use editor::{
 };
 pub use editor_types::*;
 pub use inspect::{certify_metadata_declaration, inspect, inspect_metadata};
-pub use render::Engine;
+pub use notes::*;
+pub use numbering::*;
+pub use render::{Engine, native_literal_display};
 pub use types::*;
 
 /// Encode plain text as native Typst markup without creating code or structure.

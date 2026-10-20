@@ -1,13 +1,13 @@
-use crate::{inspect, types::*, world::LocalWorld};
+use crate::{inspect, inspect::Utf16Offsets, types::*, world::LocalWorld};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::Path,
 };
 use typst::{
     Feature, Library, LibraryExt, World,
     diag::{Severity, SourceDiagnostic},
-    foundations::{NativeElement, StyleChain},
+    foundations::{NativeElement, StyleChain, Value},
     introspection::{Introspector, MetadataElem, Tag},
     model::{Document, HeadingElem},
     text::{FontFamily, FontList, Lang, TextElem},
@@ -15,7 +15,7 @@ use typst::{
 };
 use typst_html::{HtmlDocument, HtmlNode};
 use typst_kit::fonts::{self, FontStore};
-use typst_syntax::{DiagSpanKind, Span};
+use typst_syntax::{DiagSpanKind, FileId, Span};
 
 pub struct Engine {
     pub(crate) library: LazyHash<Library>,
@@ -109,10 +109,23 @@ impl Engine {
             source_info.writer_status = reason.clone();
         }
         let result = typst::compile::<HtmlDocument>(&world);
+        // Existing Sources are immutable in this request after compilation.
+        // Retain their shared text snapshots while projecting, indexed by the
+        // exact FileId rather than a display path or equal author text.
+        let sources = world.loaded_sources();
+        let offsets: OriginOffsets<'_> = sources
+            .iter()
+            .map(|source| {
+                (
+                    source.id(),
+                    (source.text(), Utf16Offsets::new(source.text())),
+                )
+            })
+            .collect();
         let mut diagnostics: Vec<_> = result
             .warnings
             .iter()
-            .map(|d| diagnostic(d, &world))
+            .map(|d| diagnostic_with_offsets(d, &world, Some(&offsets)))
             .collect();
         let mut tree = None;
         let mut html = String::new();
@@ -129,7 +142,9 @@ impl Engine {
                             origins: vec![],
                         });
                         entry.count += 1;
-                        if let Some(origin) = origin(content.span(), &world) {
+                        if let Some(origin) =
+                            origin_with_offsets(content.span(), &world, Some(&offsets))
+                        {
                             entry.origins.push(origin);
                         }
                     }
@@ -139,6 +154,13 @@ impl Engine {
                 }
                 let mut counter = 0;
                 let mut native_headings = vec![];
+                let endnote_sources = endnote_producers(&document, &world, &mut diagnostics);
+                let mut note_producers = NoteProducerState {
+                    sources: &endnote_sources,
+                    offsets: &offsets,
+                    definitions: HashSet::new(),
+                    reference: None,
+                };
                 let mut projected = project(
                     document.root_node(),
                     &world,
@@ -146,17 +168,29 @@ impl Engine {
                     &mut native_headings,
                     0,
                     &scope,
+                    &mut note_producers,
                 )?;
                 qualify_run_in_roles(&mut projected);
+                qualify_managed_numbering(&mut projected, source, &scope, &world);
                 qualify_subtitle_role(
                     &mut projected,
                     labels
                         .get("weftext-subtitle")
                         .map_or(0, |label| label.count),
                 );
+                if !endnote_sources.is_empty() {
+                    qualify_endnote_origins(
+                        &mut projected,
+                        &mut source_info.notes,
+                        &document,
+                        &world,
+                        &offsets,
+                    );
+                }
                 let mut occurrences = HashMap::new();
                 count_origins(&projected, &mut occurrences);
                 qualify(&mut projected, &editor_map, &occurrences);
+                qualify_note_writers(&projected, &mut source_info.notes, &world);
                 // Query the successful target's real native introspector. This
                 // includes headings in same-target frame islands and excludes
                 // unevaluated author AST branches.
@@ -166,7 +200,7 @@ impl Engine {
                     .iter()
                     .filter_map(|content| {
                         let heading = content.to_packed::<HeadingElem>()?;
-                        let origin = origin(content.span(), &world);
+                        let origin = origin_with_offsets(content.span(), &world, Some(&offsets));
                         Some(HeadingInfo {
                             text: heading.body.plain_text().to_string(),
                             path: origin.as_ref().map(|o| o.path.clone()),
@@ -215,7 +249,11 @@ impl Engine {
                 true
             }
             Err(errors) => {
-                diagnostics.extend(errors.iter().map(|d| diagnostic(d, &world)));
+                diagnostics.extend(
+                    errors
+                        .iter()
+                        .map(|d| diagnostic_with_offsets(d, &world, Some(&offsets))),
+                );
                 false
             }
         };
@@ -244,6 +282,30 @@ impl Engine {
 }
 
 pub(crate) fn diagnostic(d: &SourceDiagnostic, world: &LocalWorld<'_>) -> Diagnostic {
+    diagnostic_with_offsets(d, world, None)
+}
+
+type OriginOffsets<'a> = HashMap<FileId, (&'a str, Utf16Offsets<'a>)>;
+
+fn origin_utf16(
+    source: &typst_syntax::Source,
+    at: usize,
+    offsets: Option<&OriginOffsets<'_>>,
+) -> usize {
+    offsets
+        .and_then(|offsets| offsets.get(&source.id()))
+        // Source::clone shares its immutable Arc representation. If a future
+        // caller supplies a replacement Source, preserve the original path
+        // through prefix conversion, without a full-text equality scan here.
+        .filter(|(snapshot, _)| std::ptr::eq(*snapshot, source.text()))
+        .map_or_else(|| utf16(source.text(), at), |(_, offsets)| offsets.at(at))
+}
+
+fn diagnostic_with_offsets(
+    d: &SourceDiagnostic,
+    world: &LocalWorld<'_>,
+    offsets: Option<&OriginOffsets<'_>>,
+) -> Diagnostic {
     let origin = d.span.id().and_then(|id| {
         let source = world.source(id).ok()?;
         let range = match d.span.get() {
@@ -255,8 +317,8 @@ pub(crate) fn diagnostic(d: &SourceDiagnostic, world: &LocalWorld<'_>) -> Diagno
             path: world.display_path(id),
             from: range.start,
             to: range.end,
-            utf16_from: utf16(source.text(), range.start),
-            utf16_to: utf16(source.text(), range.end),
+            utf16_from: origin_utf16(&source, range.start, offsets),
+            utf16_to: origin_utf16(&source, range.end, offsets),
             raw: source.text().get(range)?.into(),
             syntax_kind: "Diagnostic".into(),
             is_main: id == world.main_id,
@@ -274,6 +336,14 @@ pub(crate) fn diagnostic(d: &SourceDiagnostic, world: &LocalWorld<'_>) -> Diagno
 }
 
 pub(crate) fn origin(span: Span, world: &LocalWorld<'_>) -> Option<Origin> {
+    origin_with_offsets(span, world, None)
+}
+
+fn origin_with_offsets(
+    span: Span,
+    world: &LocalWorld<'_>,
+    offsets: Option<&OriginOffsets<'_>>,
+) -> Option<Origin> {
     let id = span.id()?;
     let source = world.source(id).ok()?;
     let node = source.find(span)?;
@@ -282,12 +352,380 @@ pub(crate) fn origin(span: Span, world: &LocalWorld<'_>) -> Option<Origin> {
         path: world.display_path(id),
         from: range.start,
         to: range.end,
-        utf16_from: utf16(source.text(), range.start),
-        utf16_to: utf16(source.text(), range.end),
+        utf16_from: origin_utf16(&source, range.start, offsets),
+        utf16_to: origin_utf16(&source, range.end, offsets),
         raw: source.text().get(range)?.into(),
         syntax_kind: format!("{:?}", node.kind()),
         is_main: id == world.main_id,
     })
+}
+
+/// Certify only the product's pinned, actually loaded native module. A custom
+/// show may clone/mutate HTML elements while retaining their source spans, so
+/// that broader valid Typst profile stays readable but gains no exchange role.
+fn endnote_producers(
+    document: &HtmlDocument,
+    world: &LocalWorld<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> HashSet<FileId> {
+    const MODULE: &str = include_str!("../../weftext-export/assets/weftext-endnotes.typ");
+    let sources = world.loaded_sources();
+    let ids: HashSet<_> = sources
+        .iter()
+        .filter(|source| source.text() == MODULE)
+        .map(|source| source.id())
+        .collect();
+    if ids.is_empty() {
+        if crate::notes::endnotes_import(world.main_source.text()) {
+            diagnostics.push(Diagnostic {
+                severity: "warning".into(),
+                message: "作者源使用尾注接口形式，但本次获权模块字节不等于产品随附版本；保留原源和显示，不认证尾注结构交换或安全回写".into(),
+                origin: None,
+            });
+        }
+        return ids;
+    }
+    let ambiguous = sources.iter().any(|source| {
+        crate::notes::has_unverified_notes_show(source)
+            && !world.trusted_style_sources.contains(&source.id())
+    }) || document
+        .introspector()
+        .query(&MetadataElem::ELEM.select())
+        .iter()
+        .any(|content| {
+            content.label().is_some_and(|label| {
+                matches!(
+                    label.resolve().as_str(),
+                    "weftext-endnote-definition"
+                        | "weftext-endnote-reference"
+                        | "weftext-endnote-body"
+                        | "weftext-endnotes-list"
+                )
+            }) && content.span().id().is_none_or(|id| !ids.contains(&id))
+        });
+    if ambiguous {
+        diagnostics.push(Diagnostic {
+            severity: "warning".into(),
+            message: "尾注仍保留原生显示与作者源；本次存在 show 规则或非随附模块的同名 metadata，无法认证有界尾注交换角色".into(),
+            origin: None,
+        });
+        HashSet::new()
+    } else {
+        ids
+    }
+}
+
+fn qualify_managed_numbering(
+    tree: &mut RenderNode,
+    source: &str,
+    source_hash: &str,
+    world: &LocalWorld<'_>,
+) {
+    let pinned = crate::notes::pinned_endnotes_from_loaded_world(source, world);
+    let inspection = crate::numbering::inspect_heading_numbering_qualified(source, pinned.as_ref());
+    let Some(settings) = inspection
+        .settings
+        .filter(|_| inspection.editable && inspection.source_hash == source_hash)
+    else {
+        return;
+    };
+    let pattern = match settings.scheme {
+        crate::HeadingNumberingScheme::Decimal => "1.1",
+        crate::HeadingNumberingScheme::Chinese => "一.一",
+        crate::HeadingNumberingScheme::None => return,
+    };
+    let Some(header) = crate::numbering::verified_numbering_header_range(source) else {
+        return;
+    };
+    fn visit(
+        node: &mut RenderNode,
+        settings: &crate::HeadingNumberingIntent,
+        pattern: &str,
+        hash: &str,
+        header: &std::ops::Range<usize>,
+    ) {
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "heading")
+            && node
+                .attrs
+                .get("data-weftext-numbering-kind")
+                .is_some_and(|kind| kind == "function")
+            && node.origin.as_ref().is_some_and(|origin| origin.is_main)
+            && node
+                .attrs
+                .get("data-weftext-numbering-function-from")
+                .and_then(|from| from.parse::<usize>().ok())
+                .is_some_and(|from| from >= header.start)
+            && node
+                .attrs
+                .get("data-weftext-numbering-function-to")
+                .and_then(|to| to.parse::<usize>().ok())
+                .is_some_and(|to| to <= header.end)
+        {
+            let visible = node
+                .attrs
+                .get("data-weftext-level")
+                .and_then(|level| level.parse::<u32>().ok())
+                .is_some_and(|level| level <= settings.max_level)
+                && !node
+                    .attrs
+                    .get("data-weftext-label")
+                    .is_some_and(|label| settings.exclude_labels.contains(label));
+            node.attrs.insert(
+                "data-weftext-managed-numbering-visible".into(),
+                visible.to_string(),
+            );
+            node.attrs.insert(
+                "data-weftext-managed-numbering-source-hash".into(),
+                hash.into(),
+            );
+            if visible {
+                node.attrs.insert(
+                    "data-weftext-managed-numbering-pattern".into(),
+                    pattern.into(),
+                );
+            }
+        }
+        for child in &mut node.children {
+            visit(child, settings, pattern, hash, header);
+        }
+    }
+    visit(tree, &settings, pattern, source_hash, &header);
+}
+
+fn qualify_note_writers(
+    tree: &RenderNode,
+    notes: &mut crate::NotesSourceMap,
+    world: &LocalWorld<'_>,
+) {
+    let unknown_show = world.loaded_sources().iter().any(|source| {
+        crate::notes::has_unverified_notes_show(source)
+            && !world.trusted_style_sources.contains(&source.id())
+    });
+    fn collect(node: &RenderNode, counts: &mut HashMap<(String, usize), Vec<usize>>) {
+        if let Some(role) = node
+            .attrs
+            .get("data-weftext-role")
+            .filter(|role| matches!(role.as_str(), "footnote-reference" | "figure" | "equation"))
+            && let Some(origin) = node.origin.as_ref().filter(|origin| origin.is_main)
+        {
+            counts
+                .entry((role.clone(), origin.from))
+                .or_default()
+                .push(origin.to);
+        }
+        for child in &node.children {
+            collect(child, counts);
+        }
+    }
+    let mut counts = HashMap::new();
+    collect(tree, &mut counts);
+    for entry in &mut notes.entries {
+        if !entry.writable {
+            continue;
+        }
+        let role = match entry.kind.as_str() {
+            "footnote-definition" | "footnote-reference" => Some("footnote-reference"),
+            "figure" => Some("figure"),
+            "equation" => Some("equation"),
+            _ => None,
+        };
+        let unique = role.is_none_or(|role| {
+            counts
+                .get(&(
+                    role.into(),
+                    entry.construct.from + usize::from(entry.construct.raw.starts_with('#')),
+                ))
+                .is_some_and(|ends| {
+                    ends.iter()
+                        .filter(|end| **end <= entry.construct.to)
+                        .count()
+                        == 1
+                })
+        });
+        if unknown_show || !unique {
+            entry.writable = false;
+            entry.construct.writable = false;
+            if let Some(body) = &mut entry.body {
+                body.writable = false;
+            }
+            entry.unavailable_reason = Some(
+                if unknown_show {
+                    "unverified-environment-show"
+                } else {
+                    "nonunique-or-undisplayed-native-origin"
+                }
+                .into(),
+            );
+        }
+    }
+}
+
+fn qualify_endnote_origins(
+    tree: &mut RenderNode,
+    notes: &mut crate::NotesSourceMap,
+    document: &HtmlDocument,
+    world: &LocalWorld<'_>,
+    offsets: &OriginOffsets<'_>,
+) {
+    // The native module's actual definition metadata retains the original
+    // Content value and its author span, including for unboxed imported notes.
+    // The id is the module's real relationship key, never rendered text.
+    for content in document.introspector().query(&MetadataElem::ELEM.select()) {
+        let Some(metadata) = content.to_packed::<MetadataElem>() else {
+            continue;
+        };
+        let Value::Dict(value) = &metadata.value else {
+            continue;
+        };
+        let Ok(Value::Str(kind)) = value.get("kind") else {
+            continue;
+        };
+        if kind.as_str() != "definition"
+            || content
+                .label()
+                .is_none_or(|label| label.resolve().as_str() != "weftext-endnote-definition")
+        {
+            continue;
+        }
+        let (Ok(Value::Str(id)), Ok(Value::Content(body))) = (value.get("id"), value.get("body"))
+        else {
+            continue;
+        };
+        let Some(actual) =
+            origin_with_offsets(body.span(), world, Some(offsets)).filter(|origin| origin.is_main)
+        else {
+            continue;
+        };
+        let matching: Vec<_> = notes
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry.kind == "endnote-definition"
+                    && entry.target.as_deref() == Some(id.as_str())
+                    && entry.unavailable_reason.as_deref()
+                        == Some("requires-frozen-endnotes-module")
+                    && entry.body.as_ref().is_some_and(|slot| {
+                        actual.from >= slot.from.saturating_sub(1) && actual.to <= slot.to + 1
+                    })
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if let [index] = matching.as_slice() {
+            let entry = &mut notes.entries[*index];
+            entry.writable = true;
+            entry.construct.writable = true;
+            entry.unavailable_reason = None;
+            if let Some(body) = &mut entry.body {
+                body.writable = true;
+            }
+        }
+    }
+    fn assign_reference(
+        node: &mut RenderNode,
+        entry: &crate::NoteSourceEntry,
+        origin: &Origin,
+    ) -> usize {
+        let mut count = 0;
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "endnote-reference")
+            && node.attrs.get("data-weftext-note-id") == entry.target.as_ref()
+        {
+            let mut actual = origin.clone();
+            actual.from = entry.construct.from;
+            actual.to = entry.construct.to;
+            actual.utf16_from = entry.construct.utf16_from;
+            actual.utf16_to = entry.construct.utf16_to;
+            actual.raw = entry.construct.raw.clone();
+            actual.syntax_kind = "CertifiedEndnoteBox".into();
+            node.origin = Some(actual);
+            count += 1;
+        }
+        for child in &mut node.children {
+            count += assign_reference(child, entry, origin);
+        }
+        count
+    }
+    fn visit(node: &mut RenderNode, notes: &mut crate::NotesSourceMap) {
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "source-box")
+            && let Some(origin) = node.origin.clone().filter(|origin| origin.is_main)
+            && let Some(entry) = notes.entries.iter_mut().find(|entry| {
+                entry.kind.starts_with("endnote-")
+                    && (entry.unavailable_reason.as_deref()
+                        == Some("requires-frozen-endnotes-module")
+                        || entry.writable)
+                    && entry.construct.raw.starts_with("#box[")
+                    && entry.construct.from + 1 == origin.from
+                    && entry.construct.to == origin.to
+            })
+            && assign_reference(node, entry, &origin) == 1
+        {
+            entry.writable = true;
+            entry.construct.writable = true;
+            entry.unavailable_reason = None;
+            if let Some(body) = &mut entry.body {
+                body.writable = true;
+            }
+        }
+        for child in &mut node.children {
+            visit(child, notes);
+        }
+    }
+    visit(tree, notes);
+    // A declaration's author Content span survives as its actual body text.
+    // It is safe to expose that slot only once; module source locations are
+    // never repurposed as main-source addresses.
+    fn bodies(node: &mut RenderNode, notes: &crate::NotesSourceMap, main_source_path: &str) {
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "endnote-body")
+            && let Some(id) = node.attrs.get("data-weftext-note-id")
+        {
+            let entries: Vec<_> = notes
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry.kind == "endnote-definition"
+                        && entry.target.as_ref() == Some(id)
+                        && entry.writable
+                })
+                .collect();
+            if let [entry] = entries.as_slice()
+                && let Some(body) = &entry.body
+            {
+                node.origin = Some(Origin {
+                    path: main_source_path.into(),
+                    from: body.from,
+                    to: body.to,
+                    utf16_from: body.utf16_from,
+                    utf16_to: body.utf16_to,
+                    raw: body.raw.clone(),
+                    syntax_kind: "CertifiedEndnoteBody".into(),
+                    is_main: true,
+                });
+            }
+        }
+        for child in &mut node.children {
+            bodies(child, notes, main_source_path);
+        }
+    }
+    bodies(tree, notes, &world.display_path(world.main_id));
+}
+
+struct NoteProducerState<'a> {
+    sources: &'a HashSet<FileId>,
+    offsets: &'a OriginOffsets<'a>,
+    definitions: HashSet<String>,
+    reference: Option<(String, bool)>,
 }
 
 fn project(
@@ -297,6 +735,7 @@ fn project(
     headings: &mut Vec<HeadingInfo>,
     depth: usize,
     scope: &str,
+    note_producers: &mut NoteProducerState<'_>,
 ) -> Result<RenderNode, EngineError> {
     *counter += 1;
     if *counter > 100_000 || depth > 256 {
@@ -309,7 +748,7 @@ fn project(
         text: None,
         attrs: BTreeMap::new(),
         children: vec![],
-        origin: origin(node.span(), world),
+        origin: origin_with_offsets(node.span(), world, Some(note_producers.offsets)),
         writable: false,
     };
     match node {
@@ -373,6 +812,10 @@ fn project(
                 out.attrs
                     .insert("data-weftext-level".into(), level.to_string());
             }
+            if let Some(repeat) = element.weftext.repeat {
+                out.attrs
+                    .insert("data-weftext-repeat".into(), repeat.to_string());
+            }
             if let Some(numbered) = element.weftext.numbered {
                 out.attrs
                     .insert("data-weftext-numbered".into(), numbered.to_string());
@@ -385,6 +828,21 @@ fn project(
                 out.attrs
                     .insert("data-weftext-numbering-pattern".into(), pattern.to_string());
             }
+            if let Some(function) = element
+                .weftext
+                .numbering_function_span
+                .and_then(|span| origin_with_offsets(span, world, Some(note_producers.offsets)))
+                .filter(|origin| origin.is_main)
+            {
+                out.attrs.insert(
+                    "data-weftext-numbering-function-from".into(),
+                    function.from.to_string(),
+                );
+                out.attrs.insert(
+                    "data-weftext-numbering-function-to".into(),
+                    function.to.to_string(),
+                );
+            }
             if let Some(state) = &element.weftext.counter_state {
                 out.attrs
                     .insert("data-weftext-counter-state".into(), state.to_string());
@@ -396,6 +854,90 @@ fn project(
             if let Some(label) = &element.weftext.label {
                 out.attrs
                     .insert("data-weftext-label".into(), label.to_string());
+            }
+            for (name, value) in [
+                ("data-weftext-note-id", element.weftext.note_id.as_ref()),
+                ("data-weftext-target-id", element.weftext.target_id.as_ref()),
+                (
+                    "data-weftext-caption-kind",
+                    element.weftext.caption_kind.as_ref(),
+                ),
+            ] {
+                if let Some(value) = value {
+                    out.attrs.insert(name.into(), value.to_string());
+                }
+            }
+            if let Some(position) = element.weftext.caption_position {
+                out.attrs
+                    .insert("data-weftext-caption-position".into(), position.into());
+            }
+            if let Some(definition) = element.weftext.note_definition {
+                out.attrs.insert(
+                    "data-weftext-note-definition".into(),
+                    definition.to_string(),
+                );
+            }
+            if element.weftext.role == Some("citation") {
+                out.attrs.insert(
+                    "data-weftext-citation-keys".into(),
+                    serde_json::to_string(&element.weftext.citation_keys).unwrap(),
+                );
+                out.attrs.insert(
+                    "data-weftext-citation-forms".into(),
+                    serde_json::to_string(&element.weftext.citation_forms).unwrap(),
+                );
+                let origins: Vec<_> = element
+                    .weftext
+                    .citation_spans
+                    .iter()
+                    .map(|span| origin_with_offsets(*span, world, Some(note_producers.offsets)))
+                    .collect();
+                out.attrs.insert(
+                    "data-weftext-citation-origins".into(),
+                    serde_json::to_string(&origins).unwrap(),
+                );
+            }
+            // The bundled module has no private Rust fields. Its exact native
+            // call-site span and frozen bytes authenticate its explicit
+            // producer protocol. Arbitrary author HTML and metadata cannot.
+            if element
+                .span
+                .id()
+                .is_some_and(|id| note_producers.sources.contains(&id))
+            {
+                let attr = |name: &str| {
+                    element
+                        .attrs
+                        .0
+                        .iter()
+                        .find(|(key, _)| key.resolve().as_str() == name)
+                        .map(|(_, value)| value.as_str())
+                };
+                let role = match attr("data-weftext-endnote-kind") {
+                    Some("reference") => Some("endnote-reference"),
+                    Some("body") => Some("endnote-body"),
+                    Some("list") => Some("endnotes"),
+                    _ => None,
+                };
+                if let Some(role) = role {
+                    if role == "endnotes" {
+                        out.attrs.insert("data-weftext-role".into(), role.into());
+                    } else if let Some(id) = attr("data-weftext-endnote-id")
+                        .filter(|id| !id.is_empty() && id.len() <= 512)
+                    {
+                        out.attrs.insert("data-weftext-role".into(), role.into());
+                        out.attrs.insert("data-weftext-note-id".into(), id.into());
+                        if role == "endnote-reference"
+                            && let Some((actual_id, definition)) = note_producers.reference.take()
+                            && actual_id == id
+                        {
+                            out.attrs.insert(
+                                "data-weftext-note-definition".into(),
+                                definition.to_string(),
+                            );
+                        }
+                    }
+                }
             }
             let css = safe_css(&element.css);
             if !css.is_empty() {
@@ -415,12 +957,44 @@ fn project(
                 ));
             }
             for child in &element.children {
-                out.children
-                    .push(project(child, world, counter, headings, depth + 1, scope)?);
+                out.children.push(project(
+                    child,
+                    world,
+                    counter,
+                    headings,
+                    depth + 1,
+                    scope,
+                    note_producers,
+                )?);
             }
         }
         HtmlNode::Tag(Tag::Start(content, _)) => {
             out.kind = "tag".into();
+            // Actual metadata events from the exact module's fixed
+            // definition -> _marker protocol preserve definition identity,
+            // including forward references in unboxed standalone source.
+            if content
+                .span()
+                .id()
+                .is_some_and(|id| note_producers.sources.contains(&id))
+                && let Some(metadata) = content.to_packed::<MetadataElem>()
+                && let Value::Dict(value) = &metadata.value
+                && let Ok(Value::Str(id)) = value.get("id")
+                && let Some(label) = content.label()
+            {
+                match label.resolve().as_str() {
+                    "weftext-endnote-definition" => {
+                        note_producers.definitions.insert(id.as_str().into());
+                    }
+                    "weftext-endnote-reference" => {
+                        note_producers.reference = Some((
+                            id.as_str().into(),
+                            note_producers.definitions.remove(id.as_str()),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
             // Keep the native metadata tag at its actual final-tree position.
             // The UI can attach derived Query presentation here, but this tag
             // never becomes body text, an exported result, or a source writer.
@@ -438,7 +1012,8 @@ fn project(
                         format!("{:032x}", location.hash()),
                     );
                 }
-                out.origin = origin(content.span(), world);
+                out.origin =
+                    origin_with_offsets(content.span(), world, Some(note_producers.offsets));
             }
             if let Some(heading) = content.to_packed::<HeadingElem>() {
                 out.attrs.insert(
@@ -474,7 +1049,8 @@ fn project(
                     out.attrs
                         .insert("data-weftext-label".into(), label.resolve().as_str().into());
                 }
-                let origin = origin(content.span(), world);
+                let origin =
+                    origin_with_offsets(content.span(), world, Some(note_producers.offsets));
                 let (from, to, uf, ut, generated) = origin
                     .as_ref()
                     .map(|o| {
@@ -651,6 +1227,43 @@ fn count_origins(node: &RenderNode, counts: &mut HashMap<(String, usize, usize),
     }
 }
 
+fn literal_display(origin: &Origin) -> Option<String> {
+    match origin.syntax_kind.as_str() {
+        "Text" => Some(origin.raw.clone()),
+        "Escape" | "Shorthand" | "Space" => {
+            let parsed = typst_syntax::Source::detached(&origin.raw);
+            let mut children = parsed.root().children();
+            let node = children.next()?;
+            if children.next().is_some() || node.len() != origin.raw.len() {
+                return None;
+            }
+            match (origin.syntax_kind.as_str(), node.kind()) {
+                ("Escape", typst_syntax::SyntaxKind::Escape) => node
+                    .cast::<typst_syntax::ast::Escape>()
+                    .map(|escape| escape.get().to_string()),
+                ("Shorthand", typst_syntax::SyntaxKind::Shorthand) => node
+                    .cast::<typst_syntax::ast::Shorthand>()
+                    .map(|shorthand| shorthand.get().to_string()),
+                ("Space", typst_syntax::SyntaxKind::Space) => Some(" ".into()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Certify a frozen native literal's displayed text, without granting source
+/// editing permission. Consumers must separately prove unique occurrences and
+/// complete atomic boundaries when attaching discussion to its source range.
+pub fn native_literal_display(node: &RenderNode) -> bool {
+    node.kind == "text"
+        && node.origin.as_ref().is_some_and(|origin| {
+            origin.is_main
+                && origin.to.checked_sub(origin.from) == Some(origin.raw.len())
+                && literal_display(origin).as_deref() == node.text.as_deref()
+        })
+}
+
 fn qualify(
     node: &mut RenderNode,
     info: &crate::EditorMap,
@@ -660,22 +1273,7 @@ fn qualify(
         && node.kind == "text"
         && let Some(o) = &node.origin
     {
-        let expected = match o.syntax_kind.as_str() {
-            "Text" => Some(o.raw.clone()),
-            "Escape" | "Shorthand" => {
-                let parsed = typst_syntax::Source::detached(&o.raw);
-                parsed.root().children().next().and_then(|n| {
-                    n.cast::<typst_syntax::ast::Escape>()
-                        .map(|e| e.get().to_string())
-                        .or_else(|| {
-                            n.cast::<typst_syntax::ast::Shorthand>()
-                                .map(|e| e.get().to_string())
-                        })
-                })
-            }
-            "Space" => Some(" ".into()),
-            _ => None,
-        };
+        let expected = literal_display(o);
         node.writable = o.is_main
             && expected.as_deref() == node.text.as_deref()
             && info
@@ -852,12 +1450,33 @@ fn safe_attr(name: &str, value: &str, tag: &str) -> Option<String> {
             || value.starts_with("data:image/gif;base64,")
             || value.starts_with("data:image/webp;base64,"))
         .then(|| value.into()),
+        "linethickness" if tag == "mfrac" => (matches!(value, "thin" | "medium" | "thick")
+            || safe_math_length(value, false))
+        .then(|| value.into()),
+        "width" if tag == "mspace" => safe_math_length(value, true).then(|| value.into()),
         "id" | "title" | "alt" | "lang" | "dir" | "role" | "aria-level" | "aria-label"
         | "colspan" | "rowspan" | "scope" | "start" | "value" | "display" | "mathvariant"
         | "stretchy" | "fence" | "separator" | "accent" | "accentunder" | "lspace" | "rspace"
         | "encoding" | "xmlns" => Some(value.into()),
         _ => None,
     }
+}
+
+fn safe_math_length(value: &str, negative: bool) -> bool {
+    if value.is_empty()
+        || value.len() > 64
+        || !value.is_ascii()
+        || value.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+    let scalar = ["em", "ex", "px", "pt", "pc", "cm", "mm", "in", "%"]
+        .into_iter()
+        .find_map(|unit| value.strip_suffix(unit))
+        .unwrap_or(value);
+    scalar.parse::<f64>().is_ok_and(|number| {
+        number.is_finite() && number.abs() <= 100_000.0 && (negative || number >= 0.0)
+    })
 }
 
 pub fn safe_url(value: &str) -> bool {
@@ -924,5 +1543,78 @@ fn safe_html(node: &RenderNode) -> String {
         format!("<{tag}{attrs}>")
     } else {
         format!("<{tag}{attrs}>{children}</{tag}>")
+    }
+}
+
+#[cfg(test)]
+mod origin_offset_tests {
+    use super::*;
+    use typst_syntax::{LinkedNode, RootedPath, Source, VirtualPath, VirtualRoot};
+
+    #[test]
+    fn snapshots_cover_derived_sources_and_late_or_replaced_sources_fall_back() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let engine = Engine::new_with_system_fonts(false).unwrap();
+        let input = crate::FrozenRenderRequest {
+            source: "主😀𠮷e\u{301}\r\n".into(),
+            path: dir.path().join("notes/主😀.typ"),
+            root: dir.path().into(),
+            files: BTreeMap::from([("notes/late.typ".into(), "后来😀𠮷\r\n".as_bytes().to_vec())]),
+            style: Some(crate::StyleModule {
+                path: "styles/样式😀.typ".into(),
+                source: "#let library-style(body) = [样式𠮷 #body]".into(),
+                enabled: true,
+                entry_function: "library-style".into(),
+            }),
+        };
+        let world = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        let sources = world.loaded_sources();
+        let offsets: OriginOffsets<'_> = sources
+            .iter()
+            .map(|source| {
+                (
+                    source.id(),
+                    (source.text(), Utf16Offsets::new(source.text())),
+                )
+            })
+            .collect();
+        let derived = world.main();
+        assert_ne!(derived, world.main_id);
+        assert!(offsets.contains_key(&derived));
+        fn walk(node: &LinkedNode<'_>, world: &LocalWorld<'_>, offsets: &OriginOffsets<'_>) {
+            assert_eq!(
+                serde_json::to_value(origin_with_offsets(node.span(), world, Some(offsets)))
+                    .unwrap(),
+                serde_json::to_value(origin(node.span(), world)).unwrap()
+            );
+            for child in node.children() {
+                walk(&child, world, offsets);
+            }
+        }
+        for source in &sources {
+            assert!(std::ptr::eq(
+                source.text(),
+                world.source(source.id()).unwrap().text()
+            ));
+            walk(&LinkedNode::new(source.root()), &world, &offsets);
+        }
+        let late_id = FileId::new(RootedPath::new(
+            VirtualRoot::Project,
+            VirtualPath::new("/notes/late.typ").unwrap(),
+        ));
+        assert!(!offsets.contains_key(&late_id));
+        let late = world.source(late_id).unwrap();
+        walk(&LinkedNode::new(late.root()), &world, &offsets);
+        let first = Source::new(late_id, "éxy".into());
+        let replaced = Source::new(late_id, "😀".into());
+        let guarded = HashMap::from([(late_id, (first.text(), Utf16Offsets::new(first.text())))]);
+        assert_eq!(first.text().len(), replaced.text().len());
+        for at in 0..=replaced.text().len() + 1 {
+            assert_eq!(
+                origin_utf16(&replaced, at, Some(&guarded)),
+                utf16(replaced.text(), at)
+            );
+        }
+        assert_eq!(origin_utf16(&replaced, usize::MAX, Some(&guarded)), 0);
     }
 }

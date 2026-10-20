@@ -251,6 +251,13 @@ fn capture_works(
             .core
             .qualified_node_at(&root, &path)
             .map_err(|_| unavailable())?;
+        if file
+            .expected_node
+            .as_ref()
+            .is_some_and(|expected| expected != &qualified.owner)
+        {
+            return Err(unavailable());
+        }
         if qualified.revision.is_none() {
             return Err(changed());
         }
@@ -562,6 +569,348 @@ pub(super) fn router() -> Router<HostedState> {
     Router::new()
         .route("/api/hosted/citations", get(catalog))
         .route("/api/hosted/citations/propose", post(propose))
+        .route("/api/hosted/citations/editor", post(read_editor))
+        .route("/api/hosted/citations/edit", post(edit_native))
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NativeBasis {
+    session_id: String,
+    source: String,
+    serial: u64,
+    source_hash: String,
+}
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NativeEdit {
+    session_id: String,
+    source: String,
+    serial: u64,
+    source_hash: String,
+    generation: String,
+    intent: Value,
+}
+fn native_basis(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    req: &NativeBasis,
+    observe: bool,
+    write: bool,
+) -> Result<(String, HostedSession), ApiError> {
+    let (actor, session, rights) = inner.session(auth, &req.session_id)?;
+    let file = author_file(inner, &session.resource)?;
+    let path = inner.config.root.join(&file.path);
+    let owner = inner
+        .core
+        .qualified_node_at(&inner.config.root, &path)
+        .map_err(|_| unavailable())?;
+    if file
+        .expected_node
+        .as_ref()
+        .is_some_and(|expected| expected != &owner.owner)
+        || weftext_engine::inspect_metadata(&req.source).id.as_deref()
+            != Some(owner.owner.node_id.as_str())
+    {
+        return Err(unavailable());
+    }
+    inner
+        .core
+        .validate_snapshot_witness(&inner.config.root, &path, &owner.witness)
+        .map_err(|_| changed())?;
+    if write && (!rights.write || !inner.file(&session.resource)?.editable) {
+        return Err(unavailable());
+    }
+    writing_api::validate_source(&req.source, Some(&req.source_hash))?;
+    if observe {
+        writing_api::observe_version(
+            &mut inner.editor_versions,
+            &req.session_id,
+            &req.source,
+            req.serial,
+        )?;
+    } else {
+        writing_api::exact_version(
+            &inner.editor_versions,
+            &req.session_id,
+            &req.source,
+            req.serial,
+        )?;
+    }
+    Ok((actor, session))
+}
+fn native_profile(
+    inner: &mut HostedInner,
+    actor: &str,
+    resource: &str,
+    source: &str,
+) -> Result<Value, ApiError> {
+    let mut choices = BTreeMap::<String, Value>::new();
+    let mut sources = Vec::<(String, String, String)>::new();
+    let mut source_bytes = 0usize;
+    let mut partial = false;
+    let ids = inner
+        .files_view(actor)?
+        .keys()
+        .filter(|id| {
+            inner.rights(actor, id).is_ok() || access(inner, actor, id, false, false).is_ok()
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    partial |= ids.len() > 512;
+    for id in ids.into_iter().take(512) {
+        let file = inner.file(&id)?.clone();
+        if inner.rights(actor, &id).is_ok() {
+            let readable = (|| {
+                let file = author_file(inner, &id)?;
+                let path = inner.config.root.join(&file.path);
+                let node = inner
+                    .core
+                    .qualified_node_at(&inner.config.root, &path)
+                    .map_err(|_| unavailable())?;
+                if file
+                    .expected_node
+                    .as_ref()
+                    .is_some_and(|expected| expected != &node.owner)
+                {
+                    return Err(unavailable());
+                }
+                let files = inner.files(actor, std::slice::from_ref(&id))?;
+                let saved = files
+                    .get(&file.path)
+                    .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                    .ok_or_else(unavailable)?;
+                if weftext_engine::source_hash(saved) != node.source_hash {
+                    return Err(changed());
+                }
+                inner
+                    .core
+                    .validate_snapshot_witness(&inner.config.root, &path, &node.witness)
+                    .map_err(|_| changed())?;
+                let selected = if id == resource { source } else { saved };
+                if weftext_engine::inspect_metadata(selected).id.as_deref()
+                    != Some(node.owner.node_id.as_str())
+                {
+                    return Err(unavailable());
+                }
+                let title = weftext_engine::inspect_editor(selected)
+                    .title
+                    .text
+                    .unwrap_or_else(|| file.title.clone());
+                Ok((uri(&node.owner), title, selected.to_owned()))
+            })();
+            if let Ok((reference, title, source)) = readable {
+                source_bytes = source_bytes.saturating_add(source.len());
+                if source_bytes <= 16 * 1024 * 1024 {
+                    sources.push((reference.clone(), title.clone(), source));
+                } else {
+                    partial = true;
+                }
+                choices.insert(reference.clone(),json!({"resource":id,"reference":reference,"title":title,"citationReady":false,"reason":"正式文献引用需要获权且完整的 Work 出版字段；可插入普通笔记链接。"}));
+            } else {
+                partial = true;
+            }
+        }
+        if access(inner, actor, &id, false, false).is_ok() {
+            match capture_works(
+                inner,
+                actor,
+                &[("validation".into(), id.clone())],
+                Some((resource, source)),
+            ) {
+                Ok(capture) => {
+                    let work = &capture.works[0];
+                    let publication = &work.work.publication;
+                    let reference = work.work.entity_ref.clone();
+                    let title = publication
+                        .member("title")
+                        .and_then(weftext_data::NativeValue::text)
+                        .unwrap_or(&file.title);
+                    let suggestion = publication
+                        .member("citation_key")
+                        .and_then(weftext_data::NativeValue::text)
+                        .unwrap_or("work");
+                    choices.insert(reference.clone(),json!({"resource":id,"reference":reference,"title":title,"citationReady":true,"suggestedKey":suggestion}));
+                }
+                Err(_) => {
+                    partial = true;
+                }
+            }
+        }
+    }
+    let mut editor = weftext_engine::inspect_native_citation_editor(source);
+    let style_safe = library::environment(inner, actor)
+        .and_then(|environment| {
+            let mut worker = WorkerRequest {
+                source: source.into(),
+                path: inner.file(resource)?.path.clone().into(),
+                root: inner.config.root.clone(),
+                paged: false,
+                style: None,
+                frozen_files: Some(BTreeMap::new()),
+            };
+            environment.apply(&mut worker)?;
+            Ok(worker
+                .style
+                .as_ref()
+                .is_none_or(weftext_engine::style_allows_rich_editing))
+        })
+        .unwrap_or(false);
+    if !style_safe {
+        editor.rename_available = false;
+        editor.rename_reason =
+            Some("当前库样式或其权限不能证明完整改名覆盖；请保留原生源。".into());
+    }
+    let bindings=editor.bindings.iter().map(|entry|{let slots=editor.citations.iter().filter(|slot|slot.key==entry.key && slot.binding_proven).collect::<Vec<_>>();json!({"key":entry.key,"work":entry.work,"state":if slots.is_empty(){"boundOnly"}else{"authored"},"authoredSlots":slots})}).collect::<Vec<_>>();
+    let selected_ref = inner
+        .core
+        .qualified_node_at(
+            &inner.config.root,
+            &inner.config.root.join(&inner.file(resource)?.path),
+        )
+        .map(|node| uri(&node.owner))
+        .map_err(|_| unavailable())?;
+    let mut incoming = Vec::new();
+    for (reference, title, source) in &sources {
+        if !crate::citation_api::owns_single_virtual_bibliography(source) {
+            let inspected = weftext_engine::inspect_native_citation_editor(source);
+            if !weftext_engine::native_citation_owner_complete(source)
+                || !inspected.bindings.is_empty()
+                || !inspected.citations.is_empty()
+            {
+                partial = true;
+            }
+            continue;
+        }
+        let inspected = weftext_engine::inspect_native_citation_editor(source);
+        let keys = inspected
+            .bindings
+            .iter()
+            .filter(|binding| binding.work == selected_ref)
+            .map(|binding| binding.key.as_str())
+            .collect::<BTreeSet<_>>();
+        let slots = inspected
+            .citations
+            .iter()
+            .filter(|slot| slot.binding_proven && keys.contains(slot.key.as_str()))
+            .collect::<Vec<_>>();
+        if !slots.is_empty() {
+            incoming.push(json!({"title":title,"reference":reference,"slots":slots,"visibility":"unconfirmed"}));
+        }
+    }
+    if !style_safe {
+        incoming.clear();
+        partial = true;
+    }
+    let generation=digest(&serde_json::to_vec(&json!({"source":weftext_engine::source_hash(source),"choices":choices,"incoming":incoming,"actor":actor,"epoch":inner.actor_generation(actor),"deployment":inner.config.deployment})).map_err(|_|changed())?);
+    let links=weftext_knowledge::native_links(source).into_iter().filter(|link|link.kind=="native").map(|link|{let reference=link.target.split('#').next().unwrap_or("");let title=choices.get(reference).and_then(|choice|choice["title"].as_str());json!({"range":{"from":link.from,"to":link.to,"utf16From":link.utf16_from,"utf16To":link.utf16_to,"raw":source.get(link.from..link.to).unwrap_or(""),"writable":true},"target":link.target,"title":title,"editable":title.is_some()&&link.body_explicit,"reason":"当前统一控件仅更新获权稳定目标的纯文字链接；复杂内容和其它地址保原源。"})}).collect::<Vec<_>>();
+    Ok(
+        json!({"ownerReference":selected_ref,"generation":generation,"coverage":if partial{"partial"}else{"complete"},"choices":choices.into_values().collect::<Vec<_>>(),"editor":editor,"bindings":bindings,"links":links,"incoming":incoming,"bibliographyOwnership":if style_safe && crate::citation_api::owns_single_virtual_bibliography(source){"singleVirtual"}else{"unavailable"},"displayStatus":"unavailable","displayExplanation":"文献绑定、源码槽及本次实际 HTML 显示项分别记录；条件未执行和仅文献表引用不冒可见正文。入引用按本次明确获权且来源完整的笔记分组，显示可见性由各篇实际编译另证。"}),
+    )
+}
+async fn read_editor(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<NativeBasis>,
+) -> ApiResult {
+    let request = req.clone();
+    let check = auth.clone();
+    let (mut profile, frozen) = locked(&state, move |inner| {
+        let (actor, session) = native_basis(inner, &check, &request, true, false)?;
+        let profile = native_profile(inner, &actor, &session.resource, &request.source)?;
+        let frozen = editor::freeze(inner, &actor, &session.resource, &request.source).ok();
+        Ok((profile, frozen))
+    })
+    .await?;
+    let compiled = if let Some((input, dependencies, environment)) = frozen {
+        let _permit = state.render_gate.try_acquire().map_err(|_| {
+            ApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "busy",
+                "原生引用预览正在运行，请稍后再试",
+            )
+        })?;
+        Some((render_worker(input).await, dependencies, environment))
+    } else {
+        None
+    };
+    locked(&state,move|inner|{
+        let(actor,session)=native_basis(inner,&auth,&req,false,false)?;let fresh=native_profile(inner,&actor,&session.resource,&req.source)?;if fresh["generation"]!=profile["generation"]{return Err(changed());}
+        if let Some((Ok(output),dependencies,environment))=compiled{editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;if output["ok"]==true{
+            if let Ok(tree)=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()){profile["displayed"]=json!(crate::citation_api::displayed_citations(&tree));profile["unlabelledTargets"]=json!(crate::citation_api::unlabelled_reference_targets(&req.source,&tree));crate::citation_api::classify_reference_controls(&mut profile["editor"],Some(&tree));profile["displayStatus"]=json!("nativeCompileAvailable");}
+            let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();
+            if let Some(targets)=profile["editor"]["targets"].as_array_mut(){targets.retain(|target|matches!(target["kind"].as_str(),Some("heading"|"figure"|"table"|"equation"|"footnote"))&&labels.iter().any(|label|label.label==target["label"].as_str().unwrap_or("") && label.count==1 && label.origins.iter().any(|origin|origin.is_main && origin.from==target["range"]["from"].as_u64().unwrap_or(u64::MAX) as usize)));}
+        }else{profile["editor"]["targets"]=json!([]);}}else{profile["editor"]["targets"]=json!([]);}
+        if profile["displayStatus"]!="nativeCompileAvailable"{profile["coverage"]=json!("partial");}
+        if serde_json::to_vec(&profile).map_err(|_|changed())?.len()>8*1024*1024{return Err(ApiError::bad("本次引用目录超过交付预算"));}
+        Ok(Json(json!({"resource":session.resource,"serial":req.serial,"sourceHash":req.source_hash,"profile":profile})))
+    }).await
+}
+async fn edit_native(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<NativeEdit>,
+) -> ApiResult {
+    let basis = NativeBasis {
+        session_id: req.session_id.clone(),
+        source: req.source.clone(),
+        serial: req.serial,
+        source_hash: req.source_hash.clone(),
+    };
+    // Cross-reference targets require a new official compile, with the same
+    // independent input grants rechecked after worker latency.
+    let compiled = if matches!(
+        req.intent["kind"].as_str(),
+        Some("nativeReferenceInsert" | "nativeReferenceInsertWithLabel")
+    ) {
+        let check = auth.clone();
+        let request = basis.clone();
+        let frozen = locked(&state, move |inner| {
+            let (actor, session) = native_basis(inner, &check, &request, false, true)?;
+            editor::freeze(inner, &actor, &session.resource, &request.source)
+        })
+        .await?;
+        let _permit = state.render_gate.try_acquire().map_err(|_| {
+            ApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "busy",
+                "原生引用编译正在运行",
+            )
+        })?;
+        Some((render_worker(frozen.0).await, frozen.1, frozen.2))
+    } else {
+        None
+    };
+    locked(&state,move|inner|{
+        let(actor,session)=native_basis(inner,&auth,&basis,false,true)?;let profile=native_profile(inner,&actor,&session.resource,&basis.source)?;if profile["generation"].as_str()!=Some(req.generation.as_str()){return Err(changed());}
+        if matches!(req.intent["kind"].as_str(),Some("nativeCitationRename"|"nativeReferenceRename")) && profile["editor"]["renameAvailable"]!=true{return Err(ApiError::bad("当前环境没有完整改名资格，原稿保留"));}
+        let s=|key:&str|req.intent[key].as_str().ok_or_else(||ApiError::bad(format!("缺少 {key}")));let at=||req.intent["at"].as_u64().and_then(|value|usize::try_from(value).ok()).ok_or_else(||ApiError::bad("缺少准确插入位置"));
+        let fail=|error:weftext_engine::EngineError|ApiError::new(StatusCode::CONFLICT,"unsupportedCitationEdit",error.to_string());
+        let range=||serde_json::from_value::<weftext_engine::SourceRange>(req.intent["range"].clone()).map_err(|_|ApiError::bad("缺少准确源范围"));
+        let form=||serde_json::from_value::<weftext_engine::CitationForm>(req.intent["form"].clone()).map_err(|_|ApiError::bad("未知引用形式"));
+        if req.intent["form"]=="normal" && matches!(s("kind")?,"nativeReferenceInsert"|"nativeReferenceInsertWithLabel") {
+            let from=if s("kind")?=="nativeReferenceInsertWithLabel"{req.intent["target"]["from"].as_u64().unwrap_or(u64::MAX) as usize}else{weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|Some(target.label.as_str())==req.intent["label"].as_str()).map_or(usize::MAX,|target|target.range.from)};
+            let numbered=compiled.as_ref().and_then(|(output,_,_)|output.as_ref().ok()).and_then(|output|serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).ok()).and_then(|tree|crate::citation_api::reference_numbered_at(&tree,from)).unwrap_or(false);
+            if !numbered{return Err(ApiError::bad("目标当前没有获证的可引用编号；可选自定义文字或适用的页码引用"));}
+        }
+        if s("kind")?=="nativeReferenceInsert" && !weftext_engine::inspect_native_citation_editor(&basis.source).targets.iter().any(|target|Some(target.label.as_str())==req.intent["label"].as_str()&&matches!(target.kind.as_str(),"heading"|"figure"|"table"|"equation"|"footnote")){return Err(ApiError::bad("目标当前没有可引用原生对象证明"));}
+        let edited=match s("kind")?{
+            "nativeCitationInsert"=>{let work=s("work")?;let choice=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==work && choice["citationReady"]==true)).ok_or_else(unavailable)?;weftext_engine::insert_native_citation(&basis.source,&basis.source_hash,at()?,work,choice["suggestedKey"].as_str().unwrap_or("work"),req.intent["key"].as_str().filter(|key|!key.is_empty()),form()?,req.intent["supplement"].as_str().unwrap_or("")).map_err(fail)?},
+            "nativeCitationUpdate"=>weftext_engine::update_native_citation_options(&basis.source,&basis.source_hash,&range()?,if req.intent["form"].is_null(){None}else{Some(form()?)},req.intent["supplement"].as_str()).map_err(fail)?,
+            "nativeCitationStyle"=>weftext_engine::update_native_citation_style(&basis.source,&basis.source_hash,&range()?,req.intent["style"].as_str().filter(|style|!style.is_empty())).map_err(fail)?,
+            "nativeCitationRename"=>weftext_engine::rename_native_citation_key(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
+            "nativeCitationLink"=>{let target=s("target")?;let choice=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==target)).ok_or_else(unavailable)?;weftext_engine::insert_native_link(&basis.source,&basis.source_hash,at()?,target,req.intent["text"].as_str().filter(|text|!text.is_empty()).unwrap_or(choice["title"].as_str().unwrap_or(""))).map_err(fail)?},
+            "nativeCitationLinkText"=>{let range=range()?;let link=weftext_knowledge::native_links(&basis.source).into_iter().find(|link|link.from==range.from && link.to==range.to && link.kind=="native").ok_or_else(changed)?;let reference=link.target.split('#').next().unwrap_or("");let title=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==reference)).and_then(|choice|choice["title"].as_str()).ok_or_else(unavailable)?;weftext_engine::update_native_link_text(&basis.source,&basis.source_hash,&range,title).map_err(fail)?},
+            "nativeReferenceInsert"=>{let label=s("label")?;let target=weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|target.label==label && target.unique).ok_or_else(unavailable)?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(|_|changed())?;let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();if output["ok"]!=true || !labels.iter().any(|entry|entry.label==label && entry.count==1 && entry.origins.iter().any(|origin|origin.is_main && origin.from==target.range.from)){return Err(ApiError::bad("目标没有本次唯一执行与作者来源证明"));}
+            if s("form")?=="text"{weftext_engine::insert_native_cross_link(&basis.source,&basis.source_hash,at()?,label,s("text")?).map_err(fail)?}else{if !matches!(s("form")?,"normal"|"page"){return Err(ApiError::bad("未知交叉引用形式"));}weftext_engine::insert_native_cross_reference(&basis.source,&basis.source_hash,at()?,label,s("form")?=="page").map_err(fail)?}},
+            "nativeReferenceInsertWithLabel"=>{let target=serde_json::from_value::<weftext_engine::SourceRange>(req.intent["target"].clone()).map_err(|_|ApiError::bad("缺少准确对象范围"))?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(|_|changed())?;let tree=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).map_err(|_|changed())?;if output["ok"]!=true||!crate::citation_api::unlabelled_reference_targets(&basis.source,&tree).iter().any(|candidate|candidate["range"]==req.intent["target"]){return Err(ApiError::bad("目标没有本次唯一原生对象及准确来源证明"));}let form=s("form")?;if !matches!(form,"normal"|"page"){return Err(ApiError::bad("补标签同稿目前支持编号或页码引用"));}weftext_engine::insert_native_cross_reference_with_label(&basis.source,&basis.source_hash,at()?,&target,s("label")?,form=="page").map_err(fail)?},
+            "nativeReferenceRename"=>weftext_engine::rename_native_label(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
+            _=>return Err(ApiError::bad("未知引用操作")),
+        };
+        writing_api::validate_source(&edited.source,None)?;
+        let patches=edited.patches.iter().map(|patch|json!({"from":patch.utf16_from,"to":patch.utf16_to,"text":patch.insert,"expected":patch.expected,"byteFrom":patch.from,"byteTo":patch.to})).collect::<Vec<_>>();
+        Ok(Json(json!({"resource":session.resource,"serial":basis.serial,"sourceHash":basis.source_hash,"patchUnit":"utf16","source":edited.source,"patches":patches})))
+    }).await
 }
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;let ids=inner.files_view(&actor)?.keys().filter(|id|access(inner,&actor,id,false,false).is_ok()).cloned().collect::<Vec<_>>();let mut partial=false;let mut works=vec![];
@@ -624,6 +973,158 @@ async fn propose(
 mod tests {
     use super::*;
     const PRIVATE: &str = "PRIVATE WORK BODY 绝不交付";
+    #[test]
+    fn native_catalog_never_discloses_a_configured_path_with_another_expected_owner() {
+        let (_temp, state, _auth, doc, _reference) = fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        let expected = inner
+            .core
+            .qualified_node_at(&root, &root.join("Shared/Shared.typ"))
+            .unwrap()
+            .owner;
+        inner.config.files.get_mut("Target").unwrap().expected_node = Some(expected);
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Target")
+            .unwrap()
+            .read = true;
+        let profile = native_profile(
+            &mut inner,
+            "alice",
+            "Shared",
+            doc["source"].as_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(profile["coverage"], "partial");
+        let encoded = profile.to_string();
+        assert!(!encoded.contains("Granted Publication"));
+        assert!(!encoded.contains(PRIVATE));
+        assert!(
+            !profile["choices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|choice| choice["resource"] == "Target")
+        );
+    }
+    #[tokio::test]
+    async fn native_controls_reuse_work_in_one_draft_and_reject_revoked_or_stale_selection() {
+        let (_temp, state, auth, doc, reference) = fixture();
+        let source = doc["source"].as_str().unwrap().to_owned();
+        let session = doc["sessionId"].as_str().unwrap().to_owned();
+        let path = state
+            .inner
+            .lock()
+            .unwrap()
+            .config
+            .root
+            .join("Shared/Shared.typ");
+        let original = std::fs::read(&path).unwrap();
+        let profile = {
+            let mut inner = state.inner.lock().unwrap();
+            native_profile(&mut inner, "alice", "Shared", &source).unwrap()
+        };
+        assert!(!profile.to_string().contains(PRIVATE));
+        let mut req = NativeEdit {
+            session_id: session.clone(),
+            source: source.clone(),
+            serial: 1,
+            source_hash: weftext_engine::source_hash(&source),
+            generation: profile["generation"].as_str().unwrap().into(),
+            intent: json!({"kind":"nativeCitationInsert","at":source.find("Saved B").unwrap(),"work":reference,"key":"reader2026","form":"prose","supplement":"第 12 页 ] #panic(\"never execute\")"}),
+        };
+        let result = edit_native(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(req.clone()),
+        )
+        .await
+        .unwrap()
+        .0;
+        let after = result["source"].as_str().unwrap().to_owned();
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(
+            weftext_engine::inspect_citation_declaration(&after)
+                .unwrap()
+                .unwrap()
+                .entries
+                .len(),
+            1
+        );
+        assert_eq!(
+            weftext_engine::inspect_native_citation_editor(&after).citations[0].form,
+            Some(weftext_engine::CitationForm::Prose)
+        );
+        {
+            let mut inner = state.inner.lock().unwrap();
+            writing_api::observe_version(&mut inner.editor_versions, &session, &after, 2).unwrap();
+        }
+        assert!(
+            edit_native(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(req.clone())
+            )
+            .await
+            .is_err()
+        );
+        let profile = {
+            let mut inner = state.inner.lock().unwrap();
+            native_profile(&mut inner, "alice", "Shared", &after).unwrap()
+        };
+        req.source = after.clone();
+        req.serial = 2;
+        req.source_hash = weftext_engine::source_hash(&after);
+        req.generation = profile["generation"].as_str().unwrap().into();
+        req.intent = json!({"kind":"nativeCitationInsert","at":after.find("Saved B").unwrap(),"work":reference,"form":"none","supplement":""});
+        let second = edit_native(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(req.clone()),
+        )
+        .await
+        .unwrap()
+        .0;
+        let second = second["source"].as_str().unwrap();
+        assert_eq!(
+            weftext_engine::inspect_citation_declaration(second)
+                .unwrap()
+                .unwrap()
+                .entries
+                .len(),
+            1
+        );
+        assert_eq!(
+            weftext_engine::inspect_native_citation_editor(second)
+                .citations
+                .len(),
+            2
+        );
+        state
+            .inner
+            .lock()
+            .unwrap()
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Target")
+            .unwrap()
+            .fields
+            .clear();
+        assert!(
+            edit_native(State(state), Extension(auth), Json(req))
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read(path).unwrap(), original);
+    }
     fn fixture() -> (tempfile::TempDir, HostedState, Auth, Value, String) {
         let (temp, state, auth, doc, _, _) = history_api::test_fixture();
         let reference = {

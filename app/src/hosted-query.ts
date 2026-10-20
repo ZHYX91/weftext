@@ -1,5 +1,7 @@
-import { action, diagnosticText, formatNativeValue, ui, type Cell } from "./data-panel";
-import { parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
+import { action, diagnosticText, formatNativeValue, ui, fieldNames, type Cell, type DataSchema } from "./data-panel";
+import { queryPlanControls } from "./query-plan-controls";
+import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
+import { directQueryField, parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
 import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor, type HostedScopeCatalog } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
@@ -8,7 +10,7 @@ import { mediaCellReferences } from "./hosted-media-state";
 type Product = "title" | "body" | "headings" | "types" | "self";
 type Resource = { resource: string; title: string; fields: string[]; products: Record<Product, boolean>; relations: string[]; definitions: boolean; definitionHistory: boolean };
 type Definition = { resource?: string; key: string; label: string; revision?: string; plan?: QueryPlan; binding?: unknown };
-type Catalog = HostedScopeCatalog & { resources: Resource[]; definitions: Definition[]; providers?: HostedProviderDescriptor[]; seriesPolicies?: HostedSeriesPolicyDescriptor[]; coverage?: "complete" | "partial"; providerCoverage?: "complete" | "partial"; unavailableDefinitions?: { resource: string; status: "unavailable" }[]; unavailableProviders?: { id: string; status: "unavailable" }[]; unavailableSeriesPolicies?: { id: string; status: "unavailable" }[] };
+type Catalog = HostedScopeCatalog & { formSchema?: DataSchema | null; resources: Resource[]; definitions: Definition[]; providers?: HostedProviderDescriptor[]; seriesPolicies?: HostedSeriesPolicyDescriptor[]; coverage?: "complete" | "partial"; providerCoverage?: "complete" | "partial"; unavailableDefinitions?: { resource: string; status: "unavailable" }[]; unavailableProviders?: { id: string; status: "unavailable" }[]; unavailableSeriesPolicies?: { id: string; status: "unavailable" }[] };
 type Draft = HostedQueryDependencies & { resources: string[]; fields: string[]; products: Product[]; relations: string[]; plan: string; parameters: string; owner: string; definition: string; selection: "current" | "pinned"; revision: string; scopeDraft?: QueryPlan["scope"]; visual?: { where: string; columns: string; order: string } };
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
 const productNames: Record<Product, string> = { title: "标题", body: "呈现正文", headings: "真实深标题", types: "笔记类型", self: "自身稳定身份" };
@@ -20,6 +22,7 @@ const text = (cell?: Cell) => !cell ? "未投影" : cell.state === "value" ? for
 
 /** Temporary controls reuse the native Query plan. Only the author buffer saves definitions. */
 export class HostedQuery {
+  private view = initialOccurrenceView();
   private epoch = 0;
   private key = "";
   private inputRevision = 0;
@@ -35,7 +38,7 @@ export class HostedQuery {
   private results = ui("section");
   private scopeControls = ui("section");
   private definitions?: HostedQueryDefinitions;
-  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void, private openMedia?: (reference: string) => Promise<void>) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void, private openMedia?: (reference: string) => Promise<void>, private fieldActions?: { canEdit(resource: string, fieldId: string): boolean; open(resource: string, fieldId: string): Promise<void> }) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
   dependencies(): HostedQueryDependencies { return exactHostedDependencies(this.draft, this.catalog); }
   get version() { return this.inputRevision; }
   refuseResult(message: string) { this.gate.clear(); this.result = undefined; this.resultInput = undefined; this.message.textContent = message; this.renderResults(); }
@@ -48,6 +51,7 @@ export class HostedQuery {
     catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "当前定义目录刷新失败，原计划和冻结结果保留。"; }
   }
   clear(removeCache = true) {
+    this.view = initialOccurrenceView();
     this.epoch++; this.inputRevision++; this.gate.clear(); this.definitions?.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
     this.host.replaceChildren(); this.host.hidden = true; this.controls.replaceChildren(); this.results.replaceChildren(); this.scopeControls.replaceChildren(); this.message.textContent = ""; this.key = "";
     this.dependenciesChanged?.();
@@ -129,6 +133,7 @@ export class HostedQuery {
     const plan = input("托管完整查询计划（JSON）", draft.plan, true), parameters = input("托管查询参数（原生值 JSON）", draft.parameters, true); plan.control.oninput = () => { draft.plan = plan.control.value; this.changed(); this.renderScopes(); }; parameters.control.oninput = () => { draft.parameters = parameters.control.value; this.changed(); }; this.controls.append(plan.host, parameters.host); this.renderScopes(); this.controls.append(this.scopeControls);
     const visual = ui("details"); visual.dataset.queryDisclosure = "visual"; visual.append(ui("summary", "", "可视化条件与高级组合"));
     let parsed: QueryPlan | undefined; try { parsed = parseQueryPlan(draft.plan); } catch { /* Invalid source is kept verbatim. */ }
+    if (parsed && !parsed.advanced && !parsed.unnest) { const proposal = structuredClone(parsed), opening = draft.plan, controls = ui("details"); controls.append(ui("summary", "", "属性筛选、排序与汇总控件"), queryPlanControls(proposal, this.catalog.formSchema ?? null, () => {}), action("采用控件提案到临时查询", () => { if (draft.plan !== opening) { this.message.textContent = "完整计划已变化，控件提案保留，未覆盖新计划。"; return; } this.writePlan(parseQueryPlan(JSON.stringify(proposal))); })); visual.append(controls); }
     const where = input("托管可视条件（CEL）", draft.visual?.where ?? parsed?.where ?? ""), columns = input("托管投影列（JSON）", draft.visual?.columns ?? JSON.stringify(parsed?.select ?? [], null, 2), true), order = input("托管排序（JSON）", draft.visual?.order ?? JSON.stringify(parsed?.order ?? [], null, 2), true);
     for (const control of [where.control, columns.control, order.control]) control.oninput = () => { draft.visual = { where: where.control.value, columns: columns.control.value, order: order.control.value }; this.changed(); };
     visual.append(where.host, columns.host, order.host, action("应用可视条件到临时计划", () => { try { const current = parseQueryPlan(draft.plan), selection = parseQueryJson(columns.control.value), sorting = parseQueryJson(order.control.value); this.writePlan(parseQueryPlan(JSON.stringify({ ...current, where: where.control.value || undefined, select: selection, order: sorting }))); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }));
@@ -187,9 +192,13 @@ export class HostedQuery {
     const status = ui("p", "hint", queryResultState(result)); status.setAttribute("role", "status"); this.results.append(status, ui("p", "hint", `范围：${result.coverage} · 当前性：${result.freshness}${result.limited ? " · 已达显示上限" : ""}${result.externalPending ? " · 外部稿待接纳" : ""}${current ? "" : " · 对应先前计划或参数"}`));
     if (result.aggregateExact === false) this.results.append(ui("p", "hint", "此汇总仅对应已知输入，不代表完整总数。"));
     for (const diagnostic of result.diagnostics) this.results.append(ui("p", "hint", diagnosticText(diagnostic)));
+    this.results.append(occurrenceViewControls(this.view, result.columns, () => this.renderResults()));
     const table = ui("table"); table.setAttribute("aria-label", "托管高级查询冻结结果"); const head = ui("tr"); for (const column of result.columns) head.append(ui("th", "", column)); head.append(ui("th", "", "独立获权导航")); table.append(head);
     for (const row of result.rows) { const line = ui("tr"); for (const column of result.columns) { const cell = row.cells[column], value = ui("td", `cell-${cell?.state ?? "unprojected"}`, text(cell)); if (this.openMedia && cell) for (const reference of mediaCellReferences(cell)) { const open = action("独立查看获权资源", async () => { try { await this.openMedia!(reference); } catch (error) { this.message.textContent = error instanceof Error ? error.message : "资源当前不可用，查询输入保留。"; } }); open.disabled = !current; value.append(open); } line.append(value); } const target = ui("td"); if (row.canOpen === true && row.resource) { const open = action("打开获权正文", () => this.openRow(row)); open.disabled = !current; target.append(open); } else target.textContent = "无正文读取资格 / 派生行"; line.append(target); table.append(line); }
-    this.results.append(table); if (result.rows.some(row => row.lifecycle === "trash")) this.results.append(ui("p", "hint", "本次含回收站来源，只读结果不提供恢复、删除或正文写入资格。")); if (!result.rows.length) this.results.append(ui("p", "hint", current && result.coverage === "complete" && result.freshness === "current" && !result.limited ? "本次明确范围内的完整空结果。" : "已知范围没有结果，不能断言完整为空。"));
+    if (this.view.kind === "table") this.results.append(table); else renderOccurrenceCards(this.results, result, this.view, original => { const row = original as HostedQueryRow; if (row.canOpen && row.resource) { const open = action("打开获权正文", () => this.openRow(row)); open.disabled = !current; return open; } return ui("span", "", "无正文读取资格 / 派生行"); });
+    if (this.view.kind === "table" && this.view.columns.length) { [...table.querySelectorAll("tr")].forEach(line => { [...line.children].forEach((cell, index) => { if (index < result.columns.length && !this.view.columns.includes(result.columns[index])) (cell as HTMLElement).hidden = true; }); }); }
+    if (current && result.freshness === "current" && this.fieldActions) { let plan: QueryPlan | null = null; try { plan = parseQueryPlan(this.draft.plan); } catch {} for (const row of result.rows) { if (row.readOnly || !row.resource || row.lifecycle === "trash") continue; for (const column of result.columns) { const field = directQueryField(plan, this.catalog.formSchema ?? null, column); if (field && this.fieldActions.canEdit(row.resource, field.id)) this.results.append(action(`编辑 ${row.resource} 的${fieldNames[field.key] ?? field.key}（独立字段权限）`, () => this.fieldActions!.open(row.resource!, field.id))); } } }
+    if (result.rows.some(row => row.lifecycle === "trash")) this.results.append(ui("p", "hint", "本次含回收站来源，只读结果不提供恢复、删除或正文写入资格。")); if (!result.rows.length) this.results.append(ui("p", "hint", current && result.coverage === "complete" && result.freshness === "current" && !result.limited ? "本次明确范围内的完整空结果。" : "已知范围没有结果，不能断言完整为空。"));
     const output = action("将原冻结查询交给 Office", () => this.output(result.queryId, { columns: result.columns, rowCount: result.rows.length, coverage: result.coverage })); output.disabled = !current || this.busy; this.results.append(output);
   }
   private async openRow(row: HostedQueryRow) { if (row.canOpen !== true || !row.resource || !this.result || this.result.superseded || this.resultInput !== this.fingerprint()) return; try { await this.open(row.resource); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }

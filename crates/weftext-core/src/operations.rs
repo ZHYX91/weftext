@@ -95,6 +95,10 @@ pub struct OperationRequest {
     deny_unknown_fields
 )]
 pub enum OperationIntent {
+    /// Frozen by the dedicated create-only library API, never generic prepare.
+    CreateLibrary {
+        options: crate::LibraryCreateOptions,
+    },
     /// Exact observed content adoption, not an edited-after repair path.
     AdoptSyncExternal {
         identity: crate::sync::SyncIdentity,
@@ -190,6 +194,18 @@ pub enum OperationIntent {
         #[serde(default)]
         allow_losses: bool,
     },
+    /// One original, immutable recognition provenance and reviewed native author
+    /// proposal share the same create-only transaction and sync publication.
+    ImportRecognized {
+        parent: String,
+        name: String,
+        format: String,
+        bytes: Vec<u8>,
+        evidence: serde_json::Value,
+        review: weftext_export::recognition::RecognitionReview,
+        #[serde(default)]
+        allow_losses: bool,
+    },
     ImportBibliography {
         parent: String,
         name: String,
@@ -204,6 +220,19 @@ pub enum OperationIntent {
         bytes: Vec<u8>,
         #[serde(default)]
         allow_losses: bool,
+    },
+    /// Exact DOCX/options and any legacy originals share one durable Core plan.
+    ImportDocxWithOptions {
+        parent: String,
+        name: String,
+        bytes: Vec<u8>,
+        #[serde(default)]
+        allow_losses: bool,
+        options: weftext_export::docx::DocxImportOptions,
+        #[serde(default)]
+        originals: Vec<weftext_export::docx::OriginalImportAsset>,
+        #[serde(default)]
+        conversion_losses: Vec<weftext_export::exchange::NativeLoss>,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -469,7 +498,7 @@ fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBind
 }
 #[derive(Clone)]
 pub(crate) struct AdmittedBasis {
-    root: String,
+    pub(crate) root: String,
     pub(crate) lifecycle: String,
     members: BTreeSet<String>,
     pub(crate) bases: Vec<String>,
@@ -1442,6 +1471,56 @@ impl Core {
         )?;
         Ok(key)
     }
+    /// Recover the original local reservation from its actual owner and key.
+    /// This does not admit a definition or grant a writer to a matching title.
+    pub fn pending_definition_operation(
+        &self,
+        root: &Path,
+        path: &Path,
+        key: &str,
+    ) -> Result<Option<String>> {
+        let node = self.managed_node(
+            root,
+            path.parent()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing owner"))?,
+            false,
+        )?;
+        if node.path != display(path) {
+            return Err(CoreError::new(
+                "identityConflict",
+                "Not the canonical owner",
+            ));
+        }
+        let owner = self
+            .admitted_binding(&node.stamp.identity)
+            .ok_or_else(|| CoreError::new("identityConflict", "Owner is not admitted"))?;
+        let directory = self.journal_path("probe", "definition-reservation");
+        let mut found = None;
+        for entry in fs::read_dir(directory.parent().unwrap())? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let Some(id) = name.strip_suffix(".definition-reservation.json") else {
+                continue;
+            };
+            let reservation: DefinitionReservation =
+                serde_json::from_slice(&fs::read(entry.path())?)?;
+            if reservation.owner_id == owner.node_id
+                && reservation.source.stamp.identity == node.stamp.identity
+                && reservation.key == key
+                && !self.committed(id)
+            {
+                if found.is_some() {
+                    return Err(CoreError::new(
+                        "operationConflict",
+                        "Ambiguous definition reservation",
+                    ));
+                }
+                found = Some(id.to_string());
+            }
+        }
+        Ok(found)
+    }
     pub fn is_definition_key_admitted(
         &self,
         root: impl AsRef<Path>,
@@ -1993,6 +2072,15 @@ impl Core {
             .map(|binding| SnapshotWitness { binding })
             .ok_or_else(|| CoreError::new("basisRequired", "The original snapshot is unavailable"))
     }
+    /// Retain the same original read evidence for another bounded consumer.
+    /// This does not observe current bytes or grant a write capability.
+    pub fn snapshot_witness(&self, base_id: &str) -> Result<SnapshotWitness> {
+        self.snapshots
+            .get(base_id)
+            .cloned()
+            .map(|binding| SnapshotWitness { binding })
+            .ok_or_else(|| CoreError::new("basisRequired", "The original snapshot is unavailable"))
+    }
     pub fn validate_snapshot_witness(
         &self,
         root: impl AsRef<Path>,
@@ -2514,19 +2602,48 @@ impl Core {
             .filter_map(|p| {
                 let revision = self
                     .read_observation_facts(&p.operation_id)
+                    .inspect_err(|error| {
+                        resource_diagnostics::error(
+                            "accepted_revision.observations",
+                            &p.operation_id,
+                            error,
+                        )
+                    })
                     .ok()?
                     .into_iter()
                     .find(|f| f.stamp == captured.stamp && f.hash == digest)?
                     .revision;
                 let commit: serde_json::Value = serde_json::from_slice(
-                    &fs::read(self.journal_path(&p.operation_id, "commit")).ok()?,
+                    &fs::read(self.journal_path(&p.operation_id, "commit"))
+                        .inspect_err(|error| {
+                            resource_diagnostics::io_error(
+                                "accepted_revision.commit_read",
+                                &p.operation_id,
+                                error,
+                            )
+                        })
+                        .ok()?,
                 )
+                .inspect_err(|_| {
+                    resource_diagnostics::branch(
+                        "accepted_revision.commit_parse",
+                        &p.operation_id,
+                        "invalidState",
+                    )
+                })
                 .ok()?;
                 Some((commit["commitSequence"].as_u64().unwrap_or(0), revision))
             })
             .collect::<Vec<_>>();
         candidates.sort_by_key(|v| v.0);
-        let (sequence, revision) = candidates.last()?;
+        let (sequence, revision) = candidates.last().or_else(|| {
+            resource_diagnostics::branch(
+                "accepted_revision.none",
+                &resource_diagnostics::stamp_token(&captured.stamp),
+                "noAcceptedFact",
+            );
+            None
+        })?;
         // Same physical bytes can acquire a different portable revision after
         // an explicit branch choice. Use the durable local decision order,
         // never HashMap traversal or timestamps. Ambiguous legacy facts fail.
@@ -2534,6 +2651,11 @@ impl Core {
             .iter()
             .any(|(s, r)| s == sequence && r != revision)
         {
+            resource_diagnostics::branch(
+                "accepted_revision.ambiguous",
+                &resource_diagnostics::stamp_token(&captured.stamp),
+                "ambiguousRevision",
+            );
             None
         } else {
             Some(revision.clone())
@@ -3295,6 +3417,7 @@ impl Core {
         if let Some(cut) = self.admitted_cuts.get_mut(&snapshot.cut_id) {
             cut.bases.extend(bases);
         }
+        self.retain_compile_dependency_cut(&root, &snapshot.cut_id, &directories)?;
         drop(handles);
         drop(guards);
         Ok(AdmittedCompileSnapshot {
@@ -3546,6 +3669,12 @@ impl Core {
             }
         }
         let mutation = match &request.intent {
+            OperationIntent::CreateLibrary { .. } => {
+                return Err(CoreError::new(
+                    "invalidIntent",
+                    "Library creation requires its dedicated create-only planner",
+                ));
+            }
             OperationIntent::CloneSync { .. }
             | OperationIntent::ApplySync { .. }
             | OperationIntent::MergeSync { .. }
@@ -3567,6 +3696,30 @@ impl Core {
                 name,
                 bytes,
                 *allow_losses,
+                None,
+                &[],
+                &[],
+                &mut preview,
+                &mut files,
+                &mut absent_dependencies,
+            )?,
+            OperationIntent::ImportDocxWithOptions {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+                options,
+                originals,
+                conversion_losses,
+            } => self.plan_docx_import(
+                &root,
+                Path::new(parent),
+                name,
+                bytes,
+                *allow_losses,
+                Some(options),
+                originals,
+                conversion_losses,
                 &mut preview,
                 &mut files,
                 &mut absent_dependencies,
@@ -3581,6 +3734,27 @@ impl Core {
                 Path::new(parent),
                 name,
                 bytes,
+                *allow_losses,
+                &mut preview,
+                &mut files,
+                &mut absent_dependencies,
+            )?,
+            OperationIntent::ImportRecognized {
+                parent,
+                name,
+                format,
+                bytes,
+                evidence,
+                review,
+                allow_losses,
+            } => self.plan_recognition_import(
+                &root,
+                Path::new(parent),
+                name,
+                format,
+                bytes,
+                evidence,
+                review,
                 *allow_losses,
                 &mut preview,
                 &mut files,
@@ -6057,6 +6231,7 @@ impl Core {
 }
 fn intent_kind(intent: &OperationIntent) -> &'static str {
     match intent {
+        OperationIntent::CreateLibrary { .. } => "createLibrary",
         OperationIntent::AdoptSyncExternal { .. } => "adoptSyncExternal",
         OperationIntent::CloneSync { .. } => "cloneSync",
         OperationIntent::ApplySync { .. } => "applySync",
@@ -6075,8 +6250,11 @@ fn intent_kind(intent: &OperationIntent) -> &'static str {
         OperationIntent::ConfigureStyle { .. } => "configureStyle",
         OperationIntent::ImportResource { .. } => "importResource",
         OperationIntent::ImportNative { .. } => "importNative",
+        OperationIntent::ImportRecognized { .. } => "importRecognized",
         OperationIntent::ImportBibliography { .. } => "importBibliography",
-        OperationIntent::ImportDocx { .. } => "importDocx",
+        OperationIntent::ImportDocx { .. } | OperationIntent::ImportDocxWithOptions { .. } => {
+            "importDocx"
+        }
     }
 }
 pub(crate) fn canonical_json_bytes(value: &serde_json::Value) -> Result<Vec<u8>> {

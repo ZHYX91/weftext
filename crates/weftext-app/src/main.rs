@@ -24,6 +24,7 @@ use tokio::{
 use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
 
 mod bibliography_import_api;
+mod builtin_module_api;
 mod citation_api;
 mod data_api;
 mod embedded_output;
@@ -33,8 +34,11 @@ mod export_conversions;
 mod history_api;
 mod hosted;
 mod knowledge_api;
+mod legacy_office;
 mod media_api;
 mod navigation_api;
+mod processing_api;
+mod recognition_api;
 mod remote_sync;
 mod sync_api;
 mod sync_wire;
@@ -64,6 +68,8 @@ struct Args {
     no_browser: bool,
     #[arg(long, hide = true)]
     render_worker: bool,
+    #[arg(long, hide = true)]
+    notes_edit_worker: bool,
 }
 
 #[derive(Clone)]
@@ -77,7 +83,9 @@ struct AppState {
     exports: Arc<Mutex<export_api::ExportStore>>,
     render_gate: Arc<tokio::sync::Semaphore>,
     sync_remote: Arc<Mutex<remote_sync::Store>>,
-    initial: Option<Value>,
+    // Route and middleware state clones share the immutable launch locator;
+    // bootstrap still reopens its original identity and current Draft.
+    initial: Option<Arc<Value>>,
 }
 
 #[derive(Clone)]
@@ -242,7 +250,14 @@ async fn boundary(State(state): State<AppState>, request: Request, next: Next) -
 struct PathRequest {
     path: String,
     root: Option<PathBuf>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CreateLibraryRequest {
+    path: String,
     operation_id: Option<String>,
+    #[serde(default)]
+    options: weftext_core::LibraryCreateOptions,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -264,6 +279,14 @@ struct RenderRequest {
     session_id: String,
     source: String,
     serial: u64,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProposalPreviewRequest {
+    session_id: String,
+    source: String,
+    serial: u64,
+    proposal_source: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -367,11 +390,37 @@ async fn inventory(State(state): State<AppState>, Json(req): Json<PathRequest>) 
         core_call(&state, move |c| c.inventory(req.path)).await?,
     )?))
 }
-async fn create_library(State(state): State<AppState>, Json(req): Json<PathRequest>) -> ApiResult {
+async fn library_creation_defaults() -> ApiResult {
+    let source = weftext_engine::DEFAULT_LIBRARY_STYLE;
+    let inspection = weftext_engine::inspect_library_style(source);
+    Ok(Json(
+        json!({"source":source,"sourceHash":inspection.source_hash,"controls":inspection.controls,"rootPresets":weftext_core::root_query_presets()}),
+    ))
+}
+async fn create_library(
+    State(state): State<AppState>,
+    Json(req): Json<CreateLibraryRequest>,
+) -> ApiResult {
     Ok(Json(value(
-        core_call(&state, move |c| match req.operation_id {
-            Some(id) => c.create_library_with_id(req.path, &id),
-            None => c.create_library(req.path),
+        core_call(&state, move |c| {
+            let operation_id = req
+                .operation_id
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            c.create_library_with_options_and_id(req.path, req.options, &operation_id)
+        })
+        .await?,
+    )?))
+}
+async fn cancel_library_creation(
+    State(state): State<AppState>,
+    Json(req): Json<CreateLibraryRequest>,
+) -> ApiResult {
+    let operation_id = req
+        .operation_id
+        .ok_or_else(|| ApiError::bad("请提供原创建操作编号；未生成替代操作"))?;
+    Ok(Json(value(
+        core_call(&state, move |c| {
+            c.cancel_library_creation_with_options_and_id(req.path, req.options, &operation_id)
         })
         .await?,
     )?))
@@ -448,26 +497,56 @@ struct WorkerRequest {
     #[serde(default)]
     frozen_files: Option<std::collections::BTreeMap<String, String>>,
 }
+#[derive(Serialize, Deserialize)]
+struct NotesWorkerRequest {
+    input: WorkerRequest,
+    request: weftext_engine::EditRequest,
+}
 async fn render(State(state): State<AppState>, Json(req): Json<RenderRequest>) -> ApiResult {
-    compile_output(state, req, false).await
+    compile_output(state, req, false, None).await
 }
 async fn paged(State(state): State<AppState>, Json(req): Json<RenderRequest>) -> ApiResult {
-    compile_output(state, req, true).await
+    compile_output(state, req, true, None).await
 }
-async fn compile_output(state: AppState, req: RenderRequest, paged: bool) -> ApiResult {
-    if req.source.len() > 2 * 1024 * 1024 {
-        return Err(ApiError::bad("预览上限为 2 MiB；原文仍可编辑保存"));
+async fn proposal_preview(
+    State(state): State<AppState>,
+    Json(req): Json<ProposalPreviewRequest>,
+) -> ApiResult {
+    compile_output(
+        state,
+        RenderRequest {
+            session_id: req.session_id,
+            source: req.source,
+            serial: req.serial,
+        },
+        false,
+        Some(req.proposal_source),
+    )
+    .await
+}
+async fn compile_output(
+    state: AppState,
+    req: RenderRequest,
+    paged: bool,
+    proposal_source: Option<String>,
+) -> ApiResult {
+    let preview_only = proposal_source.is_some();
+    let compiled_source = proposal_source.unwrap_or_else(|| req.source.clone());
+    if req.source.len() > 2 * 1024 * 1024 || compiled_source.len() > 2 * 1024 * 1024 {
+        return Err(ApiError::bad(
+            "预览上限为 2 MiB；完整输入仍保留在当前窗口，保存也受源码上限约束",
+        ));
     }
     let loc = location(&state, &req.session_id)?;
     writing_api::observe_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
     let environment = writing_api::style_environment(&state, &req.session_id).await?;
-    let citation_inputs = if weftext_engine::inspect_citation_declaration(&req.source)
+    let citation_inputs = if weftext_engine::inspect_citation_declaration(&compiled_source)
         .map_err(|e| ApiError::bad(e.to_string()))?
         .is_some()
     {
         let root = loc.root.clone();
         let path = loc.path.clone();
-        let source = req.source.clone();
+        let source = compiled_source.clone();
         let captured = core_call(&state, move |core| {
             let mut captured = core.admitted_compile_snapshot(&root, "live")?;
             let citations = citation_api::freeze_citations(&mut captured, &source, &path)?;
@@ -484,7 +563,7 @@ async fn compile_output(state: AppState, req: RenderRequest, paged: bool) -> Api
         .await
         .map_err(|_| ApiError::internal("编译服务不可用"))?;
     let input = WorkerRequest {
-        source: req.source.clone(),
+        source: compiled_source.clone(),
         path: loc.path,
         root: loc.root,
         paged,
@@ -509,14 +588,16 @@ async fn compile_output(state: AppState, req: RenderRequest, paged: bool) -> Api
     writing_api::check_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
     writing_api::check_style_environment(&state, &req.session_id, &environment).await?;
     output["serial"] = json!(req.serial);
-    output["source"] = json!(req.source);
+    output["source"] = json!(compiled_source);
     output["environmentKey"] = json!(environment.key);
     output["environment"] = json!(environment.key);
     output["sessionId"] = json!(req.session_id);
     if let Some((_, citations)) = citation_inputs {
         output["citations"] = value(citations)?;
     }
-    if paged {
+    // A proposed source never becomes the current editor version or its cached
+    // projection. Confirmation separately rechecks and patches the original Draft.
+    if paged || preview_only {
         return Ok(Json(output));
     }
     let mut cache = state
@@ -585,10 +666,81 @@ async fn render_frozen_target_worker(
 }
 
 async fn render_worker(input: WorkerRequest) -> Result<Value, ApiError> {
+    bounded_compiler_worker(value(input)?, false).await
+}
+
+#[derive(Deserialize)]
+struct NotesWorkerOutput {
+    edit: Value,
+    dependencies: Vec<weftext_engine::Dependency>,
+}
+
+async fn notes_edit_worker(
+    input: weftext_engine::FrozenRenderRequest,
+    request: weftext_engine::EditRequest,
+) -> Result<NotesWorkerOutput, ApiError> {
+    use base64::Engine as _;
+    if input.source.len() > weftext_core::MAX_SOURCE_BYTES
+        || input.files.values().map(Vec::len).sum::<usize>() > 64 * 1024 * 1024
+    {
+        return Err(ApiError::bad("尾注编辑的冻结输入超过预算，原稿保留"));
+    }
+    notes_edit_from_worker(
+        WorkerRequest {
+            source: input.source,
+            path: input.path,
+            root: input.root,
+            paged: false,
+            style: input.style,
+            frozen_files: Some(
+                input
+                    .files
+                    .into_iter()
+                    .map(|(path, bytes)| {
+                        (
+                            path,
+                            base64::engine::general_purpose::STANDARD.encode(bytes),
+                        )
+                    })
+                    .collect(),
+            ),
+        },
+        request,
+    )
+    .await
+}
+
+async fn notes_edit_from_worker(
+    input: WorkerRequest,
+    request: weftext_engine::EditRequest,
+) -> Result<NotesWorkerOutput, ApiError> {
+    let output =
+        bounded_compiler_worker(value(NotesWorkerRequest { input, request })?, true).await?;
+    serde_json::from_value(output).map_err(|_| ApiError::internal("尾注编译依赖回执无效，原稿保留"))
+}
+
+async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
     let exe = std::env::current_exe().map_err(|e| ApiError::internal(e.to_string()))?;
+    #[cfg(test)]
+    let exe = std::env::var_os("WEFTEXT_TEST_EXECUTABLE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            exe.parent()
+                .and_then(std::path::Path::parent)
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(if cfg!(windows) {
+                    "weftext.exe"
+                } else {
+                    "weftext"
+                })
+        });
     let mut command = Command::new(exe);
     command
-        .arg("--render-worker")
+        .arg(if notes_edit {
+            "--notes-edit-worker"
+        } else {
+            "--render-worker"
+        })
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -659,7 +811,194 @@ async fn render_worker(input: WorkerRequest) -> Result<Value, ApiError> {
             "编译进程停止或超出资源限额；原文已保留",
         ));
     }
-    serde_json::from_slice(&output.1).map_err(|_| ApiError::internal("编译输出无效"))
+    decode_compiler_worker_output(&output.1, notes_edit)
+}
+
+const DISPLAY_TREE_BUDGET_ENGINE_ERROR: &str = "显示树超过安全预算；请使用源码入口";
+const DISPLAY_TREE_BUDGET_MESSAGE: &str =
+    "预览显示树超过 100000 个节点或 256 层深度的安全预算；请使用源码编辑，输入已保留。";
+const RENDER_WORKER_FAILURE_KEY: &str = "weftextRenderWorkerFailure";
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RenderWorkerFailureEnvelope {
+    #[serde(rename = "weftextRenderWorkerFailure")]
+    failure: RenderWorkerFailure,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RenderWorkerFailure {
+    version: u8,
+    code: RenderWorkerFailureCode,
+}
+
+#[derive(Serialize, Deserialize)]
+enum RenderWorkerFailureCode {
+    #[serde(rename = "display_tree_budget")]
+    DisplayTreeBudget,
+}
+
+fn write_render_worker_failure(
+    error: Box<dyn std::error::Error>,
+    writer: &mut impl std::io::Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Only this engine-owned static failure gets a public code. Neither an
+    // arbitrary error's text nor stderr is a trusted failure protocol.
+    if !error
+        .downcast_ref::<weftext_engine::EngineError>()
+        .is_some_and(|error| error.0 == DISPLAY_TREE_BUDGET_ENGINE_ERROR)
+    {
+        return Err(error);
+    }
+    serde_json::to_writer(
+        &mut *writer,
+        &RenderWorkerFailureEnvelope {
+            failure: RenderWorkerFailure {
+                version: 1,
+                code: RenderWorkerFailureCode::DisplayTreeBudget,
+            },
+        },
+    )?;
+    writer.flush()?;
+    Ok(())
+}
+
+fn decode_compiler_worker_output(bytes: &[u8], notes_edit: bool) -> Result<Value, ApiError> {
+    let output: Value =
+        serde_json::from_slice(bytes).map_err(|_| ApiError::internal("编译输出无效"))?;
+    if notes_edit {
+        return Ok(output);
+    }
+    let object = output
+        .as_object()
+        .ok_or_else(|| ApiError::internal("编译输出无效"))?;
+    if !object.contains_key(RENDER_WORKER_FAILURE_KEY) {
+        return Ok(output);
+    }
+    // Struct decoding rejects duplicate/unknown fields; the object checks also
+    // exclude JSON sequence representations of a named struct. A nested author
+    // field in a normal RenderOutput never enters this private protocol.
+    let exact_objects = object.len() == 1
+        && output[RENDER_WORKER_FAILURE_KEY]
+            .as_object()
+            .is_some_and(|object| object.len() == 2);
+    if exact_objects
+        && matches!(
+            serde_json::from_slice::<RenderWorkerFailureEnvelope>(bytes),
+            Ok(RenderWorkerFailureEnvelope {
+                failure: RenderWorkerFailure {
+                    version: 1,
+                    code: RenderWorkerFailureCode::DisplayTreeBudget,
+                },
+            })
+        )
+    {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "display_tree_budget",
+            DISPLAY_TREE_BUDGET_MESSAGE,
+        ));
+    }
+    Err(ApiError::internal("编译输出无效"))
+}
+
+#[cfg(test)]
+mod render_worker_codec_tests {
+    use super::*;
+
+    const FAILURE: &[u8] =
+        br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}"#;
+
+    #[test]
+    fn exact_typed_engine_budget_emits_only_the_private_code() {
+        let mut output = Vec::new();
+        write_render_worker_failure(
+            Box::new(weftext_engine::EngineError(
+                DISPLAY_TREE_BUDGET_ENGINE_ERROR.into(),
+            )),
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(output, FAILURE);
+        let error = decode_compiler_worker_output(&output, false).unwrap_err();
+        assert_eq!(error.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(error.code, "display_tree_budget");
+        assert_eq!(error.message, DISPLAY_TREE_BUDGET_MESSAGE);
+        assert!(error.details.is_none());
+    }
+
+    #[test]
+    fn other_types_and_non_exact_engine_errors_write_nothing() {
+        let errors: Vec<Box<dyn std::error::Error>> = vec![
+            Box::new(std::io::Error::other(DISPLAY_TREE_BUDGET_ENGINE_ERROR)),
+            Box::new(weftext_engine::EngineError(format!(
+                "{DISPLAY_TREE_BUDGET_ENGINE_ERROR}\nprivate-source-or-path"
+            ))),
+            Box::new(weftext_engine::EngineError(
+                "unrelated private-source-or-path".into(),
+            )),
+        ];
+        for original in errors {
+            let original_message = original.to_string();
+            let mut output = Vec::new();
+            let returned = write_render_worker_failure(original, &mut output).unwrap_err();
+            assert_eq!(returned.to_string(), original_message);
+            assert!(output.is_empty());
+        }
+    }
+
+    #[test]
+    fn invalid_or_unknown_failure_envelopes_use_only_fixed_invalid_output() {
+        for bytes in [
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget"}}"#.as_slice(),
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"private-unknown-code"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":"1","code":"display_tree_budget"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget","message":"private-source-or-path"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"},"extra":"private-source-or-path"}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"version":1,"code":"display_tree_budget"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget","code":"display_tree_budget"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"},"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}"#,
+            br#"{"weftextRenderWorkerFailure":[1,"display_tree_budget"]}"#,
+            br#"[{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}]"#,
+            br#"{"weftextRenderWorkerFailure":null}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}} trailing"#,
+            br#"{"weftextRenderWorkerFailure":"#,
+        ] {
+            let error = decode_compiler_worker_output(bytes, false).unwrap_err();
+            assert_eq!(error.code, "internal");
+            assert_eq!(error.message, "编译输出无效");
+            assert!(error.details.is_none());
+        }
+    }
+
+    #[test]
+    fn ordinary_outputs_and_nested_author_fields_are_unchanged() {
+        for ordinary in [
+            json!({"ok":true,"tree":null,"sourceInfo":{},"products":null}),
+            json!({"ok":false,"diagnostics":[{"message":DISPLAY_TREE_BUDGET_ENGINE_ERROR}],"tree":{"attrs":{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}}}),
+        ] {
+            assert_eq!(
+                decode_compiler_worker_output(&serde_json::to_vec(&ordinary).unwrap(), false)
+                    .unwrap(),
+                ordinary
+            );
+        }
+    }
+
+    #[test]
+    fn notes_output_keeps_its_existing_decoder() {
+        let output = serde_json::from_slice::<Value>(FAILURE).unwrap();
+        assert_eq!(
+            decode_compiler_worker_output(FAILURE, true).unwrap(),
+            output
+        );
+        let ordinary = json!({"edit":{"source":"retained","weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}},"dependencies":[]});
+        assert_eq!(
+            decode_compiler_worker_output(&serde_json::to_vec(&ordinary).unwrap(), true).unwrap(),
+            ordinary
+        );
+    }
 }
 
 fn find_node<'a>(node: &'a Value, key: &str) -> Option<&'a Value> {
@@ -863,6 +1202,55 @@ async fn assets(request: Request) -> Response {
         .into_response()
 }
 
+fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
+    use base64::Engine as _;
+    use std::io::{Read, Write};
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .take(96 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 96 * 1024 * 1024 {
+        return Err("Frozen note edit exceeds input budget".into());
+    }
+    let NotesWorkerRequest { input, request } = serde_json::from_slice(&bytes)?;
+    let mut files = std::collections::BTreeMap::new();
+    let mut total = 0usize;
+    for (path, bytes) in input
+        .frozen_files
+        .ok_or("A frozen note edit requires exact admitted files")?
+    {
+        let decoded = base64::engine::general_purpose::STANDARD.decode(bytes)?;
+        total = total
+            .checked_add(decoded.len())
+            .ok_or("Note edit size overflow")?;
+        if total > 64 * 1024 * 1024 {
+            return Err("Frozen note files exceed budget".into());
+        }
+        files.insert(path, decoded);
+    }
+    if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
+        return Err("Note edit source exceeds budget".into());
+    }
+    let engine = weftext_engine::Engine::new_with_system_fonts(false)?;
+    let output = engine.edit_notes_frozen_with_dependencies(
+        &weftext_engine::FrozenRenderRequest {
+            source: input.source,
+            path: input.path,
+            root: input.root,
+            files,
+            style: input.style,
+        },
+        &request,
+    )?;
+    let output =
+        serde_json::to_vec(&json!({"edit": output.edit, "dependencies": output.dependencies}))?;
+    if output.len() > 24 * 1024 * 1024 {
+        return Err("Note edit result exceeds budget".into());
+    }
+    std::io::stdout().write_all(&output)?;
+    Ok(())
+}
+
 fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
     use base64::Engine as _;
     use std::io::{Read, Write};
@@ -926,7 +1314,11 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     if args.render_worker {
-        return worker_main();
+        return worker_main()
+            .or_else(|error| write_render_worker_failure(error, &mut std::io::stdout().lock()));
+    }
+    if args.notes_edit_worker {
+        return notes_worker_main();
     }
     let data = args.data_dir.unwrap_or_else(|| {
         std::env::var_os("LOCALAPPDATA")
@@ -934,15 +1326,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(std::env::temp_dir)
             .join("Weftext-MVP")
     });
-    let mut core = Core::new(std::path::absolute(data)?)?;
+    let data = std::path::absolute(data)?;
+    let mut core = Core::new(&data)?;
+    let data = std::fs::canonicalize(data)?;
     if let Some(config) = args.server_config {
-        return hosted::serve(core, config).await;
+        return hosted::serve(core, config, data.join("legacy-office")).await;
     }
     let initial = if let Some(path) = args.open {
-        Some(serde_json::to_value(core.open(
+        Some(Arc::new(serde_json::to_value(core.open(
             std::path::absolute(path)?,
             args.root.map(std::path::absolute).transpose()?,
-        )?)?)
+        )?)?))
     } else {
         None
     };
@@ -961,7 +1355,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         locations: Arc::new(Mutex::new(HashMap::new())),
         renders: Arc::new(Mutex::new(HashMap::new())),
         editor_versions: Arc::new(Mutex::new(HashMap::new())),
-        exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+        exports: Arc::new(Mutex::new(
+            crate::export_api::ExportStore::with_legacy_root(data.join("legacy-office")),
+        )),
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         sync_remote: Arc::new(Mutex::new(remote_sync::Store::default())),
         initial,
@@ -971,10 +1367,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let app = Router::new()
         .merge(writing_api::router())
+        .merge(builtin_module_api::router())
         .merge(data_api::router())
         .merge(embedded_query_api::router())
         .merge(history_api::router())
         .merge(knowledge_api::router())
+        .merge(processing_api::router())
+        .merge(recognition_api::router())
         .merge(media_api::router())
         .merge(navigation_api::router())
         .merge(sync_api::router())
@@ -984,12 +1383,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/open", post(open))
         .route("/api/library/open", post(inventory))
         .route("/api/library/create", post(create_library))
+        .route(
+            "/api/library/create-defaults",
+            get(library_creation_defaults),
+        )
+        .route("/api/library/create-cancel", post(cancel_library_creation))
         .route("/api/note/create", post(create_note))
         .route("/api/save", post(save))
         .route("/api/save-as", post(save_as))
         .route("/api/draft", post(draft))
         .route("/api/draft/resolve", post(resolve_draft))
         .route("/api/render", post(render))
+        .route("/api/editor/preview", post(proposal_preview))
         .route("/api/paged", post(paged))
         .route("/api/edit-literal", post(edit_literal))
         .route("/api/link/resolve", post(link_resolve))

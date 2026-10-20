@@ -554,7 +554,19 @@ class V05Completion(features.LocalFeatures):
         grouped_plan = {'types': ['task'], 'group': {
             'keys': [{'name': 'status', 'expr': 'status'}],
             'aggregates': [{'name': 'count', 'op': 'count'}]}}
-        saved = self.definition(doc, grouped_plan, 'weftext-query-complex')
+        grouped = self.definition(doc, grouped_plan, 'weftext-query-grouped')
+        doc = grouped['document']
+        grouped_query = self.occurrence(self.discover(doc), 'weftext-query-grouped')
+        self.assertTrue(grouped_query['builderSupported'])
+        grouped_edit = self.edit_embedded(doc, doc['source'], grouped_query['id'],
+            plan={**grouped_query['plan'], 'take': 10})
+        self.assert_patches(doc['source'], grouped_edit, data=True)
+        self.assertEqual(Path(doc['path']).read_bytes(), doc['source'].encode())
+        # Simple grouping is now supported. A distinct producer remains an
+        # advanced source-only plan, preserving this negative boundary.
+        complex_plan = {**self.status_plan(), 'advanced': {
+            'distinct': [{'name': 'status', 'expr': 'status'}]}}
+        saved = self.definition(doc, complex_plan, 'weftext-query-complex')
         doc = saved['document']
         original = Path(doc['path']).read_bytes()
         discovery = self.discover(doc, serial=1)
@@ -618,7 +630,7 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(occurrence['kind'], 'call')
         self.assertEqual(occurrence['call']['owner'], owner_ref)
         self.assertEqual(occurrence['call']['selection']['revision'], revision)
-        self.assertFalse(occurrence['builderSupported'])
+        self.assertTrue(occurrence['builderSupported'])
         result = self.run_embedded(caller, caller['source'], occurrence['id'])['result']
         self.assertEqual([row['path'] for row in result['rows']], [task['path']])
         self.assertFalse(result['access']['resultGrantsWriteAccess'])
@@ -629,9 +641,15 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(provenance['definitionRevision'], revision)
         self.assertEqual(provenance['sourceHash'], features.sha(first['document']['source']))
         self.assertFalse(provenance['draftPreview'])
-        failure = self.edit_embedded(caller, caller['source'], occurrence['id'],
-                                     plan=self.status_plan(), status=409)
-        self.assertEqual(failure['error']['code'], 'embeddedQueryBuilderUnsupported')
+        current_plan = json.loads(json.dumps(occurrence['plan']))
+        current_plan['advanced']['call']['selection'] = {'mode': 'current', 'key': key}
+        current_edit = self.edit_embedded(caller, caller['source'], occurrence['id'],
+                                         plan=current_plan)
+        self.assert_patches(caller['source'], current_edit, data=True)
+        self.assertRegex(current_edit['source'], r'(?:"mode"|mode):\s*"current"')
+        self.assertIn(owner_ref, current_edit['source'])
+        self.assertEqual(Path(owner['path']).read_bytes(), owner_before)
+        self.assertEqual(Path(caller['path']).read_bytes(), caller_before)
         owner_discovery = self.discover(owner)
         owner_occurrence = self.occurrence(owner_discovery, 'weftext-query-first')
         borrowed_range = self.edit_embedded(caller, caller['source'], owner_occurrence['id'],

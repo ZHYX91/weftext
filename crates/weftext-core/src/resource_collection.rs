@@ -58,6 +58,27 @@ impl ResourceCollectionWitness {
     }
 }
 
+fn diagnostic_witness_token(
+    owner: &str,
+    manifest: &SnapshotWitness,
+    revision: Option<&str>,
+) -> String {
+    let stamp = manifest
+        .binding
+        .captured
+        .as_ref()
+        .map(|captured| resource_diagnostics::stamp_token(&captured.stamp))
+        .unwrap_or_else(|| {
+            format!(
+                "absent:{}:{}:{}",
+                manifest.binding.parent.volume,
+                manifest.binding.parent.index,
+                manifest.binding.parent.created
+            )
+        });
+    format!("{owner}:{stamp}:{}", revision.unwrap_or("none"))
+}
+
 impl Core {
     /// Qualify the actual original DOCX-produced Node in one preconfigured
     /// import source slot. Moving it requires an explicit expected NodeRef at
@@ -82,8 +103,10 @@ impl Core {
             let Some(operation) = &plan.transaction else {
                 continue;
             };
-            let OperationIntent::ImportDocx { parent, name, .. } = &operation.request.intent else {
-                continue;
+            let (parent, name) = match &operation.request.intent {
+                OperationIntent::ImportDocx { parent, name, .. }
+                | OperationIntent::ImportDocxWithOptions { parent, name, .. } => (parent, name),
+                _ => continue,
             };
             let Mutation::CreateTree {
                 existing_target: false,
@@ -161,10 +184,31 @@ impl Core {
     ) -> Result<QualifiedResourceCollection> {
         let root = absolute_path(root)?;
         let owner_path = absolute_path(owner_path)?;
-        let owner = self.qualified_query_node_at(&root, &owner_path, expected_owner, lifecycle)?;
-        let owner_guard = ParentGuard::acquire(&owner_path)?;
-        let identity = stamp(&owner_guard.open_placement_file()?)?.identity;
+        let owner = self
+            .qualified_query_node_at(&root, &owner_path, expected_owner, lifecycle)
+            .inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.owner.qualify",
+                    &expected_owner.node_id,
+                    error,
+                )
+            })?;
+        let owner_guard = ParentGuard::acquire(&owner_path).inspect_err(|error| {
+            resource_diagnostics::error("collection.owner.guard", &expected_owner.node_id, error)
+        })?;
+        let identity = stamp(&owner_guard.open_placement_file().inspect_err(|error| {
+            resource_diagnostics::error("collection.owner.open", &expected_owner.node_id, error)
+        })?)
+        .inspect_err(|error| {
+            resource_diagnostics::error("collection.owner.stamp", &expected_owner.node_id, error)
+        })?
+        .identity;
         let birth = self.admitted_binding(&identity).ok_or_else(|| {
+            resource_diagnostics::branch(
+                "collection.owner.birth",
+                &expected_owner.node_id,
+                "missingAdmission",
+            );
             CoreError::new(
                 "resourceOwner",
                 "The original resource owner is unavailable",
@@ -173,6 +217,11 @@ impl Core {
         if birth.workspace_id != expected_owner.workspace_id
             || birth.node_id != expected_owner.node_id
         {
+            resource_diagnostics::branch(
+                "collection.owner.binding",
+                &expected_owner.node_id,
+                "ownerMismatch",
+            );
             return Err(CoreError::new(
                 "resourceOwner",
                 "The selected resource owner changed",
@@ -180,9 +229,22 @@ impl Core {
         }
         let directory = owner_path.parent().unwrap();
         let manifest_path = directory.join("weftext.resources.json");
-        self.check_pending(&manifest_path)?;
-        let guard = ParentGuard::acquire(&manifest_path)?;
+        self.check_pending(&manifest_path).inspect_err(|error| {
+            resource_diagnostics::error(
+                "collection.manifest.pending",
+                &expected_owner.node_id,
+                error,
+            )
+        })?;
+        let guard = ParentGuard::acquire(&manifest_path).inspect_err(|error| {
+            resource_diagnostics::error("collection.manifest.guard", &expected_owner.node_id, error)
+        })?;
         if guard.directory_coordinates()? != owner.coordinate.parent().unwrap() {
+            resource_diagnostics::branch(
+                "collection.manifest.parent",
+                &expected_owner.node_id,
+                "parentMismatch",
+            );
             return Err(CoreError::new(
                 "staleBase",
                 "The resource owner's actual directory changed",
@@ -192,21 +254,52 @@ impl Core {
             .open_file(false, false)
         {
             Ok(mut handle) => {
-                let observed = stamp(&handle)?;
-                self.check_pending_identity(&observed.identity)?;
-                let bytes = read_source(&mut handle)?;
+                let observed = stamp(&handle).inspect_err(|error| {
+                    resource_diagnostics::error(
+                        "collection.manifest.stamp",
+                        &expected_owner.node_id,
+                        error,
+                    )
+                })?;
+                self.check_pending_identity(&observed.identity)
+                    .inspect_err(|error| {
+                        resource_diagnostics::error(
+                            "collection.manifest.identity_pending",
+                            &expected_owner.node_id,
+                            error,
+                        )
+                    })?;
+                let bytes = read_source(&mut handle).inspect_err(|error| {
+                    resource_diagnostics::error(
+                        "collection.manifest.read",
+                        &expected_owner.node_id,
+                        error,
+                    )
+                })?;
                 let captured = CapturedFile {
                     path: display(&manifest_path),
                     stamp: observed,
                     bytes,
                 };
                 let revision = self.accepted_revision(&captured).ok_or_else(|| {
+                    resource_diagnostics::branch(
+                        "collection.manifest.accepted",
+                        &resource_diagnostics::stamp_token(&captured.stamp),
+                        "noAcceptedRevision",
+                    );
                     CoreError::new(
                         "resourceManifestUnavailable",
                         "Collection membership requires a currently accepted exact manifest",
                     )
                 })?;
-                let document: serde_json::Value = serde_json::from_slice(&captured.bytes)?;
+                let document: serde_json::Value = serde_json::from_slice(&captured.bytes)
+                    .inspect_err(|_| {
+                        resource_diagnostics::branch(
+                            "collection.manifest.parse",
+                            &expected_owner.node_id,
+                            "invalidState",
+                        )
+                    })?;
                 let records = document["resources"]
                     .as_array()
                     .filter(|_| document["version"] == 1)
@@ -257,14 +350,28 @@ impl Core {
                     });
                 }
                 let unrecognized = records.len() - entries.len();
-                self.validate_query_node_witness(&root, &owner.witness)?;
+                self.validate_query_node_witness(&root, &owner.witness)
+                    .inspect_err(|error| {
+                        resource_diagnostics::error(
+                            "collection.owner.recheck_before_release",
+                            &expected_owner.node_id,
+                            error,
+                        )
+                    })?;
                 (Some(captured), entries, unrecognized, Some(revision))
             }
             Err(error) if error.code == "missing" => {
                 self.require_resource_collection_uninitialized(&birth)?;
                 (None, Vec::new(), 0, None)
             }
-            Err(error) => return Err(error),
+            Err(error) => {
+                resource_diagnostics::error(
+                    "collection.manifest.open",
+                    &expected_owner.node_id,
+                    &error,
+                );
+                return Err(error);
+            }
         };
         let manifest = SnapshotWitness {
             binding: SnapshotBinding {
@@ -275,8 +382,36 @@ impl Core {
         };
         // Recheck the original observation after its handle is released;
         // consumers retain this exact witness for their final read decision.
-        self.validate_query_node_witness(&root, &owner.witness)?;
-        self.validate_snapshot_witness(&root, &manifest_path, &manifest)?;
+        let diagnostic_token = resource_diagnostics::enabled().then(|| {
+            diagnostic_witness_token(&expected_owner.node_id, &manifest, revision.as_deref())
+        });
+        self.validate_query_node_witness(&root, &owner.witness)
+            .inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.owner.recheck_after_release",
+                    diagnostic_token.as_deref().unwrap_or("disabled"),
+                    error,
+                )
+            })?;
+        self.validate_snapshot_witness(&root, &manifest_path, &manifest)
+            .inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.manifest.recheck_after_release",
+                    diagnostic_token.as_deref().unwrap_or("disabled"),
+                    error,
+                )
+            })?;
+        if let Some(token) = &diagnostic_token {
+            resource_diagnostics::branch(
+                "collection.capture",
+                token,
+                if revision.is_some() {
+                    "accepted"
+                } else {
+                    "uninitialized"
+                },
+            );
+        }
         Ok(QualifiedResourceCollection {
             owner: expected_owner.clone(),
             lifecycle: lifecycle.into(),
@@ -429,23 +564,61 @@ impl Core {
         root: &Path,
         witness: &ResourceCollectionWitness,
     ) -> Result<()> {
+        let diagnostic_token = resource_diagnostics::enabled().then(|| {
+            diagnostic_witness_token(
+                &witness.owner_birth.node_id,
+                &witness.manifest,
+                witness.revision.as_deref(),
+            )
+        });
         if absolute_path(root)? != witness.root {
+            resource_diagnostics::branch(
+                "collection.recheck.root",
+                diagnostic_token.as_deref().unwrap_or("disabled"),
+                "rootMismatch",
+            );
             return Err(CoreError::new(
                 "outsideRoot",
                 "Collection evidence belongs to another configured root",
             ));
         }
-        self.validate_query_node_witness(root, &witness.owner_witness)?;
-        self.validate_snapshot_witness(root, &witness.manifest.binding.path, &witness.manifest)?;
+        self.validate_query_node_witness(root, &witness.owner_witness)
+            .inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.recheck.owner",
+                    diagnostic_token.as_deref().unwrap_or("disabled"),
+                    error,
+                )
+            })?;
+        self.validate_snapshot_witness(root, &witness.manifest.binding.path, &witness.manifest)
+            .inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.recheck.manifest",
+                    diagnostic_token.as_deref().unwrap_or("disabled"),
+                    error,
+                )
+            })?;
         if let Some(captured) = &witness.manifest.binding.captured {
             if self.accepted_revision(captured) != witness.revision {
+                resource_diagnostics::branch(
+                    "collection.recheck.accepted",
+                    diagnostic_token.as_deref().unwrap_or("disabled"),
+                    "acceptedRevisionMismatch",
+                );
                 return Err(CoreError::new(
                     "resourceVersion",
                     "The original collection revision qualification changed",
                 ));
             }
         } else {
-            self.require_resource_collection_uninitialized(&witness.owner_birth)?;
+            self.require_resource_collection_uninitialized(&witness.owner_birth)
+                .inspect_err(|error| {
+                    resource_diagnostics::error(
+                        "collection.recheck.uninitialized",
+                        diagnostic_token.as_deref().unwrap_or("disabled"),
+                        error,
+                    )
+                })?;
         }
         Ok(())
     }

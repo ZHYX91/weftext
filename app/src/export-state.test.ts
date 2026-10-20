@@ -10,6 +10,20 @@ function transport(overrides: Partial<OutputTransport> = {}): OutputTransport {
   return { id: () => "request-a", prepare: async request => prepared(request), confirm: async request => ({ id: request.id, status: "confirmed", digest: hash, length: 3 }), download: async () => new Blob(["abc"]), digest: async () => hash, ...overrides };
 }
 
+test("legacy output freezes its DOCX review inputs and cancellation signals the original request without unlocking it", async () => {
+  let resolve!: (value: PreparedOutput) => void; let request!: ExportRequest; const cancelled: string[] = [];
+  const controller = new OutputController(transport({ prepare: input => { request = input; return new Promise(done => resolve = done); }, cancel: async input => { cancelled.push(input.requestId); } }), basis(), undefined, [{ occurrenceId: "diagram-neighbor", queryId: "query-frozen" }]);
+  controller.setDraft({ format: "doc", legacyBackend: "libreoffice", reviewMode: "changes", includeResolved: true }); const pending = controller.prepare();
+  assert.equal(controller.busy, true); await controller.cancel(); assert.deepEqual(cancelled, ["request-a"]); assert.equal(controller.busy, true); assert.equal(controller.locked, true);
+  assert.equal(request.format, "doc"); assert.equal(request.legacyBackend, "libreoffice"); assert.equal(request.reviewMode, "changes"); assert.equal(request.includeResolved, true); assert.deepEqual(request.embeddedQueries, [{ occurrenceId: "diagram-neighbor", queryId: "query-frozen" }]);
+  resolve(prepared(request)); await pending;
+});
+test("an unknown persistent external outcome keeps the same immutable request instead of launching a new conversion", async () => {
+  const requests: ExportRequest[] = []; const controller = new OutputController(transport({ prepare: async input => { requests.push(input); return { id: input.requestId, requestId: input.requestId, status: "failed", code: "resultUnknown", message: "原转换结果未知" }; } }), basis());
+  controller.setDraft({ format: "wps", legacyBackend: "configured" }); await assert.rejects(controller.prepare(), /未知/); assert.equal(controller.uncertain, "prepare");
+  await assert.rejects(controller.prepare()); assert.deepEqual(requests[0], requests[1]); assert.throws(() => controller.setDraft({ legacyBackend: "libreoffice" }));
+});
+
 test("output freezes the original draft and server-retained Query; no later document or Query changes enter preparation", async () => {
   const current = basis(); const query = { queryId: "query-a", label: "部分结果", rowCount: 2, coverage: "partial" as const, freshness: "current" as const, limited: true }; let request: ExportRequest | undefined;
   const controller = new OutputController(transport({ prepare: async value => { request = value; return prepared(value); } }), current, query);

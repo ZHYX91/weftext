@@ -15,6 +15,28 @@ from test_hosted_history import HostedHistory
 
 
 class HostedKnowledgeLinks(HostedHistory):
+    def test_links_stage_three_fragments_diagnostics_and_revoked_candidates(self):
+        target=self.replace_body('Other','目标笔记','= 路线图 <route>\n\n正文')
+        ref=self.call('navigation/ref',{'sessionId':target['sessionId']})['reference']
+        secret=self.replace_body('Secret','隐藏笔记','= 私有片段 <secret-label>')
+        shared=self.replace_body('Shared','当前笔记','路线图 route 私有片段 secret-label\n\n#link("'+ref+'#lost")[坏片段]\n#link("'+ref.replace(ref.rsplit('/',1)[1],uid())+'")[缺失]')
+        basis=self.basis(shared,serial=3);profile=self.links(basis)
+        issue=next(i for i in profile['diagnostics']['issues'] if i['resolution']['status']=='fragmentMissing')
+        self.assertEqual(issue['resolution']['target']['resource'],'Other')
+        self.assertEqual(len(issue['sourceHash']),64)
+        self.assertGreater(next(n for n in profile['diagnostics']['nodes'] if n['node']['resource']=='Other')['incoming'],0)
+        fragment,hit,candidate=next((f,h,c) for f in profile['mentions']['fragments'] for h in f['hits'] for c in h['candidates'] if c['provenance']=='heading' and c['fragment']=='route')
+        intent=dict(kind='mention',fragmentId=fragment['id'],startScalar=hit['startScalar'],endScalar=hit['endScalar'],target=candidate['target']['nodeRef'],fragment='route')
+        proposal=self.call('knowledge-links/convert',dict(basis=basis,snapshot=profile['basis']['snapshot'],intent=intent))
+        self.assertIn(ref+'#route',proposal['patch']['after']);self.assertFalse(proposal['saved'])
+        self.assertEqual((self.root/'Shared/Shared.typ').read_text('utf-8'),shared['source'])
+        bob=self.open(actor='bob');limited=self.links(self.basis(bob,actor='bob'),'bob')
+        self.assertFalse(any(c['fragment']=='secret-label' for f in limited['mentions']['fragments'] for h in f['hits'] for c in h['candidates']))
+        self.policy(lambda users:users['alice']['grants'].pop('Other'))
+        self.call('knowledge-links/convert',dict(basis=basis,snapshot=profile['basis']['snapshot'],intent=intent),status=410)
+        reopened=self.open();fresh=self.links(self.basis(reopened,serial=4))
+        self.assertFalse(any(c['fragment']=='route' for f in fresh['mentions']['fragments'] for h in f['hits'] for c in h['candidates']))
+
     def replace_body(self, resource, title, body, aliases=()):
         doc = self.open(resource)
         node = self.call('navigation/ref', {'sessionId': doc['sessionId']})['nodeRef']['nodeId']

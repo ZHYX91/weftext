@@ -20,13 +20,15 @@ export interface HostedLinksResolution {
   asset?: { asset: string; title: string; reference: string } | null; reference?: string | null; canOpen: boolean;
 }
 export interface HostedLinksOccurrence { from: number; to: number; utf16From: number; utf16To: number; target: string; kind: string; destinationSlot?: HostedLinksRange | null }
-export interface HostedLinksEdge { source: HostedLinksNode; occurrence: HostedLinksOccurrence; raw: string; resolution: HostedLinksResolution; editable: boolean }
+export interface HostedLinksEdge { source: HostedLinksNode; sourceHash?: string; occurrence: HostedLinksOccurrence; raw: string; resolution: HostedLinksResolution; editable: boolean }
 export interface HostedLinksHit {
+  candidates?: { target: HostedLinksNode; fragment?: string | null; term: string; provenance: string }[];
   startScalar: number; endScalar: number; startUtf16: number; endUtf16: number;
   terms: string[]; writable: boolean; sourceRange?: HostedLinksRange | null;
   lane?: number | null; component: number; targets: HostedLinksNode[];
 }
 export interface HostedLinksProfile {
+  diagnostics?: { coverage: "complete" | "partial"; scannedNodes: number; issues: HostedLinksEdge[]; propertyIssues?: { source: HostedLinksNode; fieldId: string; itemPath: string[]; address: string; resolution: HostedLinksEdge["resolution"] }[]; nodes: { node: HostedLinksNode; incoming: number; outgoing: number; invalidOutgoing: number; state: string }[] };
   basis: HostedLinksBasis; scope: "configuredAuthorizedManagedSources"; writable: boolean; fileConversion: false;
   links: { coverage: "complete" | "partial"; outgoing: HostedLinksEdge[]; incomingId: HostedLinksEdge[]; incomingPath: HostedLinksEdge[] };
   renderedLinks: { compileIdentity: string; target: "html"; occurrenceOrdinal: number; destination: string; origin: string; resolution: HostedLinksResolution }[];

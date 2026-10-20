@@ -26,6 +26,8 @@ export class HostedFields {
   private readonly message = ui("p", "hint");
   private readonly results = ui("section");
   constructor(private host: HTMLElement, private request: Request, private onQuery?: (id: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void) { this.clear(false); }
+  canEdit(resource: string, fieldId: string): boolean { return this.grants.some(grant => grant.resource === resource && grant.fieldId === fieldId && grant.write); }
+  async openGranted(resource: string, fieldId: string): Promise<void> { const grant = this.grants.find(grant => grant.resource === resource && grant.fieldId === fieldId && grant.write); if (!grant) throw new Error("此字段没有独立写入权限"); await this.run(() => this.open(grant)); this.host.scrollIntoView({ block: "start" }); this.editor.querySelector<HTMLElement>("input,select,textarea")?.focus({ preventScroll: true }); }
   clear(removeCache = true) {
     this.epoch++; this.profile = undefined; this.selected = undefined; this.draft = undefined;
     this.grants = []; this.busy = false; this.form = undefined; this.formDraft = undefined; this.unreadableDraft = undefined; this.picker.replaceChildren(); this.editor.replaceChildren(); this.results.replaceChildren();

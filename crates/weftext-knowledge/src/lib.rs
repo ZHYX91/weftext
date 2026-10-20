@@ -2,14 +2,18 @@
 //! Inputs contain only the current authorized scope; coverage never describes hidden data.
 mod annotations;
 mod copy;
+mod diagnostics;
 mod links;
 mod mentions;
+mod processing_settings;
 mod proofreading;
 
 pub use annotations::*;
 pub use copy::*;
+pub use diagnostics::*;
 pub use links::*;
 pub use mentions::*;
+pub use processing_settings::*;
 pub use proofreading::*;
 
 use serde::{Deserialize, Serialize};

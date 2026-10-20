@@ -1,6 +1,7 @@
 /** Presentation state only. Core owns discovery, identities and write qualification. */
 export interface KnowledgeNodeRef { workspaceId: string; nodeId: string; title?: string; path?: string }
 export interface KnowledgeMention {
+  candidates?: { target: KnowledgeNodeRef; fragment?: string | null; term: string; provenance: string }[];
   startScalar: number;
   endScalar: number;
   startUtf16: number;

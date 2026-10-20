@@ -72,6 +72,7 @@ pub fn convert_to_nodes<'a>(
         output: EcoVec::new(),
         trailing: None,
         text_css: None,
+        text_lang: None,
     };
 
     for (child, styles) in children {
@@ -93,7 +94,16 @@ fn handle(converter: &mut Converter, child: &Content, styles: StyleChain) -> Sou
     } else if let Some(elem) = child.to_packed::<HtmlElem>() {
         handle_html_elem(converter, elem, styles)?;
     } else if child.is::<SpaceElem>() {
-        converter.push(HtmlNode::text(' ', child.span()));
+        // Realization already collapsed ordinary native spaces and retained
+        // the first space's styles. Preserve those exact styles without
+        // turning a normal space into an explicitly protected literal one.
+        let mut css = crate::weftext_styles::text_css(styles);
+        css.remove("white-space");
+        converter.text_css = Some(css);
+        converter.text_lang = Some(native_language(styles));
+        converter.push_text(' ', child.span());
+        converter.text_css = None;
+        converter.text_lang = None;
     } else if let Some(elem) = child.to_packed::<TextElem>() {
         if !matches!(
             styles.get_ref(TextElem::fill),
@@ -110,8 +120,10 @@ fn handle(converter: &mut Converter, child: &Content, styles: StyleChain) -> Sou
             elem.text.clone()
         };
         converter.text_css = Some(crate::weftext_styles::text_css(styles));
+        converter.text_lang = Some(native_language(styles));
         handle_text(converter, text, elem.span());
         converter.text_css = None;
+        converter.text_lang = None;
     } else if let Some(elem) = child.to_packed::<HElem>()
         && elem.amount.is_zero()
     {
@@ -236,6 +248,9 @@ fn handle_html_elem(
     }
 
     let mut attrs = elem.attrs.get_cloned(styles);
+    // This value follows the actual native style chain, including local
+    // overrides and an explicitly absent region. No OS/UI locale is used.
+    attrs.push(attr::lang, native_language(styles));
     if let Some(role) = role {
         attrs.push(attr::role, role);
     }
@@ -292,7 +307,7 @@ fn handle_text(converter: &mut Converter, text: EcoString, span: Span) {
     }
 
     if converter.whitespace == Whitespace::Pre {
-        converter.push(HtmlNode::Text(text, span));
+        converter.push_text(text, span);
         return;
     }
 
@@ -358,6 +373,19 @@ fn handle_box(
     elem: &Packed<BoxElem>,
     styles: StyleChain,
 ) -> SourceResult<()> {
+    fn contains_note_protocol(nodes: &[HtmlNode]) -> bool {
+        nodes.iter().any(|node| match node {
+            HtmlNode::Element(element) => {
+                element
+                    .attrs
+                    .0
+                    .iter()
+                    .any(|(key, _)| key.resolve().as_str() == "data-weftext-endnote-kind")
+                    || contains_note_protocol(&element.children)
+            }
+            _ => false,
+        })
+    }
     let mut children = EcoVec::new();
     if let Some(body) = elem.body.get_ref(styles) {
         children = html_inline_fragment(
@@ -369,7 +397,12 @@ fn handle_box(
             converter.whitespace,
         )?;
 
-        if let Some(node) = to_lone_element(&mut children) {
+        // Keep the actual native Box source boundary around the note module's
+        // protocol output. This is provenance only; the engine independently
+        // certifies module bytes and call-site syntax before trusting a note.
+        if !contains_note_protocol(&children)
+            && let Some(node) = to_lone_element(&mut children)
+        {
             make_inline_level(node);
             converter.extend(children);
             return Ok(());
@@ -379,6 +412,7 @@ fn handle_box(
     converter.push(
         // TODO: This is rather incomplete.
         HtmlElement::new(tag::span)
+            .with_weftext(crate::WeftextHtmlSemantics::new("source-box"))
             .with_css(css::Properties::new().with("display", "inline-block"))
             .with_children(children)
             .spanned(elem.span()),
@@ -565,6 +599,7 @@ struct Converter<'a, 'y, 'z> {
     output: EcoVec<HtmlNode>,
     trailing: Option<TrailingWhitespace>,
     text_css: Option<css::Properties>,
+    text_lang: Option<EcoString>,
 }
 
 /// Keeps track of a trailing whitespace in the output.
@@ -614,12 +649,10 @@ impl Converter<'_, '_, '_> {
     /// Shorthand for pushing a text node.
     fn push_text(&mut self, text: impl Into<EcoString>, span: Span) {
         let text = text.into();
-        if let Some(css) = &self.text_css
-            && text != " "
-            && text != "\t"
-        {
+        if let Some(css) = &self.text_css {
             self.push(
                 HtmlElement::new(tag::span)
+                    .with_attr(attr::lang, self.text_lang.clone().unwrap_or_default())
                     .with_attr(
                         crate::HtmlAttr::intern("data-weftext-text").unwrap(),
                         "true",
@@ -649,6 +682,14 @@ impl Converter<'_, '_, '_> {
             self.output.truncate(from);
             self.output.push(HtmlNode::Element(pre_wrap(nodes)));
         }
+    }
+}
+
+fn native_language(styles: StyleChain) -> EcoString {
+    let lang = styles.get(TextElem::lang);
+    match styles.get(TextElem::region) {
+        Some(region) => ecow::eco_format!("{}-{}", lang.as_str(), region.as_str()),
+        None => lang.as_str().into(),
     }
 }
 

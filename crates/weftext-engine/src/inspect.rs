@@ -12,8 +12,10 @@ pub fn inspect_metadata(source: &str) -> SourceInfo {
 
 pub fn inspect(source: &str) -> SourceInfo {
     let parsed = Source::detached(source);
+    let offsets = Utf16Offsets::new(source);
     let root = LinkedNode::new(parsed.root());
     let valid = parsed.root().errors_and_warnings().0.is_empty();
+    let numbering_header = crate::numbering::verified_numbering_header_range(source);
     let mut out = SourceInfo {
         syntax_valid: valid,
         identity_status: if valid { "absent" } else { "invalid" }.into(),
@@ -26,8 +28,9 @@ pub fn inspect(source: &str) -> SourceInfo {
         syntax_tokens: vec![],
         body_insertion: None,
         writer_status: "complex-source-readonly".into(),
+        notes: crate::inspect_notes_source(source),
     };
-    walk(&root, source, &mut out);
+    walk(&root, &offsets, &mut out);
     let children: Vec<_> = root.children().collect();
     let candidates: Vec<_> = children
         .iter()
@@ -51,14 +54,17 @@ pub fn inspect(source: &str) -> SourceInfo {
     if candidates.len() > 1 {
         out.identity_status = "ambiguous".into();
     } else if let Some((i, n, call, label)) = candidates.first() {
-        let safe_prefix = children[..*i]
-            .iter()
-            .all(|n| n.kind() == SyntaxKind::Hash || safe_standard_node(n.get()));
+        let safe_prefix = children[..*i].iter().all(|n| {
+            numbering_header.as_ref().is_some_and(|header| {
+                n.range().start >= header.start && n.range().end <= header.end
+            }) || n.kind() == SyntaxKind::Hash
+                || safe_standard_node(n.get())
+        });
         if valid && safe_prefix {
             let args: Vec<_> = call.args().items().collect();
             if let [ast::Arg::Pos(expr)] = args.as_slice()
                 && let Some(dict) = expr.to_untyped().cast::<ast::Dict>()
-                && let Some(fields) = metadata_fields(dict, &parsed, source)
+                && let Some(fields) = metadata_fields(dict, &parsed, &offsets)
             {
                 let id = fields
                     .iter()
@@ -110,7 +116,10 @@ pub fn inspect(source: &str) -> SourceInfo {
     }
     let simple = valid
         && children.iter().all(|n| {
-            if accepted.is_some_and(|(a, b)| n.range().start >= a && n.range().end <= b) {
+            if numbering_header.as_ref().is_some_and(|header| {
+                n.range().start >= header.start && n.range().end <= header.end
+            }) || accepted.is_some_and(|(a, b)| n.range().start >= a && n.range().end <= b)
+            {
                 true
             } else if n.kind() == SyntaxKind::Hash {
                 accepted.is_some_and(|(a, _)| n.range().end == a)
@@ -152,8 +161,8 @@ pub fn inspect(source: &str) -> SourceInfo {
             out.body_insertion = Some(SourceRange {
                 from: source.len(),
                 to: source.len(),
-                utf16_from: source.encode_utf16().count(),
-                utf16_to: source.encode_utf16().count(),
+                utf16_from: offsets.at(source.len()),
+                utf16_to: offsets.at(source.len()),
                 raw: String::new(),
                 writable: true,
             });
@@ -162,11 +171,52 @@ pub fn inspect(source: &str) -> SourceInfo {
     out
 }
 
+/// Only non-ASCII characters change the difference between a UTF-8 byte
+/// offset and its UTF-16 offset. Index their cumulative difference once so
+/// inspecting many nodes does not repeatedly scan the source prefix.
+pub(crate) struct Utf16Offsets<'a> {
+    source: &'a str,
+    differences: Vec<(usize, usize)>,
+}
+
+impl<'a> Utf16Offsets<'a> {
+    pub(crate) fn new(source: &'a str) -> Self {
+        let mut difference = 0;
+        let differences = source
+            .char_indices()
+            .filter_map(|(at, ch)| {
+                if ch.is_ascii() {
+                    return None;
+                }
+                difference += ch.len_utf8() - ch.len_utf16();
+                Some((at + ch.len_utf8(), difference))
+            })
+            .collect();
+        Self {
+            source,
+            differences,
+        }
+    }
+
+    pub(crate) fn at(&self, byte: usize) -> usize {
+        // Match the original prefix conversion for non-boundaries and offsets
+        // beyond EOF, including usize::MAX: there is no valid prefix.
+        if !self.source.is_char_boundary(byte) {
+            return 0;
+        }
+        let end = self.differences.partition_point(|&(at, _)| at <= byte);
+        byte - end
+            .checked_sub(1)
+            .map_or(0, |index| self.differences[index].1)
+    }
+}
+
 fn metadata_fields(
     dict: ast::Dict<'_>,
     parsed: &Source,
-    source: &str,
+    offsets: &Utf16Offsets<'_>,
 ) -> Option<Vec<MetadataField>> {
+    let source = offsets.source;
     let mut seen = HashSet::new();
     dict.items()
         .map(|item| {
@@ -188,8 +238,8 @@ fn metadata_fields(
                 raw: source.get(range.clone())?.into(),
                 from: range.start,
                 to: range.end,
-                utf16_from: utf16(source, range.start),
-                utf16_to: utf16(source, range.end),
+                utf16_from: offsets.at(range.start),
+                utf16_to: offsets.at(range.end),
                 writable: projected.is_some(),
                 value: projected,
             })
@@ -307,6 +357,7 @@ pub fn certify_metadata_declaration(source: &str, label_name: &str) -> Option<So
     }
     let root = LinkedNode::new(parsed.root());
     let children: Vec<_> = root.children().collect();
+    let numbering_header = crate::numbering::verified_numbering_header_range(source);
     fn label_count(node: &LinkedNode<'_>, name: &str) -> usize {
         // A label value in query(<role>), a show selector, or a variable is
         // not an attachment declaration. Only markup's actual label syntax
@@ -408,6 +459,12 @@ pub fn certify_metadata_declaration(source: &str, label_name: &str) -> Option<So
         )
     }
     let safe_prefix = children[..index].iter().all(|n| {
+        if numbering_header
+            .as_ref()
+            .is_some_and(|header| n.range().start >= header.start && n.range().end <= header.end)
+        {
+            return true;
+        }
         if matches!(
             n.kind(),
             SyntaxKind::Hash
@@ -479,15 +536,15 @@ pub(crate) fn simple_markup(node: &SyntaxNode) -> bool {
     }
 }
 
-fn walk(node: &LinkedNode<'_>, source: &str, out: &mut SourceInfo) {
+fn walk(node: &LinkedNode<'_>, offsets: &Utf16Offsets<'_>, out: &mut SourceInfo) {
     let range = node.range();
     if node.kind() != SyntaxKind::Markup && out.syntax_tokens.len() < 100_000 {
         out.syntax_tokens.push(SyntaxToken {
             kind: format!("{:?}", node.kind()),
             from: range.start,
             to: range.end,
-            utf16_from: utf16(source, range.start),
-            utf16_to: utf16(source, range.end),
+            utf16_from: offsets.at(range.start),
+            utf16_to: offsets.at(range.end),
         });
     }
     if let Some(heading) = node.get().cast::<ast::Heading>() {
@@ -498,8 +555,8 @@ fn walk(node: &LinkedNode<'_>, source: &str, out: &mut SourceInfo) {
             level: heading.depth().get(),
             from: range.start,
             to: range.end,
-            utf16_from: utf16(source, range.start),
-            utf16_to: utf16(source, range.end),
+            utf16_from: offsets.at(range.start),
+            utf16_to: offsets.at(range.end),
             generated: false,
             visible: false,
         });
@@ -534,12 +591,12 @@ fn walk(node: &LinkedNode<'_>, source: &str, out: &mut SourceInfo) {
             kind: kind.into(),
             from: range.start,
             to: range.end,
-            utf16_from: utf16(source, range.start),
-            utf16_to: utf16(source, range.end),
+            utf16_from: offsets.at(range.start),
+            utf16_to: offsets.at(range.end),
         });
     }
     for child in node.children() {
-        walk(&child, source, out);
+        walk(&child, offsets, out);
     }
 }
 
@@ -571,4 +628,146 @@ fn is_uuid_v4(id: &str) -> bool {
                 b.is_ascii_digit() || matches!(b, b'a'..=b'f')
             }
         })
+}
+
+#[cfg(test)]
+mod offset_tests {
+    use super::*;
+
+    fn assert_range(source: &str, from: usize, to: usize, utf16_from: usize, utf16_to: usize) {
+        assert!(from <= to);
+        assert_eq!(utf16_from, source[..from].encode_utf16().count());
+        assert_eq!(utf16_to, source[..to].encode_utf16().count());
+    }
+
+    fn assert_projection_offsets(source: &str, info: &SourceInfo) {
+        for token in &info.syntax_tokens {
+            assert_range(
+                source,
+                token.from,
+                token.to,
+                token.utf16_from,
+                token.utf16_to,
+            );
+        }
+        for heading in &info.headings {
+            assert_range(
+                source,
+                heading.from,
+                heading.to,
+                heading.utf16_from,
+                heading.utf16_to,
+            );
+        }
+        for link in &info.links {
+            assert_range(source, link.from, link.to, link.utf16_from, link.utf16_to);
+        }
+        if let Some(metadata) = &info.metadata {
+            for field in &metadata.fields {
+                assert_range(
+                    source,
+                    field.from,
+                    field.to,
+                    field.utf16_from,
+                    field.utf16_to,
+                );
+                assert_eq!(field.raw, source[field.from..field.to]);
+            }
+        }
+        if let Some(range) = &info.body_insertion {
+            assert_range(
+                source,
+                range.from,
+                range.to,
+                range.utf16_from,
+                range.utf16_to,
+            );
+            assert_eq!(range.raw, source[range.from..range.to]);
+        }
+    }
+
+    #[test]
+    fn indexed_offsets_match_prefixes_and_reject_invalid_byte_boundaries() {
+        for source in ["", "ASCII\r\n", "aé中😀e\u{301}\r\n尾\0z", "😀😀"] {
+            let offsets = Utf16Offsets::new(source);
+            for at in 0..=source.len() + 1 {
+                assert_eq!(offsets.at(at), utf16(source, at), "{source:?} at {at}");
+            }
+            assert_eq!(offsets.at(usize::MAX), 0);
+        }
+        let source = "a😀z";
+        let offsets = Utf16Offsets::new(source);
+        // No UTF-8 character boundary can select half of the surrogate pair.
+        let positions: Vec<_> = (0..=source.len())
+            .filter(|&at| source.is_char_boundary(at))
+            .map(|at| offsets.at(at))
+            .collect();
+        assert_eq!(positions, [0, 1, 3, 4]);
+    }
+
+    #[test]
+    fn long_single_line_indexes_only_non_ascii_differences() {
+        let source = format!("{}中😀", "x".repeat(2_000_000));
+        let offsets = Utf16Offsets::new(&source);
+        assert_eq!(offsets.differences.len(), 2);
+        for at in [0, 1, 999_999, 2_000_000, 2_000_003, source.len()] {
+            assert_eq!(offsets.at(at), utf16(&source, at));
+        }
+        assert_eq!(offsets.at(2_000_001), 0);
+        assert_eq!(offsets.at(2_000_005), 0);
+    }
+
+    #[test]
+    fn metadata_heading_link_and_body_offsets_preserve_unicode_and_crlf() {
+        let source = concat!(
+            "// 前😀\r\n",
+            "#metadata((id: \"12345678-1234-4234-8234-123456789abc\", ",
+            "types: (\"Note\",), title: \"中文😀\")) <weftext>\r\n",
+            "= 尾😀e\u{301}\r\n",
+            "https://example.test/abc\r\n",
+        );
+        let info = inspect(source);
+        assert!(info.syntax_valid);
+        assert_eq!(info.identity_status, "valid");
+        assert_eq!(info.metadata.as_ref().unwrap().fields.len(), 3);
+        assert_eq!(info.headings.len(), 1);
+        assert_eq!(info.links.len(), 1);
+        assert!(info.body_insertion.is_some());
+        assert_projection_offsets(source, &info);
+
+        let malformed = "= 尾😀\r\n#let broken = (\r\n";
+        let info = inspect(malformed);
+        assert!(!info.syntax_valid);
+        assert_eq!(info.identity_status, "invalid");
+        assert!(info.body_insertion.is_none());
+        assert_projection_offsets(malformed, &info);
+    }
+
+    #[test]
+    fn token_limit_still_visits_later_headings_and_links() {
+        let mut source = "word\n\n".repeat(50_001);
+        source.push_str("= 尾😀\nhttps://example.test/after-limit\n");
+        let info = inspect(&source);
+        assert!(info.syntax_valid);
+        assert_eq!(info.syntax_tokens.len(), 100_000);
+        for token in &info.syntax_tokens {
+            assert_eq!(token.utf16_from, token.from);
+            assert_eq!(token.utf16_to, token.to);
+        }
+        assert_eq!(info.headings.len(), 1);
+        assert_eq!(info.links.len(), 1);
+        assert!(info.headings[0].from > info.syntax_tokens.last().unwrap().to);
+        for heading in &info.headings {
+            assert_range(
+                &source,
+                heading.from,
+                heading.to,
+                heading.utf16_from,
+                heading.utf16_to,
+            );
+        }
+        for link in &info.links {
+            assert_range(&source, link.from, link.to, link.utf16_from, link.utf16_to);
+        }
+    }
 }

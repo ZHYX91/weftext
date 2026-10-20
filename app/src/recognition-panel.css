@@ -1,0 +1,23 @@
+.recognition-panel { width: min(1180px, 94vw); max-height: 92vh; overflow: auto; padding: 24px; color: var(--text, #242c35); }
+.recognition-panel h2 { margin-top: 0; }
+.recognition-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.recognition-control { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.recognition-control input[type=checkbox] { align-self: start; }
+.recognition-control:has(input[type=checkbox]) { display: flex; flex-direction: row-reverse; justify-content: start; align-items: start; gap: 8px; margin: 10px 0; }
+.recognition-check { display: flex; align-items: start; gap: 8px; margin: 12px 0; line-height: 1.5; font-size: 13px; cursor: pointer; }
+.recognition-checkbox { width: 16px; height: 16px; min-height: 0; flex: 0 0 16px; margin: 2px 0 0; padding: 0; }
+.recognition-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.recognition-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px; align-items: start; }
+.recognition-original { position: sticky; top: 0; min-width: 0; background: var(--panel, #fff); overflow-wrap: anywhere; }
+.recognition-original canvas { width: 100%; height: auto; border: 1px solid #c7cbd0; background: white; }
+.recognition-block, .recognition-field, .recognition-table, .recognition-page-state { min-width: 0; margin: 12px 0; padding: 12px; border: 1px solid #cdd2d8; border-radius: 6px; }
+.recognition-block textarea, .recognition-field input { width: 100%; box-sizing: border-box; }
+.recognition-raw { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; font-size: 13px; }
+.recognition-table { overflow: auto; }
+.recognition-table table { border-collapse: collapse; min-width: 100%; }
+.recognition-table td { padding: 4px; border: 1px solid #b8c1c9; min-width: 100px; }
+.recognition-table textarea { width: 100%; min-width: 90px; box-sizing: border-box; }
+.recognition-status { padding: 10px 12px; background: #f2f5f8; border-radius: 5px; overflow-wrap: anywhere; }
+.recognition-recovery { border-top: 1px solid #cdd2d8; margin-top: 16px; padding-top: 12px; overflow-wrap: anywhere; }
+.recognition-recovery > button { margin: 5px; }
+@media (max-width: 780px) { .recognition-panel { padding: 14px; width: 96vw; } .recognition-grid { grid-template-columns: minmax(0, 1fr); } .recognition-compare { grid-template-columns: minmax(0, 1fr); } .recognition-original { position: static; } }

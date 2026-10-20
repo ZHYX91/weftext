@@ -5,8 +5,31 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from test_hosted import Hosted
+from owned_worker_observer import SUPPORTED, creation_boundary, timed_call, wait_for_owned_worker
+
+PURE_COMPUTE = '#let checksum = range(500000).fold(0, (acc, i) => acc + i)\nFinal #checksum'
 
 class HostedEditor(Hosted):
+    def assert_inflight_projection_change(self, basis, change, expected, evidence_name, error_code=None):
+        if not SUPPORTED:
+            self.skipTest('In-flight compiler race is unverified without the Windows owned-worker boundary')
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            boundary = creation_boundary()
+            submitted = time.monotonic_ns()
+            pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render', basis, self.tokens['alice'])
+            worker = wait_for_owned_worker(self.server.process, pending, boundary)
+            self.assertFalse(pending.done())
+            change()
+            changed = time.monotonic_ns()
+            (code, result, _), completed = pending.result(timeout=40)
+        trace = {'submittedMonotonicNs':submitted, 'worker':worker,
+                 'changeCompletedMonotonicNs':changed, 'renderCompletedMonotonicNs':completed,
+                 'status':code, 'errorCode':result.get('error',{}).get('code')}
+        (self.folder/(evidence_name+'.json')).write_text(json.dumps(trace,ensure_ascii=False,indent=2),'utf-8')
+        self.assertLess(changed,completed,'Concurrent change must finish before render delivery')
+        self.assertEqual(code,expected,result)
+        if error_code is not None:self.assertEqual(result['error']['code'],error_code)
+
     def test_native_edit_map_exact_basis_permissions_and_original_save(self):
         a=self.call('open',{'resource':'Shared'})
         source=a['source']+'\n= 标题\n\n中文😀正文\n'
@@ -56,27 +79,23 @@ class HostedEditor(Hosted):
         def text(tree): return (tree.get('text') or '')+''.join(text(child) for child in tree.get('children',[]))
         self.assertIn('HIDDEN_PAYLOAD',text(result['tree']));self.assertFalse(list(origins(result['tree'])))
         dependency=self.call('open',{'resource':'Secret'})
-        with ThreadPoolExecutor() as pool:
-            pending=pool.submit(self.server.call,'/api/hosted/editor/render',{'sessionId':a['sessionId'],'source':'#include "../Secret/Secret.typ"\n#for i in range(20000) [delayed paragraph #parbreak()]','serial':2},self.tokens['alice'])
-            time.sleep(.2)
-            self.save(dependency,dependency['source']+'\n新的依赖正文')
-            code,result,_=pending.result(timeout=40);self.assertEqual(code,409,result);self.assertEqual(result['error']['code'],'staleEnvironment')
+        with self.subTest(race='dependency-currentness'):
+            # Reading the authorized note avoids executing its document set rules
+            # inside a content container. Pure computation keeps output small.
+            basis={'sessionId':a['sessionId'],'source':'#read("../Secret/Secret.typ")\n'+PURE_COMPUTE,'serial':2}
+            self.assert_inflight_projection_change(basis,lambda:self.save(dependency,dependency['source']+'\n新的依赖正文'),409,'projection-dependency-race','staleEnvironment')
         b=self.call('open',{'resource':'Shared'},'bob')
         self.call('editor/render',{'sessionId':b['sessionId'],'source':'普通文字','serial':1},'bob',404)
 
     def test_late_projection_cannot_revive_old_serial_or_revoked_session(self):
         a=self.call('open',{'resource':'Shared'})
-        slow={'sessionId':a['sessionId'],'source':'#for i in range(20000) [delayed paragraph #parbreak()]','serial':1}
-        with ThreadPoolExecutor() as pool:
-            pending=pool.submit(self.server.call,'/api/hosted/editor/render',slow,self.tokens['alice'])
-            time.sleep(.2)
-            self.call('editor/map',{**slow,'source':'更新后的草稿','serial':2})
-            code,result,_=pending.result(timeout=40);self.assertEqual(code,409,result)
-        with ThreadPoolExecutor() as pool:
-            pending=pool.submit(self.server.call,'/api/hosted/editor/render',{**slow,'serial':3},self.tokens['alice'])
-            time.sleep(.2)
+        slow={'sessionId':a['sessionId'],'source':PURE_COMPUTE,'serial':1}
+        with self.subTest(race='newer-serial'):
+            self.assert_inflight_projection_change(slow,lambda:self.call('editor/map',{**slow,'source':'更新后的草稿','serial':2}),409,'projection-serial-race')
+        def revoke():
             policy=self.call('admin/policy',actor='admin');policy['users']['alice']['grants']['Shared']['write']=False
             self.call('admin/policy',{'expectedGeneration':policy['generation'],'users':policy['users']},actor='admin')
-            code,result,_=pending.result(timeout=40);self.assertEqual(code,410,result)
+        with self.subTest(race='revoked-session'):
+            self.assert_inflight_projection_change({**slow,'serial':3},revoke,410,'projection-revoked-race')
 
 if __name__=='__main__': unittest.main(argv=[sys.argv[0]],defaultTest='HostedEditor',verbosity=2)

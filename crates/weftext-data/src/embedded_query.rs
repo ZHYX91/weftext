@@ -7,6 +7,52 @@ use typst_syntax::{
     ast::{self, AstNode},
 };
 
+/// Only exact, independently qualified adjacent carriers may exchange places.
+/// Intervening prose, comments or rules are barriers, never guessed away.
+pub fn arrange_embedded_query(source: &str, id: &str, action: &str) -> Result<FieldPatch> {
+    let target = embedded_query(source, id)?;
+    if !target.writable {
+        return Err(DataError("Query has no unique native writer".into()));
+    }
+    if action == "remove" {
+        return replace_embedded_query_source(source, id, "");
+    }
+    if action != "up" && action != "down" {
+        return Err(DataError("Unknown Query arrangement".into()));
+    }
+    let mut queries = embedded_queries(source);
+    queries.sort_by_key(|q| q.source.range.from);
+    let index = queries.iter().position(|q| q.source.id == id).unwrap();
+    let other = if action == "up" {
+        index.checked_sub(1).and_then(|i| queries.get(i))
+    } else {
+        queries.get(index + 1)
+    }
+    .ok_or_else(|| DataError("No adjacent Query in that direction".into()))?;
+    if !other.writable {
+        return Err(DataError("Adjacent Query has no unique writer".into()));
+    }
+    let (first, last) = if target.source.range.from < other.source.range.from {
+        (&target.source.range, &other.source.range)
+    } else {
+        (&other.source.range, &target.source.range)
+    };
+    let separator = &source[first.to..last.from];
+    if !separator.chars().all(char::is_whitespace) {
+        return Err(DataError(
+            "Intervening author content is a Query movement barrier; source retained".into(),
+        ));
+    }
+    let text = format!("{}{}{}", last.raw, separator, first.raw);
+    let edited = format!("{}{}{}", &source[..first.from], text, &source[last.to..]);
+    Ok(FieldPatch {
+        from: first.from,
+        to: last.to,
+        text,
+        source: edited,
+    })
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbeddedQueryOccurrence {
@@ -65,6 +111,17 @@ fn static_key(raw: &str) -> Option<String> {
     })
 }
 
+fn supported_builder(plan: &QueryPlan) -> bool {
+    plan.unnest.is_none()
+        && plan.advanced.as_ref().is_none_or(|a| {
+            a.call.is_some()
+                && a.parameters.is_empty()
+                && a.union_all.is_empty()
+                && a.distinct.is_none()
+                && a.related.is_none()
+        })
+}
+
 pub fn embedded_queries(source: &str) -> Vec<EmbeddedQueryOccurrence> {
     let sources = weftext_engine::embedded_query_sources(source);
     let keys: Vec<_> = sources.iter().map(|s| static_key(&s.range.raw)).collect();
@@ -91,10 +148,7 @@ pub fn embedded_queries(source: &str) -> Vec<EmbeddedQueryOccurrence> {
                 .map(ToString::to_string)
                 .or_else(|| {
                     definition.as_ref().ok().and_then(|d| {
-                        (d.plan.advanced.is_some()
-                            || d.plan.group.is_some()
-                            || d.plan.unnest.is_some())
-                        .then(|| {
+                        (!supported_builder(&d.plan)).then(|| {
                             "构建器不能完整表示此原生查询；保留原文，请使用明确的源码入口。"
                                 .to_string()
                         })
@@ -167,11 +221,7 @@ pub fn replace_embedded_query_source(
 /// outside bytes, carrier key/binding, unchanged expressions and comments.
 pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Result<FieldPatch> {
     let occurrence = embedded_query(source, id)?;
-    if !occurrence.builder_supported
-        || plan.advanced.is_some()
-        || plan.group.is_some()
-        || plan.unnest.is_some()
-    {
+    if !occurrence.builder_supported || !supported_builder(plan) {
         return Err(DataError("Query cannot completely round-trip through the basic builder; original source retained".into()));
     }
     let original = occurrence.plan.as_ref().unwrap();
@@ -199,7 +249,9 @@ pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Res
     let node = crate::native::decode_node(expr.to_untyped(), &parsed);
     let mut changes: Vec<(usize, usize, String)> = vec![];
     let mut additions = vec![];
-    for key in ["scope", "types", "where", "select", "order", "take"] {
+    for key in [
+        "scope", "types", "where", "select", "order", "take", "group", "advanced",
+    ] {
         if before.get(key) == after.get(key) {
             continue;
         }

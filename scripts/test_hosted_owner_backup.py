@@ -6,6 +6,7 @@ import base64
 import hashlib
 import io
 import json
+from pathlib import Path
 import sys
 import unittest
 import zipfile
@@ -84,7 +85,11 @@ class HostedOwnerBackup(Hosted):
         self.call('operation/settle', {'operationId': fences[1], 'resource': 'Shared'}, 'bob')
         (self.root / 'raw.bin').write_bytes(b'\x00RAW_BACKUP\xff')
         long_name = '长' * 100 + '.txt'
-        (self.root / long_name).write_bytes(b'VALID_NTFS_LONG_NAME')
+        long_file = self.root / long_name
+        if sys.platform == 'win32':
+            # Preserve the real NTFS name even under a long owned fixture root.
+            long_file = Path('\\\\?\\' + str(long_file.resolve()))
+        long_file.write_bytes(b'VALID_NTFS_LONG_NAME')
         (self.root / 'empty-raw-folder').mkdir()
         # Whole-library owner authority is independent of all ordinary grants.
         self.policy(lambda users: users['alice'].update(grants={}))

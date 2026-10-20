@@ -26,4 +26,9 @@
 .output-preview-value { white-space: pre-wrap; overflow-wrap: anywhere; }
 .output-preview-list { margin: 5px 0; padding-left: 23px; }
 .output-preview-list>li { margin-bottom: 5px; }
+.output-legacy { margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--border,#ddd); background: var(--panel,#fafaf8); }
+.output-legacy .data-help { margin: 7px 0; overflow-wrap: anywhere; }
+.output-caption-pairing { min-width: 0; margin: 14px 0; padding: 12px; border: 1px solid var(--border,#ddd); border-radius: 6px; }
+.output-caption-pairing legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.output-caption-pairing .output-preview-value { margin: 4px 0; }
 @media (max-width: 600px) { .output-grid { grid-template-columns: 1fr; gap: 0; } .output-panel { padding: 16px; } }

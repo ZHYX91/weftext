@@ -1,7 +1,10 @@
-import { rectangularTSV, textareaSourceDraft, type WritingController, type WritingRange, type WritingStructure, type WritingIntent, type WritingBlock, type WritingSnapshot, type TableAction } from "./writing";
+import { createTableGrid } from "./table-grid";
+import { delimitedTable, parseHTMLTable, type ClipboardTable } from "./table-clipboard";
+import { rectangularTSV, textareaSourceDraft, type WritingController, type WritingRange, type WritingStructure, type WritingIntent, type WritingBlock, type WritingSnapshot } from "./writing";
 
 export interface WritingControlOptions {
   onError?(error: Error): void;
+  renderedTable?: Element;
   insertLink?(): Promise<void>;
   revealSource?(range: WritingRange): void;
 }
@@ -60,16 +63,16 @@ export async function editDocumentRole(controller: WritingController, role: "tit
 }
 
 export async function insertWritingBlock(controller: WritingController, initial = "paragraph"): Promise<void> {
-  await controller.flush(); const snapshot = controller.snapshot; const at = controller.insertionPoint();
+  await controller.prepareCommand(); const snapshot = controller.snapshot; const at = controller.insertionPoint();
   await dialog("添加内容", "文字按原生 Typst 普通文字编码。公式使用原生数学表达；表格粘贴预览完整行列后一次应用。", (form, done, error) => {
-    const kind = selectInput([["paragraph", "普通段落"], ["heading", "章节标题"], ["bulletList", "无序列表"], ["numberedList", "有序列表"], ["termList", "术语列表"], ["math", "公式"], ["table", "普通表格"], ["raw", "代码块"]], initial);
+    const kind = selectInput([["paragraph", "普通段落"], ["heading", "章节标题"], ["bulletList", "无序列表"], ["numberedList", "有序列表"], ["termList", "术语列表"], ["image", "图片"], ["math", "公式"], ["table", "普通表格"], ["raw", "代码块"]], initial);
     const input = textInput("", 5); input.setAttribute("aria-label", "新内容");
     const level = numberInput(1, 1, 1024), levelField = field("标题级别（常用 1–9，也可输入更深级别）", level);
     const display = checkInput("独立公式", true); const language = element("input", "writing-input"); language.placeholder = "python / rust / 留空"; const languageField = field("代码语言", language);
     const preview = element("p", "writing-help"); preview.setAttribute("aria-live", "polite");
     const refresh = () => {
       levelField.hidden = kind.value !== "heading"; display.field.hidden = kind.value !== "math"; languageField.hidden = kind.value !== "raw";
-      input.placeholder = kind.value === "table" ? "单元格以 Tab 分隔，每行换行。" : kind.value === "termList" ? "每行：术语<Tab>说明" : ["bulletList", "numberedList"].includes(kind.value) ? "每行是一项，可保留空项。" : kind.value === "math" ? "x^2 + y^2 = z^2" : "写下内容…";
+      input.placeholder = kind.value === "image" ? "已导入本篇的图片相对路径，例如 assets/图片.png；先从资源入口导入外部图片。" : kind.value === "table" ? "单元格以 Tab 分隔，每行换行。" : kind.value === "termList" ? "每行：术语<Tab>说明" : ["bulletList", "numberedList"].includes(kind.value) ? "每行是一项，可保留空项。" : kind.value === "math" ? "x^2 + y^2 = z^2" : "写下内容…";
       if (kind.value === "table") { try { const grid = rectangularTSV(input.value); preview.textContent = `${grid.length} 行 × ${grid[0].length} 列；全部单元格一次写入。`; } catch (failure) { preview.textContent = failure instanceof Error ? failure.message : String(failure); } }
       else preview.textContent = "";
     };
@@ -77,7 +80,8 @@ export async function insertWritingBlock(controller: WritingController, initial 
     form.append(field("内容形式", kind), field("内容", input), levelField, display.field, languageField, preview); refresh(); actions(form, done, "添加");
     submit(form, error, done, async () => {
       let block: WritingBlock;
-      if (kind.value === "heading") block = { kind: "heading", text: input.value, level: validInteger(level) };
+      if (kind.value === "image") block = { kind: "image", path: input.value.trim(), alt: "" };
+      else if (kind.value === "heading") block = { kind: "heading", text: input.value, level: validInteger(level) };
       else if (kind.value === "bulletList" || kind.value === "numberedList") block = { kind: kind.value, items: input.value.replace(/\r\n/g, "\n").split("\n") };
       else if (kind.value === "termList") { const items = input.value.replace(/\r\n/g, "\n").split("\n").map(row => { const [term, ...description] = row.split("\t"); return { term, description: description.join("\t") }; }); block = { kind: "termList", items }; }
       else if (kind.value === "math") block = { kind: "math", text: input.value, display: display.input.checked };
@@ -129,48 +133,18 @@ export async function editRaw(controller: WritingController, raw?: WritingStruct
   });
 }
 
-function decodedCell(controller: WritingController, range: WritingRange): string | null {
-  if (!range.raw) return "";
-  const candidates = controller.map?.literalRegions.filter(region => region.range.utf16From === range.utf16From && region.range.utf16To === range.utf16To) ?? [];
-  return candidates.length === 1 ? candidates[0].text : null;
-}
 export async function editTable(controller: WritingController, structure?: WritingStructure): Promise<void> {
   const originSnapshot = controller.snapshot;
   await controller.flush(); if (structure && !controller.isSnapshotCurrent(originSnapshot)) throw new Error("表格来源在输入回写后已变化，请重新选择当前表格。");
   const current = structure ?? controller.structure("table"); if (!current?.table) { await insertWritingBlock(controller, "table"); return; }
-  const table = current.table, snapshot = controller.snapshot;
-  await dialog("表格", "按行列定位准确单元格；相同文字的单元格仍分别处理。复杂拓扑保留原源，网格操作只用于可证明的普通表格。", (form, done, error) => {
-    const operation = selectInput([["cell", "编辑单元格文字"], ["insertRow", "插入行"], ["removeRow", "删除行"], ["insertColumn", "插入列"], ["removeColumn", "删除列"], ["moveRow", "移动行"], ["paste", "粘贴矩形 TSV"]], "cell");
-    const row = numberInput(1, 1, table.rows), column = numberInput(1, 1, table.columns), destination = numberInput(1, 1, table.rows); const rowField = field("行（从 1 开始）", row), columnField = field("列（从 1 开始）", column), destinationField = field("移到第几行", destination);
-    const input = textInput("", 4), inputField = field("单元格文字 / TSV", input); const note = element("p", "writing-help");
-    const refresh = () => {
-      const selected = operation.value;
-      destinationField.hidden = selected !== "moveRow"; inputField.hidden = !["cell", "paste"].includes(selected);
-      rowField.hidden = ["insertColumn", "removeColumn"].includes(selected); columnField.hidden = ["insertRow", "removeRow", "moveRow"].includes(selected);
-      row.max = String(table.rows + (selected === "insertRow" ? 1 : 0)); column.max = String(table.columns + (selected === "insertColumn" ? 1 : 0));
-      if (selected === "cell") {
-        const cell = table.cells[(Number(row.value) - 1) * table.columns + Number(column.value) - 1]; const text = cell ? decodedCell(controller, cell) : null;
-        input.value = text ?? ""; input.disabled = text == null; note.textContent = text == null ? "此单元格包含结构或生成内容，保留原源；请使用源码入口。" : `${table.rows} 行 × ${table.columns} 列。`;
-      } else { input.disabled = false; input.value = ""; note.textContent = table.gridWritable ? "网格变更一次应用，可通过共同撤销栈撤销。" : "此表格有复杂拓扑或不明确的结构，网格变更不可用。"; }
-    };
-    operation.onchange = refresh; row.onchange = refresh; column.onchange = refresh;
-    form.append(field("操作", operation), rowField, columnField, destinationField, inputField, note); refresh(); actions(form, done);
-    submit(form, error, done, async () => {
-      const selected = operation.value;
-      if (selected === "cell") {
-        const cell = table.cells[(validInteger(row) - 1) * table.columns + validInteger(column) - 1]; if (!cell || decodedCell(controller, cell) == null) throw new Error("当前单元格不能无损文字编辑。");
-        await controller.execute(guard(controller, snapshot, { kind: "setTableCell", range: cell, text: input.value })); return;
-      }
-      if (!table.gridWritable) throw new Error("此表格的网格操作不可用，原源已保留。");
-      let change: TableAction;
-      if (selected === "moveRow") change = { kind: "moveRow", from: validInteger(row) - 1, to: validInteger(destination) - 1 };
-      else if (selected === "paste") { const grid = rectangularTSV(input.value); const r = validInteger(row) - 1, c = validInteger(column) - 1; if (r + grid.length > table.rows || c + grid[0].length > table.columns) throw new Error(`粘贴区域为 ${grid.length} 行 × ${grid[0].length} 列，超出当前表格；请先插入行列。`); change = { kind: "paste", row: r, column: c, text: input.value }; }
-      else change = { kind: selected as "insertRow" | "removeRow" | "insertColumn" | "removeColumn", index: validInteger(selected.includes("Column") ? column : row) - 1 };
-      await controller.execute(guard(controller, snapshot, { kind: "tableEdit", range: current.range, action: change }));
-    });
+  await dialog("表格", "所有输入进入同一草稿。Esc 从格内返回网格，关闭此窗口保留已输入文字；保存笔记仍使用原保存入口。", (form, done, error) => {
+    form.closest("dialog")?.classList.add("writing-table-dialog");
+    const surface = createTableGrid(controller, current, { onError: failure => { error.hidden = false; error.textContent = failure.message; } });
+    const close = element("button", "writing-button", "完成表格编辑"); close.type = "button";
+    close.onclick = () => { void controller.deferUntilCompositionEnds(async () => { await controller.flush(); done(); }).catch(failure => { error.hidden = false; error.textContent = failure instanceof Error ? failure.message : String(failure); }); };
+    form.append(surface, close);
   });
 }
-
 export async function insertWritingLink(controller: WritingController): Promise<void> {
   await controller.flush(); const snapshot = controller.snapshot, at = controller.insertionPoint();
   await dialog("添加链接", "链接作为原生 Typst 内容写入当前草稿，保存后才提交。", (form, done, error) => {
@@ -180,13 +154,34 @@ export async function insertWritingLink(controller: WritingController): Promise<
   });
 }
 
+/** Body insertion is distinct from text-in-cell and grid-range paste. */
+export async function insertClipboardTable(controller: WritingController): Promise<void> {
+  await controller.flush(); const snapshot = controller.snapshot, at = controller.insertionPoint();
+  await dialog("插入剪贴板表格", "在正文插入一张原生表格。HTML 转换不执行脚本或加载外部资源；第一行不会自动成为表头。", (form, done, error) => {
+    const format = selectInput([["tsv", "TSV（制表符分隔）"], ["csv", "CSV（逗号分隔）"], ["html", "HTML 表格"]], "tsv"), input = textInput("", 7), preview = element("p", "writing-help"), acceptLoss = checkInput("接受以上明确列出的文字化损失", false);
+    input.setAttribute("aria-label", "待插入的表格输入"); preview.setAttribute("aria-live", "polite"); let parsed: ClipboardTable | null = null;
+    const refresh = () => { parsed = null; try { parsed = format.value === "html" ? parseHTMLTable(input.value) : delimitedTable(input.value, format.value === "csv" ? "," : "\t"); preview.textContent = `${parsed.rows} 行 × ${parsed.columns} 列，${parsed.cells.length} 个作者单元格；全部一次插入。\n${parsed.losses.join("\n")}`; acceptLoss.field.hidden = !parsed.losses.length; } catch (failure) { preview.textContent = failure instanceof Error ? failure.message : String(failure); acceptLoss.field.hidden = true; } acceptLoss.input.checked = false; };
+    input.oninput = refresh; format.onchange = refresh;
+    input.onpaste = event => { const html = event.clipboardData?.getData("text/html"); if (html && /<table[\s>]/i.test(html)) { event.preventDefault(); format.value = "html"; input.value = html; refresh(); } };
+    const read = action("读取剪贴板表格", async () => {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) if (item.types.includes("text/html")) { input.value = await (await item.getType("text/html")).text(); format.value = "html"; refresh(); return; }
+      }
+      if (!navigator.clipboard?.readText) throw new Error("当前环境不能读取剪贴板；请在输入框使用系统粘贴，原稿未变。"); input.value = await navigator.clipboard.readText(); format.value = "tsv"; refresh();
+    }, { onError: failure => { error.hidden = false; error.textContent = failure.message; } });
+    form.append(field("输入格式", format), read, field("表格输入（也可直接系统粘贴）", input), preview, acceptLoss.field); refresh(); actions(form, done, "插入表格");
+    submit(form, error, done, async () => { if (!parsed) throw new Error("请先修正表格输入，尚未插入任何内容。"); if (parsed.losses.length && !acceptLoss.input.checked) throw new Error("请明确接受预览中的格式损失，或取消并保留输入。"); await controller.execute(guard(controller, snapshot, { kind: "insertBlock", at, block: { kind: "clipboardTable", rows: parsed.rows, columns: parsed.columns, cells: parsed.cells } })); });
+  });
+}
+
 export function createWritingToolbar(controller: WritingController, options: WritingControlOptions = {}): HTMLElement {
   const toolbar = element("div", "writing-toolbar"); toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "写作工具");
   const tool = (label: string, run: () => Promise<void>) => action(label, () => controller.deferUntilCompositionEnds(run), options);
   for (const [label, format] of [["粗体", "strong"], ["斜体", "emph"], ["删除线", "strike"]] as const) toolbar.append(tool(label, () => controller.execute(() => ({ kind: "setInline", range: controller.selectionRange(), format }))));
   toolbar.append(tool("标题", () => editDocumentRole(controller, "title")), tool("副标题", () => editDocumentRole(controller, "subtitle")), tool("章节", () => editHeading(controller)), tool("列表", () => insertWritingBlock(controller, "bulletList")), tool("表格", () => editTable(controller)), tool("公式", () => editMath(controller)), tool("代码", () => editRaw(controller)));
   if (options.insertLink) toolbar.append(tool("链接", options.insertLink));
-  toolbar.append(tool("添加内容", () => insertWritingBlock(controller)), tool("撤销", () => controller.undo()), tool("重做", () => controller.redo()));
+  toolbar.append(tool("添加内容", () => insertWritingBlock(controller)), tool("插入剪贴板表格", () => insertClipboardTable(controller)), tool("撤销", () => controller.undo()), tool("重做", () => controller.redo()));
   return toolbar;
 }
 
@@ -197,7 +192,7 @@ export function createStructureControls(controller: WritingController, range: Wr
   const checked = (run: () => Promise<void> | void) => async () => { if (!controller.isSnapshotCurrent(snapshot)) throw new Error("这个结构入口已过期，请等待当前预览后重试。"); await run(); };
   const controls = element("div", "writing-structure-controls"); controls.setAttribute("role", "group"); controls.setAttribute("aria-label", "当前结构操作");
   if (structure.kind === "heading") controls.append(action(`章节 ${structure.level} · ${structure.runIn ? "接正文" : "独立段"}`, checked(() => editHeading(controller, structure)), options));
-  else if (structure.kind === "table") controls.append(action("编辑表格", checked(() => editTable(controller, structure)), options));
+  else if (structure.kind === "table" && structure.table) return createTableGrid(controller, structure, options);
   else if (["inlineMath", "displayMath"].includes(structure.kind)) controls.append(action("编辑公式", checked(() => editMath(controller, structure)), options));
   else if (["inlineRaw", "blockRaw"].includes(structure.kind)) controls.append(action("编辑代码", checked(() => editRaw(controller, structure)), options));
   else if (["bulletListItem", "numberedListItem"].includes(structure.kind)) {

@@ -1,5 +1,7 @@
 import { action, ui } from "./data-panel";
 import { nativeStyleControlInput, nativeStyleControlReason, type NativeStyleControl, type NativeStyleValue } from "./style-panel";
+import { decodeProcessingDocument, defaultProcessingDocument } from "./processing-settings-panel";
+import { parseProcessingLanguages, processingLanguageTag } from "./processing-settings";
 import { hostedCachePrefix } from "./hosted-state";
 import { decodeLibraryDraft, freezeLibraryPrepare, libraryCanCommit, libraryInput, libraryReceipt, libraryRoles, libraryTerminal, type LibraryDraft, type LibraryProfile, type LibraryReceipt, type LibraryRole } from "./hosted-library-state";
 
@@ -129,6 +131,21 @@ export class HostedLibrary {
       this.editor.append(controls, ui("p", "hint", "控件修改准确原生参数；完整源码保留未知规则。编辑完整源码时控件暂停，不能同时提交两份输入。"));
       for (const [key, value] of Object.entries(draft.changes)) if (!profile?.controls?.some(control => control.key === key && control.editable)) this.editor.append(ui("p", "hint", `未映射原控件 ${key}：${String(value)}（保留，不能静默提交）`), action(`放弃原控件输入 ${key}`, () => { delete draft.changes[key]; this.edited(); this.render(); }));
       if (Object.keys(draft.changes).length) this.editor.append(action("放弃控件输入，使用完整源码", () => { draft.changes = {}; this.edited(); this.render(); }));
+    }
+    if (this.role === "settings") {
+      const processing = ui("section"); processing.setAttribute("aria-label", "共享处理默认建议");
+      processing.append(ui("h3", "共享处理默认与词表"), ui("p", "hint", "这里是导入／校对的共享建议，只有用户在本次处理明确采用才启用；文档语言仍由原生 Typst 决定。保存复用当前库设置的权限、历史与同步。"));
+      try {
+        const settings = JSON.parse(draft.source) as Record<string, unknown>;
+        if (!settings || Array.isArray(settings) || settings.version !== 1) throw new Error("原设置版本不受支持");
+        if (settings.processing === undefined) {
+          const create = action("添加共享通用处理建议", () => { settings.processing = defaultProcessingDocument(); draft.source = JSON.stringify(settings, null, 2); this.edited(); this.render(); }); create.disabled = !this.writable(); processing.append(create);
+        } else {
+          const document = decodeProcessingDocument(settings.processing);
+          const label = ui("label", "", "默认建议语言／文字体系／地区（可多选，未知地区省略）"), input = ui("input", "knowledge-input"); input.value = document.defaults.languages.map(processingLanguageTag).join(", "); input.disabled = !this.writable(); input.onchange = () => { try { document.defaults.languages = parseProcessingLanguages(input.value); settings.processing = document; draft.source = JSON.stringify(settings, null, 2); this.edited(); this.render(); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }; label.append(input); processing.append(label, ui("p", "hint", `通用方案；${document.rules.length} 条词典规则、${document.scopedAllowlist.length} 条有范围白名单。词条、适用范围及准确版本在下方同一 JSON 中编辑，未知规则保源。`));
+        }
+      } catch { processing.append(ui("p", "hint", "当前共享处理设置不能由友好控件安全解析，原 JSON 已保留；请在源码中核对，未覆盖未知规则。")); }
+      this.editor.append(processing);
     }
     const sourceLabel = ui("label", "", this.role === "style" ? "完整原生 Typst 样式源码" : "完整 JSON 配置源码"); this.source.rows = 14; this.source.spellcheck = false; this.source.setAttribute("aria-label", labelSource); if (this.source.value !== draft.source) this.source.value = draft.source; this.source.readOnly = !this.writable(); this.source.oninput = () => { draft.source = this.source.value; this.edited(); }; sourceLabel.append(this.source); this.editor.append(sourceLabel);
     if (this.needsComparison()) { this.editor.append(ui("h3", "", "配置依据已变化，保留双方原文"), ui("p", "", "原读取依据"), ui("pre", "", draft.baseSource), ui("p", "", "当前服务端配置"), ui("pre", "", profile!.source)); const compare = action("已核对配置，以当前原文作为新依据", () => this.run(() => { if (draft.pending) throw new Error("先核对或结束原操作，再确认新依据。"); draft.baseSource = profile!.source; draft.baseEnabled = profile!.enabled; this.edited(); this.render(); })); this.comparison = compare; this.editor.append(compare); }

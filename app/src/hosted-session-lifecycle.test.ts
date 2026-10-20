@@ -20,11 +20,15 @@ function fixture() {
   const storage = new Map<string, string>();
   const cleared: string[] = [];
   const el = (id: string) => {
-    if (!nodes.has(id)) nodes.set(id, { hidden: false, value: "", disabled: false, textContent: "", srcdoc: "", replaceChildren() {} });
+    if (!nodes.has(id)) nodes.set(id, { hidden: false, value: "", disabled: false, textContent: "", srcdoc: "", replaceChildren() {}, querySelectorAll() { return []; } });
     return nodes.get(id);
   };
   const context: any = {
     el, window: { addEventListener(name: string, listener: (event: any) => void) { listeners.set(name, listener); } },
+    document: { querySelectorAll() { return []; } },
+    everydayNavigation: { clear() {} }, everydayBar: { replaceChildren() {} },
+    renderEverydayBar() {}, noteInputAudience() { return null; }, noteInputRecovery: { count() { return 0; } },
+    authoringEditable() { return false; }, actionVersion: 0,
     requestEpoch: 0, authorizationEpoch: 0, cachePrefix: "weftext-hosted-draft:space:alice:0:",
     doc: { sessionId: "alice-original", resource: "Shared", rights: { read: true, write: true } },
     draft: { source: "unsaved draft", baseSource: "saved source" },
@@ -37,8 +41,8 @@ function fixture() {
     fetch: async (url: string, options: RequestInit) => { calls.push({ url, options }); return { arrayBuffer: async () => new ArrayBuffer(0) }; },
     request: async () => ({ active: true }),
   };
-  for (const name of ["source", "knowledgeLinks", "citations", "navigationRegistry", "contentImport", "ownerBackup", "fields", "review", "queries", "office", "history", "library", "media", "structures"]) {
-    context[name] = { value: "unsaved draft", viewMode: "source", pausedSession: false, clear() { cleared.push(name); }, hasPending() { return false; } };
+  for (const name of ["latexAuthoring", "diagramAuthoring", "recognitionPanel", "source", "knowledgeLinks", "citations", "navigationRegistry", "contentImport", "ownerBackup", "fields", "review", "queries", "office", "history", "library", "media", "structures"]) {
+    context[name] = { value: "unsaved draft", viewMode: "source", pausedSession: false, clear() { cleared.push(name); }, revoke() { cleared.push(name); }, hasPending() { return false; } };
   }
   vm.createContext(context); vm.runInContext(compiled, context);
   return { context, nodes, listeners, calls, storage, cleared };
@@ -59,7 +63,8 @@ test("logout releases the original document before clearing its credential and a
     assert.equal(JSON.parse(f.calls[index].options.body as string).sessionId, `alice-${index}`);
     assert.equal(f.calls[index].options.keepalive, true);
   }
-  assert.equal(f.calls.length, 40); assert.equal(f.cleared.length, 40 * 14);
+  assert.equal(f.calls.length, 40); assert.equal(f.cleared.length, 40 * 17);
+  for (const name of ["latexAuthoring", "diagramAuthoring", "recognitionPanel"]) assert.equal(f.cleared.filter(item => item === name).length, 40);
 });
 
 test("cleanup of a late temporary session uses its original actor after another actor connects", async () => {
@@ -89,7 +94,7 @@ test("failed close delivery or browser storage does not block local logout and p
   f.context.fetch = async () => { throw new Error("offline"); };
   assert.doesNotThrow(() => f.nodes.get("logout").onclick());
   await Promise.resolve();
-  assert.equal(f.context.token, ""); assert.equal(f.context.doc, undefined); assert.equal(f.cleared.length, 14);
+  assert.equal(f.context.token, ""); assert.equal(f.context.doc, undefined); assert.equal(f.cleared.length, 17);
   const other = fixture();
   other.context.sessionStorage.setItem = () => { throw new Error("quota"); };
   assert.doesNotThrow(() => other.listeners.get("pagehide")!({ persisted: false }));

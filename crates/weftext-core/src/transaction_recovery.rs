@@ -267,7 +267,11 @@ impl Core {
         drop(capture);
         self.inspect_transaction_recovery(plan)
     }
-    fn capture_transaction_recovery(&self, plan: &Plan, write: bool) -> Result<RecoveryCapture> {
+    pub(crate) fn capture_transaction_recovery(
+        &self,
+        plan: &Plan,
+        write: bool,
+    ) -> Result<RecoveryCapture> {
         let t = plan.transaction.as_ref().unwrap();
         let mut capture = RecoveryCapture {
             members: Vec::new(),
@@ -664,6 +668,10 @@ impl Core {
                                     && bytes.is_empty()
                                     && plan.transaction.as_ref().is_some_and(|t| {
                                         matches!(t.mutation, Mutation::Compound { .. })
+                                            || matches!(
+                                                t.request.intent,
+                                                OperationIntent::CreateLibrary { .. }
+                                            )
                                     });
                                 member.matches_before = bound
                                     && exact_before_stamp

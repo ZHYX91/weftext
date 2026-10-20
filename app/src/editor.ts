@@ -1,9 +1,11 @@
-import { Annotation, Compartment, EditorState, StateEffect, StateField, type Extension, type Transaction } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, Prec, StateEffect, StateField, type Extension, type Transaction } from "@codemirror/state";
 import { Decoration, EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory, undo, redo } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import type { SyntaxToken } from "./types";
+import { currentSourceStyleBasis, retireSourceStylesEffect, sourceStyleModeEffect, sourceStyles, sourceTokensEffect, type SourceStyleBasis } from "./source-style";
+import { sourceCompositionHistory, SourceHistoryRequests, type SourceHistoryCommand } from "./source-history";
 
 export interface SourceSelection { from: number; to: number }
 export interface SourcePatch { from: number; to: number; expected: string; insert: string }
@@ -85,34 +87,6 @@ function localInput(transaction: Transaction) {
 /** The full buffer/history remain in state; only this proven source slot is drawn. */
 export const sourceRevealExtensions: Extension = [revealField, revealDecorations, EditorState.transactionFilter.of(localInput), EditorView.atomicRanges.of(view => view.state.field(revealDecorations))];
 
-const tokenEffect = StateEffect.define<{ tokens: SyntaxToken[]; styled: boolean }>();
-const sourceDecorations = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(value, transaction) {
-    // A parser result belongs to its exact source. Never map old syntax through
-    // new source and present it as a current semantic decoration.
-    if (transaction.docChanged) value = Decoration.none;
-    for (const effect of transaction.effects) if (effect.is(tokenEffect)) {
-      const marks: ReturnType<Decoration["range"]>[] = [];
-      for (const token of effect.value.tokens) {
-        const from = token.utf16From, to = token.utf16To;
-        if (from < 0 || to > transaction.state.doc.length || from >= to) continue;
-        const name = token.kind.toLowerCase();
-        const kind = name.includes("heading") ? "heading" : name.includes("strong") ? "strong" : name.includes("emph") ? "emph" : name.includes("listitem") || name.includes("enumitem") ? "list" : name.includes("comment") ? "comment" : name.includes("math") ? "math" : name.includes("string") ? "string" : "";
-        if (!kind) continue;
-        if (kind === "heading" && effect.value.styled) {
-          const line = transaction.state.doc.lineAt(from);
-          marks.push(Decoration.line({ class: "cm-rendered-heading" }).range(line.from));
-        }
-        marks.push(Decoration.mark({ class: `cm-typst-${kind}${effect.value.styled ? " cm-rendered" : ""}` }).range(from, to));
-      }
-      value = Decoration.set(marks, true);
-    }
-    return value;
-  },
-  provide: field => EditorView.decorations.from(field),
-});
-
 /** Keep authored CR characters as source characters instead of normalizing EOL. */
 export function createSourceState(source: string, extensions: Extension[] = []): EditorState {
   return EditorState.create({ doc: source, extensions: [EditorState.lineSeparator.of("\n"), ...extensions] });
@@ -125,19 +99,65 @@ export class SourceEditor {
   private gutters = new Compartment();
   private listeners = new Set<(event: SourceEditorEvent) => void>();
   private inputComposition = false;
+  private pendingTokens?: { tokens: SyntaxToken[]; styled: boolean; basis: SourceStyleBasis };
+  private styleNotice = document.createElement("span");
+  private disposed = false;
+  private compositionEpoch = 0;
+  private activeCompositionEpoch: number | null = null;
+  private historyRequests = new SourceHistoryRequests({
+    composing: () => this.inputComposition || !!this.view?.compositionStarted || !!this.view?.composing,
+    execute: command => (command === "undo" ? undo : redo)(this.view),
+    settled: () => {
+      this.activeCompositionEpoch = null;
+      // End the native unit before releasing mode/save or later ordinary
+      // typing. This annotation neither changes source nor adds an Undo entry.
+      this.view.dispatch({ annotations: isolateHistory.of("after") });
+      this.flushTokens(); this.emit("composition");
+    },
+  });
   generation = 0;
 
   constructor(source: string, onChange: (source: string) => void, save: () => void) {
     this.view = new EditorView({
       state: createSourceState(source, [
           history(), this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
-          bracketMatching(), indentOnInput(), highlightSelectionMatches(), sourceDecorations, sourceRevealExtensions,
+          bracketMatching(), indentOnInput(), highlightSelectionMatches(), sourceStyles, sourceRevealExtensions,
+          sourceCompositionHistory(() => this.activeCompositionEpoch, transaction => !!transaction.annotation(nativeEdit)),
           this.editable.of(EditorView.editable.of(true)),
           this.wrapped.of(EditorView.lineWrapping),
-          keymap.of([{ key: "Mod-s", run: () => { save(); return true; } }, { key: "Mod-Shift-z", run: redo, preventDefault: true }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+          keymap.of([{ key: "Mod-s", run: () => { save(); return true; } }, { key: "Mod-Shift-z", run: () => this.requestHistory("redo", true), preventDefault: true }, ...defaultKeymap,
+            ...historyKeymap.map(binding => ({ ...binding, run: binding.run === undo ? () => this.requestHistory("undo", true) : binding.run === redo ? () => this.requestHistory("redo", true) : binding.run })), ...searchKeymap, indentWithTab]),
           EditorView.contentAttributes.of({ "aria-label": "Typst 源码编辑器", spellcheck: "false" }),
+          Prec.highest(EditorView.domEventHandlers({
+            beforeinput: (event, view) => {
+              const command = event.inputType === "historyUndo" ? "undo" : event.inputType === "historyRedo" ? "redo" : null;
+              if (!command) return false;
+              // history() otherwise dispatches immediately, even while the
+              // final composition DOM mutation is still waiting to be read.
+              event.preventDefault();
+              if (!view.state.readOnly && view.state.facet(EditorView.editable)) {
+                if (event.isComposing && this.activeCompositionEpoch === null) this.activeCompositionEpoch = ++this.compositionEpoch;
+                this.requestHistory(command, true, event.isComposing);
+              }
+              return true;
+            },
+          })),
+          EditorView.domEventHandlers({
+            beforeinput: (event, view) => {
+              // A large native contenteditable insertion builds thousands of
+              // DOM lines before CodeMirror can read it back. Use the normal
+              // selection transaction while retaining the complete author text.
+              // Composition still belongs to the browser/input method.
+              if (event.inputType !== "insertText" || !event.data || event.data.length < 64 * 1024 || !event.cancelable || event.defaultPrevented || event.isComposing || this.composing || view.state.readOnly || !view.state.facet(EditorView.editable)) return false;
+              event.preventDefault();
+              view.dispatch({ ...view.state.replaceSelection(event.data), userEvent: "input.type", scrollIntoView: true, annotations: isolateHistory.of("full") });
+              return true;
+            },
+          }),
           EditorView.updateListener.of(update => {
-            if (update.docChanged) { this.generation++; onChange(update.state.doc.toString()); this.emit("source"); }
+            const styleStatus = update.state.field(sourceStyles).status;
+            this.styleNotice.hidden = styleStatus !== "pending";
+            if (update.docChanged) { this.pendingTokens = undefined; this.generation++; onChange(update.state.doc.toString()); this.emit("source"); }
             if (update.selectionSet) this.emit("selection");
             if (update.docChanged && update.startState.field(revealField) && !update.state.field(revealField)) {
               this.view.dom.classList.remove("cm-local-source");
@@ -147,8 +167,13 @@ export class SourceEditor {
             }
           }),
           EditorView.domEventObservers({
-            compositionstart: () => { this.inputComposition = true; this.emit("composition"); },
-            compositionend: () => { this.inputComposition = false; queueMicrotask(() => this.emit("composition")); },
+            compositionstart: () => { this.inputComposition = true; this.activeCompositionEpoch = ++this.compositionEpoch; this.historyRequests.compositionStart(); this.emit("composition"); },
+            compositionend: () => {
+              this.inputComposition = false;
+              // Keep outside mode/save actions waiting through CM's final DOM
+              // microtask, then apply queued history before releasing them.
+              this.historyRequests.compositionEnd();
+            },
           }),
           EditorView.theme({
             "&": { height: "100%", fontSize: "15px" },
@@ -160,18 +185,28 @@ export class SourceEditor {
             ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { background: "#cce2db !important" },
             "&.cm-focused": { outline: "none" },
             ".cm-scroller": { overflow: "auto" },
+            ".cm-source-style-notice": { position: "absolute", top: "3px", right: "12px", fontSize: "11px", lineHeight: "18px", color: "#687263", backgroundColor: "#fafcf8", pointerEvents: "none", zIndex: "2" },
           }),
         ]),
     });
+    this.styleNotice.className = "cm-source-style-notice";
+    this.styleNotice.textContent = "样式更新中 · 暂存上次外观";
+    this.styleNotice.setAttribute("role", "note");
+    this.styleNotice.hidden = true;
+    this.view.dom.append(this.styleNotice);
   }
   get source(): string { return this.view.state.doc.toString(); }
   get selection(): SourceSelection { const main = this.view.state.selection.main; return { from: main.from, to: main.to }; }
-  get composing(): boolean { return this.inputComposition || this.view.compositionStarted || this.view.composing; }
+  get composing(): boolean { return this.inputComposition || this.view.compositionStarted || this.view.composing || this.historyRequests.composing; }
   get revealed(): SourceReveal | null { return this.view.state.field(revealField); }
   observe(listener: (event: SourceEditorEvent) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   private emit(kind: SourceEditorEvent["kind"]): void { const event = { kind, source: this.source, generation: this.generation, selection: this.selection, composing: this.composing }; for (const listener of this.listeners) listener(event); }
-  undo(): void { undo(this.view); }
-  redo(): void { redo(this.view); }
+  undo(): void { this.requestHistory("undo"); }
+  redo(): void { this.requestHistory("redo"); }
+  private requestHistory(command: SourceHistoryCommand, sourceSurface = false, composingHint = false): boolean {
+    if (this.disposed || sourceSurface && (this.view.state.readOnly || !this.view.state.facet(EditorView.editable))) return false;
+    return this.historyRequests.request(command, composingHint);
+  }
   apply(from: number, to: number, text: string): void {
     this.applyPatches(this.source, [{ from, to, expected: this.source.slice(from, to), insert: text }], { from: from + text.length, to: from + text.length });
   }
@@ -194,8 +229,26 @@ export class SourceEditor {
     });
     this.view.focus();
   }
-  tokens(tokens: SyntaxToken[], styled: boolean): void { this.view.dispatch({ effects: tokenEffect.of({ tokens, styled }) }); }
-  readOnly(value: boolean): void { this.view.dispatch({ effects: this.editable.reconfigure(EditorView.editable.of(!value)) }); }
+  syntaxBasis(): SourceStyleBasis { return currentSourceStyleBasis(this.view.state); }
+  tokens(tokens: SyntaxToken[], styled: boolean, basis: SourceStyleBasis): boolean {
+    const current = this.syntaxBasis();
+    if (this.disposed || basis.source !== current.source || basis.generation !== current.generation || basis.epoch !== current.epoch) return false;
+    if (this.composing) { this.pendingTokens = { tokens, styled, basis }; return true; }
+    this.pendingTokens = undefined;
+    this.view.dispatch({ effects: sourceTokensEffect.of({ tokens, styled, basis }) });
+    return true;
+  }
+  clearTokens(): void { this.pendingTokens = undefined; this.historyRequests.retire(); this.view.dispatch({ effects: retireSourceStylesEffect.of(null) }); }
+  styleMode(styled: boolean): void {
+    if (this.pendingTokens) this.pendingTokens.styled = styled;
+    this.view.dispatch({ effects: sourceStyleModeEffect.of(styled) });
+  }
+  private flushTokens(): void {
+    const pending = this.pendingTokens;
+    if (pending && !this.composing && !this.disposed) this.tokens(pending.tokens, pending.styled, pending.basis);
+  }
+  destroy(): void { this.disposed = true; this.pendingTokens = undefined; this.historyRequests.dispose(); this.view.destroy(); }
+  readOnly(value: boolean): void { if (value && this.view.state.facet(EditorView.editable)) this.historyRequests.retire(); this.view.dispatch({ effects: this.editable.reconfigure(EditorView.editable.of(!value)) }); }
   reveal(range: SourceReveal, expectedSource = this.source): boolean {
     if (this.composing || expectedSource !== this.source || !sourceBoundary(this.source, range.from) || !sourceBoundary(this.source, range.to) || range.from < 0 || range.to < range.from || range.to > this.source.length || this.source.slice(range.from, range.to) !== range.raw) return false;
     this.view.dispatch({ effects: [sourceRevealEffect.of(range), this.gutters.reconfigure([])], selection: { anchor: range.from, head: range.to } });

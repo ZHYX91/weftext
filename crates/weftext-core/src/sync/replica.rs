@@ -295,11 +295,15 @@ impl Core {
             if matches!(tracked.object, ObjectKey::Node(_) | ObjectKey::Directory(_))
                 && !tracked.state.retired
             {
-                tracked.state.parent = parent_id(
-                    &parent_lookup,
-                    &root,
-                    Path::new(&tracked.directory).parent().unwrap(),
-                )?;
+                tracked.state.parent = if Path::new(&tracked.directory) == root {
+                    None
+                } else {
+                    parent_id(
+                        &parent_lookup,
+                        &root,
+                        Path::new(&tracked.directory).parent().unwrap(),
+                    )?
+                };
             }
             if let ObjectKey::Node(id) = &tracked.object {
                 let canonical = format!("{}.typ", tracked.state.name);
@@ -1016,6 +1020,21 @@ fn owner(
     root: &Path,
     path: &Path,
 ) -> Option<ObjectKey> {
+    // A canonical ordinary note may share the library root directory. The
+    // envelope remains workspace control, never part of that note's payload.
+    if path.parent() == Some(root)
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|name| {
+                matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    ".weftext-workspace.json" | ".weftext-mvp-commit.json" | ".weftext-format"
+                )
+            })
+    {
+        return None;
+    }
     if let Some(key) = config_key(root, path) {
         return Some(key);
     }
