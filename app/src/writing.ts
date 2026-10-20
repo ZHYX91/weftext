@@ -56,6 +56,7 @@ export type WritingIntent =
   | { kind: "listEdit"; range: WritingRange; action: { kind: "split"; at: number } | { kind: "indent" | "outdent" } };
 export interface WritingBasis { sessionId: string; source: string; serial: number }
 export interface WritingSnapshot extends WritingBasis { generation: number }
+export interface WritingSurfaceLease { basis(): WritingSnapshot; active(): boolean }
 export interface WritingRequest extends WritingBasis { sourceHash: string; intent: WritingIntent }
 export interface NativeWritingPatch { from: number; to: number; utf16From: number; utf16To: number; expected: string; insert: string }
 export interface WritingResult { source: string; sourceHash: string; patches: NativeWritingPatch[]; selection: SourceSelection; map: WritingMap }
@@ -269,7 +270,7 @@ export class WritingController {
   private failure: Error | null = null;
   private bindings = new Set<InputBinding>();
   private focusSelection = false;
-  private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; retain?(): boolean; connected: boolean }>();
+  private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; lease?: WritingSurfaceLease; connected: boolean }>();
 
   constructor(private host: WritingHost) {
     this.stopObserve = host.editor.observe(event => {
@@ -308,11 +309,16 @@ export class WritingController {
   }
   get snapshot(): WritingSnapshot { return { ...this.host.basis(), generation: this.host.editor.generation }; }
   isSnapshotCurrent(snapshot: WritingSnapshot): boolean { const now = this.snapshot; return now.sessionId === snapshot.sessionId && now.source === snapshot.source && now.serial === snapshot.serial && now.generation === snapshot.generation; }
-  /** Focused inputs stay mounted until settled; compiling may update other UI. */
-  get retainInput(): boolean { return typeof document !== "undefined" && ([...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input) || !!this.currentMap() && [...this.surfaces].some(surface => surface.element.isConnected && (surface.element.contains(document.activeElement) || surface.retain?.()))) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing); }
-  /** A native table surface remains mounted while its grid or text has focus. */
-  observeSurface(element: HTMLElement, update: (transition?: WritingTransition) => void, retain?: () => boolean): () => void {
-    const surface = { element, update, retain, connected: false }; this.surfaces.add(surface);
+  /** Valid literal input and qualified commands retain presentation; idle grid focus does not. */
+  get retainInput(): boolean {
+    return typeof document !== "undefined" && (
+      [...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input)
+      || !!this.currentMap() && [...this.surfaces].some(surface => surface.element.isConnected && surface.lease && this.isSnapshotCurrent(surface.lease.basis()) && surface.lease.active())
+    ) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing);
+  }
+  /** A surface's explicit command/gesture lease uses its existing qualified native snapshot. */
+  observeSurface(element: HTMLElement, update: (transition?: WritingTransition) => void, lease?: WritingSurfaceLease): () => void {
+    const surface = { element, update, lease, connected: false }; this.surfaces.add(surface);
     const blur = () => queueMicrotask(() => this.notify()); element.addEventListener("focusout", blur);
     return () => { this.surfaces.delete(surface); element.removeEventListener("focusout", blur); };
   }
