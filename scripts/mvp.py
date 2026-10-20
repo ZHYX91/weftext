@@ -137,7 +137,7 @@ if __name__ == '__main__':
     if args.action in {'check', 'package'}:
         run(sys.executable, 'scripts/check.py', '--models')
         run(sys.executable, 'scripts/recognition/test_schemes.py')
-        run(sys.executable, 'scripts/recognition/test_docx_reader.py')
+        run(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
         run(sys.executable, 'resources/fonts/verify.py')
         run(NPM, '--prefix', 'app', 'test')
         run('cargo', 'fmt', '--all', '--', '--check')

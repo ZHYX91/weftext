@@ -38,6 +38,8 @@ translation_status: source
 
 安装目录保留下载时的完整官方分发、Tesseract AUTHORS／LICENSE、模型许可证、wheel 内全部 PDFium／Pillow 及其随附依赖许可证、7-Zip 许可证和精确 DLL 清单。该入口让用户从上游取得本机私用运行时；它不是可再分发许可。Tesseract 的官方安装包未附全部 DLL 的独立版权／对应源码材料，重新分发整套运行时前必须逐项补齐上游适用义务；本轮不声称已完成运行时再分发审核。其他系统、移动端或服务器执行端的安装验收仍按产品版本范围另行验证。
 
+纯 DOCX 结构与编号读取检查只依赖 Python 标准库；产品检查入口以 `python -S scripts/recognition/test_docx_reader.py` 禁用 site 包执行，避免本机已装依赖掩盖意外耦合。`build_scheme_fixtures.py` 仅在生成 PDF／图片样例时需要指定 Typst CLI 和 Pillow，生成 OOXML 样例不需要它们。
+
 ## 离线 worker 合同
 
 用上述独立环境的 Python 执行 `worker.py --runtime <绝对安装目录>`，从 stdin 读一份 UTF-8 JSON，从 stdout 输出一份 JSON；[请求](../../resources/recognition/request.schema.json)与[结果](../../resources/recognition/result.schema.json)的版本均为 `1`。`inputPath` 只供已获权服务端选择准确原件，不能直接接受浏览器传来的本机路径。调用者须先固定原件摘要、页／区域与处理设置，并在交付结果或提交计划前复核原件、权限、规则与模型版本。产品桥已通过内嵌固定脚本接入 HTTP、Core Plan 与产品界面；worker 仍只读，中间结果不授予提交权限，持久化与交付资格由获权宿主及 Core 决定。

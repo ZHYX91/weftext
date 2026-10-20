@@ -1,7 +1,8 @@
 """Build owned public TEST fixtures; never download or borrow user examples.
 
-Requires an explicitly selected official Typst CLI and Pillow. Font bytes come
-from this repository's licensed Noto assets and are not copied into fixtures.
+Raster fixtures require an explicitly selected official Typst CLI and Pillow;
+the OOXML fixture uses only the standard library. Font bytes come from this
+repository's licensed Noto assets and are not copied into fixtures.
 """
 from __future__ import annotations
 
@@ -11,9 +12,6 @@ import json
 from pathlib import Path
 import subprocess
 import zipfile
-
-from PIL import Image
-
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -48,6 +46,8 @@ def official_docx(path):
 
 
 def build(typst: Path, output: Path):
+    from PIL import Image
+
     root = Path(__file__).resolve().parents[2]
     fixtures = Path(__file__).resolve().parent / "fixtures"
     output.mkdir(parents=True, exist_ok=True)
