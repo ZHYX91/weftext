@@ -730,7 +730,7 @@ def main():
     write_json(EVIDENCE / 'result.json', {'successful': result.wasSuccessful(), 'testsRun': result.testsRun,
                'failures': [{'test': str(test), 'traceback': detail} for test, detail in result.failures],
                'errors': [{'test': str(test), 'traceback': detail} for test, detail in result.errors],
-               'skipped': list(result.skipped)})
+               'skipped': [{'test': str(test), 'reason': reason} for test, reason in result.skipped]})
     return 0 if result.wasSuccessful() else 1
 
 

@@ -686,7 +686,8 @@ def main():
     print('Recognition HTTP candidate:', http.EXE, 'SHA-256', manifest['candidateSha256'], flush=True)
     outcome = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(declared[name](name) for name in selected))
     manifest.update(run=outcome.testsRun, failures=len(outcome.failures), errors=len(outcome.errors),
-                    skipped=outcome.skipped, passed=outcome.wasSuccessful())
+                    skipped=[{'test': str(test), 'reason': reason} for test, reason in outcome.skipped],
+                    passed=outcome.wasSuccessful())
     destination = ARTIFACTS / ('recognition-run-' + http.uid() + '.json')
     destination.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), 'utf-8')
     print('Recognition run manifest:', destination, flush=True)
