@@ -2754,15 +2754,11 @@ impl Core {
         let root = absolute_path(root.as_ref())?;
         let workspace = self.require_workspace(&root)?;
         let path = root.join(role.filename());
+        // Keep external bytes inspectable; semantic consumers and writers validate their own use.
         let snapshot = self
             .read_snapshot(&root, &[display(&path)])?
             .files
             .remove(0);
-        if matches!(role, ConfigRole::WorkspaceSettings)
-            && let Some(bytes) = &snapshot.bytes
-        {
-            crate::author_order::validate_workspace_settings_scope(bytes, &workspace.workspace_id)?;
-        }
         if matches!(role, ConfigRole::Rules)
             && snapshot.bytes.is_none()
             && self.query_rules_ever_committed(&root)?

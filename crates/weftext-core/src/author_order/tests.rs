@@ -342,6 +342,47 @@ fn closed_order_codec_rejects_foreign_duplicate_and_non_identity_members() {
 }
 
 #[test]
+fn config_read_preserves_invalid_settings_without_granting_navigation_or_write_validity() {
+    let (_temp, mut core, root, _data, parent) = fixture();
+    let path = root.join(SETTINGS);
+    let foreign_parent = format!("weftext-directory://{}/{}", fresh(), fresh());
+    let foreign_orders = serde_json::to_vec(
+        &serde_json::json!({"version":1,"navigationOrders":{foreign_parent:[]}}),
+    )
+    .unwrap();
+    for source in [
+        b"not json".as_slice(),
+        b"[]",
+        br#"{"version":2}"#,
+        br#"{"version":1,"navigationOrders":[]}"#,
+        &foreign_orders,
+    ] {
+        fs::write(&path, source).unwrap();
+        let config = core
+            .read_config(&root, ConfigRole::WorkspaceSettings)
+            .unwrap();
+        assert_eq!(config.bytes.as_deref(), Some(source));
+        assert_eq!(Path::new(&config.path), path);
+        core.validate_snapshot(&root, &path, &config.base_id)
+            .unwrap();
+        assert!(core.read_navigation_order(&root, &parent).is_err());
+        assert!(
+            core.prepare_config_save(
+                &root,
+                ConfigRole::WorkspaceSettings,
+                config.bytes,
+                source.to_vec(),
+                &fresh(),
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), source);
+        core.validate_snapshot(&root, &path, &config.base_id)
+            .unwrap();
+    }
+}
+
+#[test]
 fn excluded_physical_child_does_not_become_a_complete_subset_reorder() {
     let (_temp, mut core, root, _data, parent) = fixture();
     core.create_note(&root, &root, "Visible").unwrap();

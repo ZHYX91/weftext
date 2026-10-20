@@ -99,10 +99,10 @@ try{
  await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
  await click('重新读取字段');await click('已核对，采用当前字段依据');
  await page.getByLabel('字段输入',{exact:true}).selectOption('cancelled');
- let pending;
- await page.route('**/api/hosted/fields/write',async route=>{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');});
+ let pending,firstWriteDroppedResolve;const firstWriteDropped=new Promise(resolve=>firstWriteDroppedResolve=resolve);
+ await page.route('**/api/hosted/fields/write',async route=>{try{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200,await response.text());await route.abort('failed');}catch(error){routeErrors.push(String(error));await route.abort('failed').catch(()=>{});}finally{firstWriteDroppedResolve();}});
  await click('保存字段');await page.waitForFunction(()=>Object.keys(sessionStorage).some(k=>k.startsWith('weftext-hosted-field:') && JSON.parse(sessionStorage[k]).pending));
- await page.waitForTimeout(300);await page.unroute('**/api/hosted/fields/write');await page.reload();
+ await bounded(firstWriteDropped,'first committed field reply loss');assert.deepEqual(routeErrors,[]);await page.unroute('**/api/hosted/fields/write');await page.reload();
  await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
  await click('核对原字段操作');await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();
  const receipt=await api('/api/hosted/fields/operation',{resource:'shared',fieldId:'tasks/status',operationId:pending.operationId},'alice');assert.equal(receipt.status,'committed');
@@ -110,8 +110,8 @@ try{
  result.cases.push('lost committed response survives reload and resolves the original field operation');
  await click('重新读取字段');await click('已核对，采用当前字段依据');await page.getByLabel('字段输入',{exact:true}).selectOption('done');
  let committed;const committedWrite=new Promise(resolve=>committed=resolve);
- await page.route('**/api/hosted/fields/write',async route=>{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200);committed();await route.abort('failed');});
- await click('保存字段');await committedWrite;await page.waitForFunction(()=>!Array.from(document.querySelectorAll('#fields button')).find(b=>b.textContent==='核对原字段操作').disabled);await page.unroute('**/api/hosted/fields/write');
+ await page.route('**/api/hosted/fields/write',async route=>{try{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200,await response.text());await route.abort('failed');}catch(error){routeErrors.push(String(error));await route.abort('failed').catch(()=>{});}finally{committed();}});
+ await click('保存字段');await bounded(committedWrite,'second committed field reply loss');assert.deepEqual(routeErrors,[]);await page.waitForFunction(()=>!Array.from(document.querySelectorAll('#fields button')).find(b=>b.textContent==='核对原字段操作').disabled);await page.unroute('**/api/hosted/fields/write');
  const notePath=path.join(root,'Shared/Shared.typ'), accepted=await readFile(notePath,'utf8');await writeFile(notePath,accepted+'\nEXTERNAL_UNADMITTED_CHANGE\n');
  await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});
  const unavailableRead=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/read'));await click('读取字段');assert.equal((await unavailableRead).status(),409);
@@ -143,7 +143,7 @@ try{
  const alicePage=page,tagContext=await browser.newContext({viewport:{width:1440,height:1100}});page=await tagContext.newPage();observePage(page);await page.goto(base);await page.getByLabel('访问凭据',{exact:true}).fill(token.tagger);await click('连接');await page.getByLabel('选择获权字段').waitFor();
  const actualPolicy=await api('/api/hosted/admin/policy',undefined,'admin'),narrow=actualPolicy.users.tagger.grants.shared;
  assert.deepEqual(Object.keys(narrow.fields),['core/tags']);assert.equal(narrow.read??false,false);assert.equal(narrow.write??false,false);assert.equal(narrow.history??false,false);assert.equal(actualPolicy.users.tagger.navigation.tags.read,true);assert.equal(actualPolicy.users.tagger.navigation.tags.create,true);assert.equal(actualPolicy.users.tagger.navigation.tags.rename,false);assert.equal(actualPolicy.users.tagger.navigation.tags.move,false);
- const sourceDenied=await fetch(base+'/api/hosted/open',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token.tagger},body:JSON.stringify({resource:'shared'})});assert.equal(sourceDenied.status,403);
+ const sourceDenied=await fetch(base+'/api/hosted/open',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token.tagger},body:JSON.stringify({resource:'shared'})});assert.equal(sourceDenied.status,404);assert.ok(!(await sourceDenied.text()).includes('HIDDEN_BODY_987'));
  let tagPrepares=0,tagCommits=0,tagCancels=0,tagLookups=0;page.on('request',request=>{const route=new URL(request.url()).pathname;if(route.endsWith('/navigation/registry/prepare'))tagPrepares++;if(route.endsWith('/navigation/registry/commit'))tagCommits++;if(route.endsWith('/navigation/registry/settle'))tagCancels++;if(route.endsWith('/navigation/registry/operation'))tagLookups++;});
  await tagReady();assert.equal(await page.locator('#documents button').count(),0);assert.equal(await page.locator('#source .cm-content').count(),0);assert.ok(!(await page.locator('body').innerText()).includes('HIDDEN_BODY_987'));
  const picker=page.locator('#fields .data-tag-reference-picker select').first();assert.equal(await picker.inputValue(),otherRef);assert.match(await picker.locator('option').filter({hasText:'归组 / Parent'}).innerText(),/"归组 \/ Parent"/);
