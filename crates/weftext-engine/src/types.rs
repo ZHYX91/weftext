@@ -159,6 +159,8 @@ pub struct SourceInfo {
     pub syntax_tokens: Vec<SyntaxToken>,
     pub body_insertion: Option<SourceRange>,
     pub writer_status: String,
+    #[serde(default)]
+    pub notes: crate::NotesSourceMap,
 }
 
 pub(crate) fn utf16(source: &str, at: usize) -> usize {

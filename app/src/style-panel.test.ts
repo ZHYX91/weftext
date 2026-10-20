@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NativeStyleController, type LibraryStyleHost, type LibraryStylePrepare, type LibraryStyleState } from "./style-panel";
+import { NativeStyleController, nativeLanguageOptions, type LibraryStyleHost, type LibraryStylePrepare, type LibraryStyleState } from "./style-panel";
 
 const original = '#let library-style(body) = {\n  set text(size: 11pt)\n  // custom rule must stay exactly as authored\n  show heading: it => [【#it.body】]\n  body\n}\n';
 function state(): LibraryStyleState {
   return { path: "Styles/library-style.typ", source: original, baseId: "v1", enabled: true, controls: [{ key: "text.size", label: "正文大小", kind: "number", value: 11, unit: "pt", min: 1, max: 100, editable: true }, { key: "custom", label: "自定义规则", kind: "text", value: "", editable: false, reason: "没有唯一的原生参数" }] };
 }
+test("friendly locale choices submit original native expressions and keep unknown rules", () => {
+  assert.ok(nativeLanguageOptions("text.lang", '"zh"').some(o => o.value === '"en"' && o.label.includes("English")));
+  assert.ok(nativeLanguageOptions("text.region", '"CN"').some(o => o.value === "none" && o.label.includes("未指定")));
+  assert.equal(nativeLanguageOptions("text.lang", "custom-language")[0].value, "custom-language");
+  assert.deepEqual(nativeLanguageOptions("text.font", '"zh"'), []);
+});
 function host(overrides: Partial<LibraryStyleHost> = {}): LibraryStyleHost {
   return { read: async () => state(), operationId: () => "operation-1", prepare: async request => ({ operationId: request.operationId, planId: "plan-1", beforeSource: original, afterSource: request.source ?? original.replace("11pt", "12pt"), summary: ["正文大小"] }), apply: async () => ({ ...state(), source: original.replace("11pt", "12pt"), baseId: "v2" }), ...overrides };
 }

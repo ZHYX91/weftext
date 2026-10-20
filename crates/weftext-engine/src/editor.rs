@@ -1,11 +1,17 @@
 //! Exact-snapshot native authoring. No display text or generated span is a write address.
-use crate::{editor_types::*, encode_literal, types::*};
+use crate::{editor_types::*, encode_literal, inspect::Utf16Offsets, types::*};
 use sha2::{Digest, Sha256};
 use std::ops::Range;
 use typst_syntax::{
     LinkedNode, Source, SyntaxKind, SyntaxNode,
     ast::{self, AstNode},
 };
+#[path = "everyday.rs"]
+mod everyday;
+#[path = "table_clipboard.rs"]
+mod table_clipboard;
+#[path = "table_editor.rs"]
+mod table_editor;
 
 pub fn source_hash(source: &str) -> String {
     format!("{:x}", Sha256::digest(source.as_bytes()))
@@ -17,6 +23,21 @@ pub(crate) fn source_range(source: &str, range: Range<usize>) -> SourceRange {
         to: range.end,
         utf16_from: utf16(source, range.start),
         utf16_to: utf16(source, range.end),
+        raw: source[range].into(),
+        writable: true,
+    }
+}
+
+fn indexed_source_range(
+    source: &str,
+    offsets: &Utf16Offsets<'_>,
+    range: Range<usize>,
+) -> SourceRange {
+    SourceRange {
+        from: range.start,
+        to: range.end,
+        utf16_from: offsets.at(range.start),
+        utf16_to: offsets.at(range.end),
         raw: source[range].into(),
         writable: true,
     }
@@ -47,6 +68,9 @@ pub fn inspect_editor(source: &str) -> EditorMap {
         subtitle: absent(),
         body_insertion: None,
         unavailable_reason: None,
+        notes: crate::inspect_notes_source(source),
+        heading_numbering: crate::inspect_heading_numbering(source),
+        body_blocks: vec![],
     };
     if !valid {
         map.unavailable_reason = Some("syntax-invalid".into());
@@ -58,7 +82,9 @@ pub fn inspect_editor(source: &str) -> EditorMap {
         map.unavailable_reason = Some("unverified-show-rule".into());
         return map;
     }
-    collect_markup(&root, source, &parsed, "body", &mut map);
+    let offsets = Utf16Offsets::new(source);
+    collect_markup(&root, source, &parsed, &offsets, "body", &mut map);
+    map.body_blocks = everyday::blocks(source);
     let heading_levels = heading_levels_unmodified(parsed.root());
     for structure in &mut map.structures {
         if structure.kind == "heading" {
@@ -73,6 +99,9 @@ pub fn inspect_editor(source: &str) -> EditorMap {
         .is_none_or(|n| n.kind() != SyntaxKind::LineComment)
     {
         map.body_insertion = Some(source_range(source, source.len()..source.len()));
+    }
+    if let Some(at) = crate::notes::trailing_endnotes_insertion(source) {
+        map.body_insertion = Some(source_range(source, at..at));
     }
     map
 }
@@ -94,6 +123,7 @@ pub fn inspect_editor_with_style(source: &str, style: &crate::StyleModule) -> Ed
     let mut map = inspect_editor(source);
     map.literal_regions.clear();
     map.structures.clear();
+    map.body_blocks.clear();
     map.body_insertion = None;
     map.title = absent();
     map.title.status = "unverified-library-style".into();
@@ -118,6 +148,11 @@ pub fn edit_with_style(
 
 fn has_unknown_show(node: &LinkedNode<'_>, source: &str) -> bool {
     if node.kind() == SyntaxKind::ShowRule {
+        if crate::numbering::verified_numbering_header_range(source)
+            .is_some_and(|range| node.range().start >= range.start && node.range().end <= range.end)
+        {
+            return false;
+        }
         return !run_in_label(&source[node.range()])
             .is_some_and(|label| source[node.range()] == run_in_recipe(&label));
     }
@@ -149,37 +184,83 @@ fn literal_piece(node: &LinkedNode<'_>, _source: &str) -> Option<String> {
     }
 }
 
+fn cell_literal_piece(node: &LinkedNode<'_>, source: &str) -> Option<String> {
+    match node.kind() {
+        SyntaxKind::Linebreak => Some("\n".into()),
+        SyntaxKind::Space
+            if node
+                .prev_sibling_with_trivia()
+                .is_some_and(|n| n.kind() == SyntaxKind::Linebreak) =>
+        {
+            Some(String::new())
+        }
+        _ => literal_piece(node, source),
+    }
+}
+
+/// Cell text has real line breaks; an ordinary native soft source wrap remains
+/// distinct. CRLF clipboard line endings normalize to one logical break.
+fn encode_cell_literal(text: &str) -> Result<String, EngineError> {
+    if text.len() > 1_048_576 || text.contains('\0') {
+        return Err(EngineError("单元格文字过长或含 NUL".into()));
+    }
+    text.replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .split('\n')
+        .map(encode_literal)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|lines| lines.join("\\\n"))
+}
+
 fn collect_markup(
     node: &LinkedNode<'_>,
     source: &str,
     parsed: &Source,
+    offsets: &Utf16Offsets<'_>,
     role: &str,
     map: &mut EditorMap,
 ) {
     let children: Vec<_> = node.children().collect();
     if node.kind() == SyntaxKind::Markup {
         let mut run = vec![];
-        fn flush(run: &mut Vec<LinkedNode<'_>>, source: &str, role: &str, map: &mut EditorMap) {
-            let start = run
-                .iter()
-                .position(|n| !matches!(n.kind(), SyntaxKind::Space | SyntaxKind::Parbreak));
-            let end = run
-                .iter()
-                .rposition(|n| !matches!(n.kind(), SyntaxKind::Space | SyntaxKind::Parbreak));
+        fn flush(
+            run: &mut Vec<LinkedNode<'_>>,
+            source: &str,
+            offsets: &Utf16Offsets<'_>,
+            role: &str,
+            map: &mut EditorMap,
+        ) {
+            let owns = |n: &LinkedNode<'_>| {
+                !matches!(n.kind(), SyntaxKind::Space | SyntaxKind::Parbreak)
+                    || role == "tableCell"
+                        && n.kind() == SyntaxKind::Space
+                        && n.prev_sibling_with_trivia()
+                            .is_some_and(|previous| previous.kind() == SyntaxKind::Linebreak)
+            };
+            let start = run.iter().position(owns);
+            let end = run.iter().rposition(owns);
             if let (Some(start), Some(end)) = (start, end) {
                 let run = &run[start..=end];
                 let text = run
                     .iter()
-                    .map(|n| literal_piece(n, source).unwrap_or_else(|| "\n\n".into()))
+                    .map(|n| {
+                        if role == "tableCell" {
+                            cell_literal_piece(n, source)
+                        } else {
+                            literal_piece(n, source)
+                        }
+                        .unwrap_or_else(|| "\n\n".into())
+                    })
                     .collect();
                 let paragraph_breaks = run
                     .iter()
                     .filter(|n| n.kind() == SyntaxKind::Parbreak)
-                    .map(|n| source_range(source, n.range()))
+                    .map(|n| indexed_source_range(source, offsets, n.range()))
                     .collect();
                 map.literal_regions.push(LiteralRegion {
-                    range: source_range(
+                    range: indexed_source_range(
                         source,
+                        offsets,
                         run[0].range().start..run.last().unwrap().range().end,
                     ),
                     text,
@@ -190,19 +271,25 @@ fn collect_markup(
             run.clear();
         }
         for child in &children {
-            let piece = literal_piece(child, source).or_else(|| {
-                (role == "body" && child.kind() == SyntaxKind::Parbreak).then(|| "\n\n".into())
+            let piece = (if role == "tableCell" {
+                cell_literal_piece(child, source)
+            } else {
+                literal_piece(child, source)
+            })
+            .or_else(|| {
+                (matches!(role, "body" | "tableCell") && child.kind() == SyntaxKind::Parbreak)
+                    .then(|| "\n\n".into())
             });
             if piece.is_some() {
                 run.push(child.clone());
             } else {
-                flush(&mut run, source, role, map);
+                flush(&mut run, source, offsets, role, map);
             }
         }
-        flush(&mut run, source, role, map);
+        flush(&mut run, source, offsets, role, map);
         if children.is_empty() {
             map.literal_regions.push(LiteralRegion {
-                range: source_range(source, node.range()),
+                range: indexed_source_range(source, offsets, node.range()),
                 text: String::new(),
                 role: role.into(),
                 paragraph_breaks: vec![],
@@ -211,7 +298,7 @@ fn collect_markup(
     }
     for (child_index, child) in children.iter().enumerate() {
         if child.kind() == SyntaxKind::Markup {
-            collect_markup(child, source, parsed, role, map);
+            collect_markup(child, source, parsed, offsets, role, map);
             continue;
         }
         let (kind, body, level) = if let Some(h) = child.get().cast::<ast::Heading>() {
@@ -230,7 +317,7 @@ fn collect_markup(
             ("numberedListItem", Some(s.body().to_untyped()), None)
         } else if let Some(s) = child.get().cast::<ast::TermItem>() {
             if let Some(term) = parsed.find(s.term().to_untyped().span()) {
-                collect_markup(&term, source, parsed, "term", map);
+                collect_markup(&term, source, parsed, offsets, "term", map);
             }
             ("termListItem", Some(s.description().to_untyped()), None)
         } else if let Some(eq) = child.get().cast::<ast::Equation>() {
@@ -241,10 +328,10 @@ fn collect_markup(
                     "inlineMath"
                 }
                 .into(),
-                range: source_range(source, child.range()),
+                range: indexed_source_range(source, offsets, child.range()),
                 body: parsed
                     .find(eq.body().to_untyped().span())
-                    .map(|n| source_range(source, n.range())),
+                    .map(|n| indexed_source_range(source, offsets, n.range())),
                 level: None,
                 level_writable: false,
                 level_reason: None,
@@ -259,13 +346,12 @@ fn collect_markup(
                 .lines()
                 .filter_map(|line| parsed.find(line.to_untyped().span()))
                 .collect();
-            let body = lines
-                .first()
-                .zip(lines.last())
-                .map(|(first, last)| source_range(source, first.range().start..last.range().end));
+            let body = lines.first().zip(lines.last()).map(|(first, last)| {
+                indexed_source_range(source, offsets, first.range().start..last.range().end)
+            });
             map.structures.push(StructureInfo {
                 kind: if raw.block() { "blockRaw" } else { "inlineRaw" }.into(),
-                range: source_range(source, child.range()),
+                range: indexed_source_range(source, offsets, child.range()),
                 body,
                 level: None,
                 level_writable: false,
@@ -292,8 +378,10 @@ fn collect_markup(
                 .is_some_and(|l| source.contains(&format!("#{}", run_in_recipe(l))));
             map.structures.push(StructureInfo {
                 kind: kind.into(),
-                range: source_range(source, child.range()),
-                body: body_node.as_ref().map(|n| source_range(source, n.range())),
+                range: indexed_source_range(source, offsets, child.range()),
+                body: body_node
+                    .as_ref()
+                    .map(|n| indexed_source_range(source, offsets, n.range())),
                 level,
                 level_writable: false,
                 level_reason: None,
@@ -303,8 +391,17 @@ fn collect_markup(
                 language: None,
             });
             if let Some(body) = body_node {
-                collect_markup(&body, source, parsed, kind, map);
+                collect_markup(&body, source, parsed, offsets, kind, map);
             }
+            continue;
+        }
+        // Bare native content expressions preserve their own lexical scope.
+        // The table merger uses these wrappers to keep one cell's set/let from
+        // affecting the next; their explicit inner literals remain editable.
+        if let Some(block) = child.get().cast::<ast::ContentBlock>()
+            && let Some(body) = parsed.find(block.body().to_untyped().span())
+        {
+            collect_markup(&body, source, parsed, offsets, role, map);
             continue;
         }
         if let Some(call) = child.get().cast::<ast::FuncCall>() {
@@ -316,7 +413,7 @@ fn collect_markup(
                 continue;
             }
             if name == "table" {
-                collect_table(child, call, source, parsed, map);
+                collect_table(child, call, source, parsed, offsets, map);
                 continue;
             }
             if matches!(
@@ -331,8 +428,8 @@ fn collect_markup(
                         if name == "strike" {
                             map.structures.push(StructureInfo {
                                 kind: name.into(),
-                                range: source_range(source, child.range()),
-                                body: Some(source_range(source, body.range())),
+                                range: indexed_source_range(source, offsets, child.range()),
+                                body: Some(indexed_source_range(source, offsets, body.range())),
                                 level: None,
                                 level_writable: false,
                                 level_reason: None,
@@ -342,7 +439,7 @@ fn collect_markup(
                                 language: None,
                             });
                         }
-                        collect_markup(&body, source, parsed, name, map);
+                        collect_markup(&body, source, parsed, offsets, name, map);
                     }
                 }
             }
@@ -355,6 +452,7 @@ fn collect_table(
     call: ast::FuncCall<'_>,
     source: &str,
     parsed: &Source,
+    offsets: &Utf16Offsets<'_>,
     map: &mut EditorMap,
 ) {
     let mut columns = None;
@@ -383,11 +481,11 @@ fn collect_table(
                 if let Some(block) = e.to_untyped().cast::<ast::ContentBlock>()
                     && let Some(body) = parsed.find(block.body().to_untyped().span())
                 {
-                    cells.push(source_range(source, body.range()));
-                    collect_markup(&body, source, parsed, "tableCell", map);
+                    cells.push(indexed_source_range(source, offsets, body.range()));
+                    collect_markup(&body, source, parsed, offsets, "tableCell", map);
                 } else {
                     simple = false;
-                    collect_complex_cells(e.to_untyped(), source, parsed, map, &mut cells);
+                    collect_complex_cells(e.to_untyped(), source, parsed, offsets, map, &mut cells);
                 }
             }
             _ => simple = false,
@@ -400,19 +498,22 @@ fn collect_table(
         && !uncertain_table_trivia(node.get());
     map.structures.push(StructureInfo {
         kind: "table".into(),
-        range: source_range(source, node.range()),
+        range: indexed_source_range(source, offsets, node.range()),
         body: None,
         level: None,
         level_writable: false,
         level_reason: None,
         label: None,
         run_in: false,
-        table: Some(TableInfo {
+        table: Some(table_editor::inspect(
+            node,
+            call,
+            source,
+            parsed,
             columns,
-            rows: cells.len() / columns,
             cells,
             grid_writable,
-        }),
+        )),
         language: None,
     });
 }
@@ -431,6 +532,7 @@ fn collect_complex_cells(
     node: &SyntaxNode,
     source: &str,
     parsed: &Source,
+    offsets: &Utf16Offsets<'_>,
     map: &mut EditorMap,
     cells: &mut Vec<SourceRange>,
 ) {
@@ -460,10 +562,10 @@ fn collect_complex_cells(
                 if let Some(block) = expr.to_untyped().cast::<ast::ContentBlock>()
                     && let Some(body) = parsed.find(block.body().to_untyped().span())
                 {
-                    cells.push(source_range(source, body.range()));
-                    collect_markup(&body, source, parsed, "tableCell", map);
+                    cells.push(indexed_source_range(source, offsets, body.range()));
+                    collect_markup(&body, source, parsed, offsets, "tableCell", map);
                 } else {
-                    collect_complex_cells(expr.to_untyped(), source, parsed, map, cells);
+                    collect_complex_cells(expr.to_untyped(), source, parsed, offsets, map, cells);
                 }
             }
             _ => {}
@@ -735,6 +837,14 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
     let mut patches = vec![];
     let mut selection_override = None;
     match &request.intent {
+        EditIntent::ConvertBodyBlock {
+            range,
+            target,
+            level,
+        } => everyday::convert(source, &map, range, target, *level, &mut patches)?,
+        EditIntent::MoveBodyBlock { range, direction } => {
+            everyday::move_block(source, &map, range, direction, &mut patches)?
+        }
         EditIntent::ReplaceLiteral { range, text } => {
             let region = map
                 .literal_regions
@@ -744,18 +854,30 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
             literal_patch(source, region, text, &mut patches)?;
         }
         EditIntent::InsertBlock { at, block } => {
+            if matches!(block, BlockInsert::Image { .. })
+                && !standard_binding_available(source, "image")
+            {
+                return Err(EngineError("图片原生绑定不能证明，未插入内容。".into()));
+            }
             if !map.body_insertion.as_ref().is_some_and(|r| r.from == *at) {
                 return Err(EngineError("不是当前正文 sibling 插入点".into()));
             }
             let body = encode_block(block)?;
-            let prefix = if source.is_empty() || source.ends_with("\n\n") {
+            let before = &source[..*at];
+            let prefix = if before.is_empty() || before.ends_with("\n\n") {
                 String::new()
-            } else if source.ends_with('\n') {
+            } else if before.ends_with('\n') {
                 "\n".into()
             } else {
                 "\n\n".into()
             };
-            push_patch(&mut patches, source, *at..*at, format!("{prefix}{body}"));
+            let suffix = if *at < source.len() { "\n\n" } else { "" };
+            push_patch(
+                &mut patches,
+                source,
+                *at..*at,
+                format!("{prefix}{body}{suffix}"),
+            );
         }
         EditIntent::SetHeadingLevel { range, level } => {
             check_level(*level)?;
@@ -841,11 +963,19 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
                 &mut patches,
                 source,
                 range.from..range.to,
-                encode_literal(text)?,
+                encode_cell_literal(text)?,
             );
         }
         EditIntent::TableEdit { range, action } => {
             edit_table(source, &map, range, action, &mut patches)?
+        }
+        EditIntent::NativeNote { action } => {
+            let updated = crate::edit_notes(source, action)?;
+            patch_changed_source(source, &updated, &mut patches);
+        }
+        EditIntent::HeadingNumbering { action } => {
+            let updated = crate::edit_heading_numbering(source, action)?;
+            patch_changed_source(source, &updated, &mut patches);
         }
         EditIntent::ListEdit { range, action } => {
             edit_list(source, &map, range, action, &mut patches)?
@@ -891,6 +1021,32 @@ fn same_range(a: &SourceRange, b: &SourceRange) -> bool {
         && b.writable
 }
 
+/// Keep a helper's unchanged source outside its smallest UTF-8 edit boundary.
+fn patch_changed_source(source: &str, updated: &str, patches: &mut Vec<SourcePatch>) {
+    if source == updated {
+        return;
+    }
+    let prefix = source
+        .chars()
+        .zip(updated.chars())
+        .take_while(|(a, b)| a == b)
+        .map(|(ch, _)| ch.len_utf8())
+        .sum::<usize>();
+    let suffix = source[prefix..]
+        .chars()
+        .rev()
+        .zip(updated[prefix..].chars().rev())
+        .take_while(|(a, b)| a == b)
+        .map(|(ch, _)| ch.len_utf8())
+        .sum::<usize>();
+    push_patch(
+        patches,
+        source,
+        prefix..source.len() - suffix,
+        updated[prefix..updated.len() - suffix].into(),
+    );
+}
+
 fn literal_patch(
     source: &str,
     region: &LiteralRegion,
@@ -934,9 +1090,13 @@ fn literal_patch(
     let mut boundaries = std::collections::BTreeMap::from([(0usize, 0usize)]);
     let mut displayed = 0;
     for node in root.children() {
-        let piece = literal_piece(&node, raw)
-            .or_else(|| (node.kind() == SyntaxKind::Parbreak).then(|| "\n\n".into()))
-            .ok_or_else(|| EngineError("文字槽回读出现非文字节点".into()))?;
+        let piece = (if region.role == "tableCell" {
+            cell_literal_piece(&node, raw)
+        } else {
+            literal_piece(&node, raw)
+        })
+        .or_else(|| (node.kind() == SyntaxKind::Parbreak).then(|| "\n\n".into()))
+        .ok_or_else(|| EngineError("文字槽回读出现非文字节点".into()))?;
         if node.kind() == SyntaxKind::Text {
             for (at, c) in piece.char_indices() {
                 boundaries.insert(displayed + at, node.range().start + at);
@@ -967,7 +1127,11 @@ fn literal_patch(
         patches,
         source,
         region.range.from + from..region.range.from + to,
-        encode_literal(&text[prefix..text.len() - suffix])?,
+        if region.role == "tableCell" {
+            encode_cell_literal(&text[prefix..text.len() - suffix])?
+        } else {
+            encode_literal(&text[prefix..text.len() - suffix])?
+        },
     );
     Ok(())
 }
@@ -1094,6 +1258,16 @@ fn encode_math(text: &str, display: bool) -> Result<String, EngineError> {
 }
 fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
     Ok(match block {
+        BlockInsert::Image { path, alt } => {
+            if path.is_empty() || path.len() > 4096 || path.contains(['\0', '\r', '\n']) {
+                return Err(EngineError("图片路径无效。".into()));
+            }
+            format!(
+                "#image({}, alt: {})",
+                encode_string(path)?,
+                encode_string(alt)?
+            )
+        }
         BlockInsert::Paragraph { text } => encode_literal(text)?,
         BlockInsert::Heading { text, level } => {
             check_level(*level)?;
@@ -1132,9 +1306,19 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
                 "#table(columns: {columns}, {})",
                 cells
                     .iter()
-                    .map(|c| encode_literal(c).map(|c| format!("[{c}]")))
+                    .map(|c| encode_cell_literal(c).map(|c| format!("[{c}]")))
                     .collect::<Result<Vec<_>, _>>()?
                     .join(", ")
+            )
+        }
+        BlockInsert::ClipboardTable {
+            rows,
+            columns,
+            cells,
+        } => {
+            format!(
+                "#{}",
+                table_editor::encode_clipboard(*rows, *columns, cells)?
             )
         }
         BlockInsert::Link { target, text } => {
@@ -1535,88 +1719,7 @@ fn edit_table(
     patches: &mut Vec<SourcePatch>,
 ) -> Result<(), EngineError> {
     let structure = find_structure(map, range, "table")?;
-    let table = structure.table.as_ref().unwrap();
-    if !table.grid_writable {
-        return Err(EngineError(
-            "复杂/不规则/注释表格保源；网格操作不可用".into(),
-        ));
-    }
-    let mut columns = table.columns;
-    let mut rows: Vec<Vec<String>> = table
-        .cells
-        .chunks(columns)
-        .map(|r| r.iter().map(|c| format!("[{}]", c.raw)).collect())
-        .collect();
-    match action {
-        TableAction::InsertRow { index } => {
-            if *index > rows.len() {
-                return Err(EngineError("行超出范围".into()));
-            }
-            rows.insert(*index, vec!["[]".into(); columns]);
-        }
-        TableAction::RemoveRow { index } => {
-            if *index >= rows.len() || rows.len() == 1 {
-                return Err(EngineError("不能删除不存在或最后一行".into()));
-            }
-            rows.remove(*index);
-        }
-        TableAction::InsertColumn { index } => {
-            if *index > columns {
-                return Err(EngineError("列超出范围".into()));
-            }
-            for row in &mut rows {
-                row.insert(*index, "[]".into());
-            }
-            columns += 1;
-        }
-        TableAction::RemoveColumn { index } => {
-            if *index >= columns || columns == 1 {
-                return Err(EngineError("不能删除不存在或最后一列".into()));
-            }
-            for row in &mut rows {
-                row.remove(*index);
-            }
-            columns -= 1;
-        }
-        TableAction::MoveRow { from, to } => {
-            if *from >= rows.len() || *to >= rows.len() {
-                return Err(EngineError("行超出范围".into()));
-            }
-            let row = rows.remove(*from);
-            rows.insert(*to, row);
-        }
-        TableAction::Paste { row, column, text } => {
-            let data: Vec<Vec<_>> = text
-                .trim_end_matches(['\r', '\n'])
-                .split('\n')
-                .map(|r| r.trim_end_matches('\r').split('\t').collect())
-                .collect();
-            let width = data.first().map_or(0, Vec::len);
-            if width == 0
-                || data.iter().any(|r| r.len() != width)
-                || row + data.len() > rows.len()
-                || column + width > columns
-            {
-                return Err(EngineError("TSV 需要当前网格内的矩形范围".into()));
-            }
-            for (i, line) in data.iter().enumerate() {
-                for (j, value) in line.iter().enumerate() {
-                    rows[row + i][column + j] = format!("[{}]", encode_literal(value)?);
-                }
-            }
-        }
-    }
-    check_grid(columns, rows.len() * columns)?;
-    push_patch(
-        patches,
-        source,
-        range.from..range.to,
-        format!(
-            "table(columns: {columns}, {})",
-            rows.into_iter().flatten().collect::<Vec<_>>().join(", ")
-        ),
-    );
-    Ok(())
+    table_editor::edit(source, structure, action, patches)
 }
 fn edit_list(
     source: &str,

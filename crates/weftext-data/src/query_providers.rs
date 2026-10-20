@@ -43,7 +43,7 @@ pub struct QueryProviderAccess {
     pub series_policies: BTreeSet<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryProviderDependency {
     pub baseline: Option<ProviderBaseline>,
@@ -53,7 +53,7 @@ pub struct QueryProviderDependency {
     pub series_selections: BTreeMap<String, Option<String>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryProviderDependencies {
     pub baselines: Vec<QueryProviderDependency>,

@@ -3,7 +3,12 @@
 use super::export_conversions::{generate, template_slots};
 use super::*;
 use base64::Engine as _;
-use std::{collections::BTreeMap, time::Instant};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Instant,
+};
 use weftext_export::ExportArtifact;
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -49,18 +54,35 @@ impl Drop for GenerationGuard {
             && let Some(job) = store.jobs.get_mut(&self.id)
             && job.reply["status"] == "pending"
         {
-            job.reply = json!({"id":self.id,"requestId":self.id,"status":"failed","code":"generationInterrupted","message":"本次生成已中断，原输入未改写；请明确重新生成"});
+            let external = serde_json::from_str::<Value>(&job.input)
+                .is_ok_and(|input| matches!(input["format"].as_str(), Some("doc" | "wps")));
+            job.reply = if external {
+                json!({"id":self.id,"requestId":self.id,"status":"failed","code":"resultUnknown","message":"原外部转换已中断，准确结果尚不能确认；输入和原操作保留，不自动重跑"})
+            } else {
+                json!({"id":self.id,"requestId":self.id,"status":"failed","code":"generationInterrupted","message":"本次生成已中断，原输入未改写；请明确重新生成"})
+            };
             job.born = Instant::now();
         }
     }
 }
 #[derive(Default)]
 pub(crate) struct ExportStore {
+    pub(crate) recognition: crate::recognition_api::Store,
     queries: HashMap<String, FrozenQueryOutput>,
     jobs: HashMap<String, Job>,
     expired: std::collections::BTreeSet<String>,
+    legacy_root: Option<PathBuf>,
+    legacy_active: HashMap<String, Arc<AtomicBool>>,
+    legacy_queued_cancels: std::collections::BTreeSet<String>,
 }
 impl ExportStore {
+    pub(crate) fn with_legacy_root(root: PathBuf) -> Self {
+        Self {
+            recognition: crate::recognition_api::Store::new(root.with_file_name("recognition")),
+            legacy_root: Some(root),
+            ..Self::default()
+        }
+    }
     fn prune(&mut self) {
         self.queries.retain(|_, q| q.born.elapsed() < TTL);
         self.jobs.retain(|id, j| {
@@ -92,6 +114,324 @@ fn store(state: &AppState) -> Result<std::sync::MutexGuard<'_, ExportStore>, Api
         .exports
         .lock()
         .map_err(|_| ApiError::internal("输出会话不可用"))
+}
+
+async fn legacy_capabilities() -> ApiResult {
+    let mut result = value(super::legacy_office::probe().await)?;
+    result["executionLocation"] = json!("local");
+    Ok(Json(result))
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyCancel {
+    request_id: String,
+}
+async fn legacy_cancel(State(state): State<AppState>, Json(req): Json<LegacyCancel>) -> ApiResult {
+    if uuid::Uuid::parse_str(&req.request_id).is_err() {
+        return Err(ApiError::bad("原转换请求标识无效"));
+    }
+    let (active, queued) = {
+        let mut store = store(&state)?;
+        let active = store.legacy_active.get(&req.request_id).cloned();
+        let owns_pending = store.jobs.get(&req.request_id).is_some_and(|job| {
+            job.reply["status"] == "pending"
+                && serde_json::from_str::<Value>(&job.input)
+                    .is_ok_and(|input| matches!(input["format"].as_str(), Some("doc" | "wps")))
+        }) || store.legacy_root.as_ref().is_some_and(|root| {
+            root.join("requests")
+                .join(format!("{}.sha256", req.request_id))
+                .is_file()
+        });
+        let queued = active.is_none() && owns_pending;
+        if queued {
+            if store.legacy_queued_cancels.len() >= 64
+                && !store.legacy_queued_cancels.contains(&req.request_id)
+            {
+                return Err(ApiError::bad("待取消的外部转换过多，请先检查原操作"));
+            }
+            store.legacy_queued_cancels.insert(req.request_id.clone());
+        }
+        (active, queued)
+    };
+    if let Some(cancel) = &active {
+        cancel.store(true, Ordering::Release);
+    }
+    Ok(Json(
+        json!({"requestId":req.request_id,"status":if active.is_some()||queued{"cancelling"}else{"notRunning"},"message":"仅请求取消原外部转换；实际状态以同一准备请求的回执为准，输入与原件保留"}),
+    ))
+}
+struct LegacyRunGuard {
+    store: Arc<Mutex<ExportStore>>,
+    id: String,
+    cancel: Arc<AtomicBool>,
+}
+impl Drop for LegacyRunGuard {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Release);
+        if let Ok(mut store) = self.store.lock() {
+            store.legacy_active.remove(&self.id);
+        }
+    }
+}
+pub(crate) async fn legacy_convert(
+    state: &AppState,
+    id: &str,
+    request: super::legacy_office::ConversionRequest,
+) -> Result<super::legacy_office::ConversionResult, ApiError> {
+    let (root, cancel) = {
+        let mut store = store(state)?;
+        let root = store.legacy_root.clone().ok_or_else(|| {
+            ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "conversionUnavailable",
+                "当前后端未配置自己的持久外部转换目录；普通 DOCX 仍可使用",
+            )
+        })?;
+        if store.legacy_active.contains_key(id) {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "pending",
+                "原外部转换仍在运行，请继续检查同一操作",
+            ));
+        }
+        let precancelled = store.legacy_queued_cancels.remove(id);
+        let cancel = Arc::new(AtomicBool::new(precancelled));
+        store.legacy_active.insert(id.into(), cancel.clone());
+        (root, cancel)
+    };
+    let _guard = LegacyRunGuard {
+        store: state.exports.clone(),
+        id: id.into(),
+        cancel: cancel.clone(),
+    };
+    let result = super::legacy_office::convert_once(id, request, &root, cancel)
+        .await
+        .map_err(|error| {
+            ApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                if matches!(error.code.as_str(), "conversionUnknown" | "receiptFailed") {
+                    "resultUnknown"
+                } else {
+                    &error.code
+                },
+                error.message,
+            )
+        })?;
+    if result.status != "succeeded" {
+        return Err(ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            if result.status == "unknown" {
+                "resultUnknown"
+            } else {
+                &result.code
+            },
+            result.message.clone(),
+        ));
+    }
+    Ok(result)
+}
+/// Claim exact caller parameters before starting a persistent external job.
+/// A restart cannot turn the same ID into a different target or author input.
+pub(crate) fn claim_legacy_request(
+    state: &AppState,
+    id: &str,
+    input: &impl serde::Serialize,
+) -> Result<(), ApiError> {
+    use std::io::Write;
+    if uuid::Uuid::parse_str(id).is_err() {
+        return Err(ApiError::bad("原转换请求标识无效"));
+    }
+    let root = store(state)?.legacy_root.clone().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "conversionUnavailable",
+            "当前后端未配置持久外部转换目录",
+        )
+    })?;
+    let directory = root.join("requests");
+    std::fs::create_dir_all(&directory).map_err(|_| ApiError::internal("无法保留转换原请求"))?;
+    let file = directory.join(format!("{id}.sha256"));
+    let fingerprint = byte_digest(
+        &serde_json::to_vec(input).map_err(|_| ApiError::internal("转换请求无法冻结"))?,
+    );
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&file)
+    {
+        Ok(mut output) => {
+            output
+                .write_all(fingerprint.as_bytes())
+                .and_then(|_| output.sync_all())
+                .map_err(|_| {
+                    ApiError::new(
+                        StatusCode::CONFLICT,
+                        "resultUnknown",
+                        "原转换请求未完整持久化，请保留输入并检查原操作",
+                    )
+                })?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let meta = std::fs::symlink_metadata(&file).map_err(|_| {
+                ApiError::new(
+                    StatusCode::CONFLICT,
+                    "resultUnknown",
+                    "原转换请求暂不能读取；保留原操作，不重新执行",
+                )
+            })?;
+            if !meta.is_file() || meta.len() != 64 {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "resultUnknown",
+                    "原转换请求记录不完整；保留原操作，不重新执行",
+                ));
+            }
+            let saved = std::fs::read(&file).map_err(|_| {
+                ApiError::new(
+                    StatusCode::CONFLICT,
+                    "resultUnknown",
+                    "原转换请求暂不能读取；保留原操作，不重新执行",
+                )
+            })?;
+            if saved != fingerprint.as_bytes() {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "requestReuse",
+                    "原外部转换标识已有不同或未完整输入，请检查原操作；未启动新转换",
+                ));
+            }
+        }
+        Err(_) => return Err(ApiError::internal("无法保留原外部转换请求")),
+    }
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyOutputStage {
+    schema_version: u32,
+    digest: String,
+    length: usize,
+    content_type: String,
+    extension: String,
+    losses: Vec<weftext_export::ExportLoss>,
+    summary: String,
+    preview: Value,
+}
+fn legacy_stage_directory(state: &AppState, id: &str) -> Result<PathBuf, ApiError> {
+    if uuid::Uuid::parse_str(id).is_err() {
+        return Err(ApiError::bad("原转换请求标识无效"));
+    }
+    let root = store(state)?.legacy_root.clone().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "conversionUnavailable",
+            "当前后端未配置持久外部转换目录",
+        )
+    })?;
+    std::fs::create_dir_all(&root).map_err(|_| legacy_stage_unknown())?;
+    let root = std::fs::canonicalize(root).map_err(|_| legacy_stage_unknown())?;
+    Ok(root.join("output-stages").join(id))
+}
+fn legacy_stage_unknown() -> ApiError {
+    ApiError::new(
+        StatusCode::CONFLICT,
+        "resultUnknown",
+        "原外部转换的冻结 DOCX 阶段不完整或已改变；原件保留，不重新编译或重跑",
+    )
+}
+pub(crate) fn frozen_legacy_output_stage(
+    state: &AppState,
+    id: &str,
+) -> Result<Option<(ExportArtifact, Value)>, ApiError> {
+    let directory = legacy_stage_directory(state, id)?;
+    if !directory.try_exists().map_err(|_| legacy_stage_unknown())? {
+        return Ok(None);
+    }
+    let canonical = std::fs::canonicalize(&directory).map_err(|_| legacy_stage_unknown())?;
+    if canonical != directory {
+        return Err(legacy_stage_unknown());
+    }
+    let read = |name: &str, limit: u64| -> Result<Vec<u8>, ApiError> {
+        let path = directory.join(name);
+        let meta = std::fs::symlink_metadata(&path).map_err(|_| legacy_stage_unknown())?;
+        if !meta.is_file()
+            || meta.len() > limit
+            || std::fs::canonicalize(&path).ok().as_ref() != Some(&path)
+        {
+            return Err(legacy_stage_unknown());
+        }
+        std::fs::read(path).map_err(|_| legacy_stage_unknown())
+    };
+    let metadata = read("stage.json", MAX_BYTES as u64)?;
+    if read("stage.sha256", 64)? != byte_digest(&metadata).as_bytes() {
+        return Err(legacy_stage_unknown());
+    }
+    let record: LegacyOutputStage =
+        serde_json::from_slice(&metadata).map_err(|_| legacy_stage_unknown())?;
+    let bytes = read("frozen.docx", MAX_BYTES as u64)?;
+    if record.schema_version != 1
+        || record.extension != "docx"
+        || record.length != bytes.len()
+        || record.digest != byte_digest(&bytes)
+    {
+        return Err(legacy_stage_unknown());
+    }
+    Ok(Some((
+        ExportArtifact {
+            bytes,
+            content_type: record.content_type,
+            extension: record.extension,
+            losses: record.losses,
+            summary: record.summary,
+        },
+        record.preview,
+    )))
+}
+pub(crate) fn retain_legacy_output_stage(
+    state: &AppState,
+    id: &str,
+    artifact: &ExportArtifact,
+    preview: &Value,
+) -> Result<(), ApiError> {
+    use std::io::Write;
+    let directory = legacy_stage_directory(state, id)?;
+    let parent = directory.parent().unwrap();
+    std::fs::create_dir_all(parent).map_err(|_| legacy_stage_unknown())?;
+    std::fs::create_dir(&directory).map_err(|_| legacy_stage_unknown())?;
+    if std::fs::canonicalize(&directory).ok().as_ref() != Some(&directory) {
+        return Err(legacy_stage_unknown());
+    }
+    let record = LegacyOutputStage {
+        schema_version: 1,
+        digest: byte_digest(&artifact.bytes),
+        length: artifact.bytes.len(),
+        content_type: artifact.content_type.clone(),
+        extension: artifact.extension.clone(),
+        losses: artifact.losses.clone(),
+        summary: artifact.summary.clone(),
+        preview: preview.clone(),
+    };
+    let metadata = serde_json::to_vec(&record).map_err(|_| legacy_stage_unknown())?;
+    if artifact.bytes.len() > MAX_BYTES || metadata.len() > MAX_BYTES {
+        return Err(legacy_stage_unknown());
+    }
+    let seal = byte_digest(&metadata);
+    for (name, bytes) in [
+        ("frozen.docx", artifact.bytes.as_slice()),
+        ("stage.json", metadata.as_slice()),
+        ("stage.sha256", seal.as_bytes()),
+    ] {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(directory.join(name))
+            .map_err(|_| legacy_stage_unknown())?;
+        file.write_all(bytes)
+            .and_then(|_| file.sync_all())
+            .map_err(|_| legacy_stage_unknown())?;
+    }
+    Ok(())
 }
 pub(crate) fn retain_query(
     state: &AppState,
@@ -175,6 +515,8 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/export/status", post(status))
         .route("/api/export/confirm", post(confirm))
         .route("/api/export/download", post(download))
+        .route("/api/export/legacy-capabilities", post(legacy_capabilities))
+        .route("/api/export/legacy-cancel", post(legacy_cancel))
         .route("/api/exchange/prepare", post(prepare_import))
         .route("/api/exchange/inspect", post(inspect_import))
         .route("/api/exchange/commit", post(commit_import))
@@ -213,6 +555,8 @@ pub(crate) struct PrepareRequest {
     pub(crate) query_id: Option<String>,
     #[serde(default)]
     pub(crate) embedded_queries: Vec<EmbeddedQuerySelection>,
+    #[serde(default)]
+    pub(crate) legacy_backend: Option<String>,
 }
 fn template_style() -> String {
     "template".into()
@@ -304,7 +648,14 @@ async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>)
                     "同一输出请求不能更换输入",
                 ));
             }
-            return Ok(Json(job.reply.clone()));
+            // Only read the original persistent stages on an unknown external
+            // result. convert_once itself forbids another external execution.
+            if !matches!(req.format.as_str(), "doc" | "wps")
+                || job.reply["code"] != "resultUnknown"
+                || store.legacy_active.contains_key(&req.request_id)
+            {
+                return Ok(Json(job.reply.clone()));
+            }
         }
         if store.jobs.len() >= 32
             || store.expired.len() >= 4096
@@ -488,7 +839,7 @@ async fn download(
     Ok(response)
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ImportRequest {
     operation_id: String,
@@ -499,6 +850,10 @@ struct ImportRequest {
     name: String,
     format: String,
     bytes_base64: String,
+    #[serde(default)]
+    legacy_backend: Option<String>,
+    #[serde(default)]
+    docx_options: Option<weftext_export::docx::DocxImportOptions>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -512,11 +867,23 @@ async fn prepare_import(
     State(state): State<AppState>,
     Json(req): Json<ImportRequest>,
 ) -> ApiResult {
-    if !["native", "docx", "bibtex", "csl-json", "ris"].contains(&req.format.as_str()) {
+    if !["native", "docx", "doc", "wps", "bibtex", "csl-json", "ris"].contains(&req.format.as_str())
+    {
         return Err(ApiError::bad(
             "请选择 Word、Weftext 原生资料包或支持的文献格式",
         ));
     }
+    if uuid::Uuid::parse_str(&req.operation_id).is_err() {
+        return Err(ApiError::bad("原导入操作编号无效"));
+    }
+    let legacy = matches!(req.format.as_str(), "doc" | "wps");
+    // An existing once-only directory can only recover; it cannot launch a
+    // replacement process. This also covers a crash before Core got its plan.
+    let legacy_recovery = legacy
+        && store(&state)?
+            .legacy_root
+            .as_ref()
+            .is_some_and(|root| root.join(&req.operation_id).exists());
     let lookup_id = req.operation_id.clone();
     let new_import = core_call(&state, move |core| {
         match core.operation_details(&lookup_id) {
@@ -526,31 +893,109 @@ async fn prepare_import(
         }
     })
     .await?;
-    if new_import {
+    if new_import && !legacy_recovery {
         let loc = location(&state, &req.session_id)?;
         if std::path::Path::new(&req.root) != loc.root {
             return Err(ApiError::bad("目标库与当前会话不一致"));
         }
+        let sid = req.session_id.clone();
+        let base = req.base_id.clone();
+        core_call(&state, move |core| core.check_session_base(&sid, &base)).await?;
     }
-    let bytes = decode(&req.bytes_base64)?;
-    let is_docx = req.format == "docx";
+    let mut bytes = decode(&req.bytes_base64)?;
+    if !legacy && req.legacy_backend.is_some() {
+        return Err(ApiError::bad("此导入格式不使用外部转换后端"));
+    }
+    let is_docx = matches!(req.format.as_str(), "docx" | "doc" | "wps");
+    if !is_docx && req.docx_options.is_some() {
+        return Err(ApiError::bad("题注配对只适用于准确 Word 中间原件"));
+    }
+    let mut originals = vec![];
+    let mut conversion_losses = vec![];
+    let mut legacy_preview = None;
+    if legacy {
+        let root = req.root.clone();
+        let workspace =
+            core_call(&state, move |core| Ok(core.inventory(&root)?.workspace_id)).await?;
+        claim_legacy_request(
+            &state,
+            &req.operation_id,
+            &json!({"request":req,"workspaceId":workspace}),
+        )?;
+        let direction = if req.format == "doc" {
+            super::legacy_office::Direction::DocToDocx
+        } else {
+            super::legacy_office::Direction::WpsToDocx
+        };
+        let converted = legacy_convert(
+            &state,
+            &req.operation_id,
+            super::legacy_office::ConversionRequest {
+                backend: req
+                    .legacy_backend
+                    .clone()
+                    .unwrap_or_else(|| "libreoffice".into()),
+                direction,
+                bytes,
+            },
+        )
+        .await?;
+        bytes = converted
+            .intermediate_docx
+            .as_ref()
+            .ok_or_else(|| ApiError::internal("外部转换缺少准确 DOCX 中间件"))?
+            .bytes
+            .clone();
+        originals.push(weftext_export::docx::OriginalImportAsset {
+            filename: format!("original.{}", req.format),
+            mime: if req.format == "doc" {
+                "application/msword"
+            } else {
+                "application/octet-stream"
+            }
+            .into(),
+            bytes: converted.original.bytes.clone(),
+        });
+        conversion_losses = converted
+            .losses()
+            .into_iter()
+            .map(|loss| weftext_export::exchange::NativeLoss {
+                path: format!("original.{}", req.format),
+                code: loss.code,
+                detail: loss.message,
+            })
+            .collect();
+        legacy_preview = Some(converted.metadata());
+    }
     let (preview, files) = core_call(&state, move |core| {
         let operation_id = req.operation_id.clone();
         // Retained imports still pass the original full Core request through
         // its fingerprint check. Session/base are only transient admission
         // prerequisites for a new proposal, not a second durable authority.
-        if new_import {
+        if new_import && !legacy_recovery {
             core.check_session_base(&req.session_id, &req.base_id)?;
         }
-        let preview = if req.format == "docx" {
+        let preview = if is_docx {
             core.prepare_operation(weftext_core::OperationRequest {
                 operation_id: req.operation_id,
                 root: req.root,
-                intent: weftext_core::OperationIntent::ImportDocx {
-                    parent: req.parent,
-                    name: req.name,
-                    bytes,
-                    allow_losses: true,
+                intent: if req.format == "docx" && req.docx_options.is_none() {
+                    weftext_core::OperationIntent::ImportDocx {
+                        parent: req.parent,
+                        name: req.name,
+                        bytes,
+                        allow_losses: true,
+                    }
+                } else {
+                    weftext_core::OperationIntent::ImportDocxWithOptions {
+                        parent: req.parent,
+                        name: req.name,
+                        bytes,
+                        allow_losses: true,
+                        options: req.docx_options.unwrap_or_default(),
+                        originals,
+                        conversion_losses,
+                    }
                 },
             })
         } else if req.format == "native" {
@@ -585,6 +1030,9 @@ async fn prepare_import(
     })
     .await?;
     let mut output = value(preview)?;
+    if let Some(legacy) = legacy_preview {
+        output["legacyConversion"] = legacy;
+    }
     if is_docx {
         let source = files
             .iter()
@@ -629,6 +1077,20 @@ async fn inspect_import(
     Json(req): Json<TemplateRequest>,
 ) -> ApiResult {
     let bytes = decode(&req.bytes_base64)?;
+    if req.format == "docx" {
+        let analysis =
+            tokio::task::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
+                .await
+                .map_err(|_| ApiError::internal("Word 原件分析没有完成"))?
+                .map_err(|error| {
+                    ApiError::new(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "docxAnalysis",
+                        error.to_string(),
+                    )
+                })?;
+        return Ok(Json(value(analysis)?));
+    }
     let proposal = tokio::task::spawn_blocking(move || {
         bibliography_import_api::inspect_bibliography_import(&req.format, &bytes)
     })
@@ -663,6 +1125,105 @@ mod tests {
             initial: None,
         }
     }
+    #[test]
+    fn persistent_legacy_claim_binds_all_author_and_destination_inputs_after_store_restart() {
+        let (dir, mut state) = state();
+        let root = dir.path().join("legacy-office");
+        state.exports = Arc::new(Mutex::new(ExportStore::with_legacy_root(root.clone())));
+        let id = uuid::Uuid::new_v4().to_string();
+        let original = json!({"format":"doc","source":"exact draft","parent":"original target"});
+        claim_legacy_request(&state, &id, &original).unwrap();
+        state.exports = Arc::new(Mutex::new(ExportStore::with_legacy_root(root)));
+        claim_legacy_request(&state, &id, &original).unwrap();
+        assert_eq!(
+            claim_legacy_request(
+                &state,
+                &id,
+                &json!({"format":"doc","source":"exact draft","parent":"another target"})
+            )
+            .unwrap_err()
+            .code,
+            "requestReuse"
+        );
+        let interrupted = uuid::Uuid::new_v4().to_string();
+        std::fs::write(
+            dir.path()
+                .join("legacy-office/requests")
+                .join(format!("{interrupted}.sha256")),
+            b"partial",
+        )
+        .unwrap();
+        assert_eq!(
+            claim_legacy_request(&state, &interrupted, &original)
+                .unwrap_err()
+                .code,
+            "resultUnknown"
+        );
+    }
+    #[test]
+    fn external_output_restores_its_frozen_docx_stage_without_session_query_or_dependency_reads() {
+        let (dir, mut state) = state();
+        let root = dir.path().join("legacy-office");
+        state.exports = Arc::new(Mutex::new(ExportStore::with_legacy_root(root.clone())));
+        let id = uuid::Uuid::new_v4().to_string();
+        assert!(frozen_legacy_output_stage(&state, &id).unwrap().is_none());
+        let artifact = ExportArtifact {
+            bytes: b"exact frozen docx".to_vec(),
+            content_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                .into(),
+            extension: "docx".into(),
+            losses: vec![weftext_export::ExportLoss {
+                code: "originalLoss".into(),
+                message: "original stage loss".into(),
+                location: None,
+            }],
+            summary: "original summary".into(),
+        };
+        let preview = json!({"document":{"sourceHash":"original"},"query":{"queryId":"old-result","rows":["frozen"]}});
+        retain_legacy_output_stage(&state, &id, &artifact, &preview).unwrap();
+        state.exports = Arc::new(Mutex::new(ExportStore::with_legacy_root(root)));
+        let (recovered, recovered_preview) =
+            frozen_legacy_output_stage(&state, &id).unwrap().unwrap();
+        assert_eq!(recovered.bytes, artifact.bytes);
+        assert_eq!(recovered.losses[0].code, "originalLoss");
+        assert_eq!(recovered_preview, preview);
+        std::fs::write(
+            legacy_stage_directory(&state, &id)
+                .unwrap()
+                .join("frozen.docx"),
+            b"tampered frozen docx",
+        )
+        .unwrap();
+        assert_eq!(
+            frozen_legacy_output_stage(&state, &id).unwrap_err().code,
+            "resultUnknown"
+        );
+    }
+    #[tokio::test]
+    async fn external_cancel_targets_one_original_run_and_does_not_discard_it() {
+        let (_dir, state) = state();
+        let id = uuid::Uuid::new_v4().to_string();
+        let other = uuid::Uuid::new_v4().to_string();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let other_cancel = Arc::new(AtomicBool::new(false));
+        {
+            let mut store = store(&state).unwrap();
+            store.legacy_active.insert(id.clone(), cancel.clone());
+            store.legacy_active.insert(other, other_cancel.clone());
+        }
+        let Json(reply) = legacy_cancel(
+            State(state.clone()),
+            Json(LegacyCancel {
+                request_id: id.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply["status"], "cancelling");
+        assert!(cancel.load(Ordering::Acquire));
+        assert!(!other_cancel.load(Ordering::Acquire));
+        assert!(store(&state).unwrap().legacy_active.contains_key(&id));
+    }
     #[tokio::test]
     async fn native_import_retry_after_restart_uses_exact_plan_without_old_session() {
         let (dir, state) = state();
@@ -684,6 +1245,8 @@ mod tests {
             name: "Imported".into(),
             format: "native".into(),
             bytes_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+            legacy_backend: None,
+            docx_options: None,
         };
         let Json(first) = prepare_import(State(state.clone()), Json(request.clone()))
             .await
@@ -946,6 +1509,7 @@ mod tests {
             bindings: BTreeMap::new(),
             query_id: None,
             embedded_queries: vec![],
+            legacy_backend: None,
         };
         assert_eq!(
             prepare(State(state.clone()), Json(req))

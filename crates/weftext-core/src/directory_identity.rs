@@ -373,7 +373,9 @@ impl Core {
                         | OperationIntent::TemplateNode { .. }
                         | OperationIntent::ImportNative { .. }
                         | OperationIntent::ImportBibliography { .. }
+                        | OperationIntent::ImportRecognized { .. }
                         | OperationIntent::ImportDocx { .. }
+                        | OperationIntent::ImportDocxWithOptions { .. }
                         | OperationIntent::CloneSync { .. }
                         | OperationIntent::ApplySync { .. }
                         | OperationIntent::MergeSync { .. }
@@ -472,7 +474,9 @@ impl Core {
                         | OperationIntent::TemplateNode { .. }
                         | OperationIntent::ImportNative { .. }
                         | OperationIntent::ImportBibliography { .. }
+                        | OperationIntent::ImportRecognized { .. }
                         | OperationIntent::ImportDocx { .. }
+                        | OperationIntent::ImportDocxWithOptions { .. }
                         | OperationIntent::CloneSync { .. }
                         | OperationIntent::ApplySync { .. }
                         | OperationIntent::MergeSync { .. }

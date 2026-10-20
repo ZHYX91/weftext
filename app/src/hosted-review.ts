@@ -1,5 +1,5 @@
 import { action, ui } from "./data-panel";
-import { ProofreadingPanel, type ProofreadResult } from "./proofreading-panel";
+import { ProofreadingPanel, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
 import type { KnowledgeAnnotation, KnowledgeContext, KnowledgeIntent } from "./knowledge-panel";
 import { canApplySuggestion } from "./knowledge-state";
 import { hostedCachePrefix } from "./hosted-state";
@@ -35,7 +35,7 @@ export class HostedReview {
   private editor = ui("section");
   private proofread = ui("section");
   private message = ui("p", "hint");
-  constructor(private host: HTMLElement, private request: Request, private context: () => SourceContext | null, private flush: () => Promise<void>, private select: (from: number, to: number) => void, private changed: (resource: string, sourceChanged: boolean) => void, private media?: MediaHost) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private context: () => SourceContext | null, private flush: () => Promise<void>, private select: (from: number, to: number) => void, private changed: (resource: string, sourceChanged: boolean) => void, private media?: MediaHost, private processingDefaults?: () => Promise<ProcessingDefaultsSuggestion>) { this.clear(false); }
   mediaChanged(context: HostedMediaSelection | null) {
     if (!this.draft) return;
     if (context && context.descriptor.owner === this.resource && ["media", "mediaWhole"].includes(this.draft.target)) { this.draft.media = { asset: context.descriptor.asset, resource: context.descriptor.resource, revision: context.descriptor.revision, target: context.target && { ...context.target } }; this.keepInput(); }
@@ -136,6 +136,7 @@ export class HostedReview {
     if (!this.profile?.basis || !this.profile.rights.proofread) return;
     const epoch = this.epoch;
     this.panel = new ProofreadingPanel({ context: () => epoch === this.epoch ? this.sourceContext() : null,
+      processingDefaults: this.processingDefaults,
       beforeAction: () => this.requireSource().then(() => {}),
       scan: async (_, options) => { await this.requireSource(); if (!this.profile) throw new Error("请重新读取批注"); return this.request<ProofreadResult>("review/proofread", { resource: this.resource, basis: this.profile.basis, options }); },
       perform: async (label, intent) => { await this.run(() => this.prepare(label, intent)); return false; },

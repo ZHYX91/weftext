@@ -3,13 +3,23 @@
 //! Templates use standard Word content controls, bound by their exact tag.
 mod import;
 mod math;
+mod notes;
 mod package;
 mod review;
 mod styles;
 mod xml;
 pub use import::build_docx_native_package;
+pub use import::{OriginalImportAsset, retain_docx_import_originals};
+pub use import::{analyze_docx_import, build_docx_native_package_with_options};
+pub use notes::{
+    DocxCaptionCandidate, DocxCaptionPairing, DocxImportAnalysis, DocxImportOptions,
+    DocxObjectCandidate,
+};
 pub use review::DocxReview;
 pub use review::word_comment_date;
+/// The same pinned author module is provisioned to new notes and portable bundles.
+pub const ENDNOTES_MODULE_FILENAME: &str = "weftext-endnotes.typ";
+pub const ENDNOTES_MODULE: &str = include_str!("../assets/weftext-endnotes.typ");
 
 use crate::{ExportArtifact, ExportError, ExportLoss};
 use base64::Engine as _;
@@ -202,6 +212,12 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         bookmark_names: names,
         bookmark_next: existing_max(&doc, "w:bookmarkStart", "w:id") + 1,
         reference_stack: vec![],
+        notes: notes::Notes::default(),
+        note_depth: 0,
+        caption_semantics: BTreeMap::new(),
+        caption_bookmarks: BTreeMap::new(),
+        caption_counters: BTreeMap::new(),
+        caption_targets: BTreeSet::new(),
         drawing_next: existing_max(&doc, "wp:docPr", "id").max(existing_max(
             &doc,
             "pic:cNvPr",
@@ -214,6 +230,16 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
                 .values()
                 .any(|b| matches!(b, DocxBinding::Title)),
     };
+    ctx.notes.scan(tree);
+    ctx.scan_caption_info(tree);
+    for binding in input.bindings.values() {
+        if let DocxBinding::Nodes { nodes } = binding {
+            for node in nodes {
+                ctx.notes.scan(node);
+                ctx.scan_caption_info(node);
+            }
+        }
+    }
     for (key, pattern) in patterns {
         if pattern.as_ref() != Some(&chosen_pattern) {
             ctx.loss("heading-numbering-loss",format!("此标题使用函数、不支持或不同的编号 pattern；Word 共享原生编号采用 {chosen_pattern}"),Some(key));
@@ -303,6 +329,7 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         None,
     );
     let mut numbering = numbering;
+    ctx.notes.finish(ctx.package, &mut doc)?;
     for e in ctx.numbering_extra {
         numbering.push(e);
     }
@@ -418,18 +445,28 @@ fn heading_patterns(n: &RenderNode, out: &mut Vec<(String, Option<String>)>) {
     if n.attrs
         .get("data-weftext-role")
         .is_some_and(|r| r == "heading")
-        && n.attrs
-            .get("data-weftext-numbered")
-            .is_some_and(|v| v == "true")
+        && heading_numbered(n)
     {
-        out.push((
-            n.key.clone(),
-            n.attrs.get("data-weftext-numbering-pattern").cloned(),
-        ));
+        out.push((n.key.clone(), heading_pattern(n).map(str::to_owned)));
     }
     for c in &n.children {
         heading_patterns(c, out);
     }
+}
+fn heading_numbered(n: &RenderNode) -> bool {
+    n.attrs
+        .get("data-weftext-numbered")
+        .is_some_and(|v| v == "true")
+        && !n
+            .attrs
+            .get("data-weftext-managed-numbering-visible")
+            .is_some_and(|v| v == "false")
+}
+fn heading_pattern(n: &RenderNode) -> Option<&str> {
+    n.attrs
+        .get("data-weftext-managed-numbering-pattern")
+        .or_else(|| n.attrs.get("data-weftext-numbering-pattern"))
+        .map(String::as_str)
 }
 fn find_existing_bookmark_names(doc: &Element) -> BTreeSet<String> {
     let mut v = vec![];
@@ -671,11 +708,290 @@ struct Context<'a> {
     bookmark_names: BTreeSet<String>,
     bookmark_next: usize,
     reference_stack: Vec<Option<String>>,
+    notes: notes::Notes,
+    note_depth: usize,
+    caption_semantics: BTreeMap<String, BTreeMap<String, String>>,
+    caption_bookmarks: BTreeMap<String, String>,
+    caption_counters: BTreeMap<String, u64>,
+    caption_targets: BTreeSet<String>,
     drawing_next: usize,
     body_inserted: bool,
     skip_title: bool,
 }
 impl Context<'_> {
+    fn scan_caption_info(&mut self, n: &RenderNode) {
+        let role = n
+            .attrs
+            .get("data-weftext-role")
+            .map(String::as_str)
+            .unwrap_or("");
+        if role == "figure"
+            && n.attrs
+                .get("data-weftext-caption-kind")
+                .is_some_and(|s| s == "equation")
+            && n.attrs
+                .get("data-weftext-numbered")
+                .is_some_and(|s| s == "true")
+        {
+            fn numbered_equation(n: &RenderNode) -> bool {
+                n.attrs
+                    .get("data-weftext-role")
+                    .is_some_and(|s| s == "equation-number")
+                    || n.children.iter().any(numbered_equation)
+            }
+            if n.children.iter().any(numbered_equation) {
+                self.loss("equation-double-numbering","原生公式本体与包装题注都启用了编号；Word分别保字段，但两种原生计数规则不能合并为等价序列，请在原生源显式选择一种编号模式",Some(n.key.clone()));
+            }
+        }
+        if let Some(id) = n.attrs.get("data-weftext-target-id") {
+            if matches!(role, "caption" | "equation") {
+                self.caption_semantics.insert(id.clone(), n.attrs.clone());
+            }
+            if matches!(role, "caption-number" | "equation-number")
+                && matches!(
+                    n.attrs.get("data-weftext-caption-kind").map(String::as_str),
+                    Some("figure" | "table" | "equation")
+                )
+            {
+                if let Some((atoms, suffix)) = n
+                    .attrs
+                    .get("data-weftext-numbering-pattern")
+                    .and_then(|p| parse_caption_pattern(p))
+                    .filter(|(a, _)| a.len() == 1)
+                    && math::plain(n)
+                        .strip_prefix(&atoms[0].0)
+                        .and_then(|s| s.strip_suffix(&suffix))
+                        .is_some()
+                {
+                    self.caption_targets.insert(id.clone());
+                }
+            } else if role == "equation-number"
+                && let Some(pattern) = n.attrs.get("data-weftext-numbering-pattern")
+                && parse_caption_pattern(pattern).is_some()
+            {
+                self.caption_targets.insert(id.clone());
+            }
+        }
+        for child in &n.children {
+            self.scan_caption_info(child);
+        }
+    }
+    fn caption_number(
+        &mut self,
+        n: &RenderNode,
+        base: &RunStyle,
+    ) -> Result<Vec<Element>, DocxError> {
+        let inherited = n
+            .attrs
+            .get("data-weftext-target-id")
+            .and_then(|id| self.caption_semantics.get(id));
+        let attr = |key: &str| {
+            n.attrs
+                .get(key)
+                .or_else(|| inherited.and_then(|a| a.get(key)))
+                .map(String::as_str)
+        };
+        let kind = attr("data-weftext-caption-kind").unwrap_or(
+            if n.attrs
+                .get("data-weftext-role")
+                .is_some_and(|s| s == "equation-number")
+            {
+                "equation"
+            } else {
+                ""
+            },
+        );
+        let pattern = attr("data-weftext-numbering-pattern").unwrap_or("");
+        let parsed = parse_caption_pattern(pattern);
+        let sequence = match kind {
+            "figure" => "Figure",
+            "table" => "Table",
+            "equation"
+                if n.attrs
+                    .get("data-weftext-role")
+                    .is_some_and(|s| s == "caption-number") =>
+            {
+                "EquationCaption"
+            }
+            "equation" => "Equation",
+            _ => "",
+        };
+        let plain = math::plain(n);
+        let Some((atoms, suffix)) = parsed.filter(|_| !sequence.is_empty()) else {
+            self.loss(
+                "caption-numbering-unmapped",
+                "自定义类别／函数／多级题注编号未映射为Word SEQ；保冻结文字，不能自动更新",
+                Some(n.key.clone()),
+            );
+            return Ok(vec![text_run(&plain, &base.properties())]);
+        };
+        let prefix = &atoms[0].0;
+        let Some(cache) = plain
+            .strip_prefix(prefix)
+            .and_then(|s| s.strip_suffix(&suffix))
+        else {
+            self.loss(
+                "caption-numbering-unmapped",
+                "真实计数输出与已证明的简单编号pattern不匹配；保冻结文字",
+                Some(n.key.clone()),
+            );
+            return Ok(vec![text_run(&plain, &base.properties())]);
+        };
+        let format = match atoms[0].1 {
+            "lowerLetter" => "alphabetic",
+            "upperLetter" => "ALPHABETIC",
+            "lowerRoman" => "roman",
+            "upperRoman" => "ROMAN",
+            _ => "ARABIC",
+        };
+        let state = attr("data-weftext-counter-state")
+            .and_then(|v| serde_json::from_str::<Vec<u64>>(v).ok())
+            .filter(|v| v.len() == 1)
+            .map(|v| v[0]);
+        let mut restart = String::new();
+        if let Some(state) = state {
+            if self.caption_counters.get(sequence).copied().unwrap_or(0) + 1 != state {
+                restart = format!(" \\r {state}");
+            }
+            self.caption_counters.insert(sequence.into(), state);
+        } else {
+            self.loss(
+                "caption-counter-unmapped",
+                "题注没有唯一单级计数状态；SEQ采用该类别连续计数，冻结编号可能变化",
+                Some(n.key.clone()),
+            );
+        }
+        let mut field = Element::new("w:fldSimple")
+            .attr("w:instr", format!(" SEQ {sequence}{restart} \\* {format} "))
+            .attr("w:dirty", "true");
+        field.push(text_run(cache, &base.properties()));
+        let mut number = vec![field];
+        if let Some(bookmark) = n
+            .attrs
+            .get("data-weftext-target-id")
+            .and_then(|id| self.caption_bookmarks.get(id))
+        {
+            let id = self.bookmark_next;
+            self.bookmark_next += 1;
+            number.insert(
+                0,
+                Element::new("w:bookmarkStart")
+                    .attr("w:id", id)
+                    .attr("w:name", bookmark),
+            );
+            number.push(Element::new("w:bookmarkEnd").attr("w:id", id));
+        }
+        if !prefix.is_empty() {
+            number.insert(0, text_run(prefix, &base.properties()));
+        }
+        if !suffix.is_empty() {
+            number.push(text_run(&suffix, &base.properties()));
+        }
+        Ok(number)
+    }
+    fn note_reference(
+        &mut self,
+        n: &RenderNode,
+        key: (String, String),
+        base: &RunStyle,
+    ) -> Result<Vec<Element>, DocxError> {
+        if let Some(settings) = self.package.xml("word/settings.xml")? {
+            let mut properties = vec![];
+            settings.descendants(&format!("w:{}Pr", key.0), &mut properties);
+            if properties.iter().any(|pr| {
+                pr.child("w:numFmt")
+                    .and_then(|v| v.get("w:val"))
+                    .is_some_and(|v| v != "decimal")
+                    || pr
+                        .child("w:numStart")
+                        .and_then(|v| v.get("w:val"))
+                        .is_some_and(|v| v != "1")
+                    || pr
+                        .child("w:numRestart")
+                        .and_then(|v| v.get("w:val"))
+                        .is_some_and(|v| v != "continuous")
+            }) {
+                self.loss("note-template-numbering-loss","模板保有自定义注释编号设置；新增注释采用真实Word部件，但编号样式／重启与原生源不保证等价",Some("word/settings.xml".into()));
+            }
+        }
+        if n.attrs
+            .get("data-weftext-numbering-pattern")
+            .is_some_and(|p| p != "1")
+            || n.attrs
+                .get("data-weftext-numbering-kind")
+                .is_some_and(|p| p != "pattern")
+        {
+            self.loss(
+                "note-numbering-unmapped",
+                "注释自定义编号／函数未映射为Word编号；本次采用该类型的连续十进制编号，原生源保留",
+                Some(n.key.clone()),
+            );
+        }
+        if key.0 == "endnote" {
+            self.loss(
+                "endnote-placement-loss",
+                "尾注输出为Word文末独立部件；原生尾注列表标题、回链布局及指定插入位置未映射",
+                Some(n.key.clone()),
+            );
+        }
+        if self.note_depth > 0 {
+            self.loss(
+                "note-nested-unmapped",
+                "注释内的嵌套注释不能安全映射；内容保留在原生源，未进入 DOCX 注释部件",
+                Some(n.key.clone()),
+            );
+            return Ok(vec![]);
+        }
+        let definition = n
+            .attrs
+            .get("data-weftext-note-definition")
+            .map(String::as_str);
+        if !matches!(definition, Some("true" | "false")) || !self.notes.has_definition(&key) {
+            self.loss("note-definition-unmapped","本次显示没有唯一真实定义／重复标记依据；仅保标记文字，注释正文未进入DOCX，不按首次出现猜定义或改变编号顺序",Some(n.key.clone()));
+            return Ok(vec![text_run(&math::plain(n), &base.properties())]);
+        }
+        if definition == Some("false") || self.notes.emitted(&key) {
+            let (_, bookmark) = self.notes.allocate(&key, self.package)?;
+            let mut field = Element::new("w:fldSimple")
+                .attr("w:instr", format!(" NOTEREF {bookmark} \\h "))
+                .attr("w:dirty", "true");
+            field.push(text_run(&math::plain(n), &base.properties()));
+            return Ok(vec![field]);
+        }
+        let Some(mut body) = self.notes.body(&key) else {
+            self.loss(
+                "note-body-unmapped",
+                format!(
+                    "{} {} 没有唯一真实正文；注释正文未进入 DOCX，保留冻结标记文字",
+                    key.0, key.1
+                ),
+                Some(n.key.clone()),
+            );
+            return Ok(vec![text_run(&math::plain(n), &base.properties())]);
+        };
+        let (id, bookmark) = self.notes.allocate(&key, self.package)?;
+        body.attrs.remove("data-weftext-role");
+        body.tag = Some("div".into());
+        self.note_depth += 1;
+        let layout = Layout::normal(self.styles, &self.normal);
+        let content = self.blocks(&body, &layout, 0);
+        self.note_depth -= 1;
+        self.notes.push(&key, id, content?);
+        let bookmark_id = self.bookmark_next;
+        self.bookmark_next += 1;
+        let mut run = Element::new("w:r");
+        let mut pr = base.properties();
+        pr.push(val("w:vertAlign", "superscript"));
+        run.push(pr);
+        run.push(Element::new(&format!("w:{}Reference", key.0)).attr("w:id", id));
+        Ok(vec![
+            Element::new("w:bookmarkStart")
+                .attr("w:id", bookmark_id)
+                .attr("w:name", bookmark),
+            run,
+            Element::new("w:bookmarkEnd").attr("w:id", bookmark_id),
+        ])
+    }
     fn loss(&mut self, code: &str, message: impl ToString, location: Option<String>) {
         let message = message.to_string();
         if !self
@@ -691,6 +1007,13 @@ impl Context<'_> {
         }
     }
     fn scan_bookmarks(&mut self, n: &RenderNode) {
+        if matches!(
+            n.attrs.get("data-weftext-role").map(String::as_str),
+            Some("caption" | "equation")
+        ) && let Some(id) = n.attrs.get("data-weftext-target-id")
+        {
+            self.caption_semantics.insert(id.clone(), n.attrs.clone());
+        }
         if self.skip_title
             && n.attrs
                 .get("data-weftext-role")
@@ -704,10 +1027,20 @@ impl Context<'_> {
         if let Some(id) = n.attrs.get("id") {
             if n.attrs
                 .get("data-weftext-role")
-                .is_some_and(|r| r == "heading")
+                .is_some_and(|r| matches!(r.as_str(), "figure" | "equation"))
                 && n.attrs
                     .get("data-weftext-numbered")
                     .is_some_and(|r| r == "true")
+                && n.attrs
+                    .get("data-weftext-target-id")
+                    .is_some_and(|target| self.caption_targets.contains(target))
+            {
+                self.numberable_targets.insert(id.clone());
+            }
+            if n.attrs
+                .get("data-weftext-role")
+                .is_some_and(|r| r == "heading")
+                && heading_numbered(n)
                 && n.attrs
                     .get("data-weftext-level")
                     .and_then(|v| v.parse::<usize>().ok())
@@ -726,12 +1059,32 @@ impl Context<'_> {
                 .entry(id.clone())
                 .and_modify(|v| *v = None)
                 .or_insert(Some(name));
+            if matches!(
+                n.attrs.get("data-weftext-role").map(String::as_str),
+                Some("figure" | "equation")
+            ) && let Some(target) = n.attrs.get("data-weftext-target-id")
+                && self.caption_targets.contains(target)
+                && let Some(Some(bookmark)) = self.bookmarks.get(id)
+            {
+                self.caption_bookmarks
+                    .insert(target.clone(), bookmark.clone());
+            }
         }
         for c in &n.children {
             self.scan_bookmarks(c);
         }
     }
     fn bookmark(&mut self, n: &RenderNode, runs: Vec<Element>) -> Vec<Element> {
+        if matches!(
+            n.attrs.get("data-weftext-role").map(String::as_str),
+            Some("figure" | "equation")
+        ) && n
+            .attrs
+            .get("id")
+            .is_some_and(|id| self.numberable_targets.contains(id))
+        {
+            return runs;
+        }
         if let Some(name) = n
             .attrs
             .get("id")
@@ -759,6 +1112,15 @@ impl Context<'_> {
         list_depth: usize,
     ) -> Result<Vec<Element>, DocxError> {
         if n.kind == "tag" {
+            return Ok(vec![]);
+        }
+        if notes::Notes::is_body(n) {
+            return Ok(vec![]);
+        }
+        if matches!(
+            n.attrs.get("data-weftext-role").map(String::as_str),
+            Some("footnote-number" | "endnote-number" | "footnote-backlink" | "endnote-backlink")
+        ) {
             return Ok(vec![]);
         }
         if css(n).get("display").is_some_and(|v| v == "none") {
@@ -848,6 +1210,9 @@ impl Context<'_> {
             if !inline.is_empty() {
                 out.push(paragraph(layout.ppr.clone(), inline));
             }
+            if matches!(role, "figure" | "equation") {
+                return Ok(self.bookmark(n, out));
+            }
             return Ok(out);
         }
         Ok(vec![paragraph(
@@ -895,10 +1260,7 @@ impl Context<'_> {
                     .insert(0, Xml::Element(val("w:pStyle", format!("Heading{level}"))));
                 ppr.push(val("w:outlineLvl", level - 1));
                 heading_style = Some(level);
-                if h.attrs
-                    .get("data-weftext-numbered")
-                    .is_some_and(|v| v == "true")
-                {
+                if heading_numbered(h) {
                     let num_id = self.heading_number(h, level)?;
                     set_numpr(&mut ppr, num_id, level - 1);
                 } else {
@@ -915,9 +1277,7 @@ impl Context<'_> {
             }
             if run_in.is_some() {
                 if let Some(index) = run_in
-                    && h.attrs
-                        .get("data-weftext-numbered")
-                        .is_some_and(|v| v == "true")
+                    && heading_numbered(h)
                     && n.children[..index]
                         .iter()
                         .any(|c| !math::plain(c).trim().is_empty())
@@ -995,6 +1355,24 @@ impl Context<'_> {
         if n.kind == "tag" {
             return Ok(vec![]);
         }
+        if notes::Notes::is_body(n) {
+            return Ok(vec![]);
+        }
+        if let Some(key) = self.notes.reference(n) {
+            return self.note_reference(n, key, base);
+        }
+        if matches!(
+            n.attrs.get("data-weftext-role").map(String::as_str),
+            Some("caption-number" | "equation-number")
+        ) {
+            return self.caption_number(n, base);
+        }
+        if matches!(
+            n.attrs.get("data-weftext-role").map(String::as_str),
+            Some("footnote-number" | "endnote-number" | "footnote-backlink" | "endnote-backlink")
+        ) {
+            return Ok(vec![]);
+        }
         if css(n).get("display").is_some_and(|v| v == "none") {
             return Ok(vec![]);
         }
@@ -1035,12 +1413,20 @@ impl Context<'_> {
             );
         }
         if let Some(lang) = n.attrs.get("lang") {
-            style.0.insert(
-                "w:lang".into(),
-                Element::new("w:lang")
-                    .attr("w:val", lang)
-                    .attr("w:eastAsia", lang),
-            );
+            let mut language = style
+                .0
+                .get("w:lang")
+                .cloned()
+                .unwrap_or_else(|| Element::new("w:lang"));
+            language.set_attr("w:val", lang);
+            language.set_attr("w:eastAsia", lang);
+            if matches!(
+                lang.split('-').next(),
+                Some("ar" | "he" | "fa" | "ur" | "ps" | "syr" | "dv" | "yi" | "ug" | "sd" | "ckb")
+            ) {
+                language.set_attr("w:bidi", lang);
+            }
+            style.0.insert("w:lang".into(), language);
         }
         if n.attrs.get("dir").is_some_and(|s| s == "rtl") {
             style.0.insert("w:rtl".into(), val("w:rtl", "1"));
@@ -1070,8 +1456,13 @@ impl Context<'_> {
             .is_some_and(|r| r == "reference-number")
         {
             if let Some(Some(bookmark)) = self.reference_stack.last() {
+                let flags = if self.caption_bookmarks.values().any(|v| v == bookmark) {
+                    "\\h"
+                } else {
+                    "\\w \\h"
+                };
                 let mut field = Element::new("w:fldSimple")
-                    .attr("w:instr", format!(" REF {bookmark} \\w \\h "))
+                    .attr("w:instr", format!(" REF {bookmark} {flags} "))
                     .attr("w:dirty", "true");
                 field.push(text_run(&math::plain(n), &style.properties()));
                 return Ok(vec![field]);
@@ -1087,7 +1478,8 @@ impl Context<'_> {
             let mut run = text_run(n.text.as_deref().unwrap_or(""), &style.properties());
             if let Some(origin) = &n.origin
                 && origin.is_main
-                && Some(origin.raw.as_str()) == n.text.as_deref()
+                && (Some(origin.raw.as_str()) == n.text.as_deref()
+                    || weftext_engine::native_literal_display(n))
             {
                 run.source = Some((origin.from, origin.raw.clone()));
             }
@@ -1104,7 +1496,12 @@ impl Context<'_> {
         }
         if tag == "math" {
             return match math::convert(n) {
-                Ok(m) => Ok(vec![m]),
+                Ok(m) => {
+                    for reason in math::spacing_losses(n) {
+                        self.loss("math-spacing-loss", reason, Some(n.key.clone()));
+                    }
+                    Ok(vec![m])
+                }
                 Err(reason) => {
                     self.loss("math-structure-loss", reason, Some(n.key.clone()));
                     Ok(vec![text_run(&math::plain(n), &style.properties())])
@@ -1538,8 +1935,41 @@ impl Context<'_> {
         let mut generated = vec![];
         let mut active: BTreeMap<usize, (usize, usize)> = BTreeMap::new();
         let mut max_columns = 0;
+        let mut leading_repeatable = true;
         for row in rows {
             let mut tr = Element::new("w:tr");
+            let header = row
+                .attrs
+                .get("data-weftext-role")
+                .is_some_and(|r| r == "table-header-row");
+            let repeat = row
+                .attrs
+                .get("data-weftext-repeat")
+                .is_some_and(|r| r == "true");
+            let simple = active.is_empty()
+                && row
+                    .children
+                    .iter()
+                    .filter(|c| matches!(c.tag.as_deref(), Some("td" | "th")))
+                    .all(|c| {
+                        ["colspan", "rowspan"]
+                            .iter()
+                            .all(|key| c.attrs.get(*key).is_none_or(|v| v == "1"))
+                    });
+            if header && repeat && leading_repeatable && simple {
+                let mut properties = Element::new("w:trPr");
+                properties.push(val("w:tblHeader", "1"));
+                tr.push(properties);
+            } else {
+                leading_repeatable = false;
+                if header && repeat {
+                    self.loss(
+                        "table-header-repeat-loss",
+                        "非首部连续普通表头的跨页重复属性未映射；表格内容保留",
+                        Some(row.key.clone()),
+                    );
+                }
+            }
             let mut column = 0usize;
             let mut next = BTreeMap::new();
             for cell in row
@@ -1964,6 +2394,11 @@ fn numbering(existing: Option<Element>, pattern: &str) -> (Element, usize, usize
     (root, heading_id, bullet_id)
 }
 type NumberPattern = (Vec<(String, &'static str)>, String);
+fn parse_caption_pattern(pattern: &str) -> Option<NumberPattern> {
+    parse_number_pattern(pattern).filter(|(atoms, _)| {
+        atoms.len() == 1 && !matches!(atoms[0].1, "chineseCounting" | "chineseLegalSimplified")
+    })
+}
 fn parse_number_pattern(pattern: &str) -> Option<NumberPattern> {
     if pattern.len() > 256 || pattern.contains('%') {
         return None;
@@ -1977,11 +2412,13 @@ fn parse_number_pattern(pattern: &str) -> Option<NumberPattern> {
             'A' => Some("upperLetter"),
             'i' => Some("lowerRoman"),
             'I' => Some("upperRoman"),
+            '一' => Some("chineseCounting"),
+            '壹' => Some("chineseLegalSimplified"),
             _ => None,
         };
         if let Some(fmt) = fmt {
             atoms.push((std::mem::take(&mut prefix), fmt));
-        } else if "αΑ一壹あいアイא가ㄱ*١۱१১ক①⓵".contains(c) {
+        } else if "αΑあいアイא가ㄱ*١۱१১ক①⓵".contains(c) {
             return None;
         } else {
             prefix.push(c);

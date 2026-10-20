@@ -150,7 +150,7 @@ class HostedReview(HostedFields):
         doc = self.open(); source = doc['source']+'\n\n错*别*字 和 错别字，配对（未结束。\n'
         self.save(doc, source)
         options = dict(characters=True, typos=True, pairs=True, sensitive=True, allowlist=[], selection=None,
-                       rules=[dict(id='owned.typo', version='1', category='typo', text='错别字', message='请核对', replacement='正确字')])
+                       rules=[dict(id='owned.typo', version='1', category='typo', text='错别字', message='请核对', replacement='正确字', scope={'universal': True})])
         profile = self.review()
         scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         typos = [f for f in scan['findings'] if f['ruleId']=='owned.typo']
@@ -191,7 +191,7 @@ class HostedReview(HostedFields):
         self.start()
         doc = self.open(); self.save(doc, doc['source']+'\n错别字\n#include "../Secret/Secret.typ"')
         options = dict(characters=True, typos=True, pairs=True, sensitive=True, allowlist=[], selection=None,
-                       rules=[dict(id='owned.typo', version='1', category='typo', text='错别字', message='请核对', replacement='正确字')])
+                       rules=[dict(id='owned.typo', version='1', category='typo', text='错别字', message='请核对', replacement='正确字', scope={'universal': True})])
         profile = self.review(); scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)

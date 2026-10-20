@@ -60,6 +60,7 @@ struct Scan {
     inputs: BTreeMap<String, String>,
     dependencies: Vec<SnapshotFile>,
     environment: library::Environment,
+    processing: Option<library::ProcessingCapture>,
     expires: Instant,
 }
 impl Scan {
@@ -70,6 +71,10 @@ impl Scan {
             .sum::<usize>()
             + serde_json::to_vec(&self.result).map_or(MAX_BYTES, |b| b.len())
             + self.environment.retained_bytes()
+            + self
+                .processing
+                .as_ref()
+                .map_or(0, library::ProcessingCapture::retained_bytes)
     }
 }
 #[derive(Default)]
@@ -105,6 +110,8 @@ struct Decision {
     execution: library::ExecutionAuthority,
     #[serde(default)]
     media: Option<MediaDecision>,
+    #[serde(default)]
+    processing: Option<library::ProcessingAuthority>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -170,6 +177,20 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
             .get(actor)
             .is_some_and(|u| u.enabled && u.epoch == epoch)
     };
+    let invalid_scans = inner
+        .review
+        .scans
+        .iter()
+        .filter(|(_, scan)| {
+            scan.expires <= Instant::now()
+                || !current(&scan.actor, scan.epoch)
+                || scan
+                    .processing
+                    .as_ref()
+                    .is_some_and(|profile| profile.validate(inner, &scan.actor).is_err())
+        })
+        .map(|(id, _)| id.clone())
+        .collect::<BTreeSet<_>>();
     let expired = inner
         .review
         .bases
@@ -180,9 +201,9 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
             inner
                 .review
                 .scans
-                .values()
-                .filter(|s| s.expires <= Instant::now() || !current(&s.actor, s.epoch))
-                .flat_map(|s| s.dependencies.iter().map(|f| f.base_id.clone())),
+                .iter()
+                .filter(|(id, _)| invalid_scans.contains(*id))
+                .flat_map(|(_, s)| s.dependencies.iter().map(|f| f.base_id.clone())),
         )
         .collect::<BTreeSet<_>>();
     inner
@@ -192,7 +213,7 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
     inner
         .review
         .scans
-        .retain(|_, s| s.expires > Instant::now() && current(&s.actor, s.epoch));
+        .retain(|id, _| !invalid_scans.contains(id));
     release_unretained(inner, expired);
 }
 fn release_unretained(inner: &mut HostedInner, ids: BTreeSet<String>) {
@@ -736,7 +757,8 @@ async fn proofread(
     let check = auth.clone();
     let resource = req.resource.clone();
     let basis_id = req.basis.clone();
-    let (b, input, inputs, dependencies, environment) = locked(&state, move |inner| {
+    let origin = req.options.processing_origin.clone();
+    let (b, input, inputs, dependencies, environment, processing) = locked(&state, move |inner| {
         let actor = inner.actor(&check)?;
         let rights = access(inner, &actor, &resource)?;
         authorize(
@@ -749,6 +771,12 @@ async fn proofread(
             },
         )?;
         let b = basis(inner, &actor, &resource, &basis_id, true)?;
+        let processing = origin
+            .as_ref()
+            .map(|origin| {
+                library::capture_processing(inner, &actor, origin, &b.source.as_ref().unwrap().path)
+            })
+            .transpose()?;
         let (input, inputs, environment) =
             editor::freeze(inner, &actor, &resource, &b.node.as_ref().unwrap().source)?;
         let paths: Vec<_> = inputs
@@ -772,7 +800,7 @@ async fn proofread(
                 return Err(changed());
             }
         }
-        Ok((b, input, inputs, dependencies, environment))
+        Ok((b, input, inputs, dependencies, environment, processing))
     })
     .await?;
     let output = editor::compile_frozen(&state, input).await?;
@@ -811,6 +839,9 @@ async fn proofread(
             validate_basis(inner, &b, true)?;
             editor::validate_inputs(inner, &actor, &req.resource, &inputs)?;
             environment.recheck(inner, &actor)?;
+            if let Some(profile) = &processing {
+                profile.validate(inner, &actor)?;
+            }
             for f in &dependencies {
                 inner
                     .core
@@ -859,6 +890,7 @@ async fn proofread(
                 inputs,
                 dependencies,
                 environment,
+                processing,
                 expires: Instant::now() + TTL,
             };
             if inner.review.bytes().saturating_add(scan.bytes()) > MAX_BYTES {
@@ -966,7 +998,7 @@ fn change(file: &SnapshotFile, after: Vec<u8>) -> FileChange {
     }
 }
 fn safe_status(
-    inner: &HostedInner,
+    inner: &mut HostedInner,
     actor: &str,
     rights: &Rights,
     status: ActorFeatureStatus,
@@ -976,22 +1008,52 @@ fn safe_status(
     let same_config = decision.as_ref().is_some_and(|d| {
         config_hash(inner, &status.resource).is_ok_and(|hash| hash == d.config_hash)
     });
+    // Original decisions survive cache expiry and restart. Unconfirmed effects
+    // still need the exact settings version; settled facts only reauthorize
+    // delivery, without rerunning the old dictionary against new defaults.
+    let processing_allowed = decision.as_ref().is_some_and(|d| {
+        d.processing.as_ref().is_none_or(|authority| {
+            if status.status == "prepared" {
+                if library::validate_processing_versions(inner, actor, authority).is_err() {
+                    return false;
+                }
+                let actor_scope = scope(inner, actor);
+                let root = inner.config.root.clone();
+                inner
+                    .core
+                    .with_actor_for_root(&actor_scope, &root, |core| {
+                        core.validate_actor_feature_settings_dependency(
+                            &status.resource,
+                            &status.operation_id,
+                        )
+                    })
+                    .is_ok()
+            } else {
+                library::authorize_processing(inner, actor, authority).is_ok()
+            }
+        })
+    });
+    let deliver = same_config
+        && processing_allowed
+        && decision
+            .as_ref()
+            .is_some_and(|d| library::authorize_execution(inner, actor, &d.execution).is_ok());
     let mut preview = json!({});
     for key in ["kind", "summary", "annotationId", "count", "body"]
         .into_iter()
-        .filter(|_| same_config)
+        .filter(|_| deliver)
     {
         if let Some(v) = original.get(key) {
             preview[key] = v.clone();
         }
     }
-    if same_config
+    if deliver
         && rights.annotations.target
         && let Some(v) = original.get("replacement")
     {
         preview["replacement"] = v.clone();
     }
-    if same_config
+    if deliver
         && rights.read
         && rights.annotations.target
         && let Some(v) = original.get("source")
@@ -1000,6 +1062,7 @@ fn safe_status(
     }
     let commit_allowed = status.status == "prepared"
         && same_config
+        && processing_allowed
         && decision.is_some_and(|d| {
             d.actor_epoch == inner.actor_generation(actor)
                 && d.expires_at_unix_ms > now_ms()
@@ -1035,7 +1098,7 @@ async fn prepare(
         let fingerprint=digest(&serde_json::to_vec(&canonical).map_err(|_|changed())?); let actor_scope=scope(inner,&actor);
         if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
         let b=basis(inner,&actor,&req.resource,&req.basis,needs.source_read)?; let doc=document(&b)?;
-        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
+        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut processing_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
         let annotation_id=req.intent["annotationId"].as_str(); if let Some(id)=annotation_id {preview["annotationId"]=json!(id);}
         let after=match kind.as_str() {
             "annotationCreate" => {
@@ -1081,10 +1144,16 @@ async fn prepare(
                 let hash=digest(&serde_json::to_vec(&options).map_err(|_|changed())?);
                 let scan_id=text(&req.intent,"scanId")?;
                 let scan=inner.review.scans.get(scan_id).filter(|s|s.actor==actor&&s.epoch==b.epoch&&s.resource==req.resource&&s.basis==req.basis&&s.options_hash==hash&&s.expires>Instant::now()).cloned().ok_or_else(changed)?;
+                if scan.processing.as_ref().map(|profile| &profile.origin) != options.processing_origin.as_ref() {return Err(changed());}
                 editor::validate_inputs(inner,&actor,&req.resource,&scan.inputs)?;
                 scan.environment.recheck(inner,&actor)?;
                 execution=scan.environment.authority.clone();
                 witnesses=scan.environment.plan_witnesses()?;
+                if let Some(profile)=&scan.processing {
+                    profile.validate(inner,&actor)?;
+                    Core::merge_feature_witnesses(&mut witnesses,vec![profile.plan_witness()]).map_err(core_error)?;
+                    processing_decision=Some(profile.authority.clone());
+                }
                 for f in &scan.dependencies {inner.core.validate_snapshot(&inner.config.root,&f.path,&f.base_id).map_err(|_|changed())?;if Some(&f.path)!=b.source.as_ref().map(|s|&s.path) { dependencies.push(f.base_id.clone()); }}
                 let ids:BTreeSet<String>=serde_json::from_value(req.intent["findings"].clone()).map_err(|_|ApiError::bad("请选择准确原校对结果"))?;
                 if ids.is_empty()||ids.len()>200||ids.iter().any(|id|!scan.result.findings.iter().any(|f|&f.id==id)) {return Err(ApiError::bad("每批请选择原检查中的 1 至 200 条结果"));}
@@ -1108,7 +1177,7 @@ async fn prepare(
         if after.len()>MAX_DOCUMENT_BYTES {return Err(ApiError::bad("批注变更超过本次保存预算"));}
         if needs.source_read&&kind!="annotationAccept" {dependencies.push(b.source.as_ref().unwrap().base_id.clone());}
         changes.push(change(&b.annotations,after));
-        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution,media:media_decision})?;
+        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution,media:media_decision,processing:processing_decision})?;
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent:OperationIntent::UpdateFiles {changes}};
         let status=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_prepare_with_witnesses(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies,&witnesses.iter().collect::<Vec<_>>())).map_err(core_error)?;
         safe_status(inner,&actor,&rights,status)
@@ -1155,6 +1224,9 @@ async fn commit(
                 serde_json::from_value(old.preview["_review"].clone()).map_err(|_| changed())?;
             authorize(&rights, &decision.needs)?;
             library::validate_execution_versions(inner, &actor, &decision.execution)?;
+            if let Some(authority) = &decision.processing {
+                library::validate_processing_versions(inner, &actor, authority)?;
+            }
             if let Some(m) = &decision.media {
                 authorize_media(inner, &actor, &req.resource, m)?;
             }
@@ -1217,6 +1289,10 @@ async fn settle(
         .await?,
     ))
 }
+
+#[cfg(all(test, windows))]
+#[path = "review_processing_tests.rs"]
+mod processing_tests;
 
 #[cfg(all(test, windows))]
 mod media_tests {

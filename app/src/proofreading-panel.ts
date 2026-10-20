@@ -1,11 +1,14 @@
 import type { KnowledgeContext, KnowledgeIntent } from "./knowledge-panel";
 import { sameKnowledgeBasis } from "./knowledge-state";
+import type { ProcessingDocument } from "./processing-settings-panel";
+import { decodeProcessingSettings, defaultProcessingSettings, parseProcessingLanguages, processingLanguageTag, scopeLabel, validateProcessingScope, type ProcessingSettings, type ProcessingRuleScope, type SharedProcessingOrigin } from "./processing-settings";
 
-export interface ProofreadRule { id: string; version: string; category: string; text: string; message: string; replacement: string | null }
-export interface ProofreadOptions { characters: boolean; typos: boolean; pairs: boolean; sensitive: boolean; rules: ProofreadRule[]; allowlist: string[]; selection: [number, number] | null }
+export interface ProofreadRule { id: string; version: string; category: string; text: string; message: string; replacement: string | null; scope?: ProcessingRuleScope | null }
+export interface ProofreadOptions { characters: boolean; typos: boolean; pairs: boolean; sensitive: boolean; rules: ProofreadRule[]; allowlist: string[]; scopedAllowlist?: { text: string; scope: ProcessingRuleScope }[]; processing?: ProcessingSettings; processingOrigin?: SharedProcessingOrigin | null; selection: [number, number] | null }
 interface Finding { id: string; category: string; ruleId: string; excerpt: string; message: string; replacement: string | null; executable: boolean; sourceRange: { from: number; to: number; utf16From: number; utf16To: number } | null }
-export interface ProofreadResult { coverage: string; findings: Finding[]; warnings: string[]; checkedCharacters: number; existing: string[]; scanId?: string }
-interface Host { context(): KnowledgeContext | null; scan(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>; perform(label: string, intent: KnowledgeIntent): Promise<boolean>; selectSource?(from: number, to: number): void; beforeAction?(): Promise<void>; notify(message: string): void }
+export interface ProofreadResult { coverage: string; findings: Finding[]; warnings: string[]; checkedCharacters: number; existing: string[]; scanId?: string; fragments?: { language: { language: string; script: string | null; region: string | null } | null; nativeLanguage?: { language: string; script: string | null; region: string | null } | null; source: string; checkedRules: string[]; skippedRules: [string, string][] }[] }
+export interface ProcessingDefaultsSuggestion { processing: ProcessingDocument | null; source: string; baseId: string; revision?: string }
+interface Host { context(): KnowledgeContext | null; scan(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>; perform(label: string, intent: KnowledgeIntent): Promise<boolean>; processingDefaults?(): Promise<ProcessingDefaultsSuggestion>; selectSource?(from: number, to: number): void; beforeAction?(): Promise<void>; notify(message: string): void }
 const categories: Record<string, string> = { character: "错误字符／符号", typo: "错别字", pair: "成对符号", sensitive: "敏感词" };
 export function decodeProofreadingOptions(input: unknown): ProofreadOptions {
   const value = input as ProofreadOptions;
@@ -15,9 +18,14 @@ export function decodeProofreadingOptions(input: unknown): ProofreadOptions {
   for (const r of value.rules) {
     if (!r || typeof r.id !== "string" || !r.id || r.id.startsWith("builtin.") || bytes(r.id) > 100 || ids.has(r.id) || typeof r.version !== "string" || !r.version || bytes(r.version) > 100 || !["typo", "sensitive", "character"].includes(r.category) || typeof r.text !== "string" || !r.text || bytes(r.text) > 512 || typeof r.message !== "string" || bytes(r.message) > 2048 || !(r.replacement === null || typeof r.replacement === "string" && bytes(r.replacement) <= 2048) || r.category === "sensitive" && r.replacement !== null) throw new Error("规则标识、版本、词条或替换格式无效；敏感词只能提示。");
     ids.add(r.id);
+    if (r.scope) validateProcessingScope(r.scope);
   }
   if (value.allowlist.some(s => typeof s !== "string" || !s || bytes(s) > 512)) throw new Error("白名单须为非空词条数组。");
-  return structuredClone({ characters: value.characters, typos: value.typos, pairs: value.pairs, sensitive: value.sensitive, rules: value.rules, allowlist: value.allowlist, selection: null });
+  const processing = decodeProcessingSettings(value.processing);
+  if (value.processingOrigin && (value.processingOrigin.source !== "shared-library" || typeof value.processingOrigin.baseId !== "string" || !value.processingOrigin.baseId || value.processingOrigin.baseId.length > 512 || value.processingOrigin.revision !== undefined && typeof value.processingOrigin.revision !== "string")) throw new Error("共享词表缺少准确来源依据。");
+  if (value.scopedAllowlist !== undefined && (!Array.isArray(value.scopedAllowlist) || value.scopedAllowlist.length > 2000)) throw new Error("白名单超过预算。");
+  for (const entry of value.scopedAllowlist ?? []) { if (!entry || typeof entry.text !== "string" || !entry.text || bytes(entry.text) > 512) throw new Error("白名单词条无效。"); validateProcessingScope(entry.scope); }
+  return structuredClone({ characters: value.characters, typos: value.typos, pairs: value.pairs, sensitive: value.sensitive, rules: value.rules, allowlist: value.allowlist, scopedAllowlist: value.scopedAllowlist ?? [], processing, ...(value.processingOrigin ? { processingOrigin: value.processingOrigin } : {}), selection: null });
 }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLElementTagNameMap[K] { const e = document.createElement(tag); if (text) e.textContent = text; return e; }
 function button(label: string, run: () => void | Promise<void>): HTMLButtonElement { const b = el("button", label); b.type = "button"; b.className = "knowledge-button"; b.onclick = () => { void run(); }; return b; }
@@ -26,7 +34,7 @@ function field(label: string, input: HTMLElement): HTMLLabelElement { const e = 
 
 /** Settings are local preferences; findings are ephemeral and annotations use Core. */
 export class ProofreadingPanel {
-  private options: ProofreadOptions = { characters: true, typos: true, pairs: true, sensitive: true, rules: [], allowlist: [], selection: null };
+  private options: ProofreadOptions = { characters: true, typos: true, pairs: true, sensitive: true, rules: [], allowlist: [], scopedAllowlist: [], processing: defaultProcessingSettings(), selection: null };
   private result: ProofreadResult | null = null;
   private basis: KnowledgeContext | null = null;
   private checkedOptions: ProofreadOptions | null = null;
@@ -37,6 +45,7 @@ export class ProofreadingPanel {
   private generation = 0;
   private container: HTMLElement | null = null;
   private message = "";
+  private suggestion: ProcessingDefaultsSuggestion | null = null;
   private ruleDraft = { category: "typo", text: "", replacement: "", message: "", replace: true };
   constructor(private host: Host, private preferences: { storageKey: string | null; title: string } = { storageKey: "weftext-proofread-options-v1", title: "本地校对" }) {
     try { const saved = preferences.storageKey ? localStorage.getItem(preferences.storageKey) : null; if (saved) this.options = decodeProofreadingOptions(JSON.parse(saved)); } catch { /* Keep independent defaults. */ }
@@ -53,6 +62,7 @@ export class ProofreadingPanel {
       const s = context.selection; if (!s || s.from >= s.to) { this.message = "请先选择正文或源码中的准确范围。"; this.draw(); return; }
       const encoder = new TextEncoder(); options.selection = [encoder.encode(context.source.slice(0, s.from)).length, encoder.encode(context.source.slice(0, s.to)).length];
     }
+    this.result = null; this.basis = null; this.checkedOptions = null; this.selected.clear();
     this.busy = true; const generation = ++this.generation; this.message = "正在校对当前正文…"; this.draw();
     try {
       const result = await this.host.scan(context, options);
@@ -81,6 +91,27 @@ export class ProofreadingPanel {
   private draw(): void {
     const root = this.container; if (!root) return; root.replaceChildren();
     root.append(el("h3", this.preferences.title), el("p", "校对可见正文；不会检查代码、公式和链接内容，也不会自动修改文字。"));
+    const processing = this.options.processing ?? defaultProcessingSettings();
+    const languages = el("input"); languages.value = processing.languages.map(processingLanguageTag).join(", "); languages.placeholder = "留空按原文标记；如 zh-Hans-CN, en-GB"; languages.disabled = this.busy;
+    languages.onchange = () => { try { this.options.processing = { ...processing, languages: parseProcessingLanguages(languages.value) }; this.save(); this.message = "本次明确语言选择已更新，旧结果已失效。"; } catch (error) { this.message = error instanceof Error ? error.message : String(error); } this.draw(); };
+    root.append(field("本次处理语言／文字体系／地区（多语言可用逗号分隔）", languages), el("p", "明确选择优先于原文标记；留空只用可证明的原文标记。地区和文字体系未知时保留未知。库默认仅供采用为本次选择，不由界面语言推断。方案：通用校对；不翻译、不简繁转换。"));
+    if (this.host.processingDefaults) {
+      const load = button("读取共享处理建议", async () => {
+        if (this.busy) return;
+        this.busy = true; this.draw();
+        try { this.suggestion = await this.host.processingDefaults!(); this.message = this.suggestion.processing ? "共享建议已读取；检查来源、语言范围与词表后明确采用。" : "当前库没有共享处理建议。"; }
+        catch (error) { this.message = error instanceof Error ? error.message : String(error); }
+        finally { this.busy = false; this.draw(); }
+      }); load.disabled = this.busy; root.append(load);
+    }
+    if (this.suggestion?.processing) {
+      const suggestion = this.suggestion;
+      const details = el("details"); details.append(el("summary", `共享建议（来源：${suggestion.source}；版本：${suggestion.revision ?? suggestion.processing!.defaults.version}）`), el("pre", JSON.stringify(suggestion.processing, null, 2)));
+      const adopt = button("采用为本次处理选择与词表", () => {
+        const document = suggestion.processing!;
+        this.options = decodeProofreadingOptions({ ...this.options, processing: document.defaults, processingOrigin: { source: "shared-library", baseId: suggestion.baseId, ...(suggestion.revision ? { revision: suggestion.revision } : {}) }, rules: document.rules, allowlist: [], scopedAllowlist: document.scopedAllowlist }); this.save(); this.message = "已明确采用共享建议；本次处理将持续核对原共享来源和词表版本。未修改文档或共享默认。"; this.suggestion = null; this.draw();
+      }); adopt.disabled = this.busy; details.append(adopt); root.append(details);
+    }
     for (const [key, label] of [["characters", categories.character], ["typos", categories.typo], ["pairs", categories.pair], ["sensitive", categories.sensitive]] as const) {
       const check = el("input"); check.type = "checkbox"; check.checked = this.options[key]; check.disabled = this.busy;
       check.onchange = () => { this.options[key] = check.checked; this.save(); }; root.append(field(label, check));
@@ -98,16 +129,31 @@ export class ProofreadingPanel {
     const explanation = el("input"); explanation.value = this.ruleDraft.message; explanation.oninput = () => { this.ruleDraft.message = explanation.value; };
     settings.append(field("类别", cat), field("查找词语／符号", word), field("提供明确替换（空替换表示删除；敏感词只提示）", replace), field("建议替换为", replacement), field("提示说明", explanation), button("添加规则", () => {
       const d = this.ruleDraft; if (!d.text) { this.message = "词条不能为空。"; this.draw(); return; }
-      this.options.rules.push({ id: crypto.randomUUID(), version: "1", category: d.category, text: d.text, message: d.message || "疑似问题，请核对上下文", replacement: d.category !== "sensitive" && d.replace ? d.replacement : null }); this.save(); this.ruleDraft.text = ""; this.draw();
+      this.options.rules.push({ id: crypto.randomUUID(), version: "1", category: d.category, text: d.text, message: d.message || "疑似问题，请核对上下文", replacement: d.category !== "sensitive" && d.replace ? d.replacement : null, scope: { universal: true } }); this.save(); this.ruleDraft.text = ""; this.draw();
     }));
-    for (const rule of this.options.rules) { const row = el("p", `${categories[rule.category]}：${rule.text}${rule.replacement !== null ? ` → ${rule.replacement}` : ""}`); row.append(button("删除规则", () => { this.options.rules = this.options.rules.filter(r => r.id !== rule.id); this.save(); this.draw(); })); settings.append(row); }
-    const allow = el("textarea"); allow.rows = 3; allow.value = this.options.allowlist.join("\n"); allow.onchange = () => { this.options.allowlist = allow.value.split(/\r?\n/).filter(Boolean); this.save(); }; settings.append(field("白名单：每行一个准确词条", allow));
+    settings.append(el("p", "“添加规则”明确新增通用词条；需要限定语言／地区或词典版本时导出 JSON 编辑 scope 后再导入。敏感词仅表示所选词表匹配，不代表地区法律判定。"));
+    for (const rule of this.options.rules) {
+      const row = el("p", `${categories[rule.category]}：${rule.text}${rule.replacement !== null ? ` → ${rule.replacement}` : ""}（${scopeLabel(rule.scope ?? undefined)}）`);
+      if (!rule.scope) row.append(button("确认此词条适用于所有语言", () => { rule.scope = { universal: true }; this.save(); this.draw(); }));
+      row.append(button("删除规则", () => { this.options.rules = this.options.rules.filter(r => r.id !== rule.id); this.save(); this.draw(); })); settings.append(row);
+    }
+    if (this.options.allowlist.length) {
+      settings.append(el("p", `旧白名单待确认：${this.options.allowlist.join("、")}。保留原词条，确认前不用于排除。`), button("确认旧白名单适用于所有语言", () => { this.options.scopedAllowlist = [...this.options.scopedAllowlist ?? [], ...this.options.allowlist.map(text => ({ text, scope: { universal: true } }))]; this.options.allowlist = []; this.save(); this.draw(); }));
+    }
+    const generalAllowlist = (this.options.scopedAllowlist ?? []).filter(e => e.scope.universal);
+    const allow = el("textarea"); allow.rows = 3; allow.value = generalAllowlist.map(e => e.text).join("\n"); allow.onchange = () => { this.options.scopedAllowlist = [...(this.options.scopedAllowlist ?? []).filter(e => !e.scope.universal), ...allow.value.split(/\r?\n/).filter(Boolean).map(text => ({ text, scope: { universal: true } }))]; this.save(); }; settings.append(field("通用白名单：明确适用于所有语言，每行一个准确词条", allow));
+    for (const entry of (this.options.scopedAllowlist ?? []).filter(e => !e.scope.universal)) settings.append(el("p", `限定白名单：${entry.text}（${scopeLabel(entry.scope)}）`));
     root.append(settings);
     const scope = select({ document: "整篇正文", selection: "当前选区" }); scope.value = this.scope; scope.onchange = () => { this.scope = scope.value; };
     const start = button(this.busy ? "校对中…" : "开始校对", () => this.run()); start.disabled = this.busy; root.append(field("范围", scope), start);
     const message = el("p", this.message); message.setAttribute("role", "status"); root.append(message);
     if (!this.result) return;
     for (const warning of this.result.warnings) root.append(el("p", warning));
+    if (this.result.fragments?.length) {
+      const details = el("details"); details.append(el("summary", "本次实际语言来源与规则覆盖"));
+      for (const fragment of this.result.fragments) details.append(el("p", `${fragment.language ? processingLanguageTag(fragment.language) : "语言／地区未知"}；原文标记：${fragment.nativeLanguage ? processingLanguageTag(fragment.nativeLanguage) : "未知"}；来源：${({ original: "原文标记", explicit: "本次明确选择", explicitMixed: "多语言明确选择", unknown: "未知" } as Record<string, string>)[fragment.source] ?? fragment.source}；已检查：${fragment.checkedRules.join("、") || "通用内建规则"}；未检查：${fragment.skippedRules.map(([id, reason]) => `${id}（${reason}）`).join("、") || "无词典范围排除"}`));
+      root.append(details);
+    }
     if (!sameKnowledgeBasis(this.basis, this.host.context())) root.append(el("p", "这些结果对应旧正文，请重新校对后添加批注。"));
     const filter = select({ all: "全部类别", ...categories }); filter.value = this.category; filter.onchange = () => { this.category = filter.value; this.draw(); }; root.append(filter);
     const shown = this.result.findings.filter(f => this.category === "all" || f.category === this.category);

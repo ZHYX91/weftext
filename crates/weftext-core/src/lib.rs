@@ -1,11 +1,16 @@
 //! Local MVP persistence; this is deliberately not the full Core sync/schema protocol.
 mod backend;
+mod compile_dependencies;
+pub use compile_dependencies::{
+    CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
+};
 mod directory_identity;
 mod draft_recovery;
 mod exchange;
 mod export_read;
 mod history;
 mod hosted;
+mod recognition;
 pub use hosted::{
     ActorContentImportReceipt, ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus,
     ActorFieldStatus, ActorHistoryRestoreStatus, ActorOwnerBackupStatus, ActorSaveStatus,
@@ -17,10 +22,15 @@ pub use hosted::{
 mod history_tests;
 mod inventory;
 mod journal;
+mod library_creation;
+pub use library_creation::{
+    InitialLibraryStyle, InitialRootNote, LibraryCreateOptions, root_query_presets,
+};
 mod operations;
 mod query_scope;
 mod resource;
 mod resource_collection;
+mod resource_diagnostics;
 pub use resource::{
     MissingResourceWitness, QualifiedResource, QualifiedResourceInput, ResourceWitness,
 };
@@ -171,6 +181,8 @@ pub struct LibraryInfo {
     pub root: String,
     pub workspace_id: String,
     pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root_note_path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -230,6 +242,7 @@ pub struct Core {
     snapshots: HashMap<String, operations::SnapshotBinding>,
     style_bases: HashMap<String, operations::StyleBasis>,
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
+    compile_dependency_cuts: HashMap<String, compile_dependencies::CompileDependencyCut>,
 }
 impl Core {
     pub fn check_session_base(&self, session_id: &str, base_id: &str) -> Result<()> {
@@ -280,6 +293,7 @@ impl Core {
             snapshots: HashMap::new(),
             style_bases: HashMap::new(),
             admitted_cuts: HashMap::new(),
+            compile_dependency_cuts: HashMap::new(),
         };
         core.load_journals()?;
         Ok(core)
@@ -724,97 +738,7 @@ impl Core {
         path: impl AsRef<Path>,
         operation_id: &str,
     ) -> Result<LibraryInfo> {
-        valid_operation_id(operation_id)?;
-        let root = absolute_path(path.as_ref())?;
-        let fingerprint = hash(&serde_json::to_vec(
-            &serde_json::json!({"kind":"createLibrary","path":display(&root)}),
-        )?);
-        if let Some(plan) = self.operations.get(operation_id) {
-            if plan.fingerprint != fingerprint {
-                return Err(CoreError::new(
-                    "operationConflict",
-                    "This operationId already belongs to different input",
-                ));
-            }
-            if !self.committed(operation_id) {
-                return Err(CoreError::new(
-                    "recoveryPending",
-                    "The original creation plan is retained; it must not be re-created",
-                ));
-            }
-            if self.workspace(&root)?.is_none() {
-                return Err(CoreError::new(
-                    "committedResultUnavailable",
-                    "The original library was created, but its current configuration changed; no recreation was attempted",
-                ));
-            }
-            return Ok(LibraryInfo {
-                operation_id: operation_id.into(),
-                root: plan.path.clone(),
-                workspace_id: plan.workspace_id.clone().unwrap(),
-                status: "localMvp".into(),
-            });
-        }
-        let guard = ParentGuard::acquire(&root)?;
-        // Existing directories are intentionally rejected, even if empty.
-        let workspace_id = fresh();
-        let config = WorkspaceConfig {
-            version: 1,
-            workspace_id: workspace_id.clone(),
-            storage_profile: STORAGE_PROFILE.into(),
-            schema_support: "notImplemented".into(),
-            sync_support: "notImplemented".into(),
-        };
-        let operation_id = operation_id.to_string();
-        let files = vec![
-            (
-                ".weftext-workspace.json".into(),
-                serde_json::to_vec_pretty(&config)?,
-            ),
-            (".weftext-format".into(), b"weftext.typst.v1\n".to_vec()),
-            (
-                ".weftext-rules".into(),
-                br#"{"version":1,"ignored":[],"unmanaged":[]}"#.to_vec(),
-            ),
-            (
-                ".weftext-mvp-commit.json".into(),
-                serde_json::to_vec(
-                    &serde_json::json!({"workspaceId": workspace_id,"operationId": operation_id,"storageProfile": STORAGE_PROFILE}),
-                )?,
-            ),
-        ];
-        let mut plan = journal::Plan::file(
-            operation_id.clone(),
-            fingerprint,
-            &root,
-            None,
-            Vec::new(),
-            None,
-            "createLibrary",
-        );
-        plan.files = files.clone();
-        plan.workspace_id = Some(workspace_id.clone());
-        self.stage(plan.clone())?;
-        let directory = match guard.create_directory() {
-            Ok(d) => d,
-            Err(e) => {
-                self.resolve_record(&operation_id, "createRejected")?;
-                return Err(e);
-            }
-        };
-        let mut handles = Vec::new();
-        for (name, bytes) in files {
-            let mut file = ParentGuard::child_file(&directory, &name)?;
-            write_source(&mut file, &bytes)?;
-            handles.push(file);
-        }
-        self.commit(&plan)?;
-        Ok(LibraryInfo {
-            operation_id,
-            root: display(&root),
-            workspace_id,
-            status: "localMvp".into(),
-        })
+        self.create_library_with_options_and_id(path, LibraryCreateOptions::default(), operation_id)
     }
     pub fn create_note(
         &mut self,
@@ -951,6 +875,7 @@ impl Core {
                 && crate::history::history_relative_path(root, Path::new(&p.path))
                     .is_some_and(|p| p.as_os_str().is_empty())
                 && backend::same_directory(Path::new(&p.path), root).unwrap_or(false)
+                && self.library_creation_root_matches(p, root).unwrap_or(false)
                 && p.workspace_id.as_ref() == Some(&config.workspace_id)
                 && self.committed(operation_id)
         });
@@ -975,6 +900,13 @@ impl Core {
             .filter(|p| self.committed(&p.operation_id))
             .find_map(|p| {
                 self.read_births(&p.operation_id)
+                    .inspect_err(|error| {
+                        resource_diagnostics::error(
+                            "admitted_binding.births",
+                            &p.operation_id,
+                            error,
+                        )
+                    })
                     .ok()?
                     .into_iter()
                     .find(|b| &b.identity == identity)

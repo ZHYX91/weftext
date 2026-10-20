@@ -17,11 +17,12 @@ use typst_library::layout::{BlockElem, HElem, OuterVAlignment, Sizing};
 use typst_library::math::EquationElem;
 use typst_library::math::ir::resolve_equation;
 use typst_library::model::{
-    Attribution, BibliographyElem, CiteElem, CiteGroup, CslIndentElem, CslLightElem, Destination,
-    DirectLinkElem, DividerElem, EarlyLinkResolver, EmphElem, EnumElem, FigureCaption, FigureElem,
-    FootnoteContainer, FootnoteElem, FootnoteEntry, FootnoteMarker, HeadingElem, LinkElem,
-    LinkTarget, ListElem, OutlineElem, OutlineEntry, OutlineNode, ParElem, ParbreakElem, QuoteElem,
-    RefElem, RefForm, Refable, StrongElem, TableCell, TableElem, TermsElem, TitleElem, Works,
+    Attribution, BibliographyElem, CitationForm, CiteElem, CiteGroup, CslIndentElem, CslLightElem,
+    Destination, DirectLinkElem, DividerElem, EarlyLinkResolver, EmphElem, EnumElem, FigureCaption,
+    FigureElem, FigureKind, FootnoteContainer, FootnoteElem, FootnoteEntry, FootnoteMarker,
+    HeadingElem, LinkElem, LinkTarget, ListElem, OutlineElem, OutlineEntry, OutlineNode, ParElem,
+    ParbreakElem, QuoteElem, RefElem, RefForm, Refable, StrongElem, TableCell, TableElem,
+    TermsElem, TitleElem, Works,
 };
 use typst_library::routines::Arenas;
 use typst_library::text::{
@@ -335,12 +336,78 @@ pub fn heading_counter_state(
     ))
 }
 
-const FIGURE_RULE: ShowFn<FigureElem> = |elem, _, styles| {
+fn native_counter_state(
+    counter: &Counter,
+    engine: &mut Engine,
+    styles: StyleChain,
+    location: Location,
+    span: Span,
+) -> SourceResult<ecow::EcoString> {
+    let state = counter.at(
+        engine,
+        Context::new(Some(location), Some(styles)).track(),
+        span,
+        location.into(),
+    )?;
+    Ok(eco_format!(
+        "[{}]",
+        state
+            .0
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    ))
+}
+
+fn figure_kind(kind: &FigureKind) -> ecow::EcoString {
+    match kind {
+        FigureKind::Elem(element) if *element == TableElem::ELEM => "table".into(),
+        FigureKind::Elem(element) if *element == ImageElem::ELEM => "figure".into(),
+        FigureKind::Elem(element) if *element == EquationElem::ELEM => "equation".into(),
+        FigureKind::Elem(element) => eco_format!("native:{}", element.name()),
+        FigureKind::Name(name) => eco_format!("custom:{}", name),
+    }
+}
+
+const FIGURE_RULE: ShowFn<FigureElem> = |elem, engine, styles| {
     let span = elem.span();
     let mut realized = elem.body.clone();
+    let location = elem.location().unwrap();
+    let numbering = elem.numbering.get_ref(styles).as_ref();
+    let caption = elem.caption.get_cloned(styles);
+    let semantic = WeftextHtmlSemantics {
+        role: Some("figure"),
+        target_id: Some(eco_format!("{:032x}", location.hash())),
+        label: elem.label().map(|label| label.resolve().as_str().into()),
+        caption_kind: match elem.kind.get_ref(styles) {
+            Smart::Custom(kind) => Some(figure_kind(kind)),
+            Smart::Auto => None,
+        },
+        caption_position: caption
+            .as_ref()
+            .map(|caption| match caption.position.get(styles) {
+                OuterVAlignment::Top => "top",
+                OuterVAlignment::Bottom => "bottom",
+            }),
+        numbered: Some(numbering.is_some()),
+        counter_state: if numbering.is_some() {
+            Some(native_counter_state(
+                &elem.counter(),
+                engine,
+                styles,
+                location,
+                span,
+            )?)
+        } else {
+            None
+        },
+        ..Default::default()
+    }
+    .with_numbering(numbering);
 
     // Build the caption, if any.
-    if let Some(caption) = elem.caption.get_cloned(styles) {
+    if let Some(caption) = caption {
         realized = match caption.position.get(styles) {
             OuterVAlignment::Top => caption.pack() + realized,
             OuterVAlignment::Bottom => realized + caption.pack(),
@@ -352,6 +419,7 @@ const FIGURE_RULE: ShowFn<FigureElem> = |elem, _, styles| {
 
     Ok(BlockElem::packed(
         HtmlElem::new(tag::figure)
+            .with_weftext(semantic)
             .with_body(Some(realized))
             .pack()
             .spanned(elem.span()),
@@ -359,9 +427,82 @@ const FIGURE_RULE: ShowFn<FigureElem> = |elem, _, styles| {
 };
 
 const FIGURE_CAPTION_RULE: ShowFn<FigureCaption> = |elem, engine, styles| {
+    let span = elem.span();
+    let target_id = elem
+        .figure_location
+        .flatten()
+        .map(|loc| eco_format!("{:032x}", loc.hash()));
+    let numbering = elem.numbering.as_ref().and_then(Option::as_ref);
+    let semantic = WeftextHtmlSemantics {
+        role: Some("caption"),
+        target_id: target_id.clone(),
+        caption_kind: elem.kind.as_ref().map(figure_kind),
+        caption_position: Some(match elem.position.get(styles) {
+            OuterVAlignment::Top => "top",
+            OuterVAlignment::Bottom => "bottom",
+        }),
+        numbered: Some(numbering.is_some()),
+        counter_state: if let (Some(Some(counter)), Some(Some(location))) =
+            (&elem.counter, &elem.figure_location)
+        {
+            Some(native_counter_state(
+                counter, engine, styles, *location, span,
+            )?)
+        } else {
+            None
+        },
+        ..Default::default()
+    }
+    .with_numbering(numbering);
+    // Mirror the official realization while retaining the exact evaluated
+    // prefix and author body as separate native producer subtrees.
+    let mut realized = HtmlElem::new(tag::span)
+        .with_weftext(WeftextHtmlSemantics {
+            role: Some("caption-body"),
+            target_id: target_id.clone(),
+            ..Default::default()
+        })
+        .with_body(Some(elem.body.clone()))
+        .pack()
+        .spanned(elem.body.span());
+    if let (
+        Some(Some(mut supplement)),
+        Some(Some(numbering)),
+        Some(Some(counter)),
+        Some(Some(location)),
+    ) = (
+        elem.supplement.clone(),
+        &elem.numbering,
+        &elem.counter,
+        &elem.figure_location,
+    ) {
+        let numbers = counter.display_at(engine, *location, styles, numbering, span)?;
+        let numbers = HtmlElem::new(tag::span)
+            .with_weftext(WeftextHtmlSemantics {
+                role: Some("caption-number"),
+                ..semantic.clone()
+            })
+            .with_body(Some(numbers))
+            .pack()
+            .spanned(span);
+        if !supplement.is_empty() {
+            supplement += TextElem::packed('\u{a0}');
+        }
+        let separator = elem.separator.get_cloned(styles).unwrap_or_default();
+        let prefix = HtmlElem::new(tag::span)
+            .with_weftext(WeftextHtmlSemantics {
+                role: Some("caption-prefix"),
+                ..semantic.clone()
+            })
+            .with_body(Some(supplement + numbers + separator))
+            .pack()
+            .spanned(span);
+        realized = prefix + realized;
+    }
     Ok(BlockElem::packed(
         HtmlElem::new(tag::figcaption)
-            .with_body(Some(elem.realize(engine, styles)?))
+            .with_weftext(semantic)
+            .with_body(Some(realized))
             .pack()
             .spanned(elem.span()),
     ))
@@ -411,12 +552,28 @@ const FOOTNOTE_RULE: ShowFn<FootnoteElem> = |elem, engine, styles| {
         .pack()
         .styled(HtmlElem::role.set(Some("doc-noteref".into())))
         .spanned(span);
+    let reference = HtmlElem::new(tag::span)
+        .with_weftext(
+            WeftextHtmlSemantics {
+                role: Some("footnote-reference"),
+                note_definition: Some(!elem.is_ref()),
+                note_id: Some(eco_format!(
+                    "{:032x}",
+                    elem.declaration_location(engine).at(span)?.hash()
+                )),
+                ..Default::default()
+            }
+            .with_numbering(Some(elem.numbering.get_ref(styles))),
+        )
+        .with_body(Some(sup))
+        .pack()
+        .spanned(span);
 
     // Indicates the presence of a default footnote rule to emit an error when
     // no footnote container is available.
     let marker = FootnoteMarker::new().pack().spanned(span);
 
-    Ok(HElem::hole().clone() + sup + marker)
+    Ok(HElem::hole().clone() + reference + marker)
 };
 
 const FOOTNOTE_MARKER_RULE: ShowFn<FootnoteMarker> = |_, _, _| Ok(Content::empty());
@@ -473,6 +630,7 @@ const FOOTNOTE_CONTAINER_RULE: ShowFn<FootnoteContainer> = |elem, engine, _| {
     // spec (although there, the section also contains an additional heading).
     Ok(BlockElem::packed(
         HtmlElem::new(tag::section)
+            .with_weftext(WeftextHtmlSemantics::new("footnote-list"))
             .with_attr(attr::role, "doc-endnotes")
             .with_body(Some(list))
             .pack()
@@ -494,6 +652,18 @@ const FOOTNOTE_ENTRY_RULE: ShowFn<FootnoteEntry> = |elem, engine, styles| {
     // <https://www.w3.org/TR/dpub-aria-1.1/#doc-footnote>). Our footnotes more
     // appropriately modelled as ARIA endnotes. This is also in line with how
     // Pandoc handles footnotes.
+    let body = HtmlElem::new(tag::div)
+        .with_weftext(WeftextHtmlSemantics {
+            role: Some("footnote-body"),
+            note_id: elem
+                .note
+                .location()
+                .map(|loc| eco_format!("{:032x}", loc.hash())),
+            ..Default::default()
+        })
+        .with_body(Some(body.clone()))
+        .pack()
+        .spanned(body.span());
     Ok(prefix + body)
 };
 
@@ -573,7 +743,7 @@ const REF_RULE: ShowFn<RefElem> = |elem, engine, styles| {
     if elem.form.get(styles) == RefForm::Normal
         && !BibliographyElem::has(engine, elem.target, span)
         && let Ok(target) = engine.introspect(QueryLabelIntrospection(elem.target, span))
-        && target.is::<HeadingElem>()
+        && (target.is::<HeadingElem>() || target.is::<FigureElem>() || target.is::<EquationElem>())
         && let Some(refable) = target.with::<dyn Refable>()
         && let Some(numbering) = refable.numbering()
     {
@@ -614,6 +784,7 @@ const REF_RULE: ShowFn<RefElem> = |elem, engine, styles| {
                 role: Some("reference"),
                 reference_kind: Some("number"),
                 label: Some(elem.target.resolve().as_str().into()),
+                target_id: Some(eco_format!("{:032x}", location.hash())),
                 ..Default::default()
             })
             .with_body(Some(body))
@@ -624,10 +795,34 @@ const REF_RULE: ShowFn<RefElem> = |elem, engine, styles| {
     }
 };
 
-const CITE_GROUP_RULE: ShowFn<CiteGroup> = |elem, engine, _| {
-    Ok(elem
-        .realize(engine)?
-        .styled(HtmlElem::role.set(Some("doc-biblioref".into()))))
+const CITE_GROUP_RULE: ShowFn<CiteGroup> = |elem, engine, styles| {
+    // Realization confirms the actual official bibliography assignment branch.
+    // Native RefElem's synthesized citation alone does not establish a cite.
+    let body = elem.realize(engine)?;
+    let mut semantics = WeftextHtmlSemantics::new("citation");
+    for child in &elem.children {
+        if let Some(cite) = child.to_packed::<CiteElem>() {
+            let form = match cite.form.get(styles) {
+                Some(CitationForm::Normal) => "normal",
+                Some(CitationForm::Prose) => "prose",
+                Some(CitationForm::Full) => "full",
+                Some(CitationForm::Author) => "author",
+                Some(CitationForm::Year) => "year",
+                None => "none",
+            };
+            semantics
+                .citation_keys
+                .push(cite.key.resolve().as_str().into());
+            semantics.citation_forms.push(form);
+            semantics.citation_spans.push(cite.span());
+        }
+    }
+    Ok(HtmlElem::new(tag::span)
+        .with_weftext(semantics)
+        .with_body(Some(body))
+        .with_attr(attr::role, "doc-biblioref")
+        .pack()
+        .spanned(elem.span()))
 };
 
 // For the bibliography, we have a few elements that should be styled (e.g.
@@ -751,12 +946,20 @@ fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
         .chunks(grid.non_gutter_column_count())
         .collect();
 
-    let tr = |tag, row: &[Entry]| {
+    let tr = |tag, row: &[Entry], header_repeat: Option<bool>| {
         let row = row
             .iter()
             .flat_map(|entry| entry.as_cell())
             .map(|cell| show_cell(tag, cell, styles));
-        elem(tag::tr, Content::sequence(row))
+        let mut row = HtmlElem::new(tag::tr).with_body(Some(Content::sequence(row)));
+        if let Some(repeat) = header_repeat {
+            row = row.with_weftext(WeftextHtmlSemantics {
+                role: Some("table-header-row"),
+                repeat: Some(repeat),
+                ..WeftextHtmlSemantics::default()
+            });
+        }
+        row.pack().spanned(span)
     };
 
     // TODO(subfooters): similarly to headers, take consecutive footers from
@@ -773,7 +976,7 @@ fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
         let rows = rows.drain(footer_start..);
         elem(
             tag::tfoot,
-            Content::sequence(rows.map(|row| tr(tag::td, row))),
+            Content::sequence(rows.map(|row| tr(tag::td, row, None))),
         )
     });
 
@@ -811,7 +1014,16 @@ fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
             removed_header_rows,
             Some(elem(
                 tag::thead,
-                Content::sequence(rows.map(|row| tr(tag::th, row))),
+                Content::sequence(rows.enumerate().map(|(y, row)| {
+                    // A single thead can contain multiple native headers with
+                    // different repeat settings. Keep each resolved request
+                    // on its actual rows rather than deriving it from the DOM.
+                    let repeat = grid.headers[..first_mid_table_header]
+                        .iter()
+                        .find(|header| header_range(header).contains(&y))
+                        .map(|header| header.repeated);
+                    tr(tag::th, row, repeat)
+                })),
             )),
         )
     } else {
@@ -825,16 +1037,19 @@ fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
     let mut next_header = first_mid_table_header;
     let mut body = Content::sequence(rows.into_iter().enumerate().map(|(relative_y, row)| {
         let y = relative_y + y_offset;
-        if let Some(current_header_range) = grid.headers.get(next_header).map(|h| header_range(h))
+        if let Some((current_header_range, repeat)) = grid
+            .headers
+            .get(next_header)
+            .map(|header| (header_range(header), header.repeated))
             && current_header_range.contains(&y)
         {
             if y + 1 == current_header_range.end {
                 next_header += 1;
             }
 
-            tr(tag::th, row)
+            tr(tag::th, row, Some(repeat))
         } else {
-            tr(tag::td, row)
+            tr(tag::td, row, None)
         }
     }));
 
@@ -1098,7 +1313,68 @@ const EQUATION_RULE: ShowFn<EquationElem> = |elem, engine, styles| {
         .pack()
         .spanned(elem.span());
 
-    Ok(if block { BlockElem::packed(math) } else { math })
+    if !block {
+        return Ok(math);
+    }
+    let numbering = elem.numbering.get_ref(styles).as_ref();
+    let location = elem.location().unwrap();
+    let mut body = math;
+    if let Some(numbering) = numbering {
+        let numbers =
+            elem.counter()
+                .display_at(engine, location, styles, numbering, elem.span())?;
+        let number = HtmlElem::new(tag::span)
+            .with_weftext(
+                WeftextHtmlSemantics {
+                    role: Some("equation-number"),
+                    target_id: Some(eco_format!("{:032x}", location.hash())),
+                    ..Default::default()
+                }
+                .with_numbering(Some(numbering)),
+            )
+            .with_body(Some(numbers))
+            .pack()
+            .spanned(elem.span());
+        body += HtmlElem::new(tag::span)
+            .with_weftext(
+                WeftextHtmlSemantics {
+                    role: Some("equation-prefix"),
+                    target_id: Some(eco_format!("{:032x}", location.hash())),
+                    ..Default::default()
+                }
+                .with_numbering(Some(numbering)),
+            )
+            .with_body(Some(number))
+            .pack()
+            .spanned(elem.span());
+    }
+    Ok(BlockElem::packed(
+        HtmlElem::new(tag::div)
+            .with_weftext(
+                WeftextHtmlSemantics {
+                    role: Some("equation"),
+                    target_id: Some(eco_format!("{:032x}", location.hash())),
+                    label: elem.label().map(|label| label.resolve().as_str().into()),
+                    numbered: Some(numbering.is_some()),
+                    counter_state: if numbering.is_some() {
+                        Some(native_counter_state(
+                            &elem.counter(),
+                            engine,
+                            styles,
+                            location,
+                            elem.span(),
+                        )?)
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                }
+                .with_numbering(numbering),
+            )
+            .with_body(Some(body))
+            .pack()
+            .spanned(elem.span()),
+    ))
 };
 
 /// Returns the body of a MathML `HtmlElem`, if the content is one.

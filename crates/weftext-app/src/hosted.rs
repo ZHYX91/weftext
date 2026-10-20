@@ -1,6 +1,7 @@
 //! A separate hosted boundary. Local path, library, recovery and feature APIs
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
+mod builtin_module;
 mod citations;
 mod content_import;
 mod definition;
@@ -20,6 +21,7 @@ mod owner_backup;
 mod query;
 mod query_providers;
 mod query_scopes;
+mod recognition;
 mod resource_collections;
 mod review;
 mod structure;
@@ -332,6 +334,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if !office::valid_legacy_rights(&rights.office) {
+                return Err(ApiError::bad("DOC/WPS 下载须具备同格式的明确导出权限"));
+            }
             if config
                 .files
                 .get(resource)
@@ -341,7 +346,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                     || rights.annotations.write
                     || rights.annotations.accept
                     || rights.annotations.proofread
-                    || rights.office.r#import)
+                    || rights.office.r#import
+                    || rights.office.doc.r#import
+                    || rights.office.wps.r#import)
             {
                 return Err(ApiError::bad(
                     "Trash 对象只读，不能配置正文、字段、批注、校对或导入写入权限",
@@ -352,7 +359,7 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                     "查询定义历史须具备定义读取权；语义产品及关系须明确授权",
                 ));
             }
-            if rights.office.r#import
+            if (rights.office.r#import || rights.office.doc.r#import || rights.office.wps.r#import)
                 && (!rights.read
                     || !rights.write
                     || !config
@@ -1063,6 +1070,7 @@ async fn hosted_assets(request: Request) -> Response {
 pub(super) async fn serve(
     core: Core,
     config_path: PathBuf,
+    legacy_root: PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut config: Config = serde_json::from_slice(&std::fs::read(&config_path)?)?;
     config.root = std::path::absolute(&config.root)?;
@@ -1214,7 +1222,7 @@ pub(super) async fn serve(
             editor_versions: HashMap::new(),
             fields: fields::Store::default(),
             review: review::Store::default(),
-            office: office::Store::default(),
+            office: office::Store::with_legacy_root(legacy_root),
             library: library::Store::default(),
             media: media::Store::default(),
             navigation_registry: Default::default(),
@@ -1225,6 +1233,7 @@ pub(super) async fn serve(
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
     };
     let app = Router::new()
+        .merge(builtin_module::router())
         .merge(sync_transport::router())
         .merge(editor::router())
         .merge(fields::router())
@@ -1232,6 +1241,7 @@ pub(super) async fn serve(
         .merge(navigation::router())
         .merge(navigation_registry::router())
         .merge(content_import::router())
+        .merge(recognition::router())
         .merge(owner_backup::router())
         .merge(library::router())
         .merge(knowledge_links::router())

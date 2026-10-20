@@ -312,7 +312,7 @@ class HostedMedia(HostedQuery):
         self.server.close(); self.config['files']['Shared']['inputs'] = ['aux']; self.start()
         options = dict(characters=True, typos=True, pairs=True, sensitive=True,
             allowlist=[], selection=None, rules=[dict(id='media.plan', version='1',
-            category='typo', text='错别字', message='请核对', replacement='正确字')])
+            category='typo', text='错别字', message='请核对', replacement='正确字', scope={'universal': True})])
         profile = self.call('review/read', {'resource': 'Shared'})
         scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]

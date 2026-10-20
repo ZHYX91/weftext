@@ -75,6 +75,46 @@ class HostedCitationsOutputs(HostedOffice, HostedQuery):
             units = units[:patch['from']*2]+patch['text'].encode('utf-16-le')+units[patch['to']*2:]
         self.assertEqual(units.decode('utf-16-le'), proposal['source'])
 
+    def test_native_citation_controls_reuse_forms_actual_products_and_stale_basis(self):
+        self.prepare_citations()
+        doc = self.open()
+        original = (self.root/'Shared/Shared.typ').read_bytes()
+        source = doc['source']+'\n正文 😀\n'
+        basis = self.basis(doc, source, 10)
+        raw = {key: value for key, value in basis.items() if key != 'baseId'}
+        profile = self.call('citations/editor', raw)['profile']
+        self.assert_publication_only(profile)
+        self.assertTrue(any(choice['reference'] == self.work_ref and choice['citationReady']
+                            for choice in profile['choices']))
+        intent = dict(kind='nativeCitationInsert', at=len(source[:source.index('正文')].encode()),
+                      work=self.work_ref, key='paper2026', form='prose',
+                      supplement='第 12 页 ] #panic("must stay plain text")')
+        proposal = self.call('citations/edit', {**raw, 'generation': profile['generation'], 'intent': intent})
+        self.apply_utf16(source, proposal)
+        self.assertEqual((self.root/'Shared/Shared.typ').read_bytes(), original)
+        source = proposal['source']
+        basis = self.basis(doc, source, 11)
+        raw = {key: value for key, value in basis.items() if key != 'baseId'}
+        profile = self.call('citations/editor', raw)['profile']
+        self.assertEqual(len(profile['editor']['bindings']), 1)
+        self.assertEqual(profile['editor']['bindings'][0]['work'], self.work_ref)
+        self.assertEqual(profile['displayStatus'], 'nativeCompileAvailable')
+        self.assertTrue(any(item['key'] == 'paper2026' and item['form'] == 'prose'
+                            for item in profile['displayed']))
+        self.assert_publication_only(profile)
+        second = {**raw, 'generation': profile['generation'], 'intent': dict(
+            kind='nativeCitationInsert', at=len(source[:source.index('正文')].encode()),
+            work=self.work_ref, form='none', supplement='')}
+        proposal = self.call('citations/edit', second)
+        self.apply_utf16(source, proposal)
+        basis2 = self.basis(doc, proposal['source'], 12)
+        final = self.call('citations/editor', {key: value for key, value in basis2.items() if key != 'baseId'})['profile']
+        self.assertEqual(len(final['editor']['bindings']), 1)
+        self.assertEqual(len(final['editor']['citations']), 2)
+        self.assertTrue(any(item['visibility'] == 'bibliographyOnly' for item in final['displayed']))
+        self.call('citations/edit', second, status=409)
+        self.assertEqual((self.root/'Shared/Shared.typ').read_bytes(), original)
+
     def test_citation_projection_exact_proposal_and_same_saved_identity(self):
         self.prepare_citations()
         def readonly(users):

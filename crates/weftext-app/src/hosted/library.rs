@@ -1,8 +1,9 @@
 //! Explicit library roles and one frozen native style environment.
 use super::*;
+use std::path::Path;
 use weftext_core::{
     ActorFeatureStatus, ConfigDocument, ConfigRole, FileChange, LibraryStyleDocument,
-    LibraryStyleWitness, OperationIntent, OperationRequest, SnapshotWitness,
+    LibraryStyleWitness, OperationIntent, OperationRequest, SnapshotFile, SnapshotWitness,
 };
 
 const TTL: Duration = Duration::from_secs(900);
@@ -253,6 +254,158 @@ fn retain(inner: &mut HostedInner, basis: Basis) -> Result<String, ApiError> {
     inner.library.bases.insert(id.clone(), basis);
     Ok(id)
 }
+
+/// This authority is durable plan metadata, not a file-input grant. A shared
+/// processing profile always needs its own current settings-role read right.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct ProcessingAuthority {
+    config_hash: String,
+    role_ref: String,
+    revision: Option<String>,
+    source_hash: Option<String>,
+}
+
+#[derive(Clone)]
+pub(super) struct ProcessingCapture {
+    pub(super) origin: weftext_knowledge::SharedProcessingOrigin,
+    pub(super) authority: ProcessingAuthority,
+    file: SnapshotFile,
+    witness: SnapshotWitness,
+}
+impl ProcessingCapture {
+    pub(super) fn validate(&self, inner: &HostedInner, actor: &str) -> Result<(), ApiError> {
+        authorize_processing(inner, actor, &self.authority)?;
+        inner
+            .core
+            .validate_snapshot_witness(&inner.config.root, &self.file.path, &self.witness)
+            .map_err(|_| changed())
+    }
+    pub(super) fn retained_bytes(&self) -> usize {
+        self.file.bytes.as_ref().map_or(0, Vec::len) + self.witness.retained_bytes()
+    }
+    pub(super) fn plan_witness(&self) -> SnapshotWitness {
+        self.witness.clone()
+    }
+}
+
+pub(super) fn authorize_processing(
+    inner: &HostedInner,
+    actor: &str,
+    authority: &ProcessingAuthority,
+) -> Result<(), ApiError> {
+    access(inner, actor, "settings", false)?;
+    if config_hash(inner)? != authority.config_hash {
+        return Err(changed());
+    }
+    Ok(())
+}
+
+/// Recheck an unconfirmed effect from durable authority, without needing the
+/// app's expired profile cache or rerunning a historical rule dictionary.
+pub(super) fn validate_processing_versions(
+    inner: &mut HostedInner,
+    actor: &str,
+    authority: &ProcessingAuthority,
+) -> Result<(), ApiError> {
+    authorize_processing(inner, actor, authority)?;
+    let current = inner
+        .core
+        .read_config(&inner.config.root, ConfigRole::WorkspaceSettings)
+        .map_err(core_error)?;
+    let same = current.role_ref == authority.role_ref
+        && current.revision == authority.revision
+        && current.bytes.as_deref().map(digest) == authority.source_hash;
+    let _ = inner.core.take_snapshot_witness(&current.base_id);
+    if same { Ok(()) } else { Err(changed()) }
+}
+
+/// Resolve only an opaque library/read token issued to this actor. Never let a
+/// submitted Core snapshot ID or an ordinary input-file grant stand in for it.
+pub(super) fn capture_processing(
+    inner: &mut HostedInner,
+    actor: &str,
+    origin: &weftext_knowledge::SharedProcessingOrigin,
+    owner_path: &str,
+) -> Result<ProcessingCapture, ApiError> {
+    access(inner, actor, "settings", false)?;
+    if origin.source != "shared-library" {
+        return Err(changed());
+    }
+    prune(inner);
+    let basis = inner
+        .library
+        .bases
+        .get(&origin.base_id)
+        .filter(|basis| {
+            basis.actor == actor
+                && basis.role == "settings"
+                && basis.epoch == inner.actor_generation(actor)
+                && basis.config_hash == config_hash(inner).unwrap_or_default()
+                && basis.expires > Instant::now()
+        })
+        .cloned()
+        .ok_or_else(changed)?;
+    let Document::Config(document) = basis.document else {
+        return Err(changed());
+    };
+    if origin
+        .revision
+        .as_ref()
+        .is_some_and(|revision| Some(revision) != document.revision.as_ref())
+    {
+        return Err(changed());
+    }
+    let settings: Value = serde_json::from_str(&basis.source).map_err(|_| changed())?;
+    crate::processing_api::validate_settings(&settings).map_err(|_| changed())?;
+    if settings.get("processing").is_none() {
+        return Err(changed());
+    }
+    inner
+        .core
+        .validate_snapshot(&inner.config.root, &document.path, &document.base_id)
+        .map_err(|_| changed())?;
+    let original = inner
+        .core
+        .snapshot_witness(&document.base_id)
+        .map_err(core_error)?;
+    // Own a separate witness: pruning the original library UI token must not
+    // invalidate a scan that already froze its exact settings dependency.
+    let file = inner
+        .core
+        .read_snapshot(&inner.config.root, std::slice::from_ref(&document.path))
+        .map_err(core_error)?
+        .files
+        .remove(0);
+    let witness = inner
+        .core
+        .take_snapshot_witness(&file.base_id)
+        .map_err(core_error)?;
+    if file.bytes != document.bytes || file.revision != document.revision {
+        return Err(changed());
+    }
+    let mut witnesses = vec![original];
+    Core::merge_feature_witnesses(&mut witnesses, vec![witness]).map_err(|_| changed())?;
+    let witness = witnesses.remove(0);
+    let root = inner.config.root.clone();
+    inner
+        .core
+        .with_guarded_snapshot_witnesses(&root, &[&witness], Path::new(owner_path), |_| Ok(()))
+        .map_err(|_| changed())?;
+    let captured = ProcessingCapture {
+        origin: origin.clone(),
+        authority: ProcessingAuthority {
+            config_hash: basis.config_hash,
+            role_ref: document.role_ref,
+            revision: file.revision.clone(),
+            source_hash: file.bytes.as_deref().map(digest),
+        },
+        file,
+        witness,
+    };
+    captured.validate(inner, actor)?;
+    Ok(captured)
+}
 fn workspace(inner: &mut HostedInner) -> Result<String, ApiError> {
     let doc = inner
         .core
@@ -330,6 +483,24 @@ async fn read(
         result["basis"]=retain(inner,basis)?.into();Ok(result)
     }).await?))
 }
+#[cfg(all(test, windows))]
+pub(super) async fn test_processing_profile(state: &HostedState, auth: &Auth) -> ApiResult {
+    read(
+        State(state.clone()),
+        Extension(auth.clone()),
+        Json(Read {
+            role: "settings".into(),
+        }),
+    )
+    .await
+}
+#[cfg(all(test, windows))]
+pub(super) fn test_expire_processing_profiles(inner: &mut HostedInner) {
+    for basis in inner.library.bases.values_mut() {
+        basis.expires = Instant::now() - Duration::from_secs(1);
+    }
+    prune(inner);
+}
 fn validate_config(role: &str, before: &str, after: &str) -> Result<bool, ApiError> {
     if after.len() > MAX_SOURCE {
         return Err(ApiError::bad("配置或样式源码上限为 2 MiB；输入仍保留"));
@@ -353,6 +524,7 @@ fn validate_config(role: &str, before: &str, after: &str) -> Result<bool, ApiErr
     };
     let after = parse(after)?;
     let before = parse(before)?;
+    crate::processing_api::validate_settings(&after)?;
     Ok(before.get("defaultStyle") != after.get("defaultStyle"))
 }
 async fn prepare(

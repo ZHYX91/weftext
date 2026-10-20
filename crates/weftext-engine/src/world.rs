@@ -1,6 +1,6 @@
 use crate::{Dependency, EngineError};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -19,6 +19,29 @@ const FILE_LIMIT: u64 = 32 * 1024 * 1024;
 const TOTAL_LIMIT: usize = 128 * 1024 * 1024;
 const DEPENDENCY_LIMIT: usize = 512;
 
+fn admitted_file_id(path: &Path) -> Result<FileId, EngineError> {
+    if path.as_os_str().is_empty()
+        || path
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+    {
+        return Err(EngineError("冻结文件路径必须是根内准确相对路径".into()));
+    }
+    let logical = path
+        .to_str()
+        .ok_or_else(|| EngineError("冻结路径须为 UTF-8".into()))?
+        .replace('\\', "/");
+    if logical.chars().any(char::is_control) {
+        return Err(EngineError("冻结路径含控制字符".into()));
+    }
+    let virtual_path =
+        VirtualPath::new(format!("/{logical}")).map_err(|e| EngineError(e.to_string()))?;
+    Ok(FileId::new(RootedPath::new(
+        VirtualRoot::Project,
+        virtual_path,
+    )))
+}
+
 /// An immutable per-compilation source/file cache. No package downloader or
 /// ambient project directory is exposed to Typst.
 pub(crate) struct LocalWorld<'a> {
@@ -31,6 +54,7 @@ pub(crate) struct LocalWorld<'a> {
     overrides: HashMap<FileId, Source>,
     frozen_files: Option<HashMap<FileId, Bytes>>,
     cache: Mutex<Cache>,
+    pub(crate) trusted_style_sources: HashSet<FileId>,
 }
 
 #[derive(Default)]
@@ -104,6 +128,7 @@ impl<'a> LocalWorld<'a> {
             overrides: HashMap::new(),
             frozen_files: None,
             cache: Mutex::new(Cache::default()),
+            trusted_style_sources: HashSet::new(),
         })
     }
 
@@ -192,6 +217,9 @@ impl<'a> LocalWorld<'a> {
             style.entry_function,
             crate::encode_string(&format!("/{}", world.main_id.vpath().get_without_slash()))?
         );
+        if crate::style_allows_rich_editing(style) {
+            world.trusted_style_sources.extend([style_id, entry_id]);
+        }
         world
             .overrides
             .insert(style_id, Source::new(style_id, style.source.clone()));
@@ -225,36 +253,14 @@ impl<'a> LocalWorld<'a> {
         } else {
             input.path.as_path()
         };
-        fn admitted_id(path: &Path) -> Result<FileId, EngineError> {
-            if path.as_os_str().is_empty()
-                || path
-                    .components()
-                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
-            {
-                return Err(EngineError("冻结文件路径必须是根内准确相对路径".into()));
-            }
-            let logical = path
-                .to_str()
-                .ok_or_else(|| EngineError("冻结路径须为 UTF-8".into()))?
-                .replace('\\', "/");
-            if logical.chars().any(char::is_control) {
-                return Err(EngineError("冻结路径含控制字符".into()));
-            }
-            let virtual_path =
-                VirtualPath::new(format!("/{logical}")).map_err(|e| EngineError(e.to_string()))?;
-            Ok(FileId::new(RootedPath::new(
-                VirtualRoot::Project,
-                virtual_path,
-            )))
-        }
-        let main_id = admitted_id(relative)?;
+        let main_id = admitted_file_id(relative)?;
         if input.source.len() as u64 > FILE_LIMIT {
             return Err(EngineError("冻结主源超过 32 MiB".into()));
         }
         let mut files = HashMap::new();
         let mut total = input.source.len();
         for (path, data) in &input.files {
-            let id = admitted_id(Path::new(path))?;
+            let id = admitted_file_id(Path::new(path))?;
             if data.len() as u64 > FILE_LIMIT {
                 return Err(EngineError("冻结文件超过 32 MiB".into()));
             }
@@ -281,11 +287,27 @@ impl<'a> LocalWorld<'a> {
             overrides: HashMap::new(),
             frozen_files: Some(files),
             cache: Mutex::new(Cache::default()),
+            trusted_style_sources: HashSet::new(),
         };
         match &input.style {
             Some(style) => Self::apply_style(world, style),
             None => Ok(world),
         }
+    }
+
+    /// Read only the already validated immutable admission map. No filesystem
+    /// lookup, override, or fallback can certify a bundled module's bytes.
+    pub(crate) fn admitted_bytes(&self, path: &Path) -> Result<Option<&[u8]>, EngineError> {
+        let id = admitted_file_id(path)?;
+        Ok(self
+            .frozen_files
+            .as_ref()
+            .and_then(|files| files.get(&id))
+            .map(Bytes::as_slice))
+    }
+
+    pub(crate) fn is_main_admitted_path(&self, path: &Path) -> Result<bool, EngineError> {
+        Ok(admitted_file_id(path)? == self.main_id)
     }
 
     fn resolve(&self, id: FileId) -> FileResult<PathBuf> {
@@ -311,14 +333,53 @@ impl<'a> LocalWorld<'a> {
         }
     }
 
+    /// Exact source snapshots already admitted/read by this compilation only.
+    /// Does not discover dependencies or read the filesystem.
+    pub(crate) fn loaded_sources(&self) -> Vec<Source> {
+        let mut sources = vec![self.main_source.clone()];
+        sources.extend(self.overrides.values().cloned());
+        sources.extend(
+            self.cache
+                .lock()
+                .unwrap()
+                .sources
+                .values()
+                .filter_map(|source| source.as_ref().ok().cloned()),
+        );
+        sources
+    }
+
+    /// Synthetic compiler entry points are identified by their actual FileId,
+    /// never by a user-controllable filename prefix.
+    pub(crate) fn derived_dependency_paths(&self) -> HashSet<String> {
+        if self.compile_id != self.main_id && self.overrides.contains_key(&self.compile_id) {
+            HashSet::from([self.display_path(self.compile_id)])
+        } else {
+            HashSet::new()
+        }
+    }
+
     pub fn dependencies(&self) -> Vec<Dependency> {
         let mut deps: Vec<_> = self
             .cache
             .lock()
             .unwrap()
             .dependencies
-            .values()
-            .cloned()
+            .iter()
+            .map(|((id, _), dependency)| {
+                let mut dependency = dependency.clone();
+                if *id == self.compile_id
+                    && self.compile_id != self.main_id
+                    && self.overrides.contains_key(id)
+                {
+                    dependency.kind = match dependency.kind.as_str() {
+                        "source" => "derived-source".into(),
+                        "file" => "derived-file".into(),
+                        _ => dependency.kind,
+                    };
+                }
+                dependency
+            })
             .collect();
         deps.sort_by(|a, b| (&a.path, &a.kind).cmp(&(&b.path, &b.kind)));
         deps

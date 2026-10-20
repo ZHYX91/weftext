@@ -9,6 +9,8 @@ translation_status: source
 
 状态：**design-refinement-not-implemented**。当前修订保留主体架构，补齐需求边界、CEL/复制合同并精简内建配置；固定旧基线的独立接受与当前实际检查分见 [REVIEW](REVIEW.zh-CN.md) §7、§8。
 
+2026-10-20 增补 REQUIREMENTS §5.1.1 的多级标签：CORE §2.3 负责森林及身份／升级，FEATURES §§5.6、7.4 负责可信查询与交互，SOURCE／SERVER／INTEGRATION 同步衔接。该目标要求必要的共用实现重构，尚不属于 alpha.3 已验范围；完成门统一在 ROADMAP TAG01–10。
+
 本目录整体替代前轮 `typst-native` 的技术方案作为当前已接受的技术设计；前轮文件与其固定范围评审留作历史证据，不与本目录的算法拼接使用。历史 49 份输入、`inputs.json` 和完整评审已归档，不是本仓库的构建或运行依赖。这里保留用户要完成的事情，重新选择技术，不为未部署的协议族设计正常运行兼容层。
 
 | 文档 | 负责的问题 |

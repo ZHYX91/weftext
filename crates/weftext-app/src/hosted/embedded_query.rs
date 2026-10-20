@@ -36,6 +36,7 @@ struct Edit {
     occurrence_id: String,
     plan: Option<QueryPlan>,
     replacement: Option<String>,
+    action: Option<String>,
 }
 
 pub(super) fn router() -> Router<HostedState> {
@@ -209,8 +210,8 @@ async fn edit(
     };
     // Edit must consume the registered exact draft; it cannot register itself.
     let (_, session, _) = check(&state, &auth, &basis, false, true).await?;
-    let patch = match (req.plan, req.replacement) {
-        (Some(plan), None) => {
+    let patch = match (req.plan, req.replacement, req.action) {
+        (Some(plan), None, None) => {
             let occurrence = weftext_data::embedded_query(&basis.source, &req.occurrence_id)
                 .map_err(query_error)?;
             if !occurrence.builder_supported {
@@ -228,12 +229,16 @@ async fn edit(
             weftext_data::edit_embedded_query_plan(&basis.source, &req.occurrence_id, &plan)
                 .map_err(query_error)?
         }
-        (None, Some(replacement)) => weftext_data::replace_embedded_query_source(
+        (None, Some(replacement), None) => weftext_data::replace_embedded_query_source(
             &basis.source,
             &req.occurrence_id,
             &replacement,
         )
         .map_err(query_error)?,
+        (None, None, Some(action)) => {
+            weftext_data::arrange_embedded_query(&basis.source, &req.occurrence_id, &action)
+                .map_err(query_error)?
+        }
         _ => return Err(ApiError::bad("请选择完整构建器提案或准确源码替换之一")),
     };
     check(&state, &auth, &basis, false, true).await?;

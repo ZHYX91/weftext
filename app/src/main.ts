@@ -1,6 +1,10 @@
 import "./style.css";
+import { RecognitionPanel } from "./recognition-panel";
 import { api, ApiError, operationId } from "./api";
-import { SourceEditor } from "./editor";
+import { SourceEditor, applySourcePatches } from "./editor";
+import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
+import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
+import { everydayWritingCommands } from "./everyday-writing";
 import { EmbeddedQueryController } from "./embedded-query";
 import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
@@ -14,6 +18,14 @@ import "./navigation-layout.css";
 import "./writing.css";
 import "./paged-preview.css";
 import { createWritingToolbar, createStructureControls } from "./writing-controls";
+import { createMathSelectionControls } from "./math-selection";
+import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "./document-notes";
+import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
+import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
+import { openNumberingPanel } from "./numbering-panel";
+import { NoteInputRecovery } from "./note-input-recovery";
+import { openLibraryCreation, type LibraryCreationReceipt } from "./library-creation";
+import "./document-notes.css";
 import { WorkspaceTools } from "./workspace-tools";
 import type { KnowledgeTextMapping, KnowledgeContext } from "./knowledge-panel";
 import { PagedPreview } from "./paged-preview";
@@ -62,6 +74,7 @@ const modes: { id: ViewMode; title: string; hint: string; short: string }[] = [
 ];
 
 interface LiveDocument {
+  navigationKey: string;
   session: DocumentSession;
   editor: SourceEditor;
   writing: WritingController;
@@ -79,10 +92,13 @@ interface LiveDocument {
   saveAsChangedTarget?: string;
   pendingFragment?: string;
   scroll: Partial<Record<ViewMode, number>>;
+  sourceScroll?: number;
   layout: "continuous" | "paged";
   richRetained: boolean;
   sourceTrashed?: boolean;
   sourceRefreshing?: boolean;
+  notesMount?: DocumentNotesMount;
+  authoringAssets: AuthoringAssetsAdapter;
 }
 
 function sourceConsumersAvailable(doc: LiveDocument): boolean { return !doc.sourceRefreshing && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget); }
@@ -101,8 +117,19 @@ shell.append(sidebar, workspace); workspace.append(topbar, tabs, workspaceBody, 
 let inventory: Inventory | null = null;
 let documents: LiveDocument[] = [];
 let current: LiveDocument | null = null;
+let renderedDocument: LiveDocument | null = null;
+let renderedMode: ViewMode | null = null;
+const everydayNavigation = new EverydayNavigation();
+let navigatingHistory = false;
+let navigationGeneration = 0;
+const navigationContexts = new Map<LiveDocument, { inventory: Inventory | null; query: string; folder: string | null; collapsed: string[]; scroll: number; contentScroll:number; selection:string[]; sort:"name"|"path" }>();
+const everydayBar = el("nav", "everyday-bar"); everydayBar.setAttribute("aria-label", "日常导航与命令"); workspace.insertBefore(everydayBar, tabs);
 let query = "";
 let selectedFolder: string | null = null;
+let sidebarComposing = false;
+const contentSelections = new Set<string>();
+let contentSort: "name" | "path" = "name";
+const folderViews = new Map<string, { query: string; scroll: number }>();
 const collapsed = new Set<string>();
 let previewVisible = localStorage.getItem("weftext-preview") !== "false";
 let activeSourceOrigin: Origin | null = null;
@@ -110,10 +137,115 @@ let startupError: string | null = null;
 let recoveries: RecoveryInfo[] = [];
 let renderHost: HTMLElement | null = null;
 let flowScroll: HTMLElement | null = null;
+let flowHasProjection = false;
 let pendingCreation: { route: string; payload: Record<string, unknown> } | null = null;
 let pagedPreview: PagedPreview | null = null;
+function captureNavigation(): void {
+  if (!current) return;
+  navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll:sidebar.querySelector(".node-contents")?.scrollTop??0, selection:[...contentSelections], sort:contentSort });
+}
+function restoreNavigation(doc: LiveDocument): void {
+  const saved = navigationContexts.get(doc); if (!saved) return;
+  inventory = saved.inventory; query = saved.query; selectedFolder = saved.folder;
+  collapsed.clear(); saved.collapsed.forEach(path => collapsed.add(path));
+  contentSelections.clear();saved.selection.forEach(path=>contentSelections.add(path));contentSort=saved.sort;
+}
+function everydayEntries(): EverydayEntry[] {
+  const entries = new Map<string, EverydayEntry>();
+  for (const doc of documents) entries.set(doc.navigationKey, { key: doc.navigationKey, title: basename(doc.session.path), detail: `${doc.session.path} · ${saveState(doc)}`, open: () => activateDocument(doc) });
+  for (const entry of inventory?.entries ?? []) {
+    if (!entry.path.toLowerCase().endsWith(".typ") || entry.kind === "blocked") continue;
+    const existing = documents.find(doc => normalize(doc.session.path) === normalize(entry.path));
+    if (existing) continue;
+    const root = inventory!.root, workspaceId = inventory!.workspaceId;
+    entries.set(entry.path, { key: entry.path, title: entry.title || entry.name, detail: `${entry.relativePath} · ${labelStatus[entry.identityStatus] ?? entry.identityStatus}`, unavailable: ["duplicate", "invalid", "missing"].includes(entry.identityStatus) ? "当前身份不可用于准确打开，请先核对资料库提示。" : undefined,
+      open: () => openInventoryEntry(entry,root,workspaceId) });
+  }
+  return [...entries.values()];
+}
+async function openInventoryEntry(entry:InventoryEntry,root:string,workspaceId?:string):Promise<void>{
+  if(!entry.nodeId||!workspaceId){await openDocument(entry.path,root);return;}
+  const generation=++navigationGeneration;await prepareSwitch();if(generation!==navigationGeneration)return;
+  const opened=await api<OpenedDocument>("/api/data/open",{root,entityKey:`weftext-node://${workspaceId}/${entry.nodeId}`});
+  if(generation!==navigationGeneration)return;if(opened.nodeId!==entry.nodeId||opened.workspaceId!==workspaceId)throw new Error("返回目标不是原笔记，原稿保留。");await acceptResolvedDocument(opened);
+}
+function everydayCommands(): EverydayCommand[] {
+  const doc = current;
+  return [
+    { id: "quick-open", label: "快捷打开", detail: "Ctrl+P · 按标题和路径查找", run: () => openEverydayPicker("快捷打开", everydayEntries(), toast) },
+    { id: "recent", label: "最近访问", run: () => showRecent() },
+    { id: "new-note", label: "新建笔记", unavailable: !inventory?.workspaceId ? "请先打开资料库。" : undefined, run: createNote },
+    { id: "open-file", label: "打开库外 Typst 文件", run: openOutsideFile },
+    { id: "save", label: "保存当前笔记", unavailable: !doc ? "请先打开笔记。" : undefined, run: () => saveDocument(doc!) },
+    { id: "resources", label: "导入或浏览图片与资源", run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); } },
+    ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
+  ];
+}
+function showRecent(): void {
+  const entries = everydayEntries(); openEverydayPicker("最近访问", everydayNavigation.recent.flatMap(key => entries.filter(entry => entry.key === key)), toast);
+}
+async function stepNavigation(direction: -1 | 1): Promise<void> {
+  const key = everydayNavigation.target(direction), target = documents.find(doc => doc.navigationKey === key); if (!key || !target) return;
+  navigatingHistory = true;
+  try { await activateDocument(target); if (current === target) everydayNavigation.arrive(direction, key); }
+  finally { navigatingHistory = false; renderEverydayBar(); }
+}
+function renderEverydayBar(): void {
+  if (current && !navigatingHistory) everydayNavigation.visit(current.navigationKey);
+  everydayBar.replaceChildren();
+  for (const [direction, label] of [[-1,"返回"],[1,"前进"]] as const) { const control = button(label, () => stepNavigation(direction)); control.disabled = !everydayNavigation.target(direction); everydayBar.append(control); }
+  everydayBar.append(button("快捷打开", () => openEverydayPicker("快捷打开", everydayEntries(), toast)), button("最近访问", showRecent), button("命令", () => openEverydayMenu("命令", everydayCommands(), toast)), button("插入与块操作", () => openEverydayMenu("插入与块操作", everydayCommands().filter(item => /^(insert-|convert-|move-|undo|redo|resources)/.test(item.id)), toast)));
+}
+async function insertEverydayQuery(): Promise<void> {
+  const doc = current; if (!doc?.session.opened.nodeId || !doc.session.opened.workspaceId) throw new Error("内嵌 Query 需要资料库笔记与已安装的 schema。");
+  await prepareSwitch(); const basis = { sessionId:doc.session.opened.sessionId, source:doc.session.source, serial:doc.session.serial, baseId:doc.session.baseId };
+  const operation=operationId();
+  await modal<void>("插入内嵌 Query", "使用当前已安装的字段配置，在本篇添加查询定义。插入只改草稿，可一次撤销；保存后查询可运行。每次保存前可新增一个定义。", (form, close) => {
+    const label = el("input", "text-input"); label.value = "笔记列表"; label.required = true;
+    const condition = el("input", "text-input"); condition.placeholder = "留空表示当前库内全部获权笔记";
+    const name = el("label", "field-label", "查询名称"); name.append(label); const where = el("label", "field-label", "筛选条件（CEL，可留空）"); where.append(condition);
+    const kind = el("select", "text-input"); kind.setAttribute("aria-label", "查询来源"); for (const [value, text] of [["new", "新查询定义"], ["call", "复用保存定义（独立调用）"]]) { const option = el("option", "", text); option.value = value; kind.append(option); }
+    const shared = el("fieldset"); shared.hidden = true; shared.append(el("legend", "", "选择真实定义归属"));
+    const owners = el("select", "text-input"); owners.setAttribute("aria-label", "定义归属笔记"); const definitions = el("select", "text-input"); definitions.setAttribute("aria-label", "复用的保存定义");
+    const mode = el("select", "text-input"); mode.setAttribute("aria-label", "复用定义版本方式"); for (const [value, text] of [["current", "当前定义"], ["pinned", "固定准确版本"]]) { const option = el("option", "", text); option.value = value; mode.append(option); }
+    const revision = el("input", "text-input"); revision.setAttribute("aria-label", "复用定义准确固定版本"); revision.disabled = true; mode.onchange = () => { revision.disabled = mode.value !== "pinned"; };
+    if (inventory?.root === doc.session.opened.root) for (const entry of inventory.entries.filter(entry => entry.kind === "node" && entry.identityStatus === "admitted" && entry.nodeId)) { const option = el("option", "", entry.title || entry.name); option.value = `weftext-node://${doc.session.opened.workspaceId}/${entry.nodeId}`; owners.append(option); }
+    let loadedOwner = "";
+    const load = button("读取所选笔记的保存定义", async () => { const owner = owners.value; if (!owner) throw new Error("请先在当前资料库打开导航，再选择真实定义笔记。"); load.disabled = true; try { const result = await api<{ ownerRevision: string | null; definitions: { key: string; label: string }[] }>("/api/query/definitions", { root: doc.session.opened.root, owner }); if (!form.isConnected || owners.value !== owner) return; definitions.replaceChildren(); for (const definition of result.definitions) { const option = el("option", "", definition.label.replace(/^weftext-query-/, "")); option.value = definition.key; definitions.append(option); } revision.value = result.ownerRevision ?? ""; loadedOwner = owner; if (!result.definitions.length) { error.textContent = "所选笔记没有当前可用定义；不会按同名替换。"; error.hidden = false; } } catch (failure) { error.textContent = failure instanceof Error ? failure.message : String(failure); error.hidden = false; } finally { load.disabled = false; } });
+    owners.onchange = () => { definitions.replaceChildren(); loadedOwner = ""; };
+    shared.append(owners, load, definitions, mode, revision, el("p", "field-help", "此处只新增调用；共享定义归属保持不变。固定版本须准确填写，不能静默采用当前版本。"));
+    kind.onchange = () => { shared.hidden = kind.value !== "call"; where.hidden = kind.value === "call"; };
+    const error=el("p","writing-error");error.setAttribute("role","alert");error.hidden=true;
+    const submit = el("button", "button-primary", "插入查询"); submit.type = "submit";
+    form.append(name, kind, where, shared, error, button("取消", () => close(null)), submit);
+    const selection = () => JSON.stringify([kind.value, owners.value, definitions.value, mode.value, revision.value]);
+    const available=()=>current===doc&&doc.session.opened.sessionId===basis.sessionId&&doc.session.baseId===basis.baseId&&doc.session.source===basis.source&&doc.session.serial===basis.serial&&sourceConsumersAvailable(doc)&&!doc.sourceTrashed&&!readOnlySource(doc)&&doc.mode!=="read";
+    form.onsubmit=event=>{
+      event.preventDefault();submit.disabled=true;error.hidden=true;
+      void (async()=>{
+        if(!available())throw new Error("正文在确认期间已变化，原输入保留，请取消后重新选择当前笔记。");
+        const nameValue=label.value,conditionValue=condition.value, selected = selection();
+        const nativeName=nameValue.trim().replace(/\s+/g,"-");if(!/^[\p{L}\p{N}_.:-]+$/u.test(nativeName))throw new Error("名称请使用文字、数字、连字符、下划线或句点。");
+        let plan: import("./query-panel").QueryPlan = {scope:{descendants:true,lifecycle:"live"},types:[],...(conditionValue ? { where: conditionValue } : {}),select:[{name:"title",expr:"title"}],order:[],take:100};
+        if (kind.value === "call") { if (loadedOwner !== owners.value || !definitions.value || mode.value === "pinned" && !revision.value) throw new Error("请选择已读取的准确定义和需要的固定版本。"); plan = { scope:{descendants:true,lifecycle:"live"},types:[],select:[],order:[],advanced:{call:{owner:owners.value,selection: mode.value === "pinned" ? {mode:"pinned",key:definitions.value,revision:revision.value} : {mode:"current",key:definitions.value},arguments:{}}} }; }
+        const result=await api<{draftOnly:boolean;source:string;serial:number;patchUnit:string;patches:{from:number;to:number;text:string;expected:string}[]}>("/api/query/definition/draft",{...basis,operationId:operation,label:`weftext-query-${nativeName}`,plan});
+        if(!available()||!form.isConnected||label.value!==nameValue||condition.value!==conditionValue||selection()!==selected||!result.draftOnly||result.serial!==basis.serial||result.patchUnit!=="utf16")throw new Error("查询提案或输入已变化，原稿和新输入保留，请重新确认。");
+        const patches=result.patches.map(patch=>({...patch,insert:patch.text}));if(applySourcePatches(basis.source,patches)!==result.source)throw new Error("查询补丁与提案不符，未修改正文。");
+        doc.editor.applyPatches(basis.source,patches,undefined,"input.query.insert");close(undefined);await persistDraft(doc);scheduleRender(doc,0);
+      })().catch(failure=>{if(!form.isConnected){showError(failure);return;}error.textContent=failure instanceof ApiError&&failure.code==="schemaRevisionRequired"?"请先在查询配置中显式安装字段配置，再插入查询；当前正文未变。":failure instanceof Error?failure.message:String(failure);error.hidden=false;submit.disabled=false;});
+    };
+  });
+}
 let projectionMappings: KnowledgeTextMapping[] = [];
 let readingSelection: { sessionId: string; serial: number; selection: NonNullable<KnowledgeContext["selection"]> } | null = null;
+const recognitionPanel = new RecognitionPanel({
+  request: (path, body) => api(`/api/recognition${path}`, body),
+  identity: () => current ? current.session.opened.root : null,
+  target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
+  notify: toast,
+  created: async receipt => { const root = current?.session.opened.root, ref = receipt.nodeRefs[0]; if (!root || !ref) throw new Error("原导入的新笔记当前不可定位，请核对原操作。"); await prepareSwitch(); const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }); await acceptResolvedDocument(opened); await refreshInventory(); },
+});
+let recognitionSession = "";
 
 const workspaceTools = new WorkspaceTools({
   embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
@@ -131,7 +263,7 @@ const workspaceTools = new WorkspaceTools({
     for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
       const originalSession = doc.session.opened.sessionId;
       const stillOpen = (): boolean => documents.includes(doc) && doc.session.opened.sessionId === originalSession;
-      doc.sourceRefreshing = true; doc.renderGeneration++; clearTimeout(doc.renderTimer); doc.queries.invalidate(); doc.session.projection = null; doc.editor.tokens([], false);
+      doc.sourceRefreshing = true; doc.renderGeneration++; clearTimeout(doc.renderTimer); doc.queries.invalidate(); doc.session.projection = null; doc.editor.clearTokens();
       if (doc === current) { pagedPreview?.invalidate("同步结果正在核对，原草稿保留。"); workspaceTools.documentChanged(); }
       try {
         // A committed sync can arrive during later preedit. Settle/checkpoint
@@ -184,7 +316,7 @@ const workspaceTools = new WorkspaceTools({
       if (doc === current) renderContent();
       return;
     }
-    doc.session.opened = opened;
+    doc.session.opened = opened; doc.editor.clearTokens();
     if (doc.editor.source !== opened.source) doc.editor.apply(0, doc.editor.source.length, opened.source);
     doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path); doc.lastSave = undefined; doc.session.projection = null;
     await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
@@ -215,7 +347,7 @@ const workspaceTools = new WorkspaceTools({
       doc.session.error = "操作已提交，但重新读取的文件不是本次计划确认的内容。草稿和撤销记录保留，请比较磁盘内容。";
       if (doc === current) renderContent();
     } else if (receipt.documentDisposition === "trashed" && doc) {
-      doc.sourceTrashed = true;
+      doc.sourceTrashed = true; doc.editor.clearTokens();
       doc.session.error = "笔记已移入回收站。这里保留当前草稿，可另存为，也可从上方回收站恢复。";
       await persistDraft(doc); if (current === doc) renderContent();
     } else if (opened && receipt.documentDisposition === "created") {
@@ -224,11 +356,11 @@ const workspaceTools = new WorkspaceTools({
     } else if (opened && doc && opened.source === doc.session.baseSource) {
       // Namespace changes keep the same saved bytes. Preserve newer local input,
       // the shared editor and Undo while rebinding the real Core save session.
-      doc.session.opened = opened; doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
+      doc.session.opened = opened; doc.editor.clearTokens(); doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
       doc.lastSave = undefined; doc.session.projection = null;
       await persistDraft(doc); scheduleRender(doc, 0); if (current === doc) renderContent();
     } else if (opened && doc && doc.session.source === context.source && doc.session.serial === context.serial && !doc.session.dirty) {
-      doc.session.opened = opened;
+      doc.session.opened = opened; doc.editor.clearTokens();
       if (doc.editor.source !== opened.source) doc.editor.apply(0, doc.editor.source.length, opened.source);
       doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
       doc.lastSave = undefined; doc.session.projection = null; await persistDraft(doc); scheduleRender(doc, 0); if (current === doc) renderContent();
@@ -241,10 +373,10 @@ const workspaceTools = new WorkspaceTools({
       if (!related) continue;
       await related.writing.settleForSessionChange();
       if (effect.documentDisposition === "trashed") {
-        related.sourceTrashed = true; related.session.error = "所属文件夹已移入回收站，当前草稿保留。请恢复后继续保存，或另存为。";
+        related.sourceTrashed = true; related.editor.clearTokens(); related.session.error = "所属文件夹已移入回收站，当前草稿保留。请恢复后继续保存，或另存为。";
         await persistDraft(related);
       } else if (effect.document && effect.document.source === related.session.baseSource) {
-        related.session.opened = effect.document;
+        related.session.opened = effect.document; related.editor.clearTokens();
         related.session.acknowledgeSave(effect.document.source, effect.document.baseId, effect.document.path);
         related.lastSave = undefined; related.session.projection = null; await persistDraft(related); scheduleRender(related, 0);
       } else {
@@ -257,7 +389,7 @@ const workspaceTools = new WorkspaceTools({
   },
   stylesChanged: async root => {
     pagedPreview?.invalidate("库样式已变化，正在重新编译。");
-    for (const doc of documents.filter(item => normalize(item.session.opened.root) === normalize(root))) { doc.session.projection = null; scheduleRender(doc, 0); }
+    for (const doc of documents.filter(item => normalize(item.session.opened.root) === normalize(root))) { doc.session.projection = null; doc.editor.clearTokens(); scheduleRender(doc, 0); }
     if (current?.layout === "paged") await pagedPreview?.render();
     await refreshInventory();
   },
@@ -295,7 +427,7 @@ const historyPanel = new HistoryPanel({
     doc.session.opened.source = result.source; doc.session.opened.baseId = result.receipt.baseId;
     doc.session.opened.path = result.receipt.path; doc.session.opened.recoveredDraftConflict = false;
     doc.session.acknowledgeSave(result.source, result.receipt.baseId, result.receipt.path);
-    doc.lastSave = undefined; doc.session.projection = null; doc.queries.invalidate();
+    doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
     await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
   },
 });
@@ -310,7 +442,7 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
   const restored = documents.find(item => item.sourceTrashed && (normalize(item.session.path) === normalize(opened.path) || Boolean(opened.nodeId && item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId)));
   if (restored && opened.source === restored.session.baseSource) {
     await restored.writing.settleForSessionChange();
-    restored.session.opened = opened; restored.sourceTrashed = false;
+    restored.session.opened = opened; restored.editor.clearTokens(); restored.sourceTrashed = false;
     restored.session.acknowledgeSave(opened.source, opened.baseId, opened.path); restored.lastSave = undefined; restored.session.projection = null;
     await persistDraft(restored); current = restored; activeSourceOrigin = null; renderContent(); scheduleRender(restored, 0);
   } else addDocument(opened);
@@ -318,7 +450,9 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
 }
 
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+  const generation=++navigationGeneration;
   await prepareSwitch();
+  if(generation!==navigationGeneration)return;
   const existing = opened.nodeId && opened.workspaceId ? documents.find(item =>
     item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId
     && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
@@ -326,7 +460,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
   else {
     await existing.writing.settleForSessionChange();
     if (existing.session.baseSource === opened.source) {
-      existing.session.opened = opened;
+      existing.session.opened = opened; existing.editor.clearTokens();
       existing.sourceTrashed = false;
       existing.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
       existing.session.projection = null; existing.lastSave = undefined;
@@ -348,13 +482,15 @@ function showError(error: unknown): void { toast(error instanceof Error ? error.
 function setBusy(target: HTMLButtonElement, busy: boolean): void { target.disabled = busy; target.classList.toggle("busy", busy); }
 
 async function modal<T>(title: string, description: string, build: (form: HTMLFormElement, close: (value: T | null) => void) => void): Promise<T | null> {
-  const dialog = el("dialog", "modal");
-  const heading = el("div", "modal-heading"); heading.append(el("h2", "", title), button("", () => close(null), "icon-button", "close"));
+  const trigger=document.activeElement as HTMLElement|null;
+  const dialog = el("dialog", "modal");dialog.setAttribute("aria-label",title);
+  const closeButton=button("",()=>close(null),"icon-button","close");closeButton.setAttribute("aria-label",`关闭${title}`);
+  const heading = el("div", "modal-heading"); heading.append(el("h2", "", title), closeButton);
   dialog.append(heading, el("p", "modal-description", description));
   const form = el("form", "modal-form"); dialog.append(form); document.body.append(dialog);
   let resolve!: (value: T | null) => void;
   const result = new Promise<T | null>(r => { resolve = r; });
-  function close(value: T | null): void { dialog.close(); dialog.remove(); resolve(value); }
+  function close(value: T | null): void { dialog.close(); dialog.remove(); if(trigger?.isConnected)trigger.focus({preventScroll:true});resolve(value); }
   dialog.addEventListener("cancel", event => { event.preventDefault(); close(null); });
   build(form, close); dialog.showModal(); setTimeout(() => form.querySelector<HTMLElement>("input,textarea,button")?.focus(), 20); return result;
 }
@@ -376,6 +512,7 @@ async function pathDialog(kind: "openLibrary" | "createLibrary" | "file" | "save
 }
 
 function renderSidebar(): void {
+  if (sidebarComposing) return;
   navigationLayout.captureSidebarState();
   navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId, scope: selectedFolder ? { kind: "directory", key: `path:${normalize(selectedFolder)}` } : undefined } : null);
   workspaceTools.setLibrary(inventory, selectedFolder);
@@ -387,10 +524,11 @@ function renderSidebar(): void {
   const libraryButton = button(inventory ? basename(inventory.root) : "打开资料库", chooseLibrary, "library-button", "book"); libraryButton.append(icon("down")); if (inventory) libraryButton.title = inventory.root; sidebar.append(libraryButton);
   if (inventory && !inventory.workspaceId) sidebar.append(el("span", "library-kind", "普通文件夹 · 文件可直接编辑"));
   const quick = el("div", "sidebar-quick"); quick.append(button("新建笔记", createNote, "new-note", "plus"), button("", openOutsideFile, "icon-button", "file")); quick.lastElementChild!.setAttribute("aria-label", "打开库外 Typst 文件"); (quick.firstChild as HTMLButtonElement).disabled = !inventory?.workspaceId; if (inventory && !inventory.workspaceId) (quick.firstChild as HTMLButtonElement).title = "普通文件夹可浏览文件。创建新的资料库后可新建资料库笔记。"; sidebar.append(quick);
-  const search = el("label", "search-box"); search.append(icon("search")); const input = el("input"); input.id = "library-search"; input.placeholder = "搜索文件名与标题…"; input.value = query; input.disabled = !inventory; input.setAttribute("aria-label", "搜索文件名与标题"); input.oninput = () => { query = input.value; renderSidebar(); }; search.append(input); sidebar.append(search);
+  const search = el("label", "search-box"); search.append(icon("search")); const input = el("input"); input.id = "library-search"; input.placeholder = "搜索文件名与标题…"; input.value = query; input.disabled = !inventory; input.setAttribute("aria-label", "搜索文件名与标题"); input.oninput = event => { query = input.value; if (!(event as InputEvent).isComposing && !sidebarComposing) renderSidebar(); }; input.addEventListener("compositionstart",()=>{sidebarComposing=true;}); input.addEventListener("compositionend",()=>{sidebarComposing=false;query=input.value;renderSidebar();}); search.append(input); sidebar.append(search);
   if (inventory) {
     const scope = el("div", "search-scope"); scope.append(button("正文与属性查询", () => workspaceTools.search(query, true), "text-button"), el("span", "", selectedFolder ? basename(selectedFolder) : "整个资料库")); sidebar.append(scope);
-    if (selectedFolder) sidebar.append(button("返回整个资料库", () => { selectedFolder = null; renderSidebar(); }, "clear-scope"));
+    if (selectedFolder) sidebar.append(button("返回整个资料库", () => browseFolder(null), "clear-scope"));
+    if (selectedFolder) renderNodeContents(sidebar, selectedFolder);
   }
   const list = el("div", "file-tree");
   if (!inventory) {
@@ -410,7 +548,7 @@ function renderSidebar(): void {
     const visible = matching.filter(entry => query || ![...collapsed].some(path => normalize(entry.path).startsWith(normalize(path) + "/")));
     for (const entry of visible) {
       const directory = entry.kind === "directory";
-      const row = button("", () => directory ? toggleFolder(entry.folderPath!) : openDocument(entry.path, inventory!.root), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
+      const row = button("", () => directory ? browseFolder(entry.folderPath!) : openInventoryEntry(entry, inventory!.root,inventory!.workspaceId), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
       const depth = Math.max(0, entry.relativePath.replaceAll("\\", "/").split("/").length - 1); row.style.paddingLeft = `${12 + (query ? 0 : Math.min(depth, 5) * 14)}px`;
       const names = el("span", "tree-names"); names.append(el("span", "tree-name", entry.title || entry.name));
       if (query) names.append(el("span", "tree-path", entry.relativePath));
@@ -419,15 +557,17 @@ function renderSidebar(): void {
       if (!["ordinary", "admitted"].includes(entry.identityStatus)) row.append(el("span", "identity-badge", labelStatus[entry.identityStatus] ?? entry.identityStatus));
       row.title = `${entry.path}\n${labelStatus[entry.identityStatus] ?? entry.identityStatus}`;
       if (entry.kind === "blocked" || !directory && !entry.path.toLowerCase().endsWith(".typ")) row.disabled = true;
-      if (entry.folderPath) row.oncontextmenu = event => { event.preventDefault(); selectedFolder = entry.folderPath; renderSidebar(); };
+      const menu = () => nodeMenu([entry], entry.folderPath ?? undefined);
+      row.oncontextmenu = event => { event.preventDefault(); row.focus(); menu(); };
+      row.onkeydown = event => { if (!event.isComposing && (event.key === "ContextMenu" || event.shiftKey && event.key === "F10")) { event.preventDefault(); menu(); } };
       if (entry.folderPath) {
         const wrapper = el("div", "tree-row-with-scope");
-        const scopeButton = button("", () => { selectedFolder = entry.folderPath; renderSidebar(); }, "tree-scope-button", "search");
+        const scopeButton = button("", () => browseFolder(entry.folderPath), "tree-scope-button", "search");
         scopeButton.setAttribute("aria-label", `仅浏览 ${entry.name} 文件夹`); scopeButton.title = `将 ${entry.name} 设为浏览范围`;
         const expandButton = button(collapsed.has(entry.folderPath) ? "›" : "⌄", () => toggleFolder(entry.folderPath!), "tree-scope-button");
         expandButton.setAttribute("aria-label", `展开或折叠 ${entry.name}`); expandButton.setAttribute("aria-expanded", String(!collapsed.has(entry.folderPath)));
-        wrapper.append(row, expandButton, scopeButton); list.append(wrapper);
-      } else list.append(row);
+        const more = button("⋯", menu, "tree-scope-button"); more.onkeydown=row.onkeydown;more.oncontextmenu=row.oncontextmenu;more.setAttribute("aria-label", `${entry.name} 更多操作`); wrapper.append(row, expandButton, scopeButton, more); list.append(wrapper);
+      } else { const wrapper=el("div","tree-row-with-scope"); const more=button("⋯",menu,"tree-scope-button");more.onkeydown=row.onkeydown;more.oncontextmenu=row.oncontextmenu;more.setAttribute("aria-label",`${entry.name} 更多操作`);wrapper.append(row,more);list.append(wrapper); }
     }
     if (!visible.length) list.append(el("div", "search-empty", query ? `未找到「${query}」` : "这个文件夹还没有笔记"));
   }
@@ -438,6 +578,38 @@ function renderSidebar(): void {
   navigationLayout.restoreSidebarState();
 }
 function toggleFolder(path: string): void { collapsed.has(path) ? collapsed.delete(path) : collapsed.add(path); renderSidebar(); }
+function browseFolder(path: string | null): void {
+  const old = selectedFolder ?? inventory?.root; if (old) folderViews.set(normalize(old), {query,scroll:sidebar.querySelector(".file-tree")?.scrollTop ?? 0});
+  selectedFolder = path; contentSelections.clear(); const saved = folderViews.get(normalize(path ?? inventory?.root ?? "")); query = saved?.query ?? ""; renderSidebar();
+  const tree=sidebar.querySelector(".file-tree"); if(tree)tree.scrollTop=saved?.scroll??0;
+}
+function nodeMenu(entries: InventoryEntry[], folder?: string): void {
+  const selected = entries.filter(entry=>entry.path.toLowerCase().endsWith(".typ")), root=inventory?.root,workspaceId=inventory?.workspaceId;
+  const commands: EverydayCommand[] = [
+    {id:"node-open",label:"打开所选笔记",unavailable:!selected.length||!root?"所选项目没有可打开的 Typst 主文件。":undefined,run:async()=>{for(const entry of selected)await openInventoryEntry(entry,root!,workspaceId);}},
+    {id:"node-preview",label:"预览所选项目",run:()=>previewNodes(entries)},
+    {id:"node-copy-path",label:"复制所选完整路径",run:()=>navigator.clipboard.writeText(entries.map(entry=>entry.path).join("\n"))},
+    {id:"node-operations",label:"整个节点：改名、移动、复制或回收",detail:"打开准确笔记后预览文件影响；未保存草稿须先处理",unavailable:selected.length!==1||!root?"此入口每次处理一个准确节点；多选不会隐式批量改写。":undefined,run:async()=>{await openInventoryEntry(selected[0],root!,workspaceId);await workspaceTools.show("knowledge");workspaceTools.selectKnowledgeTab("files");}},
+  ];
+  if(folder)commands.unshift({id:"node-browse",label:"浏览节点内容",run:()=>browseFolder(folder)});
+  openEverydayMenu(entries.length===1?`${entries[0].title||entries[0].name} 操作`:`所选 ${entries.length} 项操作`,commands,toast,false);
+}
+async function previewNodes(entries:InventoryEntry[]):Promise<void>{await modal("项目预览","只读显示当前目录扫描中的摘要；不保存正文。",(form,close)=>{for(const entry of entries)form.append(el("strong","",entry.title||entry.name),el("pre","",`${entry.relativePath}\n${labelStatus[entry.identityStatus]??entry.identityStatus}\n${entry.excerpt??"当前扫描没有摘要，可明确打开正文查看。"}`));form.append(button("关闭",()=>close(null)));});}
+function renderNodeContents(host: HTMLElement, folder: string): void {
+  if(!inventory)return;const panel=el("section","node-contents");panel.setAttribute("aria-label","节点内容");
+  const header=el("header");header.append(button(basename(inventory.root),()=>browseFolder(null)));
+  const relative=folder.slice(inventory.root.length).replaceAll("\\","/").split("/").filter(Boolean);let parent=inventory.root;
+  for(const name of relative){parent+="/"+name;const target=parent;header.append(el("span","","›"),button(name,()=>browseFolder(target)));}
+  const sorting=el("select");sorting.setAttribute("aria-label","节点内容个人排序");for(const[value,label]of[["name","名称"],["path","路径"]]){const option=el("option","",label);option.value=value;sorting.append(option);}sorting.value=contentSort;sorting.onchange=()=>{contentSort=sorting.value as typeof contentSort;renderSidebar();};header.append(sorting);panel.append(header,el("p","","个人列表排序；作者结构顺序不受影响。"));
+  const entries=inventory.entries.filter(entry=>normalize(entry.parentPath)===normalize(folder)&&normalize(entry.path)!==normalize(folder)).filter(entry=>!query||`${entry.title??""} ${entry.name} ${entry.relativePath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>(contentSort==="name"?(a.title||a.name):(a.relativePath)).localeCompare(contentSort==="name"?(b.title||b.name):b.relativePath,"zh-CN"));
+  const more=button("所选项目操作",()=>nodeMenu(entries.filter(entry=>contentSelections.has(entry.path))));more.disabled=!entries.some(entry=>contentSelections.has(entry.path));panel.append(more);
+  const updateSelection=()=>{panel.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row=>{const selected=contentSelections.has(row.dataset.entryPath!);row.setAttribute("aria-selected",String(selected));row.querySelector<HTMLInputElement>("input")!.checked=selected;});more.disabled=!entries.some(entry=>contentSelections.has(entry.path));};
+  for(const entry of entries){const row=el("div","node-content-row");row.tabIndex=0;row.dataset.entryPath=entry.path;row.setAttribute("aria-selected",String(contentSelections.has(entry.path)));const check=el("input");check.type="checkbox";check.checked=contentSelections.has(entry.path);check.setAttribute("aria-label",`选择 ${entry.name}`);check.onchange=()=>{check.checked?contentSelections.add(entry.path):contentSelections.delete(entry.path);updateSelection();};
+    const open=()=>entry.kind==="directory"?browseFolder(entry.path):openInventoryEntry(entry,inventory!.root,inventory!.workspaceId);const title=button(`${entry.title||entry.name} · ${labelStatus[entry.identityStatus]??entry.identityStatus}`,()=>{contentSelections.clear();contentSelections.add(entry.path);updateSelection();});title.ondblclick=()=>{void Promise.resolve(open()).catch(showError);};
+    const menu=()=>{if(!contentSelections.has(entry.path)){contentSelections.clear();contentSelections.add(entry.path);}nodeMenu(entries.filter(item=>contentSelections.has(item.path)),entry.kind==="directory"?entry.path:undefined);};row.oncontextmenu=event=>{event.preventDefault();menu();};row.onkeydown=event=>{if(event.isComposing)return;if(event.key==="Enter"&&event.target===row){event.preventDefault();void Promise.resolve(open()).catch(showError);}if(event.key==="ContextMenu"||event.shiftKey&&event.key==="F10"){event.preventDefault();menu();}};
+    row.append(check,title,button("打开",open),button("预览",()=>previewNodes([entry])));panel.append(row);}
+  if(!entries.length)panel.append(el("p","",query?"当前筛选没有匹配项目。":"此节点暂无内容。"));host.append(panel);
+}
 
 function renderTopbar(): void {
   // Writing blur can report state between pointerdown and click. Preserve the
@@ -470,6 +642,7 @@ function renderTopbar(): void {
   const actions = el("div", "top-actions");
   if (current) {
     const state = el("span", `save-state ${current.session.dirty ? "dirty" : ""}`, saveState(current)); actions.append(state);
+    actions.append(button("资料导入与识别", () => recognitionPanel.open(), "button-secondary compact"));
     actions.append(button("另存为", saveAs, "button-secondary compact"));
     const timeline = button("时间线", () => historyPanel.open(), "button-secondary compact");
     timeline.disabled = !current.session.opened.nodeId || !current.session.opened.workspaceId;
@@ -509,10 +682,12 @@ function renderStatus(): void {
   const right = el("div", "status-right");
   if (doc.writing.state.pending || doc.writing.state.busy) right.append(el("span", "pending-label", doc.writing.state.busy ? "文字更新中…" : "文字正在同步至草稿"));
   else if (!sourceConsumersAvailable(doc)) right.append(el("span", "pending-label", doc.sourceRefreshing ? "正在核对同步结果" : "预览与批注等待明确比较"));
-  else if (doc.rendering || !session.projectionCurrent) right.append(el("span", "pending-label", "预览更新中"));
+  else if (doc.rendering) right.append(el("span", "pending-label", "预览更新中"));
+  else if (session.error && !session.projectionCurrent) right.append(el("span", "error-label", session.error));
+  else if (!session.projectionCurrent) right.append(el("span", "pending-label", "预览更新中"));
   else if (session.projection?.ok) right.append(icon("check"), el("span", "", "草稿预览已更新"));
   else right.append(icon("alert"), el("span", "", "预览有错误 · 源码已保留"));
-  if (doc.draftFailure) right.append(el("span", "error-label", "恢复草稿写入失败"));
+  if (doc.draftFailure) right.append(el("span", "error-label", `恢复草稿未写入：${doc.draftFailure}`));
   else if (session.dirty && session.lastDraftSource === session.source) right.append(el("span", "", "恢复草稿已留存"));
   statusbar.append(left, right);
 }
@@ -541,6 +716,37 @@ function documentComparisonMessage(doc: LiveDocument): string | null {
     ? "磁盘内容已改变。当前草稿与撤销记录保留，请比较后继续保存。" : null;
 }
 
+const noteInputRecovery = new NoteInputRecovery({ getItem: key => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value) });
+function localPersonalAudience(): string {
+  let user = localStorage.getItem("weftext-local-personal-id"); if (!user) { user = crypto.randomUUID(); localStorage.setItem("weftext-local-personal-id", user); }
+  return `local:${user}`;
+}
+function localPersonalNumbering(doc: LiveDocument) {
+  return personalNumberingKeys(localPersonalAudience(), doc.session.opened.workspaceId ?? normalize(doc.session.opened.root), doc.session.opened.nodeId ?? normalize(doc.session.path));
+}
+function localAuthoringEnvironment(doc: LiveDocument): AuthoringPanelsEnvironment {
+  const readable = () => current === doc && sourceConsumersAvailable(doc) && !doc.sourceTrashed;
+  return {
+    controller: doc.writing, readable, editable: () => readable() && !readOnlySource(doc) && doc.mode !== "read" && !doc.session.savePending && !doc.lastSave,
+    projection: () => readable() && doc.session.projectionCurrent ? doc.session.projection : null,
+    selection: () => doc.editor.selection, requestEdit: request => api("/api/edit", request), previewProposal: request => api("/api/editor/preview", request),
+    revealSource: range => revealWritingSource(doc, range), revealRendered: key => {
+      if (!readable() || !renderHost || !renderHost.isConnected || renderHost.getClientRects().length === 0) return false; const target = Array.from(renderHost.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(item => item.dataset.documentNodeKey === key); if (!target) return false; target.scrollIntoView({ block: "center", inline: "nearest" }); target.focus({ preventScroll: true }); return true;
+    },
+    ensureEndnoteModule: async () => { await doc.authoringAssets.install(); toast("本篇尾注模块资源已核对；正文与撤销记录保留，请重新打开尾注提案。"); },
+    recoverEndnoteModule: async () => { const receipt = await doc.authoringAssets.recover(); toast(receipt ? `原尾注模块操作：${receipt.status}` : "当前没有待核对的尾注模块安装。"); },
+    retryEndnoteModule: async () => { await doc.authoringAssets.retryOriginal(); toast("原尾注模块安装已确认，正文尚未保存。"); },
+    restartEndnoteModule: async () => { await doc.authoringAssets.restartAfterCancelled(); toast("已按明确取消的原操作核对并准备新模块资源；正文尚未保存。"); },
+    settleEndnoteModule: async () => { const receipt = await doc.authoringAssets.settleOriginal(); toast(`原模块操作：${receipt.status}`); },
+    pendingInput: value => { noteInputRecovery.add(localPersonalAudience(), value); toast("未应用的新注释输入已保留，可在“恢复记录”中取回。"); }, onError: showError,
+  };
+}
+async function openLocalNumbering(doc: LiveDocument): Promise<void> {
+  await doc.writing.deferUntilCompositionEnds(() => doc.writing.flush()); if (current !== doc) throw new Error("当前笔记已切换，未打开旧编号提案。");
+  const keys = localPersonalNumbering(doc);
+  await openNumberingPanel(numberingHost(localAuthoringEnvironment(doc), { ...keys, display: enabled => { if (current === doc && renderHost) displayPersonalHeadings(renderHost, enabled); } }));
+}
+
 function renderDocument(): void {
   if (!current) return;
   const doc = current;
@@ -559,7 +765,9 @@ function renderDocument(): void {
   const caption = el("div", "view-caption"); caption.append(el("span", "", modes.find(m => m.id === doc.mode)!.hint));
   if (doc.mode === "read" || readOnlySource(doc)) caption.append(el("span", "readonly-label", readOnlySource(doc) ? "回收站内容 · 只读" : "只读 · 当前草稿"));
   if (doc.session.recovered) caption.append(button("已恢复上次草稿 · 查看", showDraftComparison, "recovery-caption"));
+  if (noteInputRecovery.count(localPersonalAudience())) caption.append(button("取回未应用的注释输入", showRecovery, "recovery-caption"));
   content.append(caption);
+  doc.notesMount?.dispose(); const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary"); authoring.append(button("编号控制", () => openLocalNumbering(doc), "text-button"), notes); content.append(authoring); doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
   if (doc.session.opened.recoveredDraftConflict) {
     const conflict = el("div", "document-error document-conflict"); conflict.append(icon("alert"), el("span", "", "恢复草稿与当前磁盘内容不同。请比较并明确合并后再保存。"), button("比较并合并", showDraftComparison, "button-secondary compact")); content.append(conflict);
   }
@@ -586,9 +794,12 @@ function renderDocument(): void {
     }
   }
   if (doc.session.projectionCurrent && doc.session.projection!.diagnostics.length) renderDiagnostics(doc);
-  doc.editor.tokens(doc.session.projectionCurrent ? doc.session.projection!.sourceInfo.syntaxTokens : [], doc.mode === "styled");
+  if (doc.session.projectionCurrent && sourceConsumersAvailable(doc)) doc.editor.tokens(doc.session.projection!.sourceInfo.syntaxTokens, doc.mode === "styled", doc.editor.syntaxBasis());
+  else if (!sourceConsumersAvailable(doc) || doc.sourceTrashed) doc.editor.clearTokens();
+  doc.editor.styleMode(doc.mode === "styled");
   doc.editor.readOnly(doc.mode === "read" || doc.mode === "write" || readOnlySource(doc));
-  requestAnimationFrame(() => { if (flowScroll && doc.scroll[doc.mode] != null) flowScroll.scrollTop = doc.scroll[doc.mode]!; });
+  const scroller=flowScroll, mode=doc.mode;
+  requestAnimationFrame(() => { if(current!==doc || doc.mode!==mode)return; if(scroller && flowScroll===scroller && doc.scroll[mode]!=null)scroller.scrollTop=doc.scroll[mode]!; if(["source","styled"].includes(mode)&&doc.sourceScroll!=null)doc.editor.view.scrollDOM.scrollTop=doc.sourceScroll; });
 }
 function sourceToolbar(doc: LiveDocument): HTMLElement {
   const toolbar = el("div", "source-toolbar"); toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "源码格式工具");
@@ -602,10 +813,16 @@ function sourceToolbar(doc: LiveDocument): HTMLElement {
 }
 
 function renderContent(): void {
-  if (flowScroll && current) current.scroll[current.mode] = flowScroll.scrollTop;
+  const recognitionCurrent = current?.session.opened.root ?? "";
+  if (recognitionSession !== recognitionCurrent) { recognitionPanel.retireDisplay(true); recognitionSession = recognitionCurrent; }
+  if (flowScroll && flowHasProjection && renderedDocument && renderedMode) renderedDocument.scroll[renderedMode] = flowScroll.scrollTop;
+  if(renderedDocument && renderedMode && ["source","styled"].includes(renderedMode))renderedDocument.sourceScroll=renderedDocument.editor.view.scrollDOM.scrollTop;
+  renderedDocument = current;
+  renderedMode = current?.mode ?? null;
+  flowHasProjection=false;
   pagedPreview?.dispose(); pagedPreview = null; workspaceTools.attachSurface(null); projectionMappings = [];
   for (const doc of documents) doc.queries.detach();
-  renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus();
+  renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus(); renderEverydayBar();
 }
 function refreshChrome(): void {
   const comparisonMessage = current && documentComparisonMessage(current);
@@ -618,26 +835,52 @@ function refreshChrome(): void {
     } else { const message = notice.querySelector("span"); if (message) message.textContent = comparisonMessage; }
   }
   renderTopbar(); renderTabs(); renderStatus();
+  if (current) refreshProjectionNotice(current);
   if (current && !current.session.recovered) content.querySelector(".recovery-caption")?.remove();
   if (current && !current.session.error) content.querySelector(".document-error:not(.document-conflict)")?.remove();
   if (current && !current.session.opened.recoveredDraftConflict) content.querySelector(".document-conflict")?.remove();
 }
 
+function projectionStaleMessage(doc: LiveDocument): string {
+  return doc.session.error
+    ? `显示上次成功预览，当前草稿预览失败；此预览只读。${doc.session.error}`
+    : "显示上次预览，正在更新。文字编辑暂不可用。";
+}
+function fillProjectionEmpty(host: HTMLElement, doc: LiveDocument): void {
+  host.replaceChildren();
+  if (doc.session.error) host.append(icon("alert"), el("h3", "", "草稿暂时无法预览"), el("p", "projection-message", doc.session.error), button("查看源码", () => changeMode("source"), "button-secondary", "code"));
+  else host.append(el("div", "loading-ring"), el("p", "", "正在编译草稿…"));
+}
+// Update only the notice: retain the source editor, active input and scroll.
+function refreshProjectionNotice(doc: LiveDocument): void {
+  if (doc !== current || !renderHost || !sourceConsumersAvailable(doc) || doc.session.projectionCurrent) return;
+  if (doc.session.projection) {
+    let notice = renderHost.querySelector<HTMLElement>(":scope > .preview-stale");
+    if (!notice) { notice = el("div", "preview-stale"); renderHost.prepend(notice); }
+    const message = projectionStaleMessage(doc); if (notice.textContent !== message) notice.textContent = message;
+  } else {
+    const notice = renderHost.querySelector<HTMLElement>(":scope > .projection-empty");
+    if (!notice) return;
+    if (doc.session.error ? notice.querySelector(".projection-message")?.textContent !== doc.session.error : !notice.querySelector(".loading-ring")) fillProjectionEmpty(notice, doc);
+  }
+}
 function renderProjection(doc: LiveDocument): void {
   if (doc !== current || !renderHost) return;
   if (doc.writing.retainInput || doc.editor.composing) { renderStatus(); return; }
   const restoreQuerySourceFocus = doc.mode === "focus" && !!doc.editor.revealed && doc.editor.view.hasFocus && !!doc.editor.view.dom.closest(".embedded-query-source-host");
-  const host = renderHost; host.replaceChildren();
+  const preservedScroll=flowHasProjection?flowScroll?.scrollTop:doc.scroll[doc.mode];
+  const host = renderHost; host.replaceChildren();flowHasProjection=false;
   if (!sourceConsumersAvailable(doc)) {
     const waiting = el("div", "projection-empty"); waiting.append(el("p", "", doc.sourceRefreshing ? "正在核对同步结果，当前草稿保留。" : "笔记位置已改变，请先比较磁盘内容并明确合并；当前源码和撤销记录保留。")); host.append(waiting); return;
   }
   const projection = doc.session.projection;
-  if (!projection) { const waiting = el("div", "projection-empty"); waiting.append(el("div", "loading-ring"), el("p", "", "正在编译草稿…")); host.append(waiting); return; }
-  if (!doc.session.projectionCurrent) { const stale = el("div", "preview-stale", "显示上次预览，正在更新。文字编辑暂不可用。"); host.append(stale); }
+  if (!projection) { const waiting = el("div", "projection-empty"); fillProjectionEmpty(waiting, doc); host.append(waiting); return; }
+  if (!doc.session.projectionCurrent) { const stale = el("div", "preview-stale", projectionStaleMessage(doc)); host.append(stale); }
   if (!projection.ok || !projection.tree) {
-    const failed = el("div", "projection-empty"); failed.append(icon("alert"), el("h3", "", "草稿暂时无法预览"), el("p", "", "输入仍保留在源码与恢复草稿中。修正后会自动更新。"), button("查看源码", () => changeMode("source"), "button-secondary", "code")); host.append(failed); return;
+    const failed = el("div", "projection-empty"); failed.append(icon("alert"), el("h3", "", "草稿暂时无法预览"), el("p", "", "完整输入保留在当前窗口；恢复草稿和保存状态以单独提示为准。可使用源码入口继续编辑。"), button("查看源码", () => changeMode("source"), "button-secondary", "code")); host.append(failed); return;
   }
-  let writableCount = 0;
+  let writableCount = 0, personalHeadingOrdinal = 0;
+  const renderedTree = projection.tree, renderedSource = projection.source;
   projectionMappings = [];
   const groups = doc.session.projectionCurrent && doc.writing.map ? groupWritingRenderNodes(projection.tree, doc.writing.map, doc.session.source) : [];
   const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key, group] as const)));
@@ -666,23 +909,46 @@ function renderProjection(doc: LiveDocument): void {
     }
     const tag = node.tag?.toLowerCase() ?? "span";
     const element = nativeElement(node);
+    element.setAttribute("data-document-node-key", node.key);
+    const semanticRole = node.attrs["data-weftext-role"], noteId = node.attrs["data-weftext-note-id"], targetId = node.attrs["data-weftext-target-id"];
+    if (semanticRole === "heading") markPersonalHeading(element, ++personalHeadingOrdinal);
+    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-reference", "endnote-reference"].includes(String(semanticRole))) {
+      element.setAttribute("role", "button"); element.setAttribute("tabindex", "0"); element.setAttribute("aria-label", `查看${semanticRole === "endnote-reference" ? "尾注" : "脚注"}正文与全部标记`);
+      const open = () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-reference" ? "endnote" : "footnote", noteId);
+      element.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); void open().catch(showError); }, true);
+      element.addEventListener("keydown", event => { if (event instanceof KeyboardEvent && !event.isComposing && !doc.writing.state.composing && ["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); void open().catch(showError); } });
+    }
     const target = node.attrs.href;
     if (tag === "a" && typeof target === "string") { element.setAttribute("href", "#"); element.setAttribute("title", target); element.addEventListener("click", event => { event.preventDefault(); void navigateLink(target).catch(showError); }); }
 
     for (const child of node.children ?? []) element.append(draw(child));
     if (node.text) element.append(document.createTextNode(node.text));
+    if (doc.session.projectionCurrent && typeof targetId === "string" && ["figure", "equation"].includes(String(semanticRole))) { const actions = el("span", "document-notes-object-actions"); actions.append(button(semanticRole === "equation" ? "公式编号与题注" : "此对象题注与编号", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), "caption", targetId), "text-button")); element.append(actions); }
+    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) element.append(button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId), "text-button"));
     const empty = emptySlots.get(node.key);
     if (doc.mode === "write" && !readOnlySource(doc) && empty) { const input = el("textarea", "literal-input empty-slot-input"); input.rows = 1; input.setAttribute("aria-label", "编辑空内容"); doc.writing.bindLiteral(input, empty); element.append(input); writableCount++; }
     if (doc.mode === "write" && !readOnlySource(doc) && doc.session.projectionCurrent && node.origin?.isMain) {
       const range = doc.writing.map?.structures.find(item => item.range.utf16From === node.origin!.utf16From && item.range.utf16To === node.origin!.utf16To)?.range;
-      if (range) { const controls = createStructureControls(doc.writing, range, { onError: showError, revealSource: slot => revealWritingSource(doc, slot) }); if (controls) { const wrapper = el("div", "writing-structure"); wrapper.append(element, controls); return wrapper; } }
+      if (range) { const controls = createStructureControls(doc.writing, range, { onError: showError, revealSource: slot => revealWritingSource(doc, slot), renderedTable: element }); if (controls) { const wrapper = el("div", "writing-structure"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(element, controls); return wrapper; } }
     }
     if (doc.mode === "write" && node.origin?.isMain && !node.writable && ["pre", "table", "figure"].includes(tag)) {
       const wrapper = el("div", "readonly-construct"); wrapper.append(element, button("此部分只读 · 查看源码", () => revealSource(node.origin!), "source-entry", "code")); return wrapper;
     }
+    if (tag === "math" && doc.session.projectionCurrent) {
+      const wrapper = el("div", "math-discussion-target");
+      const isCurrent = (): boolean => doc === current && doc.session.projection === projection && doc.session.projectionCurrent && sourceConsumersAvailable(doc);
+      wrapper.append(element, createMathSelectionControls({ math: node, tree: renderedTree, source: renderedSource,
+        current: isCurrent, notify: message => toast(message, true), select: selection => {
+          if (!isCurrent()) return;
+          const structure = doc.writing.map?.structures.find(item => item.range.utf16From === selection.from && item.range.utf16To === selection.to || item.body?.utf16From === selection.from && item.body?.utf16To === selection.to);
+          readingSelection = { sessionId: doc.session.opened.sessionId, serial: doc.session.serial, selection: { from: selection.from, to: selection.to, visibleExcerpt: selection.visibleExcerpt, nodeKey: selection.nodeKey, elementRole: structure?.kind } };
+          doc.editor.select(selection.from, selection.to, false); toast("已选择准确公式范围，可在链接与批注中添加讨论。");
+        } })); return wrapper;
+    }
     return element;
   }
   host.append(draw(projection.tree));
+  displayPersonalHeadings(host, personalNumberingVisible(localPersonalNumbering(doc)));
   if (restoreQuerySourceFocus && doc.editor.view.dom.isConnected) doc.editor.view.focus();
   host.onmouseup = captureReadingSelection; host.onkeyup = captureReadingSelection;
   void workspaceTools.projectionChanged(host, projectionMappings).catch(showError);
@@ -694,6 +960,9 @@ function renderProjection(doc: LiveDocument): void {
     if (!writableCount && !(projection.sourceInfo.bodyInsertion?.writable)) { const fallback = el("div", "rich-readonly"); fallback.append(icon("code"), el("p", "", "当前内容没有可安全回写的文字区域。源码保留完整，可切换源码继续编辑。"), button("编辑源码", () => changeMode("source"), "button-secondary")); host.append(fallback); }
     else host.append(el("p", "rich-scope-note", "可编辑文字直接输入；生成内容、复杂布局与未确认区域保持只读。"));
   }
+  flowHasProjection=true;
+  const scroller=flowScroll,mode=doc.mode;
+  if(scroller&&preservedScroll!=null){scroller.scrollTop=preservedScroll;const installed=scroller.scrollTop;requestAnimationFrame(()=>{if(current!==doc||doc.mode!==mode||flowScroll!==scroller||renderHost!==host||!flowHasProjection||scroller.scrollTop!==installed)return;scroller.scrollTop=preservedScroll;doc.scroll[mode]=scroller.scrollTop;});}
 }
 function captureReadingSelection(): void {
   const doc = current; const selection = window.getSelection();
@@ -728,7 +997,7 @@ async function changeMode(mode: ViewMode): Promise<void> {
   if (current.writing.state.composing) { const doc = current; await doc.writing.deferUntilCompositionEnds(() => { if (current === doc) return changeMode(mode); }); return; }
   if (mode === "source" || mode === "styled") await current.writing.settleForSessionChange();
   else await flushLiteral();
-  if (flowScroll) current.scroll[current.mode] = flowScroll.scrollTop;
+  if (flowScroll&&flowHasProjection) current.scroll[current.mode] = flowScroll.scrollTop;
   current.editor.clearReveal(); current.mode = mode; current.queries.modeChanged(); activeSourceOrigin = null; localStorage.setItem("weftext-view", mode); renderContent();
 }
 function revealSource(origin: Origin): void {
@@ -759,7 +1028,12 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
     doc.session.acknowledgeDraft(source, serial); doc.draftFailure = null;
   });
   doc.draftChain = request;
-  try { await request; } catch (error) { doc.draftFailure = error instanceof Error ? error.message : String(error); throw error; } finally { if (doc === current) renderStatus(); }
+  try { await request; } catch (error) {
+    const failure = error instanceof ApiError && error.code === "tooLarge"
+      ? new ApiError(error.code, "源码超过 2 MiB 上限；完整输入仅保留在当前窗口，这份超限输入未写入恢复草稿或文件。请撤销或缩短内容后重试。", error.details, error.currentSource)
+      : error;
+    doc.draftFailure = failure instanceof Error ? failure.message : String(failure); throw failure;
+  } finally { if (doc === current) renderStatus(); }
 }
 function scheduleRender(doc: LiveDocument, delay = 300): void {
   doc.renderGeneration++; clearTimeout(doc.renderTimer);
@@ -768,7 +1042,7 @@ function scheduleRender(doc: LiveDocument, delay = 300): void {
 }
 async function compile(doc: LiveDocument): Promise<void> {
   clearTimeout(doc.renderTimer); if (!sourceConsumersAvailable(doc)) return;
-  const source = doc.session.source; const serial = doc.session.serial; const generation = doc.renderGeneration; const sessionId = doc.session.opened.sessionId; doc.rendering++; if (doc === current) renderStatus();
+  const source = doc.session.source; const serial = doc.session.serial; const generation = doc.renderGeneration; const sessionId = doc.session.opened.sessionId; const syntaxBasis = doc.editor.syntaxBasis(); doc.rendering++; if (doc === current) renderStatus();
   if (doc === current && doc.layout === "paged") void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
   try {
     const basis = { sessionId: doc.session.opened.sessionId, source, serial };
@@ -779,9 +1053,12 @@ async function compile(doc: LiveDocument): Promise<void> {
       doc.queries.discover(basis),
     ]);
     if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId) return;
-    doc.writing.installMap(editorMap, source, serial);
+    if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash) editorMap.notes = result.sourceInfo.notes;
     if (doc.session.acceptProjection(result)) {
-      doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled");
+      // Map observers consume the accepted projection as well as its source.
+      // Publish it before notifying them so initial notes controls can enable.
+      doc.writing.installMap(editorMap, source, serial);
+      doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled", syntaxBasis);
       if (doc === current) { if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries) renderContent(); else renderProjection(doc); if (result.diagnostics.length) renderDiagnostics(doc); else content.querySelector(".diagnostics")?.remove(); scrollFragment(doc); }
     }
   } catch (error) { if (sourceConsumersAvailable(doc) && doc.session.serial === serial && generation === doc.renderGeneration && sessionId === doc.session.opened.sessionId) { doc.session.error = `预览失败：${error instanceof Error ? error.message : String(error)}`; if (doc === current) toast(doc.session.error, true); } }
@@ -798,7 +1075,15 @@ async function creation<T>(route: string, payload: Record<string, unknown>): Pro
   try { const result = await api<T>(request.route, request.payload); pendingCreation = null; return result; }
   catch (error) { if (error instanceof ApiError && !["unknown", "pending", "resultUnknown"].includes(error.code)) pendingCreation = null; else toast("创建结果待确认，再次点击创建会确认同一操作。", true); throw error; }
 }
-async function createLibrary(): Promise<void> { const path = pendingCreation?.route === "/api/library/create" ? String(pendingCreation.payload.path) : await pathDialog("createLibrary"); if (!path) return; await creation("/api/library/create", { path }); inventory = await api<Inventory>("/api/library/open", { path }); query = ""; selectedFolder = null; renderSidebar(); renderContent(); toast("资料库已创建，可以新建笔记了。"); }
+async function createLibrary(): Promise<void> {
+  if (pendingCreation && pendingCreation.route !== "/api/library/create") throw new Error("上一次创建结果仍待确认，请先重试原创建操作。");
+  const receipt = pendingCreation
+    ? await creation<LibraryCreationReceipt>("/api/library/create", pendingCreation.payload)
+    : await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
+  if (!receipt) return;
+  inventory = await api<Inventory>("/api/library/open", { path: receipt.root }); query = ""; selectedFolder = null; renderSidebar(); renderContent(); toast("资料库已创建，可以新建笔记了；文档排版默认可在库样式中查看。");
+  if (receipt.rootNotePath) await openDocument(receipt.rootNotePath, receipt.root);
+}
 async function openOutsideFile(): Promise<void> { const path = await pathDialog("file"); if (path) await openDocument(path); }
 async function createNote(): Promise<void> {
   if (!inventory) { await chooseLibrary(); return; }
@@ -811,10 +1096,12 @@ async function createNote(): Promise<void> {
   const opened = await creation<OpenedDocument>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
   addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
 }
-async function prepareSwitch(): Promise<void> { await flushLiteral(); if (current) await persistDraft(current); }
+async function prepareSwitch(): Promise<void> { captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
 async function openDocument(path: string, root?: string): Promise<void> {
   const existing = documents.find(doc => normalize(doc.session.path) === normalize(path)); if (existing && !existing.sourceTrashed) { await activateDocument(existing); return; }
-  await prepareSwitch(); const opened = await api<OpenedDocument>("/api/open", { path, root });
+  const generation=++navigationGeneration;
+  await prepareSwitch(); if(generation!==navigationGeneration)return; const opened = await api<OpenedDocument>("/api/open", { path, root });
+  if(generation!==navigationGeneration)return;
   if (opened.kind === "managed" && documents.some(doc => doc.sourceTrashed && doc.session.opened.nodeId === opened.nodeId && doc.session.opened.workspaceId === opened.workspaceId)) await acceptResolvedDocument(opened);
   else addDocument(opened);
   shell.classList.remove("sidebar-open");
@@ -830,6 +1117,8 @@ function addDocument(opened: OpenedDocument): void {
   });
   const preference = localStorage.getItem("weftext-view"); const mode = modes.some(m => m.id === preference) ? preference as ViewMode : "styled";
   const writing = new WritingController({
+    actionAvailable: () => current===doc,
+    refreshMap: basis => api("/api/editor-map",basis),
     editor, basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }),
     // A temporary consumer pause cannot revoke pending literal settlement.
     // Only the reviewed placement conflict blocks new native visual actions.
@@ -845,6 +1134,9 @@ function addDocument(opened: OpenedDocument): void {
     onApplied: () => { scheduleDraft(doc); scheduleRender(doc, 100); },
   });
   const queries = new EmbeddedQueryController({
+    preferenceIdentity: () => session.opened.nodeId && session.opened.workspaceId ? `weftext-node://${session.opened.workspaceId}/${session.opened.nodeId}` : null,
+    catalog: async () => (await api<{ schema: import("./data-panel").DataSchema }>("/api/data/schema", { root: session.opened.root })).schema,
+    openDefinition: async owner => { await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: session.opened.root, entityKey: owner, lifecycle: "live" })); },
     basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }), mode: () => doc.mode,
     editable: () => sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
     request: (path, basis) => {
@@ -872,17 +1164,36 @@ function addDocument(opened: OpenedDocument): void {
       else throw new Error("回收站结果缺少稳定身份，不能按路径打开。");
     },
   });
-  doc = { session, editor, writing, queries, mode, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", richRetained: false }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
+  const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience() } : null, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
+  doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", richRetained: false }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
   if (session.recovered) toast("已恢复上次未保存的草稿。磁盘文件保持原样。");
 }
 async function activateDocument(doc: LiveDocument): Promise<void> {
+  const generation=++navigationGeneration;
   const activeLibrary = inventory;
   if (doc.sourceTrashed && activeLibrary && activeLibrary.workspaceId === doc.session.opened.workspaceId && activeLibrary.entries.some(entry => entry.identityStatus === "admitted" && entry.nodeId === doc.session.opened.nodeId)) {
     await prepareSwitch();
     await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: activeLibrary.root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` }));
     return;
   }
-  if (current === doc) return; await prepareSwitch(); if (flowScroll && current) current.scroll[current.mode] = flowScroll.scrollTop; current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); if (!doc.session.projectionCurrent) scheduleRender(doc, 0);
+  if (current === doc) return; await prepareSwitch(); if(generation!==navigationGeneration)return;
+  const prior=doc.session.opened;
+  const fresh=prior.nodeId&&prior.workspaceId&&!readOnlySource(doc)?await api<OpenedDocument>("/api/data/open",{root:prior.root,entityKey:`weftext-node://${prior.workspaceId}/${prior.nodeId}`}):await api<OpenedDocument>("/api/open",{path:doc.session.path,root:prior.root});
+  if(generation!==navigationGeneration)return;
+  const saved=navigationContexts.get(doc);
+  if(saved?.inventory){
+    const before=saved.inventory, latest=await api<Inventory>("/api/library/open",{path:before.root});if(generation!==navigationGeneration)return;
+    const relocate=(path:string):string|null=>{const entry=before.entries.find(item=>normalize(item.path)===normalize(path));const primary=entry?.nodeId?entry:before.entries.find(item=>item.kind==="node"&&normalize(item.parentPath)===normalize(path));if(!primary?.nodeId)return null;const next=latest.entries.find(item=>item.kind==="node"&&item.nodeId===primary.nodeId&&item.identityStatus==="admitted");return next?(entry?.kind==="directory"?next.parentPath:next.path):null;};
+    saved.selection=saved.selection.flatMap(path=>{const next=relocate(path);return next?[next]:[];});
+    if(saved.folder){const next=relocate(saved.folder);if(next)saved.folder=next;else if(!latest.entries.some(item=>item.kind==="directory"&&normalize(item.path)===normalize(saved.folder!))){saved.folder=null;toast("原目录范围当前不可用，已返回当前资料库；未按同名目标恢复选择。");}}
+    saved.inventory=latest;
+  }
+  if(fresh.source===doc.session.baseSource){doc.session.opened=fresh;doc.session.acknowledgeSave(fresh.source,fresh.baseId,fresh.path);doc.sourceTrashed=false;doc.editor.clearTokens();doc.queries.invalidate();doc.session.projection=null;await persistDraft(doc);}
+  else{doc.externalSource=fresh.source;doc.comparisonTarget=fresh;doc.session.error="返回目标的磁盘内容已变化。原草稿、选区和撤销记录保留，请比较后继续。";}
+  if(generation!==navigationGeneration)return;if (flowScroll && flowHasProjection && current) current.scroll[current.mode] = flowScroll.scrollTop; current = doc; restoreNavigation(doc); if(doc.mode==="write")doc.writing.restoreNavigationFocus(); activeSourceOrigin = null; renderSidebar(); renderContent();
+  if(saved){const tree=sidebar.querySelector(".file-tree");if(tree)tree.scrollTop=saved.scroll;const contents=sidebar.querySelector(".node-contents");if(contents)contents.scrollTop=saved.contentScroll;}
+  if (["source", "styled"].includes(doc.mode)) doc.editor.view.focus();
+  if (!doc.session.projectionCurrent) scheduleRender(doc, 0);
 }
 
 async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
@@ -893,7 +1204,15 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
   try { await flushLiteral(); await persistDraft(doc); }
   catch (error) { doc.session.savePending = false; refreshChrome(); throw error; }
   if (doc.session.opened.recoveredDraftConflict && !path) { doc.session.savePending = false; refreshChrome(); await showDraftComparison(doc); return; }
-  const request = doc.lastSave ?? { source: doc.session.source, baseId: doc.session.baseId, operationId: operationId(), path };
+  let reservedOperation: string | null = null;
+  let querySaveNotice=false;
+  if (!doc.lastSave && !path && doc.session.opened.nodeId && doc.session.source.includes('"weftext.query"')) {
+    const source = doc.session.source, serial = doc.session.serial;
+    try { const pending=await api<{operationId:string|null;queryState?:string}>("/api/query/definition/pending", {sessionId:doc.session.opened.sessionId,source,serial});reservedOperation=pending.operationId;querySaveNotice=["unparsed","unadmitted","multiplePending"].includes(pending.queryState??""); }
+    catch(error) { doc.session.savePending = false; refreshChrome(); throw error; }
+    if (doc.session.source !== source || doc.session.serial !== serial) { doc.session.savePending = false; throw new Error("保存前查询预约核对期间出现新输入，请重新保存；输入已保留。"); }
+  }
+  const request = doc.lastSave ?? { source: doc.session.source, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), path };
   doc.lastSave = request; doc.session.savePending = true; refreshChrome();
   let receiptReceived = false;
   try {
@@ -914,6 +1233,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
       }
       await doc.writing.settleForSessionChange();
       doc.session.opened = opened;
+      doc.editor.clearTokens();
       doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
       doc.session.projection = null;
       scheduleRender(doc, 0);
@@ -921,6 +1241,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     doc.saveAsChangedTarget = undefined;
     doc.lastSave = undefined;
     await persistDraft(doc); if (doc === current) { renderSidebar(); refreshChrome(); } toast(doc.session.dirty ? "提交内容已保存，后续输入仍在草稿中。" : "已保存。", false);
+    if(querySaveNotice)toast("正文已按原文保存；部分查询定义尚不可运行，请核对其配置或预约。",true);
     if (inventory) { inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar(); }
   } catch (error) {
     if (!receiptReceived && error instanceof ApiError && !["unknown", "resultUnknown", "pending"].includes(error.code)) doc.lastSave = undefined;
@@ -977,13 +1298,14 @@ async function showDraftComparison(doc = current): Promise<void> {
     if (doc === current) renderContent();
     return;
   }
-  fresh.recoveredDraftConflict = false; fresh.recoveredDraft = null; doc.session.opened = fresh; doc.sourceTrashed = fresh.kind === "managedTrash";
+  fresh.recoveredDraftConflict = false; fresh.recoveredDraft = null; doc.session.opened = fresh; doc.editor.clearTokens(); doc.sourceTrashed = fresh.kind === "managedTrash";
   doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path); doc.session.projection = null; doc.externalSource = undefined; doc.comparisonTarget = undefined; doc.lastSave = undefined;
   doc.editor.apply(0, doc.editor.source.length, result.source); await persistDraft(doc); workspaceTools.documentChanged(); scheduleRender(doc, 0); renderContent(); toast(result.action === "discardRecovered" ? "已采用磁盘版本。原恢复草稿保留在恢复历史中。" : "已应用明确合并的草稿，保存后才会写入磁盘。");
 }
 async function showRecovery(): Promise<void> {
   const result = await api<RecoveryInfo[] | { recoveries: RecoveryInfo[] }>("/api/recovery"); recoveries = Array.isArray(result) ? result : result.recoveries;
   await modal<void>("恢复记录", "未保存草稿会在下次打开同一文件时恢复。这里显示需要检查的文件操作。", (form, close) => {
+    const notes = el("section"); noteInputRecovery.render(notes, localPersonalAudience()); form.append(notes);
     if (!recoveries.length) form.append(el("p", "recovery-empty", "目前没有需要处理的文件操作。"));
     for (const record of recoveries) {
       const item = el("div", "recovery-item"); item.append(el("strong", "", record.path), el("p", "", record.message), el("span", "", `状态：${record.status}`));
@@ -1075,10 +1397,15 @@ async function bootstrap(): Promise<void> {
   if (!startupError) void ensureOfflineFonts().catch(error => toast(`离线字体未能完整加载：${error instanceof Error ? error.message : String(error)}。源码已保留，当前显示可能使用替代字体。`, true));
 }
 window.addEventListener("beforeunload", event => { if (documents.some(doc => doc.session.dirty || doc.lastSave || doc.draftFailure || doc.writing.state.pending)) { event.preventDefault(); event.returnValue = ""; } });
+content.addEventListener("contextmenu",event=>{if(!(event.target instanceof Element)||!event.target.closest(".flow-document")||event.target.closest("input,textarea,a,button,[contenteditable=true]"))return;event.preventDefault();openEverydayMenu("当前正文操作",everydayWritingCommands(current?.writing,!!current&&sourceConsumersAvailable(current)&&current.mode!=="read"&&!readOnlySource(current)&&!current.editor.composing,insertEverydayQuery),toast,false);});
 document.addEventListener("keydown", event => {
-  if (event.target instanceof Element && event.target.closest(".embedded-query-dialog, .embedded-query-builder, .embedded-query-parameters")) return;
+  if (event.isComposing || event.keyCode === 229 || current?.editor.composing || current?.writing.state.composing) return;
+  if (event.target instanceof Element && event.target.closest("dialog")) return;
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") { event.preventDefault(); openEverydayMenu(event.shiftKey ? "命令" : "快捷打开", event.shiftKey ? everydayCommands() : everydayEntries().map(entry => ({ id:entry.key,label:entry.title,detail:entry.detail,unavailable:entry.unavailable,run:entry.open })), toast); return; }
+  if (event.altKey && ["ArrowLeft","ArrowRight"].includes(event.key)) { event.preventDefault(); void stepNavigation(event.key === "ArrowLeft" ? -1 : 1).catch(showError); return; }
+  if (event.target instanceof Element && event.target.closest('.embedded-query-dialog, .embedded-query-builder, .embedded-query-parameters, .document-notes-dialog, dialog[aria-label="当前笔记编号控制"]')) return;
   if (event.defaultPrevented) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") { event.preventDefault(); if (current) void saveDocument(current).catch(showError); }
-  if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase()) && current?.mode === "write" && !event.isComposing) { event.preventDefault(); const doc = current; const redo = event.shiftKey || event.key.toLowerCase() === "y"; void flushLiteral().then(() => redo ? doc.editor.redo() : doc.editor.undo()).catch(showError); }
+  if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase()) && current?.mode === "write" && !event.isComposing && !(event.target instanceof Element && event.target.closest("input,textarea,[contenteditable=true]"))) { event.preventDefault(); const doc = current; const redo = event.shiftKey || event.key.toLowerCase() === "y"; void flushLiteral().then(() => redo ? doc.editor.redo() : doc.editor.undo()).catch(showError); }
 });
 renderSidebar(); renderContent(); void bootstrap();

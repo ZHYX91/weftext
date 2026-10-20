@@ -29,6 +29,7 @@ fn field_output_fixture() -> (tempfile::TempDir, HostedState, Auth, String) {
                         export: true,
                         download: true,
                         r#import: false,
+                        ..Default::default()
                     },
                     fields: BTreeMap::from([(
                         "tasks/status".into(),

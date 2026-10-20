@@ -1,10 +1,13 @@
 import "./knowledge-view.css";
-import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult } from "./proofreading-panel";
+import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
 import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput } from "./knowledge-state";
 import type { Origin, RenderNode } from "./types";
 import { storedMediaSelection } from "./media-selection";
 import { trashRestoreDraft, type LibraryTrashEntry } from "./library-trash";
+import { citationInsertionByte, newNativeCitationInputs, renderNativeCitations, type NativeCitationSnapshot } from "./native-citations";
+import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationDiagnostics, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
+import { nodeSourceHash } from "./hosted-navigation-state";
 
 export interface KnowledgeContext extends KnowledgeBasis {
   root: string;
@@ -14,6 +17,7 @@ export interface KnowledgeContext extends KnowledgeBasis {
   selection?: { from: number; to: number; visibleExcerpt?: string; elementRole?: string; nodeKey?: string };
 }
 export interface KnowledgeLink {
+  sourceHash?: string;
   source: KnowledgeNodeRef;
   occurrence: { from: number; to: number; utf16From: number; utf16To: number; target: string; kind: string; raw?: string; destinationSlot?: unknown };
   resolution: { status: string; target?: KnowledgeNodeRef; fragment?: string; form?: string };
@@ -50,9 +54,11 @@ export interface KnowledgeTemplate {
 }
 export type KnowledgeTemplateValue = string | boolean | null;
 export interface KnowledgeSnapshot {
+  diagnostics?: { coverage: "complete" | "partial"; scannedNodes: number; issues: KnowledgeLink[]; propertyIssues?: { source: KnowledgeNodeRef; fieldId: string; itemPath: string[]; address: string; resolution: KnowledgeLink["resolution"] }[]; nodes: { node: KnowledgeNodeRef; incoming: number; outgoing: number; invalidOutgoing: number; state: string }[] };
   links?: { generation: string | number; coverage: "complete" | "partial"; outgoing: KnowledgeLink[]; incomingId: KnowledgeLink[]; incomingPath: KnowledgeLink[]; warnings?: string[] };
   renderedLinks?: { compileIdentity: string; target: string; projectionGeneration: string; occurrenceOrdinal: number; fragments: string[]; destination: string; origin: string }[];
   propertyReferences?: { coverage: "complete" | "partial"; items: { source: KnowledgeNodeRef; fieldId: string; fieldTitle?: string; itemPath: string[]; resolution: KnowledgeLink["resolution"] }[]; diagnostics?: string[] };
+  citations?: NativeCitationSnapshot;
   mentions?: { generation: string | number; coverage: "complete" | "partial"; fragments: { id: string; text?: string; nodeKey?: string; coverage?: string; hits: KnowledgeMention[] }[] };
   annotations?: KnowledgeAnnotation[];
   annotationStatus?: string;
@@ -75,6 +81,7 @@ export interface KnowledgeReceipt { status: string; message?: string; operationI
 export interface KnowledgeIntent { kind: string; [key: string]: unknown }
 export interface KnowledgeTextMapping { nodeKey: string; node: Text | HTMLElement; text: string; origin?: Origin | null }
 export interface KnowledgeHost {
+  processingDefaults?(): Promise<ProcessingDefaultsSuggestion>;
   proofread?(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>;
   context(): KnowledgeContext | null;
   load(context: KnowledgeContext): Promise<KnowledgeSnapshot>;
@@ -92,8 +99,9 @@ export interface KnowledgeHost {
   beforeAction?(): Promise<void>;
   canEditSource?(): boolean;
 }
-export type KnowledgePanelTab = "links" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
+export type KnowledgePanelTab = "links" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
+  backgroundEnabled(): boolean;
   refresh(): Promise<void>;
   selectTab(tab: KnowledgePanelTab): void;
   attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
@@ -129,22 +137,43 @@ function nativeTree(node: RenderNode): Node {
 export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost): KnowledgePanel {
   container.classList.add("knowledge-panel"); container.setAttribute("aria-label", "知识与批注");
   const gate = new KnowledgeReadGate();
-  const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new Error("校对接口不可用")), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, notify: message => host.notify(message, true) });
+  const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new Error("校对接口不可用")), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
   let snapshot: KnowledgeSnapshot | null = null;
   let snapshotBasis: KnowledgeContext | null = null;
   let tab = "links";
-  let enabled = localStorage.getItem("weftext-potential-links") !== "false";
+  let enabled = localStorage.getItem("weftext-potential-links") === "true";
+  let problemHints = localStorage.getItem("weftext-link-problem-hints") === "true", composing = false;
+  const hintedLinks = new Map<HTMLAnchorElement, { title: string | null; description: string | null; hint: HTMLElement }>();
+  let ruleScope = "", rules = new PersonalRelationRules(), diagnosticView: RelationshipDiagnosticsView;
+  let mentionDomain = "all", exclusionScope = "note";
+  function relationNode(ref: KnowledgeNodeRef): RelationNode { return { key: nodeIdentity(ref), title: nodeLabel(ref), path: ref.path, reference: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }; }
+  function ensureRules(): void {
+    const scope = host.context()?.workspaceId ?? ""; if (scope === ruleScope && diagnosticView) return;
+    rules.closePreviews(); ruleScope = scope; const key = `weftext-relations-v1:${scope}`;
+    let stored: string | null = null; try { stored = localStorage.getItem(key); } catch { /* Saving reports its own error. */ }
+    rules = new PersonalRelationRules(next => localStorage.setItem(key, JSON.stringify(next)), stored);
+    diagnosticView = new RelationshipDiagnosticsView(rules, node => Promise.resolve(host.navigate(node.reference)), async issue => {
+      if (!sameKnowledgeBasis(snapshotBasis, host.context())) throw new Error("诊断依据已变化，请刷新后定位。");
+      const current = host.context(); if (!current || `${current.workspaceId}/${current.nodeId}` !== issue.source.key) await host.navigate(issue.source.reference);
+      if (issue.field) { host.notify("已打开属性来源笔记；没有精确源码位置，请在属性面板查看原字段。"); return; }
+      const target = host.context();
+      if (!target || `${target.workspaceId}/${target.nodeId}` !== issue.source.key || !issue.sourceHash || await nodeSourceHash(target.source) !== issue.sourceHash) { host.notify("已打开来源笔记；当前正文已变化，没有采用旧的精确位置。", true); return; }
+      if (issue.from !== undefined && issue.to !== undefined) host.selectSource?.(issue.from, issue.to);
+    }, report);
+  }
   let surface: HTMLElement | null = null;
   let mappings: KnowledgeTextMapping[] = [];
   let overlay: HTMLElement | null = null;
   let popover: HTMLElement | null = null;
   let popoverAnchor: HTMLElement | null = null;
   let pendingPlan: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
-  let disposed = false, busy = false;
+  let disposed = false, busy = false, loading = false;
   let annotationBody = "", suggestionReplacement = "", annotationKind = "comment", annotationTarget = "whole_document";
   let annotationSelection: KnowledgeContext["selection"];
   let annotationSelectionBasis: KnowledgeContext | null = null;
   const replies = new Map<string, string>();
+  const citationInputs = new Map<string, ReturnType<typeof newNativeCitationInputs>>();
+  let relationFilter = "all";
   const reconfirmations = new Map<string, { replacement: string; basis: KnowledgeContext | null; selection?: KnowledgeContext["selection"] }>();
   const fileDrafts = new Map<string, { name: string; parent: string; backup: string; allowLosses: boolean; restores: Map<string, { name: string; parent: string }> }>();
   const templateDrafts = new Map<string, { name: string; parent: string; parameters: Record<string, KnowledgeTemplateValue>; presence: Record<string, "omitted" | "value" | "none"> }>();
@@ -165,12 +194,17 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
   function navigate(target: string | KnowledgeNodeRef): void { void Promise.resolve(host.navigate(target)).catch(report); }
   function section(title: string, description?: string): HTMLElement { const value = element("section", "knowledge-section"); value.append(element("h3", "", title)); if (description) value.append(element("p", "knowledge-help", description)); return value; }
   function closePopover(restoreFocus = false): void { popover?.remove(); popover = null; const previous = popoverAnchor; popoverAnchor = null; if (restoreFocus && previous?.isConnected) previous.focus(); }
-  function clearOverlay(): void { closePopover(); overlay?.remove(); overlay = null; }
+  function clearHints(): void { for (const [anchor, old] of hintedLinks) { if (old.title === null) anchor.removeAttribute("title"); else anchor.title = old.title; if (old.description === null) anchor.removeAttribute("aria-describedby"); else anchor.setAttribute("aria-describedby", old.description); anchor.classList.remove("knowledge-link-problem"); old.hint.remove(); } hintedLinks.clear(); }
+  function clearOverlay(): void { closePopover(); overlay?.remove(); overlay = null; clearHints(); }
   function knownMentions(): { fragment: NonNullable<KnowledgeSnapshot["mentions"]>["fragments"][number]; hit: KnowledgeMention }[] {
-    return snapshot?.mentions?.fragments.flatMap(fragment => layoutMentions(fragment.hits).map(hit => ({ fragment, hit }))) ?? [];
+    ensureRules(); const source = `${host.context()?.workspaceId}/${host.context()?.nodeId}`;
+    return snapshot?.mentions?.fragments.flatMap(fragment => layoutMentions(fragment.hits.map(hit => {
+      const candidates = (hit.candidates ?? hit.targets.map(target => ({ target, term: hit.terms[0], provenance: "title", fragment: undefined }))).filter(c => (mentionDomain === "all" || (mentionDomain === "fragments") === !!c.fragment) && visibleCandidate(rules.rules, source, c.term, nodeIdentity(c.target)));
+      return { ...hit, candidates, targets: candidates.map(c => c.target) };
+    }).filter(hit => hit.candidates.length)).map(hit => ({ fragment, hit }))) ?? [];
   }
-  function mentionIntent(fragmentId: string, hit: KnowledgeMention, target: KnowledgeNodeRef): KnowledgeIntent {
-    return { kind: "mentionConvert", generation: snapshot?.mentions?.generation, fragmentId, startScalar: hit.startScalar, endScalar: hit.endScalar, target };
+  function mentionIntent(fragmentId: string, hit: KnowledgeMention, target: KnowledgeNodeRef, fragment?: string | null): KnowledgeIntent {
+    return { kind: "mentionConvert", generation: snapshot?.mentions?.generation, fragmentId, startScalar: hit.startScalar, endScalar: hit.endScalar, target, fragment };
   }
   async function confirmPlan(title: string, plan: KnowledgePlan): Promise<boolean> {
     const dialog = element("dialog", "knowledge-dialog"); dialog.append(element("h2", "", title), element("p", "knowledge-help", "核对本次完整变动。确认只应用这份准备结果。"));
@@ -290,7 +324,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
       const actionBasis = host.context();
       await host.beforeAction?.();
       const context = host.context(); if (!context) throw new Error("请先打开当前笔记。");
-      if (["mentionConvert", "linkConvert"].includes(intent.kind) && host.canEditSource?.() === false) throw new Error("请先切换到编辑视图，再转换链接。阅读模式只浏览和复制内容。");
+      if ((["mentionConvert", "linkConvert"].includes(intent.kind) || intent.kind.startsWith("nativeCitation") || intent.kind.startsWith("nativeReference")) && host.canEditSource?.() === false) throw new Error("请先切换到编辑视图，再编辑引用。阅读模式只浏览和复制内容。");
       if (!sameKnowledgeBasis(actionBasis, context)) throw new Error("当前输入已进入共享草稿，请核对更新后的目标并重新操作。输入已保留。");
       const plan = await host.prepare(intent, context);
       if (disposed) return false;
@@ -321,20 +355,23 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
 
   function chooser(fragmentId: string, hit: KnowledgeMention, text: string): HTMLElement {
     const value = element("div", "knowledge-chooser"); value.append(element("strong", "", text || hit.terms.join(" / ")));
-    let selected: KnowledgeNodeRef | null = null;
-    const convert = action("转换为原生链接", async () => { if (selected) await perform("转换潜在链接", mentionIntent(fragmentId, hit, selected)); }, "knowledge-button primary"); convert.disabled = true;
+    let selected: NonNullable<KnowledgeMention["candidates"]>[number] | null = null;
+    const convert = action("转换为原生链接", async () => { if (selected) await perform("转换潜在链接", mentionIntent(fragmentId, hit, selected.target, selected.fragment)); }, "knowledge-button primary"); convert.disabled = true;
+    const open = action("打开所选候选", async () => { if (selected && sameKnowledgeBasis(snapshotBasis, host.context())) await host.navigate(`weftext-node://${selected.target.workspaceId}/${selected.target.nodeId}${selected.fragment ? `#${encodeURIComponent(selected.fragment)}` : ""}`); }); open.disabled = true;
     const group = element("div", "knowledge-targets"); group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "选择准确链接目标");
     const name = `mention-${crypto.randomUUID()}`;
-    for (const target of hit.targets) {
+    for (const candidate of hit.candidates ?? []) {
+      const target = candidate.target;
       const radio = input(); radio.type = "radio"; radio.name = name; radio.value = nodeIdentity(target);
-      const label = element("label", "knowledge-target"); label.append(radio, element("span", "", nodeLabel(target)));
+      const label = element("label", "knowledge-target"); label.append(radio, element("span", "", `${nodeLabel(target)}${candidate.fragment ? ` #${candidate.fragment}` : ""} · ${({ title: "笔记标题", nameField: "名称字段", heading: "标题文字", stableLabel: "稳定标签" })[candidate.provenance] ?? candidate.provenance}`));
       if (target.path) label.append(element("small", "", target.path));
-      radio.onchange = () => { selected = target; convert.disabled = !hit.writable || host.canEditSource?.() === false || !sameKnowledgeBasis(snapshotBasis, host.context()); }; group.append(label);
+      radio.onchange = () => { selected = candidate; open.disabled = false; convert.disabled = !hit.writable || host.canEditSource?.() === false || !sameKnowledgeBasis(snapshotBasis, host.context()); }; group.append(label);
+      label.append(action("排除此目标…", () => { const source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "target", value: nodeIdentity(target), source }, `排除准确目标 ${nodeLabel(target)} · ${nodeIdentity(target)}；范围：${source ? "此篇" : "个人此库"}，不影响真实链接。`, knownMentions().filter(m => m.hit.targets.some(t => nodeIdentity(t) === nodeIdentity(target))).length, () => { closePopover(); render(); drawOverlay(); }); }));
     }
     value.append(group);
     if (!hit.writable) value.append(element("p", "knowledge-help", "只读发现：当前来源没有准确可写范围。"));
     else if (host.canEditSource?.() === false) value.append(element("p", "knowledge-help", "阅读模式可查看候选；切换到编辑视图后可转换链接。"));
-    value.append(convert); return value;
+    value.append(open, convert, action("忽略此词…", () => { const term = text || hit.terms[0], source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "term", value: term, source }, `精确词：${term}；范围：${source ? "此篇" : "个人此库"}。Unicode 字面匹配，不改作者标签。`, knownMentions().filter(m => m.hit.terms.includes(term)).length, () => { closePopover(); render(); drawOverlay(); }); })); return value;
   }
   function showMentionPopover(anchor: HTMLElement, fragmentId: string, hit: KnowledgeMention, text: string): void {
     if (popover?.dataset.mention === `${fragmentId}:${hit.startScalar}:${hit.endScalar}`) return;
@@ -350,7 +387,13 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
   }
   function drawOverlay(): void {
     clearOverlay();
-    if (!enabled || !surface || !sameKnowledgeBasis(snapshotBasis, host.context()) || !surface.isConnected) return;
+    if (composing || !surface || !sameKnowledgeBasis(snapshotBasis, host.context()) || !surface.isConnected) return;
+    if (problemHints) for (const anchor of surface.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+      const issue = snapshot?.diagnostics?.issues.find(i => i.source.nodeId === host.context()?.nodeId && i.occurrence.target === anchor.getAttribute("href")); if (!issue) continue;
+      const hint = element("span", "knowledge-problem-description", `链接问题：${resolutionLabels[issue.resolution.status] ?? issue.resolution.status}。可在关系诊断定位来源。`); hint.id = `link-problem-${crypto.randomUUID()}`; hint.hidden = true;
+      hintedLinks.set(anchor, { title: anchor.getAttribute("title"), description: anchor.getAttribute("aria-describedby"), hint }); anchor.title = hint.textContent!; anchor.setAttribute("aria-describedby", `${anchor.getAttribute("aria-describedby") ?? ""} ${hint.id}`.trim()); anchor.classList.add("knowledge-link-problem"); surface.append(hint);
+    }
+    if (!enabled) return;
     const base = surface.getBoundingClientRect(); overlay = element("div", "knowledge-overlays"); overlay.setAttribute("aria-label", "潜在链接提示"); surface.append(overlay);
     const overflow = new Map<string, { rect: DOMRect; count: number }>();
     for (const { fragment, hit } of knownMentions()) {
@@ -373,20 +416,34 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }
   }
   const resize = (): void => { if (!disposed) drawOverlay(); };
+  const compositionStart = (): void => { composing = true; clearOverlay(); };
+  const compositionEnd = (): void => { composing = false; };
   const escape = (event: KeyboardEvent): void => { if (event.key === "Escape" && popover) { closePopover(true); event.stopPropagation(); } };
   window.addEventListener("resize", resize); window.addEventListener("keydown", escape);
+  window.addEventListener("compositionstart", compositionStart); window.addEventListener("compositionend", compositionEnd);
 
   function renderLinks(body: HTMLElement): void {
+    ensureRules(); const d = snapshot?.diagnostics;
+    const diagnostics: RelationDiagnostics | undefined = d && { ...d, issues: d.issues.map<RelationIssue>(i => ({ source: relationNode(i.source), target: i.resolution.target ? relationNode(i.resolution.target) : undefined, address: i.occurrence.target, status: i.resolution.status, from: i.occurrence.utf16From, to: i.occurrence.utf16To, sourceHash: i.sourceHash })).concat((d.propertyIssues ?? []).map(p => ({ source: relationNode(p.source), target: p.resolution.target ? relationNode(p.resolution.target) : undefined, address: p.address, status: p.resolution.status, from: undefined, to: undefined, sourceHash: undefined, field: [p.fieldId, ...p.itemPath].join(" / ") }))), nodes: d.nodes.map(n => ({ ...n, node: relationNode(n.node) })) };
+    diagnosticView.render(body, diagnostics);
+    const hintSetting = element("label", "knowledge-setting"), hintCheck = input(); hintCheck.type = "checkbox"; hintCheck.checked = problemHints; hintCheck.onchange = () => { try { localStorage.setItem("weftext-link-problem-hints", String(hintCheck.checked)); problemHints = hintCheck.checked; drawOverlay(); } catch { hintCheck.checked = problemHints; report("问题提示偏好保存失败；扫描与正文保留。"); } }; hintSetting.append(hintCheck, document.createTextNode("正文显示问题提示（默认关闭，原链接导航保留）")); body.append(hintSetting);
     const data = snapshot?.links;
     if (!data) { body.append(element("p", "knowledge-help", "当前对象尚无可用链接索引。")); return; }
     body.append(element("p", "knowledge-help", data.coverage === "partial" ? "当前获权范围扫描不完整，下列为已知链接。" : "当前获权扫描范围已完成。"));
-    for (const [title, entries] of [["出链", data.outgoing], ["ID 反链", data.incomingId], ["当前路径解析入链", data.incomingPath]] as const) {
+    const filter=select([["all","全部关系"],["links","普通笔记链接"],["citations","文献引用"],["document","本篇交叉引用"],["properties","属性关系"]]);filter.value=relationFilter;filter.setAttribute("aria-label","关系分类");filter.onchange=()=>{relationFilter=filter.value;render();};body.append(filter);
+    if(relationFilter==="citations") { const context=host.context()!;let state=citationInputs.get(context.sessionId);if(!state){state=newNativeCitationInputs();citationInputs.set(context.sessionId,state);}renderNativeCitations(body,snapshot?.citations,state,{writable:host.canEditSource?.()!==false,at:()=>citationInsertionByte(context.source,context.selection?.from??context.source.length),perform:(title,intent)=>perform(title,intent as KnowledgeIntent),select:range=>host.selectSource?.(range.utf16From,range.utf16To),navigate,repaint:render});return; }
+    if(relationFilter==="all" || relationFilter==="document"){
+      const group=section("本篇交叉引用与待分类原生引用","只有本次实际编译确认的文献输出接入文献分类；@标签 源码候选保留待分类，不按同名连接 Work。");
+      for(const ref of snapshot?.citations?.editor.crossReferences??[]){if(ref.renderedKind==="citation")continue;group.append(action(ref.label,()=>host.selectSource?.(ref.range.utf16From,ref.range.utf16To)),element("span","knowledge-badge",ref.renderedKind==="document"?"本次原生文内引用":ref.kind==="link"?"文内链接源码槽":"原生引用源码：待执行分类"));}body.append(group);
+    }
+    for (const [title, entries] of (relationFilter==="all"||relationFilter==="links" ? [["出链", data.outgoing], ["ID 反链", data.incomingId], ["当前路径解析入链", data.incomingPath]] as const:[])) {
       const group = section(title); body.append(group);
       if (!entries.length) { group.append(element("p", "knowledge-empty", data.coverage === "complete" ? "该扫描范围没有链接。" : "暂未发现；扫描不完整。")); continue; }
       for (const entry of entries) {
         const row = element("article", "knowledge-card");
         const target = entry.resolution.target;
-        row.append(action(title === "出链" ? target ? nodeLabel(target) : entry.occurrence.target : nodeLabel(entry.source), () => navigate(title === "出链" ? target ?? entry.occurrence.target : entry.source), "knowledge-link-title"));
+        if(target) row.title=`当前获权标题：${nodeLabel(target)}；正文显示文字保持作者原值。`;
+        row.append(action(title === "出链" ? target ? nodeLabel(target) : entry.occurrence.target : nodeLabel(entry.source), () => navigate(title === "出链" ? entry.occurrence.target : entry.source), "knowledge-link-title"));
         row.append(element("span", "knowledge-badge", resolutionLabels[entry.resolution.status] ?? entry.resolution.status), element("p", "knowledge-address", entry.occurrence.target));
         const controls = element("div", "knowledge-actions"); controls.append(action("复制地址", () => copy(entry.occurrence.target)));
         const raw = entry.occurrence.raw ?? (snapshotBasis && entry.source.nodeId === snapshotBasis.nodeId ? snapshotBasis.source.slice(entry.occurrence.utf16From, entry.occurrence.utf16To) : undefined);
@@ -399,13 +456,17 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
           if (host.linkCopy) {
             const copyForm = async (full: boolean): Promise<void> => { const context = host.context(); if (!context || !sameKnowledgeBasis(snapshotBasis, context)) { report("链接信息已变化，请刷新后复制。原源仍保留。"); return; } try { const result = await host.linkCopy!(entry, format.value, context); await copy(full ? result.fullLink : result.address); } catch (error) { report(error); } };
             controls.append(action("复制所选地址", () => copyForm(false)), action("复制所选完整链接", () => copyForm(true)));
+            const stableCopy=async(full:boolean):Promise<void>=>{const context=host.context();if(!context||!sameKnowledgeBasis(snapshotBasis,context))throw new Error("链接依据已变化，请刷新后复制。");try{const result=await host.linkCopy!(entry,"id",context);await copy(full?result.fullLink:result.address);}catch(error){report(error);}};
+            controls.append(action("复制应用稳定 URI",()=>stableCopy(false)),action("复制稳定原生 Typst 链接",()=>stableCopy(true)));
+            const web=action("复制 Web 深链（当前部署不可用）",()=>{});web.disabled=true;web.title="当前部署没有配置并验证登录返回、稳定身份及片段定位路由。";controls.append(web);
           }
+          const updateText=action("更新此链接文字为当前标题",()=>perform("更新所选链接显示文字",{kind:"nativeCitationLinkText",generation:snapshot?.citations?.generation,occurrence:entry.occurrence}));updateText.disabled=host.canEditSource?.()===false||!target||!entry.occurrence.destinationSlot;controls.append(updateText);
           if (convert.disabled) row.append(element("p", "knowledge-help", host.canEditSource?.() === false ? "阅读模式可浏览和复制链接；切换到编辑视图后可转换。" : "当前链接不能快捷转换；保留原生源与诊断。"));
         }
         row.append(controls); group.append(row);
       }
     }
-    const displayed = section("当前阅读预览中的链接", "来自当前连续阅读预览的实际显示项。生成或来源不明确的项可导航与复制，不提供源转换。"); body.append(displayed);
+    const displayed = section("当前阅读预览中的链接", "来自当前连续阅读预览的实际显示项。生成或来源不明确的项可导航与复制，不提供源转换。"); if(relationFilter==="all"||relationFilter==="links")body.append(displayed);
     const rendered = snapshot?.renderedLinks ?? [];
     if (!rendered.length) displayed.append(element("p", "knowledge-empty", "当前预览没有可用显示链接。"));
     for (const link of rendered) {
@@ -414,7 +475,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     const properties = snapshot?.propertyReferences;
     const context = host.context();
     const identity = context?.workspaceId && context.nodeId ? `${context.workspaceId}/${context.nodeId}` : null;
-    if (properties && identity) {
+    if (properties && identity && (relationFilter==="all"||relationFilter==="properties")) {
       const own = properties.items.filter(item => nodeIdentity(item.source) === identity);
       const incoming = properties.items.filter(item => item.resolution.target && nodeIdentity(item.resolution.target) === identity);
       for (const [title, items, outgoing] of [["属性出引用", own, true], ["属性入引用", incoming, false]] as const) {
@@ -431,7 +492,11 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }
   }
   function renderMentions(body: HTMLElement): void {
-    const setting = element("label", "knowledge-setting"); const check = input(); check.type = "checkbox"; check.checked = enabled; check.onchange = () => { enabled = check.checked; localStorage.setItem("weftext-potential-links", String(enabled)); drawOverlay(); }; setting.append(check, document.createTextNode("正文显示双下划线提示")); body.append(setting);
+    ensureRules();
+    const setting = element("label", "knowledge-setting"); const check = input(); check.type = "checkbox"; check.checked = enabled; check.onchange = () => { try { localStorage.setItem("weftext-potential-links", String(check.checked)); enabled = check.checked; drawOverlay(); } catch { check.checked = enabled; report("提示偏好保存失败，请重试。扫描结果保留。"); } }; setting.append(check, document.createTextNode("正文显示双下划线提示（默认关闭，只改个人呈现）")); body.append(setting);
+    const domain = select([["all", "标题、名称及稳定片段"], ["notes", "仅笔记标题与名称"], ["fragments", "仅稳定片段"]]); domain.setAttribute("aria-label", "候选范围"); domain.value = mentionDomain; domain.onchange = () => { mentionDomain = domain.value; render(); drawOverlay(); };
+    const scope = select([["note", "此篇"], ["library", "个人此库"]]); scope.setAttribute("aria-label", "排除规则范围"); scope.value = exclusionScope; scope.onchange = () => { exclusionScope = scope.value; }; body.append(field("候选范围", domain), field("排除规则范围", scope), element("p", "knowledge-help", "扫描当前编译的普通可见文字；精确 Unicode 字面匹配，保留全部重复与重叠。未获唯一标签的标题不会猜测片段或新增标签。"));
+    rules.controls(body, () => { render(); drawOverlay(); });
     body.append(element("p", "knowledge-help", "每个范围的全部目标都在此列出。正文最多两层提示；更多重叠范围仍可分别操作。"));
     const list = element("div", "knowledge-mentions"); list.tabIndex = -1; body.append(list);
     if (!snapshot?.mentions) { list.append(element("p", "knowledge-empty", "当前预览尚无可用潜在链接扫描。")); return; }
@@ -626,36 +691,43 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     renderedBasis = host.context();
     const scroll = container.querySelector(".knowledge-body")?.scrollTop ?? 0;
     container.replaceChildren();
-    const heading = element("div", "knowledge-heading"); heading.append(element("strong", "", "知识与批注"), action("刷新", refresh, "knowledge-refresh")); container.append(heading);
+    const heading = element("div", "knowledge-heading"); heading.append(element("strong", "", "知识与批注"), action("刷新", refresh, "knowledge-refresh"));
+    if (loading) heading.append(action("停止等待", () => { gate.invalidate(); loading = false; clearOverlay(); status.textContent = "已停止等待本次只读扫描；未取消服务端计算，正文保留。"; render(); })); container.append(heading);
     const tabs = element("div", "knowledge-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "知识面板");
-    for (const [id, label] of [["links", "链接"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
+    for (const [id, label] of [["links", "链接"], ["citations", "插入引用"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "citations", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
     container.append(tabs, status);
     if (pendingPlan) { const pending = element("div", "knowledge-warning", `原操作 ${pendingPlan.plan.operationId} 结果待确认。`); if (host.inspectOperation) pending.append(action("检查原操作", inspectPending)); container.append(pending); }
     const body = element("div", "knowledge-body"); body.setAttribute("role", "tabpanel"); container.append(body);
     if (!host.context()) { body.append(element("p", "knowledge-empty", "打开笔记后查看链接、批注和文件操作。")); return; }
     body.append(element("p", "knowledge-help knowledge-current", host.context()!.path));
     for (const message of snapshot?.warnings ?? []) body.append(element("p", "knowledge-warning", message));
-    if (tab === "links") renderLinks(body); else if (tab === "mentions") renderMentions(body); else if (tab === "annotations") renderAnnotations(body); else if (tab === "proofreading") proofreading.render(body); else if (tab === "files") renderFiles(body); else renderTemplates(body);
+    if (tab === "links") renderLinks(body); else if (tab === "citations") {
+      const context = host.context()!;
+      let state = citationInputs.get(context.sessionId); if (!state) { state = newNativeCitationInputs(); citationInputs.set(context.sessionId, state); }
+      renderNativeCitations(body, sameKnowledgeBasis(snapshotBasis, context) ? snapshot?.citations : undefined, state, { writable: host.canEditSource?.() !== false, at: () => { const current = host.context(); if (!current || !sameKnowledgeBasis(snapshotBasis, current)) throw new Error("引用依据已变化，请刷新后重试。"); return citationInsertionByte(current.source, current.selection?.from ?? current.source.length); }, perform: (title, intent) => perform(title, intent as KnowledgeIntent), select: range => host.selectSource?.(range.utf16From, range.utf16To), navigate, repaint: render });
+    } else if (tab === "mentions") renderMentions(body); else if (tab === "annotations") renderAnnotations(body); else if (tab === "proofreading") proofreading.render(body); else if (tab === "files") renderFiles(body); else renderTemplates(body);
     body.scrollTop = scroll;
     if (focusKey) container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
   }
   async function refresh(): Promise<void> {
     const context = host.context(); const generation = gate.begin();
     if (!context) { snapshot = null; snapshotBasis = null; clearOverlay(); render(); return; }
-    if (!sameKnowledgeBasis(snapshotBasis, context)) { snapshot = null; snapshotBasis = null; clearOverlay(); render(); }
+    if (!sameKnowledgeBasis(snapshotBasis, context)) { rules.closePreviews(); snapshot = null; snapshotBasis = null; clearOverlay(); render(); }
     status.textContent = "正在读取当前获权知识信息…";
+    loading = true; if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))) render();
     try {
       const next = await host.load(context); if (disposed || !gate.accepts(generation, context, host.context())) return;
-      snapshot = next; snapshotBasis = context; status.textContent = "";
+      snapshot = next; snapshotBasis = context; loading = false; status.textContent = "";
       if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render();
       drawOverlay();
-    } catch (error) { if (gate.accepts(generation, context, host.context())) { snapshot = null; snapshotBasis = null; clearOverlay(); report(error); render(); } }
+    } catch (error) { if (gate.accepts(generation, context, host.context())) { loading = false; snapshotBasis = null; clearOverlay(); report(error); status.textContent = `扫描失败，最近结果已过期。${status.textContent} 搜索与个人规则保留，请刷新重试。`; if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render(); } }
   }
   render();
   return {
+    backgroundEnabled: () => enabled || problemHints,
     refresh,
     selectTab(next) { tab = next; render(); },
     attachSurface(next, nextMappings = []) { clearOverlay(); surface = next; mappings = nextMappings; if (surface) surface.classList.add("knowledge-surface"); drawOverlay(); },
-    dispose() { disposed = true; gate.invalidate(); clearOverlay(); mediaController?.dispose(); window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); container.removeEventListener("focusout", onBlur); container.replaceChildren(); },
+    dispose() { disposed = true; gate.invalidate(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.replaceChildren(); },
   };
 }

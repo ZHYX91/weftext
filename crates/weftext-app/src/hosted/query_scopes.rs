@@ -23,7 +23,7 @@ pub(super) struct Rights {
     #[serde(default)]
     pub(super) trash: bool,
 }
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Authority {
     pub(super) directories: BTreeMap<String, Directory>,
     pub(super) trash: bool,

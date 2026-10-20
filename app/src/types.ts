@@ -63,6 +63,7 @@ export interface SyntaxToken {
   utf16To: number;
 }
 export interface SourceInfo {
+  notes?: import("./document-notes").NotesSourceMap;
   syntaxValid: boolean;
   identityStatus: string;
   id?: string;

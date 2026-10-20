@@ -132,7 +132,7 @@ pub(super) struct QueryRights {
     #[serde(default)]
     pub(super) relations: BTreeSet<String>,
 }
-#[derive(Clone, Default, Serialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Authority {
     pub(super) execution: library::ExecutionAuthority,
     pub(super) scopes: query_scopes::Authority,
@@ -352,9 +352,11 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         let mut resources = vec![];
         let mut definitions = vec![];
         let mut unavailable_definitions = vec![];
+        let mut form_fields = BTreeSet::new();
         for (resource, rights) in grants {
             let Some(file) = inner.file(&resource).ok().filter(|f| f.editable || f.lifecycle=="trash" && inner.policy.users[&actor].query_scopes.trash) else { continue; };
             let fields = rights.fields.iter().filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<Vec<_>>();
+            form_fields.extend(fields.iter().cloned());
             if fields.is_empty() && !rights.query.definitions && !rights.query.products.values().any(|p| *p) && rights.query.relations.is_empty() { continue; }
             resources.push(json!({"resource":resource,"title":file.title,"lifecycle":file.lifecycle,"readOnly":file.lifecycle=="trash","fields":fields,
                 "products":PRODUCTS.iter().map(|p|(*p,rights.query.products.get(*p).copied().unwrap_or(false))).collect::<BTreeMap<_,_>>(),
@@ -377,6 +379,20 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         let provider_catalog = provider_catalog(inner, &actor);
         let scope_catalog = query_scopes::catalog(inner,&actor);
         let mut result = json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty()&&provider_catalog["providerCoverage"]=="complete"&&scope_catalog["scopeCoverage"]=="complete"{"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions});
+        // Field-read grants already disclose these exact shapes. Do not expose
+        // unrelated fields, type domains, relations or Provider descriptions.
+        if !form_fields.is_empty() {
+            let root = inner.config.root.clone();
+            let projected = (|| {
+                let config = inner.core.read_config(&root, ConfigRole::Schema).map_err(|_| changed())?;
+                let witness = inner.core.take_snapshot_witness(&config.base_id).map_err(|_| changed())?;
+                let schema = match config.bytes { Some(bytes) if config.revision.is_some() => Schema::from_author_json(std::str::from_utf8(&bytes).map_err(|_| changed())?).map_err(|_| changed())?, Some(_) => return Err(changed()), None => Schema::bundled().map_err(|_| changed())? };
+                let narrowed = restricted_schema(&schema, &form_fields, &BTreeSet::new(), &BTreeSet::new())?;
+                inner.core.validate_snapshot_witness(&root, &config.path, &witness).map_err(|_| changed())?;
+                serde_json::to_value(narrowed).map_err(|_| changed())
+            })();
+            result["formSchema"] = projected.unwrap_or(Value::Null);
+        }
         result.as_object_mut().unwrap().extend(provider_catalog.as_object().unwrap().clone());
         result.as_object_mut().unwrap().extend(scope_catalog.as_object().unwrap().clone());
         Ok(Json(result))

@@ -1,0 +1,22 @@
+.everyday-bar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 12px; border-bottom:1px solid #d9dfdc; }
+.everyday-bar button { padding:5px 9px; font:inherit; border:1px solid #c8d2cd; border-radius:6px; background:transparent; color:inherit; cursor:pointer; }
+.everyday-bar button:disabled { opacity:.45; cursor:default; }
+#hosted .everyday-bar { position:sticky; top:0; z-index:20; background:#f6f5f1; }
+#hosted #source { scroll-margin-top:64px; }
+.everyday-dialog { width:min(620px,calc(100vw - 32px)); max-height:80vh; overflow:auto; border:1px solid #b8c5bc; border-radius:12px; padding:20px; background:Canvas; color:CanvasText; }
+.everyday-dialog::backdrop { background:#0005; }
+.everyday-dialog h2 { margin:0 0 12px; font-size:18px; }
+.everyday-dialog input { box-sizing:border-box; width:100%; padding:10px; font:inherit; }
+.everyday-results { display:flex; flex-direction:column; gap:4px; max-height:52vh; overflow:auto; padding:8px 0; }
+.everyday-results button { text-align:left; padding:10px; border:1px solid transparent; border-radius:6px; font:inherit; color:inherit; background:transparent; }
+.everyday-results button:hover,.everyday-results button:focus-visible { background:#658f711a; border-color:#658f71; }
+.everyday-results span { display:block; font-size:12px; overflow-wrap:anywhere; opacity:.75; }
+.everyday-results [aria-disabled=true] { opacity:.65; }
+.node-contents { padding:8px 12px; border-bottom:1px solid #ddd; max-height:240px; overflow:auto; }
+.node-contents header { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.node-content-row { display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:4px 6px; align-items:center; padding:6px 4px; }
+.node-content-row[aria-selected=true] { background:#658f7120; }
+.node-content-row input { grid-column:1; grid-row:1 / span 2; }
+.node-content-row button:first-of-type { grid-column:2 / span 2; grid-row:1; min-width:0; text-align:left; overflow-wrap:anywhere; }
+.node-content-row button:nth-of-type(2) { grid-column:2; grid-row:2; justify-self:start; }
+.node-content-row button:nth-of-type(3) { grid-column:3; grid-row:2; }

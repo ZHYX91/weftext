@@ -1,7 +1,10 @@
+import "./knowledge-view.css";
 import { action, ui } from "./data-panel";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { hostedLinksPatch, requireHostedLinksBasis, sameHostedLinksContext, sameHostedLinksIdentity, type HostedLinksBasis, type HostedLinksContext, type HostedLinksIdentity, type HostedLinksEdge, type HostedLinksHit, type HostedLinksProfile, type HostedLinksProposal, type HostedLinksResolution } from "./hosted-knowledge-links-state";
 import type { SourcePatch } from "./editor";
+import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
+import type { HostedLinksNode } from "./hosted-knowledge-links-state";
 
 type Request = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 export interface HostedKnowledgeLinksHost {
@@ -20,29 +23,55 @@ const states: Record<string, string> = { resolved: "目标有效", unavailable: 
 export class HostedKnowledgeLinks {
   private epoch = 0;
   private busy = false;
+  private stale = false;
+  private composing = false;
+  private deferredPaint = false;
   private controller?: AbortController;
   private profile?: HostedLinksProfile;
   private captured?: HostedLinksContext;
   private hash?: string;
-  private showMentions = true;
+  private showMentions = false;
+  private mentionDomain = "all";
+  private exclusionScope = "note";
+  private rules = new PersonalRelationRules();
+  private diagnostics = this.diagnosticView();
+  private diagnosticView(): RelationshipDiagnosticsView {
+    return new RelationshipDiagnosticsView(this.rules, async node => { const { context, epoch } = this.current(); if (await this.audience(context, epoch)) await this.owner.navigate(node.reference); }, async issue => {
+      const { context, epoch } = this.current(); if (!await this.audience(context, epoch)) return;
+      await this.owner.navigate(issue.source.reference);
+      if (issue.field) { this.message.textContent = "已打开属性来源笔记；没有精确源码位置，请在获权字段入口查看。"; return; }
+      const opened = this.owner.context();
+      if (!opened || !issue.sourceHash || await nodeSourceHash(opened.source) !== issue.sourceHash) { this.message.textContent = "已打开来源笔记；当前正文已变化，没有采用旧精确位置。"; return; }
+      if (issue.from !== undefined && issue.to !== undefined) this.owner.select(issue.from, issue.to);
+    }, error => { this.message.textContent = error instanceof Error ? error.message : String(error); });
+  }
+  private relationNode(node: HostedLinksNode): RelationNode { return { key: `${node.nodeRef.workspaceId}/${node.nodeRef.nodeId}`, title: node.title, reference: node.reference }; }
   private readonly content = ui("div");
   private readonly message = ui("p", "hint");
   private readonly refresh = action("读取链接与潜在提及", () => this.run(() => this.read()));
-  constructor(private readonly host: HTMLElement, private readonly request: Request, private readonly owner: HostedKnowledgeLinksHost) { this.clear(); }
-  clear(): void { this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = true; this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
+  private readonly stop = action("停止等待链接扫描", () => { this.epoch++; this.controller?.abort(); this.controller = undefined; this.busy = false; this.profile = undefined; this.content.replaceChildren(); this.refresh.disabled = false; this.stop.disabled = true; this.message.textContent = "已停止等待只读扫描；服务端计算可能继续，正文与个人规则保留。"; });
+  constructor(private readonly host: HTMLElement, private readonly request: Request, private readonly owner: HostedKnowledgeLinksHost) { this.clear(); host.addEventListener("compositionstart", () => { this.composing = true; }); host.addEventListener("compositionend", () => { this.composing = false; if (this.deferredPaint) { this.deferredPaint = false; this.paint(); } }); }
+  clear(): void { this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = false; this.rules = new PersonalRelationRules(); this.diagnostics = this.diagnosticView(); this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
   connect(): void { this.clear(); this.documentChanged(); }
   documentChanged(): void {
-    this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.content.replaceChildren();
+    this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.content.replaceChildren();
     this.host.hidden = !this.owner.context();
-    if (!this.host.hidden) { this.message.textContent = "读取当前草稿与明确获权对象；结果完整性仅指本次获权范围。"; this.host.replaceChildren(ui("h2", "", "链接与潜在提及"), this.refresh, this.message, this.content); }
+    if (!this.host.hidden) { this.message.textContent = "读取当前草稿与明确获权对象；结果完整性仅指本次获权范围。"; this.host.replaceChildren(ui("h2", "", "链接与潜在提及"), this.refresh, this.stop, this.message, this.content); } this.stop.disabled = true;
     this.refresh.disabled = false;
   }
   environmentChanged(): void { this.documentChanged(); }
   private async run(work: () => Promise<void>): Promise<void> {
     if (this.busy) return;
-    this.busy = true; const epoch = this.epoch; this.refresh.disabled = true;
-    try { await work(); } catch (error) { if (epoch === this.epoch) { this.profile = undefined; this.content.replaceChildren(); this.message.textContent = error instanceof Error ? error.message : "链接读取未完成；草稿与原链接保留。"; } }
-    finally { if (epoch === this.epoch) { this.busy = false; this.refresh.disabled = false; if (this.profile) this.paint(); } }
+    this.busy = true; const epoch = this.epoch; this.refresh.disabled = true; this.stop.disabled = false;
+    try { await work(); } catch (error) { if (epoch === this.epoch) {
+      const http = (error as { http?: number })?.http;
+      let retained = false;
+      if (http && (http >= 500 || http === 429) && this.captured && this.profile) { try { retained = await this.audience(this.captured, epoch); } catch { /* Cannot retain protected results without current audience. */ } }
+      if (epoch !== this.epoch) return;
+      if (retained) this.stale = true; else { this.profile = undefined; this.content.replaceChildren(); }
+      this.message.textContent = `${retained ? "扫描失败；仍获权的最近结果已过期，只供查看，请重新读取。" : ""}${error instanceof Error ? error.message : "链接读取未完成；草稿与原链接保留。"}`;
+    } }
+    finally { if (epoch === this.epoch) { this.busy = false; this.refresh.disabled = false; this.stop.disabled = true; if (this.profile) this.paint(); } }
   }
   private accepts(context: HostedLinksContext, epoch: number): boolean { return epoch === this.epoch && sameHostedLinksContext(context, this.owner.context()); }
   private async audience(context: HostedLinksContext, epoch: number): Promise<boolean> {
@@ -62,12 +91,12 @@ export class HostedKnowledgeLinks {
     requireHostedLinksBasis(result.basis, context, hash);
     if (result.propertyReferences?.scope !== "explicitAuthorizedFields" || result.mentions?.scope !== "nativeTitlesAndAuthorizedNameFields") throw new Error("字段引用或名称词典的授权范围无法确认，未采用结果。");
     if (result.scope !== "configuredAuthorizedManagedSources" || !["complete", "partial"].includes(result.links?.coverage) || !["complete", "partial"].includes(result.mentions?.coverage) || !Array.isArray(result.links.outgoing) || !Array.isArray(result.links.incomingId) || !Array.isArray(result.links.incomingPath) || !Array.isArray(result.mentions.fragments) || !Array.isArray(result.renderedLinks) || !Array.isArray(result.propertyReferences?.items) || result.fileConversion !== false) throw new Error("链接范围或结果格式无法确认，旧结果未安装。");
-    this.profile = result; this.captured = context; this.hash = hash;
+    this.profile = result; this.captured = context; this.hash = hash; this.stale = false;
     this.message.textContent = result.links.coverage === "complete" ? "已读取本次明确获权范围的链接。" : "链接扫描未完整，仅显示已确认的结果；空列表不代表全库没有链接。";
   }
   private current(): { context: HostedLinksContext; profile: HostedLinksProfile; hash: string; epoch: number } {
     const context = this.captured, profile = this.profile, hash = this.hash;
-    if (!context || !profile || !hash || !this.accepts(context, this.epoch)) throw new Error("当前草稿或展示依据已变化，请重新读取链接。");
+    if (this.stale || !context || !profile || !hash || !this.accepts(context, this.epoch)) throw new Error("当前草稿或展示依据已变化，请重新读取链接。");
     return { context, profile, hash, epoch: this.epoch };
   }
   private async convert(intent: unknown): Promise<void> {
@@ -111,18 +140,26 @@ export class HostedKnowledgeLinks {
   }
   private mention(fragment: string, hit: HostedLinksHit): HTMLElement {
     const row = ui("div", "query-result-row"); row.append(ui("p", "", `${hit.terms.join(" / ")} · 文字位置 ${hit.startScalar}–${hit.endScalar}`));
-    for (const target of hit.targets) {
-      const choice = ui("div"), open = action("打开此候选", () => this.run(async () => { const { context, epoch } = this.current(); if (await this.audience(context, epoch)) await this.owner.navigate(target.reference); })); open.disabled = !target.canOpen; choice.append(ui("span", "", target.title), open);
-      const convert = action(`将此范围转换为链接：${target.title}`, () => this.run(() => this.convert({ kind: "mention", fragmentId: fragment, startScalar: hit.startScalar, endScalar: hit.endScalar, target: target.nodeRef })));
+    for (const candidate of hit.candidates ?? hit.targets.map(target => ({ target, term: hit.terms[0], provenance: "title", fragment: undefined }))) {
+      const target = candidate.target;
+      if ((this.mentionDomain === "fragments" && !candidate.fragment || this.mentionDomain === "notes" && candidate.fragment) || !visibleCandidate(this.rules.rules, this.owner.context()?.resource ?? "", candidate.term, this.relationNode(target).key)) continue;
+      const choice = ui("div"), open = action("打开此候选", () => this.run(async () => { const { context, epoch } = this.current(); if (await this.audience(context, epoch)) await this.owner.navigate(`${target.reference}${candidate.fragment ? `#${encodeURIComponent(candidate.fragment)}` : ""}`); })); open.disabled = !target.canOpen; choice.append(ui("span", "", `${target.title}${candidate.fragment ? ` #${candidate.fragment}` : ""} · ${({ title: "笔记标题", nameField: "名称字段", heading: "标题文字", stableLabel: "稳定标签" })[candidate.provenance] ?? candidate.provenance}`), open);
+      const convert = action(`将此范围转换为链接：${target.title}${candidate.fragment ? ` #${candidate.fragment}` : ""}`, () => this.run(() => this.convert({ kind: "mention", fragmentId: fragment, startScalar: hit.startScalar, endScalar: hit.endScalar, target: target.nodeRef, fragment: candidate.fragment })));
       const context = this.owner.context(); convert.disabled = this.busy || !hit.writable || !this.profile?.writable || !context?.writable || !!context.pending || !!context.compare;
-      choice.append(convert); row.append(choice);
+      const source = this.exclusionScope === "note" ? this.owner.context()?.resource : undefined;
+      choice.append(convert, action("排除此目标…", () => this.rules.preview({ kind: "target", value: this.relationNode(target).key, source }, `准确目标：${target.title} · ${this.relationNode(target).key}；范围：${source ? "此篇" : "本页授权范围"}，只存当前页面偏好。`, this.profile?.mentions.fragments.flatMap(f => f.hits).filter(h => h.targets.some(t => t.resource === target.resource)).length ?? 0, () => this.paint())), action("忽略此词…", () => this.rules.preview({ kind: "term", value: candidate.term, source }, `精确词：${candidate.term}；范围：${source ? "此篇" : "本页授权范围"}，退出连接后清除。`, this.profile?.mentions.fragments.flatMap(f => f.hits).filter(h => h.terms.includes(candidate.term)).length ?? 0, () => this.paint()))); row.append(choice);
     }
     if (!hit.writable) row.append(ui("p", "hint", "此提及没有当前唯一可写的文字范围，可阅读并选择候选。"));
     return row;
   }
   private paint(): void {
     const profile = this.profile; if (!profile) return;
+    if (this.composing) { this.deferredPaint = true; return; }
+    const active = document.activeElement;
+    const focus = active instanceof HTMLInputElement && this.content.contains(active) ? { label: active.getAttribute("aria-label"), start: active.selectionStart, end: active.selectionEnd } : null;
     this.content.replaceChildren();
+    const d = profile.diagnostics;
+    this.diagnostics.render(this.content, d && { ...d, issues: d.issues.map<RelationIssue>(i => ({ source: this.relationNode(i.source), target: i.resolution.target ? this.relationNode(i.resolution.target) : undefined, address: i.occurrence.target, status: i.resolution.status, from: i.occurrence.utf16From, to: i.occurrence.utf16To, sourceHash: i.sourceHash })).concat((d.propertyIssues ?? []).map(p => ({ source: this.relationNode(p.source), target: p.resolution.target ? this.relationNode(p.resolution.target) : undefined, address: p.address, status: p.resolution.status, from: undefined, to: undefined, sourceHash: undefined, field: [p.fieldId, ...p.itemPath].join(" / ") }))), nodes: d.nodes.map(n => ({ ...n, node: this.relationNode(n.node) })) });
     for (const [label, edges, outgoing] of [["出链", profile.links.outgoing, true], ["稳定 ID 反链", profile.links.incomingId, false], ["当前路径入链", profile.links.incomingPath, false]] as const) {
       const section = ui("section"); section.append(ui("h3", "", label)); if (!edges.length) section.append(ui("p", "hint", profile.links.coverage === "partial" ? "本次已确认部分没有此类结果，扫描未完整。" : "本次明确获权范围没有此类结果。")); for (const edge of edges) section.append(this.edge(edge, outgoing)); this.content.append(section);
     }
@@ -131,8 +168,11 @@ export class HostedKnowledgeLinks {
     const properties = ui("section"); properties.append(ui("h3", "", "属性引用"), ui("p", "hint", "仅显示独立获权字段中的准确引用。")); if (profile.propertyReferences.coverage === "partial") properties.append(ui("p", "hint", "属性引用解析未完整，保留已确认项。"));
     for (const item of profile.propertyReferences.items) { const row = ui("div"); row.append(ui("p", "", `${item.source.title} · ${item.fieldId}`)); this.destination(row, item.resolution); properties.append(row); } this.content.append(properties);
     const mentions = ui("section"), show = ui("input"); show.type = "checkbox"; show.checked = this.showMentions; const label = ui("label"); label.append(show, document.createTextNode("显示潜在提及")); show.onchange = () => { this.showMentions = show.checked; this.paint(); }; mentions.append(ui("h3", "", "潜在提及"), label);
-    mentions.append(ui("p", "hint", "候选词来自可读原生标题和独立获权名称字段。"));
+    mentions.append(ui("p", "hint", "当前可见普通文字的精确 Unicode 字面匹配；候选来自可读标题、独立获权名称字段与本次编译确认的唯一稳定片段。无稳定标签的标题不会猜测寻址。提示默认关闭，只改个人呈现。"));
+    const domain = ui("select"); domain.setAttribute("aria-label", "候选范围"); for (const [v, t] of [["all", "标题、名称及稳定片段"], ["notes", "仅标题与名称"], ["fragments", "仅稳定片段"]]) { const o = ui("option", "", t); o.value = v; domain.append(o); } domain.value = this.mentionDomain; domain.onchange = () => { this.mentionDomain = domain.value; this.paint(); }; mentions.append(domain);
+    const scope = ui("select"); scope.setAttribute("aria-label", "排除规则范围"); for (const [v, t] of [["note", "此篇"], ["page", "本页授权范围"]]) { const o = ui("option", "", t); o.value = v; scope.append(o); } scope.value = this.exclusionScope; scope.onchange = () => { this.exclusionScope = scope.value; }; mentions.append(scope); this.rules.controls(mentions, () => this.paint());
     if (profile.mentions.coverage === "partial") mentions.append(ui("p", "hint", "可见文字或候选词典未完整；没有命中不代表全库没有潜在链接。"));
     if (this.showMentions) for (const fragment of profile.mentions.fragments) { if (!fragment.hits.length) continue; const group = ui("section"); group.append(ui("p", "", fragment.text)); if (fragment.coverage === "partial") group.append(ui("p", "hint", "此逻辑文字片段仅扫描了部分范围。")); for (const hit of fragment.hits) group.append(this.mention(fragment.id, hit)); mentions.append(group); } this.content.append(mentions);
+    if (focus?.label) { const input = this.content.querySelector<HTMLInputElement>(`input[aria-label="${CSS.escape(focus.label)}"]`); input?.focus(); if (input && focus.start !== null && focus.end !== null) input.setSelectionRange(focus.start, focus.end); }
   }
 }

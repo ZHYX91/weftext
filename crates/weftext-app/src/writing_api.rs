@@ -31,9 +31,22 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/editor-map", post(editor_map))
         .route("/api/edit", post(edit))
         .route("/api/fonts", get(fonts))
+        .route("/api/editor/endnotes-module", get(endnotes_module))
         .route("/api/styles/read", post(styles_read))
         .route("/api/styles/prepare", post(styles_prepare))
         .route("/api/styles/apply", post(styles_apply))
+}
+
+pub(crate) const ENDNOTES_MODULE: &str =
+    include_str!("../../weftext-export/assets/weftext-endnotes.typ");
+
+/// Public, fixed distribution bytes. Installing them remains a separately
+/// authorized owned-resource operation and never saves the current note.
+pub(crate) async fn endnotes_module() -> ApiResult {
+    Ok(Json(
+        json!({"name":"weftext-endnotes.typ","source":ENDNOTES_MODULE,
+        "sha256":weftext_engine::source_hash(ENDNOTES_MODULE),"version":"1"}),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -422,10 +435,21 @@ pub(crate) async fn check_style_environment(
         return Err(stale_snapshot());
     }
     let basis = environment.basis.clone();
-    core_call(state, move |core| match basis {
-        StyleEnvironmentBasis::Module { base_id } => core.validate_library_style(root, &base_id),
+    core_call(state, move |core| {
+        recheck_style_environment(core, &root, &basis)
+    })
+    .await
+}
+
+fn recheck_style_environment(
+    core: &weftext_core::Core,
+    root: &Path,
+    basis: &StyleEnvironmentBasis,
+) -> weftext_core::Result<()> {
+    match basis {
+        StyleEnvironmentBasis::Module { base_id } => core.validate_library_style(root, base_id),
         StyleEnvironmentBasis::Settings { path, base_id } => {
-            core.validate_snapshot(root, path, &base_id)
+            core.validate_snapshot(root, path, base_id)
         }
         StyleEnvironmentBasis::Ordinary => {
             if core.has_library(root)? {
@@ -437,8 +461,7 @@ pub(crate) async fn check_style_environment(
                 Ok(())
             }
         }
-    })
-    .await
+    }
 }
 
 pub(crate) async fn fonts() -> ApiResult {
@@ -632,6 +655,112 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
             .unwrap_or_else(|| weftext_engine::source_hash(&req.source)),
         intent: req.intent,
     };
+    let needs_module = match &engine_req.intent {
+        weftext_engine::EditIntent::NativeNote { action } => {
+            action.requires_frozen_module(&req.source)
+        }
+        weftext_engine::EditIntent::HeadingNumbering { action } => {
+            action.requires_frozen_module(&req.source)
+        }
+        _ => false,
+    };
+    if needs_module {
+        let loc = location(&state, &req.session_id)?;
+        let environment = style_environment(&state, &req.session_id).await?;
+        let original_loc = loc.clone();
+        let source = req.source.clone();
+        let (frozen, guards, cut_id) = core_call(&state, move |core| {
+            let expected = loc.path.parent().ok_or_else(|| weftext_core::CoreError::new("invalidPath", "Missing note directory"))?.join("weftext-endnotes.typ");
+            let resources = core.managed_resource_snapshot(&loc.root, &loc.path)?;
+            let module = resources.into_iter().find(|resource| same_path(Path::new(&resource.path), &expected))
+                .filter(|resource| resource.identity_status == "admitted" && resource.bytes == ENDNOTES_MODULE.as_bytes())
+                .ok_or_else(|| weftext_core::CoreError::new("endnotesModuleUnavailable", "Prepare this note's exact bundled endnotes module as an owned resource first; existing files were not replaced"))?;
+            let captured = core.admitted_compile_snapshot(&loc.root, "live")?;
+            let relative = expected.strip_prefix(&loc.root).map_err(|_| weftext_core::CoreError::new("outsideRoot", "Module is outside the library"))?.to_string_lossy().replace('\\', "/");
+            if captured.files.get(&relative) != Some(&module.bytes) {
+                core.release_compile_dependency_cut(&captured.snapshot.cut_id);
+                return Err(weftext_core::CoreError::new("staleBase", "The module changed during capture"));
+            }
+            let main_path = loc.path.strip_prefix(&loc.root).map_err(|_| weftext_core::CoreError::new("outsideRoot", "The draft is outside its library"))?.to_string_lossy().replace('\\', "/");
+            let mut files = captured.files;
+            // The current author Draft is a separate, serial-checked input.
+            // It replaces only the main file in the immutable compiler view;
+            // dependency qualification keeps the original physical Core cut.
+            files.insert(main_path, source.as_bytes().to_vec());
+            let guards = vec![(module.path, module.base_id), (module.manifest_path, module.manifest_base_id)];
+            Ok((weftext_engine::FrozenRenderRequest { source, path: loc.path, root: loc.root, files, style: captured.style }, guards, captured.snapshot.cut_id))
+        }).await?;
+        let cleanup_cut = cut_id.clone();
+        let result = async {
+            let _permit = state
+                .render_gate
+                .acquire()
+                .await
+                .map_err(|_| ApiError::internal("编译服务不可用"))?;
+            let receipt = super::notes_edit_worker(frozen, engine_req).await?;
+            let guard_root = original_loc.root.clone();
+            // Only the worker's actual current/proposed World reads participate.
+            // Core qualifies them against the original cut, including absences.
+            // Dependency paths never become part of the browser response.
+            let mut output = core_call(&state, move |core| {
+                let dependencies = receipt
+                    .dependencies
+                    .iter()
+                    .map(|dependency| {
+                        weftext_core::CompileDependency::new(
+                            &dependency.path,
+                            &dependency.kind,
+                            &dependency.status,
+                        )
+                    })
+                    .collect::<weftext_core::Result<Vec<_>>>()?;
+                for (path, base_id) in guards {
+                    core.validate_snapshot(&guard_root, path, &base_id)?;
+                }
+                recheck_style_environment(core, &environment.root, &environment.basis)?;
+                let witness =
+                    core.take_compile_dependency_witness(&guard_root, &cut_id, &dependencies)?;
+                core.with_validated_compile_dependencies(&witness, |_| Ok(receipt.edit))
+            })
+            .await?;
+            validate_source(
+                output["source"]
+                    .as_str()
+                    .ok_or_else(|| ApiError::internal("尾注提案没有准确原生源码"))?,
+                None,
+            )?;
+            output["serial"] = json!(req.serial);
+            Ok::<_, ApiError>(output)
+        }
+        .await;
+        let output = match result {
+            Ok(output) => output,
+            Err(error) => {
+                // A successful take consumes the cut. All earlier error paths
+                // release only retained memory; no author files are removed.
+                core_call(&state, move |core| {
+                    core.release_compile_dependency_cut(&cleanup_cut);
+                    Ok(())
+                })
+                .await?;
+                return Err(error);
+            }
+        };
+        check_snapshot(
+            &state,
+            &req.session_id,
+            &req.source,
+            req.serial,
+            req.source_hash.as_deref(),
+        )?;
+        let current = location(&state, &req.session_id)?;
+        if !same_path(&current.path, &original_loc.path)
+            || !same_path(&current.root, &original_loc.root)
+        {
+            return Err(stale_snapshot());
+        }
+        return Ok(Json(output));
+    }
     let source = req.source.clone();
     let edited = tokio::task::spawn_blocking(move || weftext_engine::edit(&source, &engine_req))
         .await

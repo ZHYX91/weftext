@@ -36,6 +36,7 @@ export function decodeSourcePatch(result: SourcePatch | { edit: SourcePatch } | 
   return { from, to, text };
 }
 export interface PanelHost {
+  canEdit?(): boolean;
   request<T>(path: string, body?: unknown): Promise<T>;
   requestBlob?(path: string, body: unknown): Promise<Blob>;
   getDocument(): DocumentBasis | null;
@@ -226,7 +227,10 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
   host.append(input); if (["date", "time", "local_datetime", "instant"].includes(scalar)) host.append(ui("p", "data-help", scalar === "instant" ? "瞬间需显式时区偏移；保留输入精度。" : "民用日期 / 时间；不会自动添加本机时区。")); return host;
 }
 
-interface FieldDraft { value: NativeValue; changed: boolean; original?: string }
+interface FieldDraft { value: NativeValue; changed: boolean; original?: string; binding?: string; rawInputs?: Record<string, string> }
+export function nativeFormControls(wrapper: HTMLElement): [string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement][] {
+  const seen = new Map<string, number>(); return [...wrapper.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")].map(control => { const label = `${control.tagName}:${control.getAttribute("aria-label") ?? ""}`, ordinal = seen.get(label) ?? 0; seen.set(label, ordinal + 1); return [`${label}:${ordinal}`, control]; });
+}
 export class DataPanel {
   readonly element = ui("aside", "data-panel");
   private schema: DataSchema | null = null;
@@ -240,18 +244,26 @@ export class DataPanel {
   private draftCache = new Map<string, Map<string, FieldDraft>>();
   private references = emptyReferences();
   private referencesRoot = "";
-  constructor(private readonly host: PanelHost) { this.element.setAttribute("aria-label", "笔记属性"); this.element.append(ui("p", "data-empty", "打开笔记后查看属性。")); }
+  private composing = false;
+  private pendingRender = false;
+  private advancedOpen = false;
+  private renderedIdentity: string | null = null;
+  private draftIdentity: string | null = null;
+  constructor(private readonly host: PanelHost) { this.element.setAttribute("aria-label", "笔记属性"); this.element.append(ui("p", "data-empty", "打开笔记后查看属性。")); this.element.addEventListener("compositionstart", () => { this.composing = true; }); this.element.addEventListener("compositionend", () => { this.composing = false; requestAnimationFrame(() => { if (!this.composing && this.pendingRender) { this.pendingRender = false; this.render(); } }); }); }
   async refresh(): Promise<void> {
+    this.rememberInputs();
     const basis = this.host.getDocument(); const generation = ++this.generation;
-    if (!basis) { this.basis = null; this.projection = null; this.element.replaceChildren(ui("p", "data-empty", "打开笔记后查看属性。")); return; }
-    if (this.basis?.sessionId !== basis.sessionId) { if (this.basis) this.draftCache.set(this.basis.sessionId, this.drafts); this.drafts = this.draftCache.get(basis.sessionId) ?? new Map(); }
+    const identity = (doc: DocumentBasis) => JSON.stringify([doc.workspaceId, doc.nodeId ?? doc.path]);
+    if (!basis) { if (this.basis) this.draftCache.set(identity(this.basis), this.drafts); this.basis = null; this.projection = null; this.draftIdentity = this.renderedIdentity = null; this.element.replaceChildren(ui("p", "data-empty", "打开笔记后查看属性。")); return; }
+    if (!this.basis || identity(this.basis) !== identity(basis)) { if (this.basis) this.draftCache.set(identity(this.basis), this.drafts); this.drafts = this.draftCache.get(identity(basis)) ?? new Map(); }
+    this.draftIdentity = identity(basis);
     this.basis = { ...basis }; this.element.setAttribute("aria-busy", "true");
     try {
       const schemaResult = await this.host.request<DataSchema | { schema: DataSchema }>("/api/data/schema", { root: basis.root });
       const schema = "schema" in schemaResult ? schemaResult.schema : schemaResult;
       const projectionResult = await this.host.request<NoteProjection | { projection: NoteProjection }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial }); const projection = decodeProjection(projectionResult);
       if (generation !== this.generation || this.host.getDocument()?.source !== basis.source || this.host.getDocument()?.sessionId !== basis.sessionId || this.host.getDocument()?.serial !== basis.serial) return;
-      this.schema = schema; this.projection = projection; this.schemaRead = "schema" in schemaResult ? schemaResult as SchemaRead : null;
+      this.schema = schema; this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false }; this.schemaRead = "schema" in schemaResult ? schemaResult as SchemaRead : null;
       try { this.pinned = new Set(JSON.parse(localStorage.getItem(`weftext-fields:${basis.workspaceId ?? basis.root}`) ?? "[]") as string[]); } catch { this.pinned.clear(); }
       if (this.referencesRoot !== basis.root) { this.referencesRoot = basis.root; this.references = emptyReferences(); } this.render();
       if (basis.workspaceId) void loadFormReferences(this.host, basis.root, this.references, this.element, () => generation === this.generation && this.referencesRoot === basis.root);
@@ -259,9 +271,13 @@ export class DataPanel {
     finally { if (generation === this.generation) this.element.removeAttribute("aria-busy"); }
   }
   private render(): void {
+    if (this.composing) { this.pendingRender = true; return; }
     if (!this.schema || !this.projection || !this.basis) return; const schema = this.schema; const projection = this.projection;
+    const active = this.element.contains(document.activeElement) ? document.activeElement as HTMLElement : null, fieldKey = active?.closest<HTMLElement>("[data-field-key]")?.dataset.fieldKey, label = active?.getAttribute("aria-label"), pinFocused = active?.matches("button[aria-pressed]");
+    const selection = active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement && active.type === "text" ? { from: active.selectionStart, to: active.selectionEnd } : null;
+    const advanced = this.element.querySelector<HTMLDetailsElement>(".data-field-group.advanced"); if (advanced) this.advancedOpen = advanced.open;
     const oldFocus = this.element.contains(document.activeElement) ? (document.activeElement as HTMLInputElement).id : "";
-    this.element.replaceChildren(); const heading = ui("div", "data-panel-heading"); heading.append(ui("h2", "", "属性"), action("刷新", () => this.refresh(), "data-button compact")); this.element.append(heading);
+    this.rememberInputs(); this.element.replaceChildren(); const heading = ui("div", "data-panel-heading"); heading.append(ui("h2", "", "属性"), action("刷新", () => this.refresh(), "data-button compact")); this.element.append(heading);
     const status = ui("p", projection.qualification === "qualified" || projection.qualification === "certified" ? "data-help" : "data-warning", `源资格：${projection.qualification}`); this.element.append(status);
     this.renderTypes(schema, projection.types);
     this.renderSchemaSettings();
@@ -271,32 +287,39 @@ export class DataPanel {
     if (projection.diagnostics.length) { const diagnostics = ui("details", "data-diagnostics"); diagnostics.append(ui("summary", "", `${projection.diagnostics.length} 项字段提示`)); projection.diagnostics.forEach(item => diagnostics.append(ui("p", "data-warning", diagnosticText(item)))); this.element.append(diagnostics); }
     this.element.append(ui("p", "data-help", "应用属性修改只更新当前草稿；保存后写入文件。任务详情使用同一篇正文。"));
     if (oldFocus) this.element.querySelector<HTMLElement>(`#${CSS.escape(oldFocus)}`)?.focus({ preventScroll: true });
+    if (fieldKey) { const field = this.element.querySelector<HTMLElement>(`[data-field-key="${CSS.escape(fieldKey)}"]`), target = label ? field?.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label)}"]`) : pinFocused ? field?.querySelector<HTMLElement>("button[aria-pressed]") : null; target?.focus({ preventScroll: true }); if (selection?.from != null && selection.to != null && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) target.setSelectionRange(selection.from, selection.to); }
   }
   private renderTypes(schema: DataSchema, tokens: string[]): void {
+    const basis = this.basis;
     const details = ui("details", "data-type-picker"); details.append(ui("summary", "", `类型：${tokens.map(token => typeNames[token] ?? token).join("、") || "普通笔记"}`));
     const selected = new Set(tokens); const choices = ui("div", "data-type-options");
     const aliases = schema.types.map(type => { const alias = Object.entries(schema.aliases).find(([, id]) => id === type.id)?.[0] ?? type.id; return { alias, id: type.id }; });
     for (const { alias, id } of aliases) { const checkbox = ui("input"); checkbox.type = "checkbox"; checkbox.checked = tokens.includes(alias) || tokens.includes(id); const label = labelFor(typeNames[alias] ?? alias, checkbox); label.prepend(checkbox); choices.append(label); checkbox.onchange = () => { selected.delete(id); selected.delete(alias); if (checkbox.checked) selected.add(alias); warnings.textContent = typeConflicts(schema, [...selected]).join("；"); }; }
     const known = new Set(aliases.flatMap(item => [item.alias, item.id])); const unknown = tokens.filter(token => !known.has(token)); if (unknown.length) choices.append(ui("p", "data-warning", `未登记类型保留：${unknown.join("、")}`));
-    const warnings = ui("p", "data-warning"); const apply = action("应用类型到草稿", () => this.applyTypes([...selected])); if (this.projection?.readOnly) { apply.disabled = true; choices.querySelectorAll<HTMLInputElement>("input").forEach(input => { input.disabled = true; }); details.append(ui("p", "data-help", "回收站属性只读。")); } details.append(choices, warnings, apply); this.element.append(details);
+    const warnings = ui("p", "data-warning"); const apply = action("应用类型到草稿", () => this.applyTypes([...selected], basis)); if (this.projection?.readOnly) { apply.disabled = true; choices.querySelectorAll<HTMLInputElement>("input").forEach(input => { input.disabled = true; }); details.append(ui("p", "data-help", "当前属性只读。")); } details.append(choices, warnings, apply); this.element.append(details);
   }
   private renderFields(): void {
-    const target = this.element.querySelector<HTMLElement>(".data-fields"); if (!target || !this.schema || !this.projection) return; target.replaceChildren();
+    if (this.composing) { this.pendingRender = true; return; }
+    const target = this.element.querySelector<HTMLElement>(".data-fields"); if (!target || !this.schema || !this.projection) return; this.rememberInputs(); const oldAdvanced = target.querySelector<HTMLDetailsElement>(".advanced"); if (oldAdvanced) this.advancedOpen = oldAdvanced.open; target.replaceChildren();
     const schema = this.schema; const declared = fieldsForTypes(schema, this.projection.types); const ids = new Set(declared.map(item => item.field.id));
+    const basis = this.basis;
     for (const item of this.projection.fields) if (!ids.has(item.fieldId)) { const field = schema.fields.find(field => field.id === item.fieldId); if (field) declared.push({ field, required: false }); }
     const groups = { pinned: ui("div", "data-field-group"), common: ui("div", "data-field-group"), advanced: ui("details", "data-field-group advanced") }; groups.advanced.append(ui("summary", "", "更多属性"));
+    groups.advanced.open = this.advancedOpen; groups.advanced.ontoggle = () => { if (groups.advanced.isConnected) this.advancedOpen = groups.advanced.open; };
     const matching = declared.filter(({ field }) => `${field.key} ${fieldNames[field.key] ?? ""}`.toLowerCase().includes(this.filter.toLowerCase()));
     for (const { field, required } of matching) {
       const projected = this.projection.fields.find(item => item.fieldId === field.id); const cell: Cell = projected?.cell ?? { state: "absent" }; const wrapper = ui("section", "data-property");
+      wrapper.dataset.fieldKey = field.key;
       const title = ui("div", "data-property-title"); title.append(ui("h3", "", `${fieldNames[field.key] ?? field.key}${required ? " *" : ""}`));
       const pin = action(this.pinned.has(field.id) ? "取消固定" : "固定", () => { if (this.pinned.has(field.id)) this.pinned.delete(field.id); else this.pinned.add(field.id); localStorage.setItem(`weftext-fields:${this.basis!.workspaceId ?? this.basis!.root}`, JSON.stringify([...this.pinned])); this.renderFields(); }, "data-button compact"); pin.setAttribute("aria-pressed", String(this.pinned.has(field.id))); title.append(pin); wrapper.append(title, ui("p", `data-cell-state ${cell.state}`, cellLabels[cell.state]));
-      if (cell.state === "unavailable" || cell.state === "invalid" || projected?.writable === false) { wrapper.append(ui("p", "data-help", cell.reason || "当前字段没有安全写入资格。请查看原生源码。")); if (cell.value) wrapper.append(ui("p", "data-readonly-value", formatNativeValue(cell.value))); if (projected?.raw) wrapper.append(ui("pre", "data-readonly-source", projected.raw)); cell.diagnostics?.forEach(item => wrapper.append(ui("p", "data-warning", diagnosticText(item)))); }
+      if (this.projection.readOnly || cell.state === "unavailable" || cell.state === "invalid" || projected?.writable === false) { wrapper.append(ui("p", "data-help", cell.reason || "当前字段没有安全写入资格。请恢复可写会话或查看原生源码。")); if (cell.value) wrapper.append(ui("p", "data-readonly-value", formatNativeValue(cell.value))); if (projected?.raw) wrapper.append(ui("pre", "data-readonly-source", projected.raw)); cell.diagnostics?.forEach(item => wrapper.append(ui("p", "data-warning", diagnosticText(item)))); }
       else if (cell.state === "absent" && !this.drafts.has(field.key)) wrapper.append(action("填写此属性", () => { this.drafts.set(field.key, { value: emptyNativeValue(field.shape, schema), changed: true, original: JSON.stringify(cell) }); this.renderFields(); }));
       else {
-        const draft = this.drafts.get(field.key) ?? { value: cell.value ?? { kind: "none" } as NativeValue, changed: false, original: JSON.stringify(cell) }; if (!draft.changed) { draft.value = cell.value ?? { kind: "none" }; draft.original = JSON.stringify(cell); } this.drafts.set(field.key, draft); const conflicted = draft.changed && draft.original !== JSON.stringify(cell);
+        const draft: FieldDraft = this.drafts.get(field.key) ?? { value: cell.value ?? { kind: "none" } as NativeValue, changed: false, original: JSON.stringify(cell) }; const binding = JSON.stringify([field.id, field.shape, schema.definitions]); draft.binding ??= binding; const schemaChanged = draft.binding !== binding; if (!draft.changed) { draft.value = cell.value ?? { kind: "none" }; draft.original = JSON.stringify(cell); draft.binding = binding; } this.drafts.set(field.key, draft); const conflicted = draft.changed && (draft.original !== JSON.stringify(cell) || schemaChanged);
         if (conflicted) wrapper.append(ui("p", "data-warning", "原属性已变化；表单输入仍保留。请核对新属性并放弃旧表单修改后重新填写。"));
-        const controls = ui("div", "data-property-actions"); const apply = action("应用到草稿", async () => { if (!wrapper.querySelector<HTMLInputElement>(":invalid")) await this.applyField(field.key, draft.value); else wrapper.querySelector<HTMLInputElement>(":invalid")?.reportValidity(); }, "data-button primary"); apply.disabled = !draft.changed || conflicted;
-        wrapper.append(valueEditor(field.shape, draft.value, schema, next => { draft.value = next; draft.changed = true; apply.disabled = conflicted; }, fieldNames[field.key] ?? field.key, 0, this.references));
+        const controls = ui("div", "data-property-actions"); const apply = action("应用到草稿", async () => { if (!wrapper.querySelector<HTMLInputElement>(":invalid")) await this.applyField(field.key, draft.value, basis); else wrapper.querySelector<HTMLInputElement>(":invalid")?.reportValidity(); }, "data-button primary"); apply.disabled = !draft.changed || conflicted;
+        if (schemaChanged && draft.changed) wrapper.append(ui("p", "data-warning", "原字段身份或形状已变化；未把输入绑定到同名新字段。请复制保留输入或放弃表单修改后重填。"), ui("pre", "data-readonly-source", JSON.stringify({ value: draft.value, rawInputs: draft.rawInputs }, null, 2)));
+        else { wrapper.append(valueEditor(field.shape, draft.value, schema, next => { draft.value = next; draft.changed = true; apply.disabled = conflicted; }, fieldNames[field.key] ?? field.key, 0, this.references)); for (const [key, control] of this.formInputs(wrapper)) { if (draft.rawInputs && key in draft.rawInputs) { control.value = draft.rawInputs[key]; control.dispatchEvent(new Event("input", { bubbles: true })); } } }
         controls.append(apply, action("放弃表单修改", () => { this.drafts.delete(field.key); this.renderFields(); }));
         if (field.nullable && draft.value.kind !== "none") controls.append(action("明确设为 none", () => { draft.value = { kind: "none" }; draft.changed = true; this.renderFields(); })); wrapper.append(controls);
       }
@@ -304,21 +327,32 @@ export class DataPanel {
     }
     if (!matching.length) target.append(ui("p", "data-empty", declared.length ? "没有匹配的属性。" : "此笔记尚未选择含属性的类型。"));
     if (groups.pinned.childElementCount) { groups.pinned.prepend(ui("h3", "data-group-label", "固定属性")); target.append(groups.pinned); } target.append(groups.common); if (groups.advanced.childElementCount > 1) target.append(groups.advanced);
+    this.renderedIdentity = this.draftIdentity;
   }
-  private async applyField(key: string, value: NativeValue): Promise<void> { await this.patch("/api/data/edit", { key, path: [], value }); }
-  private async applyTypes(types: string[]): Promise<void> { if (this.schema) { const conflicts = typeConflicts(this.schema, types); if (conflicts.length) { this.host.notify(conflicts.join("；"), true); return; } } await this.patch("/api/data/types", { types }); }
-  private async patch(route: string, request: Record<string, unknown>): Promise<void> {
-    const basis = this.basis; if (!basis) return;
+  private formInputs(wrapper: HTMLElement): [string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement][] {
+    return nativeFormControls(wrapper);
+  }
+  private rememberInputs(): void {
+    const drafts = this.renderedIdentity === this.draftIdentity ? this.drafts : this.renderedIdentity ? this.draftCache.get(this.renderedIdentity) : undefined;
+    for (const wrapper of this.element.querySelectorAll<HTMLElement>(".data-property[data-field-key]")) { const draft = drafts?.get(wrapper.dataset.fieldKey!); if (!draft) continue; const raw: Record<string, string> = {}; for (const [key, control] of this.formInputs(wrapper)) if (!control.validity.valid) { raw[key] = control.value; draft.changed = true; } if (Object.keys(raw).length) draft.rawInputs = raw; else if (wrapper.querySelector("input,select,textarea")) delete draft.rawInputs; }
+  }
+  private async applyField(key: string, value: NativeValue, basis: DocumentBasis | null): Promise<void> { await this.patch("/api/data/edit", { key, path: [], value }, basis); }
+  private async applyTypes(types: string[], basis: DocumentBasis | null): Promise<void> { if (this.schema) { const conflicts = typeConflicts(this.schema, types); if (conflicts.length) { this.host.notify(conflicts.join("；"), true); return; } } await this.patch("/api/data/types", { types }, basis); }
+  private async patch(route: string, request: Record<string, unknown>, basis: DocumentBasis | null): Promise<void> {
+    if (this.composing) { this.host.notify("属性仍在输入组合中，输入保留，请提交组合后再应用。", true); return; }
+    if (this.host.canEdit?.() === false) { this.host.notify("当前会话只读或正在输入组合，表单输入保留。", true); return; }
+    if (!basis) return;
     if (this.host.getDocument()?.source !== basis.source || this.host.getDocument()?.sessionId !== basis.sessionId || this.host.getDocument()?.serial !== basis.serial) { this.host.notify("正文草稿已变化，请刷新属性后重新应用。表单修改仍保留。", true); return; }
     this.element.setAttribute("aria-busy", "true");
     try { const result = await this.host.request<SourcePatch | { edit: SourcePatch } | { patches: SourcePatch[]; source?: string }>(route, { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, ...request }); await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis); if (typeof request.key === "string") this.drafts.delete(request.key); await this.refresh(); this.host.notify("属性已应用到草稿。可撤销，保存后写入文件。"); }
     catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } finally { this.element.removeAttribute("aria-busy"); }
   }
   private renderSchemaSettings(): void {
-    const read = this.schemaRead; if (!read?.canInstall || !this.basis) return; const details = ui("details", "schema-settings"); details.append(ui("summary", "", "集中 schema（高级设置）"), ui("p", "data-help", `${read.builtinDefault ? "当前使用内建默认 schema" : "当前已安装 schema"}；安装会影响本库类型与字段校验。`));
+    const read = this.schemaRead; if (!read?.canInstall || !this.basis || this.projection?.readOnly) return; const basis = this.basis; const details = ui("details", "schema-settings"); details.append(ui("summary", "", "集中 schema（高级设置）"), ui("p", "data-help", `${read.builtinDefault ? "当前使用内建默认 schema" : "当前已安装 schema"}；安装会影响本库类型与字段校验。`));
     const source = ui("textarea", "data-input schema-source"); source.rows = 10; source.value = read.source; source.setAttribute("aria-label", "集中 schema JSON 配置"); details.append(source); const previewHost = ui("div", "schema-preview"); details.append(previewHost);
     const prepare = action("校验并预览安装", async () => {
-      prepare.disabled = true; try { JSON.parse(source.value); const result = await this.host.request<{ planId?: string; operationId?: string; plan?: { planId?: string }; preview?: unknown; diagnostics?: unknown[] }>("/api/data/schema/prepare", { root: this.basis!.root, source: source.value, beforeSource: read.source, beforeRevision: read.revision, operationId: crypto.randomUUID() }); previewHost.replaceChildren(ui("pre", "", diagnosticText(result.preview ?? result.diagnostics ?? result))); const planId = result.planId ?? result.plan?.planId; if (planId && result.operationId) previewHost.append(action("安装已预览的 schema", async () => { try { await this.host.request("/api/data/schema/install", { operationId: result.operationId, planId }); this.host.notify("集中 schema 已安装。请刷新查询与属性读取新定义。"); await this.refresh(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }, "data-button primary")); else previewHost.append(ui("p", "data-warning", "尚未取得可执行安装计划，配置未安装。")); }
+      if (this.host.getDocument()?.root !== basis.root || this.host.canEdit?.() === false || this.composing) { this.host.notify("当前资料库或编辑资格已变化，配置输入保留。", true); return; }
+      prepare.disabled = true; try { JSON.parse(source.value); const result = await this.host.request<{ planId?: string; operationId?: string; plan?: { planId?: string }; preview?: unknown; diagnostics?: unknown[] }>("/api/data/schema/prepare", { root: basis.root, source: source.value, beforeSource: read.source, beforeRevision: read.revision, operationId: crypto.randomUUID() }); previewHost.replaceChildren(ui("pre", "", diagnosticText(result.preview ?? result.diagnostics ?? result))); const planId = result.planId ?? result.plan?.planId; if (planId && result.operationId) previewHost.append(action("安装已预览的 schema", async () => { if (this.host.getDocument()?.root !== basis.root || this.host.canEdit?.() === false || this.composing) { this.host.notify("当前资料库或编辑资格已变化，原安装计划保留，请返回原库核对。", true); return; } try { await this.host.request("/api/data/schema/install", { operationId: result.operationId, planId }); this.host.notify("集中 schema 已安装。请刷新查询与属性读取新定义。"); await this.refresh(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }, "data-button primary")); else previewHost.append(ui("p", "data-warning", "尚未取得可执行安装计划，配置未安装。")); }
       catch (error) { previewHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? error.message : String(error))); } finally { prepare.disabled = false; }
     }); details.append(prepare); this.element.append(details);
   }

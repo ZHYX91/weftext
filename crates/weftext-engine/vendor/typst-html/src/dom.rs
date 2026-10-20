@@ -262,13 +262,25 @@ impl HtmlElement {
 pub struct WeftextHtmlSemantics {
     pub role: Option<&'static str>,
     pub level: Option<usize>,
+    /// The resolved repetition request of the actual native table header.
+    pub repeat: Option<bool>,
     pub numbered: Option<bool>,
     pub numbering_kind: Option<&'static str>,
     pub numbering_pattern: Option<EcoString>,
+    pub numbering_function_span: Option<Span>,
     pub counter_state: Option<EcoString>,
     pub reference_kind: Option<&'static str>,
     pub label: Option<EcoString>,
     pub body: Option<EcoString>,
+    /// Same-compilation native identity, never a source write address.
+    pub note_id: Option<EcoString>,
+    pub note_definition: Option<bool>,
+    pub target_id: Option<EcoString>,
+    pub caption_kind: Option<EcoString>,
+    pub caption_position: Option<&'static str>,
+    pub citation_keys: Vec<EcoString>,
+    pub citation_forms: Vec<&'static str>,
+    pub citation_spans: Vec<Span>,
 }
 
 impl WeftextHtmlSemantics {
@@ -288,7 +300,10 @@ impl WeftextHtmlSemantics {
                 self.numbering_pattern = pattern.clone().into_value().cast::<EcoString>().ok();
                 "pattern"
             }
-            Some(Numbering::Func(_)) => "function",
+            Some(Numbering::Func(function)) => {
+                self.numbering_function_span = Some(function.span());
+                "function"
+            }
         });
         self
     }

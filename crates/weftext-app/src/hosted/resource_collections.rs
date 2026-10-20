@@ -160,7 +160,63 @@ fn changed() -> ApiError {
         "资源集合、准确登记版本或原导入计划已变化；请保留原件并核对原操作。",
     )
 }
-fn core_error(_: CoreError) -> ApiError {
+fn resource_diagnostic_line(
+    setting: Option<&std::ffi::OsStr>,
+    phase: &str,
+    id: &str,
+    code: &str,
+    message: &str,
+) -> Option<String> {
+    if setting != Some(std::ffi::OsStr::new("1")) {
+        return None;
+    }
+    fn safe_code(value: &str) -> &str {
+        if !value.is_empty()
+            && value.len() <= 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        {
+            value
+        } else {
+            "redacted"
+        }
+    }
+    let os_error = message
+        .rsplit_once("(os error ")
+        .and_then(|(_, suffix)| suffix.split_once(')'))
+        .map(|(number, _)| number)
+        .filter(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|number| number.parse::<u32>().ok());
+    let safe_id = digest(id.as_bytes()).chars().take(16).collect::<String>();
+    let record = json!({
+        "phase":safe_code(phase),
+        "id":safe_id,
+        "code":safe_code(code),
+        "osError":os_error,
+    });
+    serde_json::to_string(&record)
+        .ok()
+        .map(|record| format!("weftext-resource-diagnostic {record}"))
+}
+fn resource_diagnostic(phase: &str, id: &str, code: &str, message: &str) {
+    if let Some(line) = resource_diagnostic_line(
+        std::env::var_os("WEFTEXT_TEST_RESOURCE_DIAGNOSTICS").as_deref(),
+        phase,
+        id,
+        code,
+        message,
+    ) {
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr().lock(), "{line}");
+    }
+}
+fn scoped_core_error(phase: &str, collection: &str, error: CoreError) -> ApiError {
+    resource_diagnostic(phase, collection, &error.code, &error.message);
+    changed()
+}
+fn core_error(error: CoreError) -> ApiError {
+    resource_diagnostic("generic_core", "unscoped_core", &error.code, &error.message);
     changed()
 }
 /// The special empty Office slot is tied to its original committed producer,
@@ -183,7 +239,7 @@ pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<N
                 &inner.config.root.join(&file.path),
                 &c.owner,
             )
-            .map_err(core_error)?;
+            .map_err(|error| scoped_core_error("structure_owner", collection, error))?;
         if file
             .expected_node
             .as_ref()
@@ -205,13 +261,15 @@ pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<N
         .core
         .qualified_imported_query_node_at(&inner.config.root, &inner.config.root.join(&owner.path))
         .map(|node| node.owner)
-        .map_err(core_error)
+        .map_err(|error| scoped_core_error("import_owner", collection, error))
 }
 pub(super) fn qualify(
     inner: &HostedInner,
     collection: &str,
 ) -> Result<QualifiedResourceCollection, ApiError> {
-    content_import::qualify_member(inner, collection)?;
+    content_import::qualify_member(inner, collection).inspect_err(|error| {
+        resource_diagnostic("qualify_member", collection, &error.code, "");
+    })?;
     let c = configured(inner, collection)?;
     let owner = inner.file(&c.owner).ok().ok_or_else(unavailable)?;
     let expected = effective_owner(inner, collection)?;
@@ -223,7 +281,7 @@ pub(super) fn qualify(
             &expected,
             &c.lifecycle,
         )
-        .map_err(core_error)?;
+        .map_err(|error| scoped_core_error("qualify_collection", collection, error))?;
     if captured.retained_bytes() > MAX_BYTES {
         return Err(ApiError::bad("资源集合准确依据超过 32 MiB 读取预算"));
     }
@@ -283,6 +341,12 @@ pub(super) fn expand_inputs(
                 // Unknown/ambiguous records cannot silently disappear from an
                 // explicitly requested complete compilation environment.
                 if selection(&inner.config, id).is_some() && captured.unrecognized_entries > 0 {
+                    resource_diagnostic(
+                        "expand_new_unrecognized",
+                        collection,
+                        "unrecognized_entries",
+                        "",
+                    );
                     return Err(changed());
                 }
                 bytes = bytes.saturating_add(captured.retained_bytes());
@@ -294,6 +358,12 @@ pub(super) fn expand_inputs(
             let captured = &captures[collection];
             if selection(&inner.config, id).is_some() {
                 if captured.unrecognized_entries > 0 {
+                    resource_diagnostic(
+                        "expand_cached_unrecognized",
+                        collection,
+                        "unrecognized_entries",
+                        "",
+                    );
                     return Err(changed());
                 }
                 for entry in &captured.entries {
@@ -365,7 +435,11 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/media/import/settle", post(settle))
         .layer(DefaultBodyLimit::max(24 * 1024 * 1024))
 }
-fn import_access(inner: &HostedInner, actor: &str, id: &str) -> Result<Collection, ApiError> {
+pub(super) fn import_access(
+    inner: &HostedInner,
+    actor: &str,
+    id: &str,
+) -> Result<Collection, ApiError> {
     let (c, r) = access(inner, actor, id)?;
     if c.lifecycle != "live" || !r.r#import {
         return Err(unavailable());
@@ -450,56 +524,227 @@ fn valid_name(name: &str) -> bool {
         && !name.chars().any(|c| c.is_control())
         && !matches!(name, "." | "..")
 }
+fn member_import_fingerprint(
+    collection: &str,
+    name: &str,
+    bytes: &[u8],
+) -> Result<String, ApiError> {
+    Ok(digest(
+        &serde_json::to_vec(&json!({"collection":collection,"name":name,
+        "uploadDigest":digest(bytes)}))
+        .map_err(|_| changed())?,
+    ))
+}
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
     Json(req): Json<Prepare>,
 ) -> ApiResult {
-    Ok(Json(locked(&state,move|inner| {
-        let actor=inner.actor(&auth)?;let config=import_access(inner,&actor,&req.collection)?;
-        if !valid_name(&req.name){return Err(ApiError::bad("资源名称必须是一个有效文件名"));}
-        if req.bytes_base64.len()>MAX_UPLOAD.div_ceil(3)*4 {return Err(ApiError::bad("资源原件上限为 16 MiB"));}
-        let bytes=base64::engine::general_purpose::STANDARD.decode(&req.bytes_base64).map_err(|_|ApiError::bad("资源原件编码无效"))?;
-        if bytes.len()>MAX_UPLOAD {return Err(ApiError::bad("资源原件上限为 16 MiB"));}
-        let fp=digest(&serde_json::to_vec(&json!({"collection":req.collection,"name":req.name,"uploadDigest":digest(&bytes)})).map_err(|_|changed())?);
-        let actor_scope=scope(inner,&actor);
-        if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.collection,&req.operation_id,&fp)).map_err(core_error)? {return safe_status(inner,&actor,&req.collection,old);}
-        let captured=qualify(inner,&req.collection)?;
-        let root=inner.config.root.clone();let owner_path=root.join(&inner.file(&config.owner)?.path);
-        let node=inner.core.qualified_query_node_at(&root,&owner_path,&captured.owner,"live").map_err(core_error)?;
-        let directory=owner_path.parent().ok_or_else(changed)?;
-        let cut=inner.core.read_snapshot(&root,&[directory.join("weftext.resources.json").to_string_lossy().into_owned(),directory.join(&req.name).to_string_lossy().into_owned()]).map_err(core_error)?;
-        let ids=cut.files.iter().map(|f|f.base_id.clone()).collect::<Vec<_>>();
-        let result=(|| {
-            let mut pool=vec![];
-            Core::merge_query_node_witness(&mut pool,&node.witness).map_err(core_error)?;
-            if captured.initialized {Core::merge_resource_collection_witness(&mut pool,&captured.witness).map_err(core_error)?;}
-            inner.core.validate_resource_collection_witness(&root,&captured.witness).map_err(core_error)?;
-            if captured.retained_bytes().saturating_add(node.witness.retained_bytes()).saturating_add(bytes.len())>MAX_BYTES {return Err(ApiError::bad("原件及准确导入依据超过 32 MiB 预算"));}
-            let (metadata,content_type)=crate::media_api::inspect_media(&bytes);
-            let decision=Decision{epoch:inner.actor_generation(&actor),expires:now_ms().saturating_add(TTL_MS),binding:binding(inner,&req.collection)?,owner:captured.owner};
-            let preview=json!({"summary":"以原生资源导入所选所有者，保留现有登记和未知成员；不保存正文或增加读取授权。","name":req.name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
-            let request=OperationRequest{operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent:OperationIntent::ImportResource{node:owner_path.to_string_lossy().into_owned(),name:req.name,bytes,manifest_base_id:cut.files[0].base_id.clone(),resource_base_id:cut.files[1].base_id.clone()}};
-            let refs=pool.iter().collect::<Vec<_>>();
-            let status=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_prepare_with_witnesses(&req.collection,&req.operation_id,&fp,request,preview,&[],&refs)).map_err(core_error)?;
-            safe_status(inner,&actor,&req.collection,status)
-        })();
-        for id in ids {let _=inner.core.take_snapshot_witness(&id);}
-        result
-    }).await?))
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            import_access(inner, &actor, &req.collection)?;
+            if req.bytes_base64.len() > MAX_UPLOAD.div_ceil(3) * 4 {
+                return Err(ApiError::bad("资源原件上限为 16 MiB"));
+            }
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&req.bytes_base64)
+                .map_err(|_| ApiError::bad("资源原件编码无效"))?;
+            prepare_member_import(
+                inner,
+                &actor,
+                &req.collection,
+                &req.name,
+                bytes,
+                &req.operation_id,
+            )
+        })
+        .await?,
+    ))
+}
+/// Reuse the exact same member operation under the caller's original hosted
+/// lock. Builtin adapters may add narrower identity checks without a second
+/// authorization gap or a competing resource-import persistence authority.
+pub(super) fn prepare_member_import(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    name: &str,
+    bytes: Vec<u8>,
+    operation_id: &str,
+) -> Result<Value, ApiError> {
+    let config = import_access(inner, actor, collection)?;
+    if !valid_name(name) {
+        return Err(ApiError::bad("资源名称必须是一个有效文件名"));
+    }
+    if bytes.len() > MAX_UPLOAD {
+        return Err(ApiError::bad("资源原件上限为 16 MiB"));
+    }
+    let fp = member_import_fingerprint(collection, name, &bytes)?;
+    let actor_scope = scope(inner, actor);
+    if let Some(old) = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+            core.actor_feature_retry(collection, operation_id, &fp)
+        })
+        .map_err(core_error)?
+    {
+        return safe_status(inner, actor, collection, old);
+    }
+    let captured = qualify(inner, collection)?;
+    let root = inner.config.root.clone();
+    let owner_path = root.join(&inner.file(&config.owner)?.path);
+    let node = inner
+        .core
+        .qualified_query_node_at(&root, &owner_path, &captured.owner, "live")
+        .map_err(core_error)?;
+    let directory = owner_path.parent().ok_or_else(changed)?;
+    let cut = inner
+        .core
+        .read_snapshot(
+            &root,
+            &[
+                directory
+                    .join("weftext.resources.json")
+                    .to_string_lossy()
+                    .into_owned(),
+                directory.join(name).to_string_lossy().into_owned(),
+            ],
+        )
+        .map_err(core_error)?;
+    let ids = cut
+        .files
+        .iter()
+        .map(|f| f.base_id.clone())
+        .collect::<Vec<_>>();
+    let result = (|| {
+        let mut pool = vec![];
+        Core::merge_query_node_witness(&mut pool, &node.witness).map_err(core_error)?;
+        if captured.initialized {
+            Core::merge_resource_collection_witness(&mut pool, &captured.witness)
+                .map_err(core_error)?;
+        }
+        inner
+            .core
+            .validate_resource_collection_witness(&root, &captured.witness)
+            .map_err(core_error)?;
+        if captured
+            .retained_bytes()
+            .saturating_add(node.witness.retained_bytes())
+            .saturating_add(bytes.len())
+            > MAX_BYTES
+        {
+            return Err(ApiError::bad("原件及准确导入依据超过 32 MiB 预算"));
+        }
+        let (metadata, content_type) = crate::media_api::inspect_media(&bytes);
+        let decision = Decision {
+            epoch: inner.actor_generation(actor),
+            expires: now_ms().saturating_add(TTL_MS),
+            binding: binding(inner, collection)?,
+            owner: captured.owner,
+        };
+        let preview = json!({"summary":"以原生资源导入所选所有者，保留现有登记和未知成员；不保存正文或增加读取授权。","name":name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
+        let request = OperationRequest {
+            operation_id: operation_id.into(),
+            root: root.to_string_lossy().into_owned(),
+            intent: OperationIntent::ImportResource {
+                node: owner_path.to_string_lossy().into_owned(),
+                name: name.into(),
+                bytes,
+                manifest_base_id: cut.files[0].base_id.clone(),
+                resource_base_id: cut.files[1].base_id.clone(),
+            },
+        };
+        let refs = pool.iter().collect::<Vec<_>>();
+        let status = inner
+            .core
+            .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+                core.actor_feature_prepare_with_witnesses(
+                    collection,
+                    operation_id,
+                    &fp,
+                    request,
+                    preview,
+                    &[],
+                    &refs,
+                )
+            })
+            .map_err(core_error)?;
+        safe_status(inner, actor, collection, status)
+    })();
+    for id in ids {
+        let _ = inner.core.take_snapshot_witness(&id);
+    }
+    result
 }
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
     Json(req): Json<Operation>,
 ) -> ApiResult {
-    Ok(Json(locked(&state,move|inner| {
-        let actor=inner.actor(&auth)?;let config=import_access(inner,&actor,&req.collection)?;
-        match inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|core|core.actor_feature_status(&req.collection,&req.operation_id)).map_err(core_error)? {
-            Some(status)=>safe_status(inner,&actor,&req.collection,status),
-            None=>Ok(json!({"collection":req.collection,"owner":config.owner,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"resourceRefs":[],"assets":[],"commitAllowed":false}))
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            member_import_status(inner, &actor, &req.collection, &req.operation_id)
+        })
+        .await?,
+    ))
+}
+pub(super) fn member_import_status(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    operation_id: &str,
+) -> Result<Value, ApiError> {
+    let config = import_access(inner, actor, collection)?;
+    match inner
+        .core
+        .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
+            core.actor_feature_status(collection, operation_id)
+        })
+        .map_err(core_error)?
+    {
+        Some(status) => safe_status(inner, actor, collection, status),
+        None => Ok(
+            json!({"collection":collection,"owner":config.owner,"operationId":operation_id,"status":"notRegistered","planId":null,"preview":{},"resourceRefs":[],"assets":[],"commitAllowed":false}),
+        ),
+    }
+}
+/// Status-only exact intent qualification for narrower built-in adapters.
+/// Missing operations remain missing; this never prepares a replacement plan.
+pub(super) fn member_import_status_matching(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    operation_id: &str,
+    name: &str,
+    bytes: &[u8],
+) -> Result<Value, ApiError> {
+    import_access(inner, actor, collection)?;
+    let fingerprint = member_import_fingerprint(collection, name, bytes)?;
+    let original = inner
+        .core
+        .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
+            core.actor_feature_retry(collection, operation_id, &fingerprint)
+        })
+        .map_err(core_error)?;
+    match original {
+        Some(status) => {
+            // Generic status may intentionally retain a committed fact while
+            // withholding stale resourceRefs. A fixed-module installer must
+            // not interpret that empty projection as permission to adopt a
+            // different current owner's same-named resource. Tombstones for
+            // an unknown cancelled operation have no decision and stay useful
+            // as a durable fence against late preparation.
+            if status.preview.get("_resourceImport").is_some()
+                && !original_allowed(inner, actor, collection, &status)
+            {
+                return Err(changed());
+            }
+            safe_status(inner, actor, collection, status)
         }
-    }).await?))
+        None => member_import_status(inner, actor, collection, operation_id),
+    }
 }
 async fn commit(
     State(state): State<HostedState>,
@@ -509,33 +754,48 @@ async fn commit(
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
-            import_access(inner, &actor, &req.collection)?;
-            let actor_scope = scope(inner, &actor);
-            let old = inner
-                .core
-                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
-                    core.actor_feature_status(&req.collection, &req.operation_id)
-                })
-                .map_err(core_error)?
-                .ok_or_else(changed)?;
-            if old.status == "prepared"
-                && (!original_allowed(inner, &actor, &req.collection, &old)
-                    || old.plan_id.as_deref() != Some(&req.plan_id)
-                    || !serde_json::from_value::<Decision>(old.preview["_resourceImport"].clone())
-                        .is_ok_and(|d| d.expires > now_ms()))
-            {
-                return Err(changed());
-            }
-            let status = inner
-                .core
-                .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
-                    core.actor_feature_commit(&req.collection, &req.operation_id, &req.plan_id)
-                })
-                .map_err(core_error)?;
-            safe_status(inner, &actor, &req.collection, status)
+            commit_member_import(
+                inner,
+                &actor,
+                &req.collection,
+                &req.operation_id,
+                &req.plan_id,
+            )
         })
         .await?,
     ))
+}
+pub(super) fn commit_member_import(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    operation_id: &str,
+    plan_id: &str,
+) -> Result<Value, ApiError> {
+    import_access(inner, actor, collection)?;
+    let actor_scope = scope(inner, actor);
+    let old = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+            core.actor_feature_status(collection, operation_id)
+        })
+        .map_err(core_error)?
+        .ok_or_else(changed)?;
+    if old.status == "prepared"
+        && (!original_allowed(inner, actor, collection, &old)
+            || old.plan_id.as_deref() != Some(plan_id)
+            || !serde_json::from_value::<Decision>(old.preview["_resourceImport"].clone())
+                .is_ok_and(|d| d.expires > now_ms()))
+    {
+        return Err(changed());
+    }
+    let status = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+            core.actor_feature_commit(collection, operation_id, plan_id)
+        })
+        .map_err(core_error)?;
+    safe_status(inner, actor, collection, status)
 }
 async fn settle(
     State(state): State<HostedState>,
@@ -545,17 +805,107 @@ async fn settle(
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
-            import_access(inner, &actor, &req.collection)?;
-            let status = inner
-                .core
-                .with_actor_for_root(&scope(inner, &actor), &inner.config.root, |core| {
-                    core.actor_feature_settle(&req.collection, &req.operation_id)
-                })
-                .map_err(core_error)?;
-            safe_status(inner, &actor, &req.collection, status)
+            settle_member_import(inner, &actor, &req.collection, &req.operation_id)
         })
         .await?,
     ))
+}
+pub(super) fn settle_member_import(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    operation_id: &str,
+) -> Result<Value, ApiError> {
+    import_access(inner, actor, collection)?;
+    let status = inner
+        .core
+        .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
+            core.actor_feature_settle(collection, operation_id)
+        })
+        .map_err(core_error)?;
+    safe_status(inner, actor, collection, status)
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn resource_diagnostics_default_to_silent_and_require_the_exact_gate() {
+        for setting in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("true"),
+            Some("01"),
+            Some("1 "),
+        ] {
+            assert!(
+                resource_diagnostic_line(
+                    setting.map(OsStr::new),
+                    "qualify_collection",
+                    "private collection",
+                    "resourceManifestUnavailable",
+                    "private message (os error 5)",
+                )
+                .is_none()
+            );
+        }
+        assert!(
+            resource_diagnostic_line(Some(OsStr::new("1")), "phase", "id", "code", "").is_some()
+        );
+    }
+
+    #[test]
+    fn resource_diagnostic_formatter_emits_only_safe_fields_and_the_last_os_number() {
+        let id = "private collection/path?token=secret";
+        let message = "private body and path (os error 2), later failure (os error 32)";
+        let line = resource_diagnostic_line(
+            Some(OsStr::new("1")),
+            "qualify_collection",
+            id,
+            "resourceManifestUnavailable",
+            message,
+        )
+        .unwrap();
+        let record: Value =
+            serde_json::from_str(line.strip_prefix("weftext-resource-diagnostic ").unwrap())
+                .unwrap();
+        assert_eq!(record.as_object().unwrap().len(), 4);
+        assert_eq!(record["phase"], "qualify_collection");
+        assert_eq!(record["code"], "resourceManifestUnavailable");
+        assert_eq!(record["osError"], 32);
+        assert_eq!(record["id"], digest(id.as_bytes())[..16]);
+        assert!(
+            record["id"]
+                .as_str()
+                .unwrap()
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        );
+        for private in [id, message, "private", "path", "token", "secret"] {
+            assert!(!line.contains(private));
+        }
+        let redacted = resource_diagnostic_line(
+            Some(OsStr::new("1")),
+            "private/phase",
+            id,
+            "private/code\nbody",
+            "private (os error 5) later (os error not-a-number)",
+        )
+        .unwrap();
+        let record: Value = serde_json::from_str(
+            redacted
+                .strip_prefix("weftext-resource-diagnostic ")
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(record["phase"], "redacted");
+        assert_eq!(record["code"], "redacted");
+        assert!(record["osError"].is_null());
+        assert!(!redacted.contains("private"));
+    }
 }
 
 #[cfg(all(test, windows))]

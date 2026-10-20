@@ -19,12 +19,62 @@ struct Edit {
     source_hash: String,
     intent: weftext_engine::EditIntent,
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProposalPreview {
+    session_id: String,
+    source: String,
+    serial: u64,
+    proposal_source: String,
+}
 pub(super) fn router() -> Router<HostedState> {
     Router::new()
         .route("/api/hosted/fonts", get(writing_api::fonts))
         .route("/api/hosted/editor/map", post(map))
         .route("/api/hosted/editor/edit", post(edit))
         .route("/api/hosted/editor/render", post(render))
+        .route("/api/hosted/editor/preview", post(preview_proposal))
+        .route(
+            "/api/hosted/editor/endnotes-module",
+            get(writing_api::endnotes_module),
+        )
+}
+
+async fn preview_proposal(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<ProposalPreview>,
+) -> ApiResult {
+    writing_api::validate_source(&req.proposal_source, None)?;
+    let original = Snapshot {
+        session_id: req.session_id,
+        source: req.source,
+        serial: req.serial,
+        source_hash: None,
+    };
+    let captured = original.clone();
+    let check = auth.clone();
+    let proposal = req.proposal_source;
+    let compiled_source = proposal.clone();
+    let (input, dependencies, environment) = locked(&state, move |inner| {
+        let (actor, session, _) = qualify(inner, &check, &captured, true, false)?;
+        freeze(inner, &actor, &session.resource, &proposal)
+    })
+    .await?;
+    let output = compile_frozen(&state, input).await;
+    locked(&state, move |inner| {
+        let (actor, session, _) = qualify(inner, &auth, &original, false, false)?;
+        validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+        environment.recheck(inner, &actor)?;
+        let mut output = output?;
+        scrub_tree(&mut output["tree"], &session.resource, false);
+        Ok(Json(
+            json!({"ok":output["ok"],"tree":output["tree"],"source":compiled_source,
+            "serial":original.serial,
+            "message":if output["ok"] == true { "" } else { "提案预览未成功；原草稿与输入保留" }}),
+        ))
+    })
+    .await
 }
 fn qualify(
     inner: &mut HostedInner,
@@ -61,7 +111,10 @@ fn readonly(value: &mut Value) {
     match value {
         Value::Object(fields) => {
             for (key, value) in fields {
-                if key == "writable" || key == "gridWritable" {
+                if matches!(
+                    key.as_str(),
+                    "writable" | "gridWritable" | "topologyWritable" | "levelWritable" | "editable"
+                ) {
                     *value = json!(false);
                 } else {
                     readonly(value);
@@ -124,6 +177,37 @@ async fn edit(
         source_hash: req.source_hash,
         intent: req.intent,
     };
+    let needs_module = match &command.intent {
+        weftext_engine::EditIntent::NativeNote { action } => action.requires_frozen_module(&source),
+        weftext_engine::EditIntent::HeadingNumbering { action } => {
+            action.requires_frozen_module(&source)
+        }
+        _ => false,
+    };
+    if needs_module {
+        let captured = basis.clone();
+        let check = auth.clone();
+        let (input, dependencies, environment) = locked(&state, move |inner| {
+            let (actor, session, _) = qualify(inner, &check, &captured, false, true)?;
+            freeze(inner, &actor, &session.resource, &captured.source)
+        })
+        .await?;
+        let _permit = state.render_gate.try_acquire().map_err(|_| {
+            ApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "busy",
+                "另一项预览正在运行，请稍后重试",
+            )
+        })?;
+        let output = super::super::notes_edit_from_worker(input, command).await?;
+        return locked(&state, move |inner| {
+            let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
+            validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+            environment.recheck(inner, &actor)?;
+            Ok(Json(output.edit))
+        })
+        .await;
+    }
     let result = tokio::task::spawn_blocking(move || weftext_engine::edit(&source, &command))
         .await
         .map_err(|_| ApiError::internal("编辑提案未完成"))?;
@@ -211,7 +295,7 @@ async fn render(
         environment.recheck(inner, &actor)?;
         let mut output = output?;
         scrub_tree(&mut output["tree"], &session.resource, rights.write);
-        let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"]});
+        let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"],"notes":output["sourceInfo"]["notes"]});
         if !rights.write { readonly(&mut info); }
         Ok(Json(json!({"ok":output["ok"],"tree":output["tree"],"sourceInfo":info,
             "compilerVersion":output["compilerVersion"],"source":req.source,"serial":req.serial,
@@ -334,6 +418,165 @@ pub(super) async fn compile_frozen(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn hosted_collection_endnote_edit_uses_the_actual_frozen_native_path() {
+        let (_temp, state, _auth, document, _, _) = history_api::test_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        let main = root.join("Shared/Shared.typ");
+        let owner = inner.core.qualified_node_at(&root, &main).unwrap().owner;
+        let operation = uuid::Uuid::new_v4().to_string();
+        let plan = inner
+            .core
+            .prepare_import_resource(
+                &root,
+                &main,
+                "weftext-endnotes.typ",
+                writing_api::ENDNOTES_MODULE.as_bytes().to_vec(),
+                &operation,
+            )
+            .unwrap();
+        inner
+            .core
+            .execute_operation(&operation, &plan.plan_id)
+            .unwrap();
+        inner.config.resource_collections.insert(
+            "Notes".into(),
+            resource_collections::Collection {
+                owner: "Shared".into(),
+                expected_owner: Some(owner),
+                from_import_slot: false,
+                from_structure_slot: false,
+                lifecycle: "live".into(),
+                title: "本篇尾注".into(),
+            },
+        );
+        inner.config.files.get_mut("Shared").unwrap().inputs = vec!["Notes/*".into()];
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .resource_collections
+            .insert(
+                "Notes".into(),
+                resource_collections::Rights {
+                    read: true,
+                    download: false,
+                    r#import: false,
+                },
+            );
+        let source = format!(
+            "{}\n正文#footnote[脚注]",
+            document["source"].as_str().unwrap()
+        );
+        let (worker, dependencies, environment) =
+            freeze(&mut inner, "alice", "Shared", &source).unwrap();
+        let files = worker.frozen_files.unwrap();
+        let actual_module_key = std::path::Path::new("Shared")
+            .join("weftext-endnotes.typ")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(actual_module_key, "Shared\\weftext-endnotes.typ");
+        assert!(files.contains_key(&actual_module_key));
+        assert!(!files.contains_key("Shared/weftext-endnotes.typ"));
+        let input = weftext_engine::FrozenRenderRequest {
+            source: worker.source,
+            path: worker.path,
+            root: worker.root,
+            style: worker.style,
+            files: files
+                .into_iter()
+                .map(|(path, encoded)| {
+                    (
+                        path,
+                        base64::engine::general_purpose::STANDARD
+                            .decode(encoded)
+                            .unwrap(),
+                    )
+                })
+                .collect(),
+        };
+        let request = weftext_engine::EditRequest {
+            source_hash: weftext_engine::source_hash(&source),
+            intent: weftext_engine::EditIntent::NativeNote {
+                action: weftext_engine::NotesIntent::InsertEndnote {
+                    at: weftext_engine::inspect_editor(&source)
+                        .body_insertion
+                        .unwrap(),
+                    body: weftext_engine::NotesBody {
+                        mode: weftext_engine::NotesBodyMode::Literal,
+                        value: "尾注正文".into(),
+                    },
+                },
+            },
+        };
+        let output = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .edit_notes_frozen_with_dependencies(&input, &request)
+            .unwrap();
+        assert!(
+            output
+                .edit
+                .map
+                .notes
+                .entries
+                .iter()
+                .any(|entry| entry.kind == "endnote-definition" && entry.writable)
+        );
+        assert!(output.dependencies.iter().any(|dependency| dependency.path
+            == "Shared/weftext-endnotes.typ"
+            && dependency.status == "loaded"));
+        let mut numbered_input = input.clone();
+        numbered_input.source = output.edit.source.clone();
+        let main_key = numbered_input
+            .files
+            .keys()
+            .find(|key| key.replace('\\', "/") == "Shared/Shared.typ")
+            .unwrap()
+            .clone();
+        numbered_input
+            .files
+            .insert(main_key, numbered_input.source.as_bytes().to_vec());
+        let numbered = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .edit_notes_frozen_with_dependencies(
+                &numbered_input,
+                &weftext_engine::EditRequest {
+                    source_hash: weftext_engine::source_hash(&numbered_input.source),
+                    intent: weftext_engine::EditIntent::HeadingNumbering {
+                        action: Default::default(),
+                    },
+                },
+            )
+            .unwrap();
+        assert!(numbered.edit.map.heading_numbering.editable);
+        assert!(numbered.edit.source.ends_with(&numbered_input.source));
+        assert!(
+            numbered
+                .dependencies
+                .iter()
+                .any(
+                    |dependency| dependency.path == "Shared/weftext-endnotes.typ"
+                        && dependency.status == "loaded"
+                )
+        );
+        validate_inputs(&inner, "alice", "Shared", &dependencies).unwrap();
+        environment.recheck(&inner, "alice").unwrap();
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .resource_collections
+            .get_mut("Notes")
+            .unwrap()
+            .read = false;
+        assert!(environment.recheck(&inner, "alice").is_err());
+        assert!(freeze(&mut inner, "alice", "Shared", &source).is_err());
+    }
 
     #[test]
     fn hosted_links_keep_destinations_without_forwarding_active_attributes_or_paths() {

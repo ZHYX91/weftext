@@ -188,6 +188,18 @@ impl Package {
     pub fn set_xml(&mut self, name: &str, e: &Element) {
         self.parts.insert(name.into(), xml::serialize(e));
     }
+    pub fn part_relationships(&self, part: &str) -> Result<Element, DocxError> {
+        let path = part_rels_path(part)?;
+        self.xml(&path)?.map_or_else(
+            || xml::parse(b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>"),
+            Ok,
+        )
+    }
+    pub fn set_part_relationships(&mut self, part: &str, rels: &Element) -> Result<(), DocxError> {
+        let path = part_rels_path(part)?;
+        self.set_xml(&path, rels);
+        Ok(())
+    }
     pub fn relationship(&mut self, kind: &str, target: &str, external: bool) -> String {
         loop {
             let id = format!("weftextRel{}", self.next);
@@ -198,6 +210,18 @@ impl Package {
                 .iter()
                 .filter_map(Xml::element)
                 .any(|e| e.get("Id") == Some(&id))
+                && !self
+                    .parts
+                    .iter()
+                    .filter(|(name, _)| name.ends_with(".rels"))
+                    .any(|(_, bytes)| {
+                        xml::parse(bytes).is_ok_and(|root| {
+                            root.children
+                                .iter()
+                                .filter_map(Xml::element)
+                                .any(|e| e.get("Id") == Some(&id))
+                        })
+                    })
             {
                 let mut e = Element::new("Relationship")
                     .attr("Id", &id)
@@ -266,6 +290,18 @@ impl Package {
             .map(|c| c.into_inner())
             .map_err(|e| DocxError::new(e.to_string()))
     }
+}
+fn part_rels_path(part: &str) -> Result<String, DocxError> {
+    if part.contains('\\')
+        || part.contains(':')
+        || part.split('/').any(|v| v.is_empty() || v == "..")
+    {
+        return Err(DocxError::new("无效 OOXML 部件路径"));
+    }
+    let (dir, file) = part
+        .rsplit_once('/')
+        .ok_or_else(|| DocxError::new("部件缺少目录"))?;
+    Ok(format!("{dir}/_rels/{file}.rels"))
 }
 fn unsafe_field(s: &str) -> bool {
     let upper = s.to_ascii_uppercase();

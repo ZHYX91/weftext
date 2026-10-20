@@ -51,6 +51,153 @@ fn fragment(text: &str) -> LogicalFragment {
         source_range: Some(ExactRange::new(text, 0, text.len()).unwrap()),
     }
 }
+
+#[test]
+fn diagnostics_preserve_each_issue_and_separate_fragment_from_node_connectivity() {
+    let a = node(
+        A,
+        "A.typ",
+        &format!(
+            "#link(\"{}#lost\")[one]\n#link(\"{}\")[two]\n#link(\"{}\")[three]",
+            id_link(B),
+            id_link(D),
+            id_link(D)
+        ),
+        "A",
+    );
+    let b = node(B, "B.typ", "ordinary", "B");
+    let c = node(C, "C.typ", "ordinary", "C");
+    let inv = inventory(vec![a, b, c]);
+    let d = link_diagnostics(&inv, &[], true, 100);
+    assert_eq!(d.coverage, Coverage::Complete);
+    assert_eq!(d.issues.len(), 3);
+    assert_eq!(d.issues[0].resolution.status, "fragmentMissing");
+    assert_ne!(d.issues[1].occurrence.from, d.issues[2].occurrence.from);
+    assert_eq!(
+        d.nodes
+            .iter()
+            .find(|n| n.node == owner(B))
+            .unwrap()
+            .incoming,
+        1
+    );
+    assert_eq!(
+        d.nodes.iter().find(|n| n.node == owner(C)).unwrap().state,
+        "isolated"
+    );
+    assert_eq!(link_index(&inv, &owner(B)).incoming_id.len(), 1);
+    let partial = link_diagnostics(&inv, &[], true, 1);
+    assert_eq!(partial.coverage, Coverage::Partial);
+    assert!(!partial.nodes.iter().any(|n| n.state == "isolated"));
+}
+
+#[test]
+fn diagnostics_typed_connections_and_invalid_outgoing_do_not_become_true_orphans() {
+    let a = node(A, "A.typ", &format!("#link(\"{}\")[gone]", id_link(D)), "A");
+    let b = node(B, "B.typ", "ordinary", "B");
+    let inv = inventory(vec![a, b]);
+    let d = link_diagnostics(&inv, &[], true, 20);
+    assert_eq!(
+        d.nodes.iter().find(|n| n.node == owner(A)).unwrap().state,
+        "invalidOutgoing"
+    );
+    let refs = vec![PropertyReferenceInput {
+        source: owner(A),
+        field_id: "relation".into(),
+        item_path: vec![],
+        target: id_link(B),
+    }];
+    let d = link_diagnostics(&inv, &refs, true, 20);
+    assert!(d.nodes.iter().all(|n| n.state == "connected"));
+    assert_eq!(d.issues.len(), 1);
+    let invalid_refs = vec![PropertyReferenceInput {
+        target: id_link(D),
+        ..refs[0].clone()
+    }];
+    let invalid = link_diagnostics(&inv, &invalid_refs, true, 20);
+    assert_eq!(invalid.property_issues.len(), 1);
+    assert_eq!(invalid.property_issues[0].field_id, "relation");
+    assert_eq!(
+        invalid
+            .nodes
+            .iter()
+            .find(|n| n.node == owner(A))
+            .unwrap()
+            .invalid_outgoing,
+        2
+    );
+    let mut partial = inv;
+    partial.coverage = Coverage::Partial;
+    assert!(
+        !link_diagnostics(&partial, &[], false, 20)
+            .nodes
+            .iter()
+            .any(|n| n.state == "isolated")
+    );
+}
+
+#[test]
+fn fragment_mentions_require_the_current_exact_target_and_unique_label() {
+    let source = node(A, "A.typ", "路线图", "A");
+    let mut target = node(B, "B.typ", "= 路线图 <route>", "路线图");
+    target.aliases = vec!["路线图".into()];
+    let from = source.source.find("路线图").unwrap();
+    let logical = LogicalFragment {
+        id: "body".into(),
+        node_key: "body".into(),
+        text: "路线图".into(),
+        source_range: Some(ExactRange::new(&source.source, from, from + "路线图".len()).unwrap()),
+    };
+    let candidate = MentionCandidate {
+        target: target.owner.clone(),
+        fragment: Some("route".into()),
+        term: "路线图".into(),
+        provenance: "heading".into(),
+    };
+    let inv = inventory(vec![source.clone(), target.clone()]);
+    let scan =
+        scan_mentions_with_candidates(&inv, &source.owner, &[logical], &[candidate], 100, 20)
+            .unwrap();
+    let hit = &scan.fragments[0].hits[0];
+    assert_eq!(hit.candidates.len(), 2); // Same node's title and fragment stay separate.
+    let patch = convert_mention_fragment(&source, &inv, hit, &target.owner, Some("route")).unwrap();
+    assert!(patch.after.contains(&format!("{}#route", id_link(B))));
+    assert_eq!(&patch.after[..from], &source.source[..from]);
+    assert!(convert_mention_fragment(&source, &inv, hit, &owner(C), Some("route")).is_err());
+    target.labels.push("route".into());
+    let changed = inventory(vec![source.clone(), target]);
+    assert!(convert_mention_fragment(&source, &changed, hit, &owner(B), Some("route")).is_err());
+    assert!(convert_mention_fragment(&source, &inv, hit, &owner(B), Some("other")).is_err());
+}
+
+#[test]
+fn compiled_fragment_dictionary_requires_a_real_unique_main_source_location() {
+    let mut target = node(B, "B.typ", "= 路线图 <route>", "B");
+    let root = std::env::current_dir().unwrap();
+    let output = weftext_engine::Engine::new_with_system_fonts(false)
+        .unwrap()
+        .render(&target.source, &root.join("candidate.typ"), &root)
+        .unwrap();
+    assert!(output.ok, "{:?}", output.diagnostics);
+    let candidates =
+        compiled_mention_candidates(&target, &output.source_info.headings, &output.labels);
+    assert!(candidates.iter().any(|c| c.term == "路线图"
+        && c.fragment.as_deref() == Some("route")
+        && c.provenance == "heading"));
+    let mut foreign = output.labels.clone();
+    foreign
+        .iter_mut()
+        .flat_map(|l| &mut l.origins)
+        .for_each(|o| o.is_main = false);
+    assert!(
+        compiled_mention_candidates(&target, &output.source_info.headings, &foreign).is_empty()
+    );
+    target.labels.push("route".into());
+    assert!(
+        compiled_mention_candidates(&target, &output.source_info.headings, &output.labels)
+            .is_empty()
+    );
+}
 fn record(target: AnnotationTarget) -> AnnotationRecord {
     AnnotationRecord {
         annotation_id: "annotation-1".into(),

@@ -9,12 +9,12 @@
     {
       "file": "src/convert.rs",
       "symbols": ["handle", "handle_html_elem", "handle_block", "Converter::push_text", "to_lone_element"],
-      "purpose": "Carry effective native text styles and private typed producer facts into final HTML nodes; mark actually converted subtitle blocks while preserving official whitespace and block grouping."
+      "purpose": "Carry effective native text styles, actual language/optional region and private typed producer facts into final HTML nodes; mark actually converted subtitle blocks while preserving official whitespace and block grouping."
     },
     {
       "file": "src/rules.rs",
-      "symbols": ["show_cell", "HEADING_RULE", "heading_counter_state", "REF_RULE", "EQUATION_RULE"],
-      "purpose": "Carry already-resolved cell styles, exact native heading levels/numbering/counter state, evaluated numbering prefix subtrees and native MathML provenance. Counter state reads the same compile at the actual native location without calling the numbering function. The bounded heading-reference branch mirrors official realization with one counter result marker and preserves the native supplement/link."
+      "symbols": ["show_cell", "show_cellgrid", "HEADING_RULE", "heading_counter_state", "REF_RULE", "EQUATION_RULE", "FIGURE_RULE", "FIGURE_CAPTION_RULE", "FOOTNOTE_RULE", "FOOTNOTE_ENTRY_RULE", "CITE_GROUP_RULE"],
+      "purpose": "Carry resolved styles and same-compilation native heading/figure/equation identity, numbering/counter state and exact evaluated number subtrees. Native CellGrid header ranges emit typed table-header-row facts and each resolved Repeatable<Header>.repeated request, including false, without inferring repetition from thead/tr shape. Footnotes use native declaration_location for all reference/body identity; captions use synthesized kind/figure_location. Official successful CiteGroup realization emits actual keys/forms/spans, rather than classifying synthesized RefElem candidates. No rendered text is parsed to recover relationships or counter values."
     },
     {
       "file": "src/weftext_styles.rs",
@@ -41,12 +41,12 @@
   },
   "support": {
     "effectiveText": ["font-family", "font-size", "font-weight", "font-style", "solid-color", "literal-whitespace-preservation"],
-    "tableCells": ["solid-undashed-border", "solid-fill", "horizontal-alignment", "vertical-alignment", "original-header-span-topology"],
+    "tableCells": ["solid-undashed-border", "solid-fill", "horizontal-alignment", "vertical-alignment", "original-header-span-topology", "typed-native-header-row-and-resolved-repeat-request"],
     "lists": ["native-content-marker", "original-ordered-list-start-and-values"],
     "paragraphLeading": "CSS calc(1em + resolved native leading); reflow line boxes are not identical to native paged font metrics.",
-    "semanticExport": ["native-title", "unique-displayed-title/subtitle-block-association", "exact-native-heading-depth", "native-numbering-pattern-or-function", "actual-native-heading-counter-state", "evaluated-heading-prefix-subtree", "certified-native-run-in", "native-heading-reference-number-subtree", "same-target-native-MathML"],
+    "semanticExport": ["native-title", "unique-displayed-title/subtitle-block-association", "exact-native-heading-depth", "native-numbering-pattern-or-function", "actual-native-heading-counter-state", "evaluated-heading-prefix-subtree", "certified-native-run-in", "native-reference-number-subtree-and-target", "same-target-native-MathML", "native-footnote-declaration-reference-body-identity", "native-caption-object-kind-position-counter-and-number-subtree", "actual-native-citation-group-keys-forms-and-origins", "effective-native-text-language-and-optional-region"],
     "unsupported": ["gradient-text-paint", "pattern-or-dashed-cell-stroke", "dynamic-list-marker", "arbitrary-native-paged-layout-equivalence"]
   },
-  "verificationOwner": ["weftext-engine/tests/styles.rs", "weftext-engine/tests/export_semantics.rs"],
+  "verificationOwner": ["weftext-engine/tests/styles.rs", "weftext-engine/tests/export_semantics.rs", "weftext-engine/tests/table_header_semantics.rs", "weftext-engine/tests/notes_semantics.rs", "weftext-engine/tests/notes_editing.rs"],
   "evidenceLimit": "Native tests establish bounded tree/style/source/font behavior. Browser visual layout, assistive technology and cross-platform acceptance are separate."
 }

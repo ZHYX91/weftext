@@ -71,11 +71,81 @@ pub struct MentionHit {
     pub start_utf16: usize,
     pub end_utf16: usize,
     pub targets: Vec<NodeRef>,
+    pub candidates: Vec<MentionCandidate>,
     pub terms: Vec<String>,
     pub writable: bool,
     pub source_range: Option<ExactRange>,
     pub lane: Option<usize>,
     pub component: usize,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "camelCase")]
+pub struct MentionCandidate {
+    pub target: NodeRef,
+    pub fragment: Option<String>,
+    pub term: String,
+    pub provenance: String,
+}
+
+/// Only a unique label in this exact successful compile can address a fragment.
+/// Heading text joins it by the compiler's main-source origin, never by spelling.
+pub fn compiled_mention_candidates(
+    node: &NodeSnapshot,
+    headings: &[weftext_engine::HeadingInfo],
+    labels: &[weftext_engine::CompiledLabel],
+) -> Vec<MentionCandidate> {
+    if !node.labels_complete {
+        return vec![];
+    }
+    let mut result = BTreeSet::new();
+    for label in labels
+        .iter()
+        .filter(|l| l.count == 1 && !l.label.is_empty())
+    {
+        let [origin] = label.origins.as_slice() else {
+            continue;
+        };
+        if !origin.is_main
+            || origin.from >= origin.to
+            || node.labels.iter().filter(|l| *l == &label.label).count() != 1
+            || !ExactRange::new(&node.source, origin.from, origin.to).is_ok_and(|r| {
+                r.raw == origin.raw
+                    && r.utf16_from == origin.utf16_from
+                    && r.utf16_to == origin.utf16_to
+            })
+        {
+            continue;
+        }
+        let mut add = |term: &str, provenance: &str| {
+            if !term.is_empty() {
+                result.insert(MentionCandidate {
+                    target: node.owner.clone(),
+                    fragment: Some(label.label.clone()),
+                    term: term.into(),
+                    provenance: provenance.into(),
+                });
+            }
+        };
+        add(&label.label, "stableLabel");
+        for heading in headings.iter().filter(|h| {
+            h.is_main && !h.generated && label.origins.iter().any(|o| o.is_main && o.from == h.from)
+        }) {
+            add(&heading.text, "heading");
+        }
+    }
+    // Different proven origins do not multiply one exact destination/term.
+    // BTreeSet order chooses heading provenance ahead of an equal label term.
+    let mut unique = BTreeMap::new();
+    for candidate in result {
+        unique
+            .entry((
+                candidate.target.clone(),
+                candidate.fragment.clone(),
+                candidate.term.clone(),
+            ))
+            .or_insert(candidate);
+    }
+    unique.into_values().collect()
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,18 +186,63 @@ pub fn scan_mentions_bounded(
     scalar_budget: usize,
     candidate_budget: usize,
 ) -> Result<MentionScan> {
-    let mut dictionary: BTreeMap<String, BTreeSet<NodeRef>> = BTreeMap::new();
+    scan_mentions_with_candidates(
+        inventory,
+        current,
+        fragments,
+        &[],
+        scalar_budget,
+        candidate_budget,
+    )
+}
+
+pub fn scan_mentions_with_candidates(
+    inventory: &InventorySnapshot,
+    current: &NodeRef,
+    fragments: &[LogicalFragment],
+    candidates: &[MentionCandidate],
+    scalar_budget: usize,
+    candidate_budget: usize,
+) -> Result<MentionScan> {
+    let mut dictionary: BTreeMap<String, BTreeSet<MentionCandidate>> = BTreeMap::new();
     for node in &inventory.nodes {
         if &node.owner == current {
             continue;
         }
-        for term in node.title.iter().chain(node.aliases.iter()) {
+        for (term, provenance) in node
+            .title
+            .iter()
+            .map(|t| (t, "title"))
+            .chain(node.aliases.iter().map(|t| (t, "nameField")))
+        {
             if !term.is_empty() {
-                dictionary
-                    .entry(term.clone())
-                    .or_default()
-                    .insert(node.owner.clone());
+                let entries = dictionary.entry(term.clone()).or_default();
+                if entries
+                    .iter()
+                    .any(|c| c.target == node.owner && c.fragment.is_none())
+                {
+                    continue;
+                }
+                entries.insert(MentionCandidate {
+                    target: node.owner.clone(),
+                    fragment: None,
+                    term: term.clone(),
+                    provenance: provenance.into(),
+                });
             }
+        }
+    }
+    for candidate in candidates.iter().filter(|c| {
+        &c.target != current
+            && !c.term.is_empty()
+            && inventory.nodes.iter().any(|n| n.owner == c.target)
+    }) {
+        let entries = dictionary.entry(candidate.term.clone()).or_default();
+        if !entries
+            .iter()
+            .any(|c| c.target == candidate.target && c.fragment == candidate.fragment)
+        {
+            entries.insert(candidate.clone());
         }
     }
     let terms: Vec<_> = dictionary.keys().cloned().collect();
@@ -172,7 +287,7 @@ pub fn scan_mentions_bounded(
         let mut partial_reason = stopped_reason
             .clone()
             .or_else(|| (!complete).then(|| "scalarBudget".into()));
-        let mut grouped: BTreeMap<(usize, usize), (BTreeSet<NodeRef>, BTreeSet<String>)> =
+        let mut grouped: BTreeMap<(usize, usize), (BTreeSet<MentionCandidate>, BTreeSet<String>)> =
             BTreeMap::new();
         if let Some(automaton) = &automaton {
             for hit in automaton.find_overlapping_iter(&fragment.text[..end_byte]) {
@@ -194,7 +309,13 @@ pub fn scan_mentions_bounded(
                     .saturating_add(
                         targets
                             .iter()
-                            .map(|target| target.workspace_id.len() + target.node_id.len() + 64)
+                            .map(|c| {
+                                c.target.workspace_id.len()
+                                    + c.target.node_id.len()
+                                    + c.term.len()
+                                    + c.fragment.as_ref().map_or(0, String::len)
+                                    + 128
+                            })
                             .sum::<usize>(),
                     );
                 if targets.len() > candidates_remaining || estimated_bytes > output_bytes_remaining
@@ -256,7 +377,13 @@ pub fn scan_mentions_bounded(
                     end_scalar: end,
                     start_utf16,
                     end_utf16,
-                    targets: targets.into_iter().collect(),
+                    targets: targets
+                        .iter()
+                        .map(|c| c.target.clone())
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect(),
+                    candidates: targets.into_iter().collect(),
                     terms: terms.into_iter().collect(),
                     writable: source_range.is_some(),
                     source_range,
@@ -304,6 +431,15 @@ pub fn convert_mention(
     hit: &MentionHit,
     selected: &NodeRef,
 ) -> Result<SourcePatch> {
+    convert_mention_fragment(source, inventory, hit, selected, None)
+}
+pub fn convert_mention_fragment(
+    source: &NodeSnapshot,
+    inventory: &InventorySnapshot,
+    hit: &MentionHit,
+    selected: &NodeRef,
+    fragment: Option<&str>,
+) -> Result<SourcePatch> {
     if !hit.targets.contains(selected) {
         return Err(KnowledgeError::new(
             "selection",
@@ -333,12 +469,27 @@ pub fn convert_mention(
             "The current range is not one exact whole-grapheme ordinary native text leaf",
         ));
     }
-    if !target
-        .title
-        .iter()
-        .chain(target.aliases.iter())
-        .any(|term| term == &range.raw)
-    {
+    let qualified = if let Some(fragment) = fragment {
+        target.labels_complete
+            && target
+                .labels
+                .iter()
+                .filter(|l| l.as_str() == fragment)
+                .count()
+                == 1
+            && hit.candidates.iter().any(|c| {
+                &c.target == selected
+                    && c.fragment.as_deref() == Some(fragment)
+                    && c.term == range.raw
+            })
+    } else {
+        target
+            .title
+            .iter()
+            .chain(target.aliases.iter())
+            .any(|term| term == &range.raw)
+    };
+    if !qualified {
         return Err(KnowledgeError::new(
             "staleDictionary",
             "The exact target term changed; scan again",
@@ -350,7 +501,7 @@ pub fn convert_mention(
             "The native link binding is not proven",
         ));
     }
-    let address = target_address(source, target, None, LinkForm::Id)?;
+    let address = target_address(source, target, fragment, LinkForm::Id)?;
     let destination = weftext_engine::encode_string(&address)
         .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
     let display = weftext_engine::encode_literal(&range.raw)

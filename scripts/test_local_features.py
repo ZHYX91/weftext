@@ -318,12 +318,27 @@ class LocalFeatures(unittest.TestCase):
         mapping = self.api('/api/editor-map', snap)
         table = next(s for s in mapping['structures'] if s['kind'] == 'table')
         self.assertFalse(table['table']['gridWritable'])
+        self.assertTrue(table['table']['topologyWritable'])
+        inserted = self.api('/api/edit', {**snap, 'intent': {'kind': 'tableEdit', 'range': table['range'],
+                                         'action': {'kind': 'insertRow', 'index': 0}}})
+        logical = next(s for s in inserted['map']['structures']
+                       if s['kind'] == 'table')['table']['logicalCells']
+        self.assertEqual([(c['row'], c['column'], c['colspan']) for c in logical],
+                         [(0, 0, 1), (0, 1, 1), (1, 0, 2)])
+        self.assertEqual(logical[-1]['body']['raw'], '原生合并单元格🌿')
+        compiled = self.api('/api/render', {'sessionId': doc['sessionId'],
+                            'source': inserted['source'], 'serial': 13})
+        self.assertTrue(compiled['ok'], compiled['diagnostics'])
+        self.assertTrue(any(n.get('attrs', {}).get('colspan') == '2' for n in walk(compiled['tree'])))
+        dynamic_source = '#table(columns: 2, ..([动态甲], [动态乙]))\n'
+        snap = self.snapshot(doc, dynamic_source, 14)
+        mapping = self.api('/api/editor-map', snap)
+        table = next(s for s in mapping['structures'] if s['kind'] == 'table')
         self.api('/api/edit', {**snap, 'intent': {'kind': 'tableEdit', 'range': table['range'],
                               'action': {'kind': 'insertRow', 'index': 0}}}, status=422)
         compiled = self.api('/api/render', {'sessionId': doc['sessionId'],
-                            'source': complex_source, 'serial': 12})
+                            'source': dynamic_source, 'serial': 14})
         self.assertTrue(compiled['ok'], compiled['diagnostics'])
-        self.assertTrue(any(n.get('attrs', {}).get('colspan') == '2' for n in walk(compiled['tree'])))
         self.assertEqual(Path(doc['path']).read_text(encoding='utf-8'), doc['source'])
 
     def test_04_native_paged_pdf_and_default_chinese_fonts(self):

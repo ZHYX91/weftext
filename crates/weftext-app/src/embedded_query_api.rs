@@ -39,6 +39,7 @@ struct EditRequest {
     occurrence_id: String,
     plan: Option<weftext_data::QueryPlan>,
     replacement: Option<String>,
+    action: Option<String>,
 }
 fn query_error(error: weftext_data::DataError) -> ApiError {
     ApiError::new(
@@ -155,8 +156,8 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
     )?;
     let loc = location(&state, &req.session_id)?;
     data_api::deny_trash_writer(&loc.path)?;
-    let patch = match (req.plan, req.replacement) {
-        (Some(plan), None) => {
+    let patch = match (req.plan, req.replacement, req.action) {
+        (Some(plan), None, None) => {
             let occurrence = weftext_data::embedded_query(&req.source, &req.occurrence_id)
                 .map_err(query_error)?;
             if !occurrence.builder_supported {
@@ -181,12 +182,16 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
             weftext_data::edit_embedded_query_plan(&req.source, &req.occurrence_id, &plan)
                 .map_err(query_error)?
         }
-        (None, Some(replacement)) => weftext_data::replace_embedded_query_source(
+        (None, Some(replacement), None) => weftext_data::replace_embedded_query_source(
             &req.source,
             &req.occurrence_id,
             &replacement,
         )
         .map_err(query_error)?,
+        (None, None, Some(action)) => {
+            weftext_data::arrange_embedded_query(&req.source, &req.occurrence_id, &action)
+                .map_err(query_error)?
+        }
         _ => {
             return Err(ApiError::bad(
                 "Provide exactly one builder plan or source replacement",
@@ -257,6 +262,7 @@ mod tests {
                 occurrence_id: id.clone(),
                 plan: None,
                 replacement: Some("#metadata((invalid: ".into()),
+                action: None,
             }),
         )
         .await
@@ -284,6 +290,7 @@ mod tests {
                 occurrence_id: id,
                 plan: None,
                 replacement: Some(QUERY.into()),
+                action: None,
             }),
         )
         .await

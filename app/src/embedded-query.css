@@ -23,5 +23,23 @@
 .embedded-query-dialog::backdrop { background: #13231d66; }
 .embedded-query-dialog h2 { font-size: 19px; margin-top: 0; }
 .embedded-query-source-proposal { margin: 10px 0; min-height: 240px; white-space: pre; }
+.query-plan-controls, .query-call-controls { display: grid; gap: 12px; font-size: 13px; min-width: 0; }
+.query-plan-controls section, .query-plan-controls fieldset, .query-call-controls > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: start; min-width: 0; }
+.query-plan-controls fieldset { border: 1px solid #ced9d0; border-radius: 6px; padding: 10px; }
+.query-plan-controls label, .query-call-controls label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.query-plan-controls input:not([type=checkbox]), .query-plan-controls select, .query-plan-controls textarea, .query-call-controls input { box-sizing: border-box; max-width: 100%; padding: 7px; border: 1px solid #ced9d0; border-radius: 5px; color: inherit; background: #fff; font: inherit; }
+.query-plan-controls textarea { width: 100%; }
+.query-plan-controls button, .query-call-controls button { border: 1px solid #ced9d0; padding: 6px 10px; border-radius: 5px; background: #fff; color: #385c4f; cursor: pointer; font: inherit; }
+.query-plan-controls code, .query-plan-controls pre, .query-call-controls pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.embedded-query-view { margin: 8px 0; font-size: 13px; }
+.embedded-query-view label { margin: 5px; display: inline-flex; gap: 4px; }
+.embedded-query-view select { max-width: 100%; padding: 5px; margin: 4px; }
+.embedded-query-more summary, .embedded-query-view summary { cursor: pointer; padding: 4px; }
+.embedded-query-more[open] { flex-basis: 100%; }
+.embedded-query-more button { margin: 4px; }
+.embedded-query-card { border: 1px solid #dfe7de; border-radius: 6px; padding: 10px; margin: 8px 0; overflow-wrap: anywhere; }
+.embedded-query-card p { margin: 5px 0; font-size: 13px; }
+.embedded-query-lane { border-left: 3px solid #b5ccbc; padding-left: 12px; margin: 12px 0; }
+.query-inline-fields section { border-top: 1px solid #dfe7de; padding: 8px 0; }
 .paged-query-flow { flex: 1; min-width: 300px; overflow: auto; border-left: 1px solid #e3e9df; }
 @media (max-width: 760px) { .embedded-query { padding: 12px; } .embedded-query-heading { align-items: stretch; } .embedded-query-heading strong { flex-basis: 100%; } .mode-styled .preview-pane, .mode-source.with-preview .preview-pane { display: block; } .preview-toggle { display: inline-flex; } }

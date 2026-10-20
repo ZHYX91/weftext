@@ -39,6 +39,43 @@ pub struct TableInfo {
     pub rows: usize,
     pub cells: Vec<SourceRange>,
     pub grid_writable: bool,
+    /// Certified logical cells in this exact source revision; covered slots are
+    /// represented by their one origin, never by duplicated text addresses.
+    #[serde(default)]
+    pub logical_cells: Vec<TableCellInfo>,
+    #[serde(default)]
+    pub topology_writable: bool,
+    #[serde(default)]
+    pub unavailable_reason: Option<String>,
+    #[serde(default)]
+    pub header_rows: usize,
+    #[serde(default)]
+    pub header_columns: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableCellInfo {
+    pub row: usize,
+    pub column: usize,
+    pub rowspan: usize,
+    pub colspan: usize,
+    pub body: SourceRange,
+    pub range: SourceRange,
+    pub header: bool,
+}
+
+/// Plain clipboard cells. Coordinates are relative to the pasted rectangle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TablePasteCell {
+    pub row: usize,
+    pub column: usize,
+    pub rowspan: usize,
+    pub colspan: usize,
+    pub text: String,
+    #[serde(default)]
+    pub header: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +99,18 @@ pub struct EditorMap {
     pub subtitle: DocumentRole,
     pub body_insertion: Option<SourceRange>,
     pub unavailable_reason: Option<String>,
+    #[serde(default)]
+    pub notes: crate::NotesSourceMap,
+    pub heading_numbering: crate::HeadingNumberingInspection,
+    pub body_blocks: Vec<BodyBlock>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BodyBlock {
+    pub kind: String,
+    pub range: SourceRange,
+    pub body: SourceRange,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +127,15 @@ pub struct EditRequest {
     rename_all_fields = "camelCase"
 )]
 pub enum EditIntent {
+    ConvertBodyBlock {
+        range: SourceRange,
+        target: String,
+        level: Option<usize>,
+    },
+    MoveBodyBlock {
+        range: SourceRange,
+        direction: String,
+    },
     ReplaceLiteral {
         range: SourceRange,
         text: String,
@@ -123,6 +181,12 @@ pub enum EditIntent {
         range: SourceRange,
         action: TableAction,
     },
+    NativeNote {
+        action: crate::NotesIntent,
+    },
+    HeadingNumbering {
+        action: crate::HeadingNumberingIntent,
+    },
     ListEdit {
         range: SourceRange,
         action: ListAction,
@@ -144,6 +208,10 @@ pub enum InlineFormat {
     rename_all_fields = "camelCase"
 )]
 pub enum BlockInsert {
+    Image {
+        path: String,
+        alt: String,
+    },
     Paragraph {
         text: String,
     },
@@ -167,6 +235,11 @@ pub enum BlockInsert {
     Table {
         columns: usize,
         cells: Vec<String>,
+    },
+    ClipboardTable {
+        rows: usize,
+        columns: usize,
+        cells: Vec<TablePasteCell>,
     },
     Link {
         target: String,
@@ -208,6 +281,47 @@ pub enum TableAction {
         from: usize,
         to: usize,
     },
+    MoveColumn {
+        from: usize,
+        to: usize,
+    },
+    ClearRange {
+        top: usize,
+        left: usize,
+        bottom: usize,
+        right: usize,
+    },
+    PasteRange {
+        row: usize,
+        column: usize,
+        text: String,
+        #[serde(default)]
+        expand: bool,
+    },
+    PasteCells {
+        row: usize,
+        column: usize,
+        rows: usize,
+        columns: usize,
+        cells: Vec<TablePasteCell>,
+        #[serde(default)]
+        expand: bool,
+    },
+    Merge {
+        top: usize,
+        left: usize,
+        bottom: usize,
+        right: usize,
+    },
+    Split {
+        row: usize,
+        column: usize,
+    },
+    SetHeader {
+        rows: usize,
+        columns: usize,
+    },
+    Transpose,
     Paste {
         row: usize,
         column: usize,

@@ -243,6 +243,212 @@ pub(crate) fn freeze_citations(
     Ok(Some(frozen))
 }
 
+/// Producer-only facts emitted after the pinned official CiteGroup realizes.
+/// Author HTML attributes never create these protected semantic attributes.
+pub(crate) fn displayed_citations(tree: &weftext_engine::RenderNode) -> Vec<serde_json::Value> {
+    fn visit(node: &weftext_engine::RenderNode, out: &mut Vec<serde_json::Value>) {
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| role == "citation")
+        {
+            let keys = node
+                .attrs
+                .get("data-weftext-citation-keys")
+                .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok());
+            let forms = node
+                .attrs
+                .get("data-weftext-citation-forms")
+                .and_then(|raw| serde_json::from_str::<Vec<String>>(raw).ok());
+            let origins = node
+                .attrs
+                .get("data-weftext-citation-origins")
+                .and_then(|raw| {
+                    serde_json::from_str::<Vec<Option<weftext_engine::Origin>>>(raw).ok()
+                });
+            if let (Some(keys), Some(forms), Some(origins)) = (keys, forms, origins)
+                && keys.len() == forms.len()
+                && keys.len() == origins.len()
+            {
+                for ((key, form), origin) in keys.into_iter().zip(forms).zip(origins) {
+                    let ordinal = out.len();
+                    let range=origin.as_ref().filter(|origin|origin.is_main).map(|origin|serde_json::json!({"from":origin.from,"to":origin.to,"utf16From":origin.utf16_from,"utf16To":origin.utf16_to,"raw":origin.raw,"writable":false}));
+                    out.push(serde_json::json!({"key":key,"form":form,"ordinal":ordinal,"range":range,"originKind":if origin.as_ref().is_some_and(|origin|origin.is_main){"mainSource"}else{"generatedOrExternal"},"visibility":if form=="none"{"bibliographyOnly"}else{"displayedNativeCitationGroup"}}));
+                }
+            }
+        }
+        for child in &node.children {
+            visit(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    visit(tree, &mut out);
+    out
+}
+
+/// A matching key is not enough to associate an external or multiple Bib.
+pub(crate) fn owns_single_virtual_bibliography(source: &str) -> bool {
+    use typst_syntax::{
+        LinkedNode, Source,
+        ast::{self, AstNode},
+    };
+    if !weftext_engine::standard_binding_available(source, "bibliography")
+        || !weftext_engine::native_citation_owner_complete(source)
+    {
+        return false;
+    }
+    fn visit(node: &LinkedNode<'_>, found: &mut Vec<bool>) {
+        if let Some(call) = node.get().cast::<ast::FuncCall>()
+            && call
+                .callee()
+                .to_untyped()
+                .cast::<ast::Ident>()
+                .is_some_and(|id| id.get() == "bibliography")
+        {
+            found.push(matches!(call.args().items().next(),Some(ast::Arg::Pos(expr)) if expr.to_untyped().cast::<ast::Str>().is_some_and(|path|path.get()=="weftext.citations.bib")));
+        }
+        for child in node.children() {
+            visit(&child, found);
+        }
+    }
+    let parsed = Source::detached(source);
+    let mut found = vec![];
+    visit(&LinkedNode::new(parsed.root()), &mut found);
+    found == [true]
+}
+
+/// Source candidates become selectable only when the same successful native
+/// product emitted one real object at that exact main-source span.
+pub(crate) fn unlabelled_reference_targets(
+    source: &str,
+    tree: &weftext_engine::RenderNode,
+) -> Vec<serde_json::Value> {
+    use typst_syntax::{
+        LinkedNode, Source, SyntaxKind,
+        ast::{self, AstNode},
+    };
+    fn count(node: &weftext_engine::RenderNode, from: usize, kind: &str) -> usize {
+        usize::from(
+            node.origin
+                .as_ref()
+                .is_some_and(|origin| origin.is_main && origin.from == from)
+                && node
+                    .attrs
+                    .get("data-weftext-role")
+                    .is_some_and(|role| role == kind),
+        ) + node
+            .children
+            .iter()
+            .map(|child| count(child, from, kind))
+            .sum::<usize>()
+    }
+    let parsed = Source::detached(source);
+    let root = LinkedNode::new(parsed.root());
+    let labelled = weftext_engine::inspect_native_citation_editor(source).targets;
+    let mut out = Vec::new();
+    for node in root.children() {
+        let kind = match node.kind() {
+            SyntaxKind::Heading => "heading",
+            SyntaxKind::Equation => "equation",
+            _ => {
+                let Some(call) = node.get().cast::<ast::FuncCall>() else {
+                    continue;
+                };
+                let Some(name) = call.callee().to_untyped().cast::<ast::Ident>() else {
+                    continue;
+                };
+                if !matches!(name.get().as_str(), "figure" | "table")
+                    || !weftext_engine::standard_binding_available(source, name.get())
+                {
+                    continue;
+                }
+                if name.get() == "figure" {
+                    "figure"
+                } else {
+                    "table"
+                }
+            }
+        };
+        let range = node.range();
+        if labelled
+            .iter()
+            .any(|target| target.range.from == range.start)
+            || count(tree, range.start, kind) != 1
+        {
+            continue;
+        }
+        out.push(serde_json::json!({"kind":kind,"range":{"from":range.start,"to":range.end,"utf16From":source[..range.start].encode_utf16().count(),"utf16To":source[..range.end].encode_utf16().count(),"raw":source[range.clone()],"writable":true},"title":source[range].chars().take(80).collect::<String>()}));
+    }
+    out
+}
+
+pub(crate) fn reference_numbered_at(
+    tree: &weftext_engine::RenderNode,
+    from: usize,
+) -> Option<bool> {
+    if tree
+        .origin
+        .as_ref()
+        .is_some_and(|origin| origin.is_main && origin.from == from)
+        && tree
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|role| matches!(role.as_str(), "heading" | "figure" | "equation"))
+    {
+        if let Some(numbered) = tree.attrs.get("data-weftext-numbered") {
+            return Some(numbered == "true");
+        }
+        if let Some(kind) = tree.attrs.get("data-weftext-numbering-kind") {
+            return Some(kind != "none");
+        }
+    }
+    tree.children
+        .iter()
+        .find_map(|child| reference_numbered_at(child, from))
+}
+
+pub(crate) fn classify_reference_controls(
+    editor: &mut serde_json::Value,
+    tree: Option<&weftext_engine::RenderNode>,
+) {
+    fn document_reference(node: &weftext_engine::RenderNode, from: usize, label: &str) -> bool {
+        node.origin
+            .as_ref()
+            .is_some_and(|origin| origin.is_main && origin.from == from)
+            && node
+                .attrs
+                .get("data-weftext-role")
+                .is_some_and(|role| role == "reference")
+            && node
+                .attrs
+                .get("data-weftext-label")
+                .is_some_and(|value| value == label)
+            || node
+                .children
+                .iter()
+                .any(|child| document_reference(child, from, label))
+    }
+    let citations = tree.map(displayed_citations).unwrap_or_default();
+    if let Some(references) = editor["crossReferences"].as_array_mut() {
+        for reference in references {
+            let from = reference["range"]["from"].as_u64().unwrap_or(u64::MAX) as usize;
+            let label = reference["label"].as_str().unwrap_or("");
+            let kind = if tree.is_some_and(|tree| document_reference(tree, from, label)) {
+                "document"
+            } else if citations.iter().any(|citation| {
+                citation["key"] == label && citation["range"]["from"].as_u64() == Some(from as u64)
+            }) {
+                "citation"
+            } else if reference["kind"] == "link" {
+                "documentSourceLink"
+            } else {
+                "unconfirmed"
+            };
+            reference["renderedKind"] = serde_json::json!(kind);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +456,114 @@ mod tests {
     const LIB: &str = "58c47256-bfce-4d29-a037-b83a3a644fb0";
     const OWNER: &str = "12d7c4f3-9ee6-4c36-920d-ec6af27bc654";
     const WORK: &str = "8aa10c08-3e7d-4d10-9488-92bc7f393050";
+    #[test]
+    fn compiled_citation_products_keep_actual_members_and_hide_physical_origins() {
+        let mut node = weftext_engine::RenderNode {
+            key: "producer".into(),
+            kind: "element".into(),
+            tag: Some("span".into()),
+            text: None,
+            attrs: std::collections::BTreeMap::new(),
+            children: vec![],
+            origin: None,
+            writable: false,
+        };
+        node.attrs.insert("role".into(), "doc-biblioref".into());
+        assert!(displayed_citations(&node).is_empty());
+        node.attrs
+            .insert("data-weftext-role".into(), "citation".into());
+        node.attrs.insert(
+            "data-weftext-citation-keys".into(),
+            "[\"one\",\"two\"]".into(),
+        );
+        node.attrs.insert(
+            "data-weftext-citation-forms".into(),
+            "[\"normal\",\"none\"]".into(),
+        );
+        node.attrs.insert(
+            "data-weftext-citation-origins".into(),
+            serde_json::to_string(&vec![
+                Some(weftext_engine::Origin {
+                    path: "PRIVATE_SERVER_PATH".into(),
+                    from: 0,
+                    to: 4,
+                    utf16_from: 0,
+                    utf16_to: 4,
+                    raw: "@one".into(),
+                    syntax_kind: "Ref".into(),
+                    is_main: true,
+                }),
+                None,
+            ])
+            .unwrap(),
+        );
+        let products = displayed_citations(&node);
+        assert_eq!(products.len(), 2);
+        assert_eq!(products[1]["visibility"], "bibliographyOnly");
+        assert!(
+            !serde_json::to_string(&products)
+                .unwrap()
+                .contains("PRIVATE_SERVER_PATH")
+        );
+    }
+    #[test]
+    fn unlabelled_target_requires_one_real_object_and_label_plus_ref_compile_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("citation-target.typ");
+        let source = "#set heading(numbering: \"1.\")\n= 未标记目标\n\n正文\n";
+        let engine = weftext_engine::Engine::new().unwrap();
+        let output = engine.render(source, &path, dir.path()).unwrap();
+        assert!(output.ok, "{:?}", output.diagnostics);
+        let candidates = unlabelled_reference_targets(source, output.tree.as_ref().unwrap());
+        assert_eq!(candidates.len(), 1);
+        let target =
+            serde_json::from_value::<weftext_engine::SourceRange>(candidates[0]["range"].clone())
+                .unwrap();
+        let edited = weftext_engine::insert_native_cross_reference_with_label(
+            source,
+            &weftext_engine::source_hash(source),
+            source.find("正文").unwrap(),
+            &target,
+            "新目标",
+            false,
+        )
+        .unwrap();
+        assert_eq!(edited.patches.len(), 2);
+        let rendered = engine.render(&edited.source, &path, dir.path()).unwrap();
+        assert!(rendered.ok, "{:?}", rendered.diagnostics);
+        assert!(
+            rendered
+                .labels
+                .iter()
+                .any(|label| label.label == "新目标" && label.count == 1)
+        );
+        assert!(
+            unlabelled_reference_targets(&edited.source, rendered.tree.as_ref().unwrap())
+                .is_empty()
+        );
+    }
+    #[test]
+    fn official_citation_groups_keep_bibliography_only_members_separate_from_visible_members() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("works.bib"),
+            "@article{entry, title={Native Citation}, author={Author, First}, year={2026}}\n",
+        )
+        .unwrap();
+        let engine = weftext_engine::Engine::new().unwrap();
+        let source = "#cite(<entry>, form: none)\n\n#cite(<entry>, form: \"prose\")\n\n#bibliography(\"works.bib\")";
+        let output = engine
+            .render(source, &dir.path().join("citation.typ"), dir.path())
+            .unwrap();
+        assert!(output.ok, "{:?}", output.diagnostics);
+        let products = displayed_citations(output.tree.as_ref().unwrap());
+        assert!(
+            products
+                .iter()
+                .any(|item| item["visibility"] == "bibliographyOnly")
+        );
+        assert!(products.iter().any(|item| item["form"] == "prose"));
+    }
     fn fixture() -> (AdmittedCompileSnapshot, String, std::path::PathBuf) {
         let root = std::env::temp_dir().join("weftext-frozen-citation-fixture");
         let owner_path = root.join("owner.typ");

@@ -1,0 +1,8 @@
+.diagram-panel { width:min(800px,calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; }
+.diagram-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.diagram-header h2 { margin:0; font-size:19px; }
+.diagram-source { display:block; width:100%; box-sizing:border-box; margin:12px 0; font-family:ui-monospace,monospace; resize:vertical; }
+.diagram-preview { margin:12px 0; max-height:420px; overflow:auto; background:white; border:1px solid var(--border,#ddd); }
+.diagram-preview:empty { display:none; }
+.diagram-preview img { display:block; width:100%; height:auto; }
+.diagram-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }

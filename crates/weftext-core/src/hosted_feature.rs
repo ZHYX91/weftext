@@ -9,6 +9,8 @@ pub use structure::{ActorStructureNode, ActorStructureReceipt, FeatureTreeWitnes
 mod navigation;
 pub use navigation::HostedNavigationIntent;
 use navigation::NavigationFeature;
+#[path = "hosted_prepared_read.rs"]
+mod prepared_read;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +37,7 @@ enum FeatureIntentKind {
     ImportDocx,
     ImportNative,
     ImportBibliography,
+    ImportRecognized,
     ConfigureStyle,
     ImportResource,
     NewNode,
@@ -52,9 +55,12 @@ impl FeatureIntentKind {
     fn from_intent(intent: &OperationIntent) -> Result<Self> {
         match intent {
             OperationIntent::UpdateFiles { .. } => Ok(Self::UpdateFiles),
-            OperationIntent::ImportDocx { .. } => Ok(Self::ImportDocx),
+            OperationIntent::ImportDocx { .. } | OperationIntent::ImportDocxWithOptions { .. } => {
+                Ok(Self::ImportDocx)
+            }
             OperationIntent::ImportNative { .. } => Ok(Self::ImportNative),
             OperationIntent::ImportBibliography { .. } => Ok(Self::ImportBibliography),
+            OperationIntent::ImportRecognized { .. } => Ok(Self::ImportRecognized),
             OperationIntent::ConfigureStyle { .. } => Ok(Self::ConfigureStyle),
             OperationIntent::ImportResource { .. } => Ok(Self::ImportResource),
             OperationIntent::NewNode { .. } => Ok(Self::NewNode),
@@ -76,6 +82,7 @@ impl FeatureIntentKind {
             Self::ImportDocx => "importDocx",
             Self::ImportNative => "importNative",
             Self::ImportBibliography => "importBibliography",
+            Self::ImportRecognized => "importRecognized",
             Self::ConfigureStyle => "configureStyle",
             Self::ImportResource => "importResource",
             Self::NewNode => "newNode",
@@ -96,6 +103,7 @@ impl FeatureIntentKind {
             Self::ImportDocx
                 | Self::ImportNative
                 | Self::ImportBibliography
+                | Self::ImportRecognized
                 | Self::CopyNode
                 | Self::TemplateNode
         )
@@ -182,7 +190,9 @@ fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> serde_
     }
     if matches!(
         kind,
-        FeatureIntentKind::ImportNative | FeatureIntentKind::ImportBibliography
+        FeatureIntentKind::ImportNative
+            | FeatureIntentKind::ImportBibliography
+            | FeatureIntentKind::ImportRecognized
     ) {
         // Only finite producer-defined meanings cross this trusted wrapper.
         // Never deliver source paths, schema IDs or original loss details.
@@ -469,7 +479,9 @@ impl Core {
         let kind = feature.kind();
         let resource_refs = if matches!(
             kind,
-            FeatureIntentKind::ImportResource | FeatureIntentKind::ConfigureStyle
+            FeatureIntentKind::ImportResource
+                | FeatureIntentKind::ConfigureStyle
+                | FeatureIntentKind::ImportRecognized
         ) && matches!(status, "prepared" | "committed" | "recoveryPending")
         {
             detail
@@ -750,7 +762,33 @@ impl Core {
                 "Transfer source capabilities belong only to copy or template",
             ));
         }
-        let docx_import = matches!(request.intent, OperationIntent::ImportDocx { .. });
+        let docx_import = matches!(
+            request.intent,
+            OperationIntent::ImportDocx { .. } | OperationIntent::ImportDocxWithOptions { .. }
+        );
+        if let OperationIntent::ImportDocxWithOptions {
+            bytes,
+            options,
+            originals,
+            conversion_losses,
+            ..
+        } = &request.intent
+        {
+            let extra = originals.iter().try_fold(bytes.len(), |total, original| {
+                total.checked_add(original.bytes.len())
+            });
+            if originals.len() > 4
+                || extra.is_none_or(|total| total > 16 * 1024 * 1024)
+                || serde_json::to_vec(options)?.len() > 1024 * 1024
+                || conversion_losses.len() > 128
+                || serde_json::to_vec(conversion_losses)?.len() > 256 * 1024
+            {
+                return Err(CoreError::new(
+                    "featureBudget",
+                    "Word options, originals and conversion losses exceed the bounded actor import budget",
+                ));
+            }
+        }
         let over_budget = match &mut request.intent {
             OperationIntent::UpdateFiles { changes } => {
                 changes.is_empty()
@@ -778,11 +816,25 @@ impl Core {
                 allow_losses,
                 ..
             }
+            | OperationIntent::ImportRecognized {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+                ..
+            }
             | OperationIntent::ImportDocx {
                 parent,
                 name,
                 bytes,
                 allow_losses,
+            }
+            | OperationIntent::ImportDocxWithOptions {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+                ..
             } => {
                 // Preparing reports all losses. Acceptance belongs to commit of
                 // the exact frozen plan, never to a pre-checked upload checkbox.

@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 
 use ecow::{EcoString, eco_format, eco_vec};
 use typst_assets::mathml::*;
+use typst_library::World;
 use typst_library::diag::{SourceResult, warning};
 use typst_library::engine::Engine;
 use typst_library::foundations::{Content, NativeElement, StyleChain, StyledElem};
@@ -19,9 +20,9 @@ use typst_syntax::Span;
 use typst_utils::Numeric;
 use unicode_math_class::MathClass;
 
-use crate::HtmlElem;
 use crate::css::ToCss;
 use crate::tag::mathml as tag;
+use crate::{HtmlElem, WeftextHtmlSemantics};
 use crate::{attr::mathml as attr, css};
 
 /// How Typst overrides the [MathML Core User Agent Stylesheet][UA].
@@ -443,7 +444,12 @@ impl<'v, 'e> MathContext<'v, 'e> {
     /// Handle the given item and collapse the resulting nodes into a single
     /// node.
     fn handle_into_node(&mut self, item: &MathItem) -> SourceResult<Content> {
-        Ok(self.handle_into_nodes(item)?.into_content())
+        let span = proven_group_span(item, self.engine);
+        let mut content = self.handle_into_nodes(item)?.into_content();
+        if let Some(span) = span {
+            span_inner_html_elem(&mut content, span);
+        }
+        Ok(content)
     }
 
     /// Handle the given item and collapse the resulting nodes into a single
@@ -454,9 +460,14 @@ impl<'v, 'e> MathContext<'v, 'e> {
         item: &MathItem,
         only: Form,
     ) -> SourceResult<Content> {
-        Ok(self
+        let span = proven_group_span(item, self.engine);
+        let mut content = self
             .handle_into_nodes_with_only_form(item, Some(only))?
-            .into_content())
+            .into_content();
+        if let Some(span) = span {
+            span_inner_html_elem(&mut content, span);
+        }
+        Ok(content)
     }
 
     /// Handle the given item as a lone child and strip form/spacing attributes
@@ -633,6 +644,10 @@ fn handle_realized(
                 .with_optional_attr(attr::displaystyle, displaystyle)
                 .with_css(properties)
         });
+        // Keep the realized mathematical component's native source span on its
+        // semantic MathML object, not just its glyph text. Exact formula and
+        // subexpression review maps consume this producer evidence.
+        span_inner_html_elem(&mut node, props.span);
         ctx.push(if modified {
             ctx.apply_diverging(node, styles)
         } else {
@@ -1072,6 +1087,7 @@ fn handle_fenced(
     // https://bugzilla.mozilla.org/show_bug.cgi?id=236963
     // https://bugzilla.mozilla.org/show_bug.cgi?id=2018403
     Ok(HtmlElem::new(tag::mrow)
+        .with_weftext(WeftextHtmlSemantics::new("math-fence"))
         .with_body(Some(Content::sequence(children)))
         .pack())
 }
@@ -1258,10 +1274,81 @@ fn modify_inner_html_elem(content: &mut Content, f: impl FnOnce(HtmlElem) -> Htm
     }
     if content.is::<HtmlElem>() {
         let taken = std::mem::take(content);
-        *content = f(taken.into_packed::<HtmlElem>().unwrap().unpack()).pack();
+        let span = taken.span();
+        *content = f(taken.into_packed::<HtmlElem>().unwrap().unpack())
+            .pack()
+            .spanned(span);
         return true;
     }
     false
+}
+
+fn span_inner_html_elem(content: &mut Content, span: Span) {
+    if let Some(styled) = content.to_packed_mut::<StyledElem>() {
+        span_inner_html_elem(&mut styled.child, span);
+    } else if content.is::<HtmlElem>() {
+        *content = std::mem::take(content).spanned(span);
+    }
+}
+
+/// The native IR flattens math groups and creates their properties with a
+/// detached span. Recover only an exact existing AST node whose entire range
+/// is covered by ordered component provenance and whitespace gaps. Missing,
+/// reordered, generated, repeated or multi-source components cannot acquire a
+/// guessed group source merely because their displayed glyphs look familiar.
+fn proven_group_span(item: &MathItem, engine: &Engine) -> Option<Span> {
+    if !item.span().is_detached() {
+        return Some(item.span());
+    }
+    fn leaves(item: &MathItem, spans: &mut Vec<Span>) -> Option<()> {
+        match item {
+            MathItem::Component(comp) if !comp.props.span.is_detached() => {
+                spans.push(comp.props.span)
+            }
+            MathItem::Component(comp) => {
+                let MathKind::Group(group) = &comp.kind else {
+                    return None;
+                };
+                for child in &group.items {
+                    leaves(child, spans)?;
+                }
+            }
+            MathItem::Space | MathItem::Tag(_) => {}
+            MathItem::Spacing(..) => return None,
+        }
+        Some(())
+    }
+    let mut spans = vec![];
+    leaves(item, &mut spans)?;
+    let first = *spans.first()?;
+    let id = first.id()?;
+    let source = engine.world.source(id).ok()?;
+    let mut ranges = vec![];
+    for span in spans {
+        if span.id() != Some(id) {
+            return None;
+        }
+        ranges.push(source.find(span)?.range());
+    }
+    for pair in ranges.windows(2) {
+        if pair[0].end > pair[1].start
+            || !source
+                .text()
+                .get(pair[0].end..pair[1].start)?
+                .chars()
+                .all(char::is_whitespace)
+        {
+            return None;
+        }
+    }
+    let target = ranges.first()?.start..ranges.last()?.end;
+    let mut node = source.find(first)?;
+    loop {
+        if node.range() == target {
+            return Some(node.span());
+        }
+        node = node.parent()?.clone();
+    }
 }
 
 /// Whether the text is one of the dedicated Unicode prime characters.

@@ -371,7 +371,24 @@ impl Core {
         dependencies: &[SnapshotWitness],
     ) -> Result<()> {
         for witness in dependencies {
-            self.validate_snapshot_witness(root, Path::new(&witness.binding.path), witness)?;
+            self.validate_snapshot_witness(root, Path::new(&witness.binding.path), witness)
+                .inspect_err(|error| {
+                    let kind = match Path::new(&witness.binding.path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                    {
+                        Some(".weftext-rules") => "rules",
+                        Some(".weftext-workspace.json") => "workspace",
+                        Some(".weftext-format") => "format",
+                        Some(".weftext-mvp-commit.json") => "commit",
+                        _ => "other",
+                    };
+                    resource_diagnostics::error(
+                        &format!("query.control.{kind}"),
+                        &witness.binding.path,
+                        error,
+                    );
+                })?;
         }
         Ok(())
     }

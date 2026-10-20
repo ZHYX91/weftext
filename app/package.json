@@ -1,6 +1,6 @@
 {
   "name": "weftext-app",
-  "version": "0.6.0",
+  "version": "0.6.3-alpha.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "@codemirror/search": "^6.5.11",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.6",
+    "mermaid": "12.2.0",
     "pdfjs-dist": "6.4.299"
   },
   "devDependencies": {

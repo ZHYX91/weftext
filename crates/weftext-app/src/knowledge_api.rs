@@ -322,6 +322,7 @@ async fn proofread(
     Json(request): Json<ProofreadRequest>,
 ) -> ApiResult {
     observe(&state, &request.context)?;
+    validate_processing_origin(&state, &request.context, &request.options).await?;
     let bundle = bundle(&state, &request.context).await?;
     let scan = proofreading_scan(&state, &request.context, &bundle, &request.options)?;
     let existing = annotation_document(&bundle.annotations_file)
@@ -335,9 +336,61 @@ async fn proofread(
         })
         .unwrap_or_default();
     exact(&state, &request.context)?;
+    validate_processing_origin(&state, &request.context, &request.options).await?;
     let mut output = value(scan)?;
     output["existing"] = json!(existing);
     Ok(Json(output))
+}
+
+/// Shared suggestions become a dependency of the explicit adopted operation,
+/// while the operation's language and rule inputs remain exactly its own.
+async fn validate_processing_origin(
+    state: &AppState,
+    context: &Context,
+    options: &knowledge::ProofreadOptions,
+) -> Result<Option<weftext_core::ConfigDocument>, ApiError> {
+    let Some(origin) = &options.processing_origin else {
+        return Ok(None);
+    };
+    if origin.source != "shared-library" || origin.base_id.is_empty() {
+        return Err(ApiError::bad("共享处理建议缺少准确来源依据，原输入保留"));
+    }
+    let root = location(state, &context.session_id)?.root;
+    let read_root = root.clone();
+    let original_base = origin.base_id.clone();
+    let original_path = root.join(".weftext-settings.json");
+    let mut document = core_call(state, move |core| {
+        core.validate_snapshot(&read_root, original_path, &original_base)?;
+        core.read_config(read_root, weftext_core::ConfigRole::WorkspaceSettings)
+    })
+    .await?;
+    if origin
+        .revision
+        .as_ref()
+        .is_some_and(|revision| document.revision.as_ref() != Some(revision))
+    {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "processingOriginChanged",
+            "共享处理建议的原版本已变化，请保留本次输入并重新核对共享来源",
+        ));
+    }
+    let settings: Value = serde_json::from_slice(
+        document
+            .bytes
+            .as_deref()
+            .ok_or_else(|| ApiError::bad("原共享处理设置当前不可用"))?,
+    )
+    .map_err(|_| ApiError::bad("共享库设置当前不能解析，原输入保留"))?;
+    let processing: knowledge::ProcessingDocument =
+        serde_json::from_value(settings["processing"].clone())
+            .map_err(|_| ApiError::bad("原共享处理建议当前不可用，原输入保留"))?;
+    processing.validate().map_err(knowledge_error)?;
+    let path = document.path.clone();
+    let base = origin.base_id.clone();
+    core_call(state, move |core| core.validate_snapshot(root, path, &base)).await?;
+    document.base_id = origin.base_id.clone();
+    Ok(Some(document))
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -422,6 +475,7 @@ fn annotations_path(path: &Path) -> Result<String, ApiError> {
 }
 
 struct Bundle {
+    mention_candidates: Vec<knowledge::MentionCandidate>,
     inventory: knowledge::InventorySnapshot,
     selected: knowledge::NodeSnapshot,
     committed: knowledge::NodeSnapshot,
@@ -433,6 +487,7 @@ struct Bundle {
     schema_generation: String,
     files: Vec<SnapshotFile>,
     style_generation: String,
+    citation_rename_available: bool,
     settings: SnapshotFile,
 }
 
@@ -585,6 +640,10 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     // Projection generations describe the actual consumed facts, not write
     // qualification. Core base IDs remain private guarded proofs.
     let style = crate::writing_api::style_environment(state, &context.session_id).await?;
+    let citation_rename_available = style
+        .style
+        .as_ref()
+        .is_none_or(weftext_engine::style_allows_rich_editing);
     let mut files = cut.files;
     files.push(settings.clone());
     if let Some(schema) = cut.schema {
@@ -631,6 +690,7 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     };
     exact(state, context)?;
     Ok(Bundle {
+        mention_candidates: vec![],
         inventory,
         selected,
         committed,
@@ -642,6 +702,7 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         schema_generation,
         files,
         style_generation: style.key,
+        citation_rename_available,
         settings,
     })
 }
@@ -654,7 +715,7 @@ async fn populate_labels(
     bundle: &mut Bundle,
     target: &knowledge::NodeRef,
 ) -> Result<(), ApiError> {
-    let Some(node) = bundle
+    let Some(mut node) = bundle
         .inventory
         .nodes
         .iter()
@@ -663,12 +724,25 @@ async fn populate_labels(
     else {
         return Ok(());
     };
+    if node.owner == bundle.selected.owner {
+        node = bundle.selected.clone();
+    }
+    if node.labels_complete {
+        return Ok(());
+    }
     let path = file_path(&node.path)?;
     let Some(file) = bundle.files.iter().find(|file| file.path == path).cloned() else {
         return Ok(());
     };
     let loc = location(state, &context.session_id)?;
     let environment = crate::writing_api::style_environment(state, &context.session_id).await?;
+    let files = draft_compile_files(
+        &loc.root,
+        Path::new(&path),
+        &file,
+        &frozen_map(&loc.root, &bundle.files, None)?,
+        &node.source,
+    )?;
     let output = match super::render_frozen_worker(
         state,
         weftext_engine::FrozenRenderRequest {
@@ -676,7 +750,7 @@ async fn populate_labels(
             path: path.clone().into(),
             root: loc.root.clone(),
             style: environment.style.clone(),
-            files: frozen_map(&loc.root, &bundle.files, None)?,
+            files,
         },
     )
     .await
@@ -712,7 +786,6 @@ async fn populate_labels(
                 .map(|path| path.to_string_lossy().replace('\\', "/"))
         })
         .collect();
-    allowed.insert(".weftext-runtime-entry.typ".into());
     if let Some(style) = &environment.style {
         allowed.insert(style.path.replace('\\', "/"));
     }
@@ -721,9 +794,10 @@ async fn populate_labels(
         .is_some_and(|dependencies| {
             dependencies.iter().all(|dependency| {
                 dependency["status"] == "loaded"
-                    && dependency["path"]
-                        .as_str()
-                        .is_some_and(|path| allowed.contains(path))
+                    && (derived_render_input(dependency)
+                        || dependency["path"]
+                            .as_str()
+                            .is_some_and(|path| allowed.contains(path)))
             })
         })
     {
@@ -748,8 +822,21 @@ async fn populate_labels(
         .iter_mut()
         .find(|node| &node.owner == target)
     {
-        node.labels = actual;
+        node.labels = actual.clone();
         node.labels_complete = true;
+        let headings: Vec<weftext_engine::HeadingInfo> =
+            serde_json::from_value(output["sourceInfo"]["headings"].clone()).unwrap_or_default();
+        let labels: Vec<weftext_engine::CompiledLabel> =
+            serde_json::from_value(output["labels"].clone()).unwrap_or_default();
+        bundle
+            .mention_candidates
+            .extend(knowledge::compiled_mention_candidates(
+                node, &headings, &labels,
+            ));
+    }
+    if bundle.selected.owner == *target {
+        bundle.selected.labels = actual;
+        bundle.selected.labels_complete = true;
     }
     Ok(())
 }
@@ -768,6 +855,28 @@ async fn qualify_link_fragment(
         if let Some(target) = target {
             populate_labels(state, context, bundle, &target).await?;
         }
+    }
+    Ok(())
+}
+async fn populate_diagnostic_labels(
+    state: &AppState,
+    context: &Context,
+    bundle: &mut Bundle,
+) -> Result<(), ApiError> {
+    // One bounded compile set, shared by read and conversion requalification.
+    let targets: Vec<_> = std::iter::once(bundle.selected.owner.clone())
+        .chain(
+            bundle
+                .inventory
+                .nodes
+                .iter()
+                .filter(|n| n.owner != bundle.selected.owner)
+                .map(|n| n.owner.clone()),
+        )
+        .take(8)
+        .collect();
+    for target in targets {
+        populate_labels(state, context, bundle, &target).await?;
     }
     Ok(())
 }
@@ -806,14 +915,19 @@ fn mentions(
         .as_ref()
         .map(knowledge::visible_fragments)
         .unwrap_or_default();
-    let mut scan = knowledge::scan_mentions(
+    let mut scan = knowledge::scan_mentions_with_candidates(
         &bundle.inventory,
         &bundle.selected.owner,
         &fragments,
+        &bundle.mention_candidates,
         2_000_000,
+        20_000,
     )
     .map_err(knowledge_error)?;
     if tree.is_none() {
+        scan.coverage = knowledge::Coverage::Partial;
+    }
+    if bundle.inventory.nodes.iter().any(|n| !n.labels_complete) {
         scan.coverage = knowledge::Coverage::Partial;
     }
     Ok(scan)
@@ -846,13 +960,19 @@ fn annotation_projection(
 async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -> ApiResult {
     observe(&state, &request.context)?;
     let mut bundle = bundle(&state, &request.context).await?;
+    populate_diagnostic_labels(&state, &request.context, &mut bundle).await?;
     let selected = bundle.committed.owner.clone();
     let fragment_incoming = bundle
         .inventory
         .nodes
         .iter()
         .flat_map(|node| {
-            knowledge::native_links_bounded(&node.source, 20_000, 4 * 1024 * 1024).links
+            let source = if node.owner == bundle.selected.owner {
+                &bundle.selected.source
+            } else {
+                &node.source
+            };
+            knowledge::native_links_bounded(source, 20_000, 4 * 1024 * 1024).links
         })
         .any(|link| link.target.contains('#'));
     if fragment_incoming {
@@ -934,6 +1054,11 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
                             enrich_ref(target, &bundle.inventory);
                         }
                     }
+                    if let Some(candidates) = hit["candidates"].as_array_mut() {
+                        for candidate in candidates {
+                            enrich_ref(&mut candidate["target"], &bundle.inventory);
+                        }
+                    }
                 }
             }
         }
@@ -1005,6 +1130,44 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         }
     }
     let property_references = json!({"coverage":if property_complete {"complete"} else {"partial"},"items":properties,"diagnostics":property_diagnostics});
+    let mut diagnostic_inventory = bundle.inventory.clone();
+    if let Some(node) = diagnostic_inventory
+        .nodes
+        .iter_mut()
+        .find(|n| n.owner == bundle.selected.owner)
+    {
+        *node = bundle.selected.clone();
+    }
+    let mut link_diagnostics = value(knowledge::link_diagnostics(
+        &diagnostic_inventory,
+        &property_inputs,
+        property_complete,
+        20_000,
+    ))?;
+    if let Some(issues) = link_diagnostics["issues"].as_array_mut() {
+        for edge in issues {
+            enrich_ref(&mut edge["source"], &bundle.inventory);
+            enrich_ref(&mut edge["resolution"]["target"], &bundle.inventory);
+            if let Some(node) = diagnostic_inventory
+                .nodes
+                .iter()
+                .find(|n| edge["source"]["nodeId"] == n.owner.node_id)
+            {
+                edge["sourceHash"] = json!(weftext_engine::source_hash(&node.source));
+            }
+        }
+    }
+    if let Some(nodes) = link_diagnostics["nodes"].as_array_mut() {
+        for node in nodes {
+            enrich_ref(&mut node["node"], &bundle.inventory);
+        }
+    }
+    if let Some(items) = link_diagnostics["propertyIssues"].as_array_mut() {
+        for item in items {
+            enrich_ref(&mut item["source"], &bundle.inventory);
+            enrich_ref(&mut item["resolution"]["target"], &bundle.inventory);
+        }
+    }
     let tree = render_tree(&state, &request.context, &bundle.style_generation)?;
     let rendered_links = tree
         .as_ref()
@@ -1020,6 +1183,41 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
             )
         })
         .unwrap_or_default();
+    let (citation_tree, citation_labels) =
+        citation_products(&state, &request.context, &bundle).await?;
+    let mut citations = citation_catalog(&bundle, citation_tree.as_ref());
+    crate::citation_api::classify_reference_controls(
+        &mut citations["editor"],
+        citation_tree.as_ref(),
+    );
+    citations["unlabelledTargets"] = json!(
+        citation_tree
+            .as_ref()
+            .map(|tree| crate::citation_api::unlabelled_reference_targets(
+                &request.context.source,
+                tree
+            ))
+            .unwrap_or_default()
+    );
+    if let Some(targets) = citations["editor"]["targets"].as_array_mut() {
+        targets.retain(|target| {
+            if !matches!(
+                target["kind"].as_str(),
+                Some("heading" | "figure" | "table" | "equation" | "footnote")
+            ) {
+                return false;
+            }
+            citation_labels.iter().any(|label| {
+                label.label == target["label"].as_str().unwrap_or("")
+                    && label.count == 1
+                    && label.origins.iter().any(|origin| {
+                        origin.is_main
+                            && origin.from
+                                == target["range"]["from"].as_u64().unwrap_or(u64::MAX) as usize
+                    })
+            })
+        });
+    }
     let loc = location(&state, &request.context.session_id)?;
     if crate::data_api::knowledge_schema(&state, loc.root).await?.1 != bundle.schema_generation {
         return Err(ApiError::new(
@@ -1037,7 +1235,7 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         }
     };
     Ok(Json(
-        json!({"links":links,"renderedLinks":rendered_links,"propertyReferences":property_references,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings}),
+        json!({"links":links,"diagnostics":link_diagnostics,"renderedLinks":rendered_links,"propertyReferences":property_references,"citations":citations,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings}),
     ))
 }
 fn unsigned(value: &Value, key: &str) -> Result<u64, ApiError> {
@@ -1231,6 +1429,580 @@ fn enrich_ref(reference: &mut Value, inventory: &knowledge::InventorySnapshot) {
     }
 }
 
+fn citation_catalog(bundle: &Bundle, tree: Option<&weftext_engine::RenderNode>) -> Value {
+    let selected = &bundle.selected;
+    let mut citation_complete = bundle.inventory.coverage == knowledge::Coverage::Complete
+        && tree.is_some()
+        && bundle.citation_rename_available;
+    let mut choices = Vec::new();
+    for node in &bundle.inventory.nodes {
+        let node = if node.owner == selected.owner {
+            selected
+        } else {
+            node
+        };
+        let projection = weftext_data::project(&node.source, &bundle.schema);
+        let reference = format!(
+            "weftext-node://{}/{}",
+            node.owner.workspace_id, node.owner.node_id
+        );
+        let publication = projection
+            .fields
+            .iter()
+            .find(|field| field.field_id == "library/publication")
+            .and_then(|field| field.cell.native())
+            .cloned();
+        let typed = projection.qualification == "qualified"
+            && projection
+                .resolved_types
+                .iter()
+                .any(|kind| kind == "library/work");
+        let suggestion = publication
+            .as_ref()
+            .and_then(|p| p.member("citation_key"))
+            .and_then(weftext_data::NativeValue::text)
+            .unwrap_or("");
+        let ready = typed
+            && publication.clone().is_some_and(|publication| {
+                weftext_export::bibliography::project_bibliography(
+                    &[weftext_export::bibliography::CitationWork {
+                        key: "validation".into(),
+                        work: weftext_export::bibliography::FrozenWork {
+                            entity_ref: reference.clone(),
+                            source_basis: "current-authorized-catalog".into(),
+                            publication,
+                        },
+                    }],
+                    weftext_export::bibliography::BibliographyFormat::Bibtex,
+                )
+                .is_ok()
+            });
+        choices.push(json!({"reference":reference,"title":node.title.as_deref().unwrap_or("未设置可确认标题"),"node":node.owner,"citationReady":ready,"suggestedKey":suggestion,"reason":if ready {None} else {Some("正式文献引用需要已获权且符合 library/work 的完整出版数据；仍可插入普通链接。")}}));
+    }
+    let mut editor = weftext_engine::inspect_native_citation_editor(&selected.source);
+    if !bundle.citation_rename_available {
+        editor.rename_available = false;
+        editor.rename_reason =
+            Some("当前库样式可能生成外部引用，不能证明完整改名范围；保留源码。".into());
+    }
+    // Source controls are deliberately kept separate from target-specific
+    // display evidence. An unexecuted cite is never counted as visible.
+    let mut groups = Vec::new();
+    for binding in &editor.bindings {
+        let source_slots = editor
+            .citations
+            .iter()
+            .filter(|slot| slot.key == binding.key && slot.binding_proven)
+            .collect::<Vec<_>>();
+        groups.push(json!({"key":binding.key,"work":binding.work,"authoredSlots":source_slots,"state":if source_slots.is_empty(){"boundOnly"}else{"authored"}}));
+    }
+    let mut incoming = Vec::new();
+    let reference = format!(
+        "weftext-node://{}/{}",
+        selected.owner.workspace_id, selected.owner.node_id
+    );
+    for node in &bundle.inventory.nodes {
+        let node = if node.owner == selected.owner {
+            selected
+        } else {
+            node
+        };
+        let inspected = weftext_engine::inspect_native_citation_editor(&node.source);
+        if !weftext_engine::native_citation_owner_complete(&node.source)
+            || (!inspected.bindings.is_empty() || !inspected.citations.is_empty())
+                && !crate::citation_api::owns_single_virtual_bibliography(&node.source)
+        {
+            citation_complete = false;
+        }
+        let keys = inspected
+            .bindings
+            .iter()
+            .filter(|binding| binding.work == reference)
+            .map(|binding| binding.key.as_str())
+            .collect::<BTreeSet<_>>();
+        let slots = inspected
+            .citations
+            .iter()
+            .filter(|slot| {
+                keys.contains(slot.key.as_str())
+                    && slot.binding_proven
+                    && crate::citation_api::owns_single_virtual_bibliography(&node.source)
+            })
+            .collect::<Vec<_>>();
+        if !slots.is_empty() {
+            incoming.push(json!({"source":node.owner,"title":node.title,"reference":format!("weftext-node://{}/{}",node.owner.workspace_id,node.owner.node_id),"slots":slots,"visibility":"unconfirmed"}));
+        }
+    }
+    if !bundle.citation_rename_available {
+        incoming.clear();
+    }
+    let displayed = tree
+        .map(crate::citation_api::displayed_citations)
+        .unwrap_or_default();
+    let links=knowledge::native_links(&selected.source).into_iter().filter(|link|link.kind=="native").map(|link|{let resolution=knowledge::resolve_link(&link.target,selected,&bundle.inventory);let title=resolution.target.and_then(|target|bundle.inventory.nodes.iter().find(|node|node.owner==target)).and_then(|node|node.title.clone());json!({"range":{"from":link.from,"to":link.to,"utf16From":link.utf16_from,"utf16To":link.utf16_to,"raw":selected.source.get(link.from..link.to).unwrap_or(""),"writable":true},"target":link.target,"editable":title.is_some()&&link.body_explicit,"title":title,"reason":"无可确认的获权标题或唯一可写正文；请保留源码。"})}).collect::<Vec<_>>();
+    json!({"generation":bundle.inventory.generation,"coverage":if citation_complete{"complete"}else{"partial"},"choices":choices,"editor":editor,"bindings":groups,"incoming":incoming,"displayed":displayed,"links":links,"bibliographyOwnership":if bundle.citation_rename_available && crate::citation_api::owns_single_virtual_bibliography(&selected.source){"singleVirtual"}else{"unavailable"},"displayStatus":if tree.is_some(){"nativeCompileAvailable"}else{"unavailable"},"displayExplanation":"源码引用槽与本次 HTML 编译的显示项分别记录；仅绑定、未执行的条件和 bibliography(full: true) 不计可见正文引用。多个文献表或未知归属的 key 不猜接 Work。"})
+}
+
+async fn citation_products(
+    state: &AppState,
+    context: &Context,
+    bundle: &Bundle,
+) -> Result<
+    (
+        Option<weftext_engine::RenderNode>,
+        Vec<weftext_engine::CompiledLabel>,
+    ),
+    ApiError,
+> {
+    let loc = location(state, &context.session_id)?;
+    let environment = crate::writing_api::style_environment(state, &context.session_id).await?;
+    if environment.key != bundle.style_generation {
+        return Err(ApiError::bad(
+            "原生样式环境已变化，请重新读取引用；输入保留",
+        ));
+    }
+    let expected = bundle
+        .files
+        .iter()
+        .map(|file| {
+            (
+                file.path.clone(),
+                (file.bytes.clone(), file.node_id.clone()),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let original_bases = bundle
+        .files
+        .iter()
+        .map(|file| (file.path.clone(), file.base_id.clone()))
+        .collect::<Vec<_>>();
+    let root = loc.root.clone();
+    let path = loc.path.clone();
+    let source = context.source.clone();
+    let captured = core_call(state, move |core| {
+        for (path, base) in original_bases {
+            core.validate_snapshot(&root, path, &base)?;
+        }
+        let cut = core.admitted_compile_snapshot(&root, "live")?;
+        for file in cut.snapshot.files.iter().chain(cut.snapshot.schema.iter()) {
+            if expected.get(&file.path) != Some(&(file.bytes.clone(), file.node_id.clone())) {
+                return Err(weftext_core::CoreError::new(
+                    "citationCutChanged",
+                    "引用目录与冻结编译不属于同次原生源依据",
+                ));
+            }
+        }
+        // Citation generation may use a self-Work's Draft, but the physical cut
+        // and its original snapshot bytes remain the final recheck evidence.
+        let mut citation_view = cut.clone();
+        let citation = crate::citation_api::freeze_citations(&mut citation_view, &source, &path);
+        Ok((cut, citation))
+    })
+    .await?;
+    let (captured, citation) = captured;
+    let citation = match citation {
+        Ok(value) => value,
+        Err(_) => return Ok((None, vec![])),
+    };
+    let mut files = draft_compile_files(
+        &loc.root,
+        &loc.path,
+        &bundle.source_file,
+        &captured.files,
+        &context.source,
+    )?;
+    if let Some(citation) = &citation {
+        files.insert(
+            citation.virtual_path.clone(),
+            citation.bibliography.bytes.clone(),
+        );
+    }
+    let output = super::render_frozen_worker(
+        state,
+        weftext_engine::FrozenRenderRequest {
+            source: context.source.clone(),
+            path: loc.path.clone(),
+            root: loc.root.clone(),
+            style: captured.style.clone().or_else(|| environment.style.clone()),
+            files,
+        },
+    )
+    .await?;
+    exact(state, context)?;
+    crate::writing_api::check_style_environment(state, &context.session_id, &environment).await?;
+    if output["ok"] != true {
+        return Ok((None, vec![]));
+    }
+    let mut checks = Vec::new();
+    let virtual_path = citation
+        .as_ref()
+        .map(|citation| citation.virtual_path.as_str());
+    for dependency in output["dependencies"].as_array().into_iter().flatten() {
+        let path = dependency["path"]
+            .as_str()
+            .ok_or_else(|| ApiError::bad("原生引用依赖没有准确地址"))?;
+        if derived_render_input(dependency) {
+            continue;
+        }
+        if dependency["status"] != "loaded"
+            || Path::new(path).components().any(|part| {
+                matches!(
+                    part,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return Err(ApiError::bad("原生引用依赖无法完整证明，原稿保留"));
+        }
+        if loc
+            .root
+            .join(path)
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&loc.path.to_string_lossy())
+        {
+            continue;
+        }
+        let expected = if virtual_path == Some(path) {
+            None
+        } else {
+            Some(
+                captured
+                    .files
+                    .get(path)
+                    .cloned()
+                    .ok_or_else(|| ApiError::bad("原生引用依赖未进入冻结源范围"))?,
+            )
+        };
+        checks.push((loc.root.join(path).to_string_lossy().into_owned(), expected));
+    }
+    let root = loc.root;
+    let bases = captured
+        .snapshot
+        .files
+        .iter()
+        .chain(captured.snapshot.schema.iter())
+        .map(|file| (file.path.clone(), file.base_id.clone()))
+        .collect::<Vec<_>>();
+    core_call(state, move |core| {
+        for (path, base) in bases {
+            core.validate_snapshot(&root, path, &base)?;
+        }
+        let checks = checks
+            .into_iter()
+            .collect::<BTreeMap<_, _>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        for chunk in checks.chunks(64) {
+            let paths = chunk
+                .iter()
+                .map(|(path, _)| path.clone())
+                .collect::<Vec<_>>();
+            let current = core.read_snapshot(&root, &paths)?;
+            for (path, expected) in chunk {
+                if current
+                    .files
+                    .iter()
+                    .find(|file| &file.path == path)
+                    .and_then(|file| file.bytes.as_ref())
+                    != expected.as_ref()
+                {
+                    return Err(weftext_core::CoreError::new(
+                        "citationDependencyChanged",
+                        "引用编译依赖已变化，未交付旧位置或编号",
+                    ));
+                }
+            }
+        }
+        Ok(())
+    })
+    .await?;
+    exact(state, context)?;
+    let tree = serde_json::from_value(output["tree"].clone()).ok();
+    let labels = serde_json::from_value(output["labels"].clone()).unwrap_or_default();
+    Ok((tree, labels))
+}
+
+fn native_citation_intent(
+    source: &str,
+    intent: &Value,
+    bundle: &Bundle,
+) -> Result<weftext_engine::EditOutput, ApiError> {
+    let hash = weftext_engine::source_hash(source);
+    if matches!(
+        intent["kind"].as_str(),
+        Some("nativeCitationRename" | "nativeReferenceRename")
+    ) && !bundle.citation_rename_available
+    {
+        return Err(ApiError::bad(
+            "当前库样式可能生成引用，无法证明完整改名范围；原稿保留",
+        ));
+    }
+    if intent["generation"].as_str() != Some(bundle.inventory.generation.as_str()) {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "stale_index",
+            "引用目录或当前草稿已变化，请刷新后重试；输入保留",
+        ));
+    }
+    let fail = |error: weftext_engine::EngineError| {
+        ApiError::new(
+            StatusCode::CONFLICT,
+            "unsupported_citation_edit",
+            error.to_string(),
+        )
+    };
+    let range = || {
+        serde_json::from_value::<weftext_engine::SourceRange>(intent["range"].clone())
+            .map_err(|_| ApiError::bad("缺少准确原生引用范围"))
+    };
+    let form = || {
+        serde_json::from_value::<weftext_engine::CitationForm>(intent["form"].clone())
+            .map_err(|_| ApiError::bad("请选择准确引用形式"))
+    };
+    match text(intent, "kind")? {
+        "nativeCitationInsert" => {
+            let work = text(intent, "work")?;
+            let node = bundle
+                .inventory
+                .nodes
+                .iter()
+                .find(|node| {
+                    format!(
+                        "weftext-node://{}/{}",
+                        node.owner.workspace_id, node.owner.node_id
+                    ) == work
+                })
+                .ok_or_else(|| ApiError::bad("所选 Work 当前不可用；请刷新目录"))?;
+            let node = if node.owner == bundle.selected.owner {
+                &bundle.selected
+            } else {
+                node
+            };
+            let projection = weftext_data::project(&node.source, &bundle.schema);
+            if projection.qualification != "qualified"
+                || !projection
+                    .resolved_types
+                    .iter()
+                    .any(|kind| kind == "library/work")
+            {
+                return Err(ApiError::bad(
+                    "目标不符合正式文献类型，请选择普通链接或完善出版数据",
+                ));
+            }
+            let publication = projection
+                .fields
+                .iter()
+                .find(|field| field.field_id == "library/publication")
+                .and_then(|field| field.cell.native())
+                .cloned()
+                .ok_or_else(|| ApiError::bad("目标出版数据当前不可用"))?;
+            weftext_export::bibliography::project_bibliography(
+                &[weftext_export::bibliography::CitationWork {
+                    key: "validation".into(),
+                    work: weftext_export::bibliography::FrozenWork {
+                        entity_ref: work.into(),
+                        source_basis: "current-authorized-proposal".into(),
+                        publication: publication.clone(),
+                    },
+                }],
+                weftext_export::bibliography::BibliographyFormat::Bibtex,
+            )
+            .map_err(|error| ApiError::bad(error.to_string()))?;
+            let suggestion = publication
+                .member("citation_key")
+                .and_then(weftext_data::NativeValue::text)
+                .unwrap_or("work");
+            weftext_engine::insert_native_citation(
+                source,
+                &hash,
+                integer(intent, "at")?,
+                work,
+                suggestion,
+                intent["key"].as_str().filter(|key| !key.is_empty()),
+                form()?,
+                intent["supplement"].as_str().unwrap_or(""),
+            )
+            .map_err(fail)
+        }
+        "nativeCitationUpdate" => weftext_engine::update_native_citation_options(
+            source,
+            &hash,
+            &range()?,
+            if intent["form"].is_null() {
+                None
+            } else {
+                Some(form()?)
+            },
+            intent["supplement"].as_str(),
+        )
+        .map_err(fail),
+        "nativeCitationStyle" => weftext_engine::update_native_citation_style(
+            source,
+            &hash,
+            &range()?,
+            intent["style"].as_str().filter(|value| !value.is_empty()),
+        )
+        .map_err(fail),
+        "nativeCitationRename" => weftext_engine::rename_native_citation_key(
+            source,
+            &hash,
+            text(intent, "old")?,
+            text(intent, "new")?,
+        )
+        .map_err(fail),
+        "nativeCitationLink" => {
+            let reference = text(intent, "target")?;
+            let target = bundle
+                .inventory
+                .nodes
+                .iter()
+                .find(|node| {
+                    format!(
+                        "weftext-node://{}/{}",
+                        node.owner.workspace_id, node.owner.node_id
+                    ) == reference
+                })
+                .ok_or_else(|| ApiError::bad("链接目标当前不可用，请刷新后重新选择"))?;
+            let display = intent["text"]
+                .as_str()
+                .filter(|text| !text.is_empty())
+                .or(target.title.as_deref())
+                .ok_or_else(|| ApiError::bad("目标没有可确认标题，请明确输入显示文字"))?;
+            weftext_engine::insert_native_link(
+                source,
+                &hash,
+                integer(intent, "at")?,
+                reference,
+                display,
+            )
+            .map_err(fail)
+        }
+        "nativeCitationLinkText" => {
+            let from = intent["occurrence"]["from"]
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .ok_or_else(|| ApiError::bad("缺少准确链接范围"))?;
+            let to = intent["occurrence"]["to"]
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .ok_or_else(|| ApiError::bad("缺少准确链接范围"))?;
+            let link = knowledge::native_links(source)
+                .into_iter()
+                .find(|link| {
+                    link.from == from
+                        && link.to == to
+                        && intent["occurrence"]["target"] == link.target
+                })
+                .ok_or_else(|| ApiError::bad("当前准确链接出现项已变化"))?;
+            let resolution =
+                knowledge::resolve_link(&link.target, &bundle.selected, &bundle.inventory);
+            let target = resolution
+                .target
+                .and_then(|target| {
+                    bundle
+                        .inventory
+                        .nodes
+                        .iter()
+                        .find(|node| node.owner == target)
+                })
+                .ok_or_else(|| ApiError::bad("目标当前不可读，未交付旧标题或修改显示文字"))?;
+            let range = weftext_engine::SourceRange {
+                from,
+                to,
+                utf16_from: source[..from].encode_utf16().count(),
+                utf16_to: source[..to].encode_utf16().count(),
+                raw: source[from..to].into(),
+                writable: true,
+            };
+            let title = target
+                .title
+                .as_deref()
+                .ok_or_else(|| ApiError::bad("目标没有可确认的当前标题，未改变原显示文字"))?;
+            weftext_engine::update_native_link_text(source, &hash, &range, title).map_err(fail)
+        }
+        "nativeReferenceInsert" => {
+            let label = text(intent, "label")?;
+            let form = text(intent, "form")?;
+            if form == "text" {
+                let editor = weftext_engine::inspect_native_citation_editor(source);
+                if !editor
+                    .targets
+                    .iter()
+                    .any(|target| target.label == label && target.unique)
+                {
+                    return Err(ApiError::bad("标签缺失或不唯一，请刷新后重新选择"));
+                }
+                weftext_engine::insert_native_cross_link(
+                    source,
+                    &hash,
+                    integer(intent, "at")?,
+                    label,
+                    text(intent, "text")?,
+                )
+                .map_err(fail)
+            } else {
+                if !matches!(form, "normal" | "page") {
+                    return Err(ApiError::bad("未知交叉引用形式"));
+                }
+                weftext_engine::insert_native_cross_reference(
+                    source,
+                    &hash,
+                    integer(intent, "at")?,
+                    label,
+                    form == "page",
+                )
+                .map_err(fail)
+            }
+        }
+        "nativeReferenceRename" => weftext_engine::rename_native_label(
+            source,
+            &hash,
+            text(intent, "old")?,
+            text(intent, "new")?,
+        )
+        .map_err(fail),
+        "nativeReferenceInsertWithLabel" => {
+            let target =
+                serde_json::from_value::<weftext_engine::SourceRange>(intent["target"].clone())
+                    .map_err(|_| ApiError::bad("缺少准确原生对象范围"))?;
+            let form = text(intent, "form")?;
+            if !matches!(form, "normal" | "page") {
+                return Err(ApiError::bad(
+                    "补标签同稿目前支持编号或页码引用，请在已有标签上插入自定义文字链接",
+                ));
+            }
+            weftext_engine::insert_native_cross_reference_with_label(
+                source,
+                &hash,
+                integer(intent, "at")?,
+                &target,
+                text(intent, "label")?,
+                form == "page",
+            )
+            .map_err(fail)
+        }
+        _ => Err(ApiError::bad("未知原生引用操作")),
+    }
+}
+
+fn native_citation_draft_plan(
+    operation_id: &str,
+    context: &Context,
+    edited: weftext_engine::EditOutput,
+) -> Value {
+    let from = edited.patches.first().map_or(0, |patch| patch.utf16_from);
+    let to = edited.patches.last().map_or(from, |patch| patch.utf16_to);
+    let before_utf16 = context.source.encode_utf16().count();
+    let after_utf16 = edited.source.encode_utf16().count();
+    let inserted_end = after_utf16 - (before_utf16 - to);
+    let replacement =
+        String::from_utf16(&edited.source.encode_utf16().collect::<Vec<_>>()[from..inserted_end])
+            .unwrap_or_default();
+    json!({"operationId":operation_id,"planId":format!("draft:{}:{}",context.serial,weftext_engine::source_hash(&context.source)),"kind":"draftPatch","status":"prepared","draftOnly":true,"source":edited.source,"edit":{"from":from,"to":to,"text":replacement},"context":context,"changes":[{"action":"draftEdit"}],"preview":{"source":{"before":context.source,"after":edited.source},"nativePatches":edited.patches}})
+}
+
 fn draft_plan(operation_id: &str, context: &Context, patch: knowledge::SourcePatch) -> Value {
     json!({"operationId":operation_id,"planId":format!("draft:{}:{}",context.serial,weftext_engine::source_hash(&context.source)),"kind":"draftPatch","status":"prepared","draftOnly":true,"source":patch.after,"edit":{"from":patch.range.utf16_from,"to":patch.range.utf16_to,"text":patch.replacement},"context":context,"changes":[{"action":"draftEdit","before":patch.range.raw,"after":patch.replacement}]})
 }
@@ -1251,7 +2023,10 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
     let loc = location(&state, &request.context.session_id)?;
     let canonical =
         json!({"root":loc.root,"path":loc.path,"context":request.context,"intent":request.intent});
-    if !matches!(kind, "linkConvert" | "mentionConvert") {
+    if !matches!(kind, "linkConvert" | "mentionConvert")
+        && !kind.starts_with("nativeCitation")
+        && !kind.starts_with("nativeReference")
+    {
         let operation_id = request.operation_id.clone();
         let original = canonical.clone();
         if let Some(preview) = core_call(&state, move |core| {
@@ -1269,6 +2044,8 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
             kind,
             "linkConvert" | "mentionConvert" | "templateCreate" | "templateRegister"
         )
+        && !kind.starts_with("nativeCitation")
+        && !kind.starts_with("nativeReference")
     {
         let loc = location(&state, &request.context.session_id)?;
         let intent: OperationIntent = serde_json::from_value(request.intent)
@@ -1294,6 +2071,83 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
         return register_template(&state, request, canonical).await;
     }
     let mut bundle = bundle(&state, &request.context).await?;
+    if kind.starts_with("nativeCitation") || kind.starts_with("nativeReference") {
+        if kind == "nativeReferenceInsertWithLabel" {
+            let (tree, _) = citation_products(&state, &request.context, &bundle).await?;
+            let tree = tree.ok_or_else(|| {
+                ApiError::bad("请先等待当前原生预览完成，再选择准确对象；输入保留")
+            })?;
+            let target = &request.intent["target"];
+            if request.intent["form"] == "normal"
+                && !crate::citation_api::reference_numbered_at(
+                    &tree,
+                    target["from"].as_u64().unwrap_or(u64::MAX) as usize,
+                )
+                .unwrap_or(false)
+            {
+                return Err(ApiError::bad(
+                    "目标当前没有获证的可引用编号；可改为页码引用，或先设置对象编号",
+                ));
+            }
+            if !crate::citation_api::unlabelled_reference_targets(&request.context.source, &tree)
+                .iter()
+                .any(|candidate| candidate["range"] == *target)
+            {
+                return Err(ApiError::bad(
+                    "目标没有本次唯一原生对象及准确来源证明，原稿保留",
+                ));
+            }
+        }
+        if kind == "nativeReferenceInsert" {
+            let (tree, labels) = citation_products(&state, &request.context, &bundle).await?;
+            let label = text(&request.intent, "label")?;
+            let editor = weftext_engine::inspect_native_citation_editor(&request.context.source);
+            let target = editor
+                .targets
+                .iter()
+                .find(|target| {
+                    target.label == label
+                        && target.unique
+                        && matches!(
+                            target.kind.as_str(),
+                            "heading" | "figure" | "table" | "equation" | "footnote"
+                        )
+                })
+                .ok_or_else(|| ApiError::bad("目标标签缺失或有歧义"))?;
+            if request.intent["form"] == "normal"
+                && !tree
+                    .as_ref()
+                    .and_then(|tree| {
+                        crate::citation_api::reference_numbered_at(tree, target.range.from)
+                    })
+                    .unwrap_or(false)
+            {
+                return Err(ApiError::bad(
+                    "目标当前没有获证的可引用编号；请用自定义文字链接或适用的页码引用",
+                ));
+            }
+            if !labels.iter().any(|compiled| {
+                compiled.label == label
+                    && compiled.count == 1
+                    && compiled
+                        .origins
+                        .iter()
+                        .any(|origin| origin.is_main && origin.from == target.range.from)
+            }) {
+                return Err(ApiError::bad(
+                    "目标没有本次准确编译与唯一作者来源证明，请刷新预览再选择；原稿保留",
+                ));
+            }
+        }
+        let edited = native_citation_intent(&request.context.source, &request.intent, &bundle)?;
+        crate::writing_api::validate_source(&edited.source, None)?;
+        exact(&state, &request.context)?;
+        return Ok(Json(native_citation_draft_plan(
+            &request.operation_id,
+            &request.context,
+            edited,
+        )));
+    }
     if kind == "linkConvert" || kind == "mentionConvert" {
         if request.intent["generation"].as_str() != Some(bundle.inventory.generation.as_str()) {
             return Err(ApiError::new(
@@ -1319,6 +2173,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
             )
             .map_err(knowledge_error)?
         } else {
+            populate_diagnostic_labels(&state, &request.context, &mut bundle).await?;
             let scan = mentions(&state, &request.context, &bundle)?;
             let fragment = text(&request.intent, "fragmentId")?;
             let from = integer(&request.intent, "startScalar")?;
@@ -1335,8 +2190,14 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                 })
                 .ok_or_else(|| ApiError::bad("当前预览没有这一准确候选范围"))?;
             let target = node_ref(&request.intent["target"])?;
-            knowledge::convert_mention(&bundle.selected, &bundle.inventory, hit, &target)
-                .map_err(knowledge_error)?
+            knowledge::convert_mention_fragment(
+                &bundle.selected,
+                &bundle.inventory,
+                hit,
+                &target,
+                request.intent["fragment"].as_str(),
+            )
+            .map_err(knowledge_error)?
         };
         exact(&state, &request.context)?;
         return Ok(Json(draft_plan(
@@ -1602,12 +2463,26 @@ async fn prepare_annotation(
             let options: knowledge::ProofreadOptions =
                 serde_json::from_value(request.intent["options"].clone())
                     .map_err(|e| ApiError::bad(e.to_string()))?;
+            let processing_dependency =
+                validate_processing_origin(state, &request.context, &options).await?;
             let ids: BTreeSet<String> = serde_json::from_value(request.intent["findings"].clone())
                 .map_err(|_| ApiError::bad("请选择当前校对结果"))?;
             if ids.is_empty() || ids.len() > 200 {
                 return Err(ApiError::bad("每批请选择 1 至 200 条校对结果"));
             }
             let scan = proofreading_scan(state, &request.context, &bundle, &options)?;
+            validate_processing_origin(state, &request.context, &options).await?;
+            if let Some(document) = processing_dependency {
+                let bytes = document
+                    .bytes
+                    .ok_or_else(|| ApiError::bad("原共享设置快照不可用"))?;
+                changes.push(FileChange {
+                    path: document.path,
+                    base_id: Some(document.base_id),
+                    before: Some(bytes.clone()),
+                    after: bytes,
+                });
+            }
             if ids
                 .iter()
                 .any(|id| !scan.findings.iter().any(|f| &f.id == id))
@@ -2149,6 +3024,62 @@ async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest
 }
 
 const TEMPLATE_SOURCE: &str = "#metadata((id: \"00000000-0000-4000-8000-000000000000\", types: ())) <weftext>\n\n#set document(title: [标题])\n#title()\n\n正文\n";
+
+/// Overlay one already admitted main file in a disposable compiler view. The
+/// original SnapshotFile, Core bases and every other frozen input stay intact.
+fn draft_compile_files(
+    root: &Path,
+    path: &Path,
+    admitted: &SnapshotFile,
+    files: &BTreeMap<String, Vec<u8>>,
+    source: &str,
+) -> Result<BTreeMap<String, Vec<u8>>, ApiError> {
+    let fail = || ApiError::bad("当前草稿没有唯一的已接纳主源编译位置；原稿与输入保留");
+    fn key(text: &str) -> Option<String> {
+        let key = text.replace('\\', "/");
+        if key.is_empty()
+            || key.chars().any(|c| c.is_control() || c == ':')
+            || key
+                .split('/')
+                .any(|part| part.is_empty() || matches!(part, "." | ".."))
+            || Path::new(&key)
+                .components()
+                .any(|part| !matches!(part, std::path::Component::Normal(_)))
+        {
+            return None;
+        }
+        Some(key)
+    }
+    if !root.is_absolute()
+        || !path.is_absolute()
+        || Path::new(&admitted.path) != path
+        || admitted.node_id.is_none()
+    {
+        return Err(fail());
+    }
+    let relative = path.strip_prefix(root).map_err(|_| fail())?;
+    let main = key(relative.to_str().ok_or_else(fail)?).ok_or_else(fail)?;
+    let original = admitted.bytes.as_ref().ok_or_else(fail)?;
+    let mut seen = BTreeSet::new();
+    let mut main_key = None;
+    for (raw, bytes) in files {
+        let normalized = key(raw).ok_or_else(fail)?;
+        if !seen.insert(normalized.to_ascii_lowercase()) {
+            return Err(fail());
+        }
+        if normalized == main {
+            if bytes != original {
+                return Err(fail());
+            }
+            main_key = Some(raw.clone());
+        }
+    }
+    let main_key = main_key.ok_or_else(fail)?;
+    let mut compiled = files.clone();
+    compiled.insert(main_key, source.as_bytes().to_vec());
+    Ok(compiled)
+}
+
 fn frozen_map(
     root: &Path,
     files: &[SnapshotFile],
@@ -2175,6 +3106,15 @@ fn frozen_map(
     }
     Ok(out)
 }
+// The private worker marks only its actual producer-owned FileId. An authored
+// file with a similar name must still participate in ordinary snapshot checks.
+fn derived_render_input(dependency: &Value) -> bool {
+    dependency["status"] == "loaded"
+        && matches!(
+            dependency["kind"].as_str(),
+            Some("derived-source" | "derived-file")
+        )
+}
 async fn validate_render_inputs(
     state: &AppState,
     root: &Path,
@@ -2188,7 +3128,7 @@ async fn validate_render_inputs(
         let Some(path) = dependency["path"].as_str() else {
             return Err(ApiError::bad("编译依赖缺少准确位置"));
         };
-        if path == ".weftext-runtime-entry.typ" {
+        if derived_render_input(dependency) {
             continue;
         }
         let full = root.join(path);
@@ -2758,6 +3698,136 @@ async fn template_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn draft_compile_view_keeps_the_original_core_cut_and_rejects_aliases() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = weftext_core::Core::new(temp.path().join("state")).unwrap();
+        core.create_library(&root).unwrap();
+        let note = core.create_note(&root, &root, "Note").unwrap();
+        let captured = core.admitted_compile_snapshot(&root, "live").unwrap();
+        let admitted = captured
+            .snapshot
+            .files
+            .iter()
+            .find(|file| file.path == note.path)
+            .unwrap();
+        let before = serde_json::to_value(&captured).unwrap();
+        let draft = format!(
+            "{}\n#set heading(numbering:\"1\")\n= Draft 😀 <draft-only>\n",
+            note.source
+        );
+        let engine = weftext_engine::Engine::new_with_system_fonts(false).unwrap();
+        for native_keys in [false, true] {
+            let original = captured
+                .files
+                .iter()
+                .map(|(path, bytes)| {
+                    (
+                        if native_keys {
+                            path.replace('/', "\\")
+                        } else {
+                            path.clone()
+                        },
+                        bytes.clone(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let compiled =
+                draft_compile_files(&root, Path::new(&note.path), admitted, &original, &draft)
+                    .unwrap();
+            let main_key = if native_keys {
+                "Note\\Note.typ"
+            } else {
+                "Note/Note.typ"
+            };
+            assert_eq!(compiled[main_key], draft.as_bytes());
+            for (path, bytes) in &original {
+                if path != main_key {
+                    assert_eq!(compiled[path], *bytes);
+                }
+            }
+            let output = engine
+                .render_frozen(&weftext_engine::FrozenRenderRequest {
+                    source: draft.clone(),
+                    path: note.path.clone().into(),
+                    root: root.clone(),
+                    files: compiled,
+                    style: captured.style.clone(),
+                })
+                .unwrap();
+            assert!(output.ok, "{:?}", output.diagnostics);
+            assert!(
+                output
+                    .labels
+                    .iter()
+                    .any(|label| label.label == "draft-only" && label.count == 1)
+            );
+        }
+        assert_eq!(serde_json::to_value(&captured).unwrap(), before);
+        core.validate_snapshot(&root, &admitted.path, &admitted.base_id)
+            .unwrap();
+        assert_eq!(std::fs::read(&note.path).unwrap(), note.source.as_bytes());
+        for alias in ["Note\\Note.typ", "note/Note.typ"] {
+            let mut files = captured.files.clone();
+            files.insert(alias.into(), note.source.as_bytes().to_vec());
+            assert!(
+                draft_compile_files(&root, Path::new(&note.path), admitted, &files, &draft)
+                    .is_err(),
+                "{alias}"
+            );
+        }
+        for invalid in [
+            "../outside.typ",
+            "/outside.typ",
+            "Note/./alias.typ",
+            "Note//alias.typ",
+            "Note/file:ads",
+        ] {
+            let mut files = captured.files.clone();
+            files.insert(invalid.into(), b"invalid".to_vec());
+            assert!(
+                draft_compile_files(&root, Path::new(&note.path), admitted, &files, &draft)
+                    .is_err(),
+                "{invalid}"
+            );
+        }
+        let mut missing = captured.files.clone();
+        missing.remove("Note/Note.typ");
+        assert!(
+            draft_compile_files(&root, Path::new(&note.path), admitted, &missing, &draft).is_err()
+        );
+        let mut different = captured.files.clone();
+        different.insert("Note/Note.typ".into(), b"different original".to_vec());
+        assert!(
+            draft_compile_files(&root, Path::new(&note.path), admitted, &different, &draft)
+                .is_err()
+        );
+        let mut unqualified = admitted.clone();
+        unqualified.node_id = None;
+        assert!(
+            draft_compile_files(
+                &root,
+                Path::new(&note.path),
+                &unqualified,
+                &captured.files,
+                &draft
+            )
+            .is_err()
+        );
+        assert!(
+            draft_compile_files(
+                &root,
+                &temp.path().join("outside.typ"),
+                admitted,
+                &captured.files,
+                &draft
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn utf16_offsets_require_exact_code_points() {
         assert_eq!(utf16_byte("A🙂中", 3).ok().unwrap(), 5);
@@ -2875,6 +3945,89 @@ mod tests {
             dirty: false,
         };
         (state, context)
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn adopted_shared_processing_origin_revalidates_exact_version_without_overwriting_options()
+     {
+        let (state, context) = local_state();
+        let root = location(&state, &context.session_id).unwrap().root;
+        let installed = core_call(&state, {
+            let root = root.clone();
+            move |core| {
+                let before =
+                    core.read_config(&root, weftext_core::ConfigRole::WorkspaceSettings)?;
+                let processing = knowledge::ProcessingDocument {
+                    schema_version: 1,
+                    defaults: Default::default(),
+                    rules: vec![],
+                    scoped_allowlist: vec![],
+                };
+                let mut settings: Value = before
+                    .bytes
+                    .as_deref()
+                    .map(serde_json::from_slice)
+                    .transpose()?
+                    .unwrap_or(json!({"version":1}));
+                settings["processing"] = serde_json::to_value(processing)?;
+                let op = uuid::Uuid::new_v4().to_string();
+                let plan = core.prepare_config_save(
+                    &root,
+                    weftext_core::ConfigRole::WorkspaceSettings,
+                    before.bytes,
+                    serde_json::to_vec(&settings)?,
+                    &op,
+                )?;
+                core.execute_operation(&op, &plan.plan_id)?;
+                core.read_config(&root, weftext_core::ConfigRole::WorkspaceSettings)
+            }
+        })
+        .await
+        .unwrap();
+        let mut options = knowledge::ProofreadOptions {
+            processing_origin: Some(knowledge::SharedProcessingOrigin {
+                source: "shared-library".into(),
+                base_id: installed.base_id.clone(),
+                revision: installed.revision.clone(),
+            }),
+            ..Default::default()
+        };
+        options.allowlist.push("本次个人词条".into());
+        assert!(
+            validate_processing_origin(&state, &context, &options)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert_eq!(options.allowlist, ["本次个人词条"]);
+        core_call(&state, move |core| {
+            let before = core.read_config(&root, weftext_core::ConfigRole::WorkspaceSettings)?;
+            let mut settings: Value = serde_json::from_slice(before.bytes.as_deref().unwrap())?;
+            settings["unrelatedExplicitUpdate"] = json!(true);
+            let op = uuid::Uuid::new_v4().to_string();
+            let plan = core.prepare_config_save(
+                &root,
+                weftext_core::ConfigRole::WorkspaceSettings,
+                before.bytes,
+                serde_json::to_vec(&settings)?,
+                &op,
+            )?;
+            core.execute_operation(&op, &plan.plan_id).map(|_| ())
+        })
+        .await
+        .unwrap();
+        assert!(
+            validate_processing_origin(&state, &context, &options)
+                .await
+                .is_err()
+        );
+        assert_eq!(options.allowlist, ["本次个人词条"]);
+        options.processing_origin.as_mut().unwrap().source = "invented-source".into();
+        assert!(
+            validate_processing_origin(&state, &context, &options)
+                .await
+                .is_err()
+        );
     }
     #[cfg(windows)]
     #[tokio::test]

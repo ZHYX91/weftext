@@ -8,6 +8,44 @@ fn engine() -> &'static Engine {
 }
 
 #[test]
+fn styled_dependency_report_marks_only_the_actual_synthetic_entry() {
+    let dir = TempDir::new().unwrap();
+    let authored = ".weftext-runtime-entry-authored.typ";
+    for missing in [false, true] {
+        let mut files = BTreeMap::new();
+        if !missing {
+            files.insert(authored.into(), b"author bytes".to_vec());
+        }
+        let out = engine()
+            .render_frozen(&FrozenRenderRequest {
+                source: format!("#read(\"{authored}\")"),
+                path: dir.path().join("note.typ"),
+                root: dir.path().into(),
+                files,
+                style: Some(StyleModule {
+                    path: "style.typ".into(),
+                    source: DEFAULT_LIBRARY_STYLE.into(),
+                    enabled: true,
+                    entry_function: "library-style".into(),
+                }),
+            })
+            .unwrap();
+        assert_eq!(out.ok, !missing, "{:?}", out.diagnostics);
+        assert!(out.dependencies.iter().any(|d| d.path == authored
+            && d.kind == "file"
+            && d.status == if missing { "unavailable" } else { "loaded" }));
+        let derived: Vec<_> = out
+            .dependencies
+            .iter()
+            .filter(|d| d.kind.starts_with("derived-"))
+            .collect();
+        assert_eq!(derived.len(), 1, "{:?}", out.dependencies);
+        assert_ne!(derived[0].path, authored);
+        assert_eq!(derived[0].status, "loaded");
+    }
+}
+
+#[test]
 fn library_inverse_requires_certified_single_passthrough() {
     let style = StyleModule {
         source: DEFAULT_LIBRARY_STYLE.into(),
@@ -225,6 +263,89 @@ fn style_controls_certify_unique_direct_native_default_slots() {
             .unwrap()
             .editable
     );
+}
+
+#[test]
+fn unknown_region_is_a_native_none_slot_without_rewriting_language_or_other_rules() {
+    let map = inspect_library_style(DEFAULT_LIBRARY_STYLE);
+    let out = apply_library_style_changes(
+        DEFAULT_LIBRARY_STYLE,
+        &map.source_hash,
+        &BTreeMap::from([("text.region".into(), "none".into())]),
+    )
+    .unwrap();
+    assert_eq!(out.patches.len(), 1);
+    assert!(out.source.contains("lang: \"zh\""));
+    let region = inspect_library_style(&out.source)
+        .controls
+        .into_iter()
+        .find(|c| c.key == "text.region")
+        .unwrap();
+    assert!(region.editable);
+    assert_eq!(region.value, "none");
+    let computed = out
+        .source
+        .replace("region: none", "region: if true {none} else {\"CN\"}");
+    assert!(
+        !inspect_library_style(&computed)
+            .controls
+            .into_iter()
+            .find(|c| c.key == "text.region")
+            .unwrap()
+            .editable
+    );
+}
+
+#[test]
+fn heading_numbering_native_preview_keeps_literal_prefixes_and_exclusions() {
+    let source = "= 一、作者已有前缀 <kept>\n\n== 子标题\n\n= 排除标题 <excluded>\n\n= 最后标题\n";
+    let numbered = edit_heading_numbering(
+        source,
+        &HeadingNumberingIntent {
+            scheme: HeadingNumberingScheme::Chinese,
+            start: 3,
+            max_level: 2,
+            exclude_labels: vec!["excluded".into()],
+        },
+    )
+    .unwrap();
+    let dir = TempDir::new().unwrap();
+    let output = engine()
+        .render(&numbered, &dir.path().join("note.typ"), dir.path())
+        .unwrap();
+    assert!(output.ok, "{:?}", output.diagnostics);
+    let tree = output.tree.as_ref().unwrap();
+    assert!(text_node(tree, "一、作者已有前缀").is_some());
+    fn headings<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
+        if node
+            .attrs
+            .get("data-weftext-role")
+            .is_some_and(|v| v == "heading")
+        {
+            out.push(node);
+        }
+        for child in &node.children {
+            headings(child, out);
+        }
+    }
+    let mut nodes = vec![];
+    headings(tree, &mut nodes);
+    assert_eq!(nodes.len(), 4);
+    assert_eq!(
+        nodes[0]
+            .attrs
+            .get("data-weftext-counter-state")
+            .map(String::as_str),
+        Some("[3]")
+    );
+    assert_eq!(
+        nodes[2]
+            .attrs
+            .get("data-weftext-numbered")
+            .map(String::as_str),
+        Some("false")
+    );
+    assert!(inspect_editor(&numbered).unavailable_reason.is_none());
 }
 
 #[test]

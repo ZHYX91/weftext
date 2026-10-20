@@ -242,6 +242,15 @@ strong > .literal-input, em > .literal-input, a > .literal-input { width: auto; 
 .cm-typst-heading.cm-rendered { font-family: "Noto Sans CJK SC", sans-serif; font-size: 1.35em; font-weight: 650; }
 .cm-rendered-heading { padding-top: 12px !important; padding-bottom: 7px !important; }
 .cm-typst-list.cm-rendered { color: #6e885b; }
+.cm-source-appearance-comment { color: #a5ad9d; font-style: italic; }
+.cm-source-appearance-math { color: #a08b6a; }
+.cm-source-appearance-string { color: #698c62; }
+.cm-source-appearance-heading { color: #527e50; }
+.cm-source-appearance-strong { font-weight: 650; }
+.cm-source-appearance-emph { font-style: italic; }
+.cm-source-appearance-heading.cm-source-appearance-rendered { font-family: "Noto Sans CJK SC", sans-serif; font-size: 1.35em; font-weight: 650; }
+.cm-source-heading-layout { padding-top: 12px !important; padding-bottom: 7px !important; }
+.cm-source-appearance-list.cm-source-appearance-rendered { color: #6e885b; }
 .diagnostics { flex-shrink: 0; max-height: 160px; overflow: auto; border-top: 1px solid #e9dac4; color: #a38858; background: #faf7ee; font-size: 10px; padding: 10px 25px; }
 .diagnostics summary { cursor: pointer; }
 .diagnostic-item { display: flex; text-align: left; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 0; color: #9e7750; font-size: 10px; }

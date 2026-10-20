@@ -131,6 +131,9 @@ impl Core {
         name: &str,
         bytes: &[u8],
         allow_losses: bool,
+        options: Option<&weftext_export::docx::DocxImportOptions>,
+        originals: &[weftext_export::docx::OriginalImportAsset],
+        conversion_losses: &[weftext_export::exchange::NativeLoss],
         preview: &mut OperationPreview,
         dependencies: &mut Vec<CapturedFile>,
         absent: &mut Vec<AbsentDependency>,
@@ -140,9 +143,27 @@ impl Core {
             Some(bytes) => decode(&bytes)?,
             None => include_str!("../../../docs/design/examples/schema.authoring.json").into(),
         };
-        let package =
-            weftext_export::docx::build_docx_native_package(bytes, &schema, &preview.operation_id)
-                .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
+        let mut package = match options {
+            Some(options) => weftext_export::docx::build_docx_native_package_with_options(
+                bytes,
+                &schema,
+                &preview.operation_id,
+                options,
+            ),
+            None => weftext_export::docx::build_docx_native_package(
+                bytes,
+                &schema,
+                &preview.operation_id,
+            ),
+        }
+        .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
+        weftext_export::docx::retain_docx_import_originals(
+            &mut package,
+            &preview.operation_id,
+            originals,
+            conversion_losses,
+        )
+        .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
         let mut mutation = self.plan_content_import(
             root,
             parent,
@@ -268,7 +289,7 @@ impl Core {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn plan_content_import(
+    pub(crate) fn plan_content_import(
         &mut self,
         root: &Path,
         parent: &Path,

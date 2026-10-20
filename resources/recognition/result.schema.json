@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weftext:recognition-worker-result:1",
+  "title": "Read-only recognition provenance; never an editable document",
+  "type": "object",
+  "required": ["version", "status", "pages"],
+  "properties": {
+    "version": { "const": 1 },
+    "operation": { "enum": ["recognize", "preview", "inspect"] },
+    "workerFinalValidation": { "const": false, "description": "Host-only marker on interrupted read-only recovery checkpoints. The worker's final runtime/model validation did not complete; partial acceptance cannot authorize import. An explicit new job is required." },
+    "status": { "enum": ["complete", "partial", "failed"] },
+    "error": { "type": "string" },
+    "input": {
+      "type": "object", "required": ["sha256", "bytes", "mediaType"],
+      "properties": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "bytes": { "type": "integer", "maximum": 16777216 }, "mediaType": { "enum": ["application/pdf", "image/png", "image/jpeg"] } },
+      "additionalProperties": false
+    },
+    "runtime": { "type": "object", "description": "Exact Python/PDFium/Pillow/Tesseract versions, binary/model digests and runtime lock digest; no operator paths." },
+    "implementation": { "type": "object", "required": ["version", "sha256"], "properties": { "version": { "const": 1 }, "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }, "additionalProperties": false },
+    "selection": { "type": "object" },
+    "budgets": { "type": "object" },
+    "pageCount": { "type": ["integer", "null"], "minimum": 1 },
+    "losses": { "$ref": "#/$defs/losses" },
+    "pages": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "required": ["page", "status", "regions", "losses"],
+        "properties": {
+          "page": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["complete", "blank", "partial", "failed"] },
+          "pageCount": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "width": { "type": "number", "exclusiveMinimum": 0 }, "height": { "type": "number", "exclusiveMinimum": 0 },
+          "coordinateSpace": { "const": "visible-page-top-left" }, "units": { "enum": ["pt", "px"] },
+          "rotation": { "enum": [0, 90, 180, 270] }, "cropBox": { "$ref": "#/$defs/rect" }, "mediaBox": { "$ref": "#/$defs/rect" },
+          "renderWidth": { "type": "integer" }, "renderHeight": { "type": "integer" }, "renderToPdf": { "$ref": "#/$defs/affine" },
+          "exifOrientation": { "type": "integer", "minimum": 1, "maximum": 8 }, "rawWidth": { "type": "integer" }, "rawHeight": { "type": "integer" }, "visibleToRaw": { "$ref": "#/$defs/affine" },
+          "regions": { "type": "array", "items": { "$ref": "#/$defs/region" } },
+          "readingOrder": { "type": "object", "description": "Read-only original and proposed block ID order; header/footer candidates are never removed automatically." },
+          "preview": { "type": "object", "required": ["mediaType", "dataBase64", "width", "height"], "properties": { "mediaType": { "const": "image/png" }, "dataBase64": { "type": "string", "contentEncoding": "base64" }, "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 } }, "additionalProperties": false },
+          "losses": { "$ref": "#/$defs/losses" }
+        }, "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "rect": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number" } },
+    "affine": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "type": "number" }, "description": "[a,b,c,d,e,f]: target=(a*x+c*y+e,b*x+d*y+f)." },
+    "losses": { "type": "array", "items": { "type": "string" } },
+    "word": { "type": "object", "required": ["text", "bbox", "confidence"], "properties": { "text": { "type": "string" }, "bbox": { "$ref": "#/$defs/rect" }, "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 100 } }, "additionalProperties": false },
+    "block": {
+      "type": "object", "required": ["id", "page", "text", "bbox", "sourceMethod", "confidence", "words"],
+      "properties": { "id": { "type": "string" }, "page": { "type": "integer" }, "text": { "type": "string" }, "bbox": { "$ref": "#/$defs/rect" }, "sourceMethod": { "enum": ["text-layer", "ocr"] }, "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }, "words": { "type": "array", "items": { "$ref": "#/$defs/word" } } }, "additionalProperties": false
+    },
+    "region": {
+      "type": "object", "required": ["id", "rect", "method", "status", "rawText", "blocks", "losses"],
+      "properties": {
+        "id": { "type": "string" }, "rect": { "$ref": "#/$defs/rect" }, "method": { "enum": ["text-layer", "ocr"] }, "status": { "enum": ["complete", "blank", "partial", "failed"] },
+        "rawText": { "type": "string" }, "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } }, "tables": { "type": "array" },
+        "excludedRects": { "type": "array", "items": { "$ref": "#/$defs/rect" }, "description": "Effective text-layer region excludes these automatically selected disjoint OCR rectangles." },
+        "ocrGeometry": { "type": "object", "required": ["width", "height", "rotation", "segmentation", "preprocessing", "ocrToVisible", "ocrScale"], "properties": { "width": { "type": "integer" }, "height": { "type": "integer" }, "rotation": { "enum": [0, 90, 180, 270] }, "segmentation": { "enum": ["auto", "sparse", "block", "line"] }, "ocrScale": { "enum": [0.5, 0.75, 1] }, "preprocessing": { "enum": ["none", "complete-straight-grid-rules-removed"] }, "ocrToVisible": { "$ref": "#/$defs/affine" } }, "additionalProperties": false },
+        "losses": { "$ref": "#/$defs/losses" }
+      }, "additionalProperties": false
+    }
+  }
+}

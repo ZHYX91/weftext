@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { history, isolateHistory, undo, redo, undoDepth } from "@codemirror/commands";
 import { applySourcePatches, createSourceState, sourceRevealEffect, sourceRevealExtensions, type SourceEditorEvent, type SourcePatch, type SourceSelection } from "./editor";
-import { encodeWritingLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult } from "./writing";
+import { encodeWritingLiteral, encodeWritingTableLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult, type WritingTransition } from "./writing";
 import type { RenderNode } from "./types";
 import { DocumentSession, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
 import type { OpenedDocument } from "./types";
@@ -44,6 +44,22 @@ function harness(source: string, request?: WritingHost["request"]) {
   controller.installMap(map(source), source, serial);
   return { editor, controller, calls, recoveries, serial: () => serial };
 }
+
+test("a command waiting for its map cannot open an old object's proposal after navigation",async()=>{
+  const editor=new Buffer("原稿😀");let active=true,finish!:(map:WritingMap)=>void;
+  const controller=new WritingController({editor,basis:()=>({sessionId:"old",source:editor.source,serial:editor.generation}),editable:()=>true,actionAvailable:()=>active,refreshMap:()=>new Promise(resolve=>{finish=resolve;}),request:async()=>{throw Error("No edit is authorized");}});
+  const pending=controller.prepareCommand();await Promise.resolve();await Promise.resolve();
+  active=false;finish(map(editor.source));await assert.rejects(pending,/切换/);
+  assert.equal(editor.source,"原稿😀");assert.equal(undoDepth(editor.state),0);controller.dispose();
+});
+
+test("a delayed command map cannot replace newer typed source even when the target stays active",async()=>{
+  const editor=new Buffer("原稿");let finish!:(map:WritingMap)=>void;
+  const controller=new WritingController({editor,basis:()=>({sessionId:"current",source:editor.source,serial:editor.generation}),editable:()=>true,refreshMap:()=>new Promise(resolve=>{finish=resolve;}),request:async()=>{throw Error("No edit is authorized");}});
+  const pending=controller.prepareCommand();await Promise.resolve();await Promise.resolve();
+  editor.applyPatches("原稿",[{from:2,to:2,expected:"",insert:"新输入"}]);finish(map("原稿"));
+  await assert.rejects(pending,/新输入/);assert.equal(editor.source,"原稿新输入");controller.dispose();
+});
 
 test("sync consumer pause allows real in-flight literal/IME settlement before the reviewed move blocks new visual writes", async () => {
   const editor = new Buffer("甲"); let serial = 0, refreshing = false;
@@ -98,6 +114,51 @@ function textareaFixture() {
     },
   };
 }
+
+test("a table proposal owns its mounted surface through modal focus, while an external Draft change retires retention", () => {
+  const fixture = textareaFixture(), h = harness("甲");
+  class Surface extends EventTarget { isConnected = true; contains() { return false; } }
+  const surface = new Surface() as unknown as HTMLElement; let proposalOpen = true;
+  const dispose = h.controller.observeSurface(surface, () => undefined, () => proposalOpen);
+  try {
+    assert.equal(h.controller.retainInput, true, "focus in a body-owned confirmation must not unmount its source grid");
+    proposalOpen = false; assert.equal(h.controller.retainInput, false);
+    proposalOpen = true; h.editor.applyPatches("甲", [{ from: 0, to: 1, expected: "甲", insert: "外部" }]);
+    assert.equal(h.controller.retainInput, false, "a proposal lease never grants an old map write authority");
+  } finally { dispose(); h.controller.dispose(); fixture.restore(); }
+});
+
+test("all mounted tables receive one proved native transition before installing the new map", async () => {
+  const fixture = textareaFixture(), h = harness("甲\n乙");
+  class Surface extends EventTarget { isConnected = true; contains() { return false; } }
+  const transitions: WritingTransition[] = [], surface = new Surface() as unknown as HTMLElement;
+  const dispose = h.controller.observeSurface(surface, transition => { if (transition) { transitions.push(transition); assert.equal(h.controller.map, null, "observers receive the mapping before new capabilities are installed"); } });
+  try {
+    h.controller.stageLiteral(writingRange(h.editor.source, 0, 3), "甲\n乙", "中文😀\n乙"); await h.controller.flush();
+    assert.equal(transitions.length, 1); const transition = transitions[0];
+    assert.equal(transition.before.source, "甲\n乙"); assert.equal(transition.after.source, h.editor.source);
+    assert.equal(transition.after.generation, h.editor.generation); assert.deepEqual(applySourcePatches(transition.before.source, transition.patches), transition.after.source);
+    h.editor.undo(); assert.equal(transitions.length, 1, "Undo/source changes never impersonate a certified native adapter transition");
+  } finally { dispose(); h.controller.dispose(); fixture.restore(); }
+});
+
+test("table-cell recovery retains visible hard newlines without changing ordinary paragraph soft wraps", () => {
+  assert.equal(encodeWritingTableLiteral("甲\r\n乙\r丙\n"), "甲\\\n乙\\\n丙\\\n");
+  assert.equal(literalRecoveryRaw("甲", "甲", "甲\n乙", true), "甲\\\n乙");
+  assert.equal(literalRecoveryRaw("甲", "甲", "甲\n乙"), "甲\n乙");
+  assert.equal(literalSourceOffset("甲\\\n乙", "甲\n乙", 2), 3);
+  const h = harness("甲"); const current = h.controller.map!; current.literalRegions[0].role = "tableCell";
+  try { h.controller.stageLiteral(current.literalRegions[0].range, "甲", "甲\n乙"); assert.equal(h.controller.recoverySource(), "甲\\\n乙"); }
+  finally { h.controller.dispose(); }
+});
+
+test("a confirmed structural preview rejects different native after-bytes before touching the shared Draft or Undo", async () => {
+  const h = harness("甲", async request => result(request.source, 0, request.source.length, "另一份提案"));
+  try {
+    await assert.rejects(h.controller.execute({ kind: "setTitle", text: "作者预览" }, "作者预览"), /已预览提案不一致/);
+    assert.equal(h.editor.source, "甲"); assert.equal(undoDepth(h.editor.state), 0); assert.equal(h.calls.length, 1); assert.equal(h.controller.map?.sourceHash, "hash:甲");
+  } finally { h.controller.dispose(); }
+});
 
 test("native patches preserve BOM, mixed EOL, astral text and unaffected bytes", () => {
   const source = "\uFEFF= 标题\r\n甲😀\r\n乙\n"; const from = source.indexOf("甲"), output = result(source, from, from + 3, "改😀#");

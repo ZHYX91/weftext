@@ -25,6 +25,8 @@ translation_status: source
 4. 根 dictionary 的直接 named/keyed 项，key 用官方 AST 解码且精确唯一。`id:` 与 `"id":` 重复也拒绝；不允许 spread/dynamic key。`id` 是 direct string；`types` 缺席表示空类型集合，存在则 direct string array，(), `("task",)` 分别为空和单元素。计算的 id/types 不能认证。
 5. ID/types 是控制键；其余业务键由 schema 解释。大小写和 Unicode 规范化不自动合并；保留 `weftext-` 前缀。语法破损导致无法排除第二声明时结果为不可判断，不能“首个获胜”。
 
+安全前缀另接受 §1.4 的规范受管编号原生头部：集中 generate／parse 完整逆认证、标准 binding 与精确范围均成立后，只将整个已证头部作为受信例外，使其后的既有根 metadata 保持身份认证。任意改动或未知函数／show 不获得此例外，不放开一般程序前缀，也不把标记注释变成第二权威。
+
 合法 Typst 不符合受管根角色，仍可作为原文打开和保存；已有笔记进入保稿/明确修复状态，不被索引器重造身份。完整语言与可编辑字段子集分开。普通正文可以 import、函数、计算、复杂表格；源保存、控制认证、字段校验和编译分别报告结果。
 
 文档 title/subtitle/heading 的角色由编辑器协调设计拥有。name、论文正式标题和文档 title 各有明确语义；文件名只是显示回退。若论文正式标题即用于文档 title，可从唯一 publication 字段生成 title，表单只修改这个字段，不要求双写。生成 title 没有伪造的源码可写地址。
@@ -56,6 +58,39 @@ translation_status: source
 每次compile从声明和获权当前Work publication快照生成一个冻结的只读虚拟`weftext.citations.bib`资源，按entry.key输出，保作者顺序和目标NodeRef依赖；重启可由两份真实作者输入重建，不保存手工可改Bib镜像。当前版不承诺逐entry pinned版本。真实作者资源同名、键重复或输出缺必要数据时明确失败/损失，不覆盖文件；独立native bibliography仍是普通资源，不自动合并。
 
 识别应用citation须证明官方标准cite binding及静态Label key；普通`@key`是native ref，必须用准确获权编译语义确认它实际解析为citation，不能因为entry同名就把heading ref当作品引用。复杂/计算cite仍保合法源，仅在明确只读生产者给准确分类时消费。正文Label与Bib key冲突使官方编译报歧义，应用也不能猜。此角色只持久关联，不授读取Work或源码权限；生成器/导出/反向引用受FEATURES和Core快照授权。
+
+### 1.3 脚注、尾注与题注的源接口
+
+脚注正文使用官方 `#footnote[内容]`；重复引用给定义加唯一原生 Label，以 `#ref(<label>)` 引用同一注释。脚注／尾注正文及题注都是同一 `.typ` 中的作者内容，不进入审阅批注 JSON。图／表题注使用 `figure` 的 `caption`、`kind`、`numbering` 和位置；公式本体与描述性题注分别控制，默认不同时开启两条编号序列。
+
+定版尾注模块是产品随附的 [weftext-endnotes.typ](../../crates/weftext-export/assets/weftext-endnotes.typ)，不依赖联网包或隐藏本机模块：
+
+```typst
+#import "weftext-endnotes.typ": endnote, endnote-ref, endnotes
+正文#endnote(id: "stable-key")[中文尾注正文]
+重复引用#endnote-ref("stable-key")
+#endnotes(title: [尾注])
+```
+
+`endnote` 定义一份正文和首个标记，`endnote-ref` 只引用既有唯一非空 key，`endnotes` 输出一次文末列表；默认标题为“尾注”，`title: none` 隐去标题。原生 metadata/counter/query/link 依定义顺序独立连续编号，列表编号回跳首次标记，不合并同文独立注释。有界接口覆盖空正文、多段、强调、列表、链接、已支持公式和脚注共存；分节／分章重启与任意第三方尾注宏不因此获得支持。准确模块字节作为获权资源随独立 bundle 交付，文件名固定为 `weftext-endnotes.typ`，首次提供模块仍走同一 Core 创建／资源计划。
+
+交换角色来自同次真实 Typst 生产者。脚注 reference/body 由真实声明 location 共享 `note-id`，Html 的 ARIA `doc-endnotes` 不能把脚注变成尾注。题注由实际 FigureKind、figure location、counter 和 position 取得 `target-id`，作者 `caption-body` 与生成 `caption-number`／`caption-prefix` 分开。尾注只在实际生产者源字节匹配随附模块、相关 metadata 来自该模块且 show／style 资格成立时认证；改变模块或同名遮蔽保合法源与显示，不授自动结构交换／回写资格。
+
+`RenderOutput.sourceInfo.notes` 是获权冻结编译的来源投影，含准确主源范围和 raw，按源码权限交付。新 writer 以原生 `#box[#endnote(...)[...]]`／`#box[#endnote-ref(...)]` 的准确 AST recipe 保每处标记来源；旧未包装定义可凭真实 Content.span 编辑正文，旧引用缺准确来源时只读，不按顺序、邻近或同文配对。`Engine::edit_notes_frozen` 只消费同次获权主源／模块文件，修改后用同一文件集合重新真实编译。删除定义而仍有引用须同一操作迁移正文及目标，缺证据则保输入；source-only 候选 map 不能替代编译依据。
+
+DOCX 输出真实 footnotes/endnotes 部件、各自关系、正文标记和重复 NOTEREF；导入按部件自己的关系读取正文，缺失／重复 ID 不猜归属，准确原件保留。`analyze_docx_import` 只列实际 SEQ 与真实对象候选；闭合 `DocxImportOptions` 为 `contentHash,captionPairings`，每个配对恰 `captionBlock,objectBlock,kind,captionText,position`。非空 hash 须匹配准确原件，一一配对随创建 Plan 冻结；未确认配对保文字与损失，不由 Caption 样式／邻近位置自动认定。确认的 captionText 是明确选择的纯文字，原富格式和复杂域选项另报损失。编号更新、分页、跨部件审阅与真实 Office 编辑保存重开分别验收；原件存在不代表正文／结构已进入新文档。
+
+真实定义与重复标记还分别携带 `data-weftext-note-definition=true|false`，来自实际 Footnote.is_ref 和准确模块的真实 metadata 事件协议。前向重复引用只输出指向真实定义的 NOTEREF，不把首次显示位置变成新定义或改变独立注释的编号顺序；缺唯一真实定义／引用证据时明确未转换正文，不猜首项。
+
+需要提交依赖证据的消费者使用 `edit_notes_frozen_with_dependencies → {edit,dependencies}`：合并当前编辑资格与修改后真实编译实际读取的 loaded／unavailable 依赖，不把未使用 snapshot 文件算入。合成入口按真实 LocalWorld compile FileId／override 分类为 derived-source／derived-file，普通 style 作者源仍是 source／file，并由现有 Core 当前性 guard 核验；这份可丢弃投影不成为新数据权威。
+
+### 1.4 数学与受管编号的冻结来源
+
+数学作者源仍是原生 Typst。已支持 OMML 导入生成新原生数学源与逐字符／结构范围，整体公式与符号／子式批注分别定位，重复 `x` 不按文字搜索合并。导出只消费同次 MathML 实际生产者范围，同源祖先链取覆盖完整对象的外层目标，重复生成或缺准确来源时保讨论并报告未进入目标 DOCX。合成多字符子式范围须同文件原生 span 严格有序、无重叠、间隙仅空白且存在完全一致的官方 AST 祖先。未知 OMML 结构保准确原件，不递归折为貌似可编辑的普通文字；布局空格、字体、特殊公式与审阅内容的损失和结构成功分别报告。
+
+编号控件写原生 set/counter/show-set，`// weftext:heading-numbering` 包围的规范头部没有独立权威。只有完整逆解析再生成逐字节一致、binding／尾部规则资格成立，且本次真实 heading 的有效 numbering function span 属于主源规范头部时，才产生 `data-weftext-managed-numbering-pattern` 和同源 hash；最大层级外另发 `managed-numbering-visible=false`，排除标题保真实 `numbering: none`。DOCX 据此生成原生标题编号、实际起始覆盖及排除，中文“一／壹”分别使用 `chineseCounting`／`chineseLegalSimplified`；未知或相似自定义函数继续保源和明确损失，不从显示结果猜方案。个人辅助显示不写作者规则或改变输出。
+
+本接口已用产品 Engine Html／Paged 和官方 Typst 0.15.1 独立 PDF／Html／PNG 编译及拒绝用例验证；DOCX 源／部件／域与数学范围有定向程序测试。这些结果不等于真实 Word、WPS 或 LibreOffice 双向编辑保存重开通过，不改变当前版本完成／发布状态。
 
 ## 2. 原生值和准确语义
 
@@ -213,6 +248,37 @@ Core每个SourceRevision的CommitManifest/admission记录恰一个SourceSchemaBa
 
 当前决定保留 SourceSchemaBasis 和保存 Query 的准确 binding：它们保护已有短名/别名可变规则下的冷读取与历史语义。内部配置版本共享去重，普通用户不逐篇填写基准。首代不增加任意复用已用技术 key/Type alias 的界面；显示标签可改。将来若采用不可复用技术词汇，可在证明不兼容变更、旧别名、历史 Query 与跨库映射后再缩减基准，不能只删版本而保留名称漂移。
 
+### 3.4 WorkspaceSettings 的可选共享处理默认值
+
+`.weftext-settings.json` 继续使用 `WorkspaceSettings` 角色、权限、修订及同步，不新增 locale 权威。外层 `version: 1` 和其它已有 JSON 成员保留；可选 `processing` 是闭合 `ProcessingDocument`：
+
+```text
+processing {schemaVersion:1,
+  defaults:{version:"1",languages:[{language,script:null|string,region:null|string}],
+    scheme,inputFormat,documentType,dependencies:[{id,version}]},
+  rules:[{id,version,category:"typo"|"sensitive"|"character",text,message,
+    replacement:null|string,scope?:ProcessingRuleScope}],
+  scopedAllowlist:[{text,scope:ProcessingRuleScope}]}
+ProcessingRuleScope {universal:false,languages:[],scripts:[],regions:[],
+  inputFormats:[],documentTypes:[],dependencies:[{id,version}]}
+```
+
+defaults 版本是字符串 `"1"`，默认方案／输入／文类为 `general`／`typst`／`prose`，语言和依赖数组默认为空；rules、scopedAllowlist 可缺省为空。scope 数组及 universal 可缺省为上示值；缺 scope，或 universal=false 且语言／文字体系／地区全部为空，是待确认的 unknown，不静默全语言。显式 universal=true 不得同时限定语言／文字体系／地区，其它输入、文类和依赖条件仍准确匹配。缺 script／region 保未知，general 不绑定地区，依赖按准确 id/version 匹配，缺依赖单列不可用。未知成员／不支持版本不安装；`processing: null` 的显式更新移除此成员，保其它外层 JSON。
+
+共享默认只在明确采用时成为本次处理设置。`ProofreadOptions.processingOrigin={source:"shared-library",baseId,revision?}` 随冻结源、规则／词典版本及 scope 绑定原获权配置；scan／未确认 prepare 继续核权限和版本，共享撤权或旧 basis 不得继续扫描／准备，已确认操作沿同一 Core 原操作恢复。单篇和局部排版语言仍只由原生 `text.lang`／`region` 决定，UI 语言独立；个人本地偏好不写共享配置。
+
+初始化语言／地区也只改原生样式：本地创建界面从实际产品样式读取已认证的 `text.lang`／`text.region` 字面槽，预览完整源；地区未指定写为原生 `none`，不推断地区或简繁转换。准确 `initialStyle:{source,enabled}` 与路径、原 operationId 一起冻结，由 [CORE](CORE.zh-CN.md) §3 的同一创建 Plan 建立普通 Styles 节点、样式资源与 defaultStyle 选择器；不先建库再补第二次 locale／样式事务。后续单篇／局部覆盖继续遵循原生 Typst 作用域，处理默认值和个人界面语言不覆盖作者排版源。
+
+存在 processing 时，schemaVersion／defaults 必填；defaults 的 version／scheme／inputFormat／documentType 必填。上述默认值用于明确新建，不表示读取缺项 JSON 时补齐这些必填成员。
+
+### 3.5 识别导入的原件、来源证据与确认字段
+
+v0.6.2 的 `ImportRecognized` 同时创建一个普通笔记、准确原件及 `recognition-evidence.json` 两个登记资源。原件字节不变；证据包含输入摘要、实际选择、后端／模型／规则与实现版本、逐页原始识别和来源几何、明确接受的部分状态及本次核对稿。证据只表示“导入时接受的历史事实”，不是第二份可编辑正文或当前字段值。原 ResourceRef 在 Core 分配最终身份后写入；目标 schema 修订与摘要也在原 Plan 内冻结。后续正文／字段修改不回写原件和历史识别记录。
+
+确认字段可仅作为明确标识的可编辑正文，也可显式映射到已安装永久 FieldId 及适用 TypeId。无映射不得声称已有 typed 字段、Query 或字段级授权。首轮映射只开放可完整验证且不另需必填字段／跨字段约束的文字、准确十进制和日期标量；号码保文字前导零，金额不经浮点，日期不猜补。映射值仅存于原生 metadata；正文不再另写一份声称当前有效的相同字段。默认 schema 没有专用发票属性，不擅自创造业务字段或误用任务／文献字段。
+
+方案字段必须来自本次适用方案的准确候选；缺失、歧义和解析失败不能自动确认。选择实际已解析候选与明确标记的人工修正分别保留；同一字段键或目标 FieldId 不接受互相覆盖。正文修改、顺序调整和表格确认仍是作者提案，必须能回到冻结块／表格来源；识别文字通过原生字符串构造写入，不执行其中的 Typst、脚本或链接。
+
 ## 4. 关系、文字回退与来源
 
 `target_or_text` 是判别明确的原生 record union：`(ref: "weftext-node://WorkspaceId/NodeId")` 或 `(text: "云山公司")`。两者恰一分支；ref 分支不加文字 label 的同步副本。作者确有“当时名称/出版名称”需求时字段另命名 `credited_as` 或 `name_at_time`，语义是历史作者文字，不能被目标改名覆盖。显示 ref 时读取当前获权目标；目标不可读/失效时给通用状态，不借本地旧标题泄漏。text 分支保留作者文字且不按同名自动升级关系。显式选择目标才将 text 转 ref。
@@ -237,7 +303,9 @@ graph_projection只是呈现要求：parent/spouse/sibling为family，manager/me
 
 没有跨版本逐值 UUID。表单数组行和引用观察依当前准确源版本+Field+AST 路径定位；删/重排/外部修改后失效，不能按同值重绑定。若将来确有独立分享一段任职历史、长寿命关系批注或外部系统键需求，优先独立笔记或显式业务键，并另行说明生命周期；本稿不暗藏 per-value identity。
 
-标签的稳定身份来自 CORE 的集中 TagId 登记，原生字段只保存引用。新增闭合标量 codec `tag_ref`：作者字符串为 `weftext-tag://<WorkspaceId>/<TagId>`，两个标识均按 Core 的 UUID 规则解析；格式有效不证明存在或授权。可选通用 tags 字段采用有序数组，项是判别明确的 `(ref: "...")` 或 `(text: "研究")`；前者指已登记标签，后者是普通文字标签，不能按同名自动升级。ref 分支使用 tag_ref，text 分支使用 nonempty_text，二者恰一出现。表单选已有标签或明确创建时，可由同一 Plan 登记 TagId 并写入引用；标签显示名改动不改每篇源。Query、导航和快捷入口以完整 TagRef 比较，文字标签保原值。目录的 DirectoryRef 仅是 Core 的目标身份，不为每篇笔记新增目录属性权威。
+标签的稳定身份来自 CORE 的集中 TagId 登记，原生字段只保存引用。新增闭合标量 codec `tag_ref`：作者字符串为 `weftext-tag://<WorkspaceId>/<TagId>`，两个标识均按 Core 的 UUID 规则解析；格式有效不证明存在或授权。可选通用 tags 字段采用有序数组，项是判别明确的 `(ref: "...")` 或 `(text: "研究")`；前者指已登记标签，后者是普通文字标签，不能按同名自动升级。ref 分支使用 tag_ref，text 分支使用 nonempty_text，二者恰一出现。表单选已有标签或明确创建时，可由同一 Plan 登记 TagId 并写入引用；标签显示名改动不改每篇源。精确 Query 以完整 TagRef 比较；显式后代筛选另消费 CORE 的冻结标签树，导航与快捷入口保存准确匹配模式，文字标签保原值。目录的 DirectoryRef 仅是 Core 的目标身份，不为每篇笔记新增目录属性权威。
+
+多级标签不改 `tag_ref` 字符串、ref/text 判别、数组顺序或重复值规则，不在每篇 metadata 添加 parent/path/祖先槽，也不增加正文标签语法。父关系只由 CORE §2.3 的注册表保存；完整路径和匹配结果是派生值。跨库的父关系和所有真正 typed 槽使用同次 Core 映射，普通文字不按形似路径替换。后代谓词及其准确 profile／签名、冻结参数与输入依赖由 FEATURES §5.6 负责；可变 Tags 是执行数据，不能复制进固定 schema/provider 配置或定义基准冒充当前树。这是待实现合同，现有 schema 样例／设计模型不证明层级支持。
 
 ### 4.1 一般人物关系的分类权威
 

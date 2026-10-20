@@ -40,6 +40,12 @@ fn definition_admission_uses_only_original_node_birth_source_after_clone_and_res
     let key = sender
         .reserve_definition_key(&root, &note.path, &basis.base_id, &operation)
         .unwrap();
+    assert_eq!(
+        sender
+            .pending_definition_operation(&root, Path::new(&note.path), &key)
+            .unwrap(),
+        Some(operation.clone())
+    );
     let query = weftext_data::QueryPlan {
         select: vec![weftext_data::QueryColumn {
             name: "value".into(),
@@ -67,6 +73,12 @@ fn definition_admission_uses_only_original_node_birth_source_after_clone_and_res
             source: source.clone(),
         })
         .unwrap();
+    assert_eq!(
+        sender
+            .pending_definition_operation(&root, Path::new(&note.path), &key)
+            .unwrap(),
+        None
+    );
     let workspace_id = sender.require_workspace(&root).unwrap().workspace_id;
     let mut copied_definitions = Vec::new();
     for template in [false, true] {

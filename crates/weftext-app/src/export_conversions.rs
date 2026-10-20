@@ -279,6 +279,98 @@ pub(crate) async fn generate(
     state: &AppState,
     req: &PrepareRequest,
 ) -> Result<(ExportArtifact, Value), ApiError> {
+    if matches!(req.format.as_str(), "doc" | "wps") {
+        super::export_api::claim_legacy_request(state, &req.request_id, req)?;
+        let mut intermediate = req.clone();
+        intermediate.format = "docx".into();
+        intermediate.legacy_backend = None;
+        let frozen = super::export_api::frozen_legacy_output_stage(state, &req.request_id)?;
+        let restored = frozen.is_some();
+        let (mut artifact, mut preview) = if let Some(frozen) = frozen {
+            frozen
+        } else {
+            let frozen = Box::pin(generate(state, &intermediate)).await?;
+            super::export_api::retain_legacy_output_stage(
+                state,
+                &req.request_id,
+                &frozen.0,
+                &frozen.1,
+            )?;
+            frozen
+        };
+        let direction = if req.format == "doc" {
+            super::legacy_office::Direction::DocxToDoc
+        } else {
+            super::legacy_office::Direction::DocxToWps
+        };
+        let converted = super::export_api::legacy_convert(
+            state,
+            &req.request_id,
+            super::legacy_office::ConversionRequest {
+                backend: req
+                    .legacy_backend
+                    .clone()
+                    .unwrap_or_else(|| "libreoffice".into()),
+                direction,
+                bytes: artifact.bytes.clone(),
+            },
+        )
+        .await?;
+        let generated = converted
+            .generated
+            .as_ref()
+            .ok_or_else(|| unavailable("外部软件没有返回准确生成物；中间 DOCX 已保留"))?;
+        let has_session = state
+            .locations
+            .lock()
+            .map_err(|_| ApiError::internal("编辑会话暂不可用"))?
+            .contains_key(&req.session_id);
+        if !restored || has_session {
+            super::writing_api::check_snapshot(
+                state,
+                &req.session_id,
+                &req.source,
+                req.serial,
+                None,
+            )?;
+            let sid = req.session_id.clone();
+            let base = req.base_id.clone();
+            core_call(state, move |core| core.check_session_base(&sid, &base)).await?;
+        } else {
+            preview["document"]["scope"] = json!("recoveredFrozenOutput");
+            preview["recoveryNotice"] = json!(
+                "恢复原操作封存的 DOCX 输入及预览；没有重新读取当前笔记、Query 或依赖，也未重新执行外部软件。"
+            );
+        }
+        artifact.bytes = generated.bytes.clone();
+        artifact.extension = req.format.clone();
+        artifact.content_type = if req.format == "doc" {
+            "application/msword"
+        } else {
+            "application/octet-stream"
+        }
+        .into();
+        artifact
+            .losses
+            .extend(converted.losses().into_iter().map(|loss| ExportLoss {
+                code: loss.code,
+                message: loss.message,
+                location: loss.location,
+            }));
+        artifact.summary = format!(
+            "{}；通过 {} 的 DOCX → {} 可选外部转换，须另核各项损失",
+            artifact.summary,
+            converted.backend,
+            req.format.to_uppercase()
+        );
+        preview["format"] = json!(req.format);
+        preview["legacyConversion"] = converted.metadata();
+        preview["executionLocation"] = json!("currentBackend");
+        return Ok((artifact, preview));
+    }
+    if req.legacy_backend.is_some() {
+        return Err(ApiError::bad("此输出格式不使用外部转换后端；没有忽略选择"));
+    }
     let loc = location(state, &req.session_id)?;
     super::writing_api::observe_snapshot(state, &req.session_id, &req.source, req.serial, None)?;
     let sid = req.session_id.clone();
@@ -518,10 +610,12 @@ async fn native(
     let (bytes,package)=core_call(state,move|core|{
         core.check_session_base(&request.session_id,&request.base_id)?;
         let bytes=core.export_native_package(&location.root)?;
-        let package=weftext_export::exchange::read_native_package(&bytes).map_err(|e|CoreError::new(&e.code,e.message))?;
+        let mut package=weftext_export::exchange::read_native_package(&bytes).map_err(|e|CoreError::new(&e.code,e.message))?;
         let key=relative(&location.root,&location.path)?;
         if package.files.get(&key).map(Vec::as_slice)!=Some(request.source.as_bytes()){return Err(CoreError::new("dirtyDraft","Native package exports the saved whole library; save the current draft first"));}
         for(path,source)in drafts{let key=relative(&location.root,&path)?;if package.files.get(&key).is_some_and(|saved|saved.as_slice()!=source.as_bytes()){return Err(CoreError::new("dirtyDraft","Another open library document has an unsaved draft; save it before whole-library export"));}}
+        complete_native_bibliographies(&mut package)?;
+        let bytes=weftext_export::exchange::write_native_package(&package).map_err(|e|CoreError::new(&e.code,e.message))?;
         core.check_session_base(&request.session_id,&request.base_id)?;Ok((bytes,package))
     }).await?;
     let losses=package.manifest.losses.iter().map(|l|ExportLoss{code:l.code.clone(),message:l.detail.clone(),location:Some(l.path.clone())}).chain(std::iter::once(report("native_not_recovery_backup","该原生资料包包含已保存的整库纳管内容与可交付依赖；不包含本机历史、执行日志或未登记原始文件，不能替代恢复备份。"))).collect();
@@ -539,6 +633,114 @@ async fn native(
         },
         preview,
     ))
+}
+
+/// The saved whole-library package is the sole authority for these derived
+/// inputs. Never substitute the current Draft or reread a Work from disk.
+fn complete_native_bibliographies(
+    package: &mut weftext_export::exchange::NativePackage,
+) -> Result<(), CoreError> {
+    use weftext_export::exchange::NativeFileRole;
+    let unavailable = |message| CoreError::new("citationWorkUnavailable", message);
+    let sources = package
+        .manifest
+        .entries
+        .iter()
+        .filter(|(_, entry)| entry.role == NativeFileRole::Source)
+        .collect::<Vec<_>>();
+    let mut generated = vec![];
+    for (path, owner) in &sources {
+        let source = std::str::from_utf8(&package.files[*path])
+            .map_err(|_| unavailable("Saved citation owner is not UTF-8"))?;
+        let Some(declaration) = weftext_engine::inspect_citation_declaration(source)
+            .map_err(|e| CoreError::new("citationDeclarationUnavailable", e.to_string()))?
+        else {
+            continue;
+        };
+        if weftext_engine::inspect(source).id.as_deref() != owner.node_id.as_deref()
+            || !weftext_engine::native_citation_bibliography_input(source)
+        {
+            return Err(CoreError::new(
+                "citationDeclarationUnavailable",
+                "Saved citations require their exact owner and one unambiguous virtual bibliography",
+            ));
+        }
+        let schema_bytes = &package.files[&package.manifest.schema_path];
+        let schema = std::str::from_utf8(schema_bytes)
+            .map_err(|_| CoreError::new("citationSchemaUnavailable", "Frozen schema is not UTF-8"))
+            .and_then(|source| {
+                Schema::from_author_json(source)
+                    .map_err(|e| CoreError::new("citationSchemaUnavailable", e.to_string()))
+            })?;
+        let mut works = vec![];
+        for entry in declaration.entries {
+            let prefix = format!("weftext-node://{}/", package.manifest.workspace_id);
+            let node = entry
+                .work
+                .strip_prefix(&prefix)
+                .ok_or_else(|| unavailable("Work is outside the saved library cut"))?;
+            let matches = sources
+                .iter()
+                .filter(|(_, source)| source.node_id.as_deref() == Some(node))
+                .collect::<Vec<_>>();
+            let [(work_path, work_entry)] = matches.as_slice() else {
+                return Err(unavailable(
+                    "Work has no unique saved source in this library cut",
+                ));
+            };
+            let source = std::str::from_utf8(&package.files[*work_path])
+                .map_err(|_| unavailable("Saved Work is not UTF-8"))?;
+            let projection = weftext_data::project(source, &schema);
+            if projection.qualification != "qualified"
+                || projection.id.as_deref() != Some(node)
+                || !projection
+                    .resolved_types
+                    .iter()
+                    .any(|t| t == "library/work")
+            {
+                return Err(CoreError::new(
+                    "citationWorkType",
+                    "Saved target does not qualify as installed library/work in this cut",
+                ));
+            }
+            let publication = projection
+                .fields
+                .iter()
+                .find(|field| field.field_id == "library/publication")
+                .and_then(|field| field.cell.native())
+                .cloned()
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "citationPublicationUnavailable",
+                        "Saved Work publication is absent, invalid or unavailable",
+                    )
+                })?;
+            works.push(CitationWork {
+                key: entry.key,
+                work: FrozenWork {
+                    entity_ref: entry.work,
+                    source_basis: format!(
+                        "native-package:{}:revision:{}:hash:{}",
+                        package.manifest.package_id,
+                        work_entry.revision.as_deref().unwrap_or("unavailable"),
+                        weftext_engine::source_hash(source)
+                    ),
+                    publication,
+                },
+            });
+        }
+        let bibliography = project_bibliography(&works, BibliographyFormat::Bibtex)
+            .map_err(|e| CoreError::new("citationBibliographyUnavailable", e.to_string()))?;
+        generated.push((owner.node_id.clone().unwrap(), bibliography.bytes));
+    }
+    // Retain all originals if any generated path collides or exceeds budget.
+    let mut completed = package.clone();
+    for (owner, bytes) in generated {
+        weftext_export::exchange::append_generated_bibliography(&mut completed, &owner, bytes)
+            .map_err(|e| CoreError::new(&e.code, e.message))?;
+    }
+    *package = completed;
+    Ok(())
 }
 
 fn field_cell(projection: &NoteProjection, name: &str) -> Result<Cell, ApiError> {
@@ -1013,6 +1215,166 @@ fn bibliography(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use weftext_export::exchange::{
+        NATIVE_FORMAT, NATIVE_VERSION, NativeEntry, NativeFileRole, NativeManifest, NativePackage,
+    };
+    fn native_citation_fixture() -> NativePackage {
+        let owner = "00000000-0000-4000-8000-000000000001";
+        let work = "00000000-0000-4000-8000-000000000002";
+        let workspace = "00000000-0000-4000-8000-000000000003";
+        let source = format!(
+            "#metadata((id: \"{owner}\", types: (\"note\",))) <weftext>\n\
+             #metadata((kind: \"weftext.citations\", entries: ((key: \"exact\", work: \"weftext-node://{workspace}/{work}\"),))) <weftext-citations>\n\
+             @exact\n#bibliography(\"weftext.citations.bib\")\n"
+        );
+        let work_source = format!(
+            "#metadata((id: \"{work}\", types: (\"paper\",), publication: (kind: \"article\", title: \"Exact saved publication\", contributors: ((agent: (text: \"Author\"), roles: (\"author\",)),)))) <weftext>"
+        );
+        let files: BTreeMap<String, Vec<u8>> = BTreeMap::from([
+            ("Owner/Owner.typ".into(), source.into_bytes()),
+            ("Work/Work.typ".into(), work_source.into_bytes()),
+            (
+                ".weftext-schema.json".into(),
+                include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec(),
+            ),
+        ]);
+        let entries = files
+            .iter()
+            .map(|(path, bytes)| {
+                let role = if path == ".weftext-schema.json" {
+                    NativeFileRole::Schema
+                } else {
+                    NativeFileRole::Source
+                };
+                let mut entry = NativeEntry::new(role, bytes);
+                if path == "Owner/Owner.typ" {
+                    entry.node_id = Some(owner.into());
+                } else if path == "Work/Work.typ" {
+                    entry.node_id = Some(work.into());
+                }
+                (path.clone(), entry)
+            })
+            .collect();
+        NativePackage {
+            manifest: NativeManifest {
+                format: NATIVE_FORMAT.into(),
+                version: NATIVE_VERSION,
+                package_id: "00000000-0000-4000-8000-000000000004".into(),
+                workspace_id: workspace.into(),
+                scope: "library".into(),
+                schema_path: ".weftext-schema.json".into(),
+                entries,
+                losses: vec![],
+            },
+            files,
+        }
+    }
+    fn replace_native_source(package: &mut NativePackage, path: &str, source: String) {
+        let entry = package.manifest.entries.get_mut(path).unwrap();
+        entry.bytes = source.len();
+        entry.sha256 = weftext_export::exchange::digest(source.as_bytes());
+        package.files.insert(path.into(), source.into_bytes());
+    }
+    #[test]
+    fn native_bibliographies_use_saved_package_work_and_preserve_all_original_members() {
+        let mut package = native_citation_fixture();
+        let originals = package.files.clone();
+        complete_native_bibliographies(&mut package).unwrap();
+        for (path, original) in originals {
+            assert_eq!(package.files[&path], original);
+        }
+        let generated = &package.files["Owner/weftext.citations.bib"];
+        assert!(
+            std::str::from_utf8(generated)
+                .unwrap()
+                .contains("Exact saved publication")
+        );
+        assert_eq!(
+            package.manifest.entries["Owner/weftext.citations.bib"].role,
+            NativeFileRole::GeneratedBibliography
+        );
+        let bytes = weftext_export::exchange::write_native_package(&package).unwrap();
+        let reloaded = weftext_export::exchange::read_native_package(&bytes).unwrap();
+        assert_eq!(reloaded.files, package.files);
+    }
+    #[test]
+    fn native_bibliographies_reject_bad_work_schema_ownership_and_occupied_paths_atomically() {
+        for (path, from, to, expected) in [
+            (
+                "Work/Work.typ",
+                "types: (\"paper\",)",
+                "types: (\"note\",)",
+                "citationWorkType",
+            ),
+            (
+                "Work/Work.typ",
+                "00000000-0000-4000-8000-000000000002",
+                "00000000-0000-4000-8000-000000000005",
+                "citationWorkType",
+            ),
+            (
+                "Work/Work.typ",
+                "publication:",
+                "unavailable_publication:",
+                "citationPublicationUnavailable",
+            ),
+            (
+                "Owner/Owner.typ",
+                "weftext-node://00000000-0000-4000-8000-000000000003/",
+                "weftext-node://00000000-0000-4000-8000-000000000006/",
+                "citationWorkUnavailable",
+            ),
+            (
+                "Owner/Owner.typ",
+                "#bibliography(\"weftext.citations.bib\")",
+                "#bibliography(\"weftext.citations.bib\")\n#bibliography(\"external.bib\")",
+                "citationDeclarationUnavailable",
+            ),
+            (
+                "Owner/Owner.typ",
+                "#bibliography(\"weftext.citations.bib\")",
+                "#bibliography(\"external.bib\")",
+                "citationDeclarationUnavailable",
+            ),
+            (
+                ".weftext-schema.json",
+                "{",
+                "invalid schema {",
+                "citationSchemaUnavailable",
+            ),
+        ] {
+            let mut package = native_citation_fixture();
+            let source = std::str::from_utf8(&package.files[path])
+                .unwrap()
+                .replacen(from, to, 1);
+            replace_native_source(&mut package, path, source);
+            let originals = package.files.clone();
+            assert_eq!(
+                complete_native_bibliographies(&mut package)
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+            assert_eq!(package.files, originals);
+        }
+        let mut package = native_citation_fixture();
+        package
+            .manifest
+            .losses
+            .push(weftext_export::exchange::NativeLoss {
+                path: "Owner/WEFTEXT.CITATIONS.BIB".into(),
+                code: "unregisteredFileOmitted".into(),
+                detail: "Original remains outside the package".into(),
+            });
+        let originals = package.files.clone();
+        assert_eq!(
+            complete_native_bibliographies(&mut package)
+                .unwrap_err()
+                .code,
+            "packagePath"
+        );
+        assert_eq!(package.files, originals);
+    }
     #[test]
     fn readable_typed_slots_keep_exact_text_and_distinct_states() {
         assert_eq!(

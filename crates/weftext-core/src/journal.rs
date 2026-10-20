@@ -231,15 +231,33 @@ impl Core {
             return false;
         };
         fs::read(self.journal_path(id, "commit"))
+            .inspect_err(|error| resource_diagnostics::io_error("committed.read", id, error))
             .ok()
-            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|b| {
+                serde_json::from_slice::<serde_json::Value>(&b)
+                    .inspect_err(|_| {
+                        resource_diagnostics::branch("committed.parse", id, "invalidState")
+                    })
+                    .ok()
+            })
             .is_some_and(|c| {
-                c["operationId"] == id
+                let matches = c["operationId"] == id
                     && c["fingerprint"] == plan.fingerprint
-                    && c["storageProfile"] == STORAGE_PROFILE
+                    && c["storageProfile"] == STORAGE_PROFILE;
+                if !matches {
+                    resource_diagnostics::branch("committed.match", id, "recordMismatch");
+                }
+                matches
             })
     }
     pub(crate) fn resolved(&self, id: &str) -> bool {
+        if self
+            .operations
+            .get(id)
+            .is_some_and(library_creation::is_cancellation)
+        {
+            return true;
+        }
         fs::read(self.journal_path(id, "resolution"))
             .ok()
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
@@ -396,6 +414,17 @@ impl Core {
         let plan = self.operations.get(operation_id).ok_or_else(|| {
             CoreError::new("operationMissing", "No retained operation has this ID")
         })?;
+        if library_creation::is_cancellation(plan) {
+            return Ok(Self::recovery_info(
+                plan,
+                "resolved",
+                "The exact original creation request was durably canceled; no author path was inspected or activated",
+                None,
+            ));
+        }
+        if plan.kind == "createLibrary" && plan.transaction.is_some() {
+            return self.inspect_library_creation_recovery(plan);
+        }
         if plan.transaction.is_some() {
             return self.inspect_transaction_recovery(plan);
         }
@@ -464,6 +493,9 @@ impl Core {
         let plan = self.operations.get(operation_id).cloned().ok_or_else(|| {
             CoreError::new("operationMissing", "No retained operation has this ID")
         })?;
+        if plan.kind == "createLibrary" && plan.transaction.is_some() {
+            return self.resolve_library_creation_recovery(&plan, action);
+        }
         if plan.transaction.is_some() {
             return self.resolve_transaction_recovery(&plan, action);
         }

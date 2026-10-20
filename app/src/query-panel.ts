@@ -1,4 +1,4 @@
-import { action, cellLabels, decodeProjection, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, type Cell, type DataSchema, type NativeValue, type NoteProjection, type PanelHost, type Shape, type SourcePatch } from "./data-panel";
+import { action, cellLabels, decodeProjection, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, nativeFormControls, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, valueEditor, type Cell, type DataSchema, type NativeValue, type NoteProjection, type PanelHost, type Shape, type SourcePatch, type SchemaField } from "./data-panel";
 import type { MediaResource } from "./media-viewer";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery } from "./export-state";
@@ -192,6 +192,7 @@ export function viewPreferenceIdentity(root: string, scope: string, types: strin
   return saved ? JSON.stringify(["saved-query", saved.owner, saved.key, saved.mode, saved.mode === "pinned" ? saved.revision ?? "" : "current"]) : JSON.stringify(["query-context", root, scope, [...new Set(types)].sort(), [...new Set(predicates)].sort()]);
 }
 export function hasDirectStatusProjection(plan: QueryPlan | null, schema: DataSchema | null): boolean { const field = schema?.fields.find(field => field.key === "status"); const column = plan?.select.find(column => column.name === "status"); return !!field && !!column && [fieldExpr(field.id), field.key].includes(column.expr.trim()) && !plan?.group && !plan?.unnest && !plan?.advanced; }
+export function directQueryField(plan: QueryPlan | null, schema: DataSchema | null, column: string): SchemaField | undefined { if (!plan || plan.group || plan.unnest || plan.advanced) return; const projection = plan.select.find(item => item.name === column); return schema?.fields.find(field => projection && [fieldExpr(field.id), field.key].includes(projection.expr.trim())); }
 export function distinctFacetCounts(rows: QueryRow[], column: string): { value?: NativeValue; count: number; missing: boolean }[] {
   const facets = new Map<string, { value?: NativeValue; entities: Set<string>; missing: boolean }>();
   for (const row of rows) {
@@ -239,6 +240,7 @@ function labeled(label: string, input: HTMLElement): HTMLElement { const element
 function selectControl(options: [string, string][], value: string): HTMLSelectElement { const input = ui("select", "data-input"); options.forEach(([key, label]) => { const option = ui("option", "", label); option.value = key; input.append(option); }); input.value = value; return input; }
 
 export class QueryPanel {
+  private inlineDrafts = new Map<string, { value: NativeValue; raw: Record<string, string>; binding: string }>();
   readonly element = ui("section", "query-panel");
   private root: string | null = null;
   private workspaceId?: string;
@@ -497,6 +499,21 @@ export class QueryPanel {
     const pin = action(pinned ? "取消置顶" : "置顶", () => { this.preference.pinned = pinned ? this.preference.pinned.filter(item => item !== key) : [...this.preference.pinned, key]; this.savePreferences(); this.renderResults(); }, "data-button compact"); pin.setAttribute("aria-pressed", String(pinned)); controls.append(pin);
     if (row.entityKey && row.path && queryRowLifecycle(row, this.resultPlan) === "live") controls.append(action("加到快捷入口", () => { if (!this.shortcuts.some(item => item.entityKey === row.entityKey)) this.shortcuts.push({ id: crypto.randomUUID(), label: rowTitle(row), kind: "node", entityKey: row.entityKey, path: row.path }); this.saveShortcuts(); this.renderControls(); }, "data-button compact"));
     const status = row.cells.status;
+    if (!row.readOnly && row.entityKey && row.path && queryRowLifecycle(row, this.resultPlan) === "live" && this.schema && !this.result?.superseded && !this.result?.externalPending && (this.result?.freshness === "current" || this.result?.snapshotMode === "admittedFrozen") && this.host.canEdit?.() !== false) {
+      const edit = ui("details", "query-inline-fields"); edit.append(ui("summary", "", "就地编辑真实属性"), ui("p", "data-help", "每次重新核对实际笔记与字段，修改进入该笔记草稿，可撤销；保存仍由原保存按钮完成。"));
+      for (const [column, cell] of Object.entries(row.cells)) {
+        const field = directQueryField(this.resultPlan, this.schema, column); if (!field || cell.state !== "value" || !cell.value) continue;
+        const section = ui("section"), shape = resolveShape(field.shape, this.schema); if (!["scalar", "enum", "union"].includes(shape.kind)) continue;
+        const key = JSON.stringify([this.root, row.entityKey, field.id]), binding = JSON.stringify([field.shape, this.schema.definitions]), draft = this.inlineDrafts.get(key) ?? { value: structuredClone(cell.value), raw: {}, binding };
+        section.append(ui("strong", "", fieldNames[field.key] ?? field.key));
+        if (draft.binding !== binding) { section.append(ui("p", "data-warning", "字段形状已变化，原输入保留，未绑定同名新字段。"), ui("pre", "", JSON.stringify(draft, null, 2)), action("放弃此字段的旧输入", () => { this.inlineDrafts.delete(key); this.renderResults(); })); edit.append(section); continue; }
+        section.append(valueEditor(field.shape, draft.value, this.schema, next => { draft.value = next; this.inlineDrafts.set(key, draft); }, `结果属性：${fieldNames[field.key] ?? field.key}`));
+        for (const [id, control] of nativeFormControls(section)) if (id in draft.raw) { control.value = draft.raw[id]; control.dispatchEvent(new Event("input", { bubbles: true })); }
+        const retain = () => { draft.raw = Object.fromEntries(nativeFormControls(section).filter(([, control]) => !control.validity.valid).map(([id, control]) => [id, control.value])); this.inlineDrafts.set(key, draft); }; section.addEventListener("input", retain); section.addEventListener("change", retain);
+        section.append(action("应用此字段到笔记草稿", async () => { const invalid = section.querySelector<HTMLInputElement>(":invalid"); if (invalid) { invalid.reportValidity(); return; } await this.changeTaskField(row, field.key, draft.value, field.id, () => { this.inlineDrafts.delete(key); }); })); edit.append(section);
+      }
+      if (edit.querySelector("section")) controls.append(edit);
+    }
     if (!row.readOnly && queryRowLifecycle(row, this.resultPlan) === "live" && row.path && hasDirectStatusProjection(this.resultPlan, this.schema) && status?.state === "value" && status.value?.kind === "text" && ["open", "done", "cancelled"].includes(status.value.value)) {
       const next = status.value.value === "done" ? "open" : "done"; controls.append(action(`状态 → ${next === "done" ? "已完成" : "未完成"}`, () => this.changeTaskField(row, "status", { kind: "text", value: next }), "data-button compact"));
     }
@@ -551,14 +568,15 @@ export class QueryPanel {
     const max = Math.max(...samples.map(item => Math.abs(item.amount)), 1); const chart = ui("div", "query-chart"); for (const sample of samples) { const row = ui("div", "query-chart-row"); const label = sample.row.path ? this.rowOpen(sample.row) : ui("span", "", Object.entries(sample.row.cells).filter(([name]) => name !== column).map(([, cell]) => stateText(cell)).join(" · ") || "汇总"); const track = ui("div", "query-chart-track"); const bar = ui("div", `query-chart-bar${sample.amount < 0 ? " negative" : ""}`); bar.style.width = `${Math.max(0.5, Math.abs(sample.amount) / max * 100)}%`; track.setAttribute("aria-hidden", "true"); track.append(bar); row.append(label, track, ui("span", "query-chart-value", formatNativeValue(sample.value))); chart.append(row); } this.resultsHost.append(chart);
     if (samples.length !== rows.length) this.resultsHost.append(ui("p", "data-warning", `${rows.length - samples.length} 行缺值、值无效或不是数值；仍可在等价数据表查看。`));
   }
-  private async changeTaskField(row: QueryRow, key: string, value: NativeValue): Promise<void> {
+  private async changeTaskField(row: QueryRow, key: string, value: NativeValue, expectedFieldId = this.schema?.fields.find(field => field.key === key)?.id, applied?: () => void): Promise<void> {
+    if (this.host.canEdit?.() === false) { this.host.notify("当前会话不能写入属性，输入保留。", true); return; }
     if (row.readOnly || !row.path || queryRowLifecycle(row, this.resultPlan) !== "live") { this.host.notify("这个行没有真实当前字段写入目标。", true); return; }
     try {
       await this.host.prepareAction?.();
       const target = row.entityKey ? await this.openStrong(row.entityKey) : { path: row.path, nodeId: undefined }; if (!row.entityKey) await this.host.openDocument(target.path, this.root ?? undefined); const basis = this.host.getDocument(); if (!basis || (target.nodeId ? basis.nodeId !== target.nodeId : basis.path !== target.path)) throw new Error("当前文档目标身份不匹配，未修改字段。");
-      const projection = decodeProjection(await this.host.request<NoteProjection | { projection: NoteProjection }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial })); const projected = projection.fields.find(field => field.key === key); if (!projected?.writable || projected.cell.state !== "value") throw new Error("当前字段不可安全编辑。旧行不授予写入资格。");
+      const projection = decodeProjection(await this.host.request<NoteProjection | { projection: NoteProjection }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial })); const projected = projection.fields.find(field => field.key === key); if (!projected?.writable || projected.cell.state !== "value" || !expectedFieldId || projected.fieldId !== expectedFieldId) throw new Error("当前字段不可安全编辑或身份已变化。旧行不授予写入资格。");
       if (!await this.confirmChange(key, projected.cell.value, value)) return;
-      const result = await this.host.request<SourcePatch | { edit: SourcePatch } | { patches: SourcePatch[]; source?: string }>("/api/data/edit", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, key, path: [], value }); await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis); if (this.result) { this.result.freshness = "stale"; this.result.superseded = true; } this.renderResults(); this.host.notify(`${fieldNames[key] ?? key} 已应用到真实笔记草稿，保存后写入文件。列表需刷新读取磁盘现状。`);
+      const result = await this.host.request<SourcePatch | { edit: SourcePatch } | { patches: SourcePatch[]; source?: string }>("/api/data/edit", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, key, path: [], value }); await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis); applied?.(); if (this.result) { this.result.freshness = "stale"; this.result.superseded = true; } this.renderResults(); this.host.notify(`${fieldNames[key] ?? key} 已应用到真实笔记草稿，保存后写入文件。列表需刷新读取磁盘现状。`);
     } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); }
   }
   private async openTarget(path: string, entityKey?: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<void> {
