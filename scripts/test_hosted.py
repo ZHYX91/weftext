@@ -108,6 +108,23 @@ class Hosted(unittest.TestCase):
         users=copy.deepcopy(old['users']);transform(users)
         return self.call('admin/policy',{'expectedGeneration':old['generation'],'users':users},'admin')
 
+    def test_repeated_close_releases_sessions_without_discarding_personal_drafts(self):
+        original = self.open()
+        retained = original['source'] + '\n个人恢复稿 😀\n'
+        self.call('draft', {'sessionId': original['sessionId'], 'source': retained})
+        for _ in range(40):
+            opened = self.open()
+            self.call('session/keepalive', {'sessionId': opened['sessionId']}, 'bob', 410)
+            self.call('close', {'sessionId': opened['sessionId']}, 'bob', 410)
+            self.call('session/keepalive', {'sessionId': opened['sessionId']})
+            self.call('close', {'sessionId': opened['sessionId']})
+        self.call('close', {'sessionId': original['sessionId']})
+        expired = self.call('session/keepalive', {'sessionId': original['sessionId']}, status=410)
+        self.assertEqual(expired['error']['code'], 'sessionExpired')
+        reopened = self.open()
+        self.assertEqual(reopened['recoveredDraft'], retained)
+        self.assertEqual(reopened['source'], original['source'])
+
     def test_boundary_and_hidden_existence(self):
         self.call('me',actor='unknown',status=401)
         self.call('me',headers={'Origin':'https://foreign.invalid'},status=403)

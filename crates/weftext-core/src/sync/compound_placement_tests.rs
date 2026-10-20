@@ -828,6 +828,25 @@ fn compound_complex_original_install_content_and_facts_checkpoints_resume_same_p
 }
 
 #[test]
+fn compound_nested_child_resumes_when_parent_is_final_and_child_is_still_parked() {
+    let mut pair = Pair::new(Layout::NestedChild);
+    let (request, preview) = pair.prepare();
+    let transaction = pair.b.operations[&preview.operation_id]
+        .transaction
+        .as_ref()
+        .unwrap();
+    let crate::operations::Mutation::Compound { relocations, .. } = &transaction.mutation else {
+        panic!("Nested placement must use its real Compound Plan");
+    };
+    assert_eq!(relocations.len(), 2);
+    assert!(relocations.iter().all(|step| step.parking.is_some()));
+    let parent = (0..relocations.len())
+        .min_by_key(|index| Path::new(&relocations[*index].target).components().count())
+        .unwrap();
+    original_checkpoint(&mut pair, &request, &preview, &format!("move{parent}"));
+}
+
+#[test]
 fn compound_extract_child_original_install_content_and_facts_checkpoints_resume_same_plan() {
     original_install_content_and_facts_checkpoints(Layout::ExtractChild);
 }
