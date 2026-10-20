@@ -874,6 +874,33 @@ fn retained_legacy_tag_branch_is_readable_but_cannot_install_over_current_hierar
     p.b.receive_sync(
         &p.identity,
         SyncBundle {
+            manifests: BTreeMap::from([(manifest.id().unwrap(), manifest.clone())]),
+            blobs: BTreeMap::new(),
+        },
+    )
+    .unwrap();
+    let before = fs::read(p.br.join(".weftext-tags.json")).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&before).unwrap()["version"],
+        2
+    );
+    assert!(p.b.read_tag_registry(&p.br).unwrap().complete);
+    assert_eq!(
+        p.b.read_received_sync_file(
+            &p.identity,
+            &ObjectKey::Tags,
+            &revision,
+            ".weftext-tags.json",
+        )
+        .unwrap_err()
+        .code,
+        "syncIncomplete",
+        "A readable current v2 tree cannot replace the missing exact v1 blob"
+    );
+    assert_eq!(fs::read(p.br.join(".weftext-tags.json")).unwrap(), before);
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
             manifests: BTreeMap::from([(manifest.id().unwrap(), manifest)]),
             blobs: BTreeMap::from([(hash(&bytes), bytes.clone())]),
         },
@@ -896,7 +923,6 @@ fn retained_legacy_tag_branch_is_readable_but_cannot_install_over_current_hierar
             .iter()
             .all(|tag| tag.parent_tag_id.is_none())
     );
-    let before = fs::read(p.br.join(".weftext-tags.json")).unwrap();
     let request = apply(&p);
     assert!(p.b.prepare_operation(request).is_err());
     assert_eq!(fs::read(p.br.join(".weftext-tags.json")).unwrap(), before);

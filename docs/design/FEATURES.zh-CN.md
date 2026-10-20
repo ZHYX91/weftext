@@ -144,6 +144,8 @@ coverage 与 freshness 是正交的：完整旧投影也可 stale；partial curr
 
 本地查询面板只合并同一库、查询／定义选择、typed 参数及同一环境中的在途读取，并最多保留一个最新等待意图。schema 和目录的异步预读前固定输入；新输入或环境失效后不安装旧结果。实际保存、配置／结构写入、导入、恢复及同步确认成功即使后续打开或交付失败，也使旧环境失效；未保存 Draft 和不影响查询的密度、缩略图等个人呈现不产生这种持久变化。这里的环境序号只是页面内的退休标记，不是 Core 修订、权限、结果缓存或持久 Job。完成后的明确刷新重新取 Core cut，保存定义的 current／pinned 规则不变；服务器中已开始的隔离编译仍受原预算约束，不把丢弃 UI 结果称为服务端取消。准确冻结结果也不因此被提升为持续 current。
 
+读取状态与结果更新不得卸载、重挂 Query 输入控件；导航（Nav）与周期（Period）入口须在同一 root 身份内稳定挂载，不因 loading、结果状态或 schema 反序列化产生的新对象身份重建。尚未应用的筛选、聚合与 raw JSON 草稿、DOM 选区和 composition 属于当前 root／owner 的控件临时状态，须在这类更新中保留，不写入 Query 作者计划或形成新权威。真实 schema 变化须按原 `FieldId` 重新验证；失效的 raw 输入保留并明确标为 unavailable，不按同名字段替换，保留输入也不授予写权。root／owner 切换后，旧读取及其完成响应不得改动新控件、回填草稿或重置选区／composition。
+
 ### 5.1 Core LogicalCut：结果不能由逐对象 current 读取拼成
 
 反例：同一Core事务把 `A.amount=10,B.amount=0` 变成 `A.amount=0,B.amount=10`。先读A旧值再读B新值会算出sum20，这在任何已决状态都不存在；给两项各自ReadBasis或最后核“都曾读过”不能修复。因此Query不是循环调用 `readEntity(current)`。

@@ -3378,6 +3378,7 @@ mod tests {
         );
         core.create_note(&root, &root, "one").unwrap();
         let mut original = query_snapshot(&mut core, &root, plan.clone()).unwrap();
+        let mut missing_tags = query_snapshot(&mut core, &root, plan.clone()).unwrap();
         let basis = core.read_tag_registry(&root).unwrap();
         let moved = core
             .prepare_move_tag(
@@ -3390,6 +3391,14 @@ mod tests {
             .unwrap();
         core.execute_operation(&moved.preview.operation_id, &moved.preview.plan_id)
             .unwrap();
+        missing_tags.tags.clear();
+        assert_eq!(
+            freeze_query_definitions(&mut core, &mut missing_tags, BTreeMap::new())
+                .unwrap_err()
+                .code,
+            "tagsUnavailable",
+            "The missing original capture must not be replaced by the current moved tree"
+        );
         freeze_query_definitions(&mut core, &mut original, BTreeMap::new()).unwrap();
         assert_eq!(
             weftext_data::execute_query(&original.input, &original.plan, &original.schema)

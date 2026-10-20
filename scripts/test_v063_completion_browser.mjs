@@ -28,7 +28,7 @@ const result = {
 };
 const root = path.join(out, 'TEST-library'), data = path.join(out, 'private-state');
 let child, browser, context, page, base, token, stderr = '', phase = 'setup';
-let image, plain, parent, farImage, savedImage, savedParent, dirtyImage, dirtyParent;
+let image, plain, parent, farImage, savedImage, savedParent, dirtyImage, dirtyParent, relationSource, relationTarget;
 const queryReceipts = [], knowledgeReceipts = [], previewRequests = [], mutations = [];
 const observedRequests = new Map(); let observedClient = 0;
 let caseStartedAt = performance.now();
@@ -213,9 +213,17 @@ try {
   image = await save(image, image.source.replace('types: ()', 'types: ("task",), status: "open"'));
   image = await attachImage(image);
   plain = await note('B-Plain', parentFolder, '= TEST plain note\n\nNo image or PDF belongs to this note.');
-  for (let i = 0; i < 18; i++) await note('M-' + String(i).padStart(2, '0'), parentFolder, 'Owned spacer note.');
+  for (let i = 0; i < 18; i++) {
+    const spacer = await note('M-' + String(i).padStart(2, '0'), parentFolder, 'Owned spacer note.');
+    if (i === 0) relationSource = spacer;
+    if (i === 1) relationTarget = spacer;
+  }
   farImage = await attachImage(await note('Z-Image', parentFolder, 'Owned image outside the initial node-list viewport.'));
   const reference = doc => `weftext-node://${doc.workspaceId}/${doc.nodeId}`;
+  // Use two existing spacers and the unchanged installed person schema. The
+  // library still has 22 notes, one task and the original untyped B-Plain.
+  relationTarget = await save(relationTarget, relationTarget.source.replace('types: ()', 'types: ("person",)'));
+  relationSource = await save(relationSource, relationSource.source.replace('types: ()', `types: ("person",), parents: ((target: (ref: "${reference(relationTarget)}"),),), siblings: ((target: (ref: "${reference(relationTarget)}"),),)`));
   parent = await save(parent, parent.source + `\n\n= TEST Duplicate\n\nRoot before.\n\n== TEST Child\n\nChild content.\n\n==== TEST Deep\n\nDeep content.\n\n= TEST Duplicate\n\n#link("${reference(image)}")[first image link]\n\n#link("${reference(image)}")[second image link]\n\n#link("${reference(plain)}")[plain link]\n`);
   savedParent = parent.source;
   await stop(); await start(['--open', image.path, '--root', root]);
@@ -276,11 +284,14 @@ try {
   await pass('A real untyped-note first assignment rejects before preparation; UI cancellation sends the same ID with no plan and never reprepares. The original and changed late intents stay fenced, while a new UI operation succeeds and both source/Draft remain exact.');
 
   phase = 'query-refresh-coalescing'; await showQuery(); const baseline = await runQuery(0, otherTag.tagRef); assert.ok(baseline.request.plan.where.includes('tagInSubtree'));
-  const originalDensity = await queryPanel().getByLabel('密度', { exact: true }).inputValue(), originalThumbnails = await queryPanel().getByLabel('缩略图', { exact: true }).isChecked();
+  // The wrapping label also contains the select's option text. Match its
+  // actual control instead of assuming that its accessible name is only 密度.
+  const density = () => queryPanel().locator('label.query-control-label').filter({ hasText: /^密度/ }).locator('select');
+  const originalDensity = await density().inputValue(), originalThumbnails = await queryPanel().getByLabel('缩略图', { exact: true }).isChecked();
   const sameEpochStart = result.requests.length, sameEpochMutations = mutations.length, sameEpochHold = await holdNextActualQuery(); let sameEpochWork, sameEpochHeld, sameEpochReceipt;
   try {
     sameEpochWork = runQuery(0, otherTag.tagRef); sameEpochWork.catch(() => {}); sameEpochHeld = await sameEpochHold.ready();
-    await queryPanel().getByLabel('密度', { exact: true }).selectOption(originalDensity === 'compact' ? 'comfortable' : 'compact'); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(!originalThumbnails); await click('查询', queryPanel());
+    await density().selectOption(originalDensity === 'compact' ? 'comfortable' : 'compact'); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(!originalThumbnails); await click('查询', queryPanel());
     assert.equal(mutations.length, sameEpochMutations); await expectSource(dirtyImage); sameEpochHold.release(); sameEpochReceipt = await sameEpochWork; await pause(250);
     assert.equal(result.requests.slice(sameEpochStart).filter(item => item.route === '/api/query/run').length, 1, 'Presentation changes and same-epoch repeated refresh must share one actual query');
     assert.deepEqual(sameEpochReceipt.result, sameEpochHeld.response); assert.equal(sameEpochReceipt.result.cutId, sameEpochHeld.response.cutId); assert.equal(await disk(image.path), savedImage);
@@ -294,7 +305,7 @@ try {
     installedCuts = await page.evaluate(() => window.__v063QueryBasisAudit.events); assert.ok(!installedCuts.some(event => event.bases.includes(`读取版本：${changedEpochHeld.response.cutId}`)), 'The held obsolete environment must never become the visible result basis');
     assert.deepEqual(changedEpochHeld.request, changedEpochReceipt.request); assert.notEqual(changedEpochHeld.response.cutId, changedEpochReceipt.result.cutId); assert.equal(changedEpochReceipt.result.rows[0].entityKey, reference(image)); await expectSource(dirtyImage); assert.equal(await disk(image.path), savedImage);
   } finally { await page.evaluate(() => { window.__v063QueryBasisAudit?.observer.disconnect(); delete window.__v063QueryBasisAudit; }).catch(() => {}); changedEpochHold.release(); if (changedEpochWork) await Promise.allSettled([changedEpochWork]); await changedEpochHold.close(); }
-  await moveTag(leaf, parentTag); await queryPanel().getByLabel('密度', { exact: true }).selectOption(originalDensity); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(originalThumbnails); await expectSource(dirtyImage);
+  await moveTag(leaf, parentTag); await density().selectOption(originalDensity); await queryPanel().getByLabel('缩略图', { exact: true }).setChecked(originalThumbnails); await expectSource(dirtyImage);
   result.queryRefreshCoalescing = { sameEpochHeld, sameEpochVisibleCut: sameEpochReceipt.result.cutId, changedEpochHeld, changedEpochVisibleCut: changedEpochReceipt.result.cutId, installedCuts, hook: 'Only the first original server response is held and then forwarded without changing its body; no synthetic Query result is supplied. A read-only MutationObserver records actual visible result bases.' };
   await pass('A held actual Core response survives presentation changes and same-epoch repeated refresh as one query. A real tag-tree commit requires a second identical-plan request and a new visible cut; the old result cannot replace it. Hooks, tags and display preferences are restored.');
 
@@ -343,6 +354,43 @@ try {
   result.snapshots.push({ graph: snapshot.graph, headingStructure: snapshot.headingStructure });
   await pass('Actual same-Draft knowledge receipt reaches the embedded graph with two distinct body occurrences; search/filter/pan/zoom do not write, keyboard opens the accurate retained note, Back restores Draft, and edge navigation selects its exact author occurrence.');
 
+  phase = 'actual-typed-graph'; await knowledgeCommand('打开二维关系图谱', '二维图谱');
+  const typedReceipt = await refreshKnowledge(dirtyParent), typedGraph = typedReceipt.result.graph;
+  const relationSourceKey = `${relationSource.workspaceId}/${relationSource.nodeId}`, relationTargetKey = `${relationTarget.workspaceId}/${relationTarget.nodeId}`;
+  const typedEdges = typedGraph.edges.filter(edge => edge.authorSource === relationSourceKey && edge.fieldId);
+  assert.equal(typedEdges.length, 3, 'Two actual authored fields produce one directed, one inverse and one symmetric edge');
+  const forward = typedEdges.find(edge => edge.relation === 'people/parent'), inverse = typedEdges.find(edge => edge.relation === 'child'), symmetric = typedEdges.find(edge => edge.relation === 'people/sibling');
+  assert.ok(forward && inverse && symmetric); assert.equal(new Set(typedEdges.map(edge => edge.key)).size, 3);
+  for (const edge of typedEdges) {
+    assert.equal(edge.sourceHash, sha(relationSource.source)); assert.equal(edge.range, null);
+    assert.deepEqual(edge.itemPath.map(part => JSON.parse(part)), [{ kind: 'index', index: 0 }, { kind: 'member', key: 'target' }, { kind: 'member', key: 'ref' }]);
+  }
+  assert.deepEqual([forward.source, forward.target, forward.direction, forward.derived, forward.fieldId], [relationSourceKey, relationTargetKey, 'directed', false, 'people/parents']);
+  assert.deepEqual([inverse.source, inverse.target, inverse.direction, inverse.derived, inverse.fieldId], [relationTargetKey, relationSourceKey, 'directed', true, 'people/parents']);
+  assert.deepEqual([symmetric.source, symmetric.target, symmetric.direction, symmetric.derived, symmetric.fieldId], [relationSourceKey, relationTargetKey, 'symmetric', false, 'people/siblings']);
+  const typedMutations = mutations.length, typedView = () => knowledge().locator('.knowledge-graph-view');
+  await typedView().getByLabel('范围', { exact: true }).selectOption('global');
+  await typedView().getByLabel('在当前图范围搜索定位', { exact: true }).fill('');
+  await click('适应视口', typedView());
+  for (const edge of [forward, symmetric, inverse]) {
+    await typedView().getByLabel('关系类型', { exact: true }).selectOption(edge.relation);
+    const visibleEdge = typedView().locator(`path[data-graph-key=${JSON.stringify(edge.key)}]`);
+    await visibleEdge.waitFor(); assert.equal(await typedView().locator('path[data-graph-key]').count(), 1);
+    assert.equal(await visibleEdge.getAttribute('marker-end') !== null, edge.direction === 'directed');
+    await visibleEdge.focus(); await page.keyboard.press('Space');
+    const detail = typedView().locator('.knowledge-card');
+    assert.equal(await detail.getByRole('heading', { name: edge.relation, exact: true }).count(), 1);
+    const text = await detail.innerText(); assert.ok(text.includes(`来源：M-00 · 字段 ${edge.fieldId}`));
+    assert.ok(text.includes(edge.derived ? '派生反向；作者事实保存在原来源，不另写反边。' : '原始作者关系。'));
+    assert.equal(text.includes('↔ 对称关系 ↔'), edge.direction === 'symmetric');
+  }
+  await click('打开准确作者来源', typedView()); await expectSource(relationSource.source);
+  assert.equal(await disk(relationSource.path), relationSource.source); assert.equal(await disk(relationTarget.path), relationTarget.source);
+  await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent);
+  assert.equal(mutations.length, typedMutations); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
+  result.snapshots.push({ typedGraph: { generation: typedGraph.generation, source: relationSourceKey, target: relationTargetKey, edges: typedEdges } });
+  await pass('Actual Core-authored person fields reach the embedded graph as separate directed, symmetric and derived-inverse relations; type filters, arrowheads and original field provenance remain exact, and inverse source navigation opens its real author then returns without writes.');
+
   phase = 'actual-heading-structure'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); const headingsReceipt = await refreshKnowledge(dirtyParent), headings = headingsReceipt.result.headingStructure;
   assert.ok(headings); const repeated = headings.items.filter(heading => heading.text === 'TEST Duplicate'); assert.equal(repeated.length, 2); assert.ok(repeated.every(heading => heading.range)); assert.notEqual(repeated[0].key, repeated[1].key);
   const heading = repeated[1], structure = () => knowledge().locator('.knowledge-heading-structure');
@@ -353,6 +401,47 @@ try {
   await cm().click(); await page.keyboard.press('Control+z'); await expectSource(savedParent); await page.keyboard.press('Control+y'); await expectSource(dirtyParent);
   await quick('A-Image'); await expectSource(dirtyImage); await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent);
   await pass('Native duplicate headings retain distinct accurate keys/ranges; keyboard search/jump chooses the second exact heading and all new read-only views preserve the original document Undo and navigation Draft.');
+
+  phase = 'actual-heading-subtree'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构');
+  const structureReceipt = await refreshKnowledge(dirtyParent), nativeHeadings = structureReceipt.result.headingStructure;
+  assert.equal(nativeHeadings.coverage, 'complete'); assert.equal(nativeHeadings.truncated, false);
+  assert.deepEqual(nativeHeadings.items.map(item => [item.text, item.level]), [['TEST Duplicate', 1], ['TEST Child', 2], ['TEST Deep', 4], ['TEST Duplicate', 1]]);
+  const [firstRoot, childHeading, deepHeading, secondRoot] = nativeHeadings.items, structureMutations = mutations.length;
+  const structureView = () => knowledge().locator('.knowledge-heading-structure'), structureRow = key => structureView().locator(`li[data-heading-key=${JSON.stringify(key)}]`);
+  const searchHeadings = async text => { await structureView().getByLabel('搜索真实标题', { exact: true }).fill(text); await structureView().getByLabel('搜索真实标题', { exact: true }).press('Enter'); };
+  const selectedHeading = async key => { await until(() => structureView().locator(`g[data-graph-key=${JSON.stringify(key)}].is-selected`).count().then(count => count === 1), 'actual selected heading ' + key); };
+  await searchHeadings(''); await click('整篇', structureView()); await click('全部展开', structureView());
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 5);
+  assert.match(await structureRow('@weftext-document-root').getByRole('button').first().innerText(), /2 个直接子标题／4 个全部子标题$/);
+  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
+  assert.match(await structureRow(childHeading.key).getByRole('button').first().innerText(), /1 个直接子标题／1 个全部子标题$/);
+  assert.match(await structureRow(deepHeading.key).getByRole('button').first().innerText(), /0 个直接子标题／0 个全部子标题$/);
+  await structureRow(firstRoot.key).getByRole('button').first().click();
+  await structureRow(firstRoot.key).getByRole('button', { name: '折叠分支', exact: true }).press('Enter');
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 3);
+  assert.equal(await structureRow(childHeading.key).count(), 0); assert.equal(await structureRow(deepHeading.key).count(), 0);
+  assert.equal(await structureRow(firstRoot.key).getByRole('button', { name: '展开分支', exact: true }).getAttribute('aria-expanded'), 'false');
+  await searchHeadings('TEST Deep'); assert.ok((await structureView().innerText()).includes('1 个标题命中'));
+  assert.equal(await structureRow(childHeading.key).count(), 1); assert.equal(await structureRow(deepHeading.key).count(), 1); assert.equal(await structureRow(secondRoot.key).count(), 0);
+  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
+  await searchHeadings(''); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 3);
+  assert.equal(await structureRow(deepHeading.key).count(), 0, 'Clearing search restores the original collapsed branch');
+  await searchHeadings('TEST Duplicate'); assert.ok((await structureView().innerText()).includes('2 个标题命中'));
+  await structureView().getByRole('button', { name: '下一命中', exact: true }).press('Enter'); await selectedHeading(secondRoot.key);
+  await structureView().getByRole('button', { name: '上一命中', exact: true }).press('Enter'); await selectedHeading(firstRoot.key);
+  await structureView().getByRole('button', { name: '上一命中', exact: true }).press('Enter'); await selectedHeading(secondRoot.key);
+  await structureView().getByRole('button', { name: '下一命中', exact: true }).press('Enter'); await selectedHeading(firstRoot.key);
+  await searchHeadings(''); await click('全部展开', structureView()); await structureRow(childHeading.key).getByRole('button').first().click();
+  await structureView().getByRole('button', { name: '所选子树', exact: true }).press('Enter');
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 2);
+  assert.equal(await structureRow(childHeading.key).count(), 1); assert.equal(await structureRow(deepHeading.key).count(), 1);
+  assert.equal(await structureRow('@weftext-document-root').count(), 0); assert.equal(await structureRow(firstRoot.key).count(), 0); assert.equal(await structureRow(secondRoot.key).count(), 0);
+  assert.ok((await structureView().innerText()).includes('子树：TEST Child · 已展示 2 个真实标题'));
+  await structureView().getByRole('button', { name: '整篇', exact: true }).press('Enter'); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 5);
+  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
+  await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(mutations.length, structureMutations);
+  result.snapshots.push({ headingSubtree: nativeHeadings });
+  await pass('The same native endpoint drives actual heading counts, keyboard folding and full/subtree controls; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');
 
   phase = 'explicit-inspector-commands'; await knowledgeCommand('导入或浏览图片与资源', '文件'); await knowledgeCommand('导入或浏览图片与资源', '文件');
   await expectSource(dirtyParent); await click('链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');

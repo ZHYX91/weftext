@@ -6,6 +6,7 @@ import { TagTree, tagPredicate, decodeTagShortcutCollection, type TagMatchMode }
 import { tagPicker } from "./tag-picker";
 import { tagCancellationStatus, tagOperationStatus } from "./tag-navigation-state";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
+import { updateQueryChoices, type QueryChoice } from "./query-control-state";
 
 export interface QueryPlan {
   scope: { directory?: string; descendants: boolean; lifecycle: "live" | "trash" };
@@ -80,15 +81,19 @@ class PeriodNavigator {
   private pending: Record<string, unknown> | null = null;
   private loading = false;
   private lookupGeneration = 0;
+  private schemaAvailable = true;
+  private readonly schemaMessage = ui("p", "data-warning");
   constructor(private readonly host: PanelHost, private root: string, scope: () => string) {
     this.element.append(ui("summary", "", "周期笔记 · 先找已有对象")); this.series.placeholder = "系列 key，例如 work-log"; this.series.setAttribute("aria-label", "周期系列准确标识"); this.key.placeholder = "准确周期 key，例如 2026-10-13 或 2026-W42"; this.key.setAttribute("aria-label", "准确周期 key");
     const lookup = ui("form", "period-lookup-form"); const submit = ui("button", "data-button", "查找已有周期笔记"); submit.type = "submit"; lookup.append(labeled("系列", this.series), labeled("周期种类", this.kind), labeled("周期 key", this.key), submit, action("上一周期", () => this.lookup(-1), "data-button compact"), action("下一周期", () => this.lookup(1), "data-button compact")); lookup.onsubmit = event => { event.preventDefault(); void this.lookup(); };
-    this.element.append(lookup, ui("p", "data-help", "日期与周期 key 必须明确输入，不补本机日期、时区或未知精度。查找范围由系列策略决定。"), this.resultHost);
+    this.element.append(lookup, ui("p", "data-help", "日期与周期 key 必须明确输入，不补本机日期、时区或未知精度。查找范围由系列策略决定。"), this.schemaMessage, this.resultHost);
     const creation = ui("details", "period-create-form"); creation.append(ui("summary", "", "明确创建新的周期笔记")); this.parent.value = scope(); this.parent.setAttribute("aria-label", "周期笔记保存位置"); this.name.placeholder = "笔记文件夹名称"; this.name.setAttribute("aria-label", "新周期笔记名称"); this.title.setAttribute("aria-label", "周期笔记可选作者标题"); this.body.rows = 4; this.body.setAttribute("aria-label", "周期笔记原生 Typst 正文"); this.createButton = action("创建周期笔记并打开", () => this.create(), "data-button primary"); this.createButton.disabled = true;
     creation.append(labeled("保存位置", this.parent), labeled("文件夹名称 *", this.name), labeled("作者标题（可选）", this.title), labeled("正文（原生 Typst）", this.body), this.createButton, ui("p", "data-help", "唯一系列仅在准确完整范围没有已有对象时开放创建；Core 在提交时重新核对完整范围与并发唯一性。")); this.element.append(creation);
     for (const input of [this.series, this.key, this.kind]) input.addEventListener("change", () => { this.lookupGeneration++; this.loading = false; this.result = null; this.createButton.disabled = !this.pending; this.resultHost.replaceChildren(ui("p", "data-help", "条件已变化，请重新查找。")); });
   }
+  setSchemaAvailable(available: boolean): void { this.schemaAvailable = available; this.schemaMessage.hidden = available; this.schemaMessage.textContent = available ? "" : "当前 schema 的周期字段不可用，原输入和原操作保留；请先核对配置。"; }
   private async lookup(steps = 0): Promise<void> {
+    if (!this.schemaAvailable) { this.host.notify("当前周期定义不可用，原输入保留。", true); return; }
     if (this.loading) return; if (!this.series.value || !this.key.value) { this.host.notify("请输入准确系列与周期 key。", true); return; }
     const generation = ++this.lookupGeneration; const basis = { seriesKey: this.series.value, kind: this.kind.value, key: this.key.value }; this.loading = true; this.createButton.disabled = true; this.resultHost.replaceChildren(ui("p", "data-help", "正在解析准确周期并查找已有对象…"));
     try {
@@ -100,6 +105,7 @@ class PeriodNavigator {
     finally { if (generation === this.lookupGeneration) this.loading = false; }
   }
   private async create(): Promise<void> {
+    if (!this.schemaAvailable && !this.pending) { this.host.notify("当前周期定义不可用，原输入保留。", true); return; }
     if ((!this.result?.canCreate && !this.pending) || this.loading) return; if (!this.name.value || !this.parent.value) { this.host.notify("请输入新周期笔记的名称与保存位置。", true); return; }
     const actualKey = this.result ? nativeMember(this.result.period, "key") : undefined; this.pending ??= { root: this.root, parent: this.parent.value, name: this.name.value, seriesKey: this.series.value, kind: this.kind.value, key: actualKey?.kind === "text" ? actualKey.value : this.key.value, title: this.title.value || undefined, body: this.body.value, operationId: crypto.randomUUID() }; const submitted = this.pending; let receiptReceived = false; this.loading = true; this.createButton.disabled = true;
     try {
@@ -406,6 +412,12 @@ export class QueryPanel {
   private searchTimer?: ReturnType<typeof setTimeout>;
   private periodNavigators = new Map<string, PeriodNavigator>();
   private navigationControls = new Map<string, NavigationControls>();
+  private controlsContext: string | null = null;
+  private controlUpdates: ((reset: boolean) => void)[] | null = null;
+  private readonly registeredHost = ui("div");
+  private readonly periodHost = ui("div");
+  private readonly savedHost = ui("div");
+  private readonly shortcutsHost = ui("div");
   private readonly resultsHost = ui("div", "query-results");
   private readonly controlsHost = ui("div", "query-controls");
   private readonly navigationHost = ui("nav", "query-facets");
@@ -506,61 +518,179 @@ export class QueryPanel {
     } catch (error) { if (current()) { this.error = error instanceof Error ? error.message : String(error); if (intent.selection) this.result = null; } }
     finally { if (selected()) { this.loading = false; this.renderControls(); this.renderResults(); } }
   }
+  /** Controls own their native nodes for the library lifetime; read delivery only patches state. */
   private renderControls(): void {
-    this.controlsHost.replaceChildren(); const heading = ui("div", "query-heading"); heading.append(ui("h2", "", "资料库查询"), action("刷新", () => this.refresh(), "data-button compact"));
-    const capture = action("快速记录", () => this.showCapture(), "data-button primary"); capture.disabled = !this.workspaceId; heading.append(capture); this.controlsHost.append(heading);
-    if (this.savedSelection) { this.controlsHost.append(ui("p", "query-result-status", `${this.savedSelection.mode === "pinned" ? "固定定义" : "当前定义"}：${this.savedSelection.label}${this.definitionRevision ? ` · ${this.definitionRevision}` : ""} · 每次读取当前数据`), action("复制定义为临时查询并编辑", () => { const plan = this.savedPlan; this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; if (plan) this.setPlan(plan); else { this.renderControls(); void this.refresh(); } })); }
-    if (this.exactPlan && !this.savedSelection) this.controlsHost.append(ui("p", "query-result-status", "正在使用完整 Query 计划。投影、排序与来源保持该定义；目录导航会回到可视化查询。"));
-    const searchForm = ui("form", "query-search-form"); const search = ui("input", "data-input"); search.type = "search"; search.placeholder = "搜索标题…"; search.value = this.search; search.setAttribute("aria-label", "查询标题文字"); search.oninput = () => { this.search = search.value; }; const run = ui("button", "data-button", "查询"); run.type = "submit"; searchForm.append(search, run); searchForm.onsubmit = event => { event.preventDefault(); void this.refresh(); }; this.controlsHost.append(searchForm);
-    const scopeRow = ui("div", "query-scope-row"); scopeRow.append(ui("span", "query-scope", this.directory ? `目录：${this.directory}` : "整个资料库")); if (this.directory) scopeRow.append(action("全库", () => this.applyScope(null), "data-button compact"));
-    const descendants = ui("input"); descendants.type = "checkbox"; descendants.checked = this.descendants; descendants.onchange = () => { this.descendants = descendants.checked; void this.refresh(); }; scopeRow.append(labeled("包含子目录", descendants));
-    const body = ui("input"); body.type = "checkbox"; body.checked = this.includeBody; body.onchange = () => { this.includeBody = body.checked; void this.refresh(); }; scopeRow.append(labeled("搜索正文", body));
-    const lifecycle = selectControl([["live", "在库笔记"], ["trash", "回收站（只读）"]], this.lifecycle); lifecycle.onchange = () => { this.lifecycle = lifecycle.value as "live" | "trash"; void this.refresh(); }; scopeRow.append(labeled("范围", lifecycle)); this.controlsHost.append(scopeRow);
-    const chips = ui("div", "query-chips"); this.types.forEach(token => chips.append(action(`类型：${typeNames[token] ?? token} ×`, () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip"))); this.conditions.forEach(condition => { chips.append(action(`${condition.label} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip")); if (condition.tag) chips.append(action(condition.tag.mode === "subtree" ? "改为仅此标签" : "改为此标签及子级", () => { const tag = condition.tag!; this.conditions = this.conditions.filter(item => item.id !== condition.id); this.applyTag(tag.reference, tag.label, tag.mode === "subtree" ? "exact" : "subtree"); }, "data-button compact")); }); this.controlsHost.append(chips);
-    const presentation = ui("div", "query-presentation"); const view = selectControl([["list", "列表"], ["table", "表格"], ["board", "看板"], ["calendar", "日历"], ["chart", "图表"]], this.preference.view); view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(); this.renderControls(); void this.refresh(); }; presentation.append(labeled("视图", view));
-    const density = selectControl([["comfortable", "详细"], ["compact", "紧凑"]], this.preference.density); density.onchange = () => { this.preference.density = density.value as ViewPreference["density"]; this.savePreferences(false); this.renderResults(); }; presentation.append(labeled("密度", density));
-    const sort = selectControl([["title", "标题"], ...(this.schema?.fields.filter(field => { const shape = resolveShape(field.shape, this.schema!); return shape.kind === "scalar" || shape.kind === "enum"; }).map(field => [field.key, fieldNames[field.key] ?? field.key] as [string, string]) ?? [])], this.preference.sort); sort.disabled = !!this.savedSelection || !!this.exactPlan; sort.onchange = () => { this.preference.sort = sort.value; this.bindPreferenceField(sort.value); this.savePreferences(); void this.refresh(); }; presentation.append(labeled("排序", sort)); const descending = action(this.preference.descending ? "降序 ↓" : "升序 ↑", () => { this.preference.descending = !this.preference.descending; this.savePreferences(); this.renderControls(); void this.refresh(); }, "data-button compact"); descending.disabled = !!this.savedSelection || !!this.exactPlan; presentation.append(descending);
-    const summary = ui("input"); summary.type = "checkbox"; summary.checked = this.preference.summaries; summary.onchange = () => { this.preference.summaries = summary.checked; this.savePreferences(); void this.refresh(); }; presentation.append(labeled("正文摘要", summary)); const thumbnails = ui("input"); thumbnails.type = "checkbox"; thumbnails.checked = this.preference.thumbnails; thumbnails.onchange = () => { this.preference.thumbnails = thumbnails.checked; this.savePreferences(false); this.renderResults(); }; presentation.append(labeled("缩略图", thumbnails)); this.controlsHost.append(presentation);
-    if (this.schema) this.renderBuilder();
-    this.renderAdvancedPlan(); this.renderRegisteredNavigation(); this.renderPeriodNavigation(); this.renderSavedQueries(); this.renderShortcuts();
-    if (this.savedSelection) for (const control of this.controlsHost.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(".query-search-form input,.query-search-form button,.query-chips button,.query-scope-row input,.query-scope-row select,.query-builder input,.query-builder select,.query-builder textarea,.query-builder button")) if (!control.classList.contains("query-view-field")) control.disabled = true;
-    if (this.exactPlan && !this.savedSelection) for (const control of this.controlsHost.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(".query-scope-row input,.query-scope-row select,.query-builder input,.query-builder select,.query-builder textarea,.query-builder button")) if (!control.classList.contains("query-view-field")) control.disabled = true;
+    const context = JSON.stringify([this.root, this.workspaceId]), reset = this.controlsContext !== context;
+    this.controlsContext = context;
+    if (!this.controlUpdates) this.mountControls();
+    for (const update of this.controlUpdates!) update(reset);
+    this.renderRegisteredNavigation(); this.renderPeriodNavigation();
   }
-  private renderBuilder(): void {
-    const schema = this.schema!; const builder = ui("details", "query-builder"); builder.append(ui("summary", "", "筛选、字段与汇总"));
-    const type = selectControl([["", "添加类型条件…"], ...schema.types.map(item => { const alias = Object.entries(schema.aliases).find(([, id]) => id === item.id)?.[0] ?? item.id; return [alias, typeNames[alias] ?? alias] as [string, string]; })], ""); type.onchange = () => { if (type.value && !this.types.includes(type.value)) this.types.push(type.value); this.contextChanged(); }; builder.append(labeled("类型", type));
-    const filterForm = ui("form", "query-filter-builder"); const field = selectControl(schema.fields.map(item => [item.id, fieldNames[item.key] ?? item.key]), schema.fields[0]?.id ?? ""); const operator = selectControl([["==", "等于"], ["!=", "不等于"], [">", "大于"], [">=", "大于等于"], ["<", "小于"], ["<=", "小于等于"], ["contains", "包含文字"], ["absent", "未填写"], ["null", "明确 none"]], "=="); const value = ui("input", "data-input"); value.setAttribute("aria-label", "筛选值（准确输入）"); value.placeholder = "准确值"; const branchesHost = ui("div"); let filterShape: Shape | undefined;
-    const updateFilterShape = (): void => { branchesHost.replaceChildren(); const selected = schema.fields.find(item => item.id === field.value); if (!selected) return; const shape = resolveShape(selected.shape, schema); filterShape = shape; if (shape.kind === "union") { const variants = shape.variants.map((variant, index) => ({ shape: resolveShape(variant, schema), index })).filter(item => item.shape.kind === "scalar" || item.shape.kind === "enum"); if (!variants.length) { filterShape = undefined; return; } const branch = selectControl(variants.map(item => [String(item.index), item.shape.kind === "scalar" ? item.shape.semantic : "enum"]), String(variants[0].index)); filterShape = variants[0].shape; branch.onchange = () => { filterShape = variants.find(item => item.index === Number(branch.value))?.shape; }; branchesHost.append(labeled("值类型（不自动转换）", branch)); } }; field.onchange = updateFilterShape; updateFilterShape();
-    const add = ui("button", "data-button", "添加筛选"); add.type = "submit"; filterForm.append(labeled("字段", field), labeled("条件", operator), branchesHost, value, add); builder.append(filterForm);
-    filterForm.onsubmit = event => {
-      event.preventDefault(); try {
-        const selected = schema.fields.find(item => item.id === field.value)!; const expr = fieldExpr(selected.id); let condition: string;
-        if (operator.value === "absent") condition = `isAbsent(${expr})`; else if (operator.value === "null") condition = `isNull(${expr})`;
-        else { const resolved = filterShape; if (!resolved || !["scalar", "enum"].includes(resolved.kind)) throw new Error("多值与嵌套属性请使用下方同项 CEL 条件。所有 label / note 条件必须作用于同一项。"); const native = scalarFromInput(resolved, schema, value.value); if (operator.value === "contains") { if (native.kind !== "text") throw new Error("包含文字仅支持文字字段。"); condition = `${expr}.contains(${JSON.stringify(native.value)})`; } else condition = `${expr} ${operator.value} ${shapedQueryLiteral(resolved, schema, native)}`; }
-        this.conditions.push({ id: crypto.randomUUID(), label: `${fieldNames[selected.key] ?? selected.key} ${operator.selectedOptions[0].textContent} ${value.value}`, expr: condition }); this.contextChanged();
-      } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); }
+  private draftInput(input: HTMLInputElement | HTMLTextAreaElement, read: () => string, write: (value: string) => void): (reset: boolean) => void {
+    let composing = false;
+    input.oninput = () => write(input.value);
+    input.addEventListener("compositionstart", () => { composing = true; });
+    input.addEventListener("compositionend", () => { composing = false; write(input.value); });
+    return reset => { if ((reset || !composing) && input.value !== read()) input.value = read(); };
+  }
+  private mountControls(): void {
+    this.controlUpdates = [];
+    const heading = ui("div", "query-heading"), capture = action("快速记录", () => this.showCapture(), "data-button primary");
+    heading.append(ui("h2", "", "资料库查询"), action("刷新", () => this.refresh(), "data-button compact"), capture);
+    const savedNotice = ui("p", "query-result-status"), copy = action("复制定义为临时查询并编辑", () => { const plan = this.savedPlan; this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; if (plan) this.setPlan(plan); else { this.renderControls(); void this.refresh(); } });
+    const exactNotice = ui("p", "query-result-status", "正在使用完整 Query 计划。投影、排序与来源保持该定义；目录导航会回到可视化查询。");
+    const searchForm = ui("form", "query-search-form"), search = ui("input", "data-input"), run = ui("button", "data-button", "查询");
+    search.type = "search"; search.placeholder = "搜索标题…"; search.setAttribute("aria-label", "查询标题文字"); run.type = "submit";
+    const updateSearch = this.draftInput(search, () => this.search, value => { this.search = value; });
+    searchForm.append(search, run); searchForm.onsubmit = event => { event.preventDefault(); void this.refresh(); };
+    const scopeRow = ui("div", "query-scope-row"), scopeText = ui("span", "query-scope"), all = action("全库", () => this.applyScope(null), "data-button compact");
+    const descendants = ui("input"), body = ui("input"), lifecycle = selectControl([["live", "在库笔记"], ["trash", "回收站（只读）"]], this.lifecycle);
+    descendants.type = body.type = "checkbox";
+    descendants.onchange = () => { this.descendants = descendants.checked; void this.refresh(); };
+    body.onchange = () => { this.includeBody = body.checked; void this.refresh(); };
+    lifecycle.onchange = () => { this.lifecycle = lifecycle.value as "live" | "trash"; void this.refresh(); };
+    scopeRow.append(scopeText, all, labeled("包含子目录", descendants), labeled("搜索正文", body), labeled("范围", lifecycle));
+    const chips = ui("div", "query-chips"); let chipsKey = "";
+    const presentation = ui("div", "query-presentation"), view = selectControl([["list", "列表"], ["table", "表格"], ["board", "看板"], ["calendar", "日历"], ["chart", "图表"]], this.preference.view);
+    view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(); this.renderControls(); void this.refresh(); };
+    const density = selectControl([["comfortable", "详细"], ["compact", "紧凑"]], this.preference.density);
+    density.onchange = () => { this.preference.density = density.value as ViewPreference["density"]; this.savePreferences(false); this.renderResults(); };
+    const sort = selectControl([], "");
+    sort.onchange = () => { const field = this.schema?.fields.find(field => field.id === sort.value); if (sort.value !== "@title" && !field) return; this.preference.sort = field?.key ?? "title"; this.bindPreferenceField(this.preference.sort); this.savePreferences(); void this.refresh(); };
+    const descending = action("", () => { this.preference.descending = !this.preference.descending; this.savePreferences(); this.renderControls(); void this.refresh(); }, "data-button compact");
+    const summary = ui("input"), thumbnails = ui("input"); summary.type = thumbnails.type = "checkbox";
+    summary.onchange = () => { this.preference.summaries = summary.checked; this.savePreferences(); void this.refresh(); };
+    thumbnails.onchange = () => { this.preference.thumbnails = thumbnails.checked; this.savePreferences(false); this.renderResults(); };
+    presentation.append(labeled("视图", view), labeled("密度", density), labeled("排序", sort), descending, labeled("正文摘要", summary), labeled("缩略图", thumbnails));
+    this.controlsHost.append(heading, savedNotice, copy, exactNotice, searchForm, scopeRow, chips, presentation);
+    this.controlUpdates.push(reset => {
+      capture.disabled = !this.workspaceId; const selected = this.savedSelection;
+      savedNotice.hidden = copy.hidden = !selected;
+      savedNotice.textContent = selected ? `${selected.mode === "pinned" ? "固定定义" : "当前定义"}：${selected.label}${this.definitionRevision ? ` · ${this.definitionRevision}` : ""} · 每次读取当前数据` : "";
+      exactNotice.hidden = !this.exactPlan || !!selected; updateSearch(reset); search.disabled = run.disabled = !!selected;
+      scopeText.textContent = this.directory ? `目录：${this.directory}` : "整个资料库"; all.hidden = !this.directory;
+      descendants.checked = this.descendants; body.checked = this.includeBody; lifecycle.value = this.lifecycle;
+      descendants.disabled = body.disabled = lifecycle.disabled = !!selected || !!this.exactPlan;
+      const nextChips = queryRefreshKey([this.types, this.conditions]);
+      if (nextChips !== chipsKey) { chipsKey = nextChips; chips.replaceChildren();
+        this.types.forEach(token => chips.append(action(`类型：${typeNames[token] ?? token} ×`, () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip")));
+        this.conditions.forEach(condition => { chips.append(action(`${condition.label} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip")); if (condition.tag) chips.append(action(condition.tag.mode === "subtree" ? "改为仅此标签" : "改为此标签及子级", () => { const tag = condition.tag!; this.conditions = this.conditions.filter(item => item.id !== condition.id); this.applyTag(tag.reference, tag.label, tag.mode === "subtree" ? "exact" : "subtree"); }, "data-button compact")); });
+      }
+      for (const button of chips.querySelectorAll("button")) button.disabled = !!selected;
+      view.value = this.preference.view; density.value = this.preference.density; summary.checked = this.preference.summaries; thumbnails.checked = this.preference.thumbnails;
+      const sortValue = this.preference.sort === "title" ? "@title" : this.preference.fieldBindings?.[this.preference.sort] ?? this.fieldByKey(this.preference.sort) ?? this.preference.sort;
+      updateQueryChoices(sort, [{ value: "@title", label: "标题" }, ...(this.schema?.fields.filter(field => { const shape = resolveShape(field.shape, this.schema!); return shape.kind === "scalar" || shape.kind === "enum"; }).map(field => ({ value: field.id, label: fieldNames[field.key] ?? field.key })) ?? [])], sortValue);
+      sort.disabled = descending.disabled = !!selected || !!this.exactPlan; descending.textContent = this.preference.descending ? "降序 ↓" : "升序 ↑";
+    });
+    this.mountBuilderControls(); this.mountAdvancedControls(); this.mountSavedControls(); this.mountShortcutControls();
+    this.controlsHost.append(this.registeredHost, this.periodHost, this.savedHost, this.shortcutsHost);
+  }
+  private mountBuilderControls(): void {
+    const builder = ui("details", "query-builder"); builder.append(ui("summary", "", "筛选、字段与汇总"));
+    const type = selectControl([], ""); type.onchange = () => { const definition = this.schema?.types.find(item => item.id === type.value); if (!definition || !this.schema) return; const token = Object.entries(this.schema.aliases).find(([, id]) => id === definition.id)?.[0] ?? definition.id; if (!this.types.includes(token)) this.types.push(token); type.value = ""; this.contextChanged(); }; builder.append(labeled("类型", type));
+    const filterForm = ui("form", "query-filter-builder"), field = selectControl([], ""), operator = selectControl([["==", "等于"], ["!=", "不等于"], [">", "大于"], [">=", "大于等于"], ["<", "小于"], ["<=", "小于等于"], ["contains", "包含文字"], ["absent", "未填写"], ["null", "明确 none"]], "==");
+    const value = ui("input", "data-input"), branch = selectControl([], ""), branchLabel = labeled("值类型（不自动转换）", branch), filterMessage = ui("p", "data-warning");
+    value.setAttribute("aria-label", "筛选值（准确输入）"); value.placeholder = "准确值";
+    const updateBranch = (reset: boolean): void => { const schema = this.schema, selected = schema?.fields.find(item => item.id === field.value); const shape = selected && schema ? resolveShape(selected.shape, schema) : undefined; const variants = shape?.kind === "union" ? shape.variants.map(variant => resolveShape(variant, schema!)).filter(item => item.kind === "scalar" || item.kind === "enum") : [];
+      if (reset) branch.value = "";
+      updateQueryChoices(branch, variants.map(item => ({ value: queryRefreshKey(item), label: item.kind === "scalar" ? item.semantic : "enum" }))); branchLabel.hidden = shape?.kind !== "union";
     };
-    const expression = ui("textarea", "data-input query-expression"); expression.value = this.expression; expression.rows = 3; expression.placeholder = 'phones.exists(p, p.number == "138…" && p.label == "工作")'; expression.setAttribute("aria-label", "高级 CEL 条件"); expression.oninput = () => { this.expression = expression.value; }; builder.append(labeled("CEL 条件（与上方筛选同时满足）", expression), action("应用条件", () => this.refresh()));
-    const columns = ui("fieldset", "query-columns"); columns.append(ui("legend", "", "投影字段")); schema.fields.forEach(item => { const checkbox = ui("input"); checkbox.type = "checkbox"; checkbox.checked = this.preference.columns.includes(item.key); checkbox.onchange = () => { if (checkbox.checked) { this.preference.columns.push(item.key); this.bindPreferenceField(item.key); } else this.preference.columns = this.preference.columns.filter(key => key !== item.key); this.savePreferences(); void this.refresh(); }; columns.append(labeled(fieldNames[item.key] ?? item.key, checkbox)); }); builder.append(columns);
-    const fieldOptions = this.exactPlan || this.savedSelection ? [...new Set([...(this.resultPlan?.select ?? this.getPlan().select).map(item => item.name), ...Object.keys(this.result?.rows[0]?.cells ?? {})])].filter(name => !["title", "summary", "types"].includes(name)).map(name => [name, fieldNames[name] ?? name] as [string, string]) : schema.fields.map(item => [item.key, fieldNames[item.key] ?? item.key] as [string, string]);
-    if (this.preference.view === "board") { const groupField = selectControl(fieldOptions, this.preference.groupField); groupField.classList.add("query-view-field"); groupField.onchange = () => { this.preference.groupField = groupField.value; this.bindPreferenceField(groupField.value); this.savePreferences(); void this.refresh(); }; builder.append(labeled("看板分组字段（只分组当前结果）", groupField)); }
-    if (this.preference.view === "calendar") { const dateField = selectControl(fieldOptions, this.preference.dateField); dateField.classList.add("query-view-field"); dateField.onchange = () => { this.preference.dateField = dateField.value; this.bindPreferenceField(dateField.value); this.savePreferences(); void this.refresh(); }; builder.append(labeled("日历日期字段", dateField)); }
-    if (this.preference.view === "chart") { const chartField = selectControl([["count", "汇总 count"], ...fieldOptions], this.preference.chartField); chartField.classList.add("query-view-field"); chartField.onchange = () => { this.preference.chartField = chartField.value; this.bindPreferenceField(chartField.value); this.savePreferences(); void this.refresh(); }; builder.append(labeled("图表数值字段", chartField)); }
-    const aggregateForm = ui("form", "query-aggregate-builder"); const groupKey = selectControl([["", "不按字段分组"], ...fieldOptions], this.group?.keys[0]?.name ?? ""); const op = selectControl([["count", "计数（笔记数）"], ["sum", "求和"], ["min", "最小"], ["max", "最大"]], this.group?.aggregates[0]?.op ?? "count"); const amount = selectControl(fieldOptions, this.group?.aggregates[0]?.expr ? this.preference.chartField : fieldOptions[0]?.[0] ?? ""); const aggregateSubmit = ui("button", "data-button", "运行汇总"); aggregateSubmit.type = "submit"; aggregateForm.append(labeled("分组", groupKey), labeled("汇总", op), labeled("数值字段", amount), aggregateSubmit); aggregateForm.onsubmit = event => { event.preventDefault(); this.group = { keys: groupKey.value ? [{ name: groupKey.value, expr: fieldExpr(this.fieldByKey(groupKey.value)!) }] : [], aggregates: [{ name: op.value === "count" ? "count" : "amount", op: op.value as "count", ...(op.value === "count" ? {} : { expr: fieldExpr(this.fieldByKey(amount.value)!) }) }] }; this.preference.chartField = op.value === "count" ? "count" : "amount"; this.renderControls(); void this.refresh(); }; builder.append(aggregateForm); if (this.group) builder.append(ui("p", "data-help", "汇总行只读；部分输入的数值只代表已知部分。"), action("返回笔记结果", () => { this.group = undefined; this.renderControls(); void this.refresh(); }));
-    const limit = ui("input", "data-input"); limit.type = "number"; limit.min = "1"; limit.max = "10000"; limit.value = String(this.take); limit.onchange = () => { const next = Number(limit.value); if (Number.isInteger(next) && next >= 1 && next <= 10000) { this.take = next; void this.refresh(); } }; builder.append(labeled("显示上限", limit), action("恢复本机视图默认值", () => { this.preference = defaultPreference(); this.savePreferences(); this.renderControls(); void this.refresh(); })); this.controlsHost.append(builder);
+    branch.onchange = () => this.renderControls();
+    field.onchange = () => { branch.value = ""; updateBranch(true); this.renderControls(); };
+    const add = ui("button", "data-button", "添加筛选"); add.type = "submit"; filterForm.append(labeled("字段", field), labeled("条件", operator), branchLabel, value, add); builder.append(filterForm, filterMessage);
+    filterForm.onsubmit = event => { event.preventDefault(); try {
+      const schema = this.schema, selected = schema?.fields.find(item => item.id === field.value); if (!schema || !selected) throw new Error("原筛选字段当前不可用；输入保留，请明确选择真实字段。");
+      const expr = fieldExpr(selected.id); let condition: string;
+      if (operator.value === "absent") condition = `isAbsent(${expr})`; else if (operator.value === "null") condition = `isNull(${expr})`;
+      else { const shape = resolveShape(selected.shape, schema), resolved = shape.kind === "union" ? shape.variants.map(item => resolveShape(item, schema)).find(item => queryRefreshKey(item) === branch.value) : shape;
+        if (!resolved || !["scalar", "enum"].includes(resolved.kind)) throw new Error("原字段分支当前不可用，或属于多值与嵌套属性；请明确选择分支，或使用同项 CEL 条件。");
+        const native = scalarFromInput(resolved, schema, value.value); if (operator.value === "contains") { if (native.kind !== "text") throw new Error("包含文字仅支持文字字段。"); condition = `${expr}.contains(${JSON.stringify(native.value)})`; } else condition = `${expr} ${operator.value} ${shapedQueryLiteral(resolved, schema, native)}`;
+      }
+      this.conditions.push({ id: crypto.randomUUID(), label: `${fieldNames[selected.key] ?? selected.key} ${operator.selectedOptions[0].textContent} ${value.value}`, expr: condition }); this.contextChanged();
+    } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } };
+    const expression = ui("textarea", "data-input query-expression"); expression.rows = 3; expression.placeholder = 'phones.exists(p, p.number == "138…" && p.label == "工作")'; expression.setAttribute("aria-label", "高级 CEL 条件");
+    const updateExpression = this.draftInput(expression, () => this.expression, input => { this.expression = input; });
+    builder.append(labeled("CEL 条件（与上方筛选同时满足）", expression), action("应用条件", () => this.refresh()));
+    const columns = ui("fieldset", "query-columns"); columns.append(ui("legend", "", "投影字段")); const columnRows = new Map<string, { label: HTMLElement; input: HTMLInputElement; key: string }>(); builder.append(columns);
+    const viewField = selectControl([], ""), viewFieldLabel = labeled("", viewField); viewField.classList.add("query-view-field");
+    viewField.onchange = () => { const property = this.preference.view === "board" ? "groupField" : this.preference.view === "calendar" ? "dateField" : "chartField";
+      if (this.exactPlan || this.savedSelection || this.group) this.preference[property] = viewField.value;
+      else { const selected = this.schema?.fields.find(item => item.id === viewField.value); if (!selected && viewField.value !== "@count") return; this.preference[property] = selected?.key ?? "count"; this.bindPreferenceField(this.preference[property]); }
+      this.savePreferences(); void this.refresh();
+    }; builder.append(viewFieldLabel);
+    const aggregateForm = ui("form", "query-aggregate-builder"), groupKey = selectControl([], ""), op = selectControl([["count", "计数（笔记数）"], ["sum", "求和"], ["min", "最小"], ["max", "最大"]], "count"), amount = selectControl([], "");
+    const aggregateSubmit = ui("button", "data-button", "运行汇总"), aggregateMessage = ui("p", "data-warning"); aggregateSubmit.type = "submit";
+    aggregateForm.append(labeled("分组", groupKey), labeled("汇总", op), labeled("数值字段", amount), aggregateSubmit); builder.append(aggregateForm, aggregateMessage);
+    aggregateForm.onsubmit = event => { event.preventDefault(); const schema = this.schema, groupField = schema?.fields.find(item => item.id === groupKey.value), amountField = schema?.fields.find(item => item.id === amount.value);
+      if (!schema || groupKey.value && !groupField || op.value !== "count" && !amountField) { this.host.notify("原汇总字段当前不可用；输入保留，未按同名字段替换。", true); return; }
+      this.group = { keys: groupField ? [{ name: groupField.key, expr: fieldExpr(groupField.id) }] : [], aggregates: [{ name: op.value === "count" ? "count" : "amount", op: op.value as "count", ...(op.value === "count" ? {} : { expr: fieldExpr(amountField!.id) }) }] };
+      this.preference.chartField = op.value === "count" ? "count" : "amount"; this.renderControls(); void this.refresh();
+    };
+    const grouped = ui("div"), returnRows = action("返回笔记结果", () => { this.group = undefined; this.renderControls(); void this.refresh(); }); grouped.append(ui("p", "data-help", "汇总行只读；部分输入的数值只代表已知部分。"), returnRows); builder.append(grouped);
+    const limit = ui("input", "data-input"); limit.type = "number"; limit.min = "1"; limit.max = "10000";
+    limit.onchange = () => { const next = Number(limit.value); if (Number.isInteger(next) && next >= 1 && next <= 10000) { this.take = next; void this.refresh(); } };
+    let priorLimit = this.take; limit.value = String(priorLimit);
+    builder.append(labeled("显示上限", limit), action("恢复本机视图默认值", () => { this.preference = defaultPreference(); this.savePreferences(); this.renderControls(); void this.refresh(); })); this.controlsHost.append(builder);
+    this.controlUpdates!.push(reset => {
+      const schema = this.schema, fields = schema?.fields ?? [], locked = !schema || !!this.savedSelection || !!this.exactPlan;
+      builder.hidden = !schema;
+      if (reset) { field.value = groupKey.value = amount.value = ""; operator.value = "=="; op.value = "count"; value.value = ""; builder.open = false; }
+      updateQueryChoices(type, [{ value: "", label: "添加类型条件…" }, ...(schema?.types.map(item => { const alias = Object.entries(schema.aliases).find(([, id]) => id === item.id)?.[0] ?? item.id; return { value: item.id, label: typeNames[alias] ?? alias }; }) ?? [])]);
+      const choices = fields.map(item => ({ value: item.id, label: fieldNames[item.key] ?? item.key }));
+      const fieldValid = updateQueryChoices(field, choices), groupValid = updateQueryChoices(groupKey, [{ value: "", label: "不按字段分组" }, ...choices]), amountValid = updateQueryChoices(amount, choices); updateBranch(reset);
+      filterMessage.hidden = fieldValid; filterMessage.textContent = fieldValid ? "" : "原筛选字段当前不可用，原值保留；请选择真实字段。";
+      aggregateMessage.hidden = groupValid && (op.value === "count" || amountValid); aggregateMessage.textContent = aggregateMessage.hidden ? "" : "原汇总字段当前不可用，原选择保留；不会按名称替换。";
+      updateExpression(reset);
+      const wanted = new Set(fields.map(item => item.id));
+      for (const item of fields) {
+        let row = columnRows.get(item.id); if (!row) { const input = ui("input"); input.type = "checkbox"; row = { input, label: labeled(fieldNames[item.key] ?? item.key, input), key: item.key }; columnRows.set(item.id, row); columns.append(row.label);
+          input.onchange = () => { const selected = this.schema?.fields.find(field => field.id === item.id); if (!selected) { input.checked = !input.checked; this.host.notify("原投影字段当前不可用，未按名称替换。", true); return; } if (input.checked) { if (!this.preference.columns.includes(selected.key)) this.preference.columns.push(selected.key); this.bindPreferenceField(selected.key); } else this.preference.columns = this.preference.columns.filter(key => key !== selected.key); this.savePreferences(); void this.refresh(); };
+        }
+        row.key = item.key; if (row.label.firstChild?.nodeType === 3) row.label.firstChild.textContent = fieldNames[item.key] ?? item.key; row.label.title = "";
+        const binding = this.preference.fieldBindings?.[item.key]; row.input.checked = this.preference.columns.includes(item.key) && (!binding || binding === item.id); row.input.disabled = locked; row.input.setAttribute("aria-invalid", "false");
+      }
+      for (const [id, row] of columnRows) if (!wanted.has(id)) { const selected = this.preference.columns.includes(row.key) && this.preference.fieldBindings?.[row.key] === id;
+        if (selected) { row.input.checked = true; row.input.disabled = true; row.input.setAttribute("aria-invalid", "true"); row.label.title = "原投影字段当前不可用；重新选择真实字段或恢复默认。"; } else { row.label.remove(); columnRows.delete(id); }
+      }
+      const property = this.preference.view === "board" ? "groupField" : this.preference.view === "calendar" ? "dateField" : "chartField", selectedViewField = this.preference[property];
+      viewFieldLabel.hidden = !["board", "calendar", "chart"].includes(this.preference.view);
+      const caption = this.preference.view === "board" ? "看板分组字段（只分组当前结果）" : this.preference.view === "calendar" ? "日历日期字段" : "图表数值字段";
+      if (viewFieldLabel.firstChild?.nodeType === 3) viewFieldLabel.firstChild.textContent = caption;
+      const derived = !!this.exactPlan || !!this.savedSelection || !!this.group;
+      const viewChoices = derived ? [...new Set([...(this.resultPlan?.select ?? this.getPlan().select).map(item => item.name), ...Object.keys(this.result?.rows[0]?.cells ?? {})])].filter(name => !["title", "summary", "types"].includes(name)).map(name => ({ value: name, label: fieldNames[name] ?? name })) : [...(this.preference.view === "chart" ? [{ value: "@count", label: "汇总 count" }] : []), ...choices];
+      updateQueryChoices(viewField, viewChoices, derived ? selectedViewField : selectedViewField === "count" ? "@count" : this.preference.fieldBindings?.[selectedViewField] ?? this.fieldByKey(selectedViewField) ?? selectedViewField);
+      for (const control of builder.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button")) if (!control.classList.contains("query-view-field") && !columns.contains(control)) control.disabled = locked;
+      add.disabled = locked || !fieldValid || !field.value || !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
+      aggregateSubmit.disabled = locked || !groupValid || op.value !== "count" && (!amountValid || !amount.value); grouped.hidden = !this.group;
+      if (reset || priorLimit !== this.take) { limit.value = String(this.take); priorLimit = this.take; }
+    });
+    op.onchange = () => this.renderControls();
+    groupKey.onchange = amount.onchange = () => this.renderControls();
   }
-  private renderAdvancedPlan(): void {
-    const section = ui("details", "query-advanced-plan"); section.open = this.advancedOpen; section.ontoggle = () => { this.advancedOpen = section.open; }; section.append(ui("summary", "", "高级 Query · 完整计划与参数"));
-    const planInput = ui("textarea", "data-input query-plan-input"); planInput.rows = 14; planInput.spellcheck = false; planInput.value = this.advancedDraft || JSON.stringify(this.getPlan(), null, 2); planInput.setAttribute("aria-label", "完整 Query 计划 JSON"); planInput.oninput = () => { this.advancedDraft = planInput.value; };
-    const parameterInput = ui("textarea", "data-input query-expression"); parameterInput.rows = 4; parameterInput.spellcheck = false; parameterInput.value = this.parameterDraft; parameterInput.setAttribute("aria-label", "本次调用的原生参数 JSON"); parameterInput.oninput = () => { this.parameterDraft = parameterInput.value; };
+  private mountAdvancedControls(): void {
+    const section = ui("details", "query-advanced-plan"); section.append(ui("summary", "", "高级 Query · 完整计划与参数"));
+    section.ontoggle = () => { this.advancedOpen = section.open; };
+    const planInput = ui("textarea", "data-input query-plan-input"), parameterInput = ui("textarea", "data-input query-expression");
+    planInput.rows = 14; parameterInput.rows = 4; planInput.spellcheck = parameterInput.spellcheck = false;
+    planInput.setAttribute("aria-label", "完整 Query 计划 JSON"); parameterInput.setAttribute("aria-label", "本次调用的原生参数 JSON");
+    let planInitialized = false;
+    planInput.addEventListener("compositionstart", () => { planInitialized = true; });
+    const updatePlan = this.draftInput(planInput, () => this.advancedDraft, value => { this.advancedDraft = value; planInitialized = true; });
+    const updateParameters = this.draftInput(parameterInput, () => this.parameterDraft, value => { this.parameterDraft = value; });
     const feedback = ui("p", "data-help", "CEL 条件、投影和排序使用同一编译器。高级来源在 advanced 中；参数是本次输入，不成为另一份笔记内容。"); feedback.setAttribute("aria-live", "polite");
-    section.append(action("载入当前实际计划（替换此编辑框）", () => { this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; }), labeled("完整计划", planInput), labeled("本次调用参数", parameterInput));
+    section.append(action("载入当前实际计划（替换此编辑框）", () => { this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; }), labeled("完整计划", planInput), labeled("本次调用参数", parameterInput));
     section.append(action("运行完整计划", async () => { try { const plan = parseQueryPlan(planInput.value); parseQueryParameters(parameterInput.value); this.parameterDraft = parameterInput.value; this.advancedOpen = true; this.setPlan(plan); } catch (error) { feedback.className = "data-warning"; feedback.textContent = error instanceof Error ? error.message : String(error); } }, "data-button primary"), action("按本次参数重跑", async () => { try { parseQueryParameters(parameterInput.value); this.parameterDraft = parameterInput.value; await this.refresh(); } catch (error) { feedback.className = "data-warning"; feedback.textContent = error instanceof Error ? error.message : String(error); } }));
-    if (this.exactPlan && !this.savedSelection) section.append(action("返回可视化查询", () => { this.exactPlan = null; this.group = undefined; this.expression = ""; this.conditions = []; this.loadPreferences(); this.renderControls(); void this.refresh(); }));
-    const multivalue = this.schema?.fields.find(field => field.key === "phones" && resolveShape(field.shape, this.schema!).kind === "list") ?? this.schema?.fields.find(field => resolveShape(field.shape, this.schema!).kind === "list");
-    if (multivalue) section.append(action("载入多值展开示例（暂不运行）", () => { const plan: QueryPlan = { scope: { ...(this.scopeIdentity || this.directory ? { directory: this.scopeIdentity ?? this.directory! } : {}), descendants: this.descendants, lifecycle: this.lifecycle }, types: [...this.types], select: [{ name: "title", expr: "title" }, { name: "item", expr: "item" }], order: [], unnest: { array: fieldExpr(multivalue.id), binding: "item" }, take: this.take }; this.advancedDraft = JSON.stringify(plan, null, 2); planInput.value = this.advancedDraft; }));
-    section.append(feedback, ui("p", "data-help", 'select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {"limit":{"kind":"int","value":"200"}}；准确数字保字符串，none 与未提供不同。'));
+    const back = action("返回可视化查询", () => { this.exactPlan = null; this.group = undefined; this.expression = ""; this.conditions = []; this.loadPreferences(); this.renderControls(); void this.refresh(); });
+    const example = action("载入多值展开示例（暂不运行）", () => { const multivalue = this.schema?.fields.find(field => field.key === "phones" && resolveShape(field.shape, this.schema!).kind === "list") ?? this.schema?.fields.find(field => resolveShape(field.shape, this.schema!).kind === "list"); if (!multivalue) return;
+      const plan: QueryPlan = { scope: { ...(this.scopeIdentity || this.directory ? { directory: this.scopeIdentity ?? this.directory! } : {}), descendants: this.descendants, lifecycle: this.lifecycle }, types: [...this.types], select: [{ name: "title", expr: "title" }, { name: "item", expr: "item" }], order: [], unnest: { array: fieldExpr(multivalue.id), binding: "item" }, take: this.take }; this.advancedDraft = JSON.stringify(plan, null, 2); planInput.value = this.advancedDraft; planInitialized = true;
+    });
+    section.append(back, example, feedback, ui("p", "data-help", 'select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {"limit":{"kind":"int","value":"200"}}；准确数字保字符串，none 与未提供不同。'));
     this.controlsHost.append(section);
+    this.controlUpdates!.push(reset => { if (reset) planInitialized = false;
+      if (!planInitialized && !this.advancedDraft && this.schema) { this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; } else if (reset || planInitialized || this.advancedDraft) updatePlan(reset);
+      updateParameters(reset); if (reset && section.open !== this.advancedOpen) section.open = this.advancedOpen;
+      back.hidden = !this.exactPlan || !!this.savedSelection; example.hidden = !this.schema?.fields.some(field => resolveShape(field.shape, this.schema!).kind === "list");
+    });
   }
   private renderNavigation(): void {
     this.navigationHost.replaceChildren(); if (!this.result || !this.schema) return;
@@ -576,16 +706,25 @@ export class QueryPanel {
       }, "query-facet"); this.navigationHost.append(button);
     }
   }
-  private renderShortcuts(): void {
-    const shortcuts = ui("details", "query-shortcuts"); shortcuts.append(ui("summary", "", "本机快捷入口与最近打开"));
-    if (this.shortcutError) { const key = `weftext-query-shortcuts:${this.libraryIdentity()}`, raw = localStorage.getItem(key); shortcuts.append(ui("p", "data-warning", this.shortcutError), ui("pre", "", raw ?? ""), action("备份原记录并重置无效入口", () => { if (raw !== null) localStorage.setItem(`${key}:preserved:${crypto.randomUUID()}`, raw); localStorage.setItem(key, JSON.stringify({ version: 2, items: [] })); this.loadPreferences(); this.renderControls(); })); }
-    shortcuts.append(action("把当前条件添加为本机快捷入口", () => { const label = window.prompt("快捷入口名称", this.savedSelection?.label || this.search || "当前查询"); if (!label) return; this.shortcuts.push(this.savedSelection ? { id: crypto.randomUUID(), label, kind: "savedQuery", definition: { ...this.savedSelection } } : { id: crypto.randomUUID(), label, kind: "query", plan: this.getPlan() }); this.saveShortcuts(); this.renderControls(); }));
-    this.shortcuts.forEach((shortcut, index) => { const row = ui("div", "query-shortcut-row"), label = shortcut.kind === "tag" ? `${shortcut.label} · ${shortcut.matchMode === "subtree" ? "此标签及子级" : "仅此标签"}` : shortcut.label; row.append(action(label, async () => { if (shortcut.kind === "directory" || shortcut.kind === "tag") await this.openNavigationShortcut(shortcut); else if (shortcut.kind === "savedQuery" && shortcut.definition) await this.runSaved(shortcut.definition); else if (shortcut.kind === "query" && shortcut.plan) this.setPlan(shortcut.plan); else if (shortcut.path) await this.openTarget(shortcut.path, shortcut.entityKey); }, "data-button")); const up = action("上移", () => { if (index === 0) return; [this.shortcuts[index - 1], this.shortcuts[index]] = [this.shortcuts[index], this.shortcuts[index - 1]]; this.saveShortcuts(); this.renderControls(); }, "data-button compact"); up.disabled = index === 0; row.append(up, action("移除入口", () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact")); shortcuts.append(row); });
-    for (const item of this.recent) shortcuts.append(action(`最近：${item.label}${item.lifecycle === "trash" ? " · 回收站只读" : ""}`, () => this.openTarget(item.path, item.entityKey, item.lifecycle, item.revision), "query-recent")); shortcuts.append(ui("p", "data-help", "入口、置顶与视图偏好保存在本机，不修改笔记内容。移除入口不删除目标。")); this.controlsHost.append(shortcuts);
+  private mountShortcutControls(): void {
+    const shortcuts = ui("details", "query-shortcuts"), warning = ui("div"), list = ui("div"), recent = ui("div"); shortcuts.append(ui("summary", "", "本机快捷入口与最近打开"));
+    shortcuts.append(action("把当前条件添加为本机快捷入口", () => { const label = window.prompt("快捷入口名称", this.savedSelection?.label || this.search || "当前查询"); if (!label) return; this.shortcuts.push(this.savedSelection ? { id: crypto.randomUUID(), label, kind: "savedQuery", definition: { ...this.savedSelection } } : { id: crypto.randomUUID(), label, kind: "query", plan: this.getPlan() }); this.saveShortcuts(); this.renderControls(); }), warning, list, recent, ui("p", "data-help", "入口、置顶与视图偏好保存在本机，不修改笔记内容。移除入口不删除目标。"));
+    this.shortcutsHost.append(shortcuts); let previous = "";
+    this.controlUpdates!.push(reset => {
+      const key = queryRefreshKey([this.shortcutError, this.shortcuts, this.recent]); if (!reset && key === previous) return; previous = key;
+      warning.replaceChildren(); list.replaceChildren(); recent.replaceChildren(); if (reset) shortcuts.open = false;
+      if (this.shortcutError) { const key = `weftext-query-shortcuts:${this.libraryIdentity()}`, raw = localStorage.getItem(key); warning.append(ui("p", "data-warning", this.shortcutError), ui("pre", "", raw ?? ""), action("备份原记录并重置无效入口", () => { if (raw !== null) localStorage.setItem(`${key}:preserved:${crypto.randomUUID()}`, raw); localStorage.setItem(key, JSON.stringify({ version: 2, items: [] })); this.loadPreferences(); this.renderControls(); })); }
+      this.shortcuts.forEach((shortcut, index) => { const row = ui("div", "query-shortcut-row"), label = shortcut.kind === "tag" ? `${shortcut.label} · ${shortcut.matchMode === "subtree" ? "此标签及子级" : "仅此标签"}` : shortcut.label;
+        row.append(action(label, async () => { if (shortcut.kind === "directory" || shortcut.kind === "tag") await this.openNavigationShortcut(shortcut); else if (shortcut.kind === "savedQuery" && shortcut.definition) await this.runSaved(shortcut.definition); else if (shortcut.kind === "query" && shortcut.plan) this.setPlan(shortcut.plan); else if (shortcut.path) await this.openTarget(shortcut.path, shortcut.entityKey); }, "data-button"));
+        const up = action("上移", () => { if (index === 0) return; [this.shortcuts[index - 1], this.shortcuts[index]] = [this.shortcuts[index], this.shortcuts[index - 1]]; this.saveShortcuts(); this.renderControls(); }, "data-button compact"); up.disabled = index === 0;
+        row.append(up, action("移除入口", () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact")); list.append(row);
+      });
+      for (const item of this.recent) recent.append(action(`最近：${item.label}${item.lifecycle === "trash" ? " · 回收站只读" : ""}`, () => this.openTarget(item.path, item.entityKey, item.lifecycle, item.revision), "query-recent"));
+    });
   }
   private saveShortcuts(): void { if (this.shortcutError) { this.host.notify(this.shortcutError, true); throw new Error(this.shortcutError); } decodeTagShortcutCollection({ version: 2, items: this.shortcuts }); localStorage.setItem(`weftext-query-shortcuts:${this.libraryIdentity()}`, JSON.stringify({ version: 2, items: this.shortcuts })); }
   private renderRegisteredNavigation(): void {
-    if (!this.root || !this.workspaceId) return;
+    if (!this.root || !this.workspaceId) { if (this.registeredHost.firstChild) this.registeredHost.replaceChildren(); return; }
     const root = this.root, workspaceId = this.workspaceId, identity = JSON.stringify([root, workspaceId]), current = () => this.root === root && this.workspaceId === workspaceId;
     let controls = this.navigationControls.get(identity);
     if (!controls) {
@@ -597,23 +736,58 @@ export class QueryPanel {
       }, () => current() ? this.fieldByKey("tags") : undefined, () => { if (current()) this.tagRegistryChanged(); });
       this.navigationControls.set(identity, controls);
     }
-    this.controlsHost.append(controls.element);
+    if (this.registeredHost.firstChild !== controls.element) this.registeredHost.replaceChildren(controls.element);
   }
   private tagRegistryChanged(): void { if (this.root) this.environmentChanged(this.root); }
   private applyTag(targetRef: string, label: string, mode: TagMatchMode): void { try { const field = this.schema?.fields.find(field => field.key === "tags"); if (!field || !this.schema) throw new Error("当前 schema 没有可用的 tags 字段。"); const expr = tagPredicate(targetRef, mode, fieldExpr(field.id)); this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; if (!this.conditions.some(condition => condition.expr === expr)) this.conditions.push({ id: crypto.randomUUID(), label: `标签：${label} · ${mode === "subtree" ? "此标签及子级" : "仅此标签"}`, expr, tag: { reference: targetRef, label, mode } }); this.contextChanged(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }
   private async openNavigationShortcut(shortcut: Shortcut): Promise<void> { try { if (!shortcut.targetRef) throw new Error("快捷入口缺少稳定目标身份。"); const root = this.root, workspace = this.workspaceId, target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: shortcut.targetRef }); if (root !== this.root || workspace !== this.workspaceId) return; if (target.status !== "managed" || target.targetRef !== shortcut.targetRef) throw new Error(`目标${target.status === "missing" ? "已缺失" : "身份不可用"}`); if (shortcut.kind === "tag") { if (!shortcut.matchMode) throw new Error("标签入口没有明确模式。"); this.applyTag(shortcut.targetRef, `${target.displayName ?? target.label} · ${shortcut.targetRef.slice(shortcut.targetRef.lastIndexOf("/") + 1)}`, shortcut.matchMode); } else if (target.path) this.applyScope(target.path, shortcut.targetRef); else throw new Error("目录当前位置不可用。"); } catch (error) { this.host.notify(`快捷目标不可用：${error instanceof Error ? error.message : String(error)}。入口保留，未猜测同名目标。`, true); } }
-  private renderSavedQueries(): void {
-    const section = ui("details", "query-saved-definitions"); section.append(ui("summary", "", "原生保存 Query · 当前 / 固定定义")); const document = this.host.getDocument();
-    if (!document?.nodeId || !this.workspaceId || document.root !== this.root) { section.append(ui("p", "data-help", "打开当前资料库中的笔记，才能读取或保存该笔记拥有的 Query 定义。")); this.controlsHost.append(section); return; }
-    const owner = `weftext-node://${this.workspaceId}/${document.nodeId}`; const definitionsHost = ui("div", "saved-query-definitions"); const load = action("读取当前笔记的保存定义", async () => { load.disabled = true; try { const result = await this.host.request<SavedDefinitions>("/api/query/definitions", { root: this.root, owner }); definitionsHost.replaceChildren(ui("p", "data-help", `当前定义笔记版本：${result.ownerRevision ?? "尚无保留版本"}`)); if (!result.definitions.length) definitionsHost.append(ui("p", "data-empty", "此笔记还没有保存的 Query 定义。")); result.unavailable?.forEach(item => definitionsHost.append(ui("p", "data-warning", diagnosticText(item))));
-      for (const definition of result.definitions) {
-        const row = ui("section", "saved-query-row"); const displayLabel = definition.label.replace(/^weftext-query-/, ""); row.append(ui("h3", "", displayLabel)); const mode = selectControl([["current", "当前定义"], ["pinned", "固定指定版本"]], "current"); const revision = ui("input", "data-input"); revision.value = result.ownerRevision ?? ""; revision.setAttribute("aria-label", `${displayLabel} 的固定定义版本`); row.append(labeled("读取方式", mode), labeled("固定版本", revision), action("打开并查询", () => this.runSaved({ owner, key: definition.key, label: displayLabel, mode: mode.value as "current" | "pinned", ...(mode.value === "pinned" ? { revision: revision.value } : {}) }), "data-button primary"), action("用当前条件更新此定义并保存笔记", () => this.saveDefinition(definition.label, definition.key))); definitionsHost.append(row);
-      }
-    } catch (error) { definitionsHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? error.message : String(error))); } finally { load.disabled = false; } }); section.append(load, definitionsHost);
-    const label = ui("input", "data-input"); label.value = this.definitionName; label.oninput = () => { this.definitionName = label.value; }; label.placeholder = "例如：未完成任务（文字、数字、- 或 _）"; label.setAttribute("aria-label", "新的保存 Query 定义名称"); section.append(label, action(this.savedPending ? "确认上次保存查询与笔记" : "保存当前 Query 与当前笔记", () => this.saveDefinition(label.value)), ui("p", "data-help", "此按钮会保存当前笔记的完整草稿与 Query 定义。首次保存前可在属性 → 集中 schema 中预览并安装本库 schema。固定版本只固定定义；历史不可用时会报错。")); this.controlsHost.append(section);
+  private mountSavedControls(): void {
+    const section = ui("details", "query-saved-definitions"), unavailable = ui("p", "data-help", "打开当前资料库中的笔记，才能读取或保存该笔记拥有的 Query 定义。"), definitionsHost = ui("div", "saved-query-definitions"), version = ui("p", "data-help"), rows = ui("div");
+    section.append(ui("summary", "", "原生保存 Query · 当前 / 固定定义")); definitionsHost.append(version, rows);
+    let ownerContext = "", readGeneration = 0;
+    const owner = (): { root: string; owner: string; identity: string } | null => { const document = this.host.getDocument(); if (!document?.nodeId || !this.workspaceId || document.root !== this.root || !this.root) return null; const owner = `weftext-node://${this.workspaceId}/${document.nodeId}`; return { root: this.root, owner, identity: JSON.stringify([this.root, owner]) }; };
+    const loaded = new Map<string, { element: HTMLElement; definition: SavedQuery; mode: HTMLSelectElement; revision: HTMLInputElement; title: HTMLElement; edited: boolean }>();
+    const load = action("读取当前笔记的保存定义", async () => {
+      const context = owner(); if (!context) return; const generation = ++readGeneration; load.disabled = true;
+      try { const result = await this.host.request<SavedDefinitions>("/api/query/definitions", { root: context.root, owner: context.owner }); if (owner()?.identity !== context.identity || generation !== readGeneration) return;
+        version.textContent = `当前定义笔记版本：${result.ownerRevision ?? "尚无保留版本"}`;
+        const wanted = new Set(result.definitions.map(item => item.key));
+        for (const definition of result.definitions) {
+          let row = loaded.get(definition.key);
+          if (!row) {
+            const element = ui("section", "saved-query-row"), title = ui("h3"), mode = selectControl([["current", "当前定义"], ["pinned", "固定指定版本"]], "current"), revision = ui("input", "data-input"); revision.value = result.ownerRevision ?? "";
+            row = { element, definition, title, mode, revision, edited: false }; const currentRow = row;
+            mode.onchange = () => { currentRow.edited = true; }; revision.oninput = () => { currentRow.edited = true; };
+            element.append(title, labeled("读取方式", mode), labeled("固定版本", revision), action("打开并查询", () => { if (owner()?.identity !== context.identity) throw new Error("原定义所属笔记已变化，输入保留，未替换归属。"); return this.runSaved({ owner: context.owner, key: currentRow.definition.key, label: currentRow.definition.label.replace(/^weftext-query-/, ""), mode: mode.value as "current" | "pinned", ...(mode.value === "pinned" ? { revision: revision.value } : {}) }); }, "data-button primary"), action("用当前条件更新此定义并保存笔记", () => { if (owner()?.identity !== context.identity) throw new Error("原定义所属笔记已变化，未保存到另一笔记。"); return this.saveDefinition(currentRow.definition.label, currentRow.definition.key); }));
+            loaded.set(definition.key, row); rows.append(element);
+          }
+          row.definition = definition; row.title.textContent = definition.label.replace(/^weftext-query-/, ""); row.revision.setAttribute("aria-label", `${row.title.textContent} 的固定定义版本`);
+        }
+        for (const [key, row] of loaded) if (!wanted.has(key)) { if (row.edited || row.element.contains(document.activeElement)) row.title.textContent = `${row.definition.label.replace(/^weftext-query-/, "")}（当前定义不可用，原输入保留）`; else { row.element.remove(); loaded.delete(key); } }
+        if (!result.definitions.length) version.textContent += " · 此笔记还没有保存的 Query 定义。";
+        if (result.unavailable?.length) version.textContent += ` · ${result.unavailable.map(diagnosticText).join("；")}`;
+      } catch (error) { if (owner()?.identity === context.identity && generation === readGeneration) version.textContent = error instanceof Error ? error.message : String(error); }
+      finally { if (owner()?.identity === context.identity && generation === readGeneration) load.disabled = false; }
+    });
+    const label = ui("input", "data-input"); label.placeholder = "例如：未完成任务（文字、数字、- 或 _）"; label.setAttribute("aria-label", "新的保存 Query 定义名称"); const updateLabel = this.draftInput(label, () => this.definitionName, value => { this.definitionName = value; });
+    const save = action("保存当前 Query 与当前笔记", () => this.saveDefinition(label.value));
+    section.append(unavailable, load, definitionsHost, label, save, ui("p", "data-help", "此按钮会保存当前笔记的完整草稿与 Query 定义。首次保存前可在属性 → 集中 schema 中预览并安装本库 schema。固定版本只固定定义；历史不可用时会报错。")); this.savedHost.append(section);
+    this.controlUpdates!.push(reset => {
+      const context = owner(), next = context?.identity ?? "";
+      if (next !== ownerContext) { ownerContext = next; readGeneration++; loaded.clear(); rows.replaceChildren(); version.textContent = ""; load.disabled = false; }
+      if (reset) section.open = false;
+      unavailable.hidden = !!context; load.hidden = definitionsHost.hidden = label.hidden = save.hidden = !context;
+      save.textContent = this.savedPending ? "确认上次保存查询与笔记" : "保存当前 Query 与当前笔记"; updateLabel(reset);
+    });
   }
   private renderPeriodNavigation(): void {
-    if (!this.root || !this.schema?.fields.some(item => item.key === "period")) return; let navigator = this.periodNavigators.get(this.root); if (!navigator) { navigator = new PeriodNavigator(this.host, this.root, () => this.directory?.startsWith("weftext-") ? this.root! : this.directory ?? this.root!); this.periodNavigators.set(this.root, navigator); } this.controlsHost.append(navigator.element);
+    if (!this.root || !this.workspaceId) { if (this.periodHost.firstChild) this.periodHost.replaceChildren(); return; }
+    const root = this.root, workspaceId = this.workspaceId, identity = JSON.stringify([root, workspaceId]);
+    let navigator = this.periodNavigators.get(identity);
+    const available = !!this.schema?.fields.some(item => item.key === "period");
+    if (!navigator && available) { navigator = new PeriodNavigator(this.host, root, () => this.root === root && this.workspaceId === workspaceId && !this.directory?.startsWith("weftext-") ? this.directory ?? root : root); this.periodNavigators.set(identity, navigator); }
+    if (navigator) { if (this.periodHost.firstChild !== navigator.element) this.periodHost.replaceChildren(navigator.element); navigator.setSchemaAvailable(available); }
+    else if (this.periodHost.firstChild) this.periodHost.replaceChildren();
   }
   private async saveDefinition(label: string, key?: string): Promise<void> {
     if (!this.host.savedDefinition) { this.host.notify("当前会话没有保存 Query 的回执接入，尚未执行保存。", true); return; }
