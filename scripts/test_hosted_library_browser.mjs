@@ -37,6 +37,7 @@ try:
   users["alice"]["library"]={**{r:{"read":True,"write":True} for r in c.ROLES},"styleUse":True,"reorderNodes":True}
   users["alice"]["navigation"]={"directories":["order-parent"]}
   users["alice"]["grants"]["Shared"].update(office={"export":True,"download":True},query={"products":{"body":True}})
+  users["alice"]["grants"]["Other"].update(query={"products":{"body":True}})
   users["reader"]["library"]={"schema":{"read":True,"write":False},"styleUse":False}
   users["bob"].update(grants={},library={"style":{"read":True,"write":True},"styleUse":False})
   users["executor"]={"enabled":True,"tokenSha256":digest(c.tokens["executor"]),"grants":{"Shared":{"read":True}},"library":{"styleUse":True}}
@@ -98,9 +99,14 @@ try {
   assert.equal(await page.getByLabel('作者顺序父级',{exact:true}).locator('option').count(),1);
   const initialOrder=await readAuthorOrder();assert.deepEqual(initialOrder.orderedRefs,[fixture.orderRefs['Order-A'],fixture.orderRefs['Order-B']]);
   const temporaryQuery=page.getByLabel('托管完整查询计划（JSON）',{exact:true}),queryBeforeSort=await temporaryQuery.inputValue(),querySort={scope:{descendants:true,lifecycle:'live'},types:[],select:[{name:'body',expr:'body'}],order:[{expr:'body',descending:true,nulls:'last'}]};
-  await page.getByLabel('查询对象 Shared',{exact:true}).check();await page.getByLabel('获权语义产品 body',{exact:true}).check();await temporaryQuery.fill(JSON.stringify(querySort,null,2));
+  await page.getByLabel('查询对象 Shared',{exact:true}).check();await page.getByLabel('查询对象 Other',{exact:true}).check();await page.getByLabel('获权语义产品 body',{exact:true}).check();
   await page.locator('#source').getByText('预览对应当前草稿；编辑仍须明确保存。',{exact:true}).waitFor();await page.waitForLoadState('networkidle');
-  const queryReceived=page.waitForResponse(response=>response.url().endsWith('/api/hosted/query'));await click('运行托管高级查询');const sortedQueryResponse=await queryReceived,sortedQuery=await sortedQueryResponse.json();assert.equal(sortedQueryResponse.status(),200,JSON.stringify(sortedQuery));assert.equal(sortedQuery.result.rows.length,1);
+  const queryOrders=[];for(const descending of [false,true]){
+    await temporaryQuery.fill(JSON.stringify({...querySort,order:[{...querySort.order[0],descending}]},null,2));
+    const queryReceived=page.waitForResponse(response=>response.url().endsWith('/api/hosted/query'));await click('运行托管高级查询');const sortedQueryResponse=await queryReceived,sortedQuery=await sortedQueryResponse.json();assert.equal(sortedQueryResponse.status(),200,JSON.stringify(sortedQuery));assert.equal(sortedQuery.result.rows.length,2);queryOrders.push(sortedQuery.result.rows.map(row=>row.resource));
+    await page.getByRole('table',{name:'托管高级查询冻结结果',exact:true}).waitFor();
+  }
+  assert.deepEqual(new Set(queryOrders[0]),new Set(['Shared','Other']));assert.deepEqual(queryOrders[1],[...queryOrders[0]].reverse());
   const personalView=page.getByLabel('此查询的个人视图',{exact:true});await page.locator('#query .embedded-query-view summary').click();await personalView.selectOption('list');await page.locator('#query .embedded-query-view summary').click();await personalView.selectOption('table');
   assert.deepEqual(await readOwned(settingsPath),baselineBytes);assert.equal((await sourceDraft()).source,dirtySource);assert.deepEqual((await api('library/order/read',{parentRef:fixture.orderRefs.parent})).orderedRefs,initialOrder.orderedRefs);
   await temporaryQuery.fill(queryBeforeSort);
@@ -117,7 +123,7 @@ try {
   assert.equal((await readOwned(path.join(fixture.root,'Shared/Shared.typ'))).toString(),originalSource);assert.equal((await sourceDraft()).source,dirtySource);
   await page.locator('#source .cm-content').press('ControlOrMeta+z');assert.equal((await sourceDraft()).source,originalSource);await page.locator('#source .cm-content').press('ControlOrMeta+y');assert.equal((await sourceDraft()).source,dirtySource);
   await readRole('settings');assert.deepEqual((await readAuthorOrder()).orderedRefs,reversed);
-  result.authorOrder={parentRef:fixture.orderRefs.parent,originalRefs:initialOrder.orderedRefs,installedRefs:reversed,canceledOperationId:canceledOrder.operationId,committedOperationId:originalOrder.request.operationId,planId:restoredOrder.planId,beforeSettingsSha256:sha(baselineBytes),afterSettingsSha256:sha(await readOwned(settingsPath)),temporaryQuerySort:querySort.order,sourceDraftUnchanged:true};
+  result.authorOrder={parentRef:fixture.orderRefs.parent,originalRefs:initialOrder.orderedRefs,installedRefs:reversed,canceledOperationId:canceledOrder.operationId,committedOperationId:originalOrder.request.operationId,planId:restoredOrder.planId,beforeSettingsSha256:sha(baselineBytes),afterSettingsSha256:sha(await readOwned(settingsPath)),temporaryQuerySort:querySort.order,temporaryQueryResourceOrders:queryOrders,sourceDraftUnchanged:true};
   result.cases.push('hosted authored sibling controls require the exact granted parent; temporary Query sorting/personal presentation do not change shared order; preview cancellation preserves files, lost prepare recovers the original plan, and explicit commit preserves note Draft/Undo and unrelated settings');
 
   await readRole('style'); const native = '// PRIVATE_STYLE_SOURCE_COMMENT 未知原文😀\n#let library-style(body) = {\n  let custom = (keep: (1, 2), text: "未知")\n  set text(size: 12pt)\n  [HOSTED_STYLE_ORIGINAL]\n  body\n}\n'; await page.getByLabel('托管库配置完整源码', { exact: true }).fill(native); await page.getByLabel('托管库样式启用', { exact: true }).check(); await prepare('style'); await commit(); await readRole('style'); assert.equal(await page.getByLabel('托管库配置完整源码', { exact: true }).inputValue(), native); assert.equal((await sourceDraft()).source, dirtySource);
