@@ -137,6 +137,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_outputs.py', exe)
         run(sys.executable, 'scripts/test_v05_completion.py', exe)
         run(sys.executable, 'scripts/test_review_interchange.py', exe)
+        run(sys.executable, 'scripts/test_hosted.py', exe)
         # Includes source/editor/field boundaries and separately authorized review.
         run(sys.executable, 'scripts/test_hosted_review.py', exe)
         run(sys.executable, 'scripts/test_hosted_office.py', exe)
