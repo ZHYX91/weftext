@@ -641,16 +641,16 @@ Typst does not automatically allocate permanent IDs to every block. A real block
 
 ```typst
 #block[
-  这里是一段需要直接引用的说明。
+  This paragraph is meant to be linked directly.
 ] <para-method>
 
-见 #link(<para-method>)[这段说明]。
+See #link(<para-method>)[this paragraph].
 ```
 
 The author may rename/delete the label. `@para-method` additionally depends on referenceable-object/numbering rules; ordinary paragraph navigation uses `#link(<para-method>)[...]`, without promised paragraph numbering. A cross-note link uses full ID plus exact fragment:
 
 ```typst
-#link("weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654#para-method")[方法说明]
+#link("weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654#para-method")[Method description]
 ```
 
 Copy paragraph link:
@@ -772,7 +772,7 @@ SOURCE owns one direct native declaration per owner, with official AST/standard-
   entries: ((key: "chen2026", work: "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/8aa10c08-3e7d-4d10-9488-92bc7f393050"),),
 )) <weftext-citations>
 
-见 @chen2026；也可 #cite(<chen2026>)。
+See @chen2026; alternatively, use #cite(<chen2026>).
 #bibliography("weftext.citations.bib")
 ```
 
