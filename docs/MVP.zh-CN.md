@@ -165,7 +165,7 @@ Server 已按独立权限接通五档编辑、窄字段与高级／内嵌 Query�
 
 候选验收运行前端和 Rust 测试、基础／功能／输出 HTTP 场景、格式和 Clippy、字体及文档／有界模型检查。实际浏览器和 Office 应用验证另记；纯 XML 检查不代替目标应用打开、编号更新或可编辑性验收。具体候选结果见交付记录，不把此前候选的通过数冒作本版结果。
 
-需要 Rust、Node.js/npm、Python 3.11+ 及 Windows C++ 构建工具；本次使用 Rust 1.98、Node.js 24 和官方 Typst 0.15.1。
+需要通过 rustup 安装 Rust、Node.js/npm、Python 3.11+ 及 Windows C++ 构建工具。仓库的 `rust-toolchain.toml` 为本地和 CI 选择相同的 Rust 1.99.1 与组件，不改变本机默认工具链。此前候选证据使用 Rust 1.98；Node.js 24 和官方 Typst 0.15.1 继续使用。
 
 0.7 的首个宿主基础重构复用 `weftext-app` 库及其 `LocalService::bind`／`browser_url`／`serve_until`，现有控制台仍提供本机浏览器或 `--no-browser` 服务和 `--server-config` 托管服务。版本暂保 `0.6.3-rc.4`，不代表托盘、提醒、Mobile 或整版 0.7 已完成。服务由一个 Core 持有私有目录租约；宿主选择停止信号，浏览器和未来原生窗口不自行创建另一写入者。
 
@@ -179,7 +179,7 @@ python scripts/mvp.py check
 python scripts/mvp.py package
 ```
 
-默认构建本地调试候选，`--release` 使用优化构建。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
+默认构建本地调试候选，`--release` 使用优化构建。入口使用 Cargo 实际报告的程序路径，包括 `CARGO_TARGET_DIR` 或 Cargo 配置覆盖，供后续检查与打包使用。打包要求使用仓库的 `target/` 树或源码树以外的构建目录，并从源码快照排除该构建树。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
 
 打包在 `dist/` 创建新目录，保留旧候选，不推送或发布。包含工作树源码快照、许可证、字体清单与构建依赖声明；声明含测试／构建依赖，不表示每项进入二进制。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
 

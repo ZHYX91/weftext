@@ -166,7 +166,7 @@ Acceptance of the established 0.6.0 Windows/NTFS structural, semantic and separa
 
 Candidate acceptance runs frontend/Rust tests, baseline/feature/output HTTP scenarios, formatting/Clippy, fonts and documentation/bounded-model checks. Actual browser and Office checks are recorded separately; XML inspection does not replace opening, numbering updates or editability in a target application. See the delivery record for exact candidate results rather than reusing earlier pass counts as this version's evidence.
 
-Requires Rust, Node.js/npm, Python 3.11+ and Windows C++ build tools. This work used Rust 1.98, Node.js 24 and official Typst 0.15.1.
+Requires Rust through rustup, Node.js/npm, Python 3.11+ and Windows C++ build tools. The repository's `rust-toolchain.toml` selects the same Rust 1.99.1 and components for local work and CI without changing the machine default. Earlier candidate evidence used Rust 1.98; Node.js 24 and official Typst 0.15.1 remain in use.
 
 The first 0.7 host-foundation refactor reuses the `weftext-app` library and its `LocalService::bind` / `browser_url` / `serve_until` boundary. The existing console still provides the local browser or `--no-browser` service and the `--server-config` hosted service. The version remains `0.6.3-rc.4`; this does not complete tray support, reminders, Mobile or all of 0.7. One Core owns the private-directory lease. The host selects shutdown; browsers and future native windows do not create another writer.
 
@@ -180,7 +180,7 @@ python scripts/mvp.py check
 python scripts/mvp.py package
 ```
 
-The default builds a local debug candidate; `--release` selects optimization. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
+The default builds a local debug candidate; `--release` selects optimization. The entry uses Cargo's reported executable path, including `CARGO_TARGET_DIR` or Cargo configuration overrides, for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
 
 Packaging creates a new `dist/` directory, retains previous candidates and does not push or publish. It includes the working-tree source snapshot, licenses, font manifests and build dependency notices. The inventory includes test/build dependencies, not a claim every item is in the binary. Published releases follow [WORKFLOW](WORKFLOW.md).
 
