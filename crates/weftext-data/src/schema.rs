@@ -224,6 +224,7 @@ pub fn builtin_operations(id: &str) -> Option<(u32, &'static [&'static str])> {
                 "recurrence",
                 "exception",
                 "event",
+                "task-reminder",
                 "containsDate",
                 "nextCivilDay",
                 "rangeOverlap",
@@ -686,6 +687,7 @@ impl Schema {
                     "recurrence",
                     "exception",
                     "event",
+                    "task-reminder",
                 ]
                 .contains(&v.operation.as_str()),
                 "weftext.units.rules.v1" => {
@@ -981,6 +983,7 @@ impl Schema {
             "custom-code" => &["code", "custom"],
             "owned-resources" => &["owner", "values", "metadata"],
             "event" => &["range", "recurrence"],
+            "task-reminder" => &["reminder", "due"],
             _ => &["value"],
         };
         if c.inputs.keys().map(String::as_str).collect::<BTreeSet<_>>()
@@ -1419,7 +1422,7 @@ impl Schema {
                     validation_cell(crate::validate_exception(value, self), &mut out);
                 }
             }
-            "owned-resources" | "event" => out
+            "owned-resources" | "event" | "task-reminder" => out
                 .unavailable
                 .push("required Core field/context snapshot is not supplied".into()),
             _ => out.unavailable.push("operation unavailable".into()),

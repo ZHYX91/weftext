@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { enUS, zhCN } from "./ui-messages";
-import { LocaleScope, locale, message, normalizeUiLocale, parseUiMessage, renderUiMessage, t, type UiLocale } from "./ui-locale";
+import { LocaleScope, locale, message, displayMessage, normalizeUiLocale, parseUiMessage, renderUiMessage, t, type UiLocale } from "./ui-locale";
 
 test("interface templates preserve every semantic parameter in both delivered languages", () => {
   for (const key of Object.keys(zhCN) as (keyof typeof zhCN)[]) {
@@ -100,3 +100,36 @@ test("a failed initial binding leaves no retained callback or locale subscriptio
   assert.equal(target.textContent, "Save");
   scope.dispose(); locale.set("zh-CN");
 });
+
+// Compile-time guards remain narrow even though display consumers share a small branded interface.
+test("local display preserves exact UTF-16 without becoming the wire protocol", () => {
+  const raw = "author\ud800\u0000😀", spec = displayMessage("common.operation", { operationId: raw });
+  assert.ok(renderUiMessage("zh-CN", spec).endsWith(raw));
+  assert.ok(renderUiMessage("en-US", spec).endsWith(raw));
+  assert.equal(parseUiMessage(spec), undefined);
+  assert.throws(() => JSON.stringify(spec), /cannot be sent/);
+});
+
+test("local composition retains the captured read cut and resolves nested labels in the current language", () => {
+  let current = { title: "original\ud800\u0000" };
+  const spec = displayMessage("common.operation", { operationId: () => current.title });
+  const captured = displayMessage("common.operation", { operationId: current.title });
+  const nested = displayMessage("common.operation", { operationId: message("common.save") });
+  current = { title: "later different account" };
+  assert.ok(renderUiMessage("en-US", captured).endsWith("original\ud800\u0000"));
+  locale.set("zh-CN"); assert.match(t(nested), /保存/);
+  assert.match(renderUiMessage("en-US", nested), /Save/);
+  locale.set("en-US"); assert.match(t(nested), /Save/);
+  assert.ok(t(spec).endsWith(current.title)); locale.set("zh-CN");
+});
+
+if (false) {
+  // @ts-expect-error Product integer parameters cannot become strings.
+  message("reminder.missed", { count: "2" });
+  // @ts-expect-error Parameter-free messages reject authored payloads.
+  message("common.save", { source: "author text" });
+  // @ts-expect-error Unknown catalog keys cannot be produced.
+  message("missing.catalogKey");
+  // @ts-expect-error A local display cannot become a wire descriptor.
+  const wire: import("./ui-locale").UiMessage = displayMessage("common.save");
+}
