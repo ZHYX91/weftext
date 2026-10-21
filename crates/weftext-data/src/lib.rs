@@ -15,6 +15,7 @@ mod recurrence;
 mod relations;
 mod schema;
 mod tag_forest;
+mod task_reminder;
 mod temporal;
 pub use tag_forest::*;
 mod tag_remap;
@@ -25,6 +26,7 @@ pub use recurrence::*;
 pub use relations::*;
 pub use schema::*;
 pub use tag_remap::*;
+pub use task_reminder::*;
 pub use temporal::*;
 
 use std::fmt;
