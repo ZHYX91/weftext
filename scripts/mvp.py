@@ -9,6 +9,7 @@ import sys
 import tomllib
 import uuid
 
+from cargo_cache import CargoCache
 from package_inputs import BuildArtifacts, collect_artifact, read_checked, require_checkout, sha256, snapshot, validate_target
 from windows_package import artifact_catalog, load_contract, msix_version, package_windows, pe_info, sdk_tools
 from windows_materials import freeze_materials
@@ -96,39 +97,37 @@ def build(release, *, package_input=False, linker=None, windows_sdk=None):
     if release:
         args.append('--release')
     paths, participants = {}, set()
-    with subprocess.Popen(args, cwd=source_root, env=environment, stdout=subprocess.PIPE,
-                          text=True, encoding='utf-8') as process:
-        for line in process.stdout:
-            message = json.loads(line)
-            collect_artifact(message, package_id, contract['roles'], paths)
-            if message.get('reason') == 'compiler-artifact':
-                participants.add(message['package_id'])
-        if process.wait():
-            raise subprocess.CalledProcessError(process.returncode, args)
-    if set(paths) != {'desktop', 'cli'}:
-        raise ValueError('Cargo did not report both real Weftext desktop and CLI executables')
-    binaries = {role: read_checked(path, target) for role, path in paths.items()}
-    complete_metadata = metadata(source_root, environment, full=True)
-    if validate_target(source_root, complete_metadata['target_directory']) != target:
-        raise ValueError('Cargo target directory changed during the build')
-    if snapshot(source_root, [target]) != frozen or snapshot(source_root / 'app/dist') != frontend:
-        raise ValueError('Build inputs changed during compilation; originals retained, package refused')
-    if linker is not None and read_checked(linker, linker.parent) != linker_bytes:
-        raise ValueError('MSVC linker changed during the build')
-    catalog_path = catalog = None
-    if os.name == 'nt':
-        catalog = artifact_catalog(frozen, binaries, contract)
-        artifact_root = target / 'weftext-build-artifacts' / str(uuid.uuid4())
-        artifact_root.mkdir(parents=True, exist_ok=False)
-        paths = {}
-        for role, policy in contract['roles'].items():
-            path = artifact_root / policy['filename']
-            with path.open('xb') as stream:
-                stream.write(binaries[role])
-            paths[role] = path
-        catalog_path = artifact_root / 'artifact-catalog.json'
-        with catalog_path.open('xb') as stream:
-            stream.write(catalog)
+    def compiled(message):
+        collect_artifact(message, package_id, contract['roles'], paths)
+        participants.add(message['package_id'])
+    # Keep the product target lock through qualification and copying, so another
+    # product invocation cannot replace mutable Cargo outputs before freezing.
+    with CargoCache(source_root, target, environment) as cache:
+        cache.run(args, on_message=compiled)
+        if set(paths) != {'desktop', 'cli'}:
+            raise ValueError('Cargo did not report both real Weftext desktop and CLI executables')
+        binaries = {role: read_checked(path, target) for role, path in paths.items()}
+        complete_metadata = metadata(source_root, environment, full=True)
+        if validate_target(source_root, complete_metadata['target_directory']) != target:
+            raise ValueError('Cargo target directory changed during the build')
+        if snapshot(source_root, [target]) != frozen or snapshot(source_root / 'app/dist') != frontend:
+            raise ValueError('Build inputs changed during compilation; originals retained, package refused')
+        if linker is not None and read_checked(linker, linker.parent) != linker_bytes:
+            raise ValueError('MSVC linker changed during the build')
+        catalog_path = catalog = None
+        if os.name == 'nt':
+            catalog = artifact_catalog(frozen, binaries, contract)
+            artifact_root = target / 'weftext-build-artifacts' / str(uuid.uuid4())
+            artifact_root.mkdir(parents=True, exist_ok=False)
+            paths = {}
+            for role, policy in contract['roles'].items():
+                path = artifact_root / policy['filename']
+                with path.open('xb') as stream:
+                    stream.write(binaries[role])
+                paths[role] = path
+            catalog_path = artifact_root / 'artifact-catalog.json'
+            with catalog_path.open('xb') as stream:
+                stream.write(catalog)
     result = BuildArtifacts(source_root, paths, binaries, frozen, frontend, complete_metadata,
                             frozenset(participants), target, 'release' if release else 'debug', linker_version,
                             {key: environment[key] for key in ('CARGO_TARGET_DIR', 'CARGO_BUILD_TARGET',
@@ -148,6 +147,9 @@ def check(artifacts):
     def checked(*args, **kwargs):
         return run(*args, cwd=root, env=environment, **kwargs)
     checked(sys.executable, 'scripts/check.py', '--models')
+    check_root = artifacts.target_directory / 'weftext-checks' / str(uuid.uuid4())
+    check_root.mkdir(parents=True, exist_ok=False)
+    checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
     checked(sys.executable, 'scripts/test_windows_package.py')
     checked(sys.executable, 'scripts/test_cli_serve.py')
     checked(NODE, '--test', 'scripts/test_cli_serve.mjs')
@@ -156,10 +158,10 @@ def check(artifacts):
     checked(sys.executable, 'resources/fonts/verify.py')
     checked(NPM, '--prefix', 'app', 'test')
     checked('cargo', 'fmt', '--all', '--', '--check')
-    checked('cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings')
-    checked('cargo', 'test', '--locked', '--workspace')
-    check_root = artifacts.target_directory / 'weftext-checks' / str(uuid.uuid4())
-    check_root.mkdir(parents=True, exist_ok=False)
+    with CargoCache(root, artifacts.target_directory, environment) as cache:
+        cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
+                   '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
+        cache.run(['cargo', 'test', '--locked', '--workspace', '--message-format=json-render-diagnostics'])
     checked(sys.executable, 'scripts/test_cli_contract.py',
             '--gui-executable', artifacts.paths['desktop'], '--cli-executable', artifacts.paths['cli'],
             '--test-root', check_root / 'cli', '--output-dir', check_root / 'cli-results')
