@@ -549,6 +549,26 @@
       "zh-CN": "准确值（保留精度）",
       "en-US": "Exact value (precision preserved)",
       "params": {}
+    },
+    "reminder.overview": {
+      "zh-CN": "提醒状态与设置",
+      "en-US": "Reminder status and settings",
+      "params": {}
+    },
+    "reminder.more": {
+      "zh-CN": "继续读取下一页",
+      "en-US": "Read the next page",
+      "params": {}
+    },
+    "reminder.noDeliveryRecords": {
+      "zh-CN": "本设备尚无已记录的投递",
+      "en-US": "No recorded deliveries on this device",
+      "params": {}
+    },
+    "reminder.openTask": {
+      "zh-CN": "打开当前获权任务",
+      "en-US": "Open the currently authorized task",
+      "params": {}
     }
   }
 }

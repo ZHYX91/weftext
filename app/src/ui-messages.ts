@@ -104,7 +104,11 @@ export const zhCN = {
   "reminder.discardPending": "放弃这次设置请求",
   "reminder.pendingDiscardHelp": "放弃不会撤销可能已经生效的设置；刷新查看当前状态",
   "reminder.offset": "明确时区偏移",
-  "reminder.exactValue": "准确值（保留精度）"
+  "reminder.exactValue": "准确值（保留精度）",
+  "reminder.overview": "提醒状态与设置",
+  "reminder.more": "继续读取下一页",
+  "reminder.noDeliveryRecords": "本设备尚无已记录的投递",
+  "reminder.openTask": "打开当前获权任务"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -214,6 +218,10 @@ export interface MessageParamsMap {
   "reminder.pendingDiscardHelp": {  };
   "reminder.offset": {  };
   "reminder.exactValue": {  };
+  "reminder.overview": {  };
+  "reminder.more": {  };
+  "reminder.noDeliveryRecords": {  };
+  "reminder.openTask": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -339,7 +347,11 @@ export const messageParamTypes = {
   "reminder.discardPending": {},
   "reminder.pendingDiscardHelp": {},
   "reminder.offset": {},
-  "reminder.exactValue": {}
+  "reminder.exactValue": {},
+  "reminder.overview": {},
+  "reminder.more": {},
+  "reminder.noDeliveryRecords": {},
+  "reminder.openTask": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -447,5 +459,9 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "reminder.discardPending": "Discard this settings request",
   "reminder.pendingDiscardHelp": "Discarding does not undo settings that may already have taken effect; refresh to inspect current state",
   "reminder.offset": "Explicit timezone offset",
-  "reminder.exactValue": "Exact value (precision preserved)"
+  "reminder.exactValue": "Exact value (precision preserved)",
+  "reminder.overview": "Reminder status and settings",
+  "reminder.more": "Read the next page",
+  "reminder.noDeliveryRecords": "No recorded deliveries on this device",
+  "reminder.openTask": "Open the currently authorized task"
 };
