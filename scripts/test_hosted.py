@@ -1,4 +1,5 @@
 """Real hosted HTTP boundaries against owned disposable libraries; no desktop input."""
+from _creation_result import created_document
 import copy
 import hashlib
 import json
@@ -71,6 +72,7 @@ class Hosted(unittest.TestCase):
             for name, content in [('Shared','初始共同正文'),('Other','独立正文'),('Secret','HIDDEN_PAYLOAD_987')]:
                 code, doc, _ = local.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':name,'operationId':uid()})
                 self.assertEqual(code,200,doc)
+                doc = created_document(doc)
                 doc['source'] += content
                 code, _, _ = local.call('/api/save',{'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':doc['source'],'operationId':uid()})
                 self.assertEqual(code,200)

@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real owned browser tasks; no desktop input, real OS IME or reference-host claim.
 
 import assert from 'node:assert/strict';
@@ -174,7 +175,7 @@ try {
 
   const taskDocs=[]; phase='fixture-seed';
 
-  for (const [name,status,due] of [['任务甲','open','2026-10-19'],['任务乙','open','2026-10-20'],['任务丙','done',null]]) { const doc=await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()}), date=due ? `, due: datetime(year: ${due.slice(0,4)}, month: ${Number(due.slice(5,7))}, day: ${Number(due.slice(8,10))})` : ''; const native=`#metadata((id: "${doc.nodeId}", types: ("task",), status: "${status}"${date})) <weftext>\n#set document(title: "${name}")\n#title()\n\n正文保留😀\n`; await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:native,operationId:randomUUID()}); taskDocs.push({...doc,source:native}); }
+  for (const [name,status,due] of [['任务甲','open','2026-10-19'],['任务乙','open','2026-10-20'],['任务丙','done',null]]) { const doc=createdDocument(await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()})), date=due ? `, due: datetime(year: ${due.slice(0,4)}, month: ${Number(due.slice(5,7))}, day: ${Number(due.slice(8,10))})` : ''; const native=`#metadata((id: "${doc.nodeId}", types: ("task",), status: "${status}"${date})) <weftext>\n#set document(title: "${name}")\n#title()\n\n正文保留😀\n`; await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:native,operationId:randomUUID()}); taskDocs.push({...doc,source:native}); }
 
   const discovered=await api('/api/query/embedded/discover',{sessionId:rootDoc.sessionId,source:original,serial:0}), tasks=discovered.occurrences.find(item=>item.plan.types.includes('task')), events=discovered.occurrences.find(item=>item.plan.types.includes('event'));
 

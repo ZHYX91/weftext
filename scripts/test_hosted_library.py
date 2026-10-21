@@ -3,6 +3,7 @@
 Uses only owned disposable fixtures. Consumer requests never use local routes.
 The shared harness retains all original files and evidence after failures.
 """
+from _creation_result import created_document
 import json
 import sys
 import time
@@ -89,7 +90,7 @@ class HostedLibrary(HostedQuery):
             refs['parent']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared')})['targetRef']
             refs['secret']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Secret')})['targetRef']
             for name in ['First','Second']:
-                api('/api/note/create',{'root':str(self.root),'parent':str(self.root/'Shared'),'name':name,'operationId':uid()})
+                created_document(api('/api/note/create',{'root':str(self.root),'parent':str(self.root/'Shared'),'name':name,'operationId':uid()}))
                 refs[name]=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared'/name)})['targetRef']
             self.config['directories']={'order-parent':{'path':'Shared','title':'Visible parent','reference':refs['parent']},'secret-parent':{'path':'Secret','title':'Private parent','reference':refs['secret']}}
         self.local(provision)

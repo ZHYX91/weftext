@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // An ordinary Directory moves through real public producers, then the real
 // receiver Sync UI. No synthetic Plan, response, editor state or private record.
 import { createRequire } from 'node:module';
@@ -72,10 +73,10 @@ try {
   await commit(a, admitted.preview);
   const marker = JSON.parse(await readFile(path.join(folder, 'weftext.directory.json'), 'utf8'));
   const directoryKey = { kind: 'directory', id: marker.directoryId };
-  const child = await api(a, '/api/note/create', { root: ra, parent: folder, name: 'Child', operationId: randomUUID() });
+  const child = createdDocument(await api(a, '/api/note/create', { root: ra, parent: folder, name: 'Child', operationId: randomUUID() }));
   const savedSource = child.source + '\n= 目录子笔记\n原始正文 中文😀\n';
   await api(a, '/api/save', { sessionId: child.sessionId, baseId: child.baseId, source: savedSource, operationId: randomUUID() });
-  const container = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Container', operationId: randomUUID() });
+  const container = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Container', operationId: randomUUID() }));
   const childKey = { kind: 'node', id: child.nodeId }, containerKey = { kind: 'node', id: container.nodeId };
   const binding = await api(a, '/api/sync/enable', { root: ra, operationId: randomUUID() }), identity = binding.identity;
   const objects = [directoryKey, childKey, containerKey];

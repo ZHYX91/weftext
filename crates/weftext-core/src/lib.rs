@@ -30,6 +30,7 @@ mod history_tests;
 mod inventory;
 mod journal;
 mod library_creation;
+mod local_operation;
 pub use library_creation::{
     InitialLibraryStyle, InitialRootNote, LibraryCreateOptions, root_query_presets,
 };
@@ -180,6 +181,29 @@ pub struct Receipt {
     pub path: String,
     pub base_id: String,
     pub message: String,
+}
+/// The original journal stores only Receipt. Recovery delivery is transient.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveOutcome {
+    #[serde(flatten)]
+    pub receipt: Receipt,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_issue: Option<RecoveryIssue>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryIssue {
+    pub code: String,
+    pub message: String,
+}
+impl SaveOutcome {
+    fn committed(receipt: Receipt) -> Self {
+        Self {
+            receipt,
+            recovery_issue: None,
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -523,16 +547,17 @@ impl Core {
             },
         )
     }
-    pub fn save(&mut self, request: SaveRequest) -> Result<Receipt> {
+    pub fn save(&mut self, request: SaveRequest) -> Result<SaveOutcome> {
         self.save_with_restore(request, None)
     }
     fn save_with_restore(
         &mut self,
         request: SaveRequest,
         restore: Option<history::RestoreBinding>,
-    ) -> Result<Receipt> {
+    ) -> Result<SaveOutcome> {
         self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
+        self.check_attempt_not_cancelled(&request.operation_id)?;
         check_size(request.source.as_bytes())?;
         let session = self
             .sessions
@@ -550,7 +575,7 @@ impl Core {
         }
         let fingerprint = hash(&serde_json::to_vec(&intent)?);
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
-            return Ok(receipt);
+            return Ok(SaveOutcome::committed(receipt));
         }
         if request.base_id != session.base_id {
             let draft = Draft {
@@ -679,12 +704,23 @@ impl Core {
                 ..session
             },
         );
-        self.persist_draft(&request.session_id, &request.source)?;
-        Ok(receipt)
+        #[cfg(all(test, windows))]
+        let draft_update = hosted::definition_test_failpoint("saveDraftUpdate")
+            .and_then(|()| self.persist_draft(&request.session_id, &request.source));
+        #[cfg(not(all(test, windows)))]
+        let draft_update = self.persist_draft(&request.session_id, &request.source);
+        let recovery_issue = draft_update.err().map(|error| RecoveryIssue {
+            code: error.code, message: "Source save committed; its separate recovery draft update is unavailable. Retain the original operation and current input.".into(),
+        });
+        Ok(SaveOutcome {
+            receipt,
+            recovery_issue,
+        })
     }
-    pub fn save_as(&mut self, request: SaveAsRequest) -> Result<Receipt> {
+    pub fn save_as(&mut self, request: SaveAsRequest) -> Result<SaveOutcome> {
         self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
+        self.check_attempt_not_cancelled(&request.operation_id)?;
         check_size(request.source.as_bytes())?;
         let session = self
             .sessions
@@ -697,7 +733,7 @@ impl Core {
             &serde_json::json!({"kind":"saveAs","session":request.session_id,"path":display(&path),"source":request.source}),
         )?);
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
-            return Ok(receipt);
+            return Ok(SaveOutcome::committed(receipt));
         }
         self.persist_draft(&request.session_id, &request.source)?;
         self.check_pending(&path)?;
@@ -735,7 +771,7 @@ impl Core {
         };
         write_source(&mut file, &plan.after)?;
         self.commit(&plan)?;
-        Ok(plan.receipt.unwrap())
+        Ok(SaveOutcome::committed(plan.receipt.unwrap()))
     }
     pub fn create_library(&mut self, path: impl AsRef<Path>) -> Result<LibraryInfo> {
         self.create_library_with_id(path, &fresh())
@@ -752,104 +788,42 @@ impl Core {
         root: impl AsRef<Path>,
         parent: impl AsRef<Path>,
         name: &str,
-    ) -> Result<OpenedDocument> {
+    ) -> Result<OperationReceipt> {
         self.create_note_with_id(root, parent, name, &fresh())
     }
+    /// Creation commits through the shared NewNode transaction. Opening is a
+    /// separate delivery step and cannot erase the original receipt.
     pub fn create_note_with_id(
         &mut self,
         root: impl AsRef<Path>,
         parent: impl AsRef<Path>,
         name: &str,
         operation_id: &str,
-    ) -> Result<OpenedDocument> {
+    ) -> Result<OperationReceipt> {
         valid_operation_id(operation_id)?;
-        valid_name(name)?;
-        let root = absolute_path(root.as_ref())?;
-        let parent = absolute_path(parent.as_ref())?;
-        let fingerprint = hash(&serde_json::to_vec(
-            &serde_json::json!({"kind":"createNote","root":display(&root),"parent":display(&parent),"name":name}),
-        )?);
-        if let Some(plan) = self.operations.get(operation_id).cloned() {
-            if plan.fingerprint != fingerprint {
-                return Err(CoreError::new(
-                    "operationConflict",
-                    "This operationId already belongs to different input",
-                ));
-            }
-            if !self.committed(operation_id) {
-                return Err(CoreError::new(
-                    "recoveryPending",
-                    "The original node creation remains retained; it must not be re-created",
-                ));
-            }
-            let result = self.open(PathBuf::from(plan.path), Some(root))?;
-            if result.node_id != plan.node_id {
-                return Err(CoreError::new(
-                    "committedResultUnavailable",
-                    "The original note was committed, but the current object at that path changed; no recreation was attempted",
-                ));
-            }
-            return Ok(result);
-        }
-        if !parent.starts_with(&root) {
-            return Err(CoreError::new(
-                "outsideRoot",
-                "The target parent is outside the selected library",
-            ));
-        }
-        let directory_path = parent.join(name);
-        let path = directory_path.join(format!("{name}.typ"));
-        let guard = ParentGuard::acquire(&directory_path)?;
-        let workspace = self.workspace(&root)?.ok_or_else(|| {
-            CoreError::new(
-                "unadmittedLibrary",
-                "Create notes only inside a library initialized by this MVP",
-            )
+        let preview = self.prepare_operation(OperationRequest {
+            operation_id: operation_id.into(),
+            root: display(root.as_ref()),
+            intent: OperationIntent::NewNode {
+                parent: display(parent.as_ref()),
+                name: name.into(),
+                source: None,
+            },
         })?;
-        self.check_discovery_boundary(&root, &parent)?;
-        let node_id = fresh();
-        let source = default_note_source(&node_id, name)?;
-        let operation_id = operation_id.to_string();
-        let mut plan = journal::Plan::file(
-            operation_id.clone(),
-            fingerprint,
-            &path,
-            None,
-            source.as_bytes().to_vec(),
-            None,
-            "createNote",
-        );
-        plan.workspace_id = Some(workspace.workspace_id.clone());
-        plan.node_id = Some(node_id.clone());
-        plan.content_revision = Some(fresh());
-        self.stage(plan.clone())?;
-        let directory = match guard.create_directory() {
-            Ok(d) => d,
-            Err(e) => {
-                self.resolve_record(&operation_id, "createRejected")?;
-                return Err(e);
-            }
-        };
-        let mut file = ParentGuard::child_file(&directory, &format!("{name}.typ"))?;
-        write_source(&mut file, source.as_bytes())?;
-        let birth = Birth {
-            node_id,
-            workspace_id: workspace.workspace_id,
-            identity: stamp(&file)?.identity,
-        };
-        self.write_birth(&plan.operation_id, &birth)?;
-        self.record_observation(
-            &plan.operation_id,
-            &path,
-            &stamp(&file)?,
-            source.as_bytes(),
-            plan.content_revision.as_ref().unwrap(),
-        )?;
-        self.commit(&plan)?;
-        drop(file);
-        drop(directory);
-        drop(guard);
-        self.open(path, Some(root))
+        self.execute_operation(operation_id, &preview.plan_id)
+    }
+    #[cfg(test)]
+    fn create_note_fixture(
+        &mut self,
+        root: impl AsRef<Path>,
+        parent: impl AsRef<Path>,
+        name: &str,
+    ) -> Result<OpenedDocument> {
+        let receipt = self.create_note(root.as_ref(), parent, name)?;
+        self.open(
+            Path::new(&receipt.path).join(format!("{name}.typ")),
+            Some(root.as_ref().to_path_buf()),
+        )
     }
     fn workspace(&self, root: &Path) -> Result<Option<WorkspaceConfig>> {
         let config_path = root.join(".weftext-workspace.json");
@@ -1035,10 +1009,10 @@ fn valid_name(name: &str) -> Result<()> {
     Ok(())
 }
 fn valid_operation_id(id: &str) -> Result<()> {
-    if Uuid::parse_str(id).is_err() {
+    if !Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id) {
         return Err(CoreError::new(
             "invalidOperationId",
-            "operationId must be a UUID",
+            "operationId must be a canonical lowercase hyphenated UUID",
         ));
     }
     Ok(())

@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Two owned programs and headless Chrome. No desktop input or borrowed state.
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
@@ -56,7 +57,7 @@ try {
   const ra = path.join(out, 'library-a'), rb = path.join(out, 'library-b'), da = path.join(out, 'state-a'), db = path.join(out, 'state-b'), exchange = path.join(out, 'exchange');
   let a = await start(['--no-browser', '--data-dir', da]), b = await start(['--no-browser', '--data-dir', db]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
-  const note = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() });
+  const note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
   const key = { kind: 'node', id: note.nodeId };
   const { identity } = await api(a, '/api/sync/enable', { root: ra, operationId: randomUUID() });
   async function transfer() {

@@ -8,7 +8,7 @@ fn definition_admission_uses_only_original_node_birth_source_after_clone_and_res
     let data = temp.path().join("receiver-private");
     let mut sender = Core::new(temp.path().join("sender-private")).unwrap();
     sender.create_library(&root).unwrap();
-    let note = sender.create_note(&root, &root, "Note").unwrap();
+    let note = sender.create_note_fixture(&root, &root, "Note").unwrap();
     let owner = note.node_id.unwrap();
     let schema = weftext_data::Schema::bundled().unwrap();
     let config = sender.read_config(&root, ConfigRole::Schema).unwrap();

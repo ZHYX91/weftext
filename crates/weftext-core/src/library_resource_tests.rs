@@ -64,7 +64,7 @@ impl Fixture {
         Self::finish(temp, data, root, core)
     }
     fn finish(temp: tempfile::TempDir, data: PathBuf, root: PathBuf, mut core: Core) -> Self {
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let owner = weftext_knowledge::NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
             node_id: note.node_id.unwrap(),
@@ -224,7 +224,10 @@ fn exact_resource_reads_only_selected_leaf_and_never_registers_writable_bases() 
             .code,
         "resourcePath"
     );
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert!(
         f.core
             .qualified_resource_at(

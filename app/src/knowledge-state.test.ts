@@ -37,7 +37,7 @@ test("local draft refusal never invents an unknown Core operation; actual networ
   assert.equal(retainPendingKnowledgePlan(true, new Error("draft persistence failed after applying")), false);
   assert.equal(retainPendingKnowledgePlan(false, new Error("connection lost")), true);
   assert.equal(retainPendingKnowledgePlan(false, { code: "resultUnknown" }), true);
-  assert.equal(retainPendingKnowledgePlan(false, { code: "conflict" }), false);
+  assert.equal(retainPendingKnowledgePlan(false, { code: "conflict" }), true);
 });
 test("a late background response cannot replace a newer refresh or a switched draft", () => {
   const gate = new KnowledgeReadGate(); const first = gate.begin(), second = gate.begin();

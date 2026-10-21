@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real-candidate table interaction acceptance. This uses an owned library and
 // headless Chrome; synthetic composition events do not establish real OS IME.
 import { createRequire } from 'node:module';
@@ -31,7 +32,7 @@ async function saved(){const response=page.waitForResponse(r=>r.url().endsWith('
 async function actualClipboard(){return page.evaluate(async()=>{if(!navigator.clipboard?.read)throw new Error('Actual Clipboard API read is unavailable; no synthetic clipboard fallback is permitted.');return Promise.all((await navigator.clipboard.read()).map(async item=>({types:[...item.types].sort(),payloads:Object.fromEntries(await Promise.all(item.types.map(async type=>[type,await(await item.getType(type)).text()]))) })));});}
 async function copyOutput(format){await beginTableCopyObservation(page,'复制范围 '+format);await surface().getByRole('button',{name:'复制范围 '+format,exact:true}).click();await surface().getByRole('status').filter({hasText:`已复制所选范围为 ${format}，1 行 × 3 列。`}).waitFor();(result.copyLifecycles??=[]).push(await endTableCopyObservation(page));}
 try{
- const data=path.join(out,'state'),root=path.join(out,'library');local=await start(['--no-browser','--data-dir',data]);await api('/api/library/create',{path:root,operationId:randomUUID()});const opened=await api('/api/note/create',{root,parent:root,name:'Tables',operationId:randomUUID()});
+ const data=path.join(out,'state'),root=path.join(out,'library');local=await start(['--no-browser','--data-dir',data]);await api('/api/library/create',{path:root,operationId:randomUUID()});const opened=createdDocument(await api('/api/note/create',{root,parent:root,name:'Tables',operationId:randomUUID()}));
  const initial=opened.source+'\n表前保留。\n\n#table(columns: 3,\n  [重复], [], [重复],\n  [甲], [乙], [末],\n)\n\n表后保留。\n\n#table(columns: 2, [后表], [后格])\n';
  await api('/api/save',{sessionId:opened.sessionId,baseId:opened.baseId,source:initial,operationId:randomUUID()});await stop(local);local=null;
  const config={deployment:'tables-browser',bind:'127.0.0.1:0',root,adminTokenSha256:sha(token.admin),files:{tables:{path:'Tables/Tables.typ',title:'表格文档',editable:true}},users:{alice:{enabled:true,tokenSha256:sha(token.alice),grants:{tables:{read:true,write:true}}}}};const configPath=path.join(out,'server.json');await writeFile(configPath,JSON.stringify(config,null,2));server=await start(['--no-browser','--data-dir',data,'--server-config',configPath],true);

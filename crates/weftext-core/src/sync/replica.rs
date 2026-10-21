@@ -88,7 +88,7 @@ impl Core {
         if let Some(plan) = self.operations.get(operation_id).cloned() {
             if plan.fingerprint != fingerprint
                 || plan.sync_setup.is_none()
-                || self.resolved(operation_id)
+                || self.resolved(operation_id)?
             {
                 return Err(CoreError::new(
                     "operationConflict",
@@ -533,17 +533,18 @@ impl Core {
         }
     }
     pub(crate) fn check_sync_setup_pending(&self, workspace: &str) -> Result<()> {
-        if self.operations.values().any(|p| {
-            p.sync_setup
+        for p in self.operations.values() {
+            if p.sync_setup
                 .as_ref()
                 .is_some_and(|s| s.identity.workspace_id == workspace)
                 && !self.committed(&p.operation_id)
-                && !self.resolved(&p.operation_id)
-        }) {
-            return Err(CoreError::new(
-                "syncSetupPending",
-                "Resume or resolve the original replica setup before allocating another",
-            ));
+                && !self.resolved(&p.operation_id)?
+            {
+                return Err(CoreError::new(
+                    "syncSetupPending",
+                    "Resume or resolve the original replica setup before allocating another",
+                ));
+            }
         }
         Ok(())
     }

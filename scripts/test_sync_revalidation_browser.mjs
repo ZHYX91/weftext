@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Actual semantic-review UI, original pending operation, owned replicas and headless Chrome.
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
@@ -85,7 +86,7 @@ async function setup(id) {
   const s = { id, folder, ra: path.join(folder, 'a'), rb: path.join(folder, 'b'), da: path.join(folder, 'sa'), db: path.join(folder, 'sb'), transfer: 0, requests: [], responses: [], observations: [] }; active = s;
   s.a = await start(s, 'a', ['--data-dir', s.da]); s.b = await start(s, 'b-initial', ['--data-dir', s.db]);
   await api(s, s.a, '/api/library/create', { path: s.ra, operationId: randomUUID() }); await saveSchema(s, s.a, s.ra, 'semantic_baseline_title');
-  const note = await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Note', operationId: randomUUID() }); s.nodeId = note.nodeId; s.key = { kind: 'node', id: note.nodeId };
+  const note = createdDocument(await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Note', operationId: randomUUID() })); s.nodeId = note.nodeId; s.key = { kind: 'node', id: note.nodeId };
   const binding = await api(s, s.a, '/api/sync/enable', { root: s.ra, operationId: randomUUID() }); s.identity = binding.identity;
   await transfer(s, s.a, s.ra, s.b, binding.installedObjects);
   await commit(s, s.b, await api(s, s.b, '/api/operations/prepare', { root: s.rb, operationId: randomUUID(), intent: { kind: 'cloneSync', identity: s.identity, objects: binding.installedObjects } }));
@@ -101,7 +102,7 @@ async function setup(id) {
   s.originalPhysical = { directory: await physical(path.join(s.rb, 'Note')), source: await physical(path.join(s.rb, 'Note', 'Note.typ')) };
   if (id === 11 || id === 12) return setupRemovedMember(s);
   if (id >= 6) {
-    const task = await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Task', operationId: randomUUID() });
+    const task = createdDocument(await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Task', operationId: randomUUID() }));
     s.nativeKey = { kind: 'node', id: task.nodeId };
     const body = id === 7 ? nativeGood.replace('精确标题', '错误标题') : nativeGood;
     s.nativeSource = `#metadata((id: "${task.nodeId}", types: ("task",), status: "open")) <weftext>\n${body}${id === 8 ? '\n#include "../shared.typ"\n' : ''}`;

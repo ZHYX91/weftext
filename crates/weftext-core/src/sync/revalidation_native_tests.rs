@@ -64,7 +64,12 @@ impl Fixture {
         for name in ["Note", "Task", "Unrelated"] {
             nodes.insert(
                 name,
-                ObjectKey::Node(a.create_note(&ar, &ar, name).unwrap().node_id.unwrap()),
+                ObjectKey::Node(
+                    a.create_note_fixture(&ar, &ar, name)
+                        .unwrap()
+                        .node_id
+                        .unwrap(),
+                ),
             );
         }
         let schema = a.read_config(&ar, ConfigRole::Schema).unwrap();
@@ -483,7 +488,7 @@ fn semantic_membership_original_created_node_does_not_mask_a_later_foreign_birth
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Existing").unwrap();
+    core.create_note_fixture(&root, &root, "Existing").unwrap();
     let cut = core.admitted_snapshot(&root).unwrap();
     let request = OperationRequest {
         operation_id: crate::fresh(),
@@ -512,7 +517,9 @@ fn semantic_membership_original_created_node_does_not_mask_a_later_foreign_birth
     let own = capture_optional(&root.join("OriginalBirth").join("OriginalBirth.typ"))
         .unwrap()
         .unwrap();
-    let foreign = core.create_note(&root, &root, "LaterForeignBirth").unwrap();
+    let foreign = core
+        .create_note_fixture(&root, &root, "LaterForeignBirth")
+        .unwrap();
     let foreign_file = capture_optional(Path::new(&foreign.path)).unwrap().unwrap();
     assert_eq!(
         core.validate_recovery_scope(transaction).unwrap_err().code,
@@ -600,10 +607,14 @@ fn typed_native_inherited_trash_child_keeps_original_false_flag_and_actual_compi
 #[test]
 fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_file_identities() {
     let mut f = Fixture::with_plan(GOOD, trash_native_plan());
-    let late = f.b.create_note(&f.br, &f.br, "LateForeign").unwrap();
+    let late =
+        f.b.create_note_fixture(&f.br, &f.br, "LateForeign")
+            .unwrap();
     let late_directory = Path::new(&late.path).parent().unwrap().to_path_buf();
     let late_original = capture_optional(Path::new(&late.path)).unwrap().unwrap();
-    let foreign = f.b.create_note(&f.br, &f.br, "ExistingTrash").unwrap();
+    let foreign =
+        f.b.create_note_fixture(&f.br, &f.br, "ExistingTrash")
+            .unwrap();
     let foreign_retirement =
         f.b.prepare_operation(OperationRequest {
             operation_id: crate::fresh(),

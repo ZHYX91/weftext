@@ -18,6 +18,7 @@ await writeFile(helper, `import copy,json,secrets,sys
 from pathlib import Path
 sys.path.insert(0,sys.argv[1]+"/scripts")
 import test_hosted
+from _creation_result import created_document
 test_hosted.EXE=Path(sys.argv[2])
 from test_hosted import digest,uid
 from test_hosted_library import HostedLibrary
@@ -28,7 +29,7 @@ try:
   order_refs["parent"]=api("/api/navigation/capture",{"root":str(c.root),"path":str(c.root/"Shared")})["targetRef"]
   order_refs["hidden"]=api("/api/navigation/capture",{"root":str(c.root),"path":str(c.root/"Secret")})["targetRef"]
   for name in ["Order-A","Order-B"]:
-   child=api("/api/note/create",{"root":str(c.root),"parent":str(c.root/"Shared"),"name":name,"operationId":uid()})
+   child=created_document(api("/api/note/create",{"root":str(c.root),"parent":str(c.root/"Shared"),"name":name,"operationId":uid()}))
    order_refs[name]=api("/api/navigation/capture",{"root":str(c.root),"path":str(Path(child["path"]).parent)})["targetRef"]
   c.config["directories"]={"order-parent":{"path":"Shared","title":"Author order parent","reference":order_refs["parent"]},"hidden-order-parent":{"path":"Secret","title":"Hidden order parent","reference":order_refs["hidden"]}}
  c.local(provision_order)

@@ -10,6 +10,7 @@ Run: python scripts/test_sync_compound.py <candidate.exe> [exact_test_name ...]
 Unknown selections fail before either program starts. Every positive prepare
 must return 200; an older candidate's syncStructureRequired is never a pass.
 """
+from _creation_result import created_document
 import base64
 import ctypes
 from ctypes import wintypes
@@ -131,8 +132,8 @@ class SyncCompound(unittest.TestCase):
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.docs = {}
         for name in ['Left', 'Right', 'Container', 'Still']:
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra),
-                            parent=str(self.ra), name=name, operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra),
+                            parent=str(self.ra), name=name, operationId=uid()))
             self.docs[name] = doc
             self.save(self.a, self.ra, Path(name) / f'{name}.typ', f'初始 {name} 中文😀')
         self.keys = {name: {'kind': 'node', 'id': doc['nodeId']}

@@ -2,6 +2,8 @@
 //! owned-resource import. This adapter never writes a note or invents a resource
 //! identity from a filename; actor records retain the original operation.
 use super::{ApiResult, AppState, Location, core_call, location};
+#[cfg(test)]
+use crate::CoreTestFixture;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
@@ -451,7 +453,9 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let root = temp.path().join("library");
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "module owner").unwrap();
+        let note = core
+            .create_note_fixture(&root, &root, "module owner")
+            .unwrap();
         let loc = Location {
             root,
             path: note.path.into(),
@@ -479,7 +483,7 @@ mod tests {
         changed.module.source.push_str("\n#panic(\"changed\")");
         assert!(prepare_original(&mut core, &loc, &changed).is_err());
         let other = core
-            .create_note(&loc.root, &loc.root, "other owner")
+            .create_note_fixture(&loc.root, &loc.root, "other owner")
             .unwrap();
         let other_loc = Location {
             root: loc.root.clone(),
@@ -582,7 +586,9 @@ mod tests {
             std::fs::read(loc.path.parent().unwrap().join(MODULE_NAME)).unwrap(),
             b"different original"
         );
-        let other = core.create_note(&loc.root, &loc.root, "other").unwrap();
+        let other = core
+            .create_note_fixture(&loc.root, &loc.root, "other")
+            .unwrap();
         let other = Location {
             root: loc.root.clone(),
             path: other.path.into(),

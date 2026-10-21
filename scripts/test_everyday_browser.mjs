@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Full stage-one tasks against the supplied candidate, in owned headless Chrome.
 // Synthetic text/composition is not real system IME acceptance.
 import assert from 'node:assert/strict';
@@ -34,11 +35,11 @@ const pass=message=>{result.cases.push(message);console.log('PASS',message);};
 try{
   await start();await api('/api/library/create',{path:root,operationId:randomUUID()});
   const schema=await api('/api/data/schema',{root}),schemaOp=randomUUID(),plan=await api('/api/data/schema/prepare',{root,source:schema.source,beforeSource:schema.source,beforeRevision:schema.revision,operationId:schemaOp});await api('/api/data/schema/install',{operationId:schemaOp,planId:plan.planId});
-  const a=await api('/api/note/create',{root,parent:root,name:'TEST-A',operationId:randomUUID()}),b=await api('/api/note/create',{root,parent:root,name:'TEST-B',operationId:randomUUID()});
+  const a=createdDocument(await api('/api/note/create',{root,parent:root,name:'TEST-A',operationId:randomUUID()})),b=createdDocument(await api('/api/note/create',{root,parent:root,name:'TEST-B',operationId:randomUUID()}));
   const originalA=a.source+'\n\n= 甲标题\n\n甲正文😀\n\n尾段甲\n\n'+Array.from({length:80},(_,index)=>'TEST 滚动样本 '+index).join('\n\n'),originalB=b.source+'\n\n= 乙标题\n\n乙正文';
   for(const[doc,source]of[[a,originalA],[b,originalB]])await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source,operationId:randomUUID()});
-  await api('/api/note/create',{root,parent:path.dirname(a.path),name:'TEST-child',operationId:randomUUID()});
-  const budgetDocs=[];for(let index=1;index<=15;index++){const name='TEST-budget-'+String(index).padStart(2,'0');budgetDocs.push(await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()}));}
+  createdDocument(await api('/api/note/create',{root,parent:path.dirname(a.path),name:'TEST-child',operationId:randomUUID()}));
+  const budgetDocs=[];for(let index=1;index<=15;index++){const name='TEST-budget-'+String(index).padStart(2,'0');budgetDocs.push(createdDocument(await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()})));}
   await stop();await start(['--open',a.path,'--root',root]);
   browser=await chromium.launch({headless:true,...(process.env.WEFTEXT_BROWSER_EXECUTABLE?{executablePath:process.env.WEFTEXT_BROWSER_EXECUTABLE}:{channel:'chrome'})});result.browser=browser.version();page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(30000);observe(page);
   await page.goto(await frontend()+'/#token='+token);await click('源码');await expectSource(originalA);

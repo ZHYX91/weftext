@@ -149,7 +149,7 @@ fn sync_received_file_reads_retained_ancestor_and_trash_without_current_fallback
     let root = temp.path().join("library");
     let mut a = Core::new(temp.path().join("a-private")).unwrap();
     a.create_library(&root).unwrap();
-    let note = a.create_note(&root, &root, "Note").unwrap();
+    let note = a.create_note_fixture(&root, &root, "Note").unwrap();
     let object = ObjectKey::Node(note.node_id.unwrap());
     let identity = a.enable_sync(&root, &fresh()).unwrap().identity;
     let original =
@@ -227,7 +227,7 @@ fn sync_received_file_staged_missing_blob_survives_restart_and_exact_hydration()
     let root = temp.path().join("library");
     let mut a = Core::new(temp.path().join("a-private")).unwrap();
     a.create_library(&root).unwrap();
-    let note = a.create_note(&root, &root, "Note").unwrap();
+    let note = a.create_note_fixture(&root, &root, "Note").unwrap();
     let object = ObjectKey::Node(note.node_id.unwrap());
     let identity = a.enable_sync(&root, &fresh()).unwrap().identity;
     let bundle = a.export_sync_history(&identity).unwrap();

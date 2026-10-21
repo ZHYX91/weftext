@@ -118,7 +118,7 @@ impl Fixture {
         for relative in ["Parent", "Parent/Child", "Other", "Live"] {
             let relative = PathBuf::from(relative);
             let note = a
-                .create_note(
+                .create_note_fixture(
                     &ar,
                     ar.join(relative.parent().unwrap()),
                     relative.file_name().unwrap().to_str().unwrap(),

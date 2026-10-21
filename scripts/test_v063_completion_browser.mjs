@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Actual final-candidate daily task chain. Every product view comes from the
 // supplied executable's embedded frontend and actual HTTP/Core fixture data.
 // Headless keyboard/text events are not OS IME or reference-host acceptance.
@@ -60,7 +61,7 @@ async function save(doc, source) {
   return api('/api/open', { root, path: doc.path });
 }
 async function note(name, container = root, body = '') {
-  const doc = await api('/api/note/create', { root, parent: container, name, operationId: randomUUID() });
+  const doc = createdDocument(await api('/api/note/create', { root, parent: container, name, operationId: randomUUID() }));
   return save(doc, doc.source + '\n\n' + body);
 }
 // Same small owned PNG geometry as the existing product HTTP fixtures.

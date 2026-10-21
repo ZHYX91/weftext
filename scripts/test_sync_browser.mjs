@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Headless, owned fixtures, two independent actual programs. No desktop input.
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
@@ -37,7 +38,7 @@ try {
   const ra = path.join(out, 'library-a'), rb = path.join(out, 'library-b'), da = path.join(out, 'state-a'), db = path.join(out, 'state-b'), exchange = path.join(out, 'exchange');
   let a = await start(['--no-browser', '--data-dir', da]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
-  const note = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() });
+  const note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
   await stop(a.child);
   a = await start(['--no-browser', '--data-dir', da, '--open', note.path, '--root', ra]);
   const b = await start(['--no-browser', '--data-dir', db]);

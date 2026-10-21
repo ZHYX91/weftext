@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
 // through WEFTEXT_PLAYWRIGHT_MODULE, plus EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
@@ -32,7 +33,7 @@ try{
  const data=path.join(out,'state'), root=path.join(out,'library');
  local=await start(['--no-browser','--data-dir',data]);
  await api('/api/library/create',{path:root,operationId:randomUUID()});
- const note=await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()});
+ const note=createdDocument(await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()}));
  const initial=note.source+'\n中文远端测试😀\n';
  await api('/api/save',{sessionId:note.sessionId,baseId:note.baseId,source:initial,operationId:randomUUID()});
  await stop(local);local=null;

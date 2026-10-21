@@ -22,7 +22,7 @@ impl Fixture {
         let br = temp.path().join("b-library");
         let mut a = Core::new(temp.path().join("a-private")).unwrap();
         a.create_library(&ar).unwrap();
-        let note = a.create_note(&ar, &ar, "Note").unwrap();
+        let note = a.create_note_fixture(&ar, &ar, "Note").unwrap();
         let imported = a
             .prepare_import_resource(
                 &ar,

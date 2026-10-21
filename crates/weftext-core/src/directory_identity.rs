@@ -60,6 +60,10 @@ struct DirectoryMarker {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DirectoryReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_id: Option<String>,
     root: String,
     path: String,
     workspace_id: String,
@@ -71,6 +75,10 @@ struct DirectoryReservation {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TagReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_id: Option<String>,
     root: String,
     workspace_id: String,
     tag_id: String,
@@ -288,6 +296,66 @@ fn marker_claim(path: &Path) -> Result<Option<(DirectoryMarker, FileIdentity)>> 
 }
 
 impl Core {
+    pub(crate) fn validate_navigation_reservation(
+        &self,
+        id: &str,
+        suffix: &str,
+        bytes: &[u8],
+    ) -> Result<hosted::ActorLibraryBinding> {
+        let invalid = || {
+            CoreError::new(
+                "resolutionUnavailable",
+                "Original navigation reservation cannot be qualified to this attempt and library",
+            )
+        };
+        let (library, original, root, workspace, ids, fingerprint) = match suffix {
+            "tag-reservation" => {
+                let r: TagReservation = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+                let mut ids = r.additional_tag_ids;
+                ids.push(r.tag_id);
+                (
+                    r.library,
+                    r.operation_id,
+                    r.root,
+                    r.workspace_id,
+                    ids,
+                    r.fingerprint,
+                )
+            }
+            "directory-reservation" => {
+                let r: DirectoryReservation =
+                    serde_json::from_slice(bytes).map_err(|_| invalid())?;
+                if !Path::new(&r.path).starts_with(&r.root) {
+                    return Err(invalid());
+                }
+                (
+                    r.library,
+                    r.operation_id,
+                    r.root,
+                    r.workspace_id,
+                    vec![r.directory_id],
+                    r.fingerprint,
+                )
+            }
+            _ => return Err(invalid()),
+        };
+        let binding = library.ok_or_else(invalid)?;
+        let original_root = self.validate_original_reservation_library(&binding)?;
+        if original.as_deref() != Some(id)
+            || !root.eq_ignore_ascii_case(&original_root)
+            || binding.workspace_id.as_deref() != Some(&workspace)
+            || ids.len() > 5000
+            || fingerprint.len() != 64
+            || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(invalid());
+        }
+        for id in ids {
+            valid_operation_id(&id)?;
+        }
+        Ok(binding)
+    }
+
     /// Copy consumes the admitted source identity, while the frozen copy plan
     /// allocates a fresh ID. Its retained directory creation handle supplies the
     /// physical birth evidence in the same original operation journal.
@@ -1093,6 +1161,8 @@ impl Core {
             old
         } else {
             let new = DirectoryReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(&root),
                 path: display(&path),
                 workspace_id: workspace.workspace_id,
@@ -1404,6 +1474,8 @@ impl Core {
             old
         } else {
             let new = TagReservation {
+                library: self.draft_library_for_root(root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(root),
                 workspace_id: workspace.clone(),
                 tag_id: fresh(),
@@ -1615,7 +1687,7 @@ impl Core {
     pub(crate) fn validate_tag_plan_changes(&self, plan: &journal::Plan) -> Result<()> {
         // A retained terminal receipt cannot acquire another filesystem effect.
         // Historical v1 receipts remain readable rather than being rewritten.
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
             return Ok(());
         }
         let transaction = plan.transaction.as_ref().ok_or_else(|| {
@@ -1759,6 +1831,8 @@ impl Core {
             old
         } else {
             let new = TagReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(&root),
                 workspace_id: workspace.workspace_id,
                 tag_id: fresh(),
@@ -2263,7 +2337,7 @@ mod tests {
     #[test]
     fn node_directory_capture_uses_existing_node_ref() {
         let (_temp, mut core, root, _) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let captured = core
             .capture_navigation_target(&root, root.join("Note"))
             .unwrap();
@@ -2282,7 +2356,7 @@ mod tests {
     #[test]
     fn copied_node_containers_receive_fresh_directory_births() {
         let (_temp, mut core, root, _) = fixture();
-        core.create_note(&root, &root, "Original").unwrap();
+        core.create_note_fixture(&root, &root, "Original").unwrap();
         let child = root.join("Original/Container");
         fs::create_dir(&child).unwrap();
         let admitted = core
@@ -2353,7 +2427,7 @@ mod tests {
     #[test]
     fn tag_rename_and_equal_names_preserve_distinct_refs_and_sources() {
         let (_temp, mut core, root, _) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let basis = core.read_tag_registry(&root).unwrap();
         let first = core
             .prepare_create_tag(&root, "Research", &basis.base_id, &fresh())
@@ -2696,7 +2770,7 @@ mod tests {
             cancelled
         );
         let note = core
-            .create_note(&root, &root, "CannotReuseCancelledId")
+            .create_note_fixture(&root, &root, "CannotReuseCancelledId")
             .unwrap();
         assert_eq!(
             core.save(SaveRequest {
@@ -2727,7 +2801,7 @@ mod tests {
     #[test]
     fn tag_creation_and_first_assignment_share_original_plan_and_recover_after_restart() {
         let (_temp, mut core, root, state) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         core.save(SaveRequest {
             session_id: note.session_id.clone(),
             base_id: note.base_id.clone(),
@@ -2787,7 +2861,9 @@ mod tests {
     #[test]
     fn first_assignment_qualifies_the_original_local_session_and_rejects_changed_bytes() {
         let (_temp, mut core, root, _state) = fixture();
-        let note = core.create_note(&root, &root, "SessionNote").unwrap();
+        let note = core
+            .create_note_fixture(&root, &root, "SessionNote")
+            .unwrap();
         let source = note
             .source
             .replace("types: ()", "types: (\"task\",), status: \"open\"");
@@ -2801,7 +2877,7 @@ mod tests {
             .unwrap();
         let assignment = TagAssignment {
             path: note.path.clone(),
-            base_id: saved.base_id,
+            base_id: saved.receipt.base_id,
             field_id: "core/tags".into(),
         };
         let tags = core.read_tag_registry(&root).unwrap();
@@ -2839,7 +2915,9 @@ mod tests {
                 .unwrap()
                 .contains(&prepared.target_ref)
         );
-        let other = core.create_note(&root, &root, "ChangedNote").unwrap();
+        let other = core
+            .create_note_fixture(&root, &root, "ChangedNote")
+            .unwrap();
         let tags = core.read_tag_registry(&root).unwrap();
         let registry = fs::read(root.join(TAG_REGISTRY)).unwrap();
         fs::write(&other.path, format!("{}\nexternal change\n", other.source)).unwrap();

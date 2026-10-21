@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply EXE, a new owned evidence directory,
 // WEFTEXT_PLAYWRIGHT_MODULE when necessary, and an installed Python 3 runtime.
 import { createRequire } from 'node:module';
@@ -74,7 +75,7 @@ try {
   const installed = JSON.parse(schema.source); installed.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const plan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(installed, null, 2), beforeSource: schema.source, beforeRevision: schema.revision, operationId });
   await api('/api/data/schema/install', { operationId, planId: plan.planId });
-  const note = await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() });
+  const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() }));
   const initial = note.source.replace('types: ()', 'types: ("task",), status: "open"') + '\n共同正文中文😀\n';
   await api('/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: initial, operationId: randomUUID() }); await stop(local); local = null;
   const config = { deployment: 'office-browser', bind: '127.0.0.1:0', root, adminTokenSha256: sha(token.admin), files: {

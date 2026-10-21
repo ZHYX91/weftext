@@ -463,3 +463,18 @@ live、Trash 及混合调用按原实际生命周期快照与所选 after 判定
 Server 的独立 syncOwner capability 仅授权明确 syncIdentity 的完整不可变记录传输，不继承文档或字段权，不授予原始路径、private state 或作者树安装。持久策略绑定配对，actor/epoch/票据与每块交付/接收在同一服务锁下重验；撤权清缓存、重新授权不复活旧票据。服务端已有同一物理副本的用户保存沿用原 Core outbox，relay 不因接收 manifest 改 current。上传按完整记录摘要幂等；半条记录是有界可丢内存缓存，完整记录由原 Core immutable store 保留，不能把传输进度当作者 receipt。下载冻结记录字节，不在续传时取 latest。
 
 本地网络客户端只在准确配对与有限记录目录下复制，网络等待不持有 Core writer 锁。每条完成记录再经 Core 校验，部分或重启传输保留已收完整记录，安装继续使用已有 Plan 资格与恢复机制。此通道信任同所有者设备/账户；TLS、权限和摘要分别处理传输机密、披露资格和完整性，不构成设备签名/恶意 provider 协议。
+
+
+## 原提交事实与结果交付（当前开发合同）
+
+新建普通笔记、快速记录与周期笔记共用现有 `NewNode`／`CreateTree`，没有另一条直接文件写入算法。创建接口返回原 `OperationReceipt`，可选 `document` 与 `documentError` 单独报告打开和会话登记；已有回执不会因之后打开、刷新或下载失败变成无效果。快速记录／周期请求先核原号与完整作者输入，已存在的计划不按当前 schema 重解释。
+
+普通保存的原 Plan 仍只保存 `Receipt`。瞬时 `SaveOutcome` 的 `recoveryIssue` 报告提交后个人 Draft 更新失败，源码提交与会话的新依据仍成立。`/api/operations/status` 从原 Plan／commit 读取保存事实，不依赖旧会话；其可选新文档有自己的实际 base。客户端只在原编辑器会话、真实 owner 和已提交源码均匹配时接纳新会话，保留等待期间的新输入、选区与 Undo。当前磁盘已是另一版时保原回执与交付待定，不能把原回执 base 与另一版的会话混用。Query 定义和历史恢复的状态也先保提交事实，再独立报告结果读取失败。
+
+普通错误码和单次 missing 不证明无效果。客户端冻结原请求；未知结果先查原号，再经 `/api/operations/settle` 在同一原 journal 写入持久终结后才可释放编号。新全局查询／终结限本地所有者；托管内部事实读取继续由原 actor、resource、library 校验约束。操作编号统一为小写带连字符 UUID，拒绝别名，不改写原件。resolution 使用有界、严格字段和原号／文件名校验；解析或读盘错误保留为错误，不能解释成未解决或已取消。已加载 Core 中确定已提交的原事实优先于附属交付元数据。
+
+无 Plan 的决议只能是 `cancelPrepared`。裸终结标记属于设备本身，不进入某个库的作者或同步集合。已有非安装预约须带原号及原库物理身份，按原 typed 记录核对；与预约相连的取消及预约按实际归属共同备份，外库只读有界归属首部。新取消不再制造 `cancelLibraryCreation` Plan；保留的旧取消仅按严格无作者参与者的形状读取。任何未知 suffix、孤立 install／commit、损坏决议或无法证明归属的预约都保留并拒绝宣布无效果；备份不忽略这些证据。实现与定向回归不建立整版 0.7、多端、真实 IME 或断电验收。
+
+终结请求仅含 `operationId`、`requestKind` 和严格 64 位十六进制 `wireDigest`。客户端在首次异步等待前同步固定原 `JSON.stringify` 字节，再对这些字节计算 SHA-256；终结不重采后续输入，也不要求服务端再次解析原作者 JSON，因此被拒绝的孤立 UTF-16 代理项也能安全结束原号。摘要是同一决议的请求关联元数据，不证明未提交；后端仍先核原 Plan／commit、命名空间证据与所有者。历史恢复沿同一冻结边界，后续 CaptureDraft 直接复用此合同。
+
+本地历史恢复的 restore 与 status 接口统一返回原操作状态信封：`operationId/status/receipt` 加可选 `result/resultError`。完整结果直接可消费；提交已确定但准确结果暂不可读时，仍保原回执、编号和 committed 状态，不能退成未知或再发作者恢复。missing 查询与终结之间可能已有提交：通用 settle 的 flat 保存事实先保留，再从 history/status 取得历史结果，不能把 flat 回执当作历史结果。不同作者输入的同号请求仍返回 operationConflict。

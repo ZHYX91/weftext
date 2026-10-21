@@ -21,8 +21,11 @@ impl Fixture {
         let foreign = temp.path().join("L2");
         core.create_library(&root).unwrap();
         core.create_library(&foreign).unwrap();
-        let note = core.create_note(&root, &root, "A").unwrap().path;
-        let foreign_note = core.create_note(&foreign, &foreign, "B").unwrap().path;
+        let note = core.create_note_fixture(&root, &root, "A").unwrap().path;
+        let foreign_note = core
+            .create_note_fixture(&foreign, &foreign, "B")
+            .unwrap()
+            .path;
         Self {
             temp,
             core,
@@ -437,4 +440,167 @@ fn owner_backup_case_alias_private_root_is_never_silently_omitted() {
     assert_eq!(error.code, "privateEvidence");
     assert!(f.data.join("Actors").is_dir());
     assert!(!f.temp.path().join("backup").exists());
+}
+
+#[test]
+fn owner_backup_excludes_device_fence_but_retains_its_exact_routing_dependency() {
+    let mut f = Fixture::new();
+    let id = fresh();
+    f.core
+        .cancel_navigation_attempt(&f.root, &id, None)
+        .unwrap();
+    let p = f.prepare("with-fence");
+    f.core
+        .execute_operation(&p.operation_id, &p.plan_id)
+        .unwrap();
+    assert!(
+        !f.temp
+            .path()
+            .join("with-fence/private/journal")
+            .join(format!("{id}.resolution.json"))
+            .exists()
+    );
+    assert!(f.core.journal_path(&id, "resolution").exists());
+    let p = f.prepare("fence-changed");
+    let mut decision: serde_json::Value =
+        serde_json::from_slice(&fs::read(f.core.journal_path(&id, "resolution")).unwrap()).unwrap();
+    decision["message"] = serde_json::json!("changed original device fact");
+    fs::write(
+        f.core.journal_path(&id, "resolution"),
+        serde_json::to_vec(&decision).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        f.core
+            .execute_operation(&p.operation_id, &p.plan_id)
+            .unwrap_err()
+            .code,
+        "scopeChanged"
+    );
+    assert!(!f.temp.path().join("fence-changed").exists());
+}
+#[test]
+fn owner_backup_never_ignores_orphan_or_malformed_selected_resolution() {
+    let mut f = Fixture::new();
+    let id = fresh();
+    fs::write(
+        f.core.journal_path(&id, "commit"),
+        b"unknown retained commit",
+    )
+    .unwrap();
+    let error = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.root),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&f.temp.path().join("blocked")),
+            },
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "resolutionUnavailable");
+    assert!(!f.temp.path().join("blocked").exists());
+    let mut f = Fixture::new();
+    let id = f
+        .core
+        .operations
+        .values()
+        .find(|plan| plan.kind == "createLibrary" && Path::new(&plan.path) == f.root)
+        .unwrap()
+        .operation_id
+        .clone();
+    fs::write(f.core.journal_path(&id, "resolution"), b"not a decision").unwrap();
+    let error = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.root),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&f.temp.path().join("blocked")),
+            },
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "resolutionUnavailable");
+}
+
+#[test]
+fn owner_backup_registered_plan_unknown_leaf_is_never_a_formal_backup_member() {
+    let mut f = Fixture::new();
+    let id = f
+        .core
+        .operations
+        .values()
+        .find(|p| p.kind == "createLibrary" && Path::new(&p.path) == f.root)
+        .unwrap()
+        .operation_id
+        .clone();
+    fs::write(
+        f.core.journal_path(&id, "unknown"),
+        b"retained unknown evidence",
+    )
+    .unwrap();
+    let error = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.root),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&f.temp.path().join("blocked")),
+            },
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "privateEvidence");
+    assert!(!f.temp.path().join("blocked").exists());
+}
+#[test]
+fn owner_backup_routes_typed_preplan_reservation_and_its_decision_to_only_its_original_library() {
+    let mut f = Fixture::new();
+    let doc = f.core.open(&f.note, Some(f.root.clone())).unwrap();
+    let id = fresh();
+    let snapshot = f
+        .core
+        .read_snapshot(&f.root, std::slice::from_ref(&doc.path))
+        .unwrap()
+        .files
+        .remove(0);
+    f.core
+        .reserve_definition_key(&f.root, &doc.path, &snapshot.base_id, &id)
+        .unwrap();
+    f.core
+        .settle_local_attempt(&id, "save", &hash(b"rejected definition"))
+        .unwrap();
+    let p = f.prepare("scoped-cancelled-reservation");
+    f.core
+        .execute_operation(&p.operation_id, &p.plan_id)
+        .unwrap();
+    let journal = f
+        .temp
+        .path()
+        .join("scoped-cancelled-reservation/private/journal");
+    assert!(
+        journal
+            .join(format!("{id}.definition-reservation.json"))
+            .exists()
+    );
+    assert!(journal.join(format!("{id}.resolution.json")).exists());
+    let p = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.foreign),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&f.temp.path().join("other-library")),
+            },
+        })
+        .unwrap();
+    f.core
+        .execute_operation(&p.operation_id, &p.plan_id)
+        .unwrap();
+    assert!(
+        !f.temp
+            .path()
+            .join("other-library/private/journal")
+            .join(format!("{id}.definition-reservation.json"))
+            .exists()
+    );
 }

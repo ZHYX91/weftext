@@ -102,7 +102,7 @@ fn pending_absent_child_refuses(recovery: bool) {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Original").unwrap();
+    core.create_note_fixture(&root, &root, "Original").unwrap();
     let original_source = fs::read(root.join("Original/Original.typ")).unwrap();
     let first = core
         .prepare_operation(OperationRequest {
@@ -180,7 +180,7 @@ fn pending_copy_readers_can_share_original_schema_and_source_without_a_write_ove
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Original").unwrap();
+    core.create_note_fixture(&root, &root, "Original").unwrap();
     let schema = core
         .prepare_config_save(
             &root,

@@ -1,6 +1,8 @@
 //! Exact history/source deliveries and actor-owned original restores. A restored
 //! source is an ordinary Core save; it never rewinds history or replaces Drafts.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use weftext_core::{
     ActorHistoryRestoreStatus, HistoryComparison, HistoryRead, HistoryRestoreRequest,
     HistoryRestoreResult, HistoryTimeline, QualifiedNode,
@@ -420,7 +422,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("state")).unwrap();
     core.create_library(&root).unwrap();
-    let first = core.create_note(&root, &root, "Shared").unwrap();
+    let first = core.create_note_fixture(&root, &root, "Shared").unwrap();
     let original = first.source.clone();
     let version = core
         .list_history(&first.session_id)
@@ -435,7 +437,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
     })
     .unwrap();
     core.close_session(&first.session_id).unwrap();
-    let target = core.create_note(&root, &root, "Target").unwrap();
+    let target = core.create_note_fixture(&root, &root, "Target").unwrap();
     core.close_session(&target.session_id).unwrap();
     let full = Rights {
         read: true,

@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Three actual programs and headless browser controls. No desktop interaction.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -36,8 +37,8 @@ try {
   const da = path.join(out, 'state-a'), db = path.join(out, 'state-b');
   let a = await start(['--no-browser', '--data-dir', da]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
-  const note = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() });
-  await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Other', operationId: randomUUID() });
+  const note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
+  createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Other', operationId: randomUUID() }));
   await stop(a.child); a = await start(['--no-browser', '--data-dir', da, '--open', note.path, '--root', ra]);
   const b = await start(['--no-browser', '--data-dir', db]);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();

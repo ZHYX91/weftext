@@ -58,6 +58,19 @@ export class DocumentSession {
   }
 }
 
+/** Install only the same original owner's verified saved bytes. A fresh
+ * Session has its own actual base; the original receipt base cannot be reused. */
+export function rebindCommittedSave(session: DocumentSession, frozen: { sessionId: string; source: string }, document: OpenedDocument): boolean {
+  const prior = session.opened;
+  const sameOwner = prior.nodeId && prior.workspaceId
+    ? document.nodeId === prior.nodeId && document.workspaceId === prior.workspaceId
+    : !document.nodeId && !document.workspaceId && document.path.replaceAll("\\", "/").toLowerCase() === session.path.replaceAll("\\", "/").toLowerCase();
+  if (prior.sessionId !== frozen.sessionId || !sameOwner || document.source !== frozen.source || document.recoveredDraftConflict) return false;
+  session.opened = document;
+  session.acknowledgeSave(frozen.source, document.baseId, document.path);
+  return true;
+}
+
 /** Conservative native literal escaping; source-mode paste remains exact. */
 export function encodeLiteral(text: string): string {
   return text.replace(/[\\#\[\]{}$*_<>@`=+\-/:~"']/g, "\\$&");

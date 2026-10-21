@@ -78,7 +78,7 @@ fn source_annotation_mixed_restart_resumes_only_original_remaining_member() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
     fs::write(&note.path, &after_source).unwrap();
     let source_modified = fs::metadata(&note.path).unwrap().modified().unwrap();
@@ -151,7 +151,7 @@ fn mixed_restart_creates_only_original_absent_sidecar_and_records_real_object() 
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, &after_source).unwrap();
     drop(core);
@@ -185,7 +185,7 @@ fn third_bytes_or_same_bytes_replacement_never_unblock_mixed_pair() {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
         fs::write(&note.path, &after_source).unwrap();
         if replace {
@@ -225,7 +225,7 @@ fn binary_members_report_exact_base64_and_refuse_unowned_after_image() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, after_source).unwrap();
     fs::write(&sidecar, [0xff, 0, 0x80]).unwrap();
@@ -248,7 +248,7 @@ fn restart_before_ui_rebind_preserves_draft_through_rename_move_trash_restore() 
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "unsaved original draft")
         .unwrap();
     operate(
@@ -307,8 +307,10 @@ fn nested_node_and_ordinary_drafts_follow_actual_moved_root_on_restart() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "A").unwrap();
-    let nested = core.create_note(&root, root.join("A"), "B").unwrap();
+    core.create_note_fixture(&root, &root, "A").unwrap();
+    let nested = core
+        .create_note_fixture(&root, root.join("A"), "B")
+        .unwrap();
     core.persist_draft(&nested.session_id, "nested node draft")
         .unwrap();
     fs::write(root.join("A/raw.typ"), "raw base").unwrap();
@@ -364,7 +366,7 @@ fn relocated_competing_drafts_preserve_both_and_require_explicit_resolution() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "first unsaved proposal")
         .unwrap();
     // Reproduce an original pathname record. The new primary must consume this
@@ -552,7 +554,7 @@ fn intermediate_leaf_rename_is_visible_and_namespace_is_never_replayed() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     let preview = core
         .prepare_operation(OperationRequest {
             operation_id: fresh(),
@@ -600,7 +602,7 @@ fn moved_original_files_in_replaced_parent_do_not_qualify_for_resume() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
     fs::write(&note.path, &after_source).unwrap();
     let retained = root.join("RetainedParent");
@@ -653,7 +655,7 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let sidecar = Path::new(&note.path)
         .parent()
         .unwrap()
@@ -696,7 +698,8 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
     )
     .unwrap();
     fs::write(&note.path, &after_source).unwrap();
-    core.create_note(&root, &root, "LaterMember").unwrap();
+    core.create_note_fixture(&root, &root, "LaterMember")
+        .unwrap();
     drop(core);
     let mut restarted = Core::new(&data).unwrap();
     let before_sidecar = fs::read(&sidecar).unwrap();
@@ -719,7 +722,7 @@ fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan_inner(&mut core, &root, &note, true, true);
     fs::write(&note.path, &after_source).unwrap();
     drop(core);
@@ -748,7 +751,7 @@ fn missing_materialized_participant_never_gets_replaced_by_a_new_object() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, after_source).unwrap();
     let guard = ParentGuard::acquire(&sidecar).unwrap();
@@ -792,7 +795,7 @@ fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     let preview = core
         .prepare_operation(OperationRequest {
             operation_id: fresh(),
@@ -856,9 +859,9 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let dependency = core
-        .create_note(&root, &root, "ReadonlyDependency")
+        .create_note_fixture(&root, &root, "ReadonlyDependency")
         .unwrap();
     let sidecar = Path::new(&note.path)
         .parent()
@@ -952,7 +955,7 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "bound original proposal")
         .unwrap();
     let destination = root.join("Moved/Moved.typ");

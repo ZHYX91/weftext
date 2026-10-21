@@ -23,8 +23,7 @@ export function uncertainKnowledgeOperation(status: string): boolean {
 /** Draft edits have no server operation to reconcile, even if local persistence fails. */
 export function retainPendingKnowledgePlan(draftOnly: boolean, error: unknown): boolean {
   if (draftOnly) return false;
-  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-  return !code || uncertainKnowledgeOperation(code);
+  return true;
 }
 
 /** Same-span targets merge; nested and crossing spans survive. No overlap graph. */

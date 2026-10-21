@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Embedded-product source appearance regression. All libraries/processes belong
 // to this run. Browser text insertion is not real Windows/OS IME acceptance.
 // Usage: node scripts/test_source_style_browser.mjs EXE NEW_OUT [--hosted]
@@ -173,7 +174,7 @@ async function inFlightModes(hosted) {
 }
 try {
   server = await start(); await api('/api/library/create', { path: root, operationId: randomUUID() });
-  doc = await api('/api/note/create', { root, parent: root, name: 'SourceStyle', operationId: randomUUID() });
+  doc = createdDocument(await api('/api/note/create', { root, parent: root, name: 'SourceStyle', operationId: randomUUID() }));
   original = doc.source + '\n= 稳定标题\n\n正文输入区：\n\n尾部保留。\n';
   await api('/api/save', { sessionId: doc.sessionId, baseId: doc.baseId, source: original, operationId: randomUUID() }); await stop();
   server = await start(['--open', doc.path, '--root', root]);

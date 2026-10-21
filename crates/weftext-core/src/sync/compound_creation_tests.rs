@@ -5,13 +5,13 @@ fn with_new_nodes_in_moving_tree() -> (Pair, String, String) {
     let mut pair = fixture_with_child(false);
     let child = pair
         .a
-        .create_note(&pair.ar, pair.ar.join("新名"), "NewChild")
+        .create_note_fixture(&pair.ar, pair.ar.join("新名"), "NewChild")
         .unwrap()
         .node_id
         .unwrap();
     let nested = pair
         .a
-        .create_note(&pair.ar, pair.ar.join("新名/NewChild"), "Nested")
+        .create_note_fixture(&pair.ar, pair.ar.join("新名/NewChild"), "Nested")
         .unwrap()
         .node_id
         .unwrap();
@@ -496,7 +496,7 @@ fn with_new_parent() -> (Pair, String) {
     let mut pair = fixture_with_child(false);
     let parent = pair
         .a
-        .create_note(&pair.ar, &pair.ar, "NewParent")
+        .create_note_fixture(&pair.ar, &pair.ar, "NewParent")
         .unwrap()
         .node_id
         .unwrap();
@@ -984,7 +984,14 @@ fn assert_independent_unicode_case_targets_refuse(create_new: bool) {
     a.create_library(&ar).unwrap();
     let mut keys = ["Left", "Right"]
         .into_iter()
-        .map(|name| ObjectKey::Node(a.create_note(&ar, &ar, name).unwrap().node_id.unwrap()))
+        .map(|name| {
+            ObjectKey::Node(
+                a.create_note_fixture(&ar, &ar, name)
+                    .unwrap()
+                    .node_id
+                    .unwrap(),
+            )
+        })
         .collect::<BTreeSet<_>>();
     let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;
     let bundle = a.export_sync_objects(&identity, &keys).unwrap();
@@ -1012,7 +1019,10 @@ fn assert_independent_unicode_case_targets_refuse(create_new: bool) {
     );
     if create_new {
         keys.insert(ObjectKey::Node(
-            b.create_note(&br, &br, "ä").unwrap().node_id.unwrap(),
+            b.create_note_fixture(&br, &br, "ä")
+                .unwrap()
+                .node_id
+                .unwrap(),
         ));
     } else {
         run(
@@ -1162,7 +1172,8 @@ fn native_resource_parent() -> (Pair, String, String) {
     let mut a = Core::new(temp.path().join("a-private")).unwrap();
     let origin = temp.path().join("native-origin");
     a.create_library(&origin).unwrap();
-    a.create_note(&origin, &origin, "NewParent").unwrap();
+    a.create_note_fixture(&origin, &origin, "NewParent")
+        .unwrap();
     let imported = a
         .prepare_import_resource(
             &origin,
@@ -1227,7 +1238,10 @@ fn native_resource_parent() -> (Pair, String, String) {
     let mut keys = BTreeSet::new();
     for name in ["Left", "Right", "Container", "Still"] {
         keys.insert(ObjectKey::Node(
-            a.create_note(&ar, &ar, name).unwrap().node_id.unwrap(),
+            a.create_note_fixture(&ar, &ar, name)
+                .unwrap()
+                .node_id
+                .unwrap(),
         ));
     }
     let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;

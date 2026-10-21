@@ -6,6 +6,7 @@ workspace cleanup. No caller-supplied library or private data directory is used.
 This checks server behavior; IME, accessibility and shared client Undo require
 the separate client acceptance and are not established by these tests.
 """
+from _creation_result import created_document
 import argparse
 import base64
 import ctypes
@@ -151,8 +152,8 @@ class LocalFeatures(unittest.TestCase):
         return root, library
 
     def note(self, root, name, source=None, parent=None):
-        doc = self.api('/api/note/create', {'root': str(root), 'parent': str(parent or root),
-                                          'name': name, 'operationId': uid()})
+        doc = created_document(self.api('/api/note/create', {'root': str(root), 'parent': str(parent or root),
+                                          'name': name, 'operationId': uid()}))
         if source is not None:
             metadata = doc['source'].split('\n', 1)[0]
             doc = self.saved(doc, metadata + '\n\n' + source, root)
@@ -447,7 +448,7 @@ class LocalFeatures(unittest.TestCase):
     def capture(self, root, name, types, fields, body='真实正文🌿', title=None, operation_id=None):
         request = {'root': str(root), 'parent': str(root), 'name': name, 'types': types,
                    'fields': fields, 'body': body, 'title': title, 'operationId': operation_id or uid()}
-        return self.api('/api/data/capture', request), request
+        return created_document(self.api('/api/data/capture', request)), request
 
     def test_06_schema_capture_fields_query_exact_values_and_same_item(self):
         root, _ = self.library()
@@ -456,7 +457,7 @@ class LocalFeatures(unittest.TestCase):
         due = {'kind': 'date', 'value': '2026-10-13'}
         doc, request = self.capture(root, '精确任务', ['task'],
                                     {'status': text('open'), 'amount': amount, 'due': due})
-        retry = self.api('/api/data/capture', request)
+        retry = created_document(self.api('/api/data/capture', request))
         self.assertEqual(retry['nodeId'], doc['nodeId'])
         self.assertEqual(retry['path'], doc['path'])
         self.assertIn('真实正文🌿', Path(doc['path']).read_text(encoding='utf-8'))

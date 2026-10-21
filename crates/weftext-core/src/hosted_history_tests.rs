@@ -22,7 +22,7 @@ impl Fixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let created = core.create_note(&root, &root, "Note").unwrap();
+        let created = core.create_note_fixture(&root, &root, "Note").unwrap();
         let path = PathBuf::from(created.path);
         let mut doc = core
             .with_actor(ALICE, |c| c.open(&path, Some(root.clone())))
@@ -364,7 +364,10 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
 #[test]
 fn hosted_history_explicit_owner_result_and_navigation_do_not_scan_unconfigured_sources() {
     let mut f = Fixture::new();
-    let hidden = f.core.create_note(&f.root, &f.root, "Unreadable").unwrap();
+    let hidden = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Unreadable")
+        .unwrap();
     let duplicate = f.root.join("UnconfiguredCopy");
     fs::create_dir(&duplicate).unwrap();
     fs::write(duplicate.join("UnconfiguredCopy.typ"), &f.original_source).unwrap();
@@ -395,7 +398,10 @@ fn hosted_history_current_qualification_and_result_refuse_replacement_and_remapp
     let operation = fresh();
     let request = f.request(&operation, None);
     f.restore(request.clone()).unwrap();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c.actor_history_restore_result_at(
@@ -504,7 +510,10 @@ fn hosted_history_unknown_version_and_wrong_configured_path_have_no_source_effec
     let mut request = f.request(&fresh(), None);
     request.version_id = fresh();
     assert_eq!(f.restore(request).unwrap_err().code, "historyUnavailable");
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let request = f.request(&fresh(), None);
     assert_eq!(
         f.core
@@ -703,7 +712,7 @@ fn hosted_history_qualification_rejects_unproved_external_move_and_other_workspa
 fn hosted_history_qualification_rejects_real_trash_children_through_windows_case_alias() {
     let mut f = Fixture::new();
     f.core
-        .create_note(&f.root, f.path.parent().unwrap(), "Child")
+        .create_note_fixture(&f.root, f.path.parent().unwrap(), "Child")
         .unwrap();
     let operation = fresh();
     let plan = f

@@ -43,8 +43,8 @@ fn sync_setup_releases_private_captures_and_retries_owned_original_bytes_after_r
             let data = temp.path().join("private");
             let mut core = Core::new(&data).unwrap();
             core.create_library(&root).unwrap();
-            let note = core.create_note(&root, &root, "Note").unwrap();
-            let retired = core.create_note(&root, &root, "Retired").unwrap();
+            let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+            let retired = core.create_note_fixture(&root, &root, "Retired").unwrap();
             operation(
                 &mut core,
                 &root,
@@ -127,7 +127,7 @@ fn sync_setup_cannot_launder_forged_replaced_or_lost_tag_registry_identity() {
         let root = temp.path().join("library");
         let mut core = Core::new(temp.path().join("private")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let path = root.join(".weftext-tags.json");
         if change == "forged" {
             fs::write(
@@ -201,7 +201,7 @@ fn rejected_incomplete_sync_setup_does_not_leave_private_cut_tokens() {
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let independent = core.admitted_snapshot(&root).unwrap();
     let bases = core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
     let cut_count = core.admitted_cuts.len();
@@ -231,7 +231,7 @@ fn saved_offline_versions_publish_original_outbox_after_restart() {
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let object = ObjectKey::Node(note.node_id.clone().unwrap());
     let enable = fresh();
     let info = core.enable_sync(&root, &enable).unwrap();
@@ -279,8 +279,8 @@ fn source_and_annotations_publish_one_transaction_and_partial_export_preserves_i
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("first")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
-    core.create_note(&root, &root, "Unrelated").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    core.create_note_fixture(&root, &root, "Unrelated").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     let annotation = root.join("Note/weftext.annotations.json");
     let cut = core
@@ -335,9 +335,9 @@ fn new_node_and_nested_child_commit_while_offline_with_typed_parents() {
     let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
-    let parent = core.create_note(&root, &root, "Parent").unwrap();
+    let parent = core.create_note_fixture(&root, &root, "Parent").unwrap();
     let child = core
-        .create_note(&root, root.join("Parent"), "Child")
+        .create_note_fixture(&root, root.join("Parent"), "Child")
         .unwrap();
     core.publish_sync(&root).unwrap();
     let graph = core.read_sync_history(&info.identity).unwrap();
@@ -355,9 +355,9 @@ fn rename_parent_keeps_child_save_location_and_trash_restore_retains_original_co
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let parent = core.create_note(&root, &root, "Parent").unwrap();
+    let parent = core.create_note_fixture(&root, &root, "Parent").unwrap();
     let child = core
-        .create_note(&root, root.join("Parent"), "Child")
+        .create_note_fixture(&root, root.join("Parent"), "Child")
         .unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     operation(
@@ -429,7 +429,7 @@ fn uncommitted_plan_does_not_publish_and_external_change_keeps_current_and_draft
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     let cut = core
         .read_snapshot(&root, std::slice::from_ref(&note.path))
@@ -490,7 +490,7 @@ fn damaged_transport_cache_does_not_turn_saved_into_failed_or_allocate_new_opera
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     let corrupted = data
         .join("sync")
@@ -526,7 +526,7 @@ fn moving_an_externally_changed_source_does_not_publish_an_older_body() {
     let root = temp.path().join("library");
     let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     core.enable_sync(&root, &fresh()).unwrap();
     let external = format!("{}\nexternal before rename", note.source);
     fs::write(&note.path, &external).unwrap();
@@ -551,7 +551,7 @@ fn selected_library_backup_includes_sync_history_and_pending_publication() {
     let target = temp.path().join("backup");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     save(
         &mut core,

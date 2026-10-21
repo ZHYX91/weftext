@@ -237,7 +237,11 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(self.timeline(doc)['versions'], before['versions'])
         self.assertEqual(self.reopen(doc, root)['recoveredDraft'], persisted)
         request['draftAction'] = 'retain'
-        restored = self.api('/api/history/restore', request)
+        envelope = self.api('/api/history/restore', request)
+        self.assertEqual(envelope['status'], 'committed')
+        self.assertEqual(envelope['operationId'], request['operationId'])
+        restored = envelope['result']
+        self.assertEqual(envelope['receipt'], restored['receipt'])
         self.assertEqual(restored['source'], versions[0]['source'])
         self.assertEqual(restored['versionId'], versions[0]['id'])
         self.assertEqual(restored['receipt']['status'], 'saved')
@@ -256,7 +260,7 @@ class V05Completion(features.LocalFeatures):
         status = self.api('/api/history/status', {'operationId': request['operationId']})
         self.assertEqual(status['status'], 'committed')
         self.assertEqual(status['result'], restored)
-        self.assertEqual(self.api('/api/history/restore', request), restored)
+        self.assertEqual(self.api('/api/history/restore', request), envelope)
         self.assertEqual(self.timeline(doc)['versions'], after['versions'])
         changed_retry = self.api('/api/history/restore', {
             **request, 'versionId': versions[1]['id']}, status=409)

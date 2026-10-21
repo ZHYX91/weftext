@@ -5,6 +5,7 @@ and proofreading workers. Owned libraries, state, HTTP records and process logs
 are retained; this suite does not establish browser, Office or IME acceptance.
 Only the tests declared below run, including through unittest discovery.
 """
+from _creation_result import created_document
 import argparse
 import copy
 import hashlib
@@ -94,8 +95,8 @@ class SharedProcessingIntegration(HostedLibrary):
             call('/api/library/create', {'path': str(self.root), 'operationId': hosted_harness.uid()})
             self.docs = {}
             for name, text in (('Shared', MARKER), ('Other', '独立的原稿😀')):
-                doc = call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                    'name': name, 'operationId': hosted_harness.uid()})
+                doc = created_document(call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                    'name': name, 'operationId': hosted_harness.uid()}))
                 source = doc['source'] + '\n\n' + text + '\n'
                 call('/api/save', {'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
                     'source': source, 'operationId': hosted_harness.uid()})

@@ -21,7 +21,7 @@ fn operation_file(core: &Core, operation: &str) -> PathBuf {
 #[test]
 fn actor_library_scoped_save_fences_output_and_draft_have_first_original_header() {
     let (_temp, mut core, root) = scope_fixture();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let operation = fresh();
     let output = fresh();
     let fences = [fresh(), fresh(), fresh(), fresh(), fresh()];
@@ -83,7 +83,7 @@ fn actor_library_scope_rejects_cross_root_session_records_and_restores_after_err
     let (temp, mut core, root) = scope_fixture();
     let other = temp.path().join("Other");
     core.create_library(&other).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let id = fresh();
     let opened = core
         .with_actor_for_root(ACTOR, &root, |core| {
@@ -149,7 +149,7 @@ fn actor_library_ordinary_root_is_bound_but_damaged_library_controls_do_not_beco
 #[test]
 fn actor_library_legacy_records_and_recovered_draft_are_not_backfilled() {
     let (_temp, mut core, root) = scope_fixture();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let operation = fresh();
     let output = fresh();
     core.with_actor(ACTOR, |core| {
@@ -226,7 +226,7 @@ fn actor_library_first_header_does_not_parse_payload_and_is_bounded_and_rewinds(
 #[test]
 fn actor_library_legacy_backup_validator_requires_original_plan_and_exact_namespace() {
     let (temp, mut core, root) = scope_fixture();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let operation = fresh();
     let unknown = fresh();
     core.with_actor(ACTOR, |core| {
@@ -292,7 +292,7 @@ fn actor_library_legacy_backup_validator_requires_original_plan_and_exact_namesp
 #[test]
 fn actor_library_bound_clean_draft_remains_authoritative_over_same_fi_unbound_record() {
     let (_temp, mut core, root) = scope_fixture();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let bound_path = core
         .with_actor_for_root(ACTOR, &root, |core| {
             let opened = core.open(&note.path, Some(root.clone()))?;

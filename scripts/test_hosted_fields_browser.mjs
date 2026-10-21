@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
 // through WEFTEXT_PLAYWRIGHT_MODULE, plus EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
@@ -48,7 +49,7 @@ try{
  await api('/api/data/schema/install',{operationId:op,planId:plan.planId});
  const makeTag=async displayName=>{const registry=await api('/api/navigation/tags',{root}),prepared=await api('/api/navigation/create-tag',{root,displayName,parentRef:null,baseId:registry.baseId,operationId:randomUUID()});assert.equal((await api('/api/operations/commit',{operationId:prepared.preview.operationId,planId:prepared.preview.planId})).status,'committed');return prepared.targetRef;};
  const parentRef=await makeTag('归组 / Parent'),otherRef=await makeTag('直接 / Other');result.tagFixture={parentRef,otherRef};
- const note=await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()});
+ const note=createdDocument(await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()}));
  const initial=note.source.replace('types: ()',`types: ("task",), status: "open", priority: 7, aliases: ("中文😀",), tags: ((ref: "${otherRef}"), (text: "literal / 保留")), hidden: read("PRIVATE_BODY")`)+'\nHIDDEN_BODY_987\n';
  await api('/api/save',{sessionId:note.sessionId,baseId:note.baseId,source:initial,operationId:randomUUID()});
  await stop(local);local=null;

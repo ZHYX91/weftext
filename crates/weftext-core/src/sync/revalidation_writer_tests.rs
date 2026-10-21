@@ -15,7 +15,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(temp.path().join("private")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Original").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Original").unwrap();
         let identity = core.enable_sync(&root, &fresh()).unwrap().identity;
         Self {
             _temp: temp,
@@ -261,7 +261,10 @@ fn original_create_plan_supplies_new_owner_admission_and_actual_after_query_rows
     receiver
         .execute_operation(&clone.operation_id, &clone.plan_id)
         .unwrap();
-    let created = f.core.create_note(&f.root, &f.root, "Fresh").unwrap();
+    let created = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Fresh")
+        .unwrap();
     let id = created.node_id.unwrap();
     let path = PathBuf::from(created.path);
     let object = ObjectKey::Node(id.clone());

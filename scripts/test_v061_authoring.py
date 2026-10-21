@@ -10,6 +10,7 @@ Run: python scripts/test_v061_authoring.py CANDIDATE.exe --evidence-dir DIRECTOR
      python scripts/test_v061_authoring.py --list
 Optional positional test names select exact cases; unknown selections fail.
 """
+from _creation_result import created_document
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import copy
@@ -103,8 +104,8 @@ class RetainedHTTP(unittest.TestCase):
         return self.call(server, '/api/library/create', {'path': str(root), 'operationId': uid()})
 
     def create_note(self, server, root, name='Note'):
-        return self.call(server, '/api/note/create', {
-            'root': str(root), 'parent': str(root), 'name': name, 'operationId': uid()})
+        return created_document(self.call(server, '/api/note/create', {
+            'root': str(root), 'parent': str(root), 'name': name, 'operationId': uid()}))
 
     def local_fixture(self):
         server = self.server('local', self.folder / 'state')

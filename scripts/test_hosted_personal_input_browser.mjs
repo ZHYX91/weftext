@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real embedded hosted UI regression. Pass EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
@@ -54,7 +55,7 @@ try {
   const data = path.join(out, 'state'), root = path.join(out, 'TEST-library');
   local = await start(['--no-browser', '--data-dir', data]);
   await api('/api/library/create', { path: root, operationId: randomUUID() }, null);
-  const note = await api('/api/note/create', { root, parent: root, name: 'TEST-Shared', operationId: randomUUID() }, null);
+  const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'TEST-Shared', operationId: randomUUID() }, null));
   const secret = 'PRIVATE_PROTECTED_BASE_NOT_PERSONAL', initial = note.source + '\n' + secret + '\n';
   await api('/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: initial, operationId: randomUUID() }, null); await stop(local); local = null;
   const rights = { read: true, write: true, history: true, download: true };

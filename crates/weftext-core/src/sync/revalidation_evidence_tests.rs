@@ -25,7 +25,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(temp.path().join("private")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let source = PathBuf::from(note.path);
         let owner = NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
@@ -440,7 +440,10 @@ fn missing_annotation_target_preserves_discussion_and_reports_unavailable_withou
 #[test]
 fn public_node_descriptor_cannot_rebind_another_opaque_qualification() {
     let mut f = Fixture::new();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let other_owner = NodeRef {
         workspace_id: f.owner.workspace_id.clone(),
         node_id: other.node_id.unwrap(),

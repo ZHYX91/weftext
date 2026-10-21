@@ -17,7 +17,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let owner = weftext_knowledge::NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
             node_id: note.node_id.unwrap(),
@@ -581,7 +581,10 @@ fn resource_collection_old_path_new_owner_does_not_transfer_initialization() {
         name: "Moved".into(),
     });
     f.source = f.root.join("Moved/Moved.typ");
-    let new = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let new = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let plan = f
         .core
         .prepare_import_resource(&f.root, &new.path, "new-owner.bin", vec![2], &fresh())
@@ -684,7 +687,10 @@ fn resource_collection_raw_manifest_replacement_and_explicit_owner_mismatch_fail
         f.collection().err().unwrap().code,
         "resourceManifestUnavailable"
     );
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert!(
         f.core
             .qualified_resource_collection_at(&f.root, Path::new(&other.path), &f.owner, "live")

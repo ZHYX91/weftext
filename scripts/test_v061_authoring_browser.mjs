@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Owned-library browser acceptance of the embedded native authoring controls.
 // Headless keyboard input does not establish real operating-system IME support.
 import assert from 'node:assert/strict';
@@ -84,8 +85,8 @@ try {
   const schema = await api('/api/data/schema', { root }), schemaOperation = randomUUID();
   const schemaPlan = await api('/api/data/schema/prepare', { root, source: schema.source, beforeSource: schema.source, beforeRevision: schema.revision, operationId: schemaOperation });
   await api('/api/data/schema/install', { operationId: schemaOperation, planId: schemaPlan.planId });
-  const doc = await api('/api/note/create', { root, parent: root, name: 'Authoring', operationId: randomUUID() });
-  const work = await api('/api/note/create', { root, parent: root, name: 'Paper', operationId: randomUUID() });
+  const doc = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Authoring', operationId: randomUUID() }));
+  const work = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Paper', operationId: randomUUID() }));
   const workSource = `#metadata((id: "${work.nodeId}", types: ("paper",), publication: (kind: "article", title: "Browser Publication", contributors: ((agent: (text: "Author Alpha"), roles: ("author",)),)))) <weftext>\n#set document(title: [Paper])\n#title()\n\nPRIVATE OWNED WORK BODY\n`;
   await save(work, workSource);
   const initial = doc.source + '\n#set heading(numbering: "1.")\n= 原生目标😀 <sec>\n\n正文保留。\n\n'; await save(doc, initial);

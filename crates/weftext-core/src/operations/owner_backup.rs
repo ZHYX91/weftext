@@ -55,6 +55,59 @@ struct FileRoute {
     route: String,
 }
 
+fn selected_attempt_scope(
+    scope: Option<&ActorLibraryBinding>,
+    expected: &ActorLibraryBinding,
+) -> Result<bool> {
+    let Some(scope) = scope else {
+        return Ok(false);
+    };
+    if scope == expected {
+        return Ok(true);
+    }
+    if scope.workspace_id == expected.workspace_id
+        || scope.root.eq_ignore_ascii_case(&expected.root)
+        || scope.root_identity == expected.root_identity
+    {
+        return Err(CoreError::new(
+            "scopeChanged",
+            "Original reservation library identity differs from this backup",
+        ));
+    }
+    Ok(false)
+}
+fn qualified_journal_suffix<'a>(id: &str, name: &'a str) -> Result<&'a str> {
+    let suffix = name
+        .strip_prefix(&format!("{id}."))
+        .and_then(|name| name.strip_suffix(".json"))
+        .ok_or_else(private_evidence)?;
+    let fixed = matches!(
+        suffix,
+        "plan"
+            | "install"
+            | "commit"
+            | "resolution"
+            | "birth"
+            | "births"
+            | "observations"
+            | "resource-births"
+            | "definition-reservation"
+            | "definition-reservations"
+            | "revision-reservation"
+            | "tag-reservation"
+            | "directory-reservation"
+    );
+    let object = suffix
+        .strip_prefix("object-")
+        .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()));
+    let recovery = suffix
+        .strip_prefix("recovery-observations-")
+        .is_some_and(|id| valid_operation_id(id).is_ok());
+    if !fixed && !object && !recovery {
+        return Err(private_evidence());
+    }
+    Ok(suffix)
+}
 impl Core {
     pub(super) fn capture_owner_backup_private(
         &self,
@@ -153,15 +206,44 @@ impl Core {
             .filter(|f| !Path::new(&f.path).starts_with(&self.data_dir))
             .map(|f| f.bytes.len())
             .sum::<usize>();
+        // Malformed selected or foreign decisions are retained errors, never
+        // silently treated as an absence or assigned to a different library.
+        for plan in self.operations.values() {
+            self.resolution_record(&plan.operation_id)?;
+        }
+        let mut selected_attempts = Vec::new();
+        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if let Some(id) = name.strip_suffix(".resolution.json")
+                && !self.operations.contains_key(id)
+            {
+                let scope = self.unregistered_attempt_library(
+                    id,
+                    false,
+                    if protected_inputs {
+                        selected_inputs
+                    } else {
+                        &[]
+                    },
+                )?;
+                if selected_attempt_scope(scope.as_ref(), &binding)? {
+                    selected_attempts.push(id.to_owned());
+                }
+            }
+        }
         let selected_plans = self
             .operations
             .values()
             .filter(|p| {
-                own.is_none_or(|own| p.operation_id != own.operation_id)
+                !library_creation::is_cancellation(p)
+                    && own.is_none_or(|own| p.operation_id != own.operation_id)
                     && (p.workspace_id.as_deref() == Some(workspace_id)
                         || locator_within(Path::new(&p.path), root))
             })
             .map(|p| p.operation_id.as_str())
+            .chain(selected_attempts.iter().map(String::as_str))
             .collect::<BTreeSet<_>>();
         let mut capture = PrivateCapture {
             digest: String::new(),
@@ -297,20 +379,61 @@ impl Core {
                     let (selected, route) = if folder == self.data_dir.join("journal") {
                         let text = name.to_string_lossy();
                         let id = text.split('.').next().ok_or_else(private_evidence)?;
+                        let suffix = qualified_journal_suffix(id, &text)?;
                         if !self.operations.contains_key(id) {
-                            return Err(private_evidence());
+                            let scope = self.unregistered_attempt_library(
+                                id,
+                                false,
+                                if protected_inputs {
+                                    selected_inputs
+                                } else {
+                                    &[]
+                                },
+                            )?;
+                            let selected = selected_attempt_scope(scope.as_ref(), &binding)?;
+                            let mut decision = File::open(self.journal_path(id, "resolution"))?;
+                            let mut bytes = Vec::new();
+                            Read::by_ref(&mut decision)
+                                .take(4097)
+                                .read_to_end(&mut bytes)?;
+                            let record = journal::decode_resolution(id, &bytes)?;
+                            if record.action != "cancelPrepared" {
+                                return Err(private_evidence());
+                            }
+                            if suffix == "resolution" && !selected {
+                                digest_json(&mut digest, &hash(&bytes))?;
+                            } else if suffix != "resolution"
+                                && !matches!(
+                                    suffix,
+                                    "definition-reservation"
+                                        | "revision-reservation"
+                                        | "tag-reservation"
+                                        | "directory-reservation"
+                                )
+                            {
+                                return Err(private_evidence());
+                            }
+                            (
+                                selected,
+                                if selected {
+                                    "selectedJournal".into()
+                                } else {
+                                    "deviceOrForeignAttempt".into()
+                                },
+                            )
+                        } else {
+                            let selected = selected_plans
+                                .iter()
+                                .any(|id| name.to_string_lossy().starts_with(&format!("{id}.")));
+                            (
+                                selected,
+                                if selected {
+                                    "selectedJournal".into()
+                                } else {
+                                    "foreignJournal".into()
+                                },
+                            )
                         }
-                        let selected = selected_plans
-                            .iter()
-                            .any(|id| name.to_string_lossy().starts_with(&format!("{id}.")));
-                        (
-                            selected,
-                            if selected {
-                                "selectedJournal".into()
-                            } else {
-                                "foreignJournal".into()
-                            },
-                        )
                     } else {
                         classify_record(
                             self,
@@ -469,6 +592,9 @@ fn route_selected_bytes(
         }) {
             return Err(private_evidence());
         }
+        let name = path.file_name().unwrap().to_string_lossy();
+        let id = name.split('.').next().ok_or_else(private_evidence)?;
+        qualified_journal_suffix(id, &name)?;
         return Ok("selectedJournal".into());
     }
     let value: UniqueValue = serde_json::from_slice(bytes)?;
@@ -504,6 +630,25 @@ fn validate_selected_record(
 ) -> Result<()> {
     let kind = record_kind(core, path)?;
     if kind == RecordKind::Journal {
+        let name = path.file_name().unwrap().to_string_lossy();
+        let id = name.split('.').next().ok_or_else(private_evidence)?;
+        let suffix = qualified_journal_suffix(id, &name)?;
+        if !core.operations.contains_key(id) {
+            if suffix == "resolution" {
+                let record = journal::decode_resolution(id, bytes)?;
+                if record.action != "cancelPrepared" {
+                    return Err(private_evidence());
+                }
+            } else {
+                let scope = core.validate_preplan_reservation(id, suffix, bytes)?;
+                let guard = ParentGuard::acquire(&root.join(".reservation-backup-root"))?;
+                if scope.workspace_id.as_deref() != Some(workspace_id)
+                    || scope.root_identity != guard.directory_identity()?
+                {
+                    return Err(private_evidence());
+                }
+            }
+        }
         return Ok(());
     }
     let value: UniqueValue = serde_json::from_slice(bytes)?;

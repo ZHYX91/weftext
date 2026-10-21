@@ -2,6 +2,8 @@
 //! Core owns every filesystem read/write and the admitted note identity.
 
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use serde::de::{MapAccess, Visitor};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -102,7 +104,7 @@ struct PeriodRequest {
     steps: i32,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PeriodCreateRequest {
     root: String,
@@ -166,7 +168,7 @@ struct TypeEdit {
     types: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CaptureRequest {
     root: String,
@@ -728,28 +730,39 @@ fn capture_body(req: &CaptureRequest) -> Result<String, weftext_data::DataError>
     })
 }
 
+type CreationCommit = (
+    weftext_core::OperationPreview,
+    weftext_core::OperationReceipt,
+);
 async fn capture(State(state): State<AppState>, Json(req): Json<CaptureRequest>) -> ApiResult {
-    let document = core_call(&state, move |core| capture_document(core, &req)).await?;
-    let document = value(document)?;
-    remember(&state, &document)?;
-    Ok(Json(document))
+    let (preview, receipt) = core_call(&state, move |core| capture_document(core, &req)).await?;
+    crate::knowledge_api::operation_output(&state, preview, receipt, None)
+        .await
+        .map(Json)
 }
-
-fn capture_document(
+fn capture_intent(req: &CaptureRequest) -> Result<Value, CoreError> {
+    Ok(json!({"kind":"capture", "request":serde_json::to_value(req)?}))
+}
+fn original_creation(
     core: &mut Core,
-    req: &CaptureRequest,
-) -> Result<weftext_core::OpenedDocument, CoreError> {
+    id: &str,
+    intent: &Value,
+) -> Result<Option<CreationCommit>, CoreError> {
+    let Some(preview) = core.feature_operation_status(id, intent)? else {
+        return Ok(None);
+    };
+    // Never reinterpret the original author request using today's schema.
+    let receipt = core.execute_operation(id, &preview.plan_id)?;
+    Ok(Some((preview, receipt)))
+}
+fn capture_document(core: &mut Core, req: &CaptureRequest) -> Result<CreationCommit, CoreError> {
+    let intent = capture_intent(req)?;
+    if let Some(original) = original_creation(core, &req.operation_id, &intent)? {
+        return Ok(original);
+    }
     let frozen = query_snapshot(core, &req.root, weftext_data::QueryPlan::default())?;
-    capture_from_frozen(core, req, frozen)
-}
-
-fn capture_from_frozen(
-    core: &mut Core,
-    req: &CaptureRequest,
-    frozen: FrozenQuery,
-) -> Result<weftext_core::OpenedDocument, CoreError> {
     with_temporary_frozen_query(core, frozen, |core, frozen| {
-        capture_from_frozen_inner(core, req, frozen)
+        capture_from_frozen_inner(core, req, frozen, &intent)
     })
 }
 
@@ -757,7 +770,8 @@ fn capture_from_frozen_inner(
     core: &mut Core,
     req: &CaptureRequest,
     frozen: &FrozenQuery,
-) -> Result<weftext_core::OpenedDocument, CoreError> {
+    intent: &Value,
+) -> Result<CreationCommit, CoreError> {
     let source = capture_template(req, &frozen.schema)
         .map_err(|error| CoreError::new("invalidData", error.to_string()))?;
     let request = CoreOperationRequest {
@@ -769,11 +783,7 @@ fn capture_from_frozen_inner(
             source: Some(source),
         },
     };
-    // A retry verifies the exact original Core request and executes only its
-    // frozen plan; an already committed period cannot be created again.
-    let preview = if core.operation_details(&req.operation_id).is_ok() {
-        core.prepare_operation(request)?
-    } else {
+    let preview = {
         let proposed = weftext_data::capture_source(
             "00000000-0000-4000-8000-000000000000",
             &req.types,
@@ -862,21 +872,10 @@ fn capture_from_frozen_inner(
                 }
             }
         }
-        core.prepare_admitted_operation(request, &frozen.input.cut_id)?
+        core.prepare_admitted_feature_operation(request, &frozen.input.cut_id, intent)?
     };
-    core.execute_operation(&req.operation_id, &preview.plan_id)?;
-    let source_path = preview
-        .changes
-        .iter()
-        .find(|change| {
-            Path::new(&change.path)
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("typ"))
-        })
-        .ok_or_else(|| {
-            CoreError::new("invalidState", "The creation plan has no canonical source")
-        })?;
-    core.open(&source_path.path, Some(PathBuf::from(&frozen.root)))
+    let receipt = core.execute_operation(&req.operation_id, &preview.plan_id)?;
+    Ok((preview, receipt))
 }
 
 fn period_value(
@@ -1098,7 +1097,11 @@ async fn create_period(
     State(state): State<AppState>,
     Json(req): Json<PeriodCreateRequest>,
 ) -> ApiResult {
-    let document = core_call(&state, move |core| {
+    let (preview, receipt) = core_call(&state, move |core| {
+        let intent = json!({"kind":"period", "request":serde_json::to_value(&req)?});
+        if let Some(original) = original_creation(core, &req.operation_id, &intent)? {
+            return Ok(original);
+        }
         let frozen = query_snapshot(core, &req.root, weftext_data::QueryPlan::default())?;
         with_temporary_frozen_query(core, frozen, |core, frozen| {
             let period = period_value(&frozen.schema, &req.series_key, &req.kind, &req.key)?;
@@ -1112,13 +1115,13 @@ async fn create_period(
                 body: req.body,
                 operation_id: req.operation_id,
             };
-            capture_from_frozen_inner(core, &capture, frozen)
+            capture_from_frozen_inner(core, &capture, frozen, &intent)
         })
     })
     .await?;
-    let document = value(document)?;
-    remember(&state, &document)?;
-    Ok(Json(document))
+    crate::knowledge_api::operation_output(&state, preview, receipt, None)
+        .await
+        .map(Json)
 }
 
 pub(crate) fn resolve_entity(
@@ -2530,12 +2533,30 @@ async fn save_definition(
     let loc = location(&state, &req.session_id)?;
     let replay_location = loc.clone();
     let replay_request = req.clone();
-    if let Some(replayed) = core_call(&state, move |core| {
+    let replay = core_call(&state, move |core| {
         replay_saved_definition(core, &replay_location, &replay_request)
     })
-    .await?
-    {
-        return definition_write_response(&state, replayed, req.serial, &req.source);
+    .await;
+    match replay {
+        Ok(Some(replayed)) => {
+            return definition_write_response(&state, replayed, req.serial, &req.source);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            let id = req.operation_id.clone();
+            let fact = core_call(&state, move |core| core.local_operation_status(&id)).await?;
+            if fact["status"] == "committed" {
+                if error.code == "operationConflict" {
+                    let mut error = error;
+                    error.details = Some(Box::new(json!({"originalOperation":fact})));
+                    return Err(error);
+                }
+                let mut output = fact;
+                output["documentError"] = json!({"code":error.code,"message":error.message});
+                return Ok(Json(output));
+            }
+            return Err(error);
+        }
     }
     writing_api::observe_snapshot(
         &state,
@@ -2547,7 +2568,7 @@ async fn save_definition(
     let final_check = state.clone();
     let before_source = req.source.clone();
     let serial = req.serial;
-    let (document, definition, revision, patch) = core_call(&state, move |core| {
+    let write = core_call(&state, move |core| {
         let inventory = core.inventory(&loc.root)?;
         let entry = inventory.entries.iter().find(|entry| entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted")
             .ok_or_else(|| CoreError::new("identityConflict", "Save definitions only in the currently admitted owner note"))?;
@@ -2579,26 +2600,22 @@ async fn save_definition(
         }
         writing_api::check_snapshot(&final_check, &req.session_id, &req.source, req.serial, req.source_hash.as_deref())
             .map_err(|error| CoreError::new(&error.code, error.message))?;
-        let receipt = core.save(SaveRequest { session_id: req.session_id, base_id: req.base_id,
-            source: patch.source.clone(), operation_id: req.operation_id })?;
-        let document = core.open(&loc.path, Some(loc.root.clone()))?;
+        // Projection is validated before commit. The live open is delivery.
         let definition = weftext_data::saved_queries(&patch.source)
             .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?.into_iter()
-            .find(|definition| definition.key == key).ok_or_else(|| CoreError::new("definitionUnavailable", "Committed definition could not be projected"))?;
-        Ok((document, definition, Some(receipt.revision_id.unwrap_or(receipt.base_id)), patch))
+            .find(|definition| definition.key == key).ok_or_else(|| CoreError::new("definitionUnavailable", "Prepared definition could not be projected"))?;
+        let outcome = core.save(SaveRequest { session_id: req.session_id, base_id: req.base_id,
+            source: patch.source.clone(), operation_id: req.operation_id })?;
+        let document = core.open(&loc.path, Some(loc.root.clone()));
+        Ok((document, definition, outcome, patch))
     }).await?;
-    definition_write_response(
-        &state,
-        (document, definition, revision, patch),
-        serial,
-        &before_source,
-    )
+    definition_write_response(&state, write, serial, &before_source)
 }
 
 type DefinitionWrite = (
-    weftext_core::OpenedDocument,
+    Result<weftext_core::OpenedDocument, CoreError>,
     weftext_data::SavedQuery,
-    Option<String>,
+    weftext_core::SaveOutcome,
     weftext_data::FieldPatch,
 );
 
@@ -2670,47 +2687,48 @@ fn replay_saved_definition(
             "This retry does not reconstruct the exact original committed source",
         ));
     }
-    let receipt = core.save(SaveRequest {
-        session_id: req.session_id.clone(),
-        base_id: req.base_id.clone(),
-        source: patch.source.clone(),
-        operation_id: req.operation_id.clone(),
-    })?;
-    let inventory = core.inventory(&location.root)?;
-    let owner_id = weftext_engine::inspect_metadata(&req.source)
-        .id
-        .ok_or_else(|| {
+    let outcome = weftext_core::SaveOutcome {
+        receipt: original.receipt.ok_or_else(|| {
             CoreError::new(
-                "operationConflict",
-                "The original draft has no owner identity",
+                "recoveryPending",
+                "The original definition source save is not committed",
+            )
+        })?,
+        recovery_issue: None,
+    };
+    let document = (|| {
+        let inventory = core.inventory(&location.root)?;
+        let owner_id = weftext_engine::inspect_metadata(&req.source)
+            .id
+            .ok_or_else(|| {
+                CoreError::new(
+                    "operationConflict",
+                    "The original draft has no owner identity",
+                )
+            })?;
+        let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "committedResultUnavailable",
+                "The original save committed, but the library is unavailable",
             )
         })?;
-    let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
-        CoreError::new(
-            "committedResultUnavailable",
-            "The original save committed, but the library is unavailable",
-        )
-    })?;
-    let entity = format!("weftext-node://{workspace}/{owner_id}");
-    let entry = resolve_entity(&inventory, &entity).map_err(|_| {
-        CoreError::new(
-            "committedResultUnavailable",
-            "The original definition was saved; its live owner is now unavailable",
-        )
-    })?;
-    let document = core.open(entry.path, Some(location.root.clone()))?;
-    if document.node_id.as_deref() != Some(&owner_id) || document.kind != "managed" {
-        return Err(CoreError::new(
-            "committedResultUnavailable",
-            "The original effect is retained, but its current source changed identity",
-        ));
-    }
-    Ok(Some((
-        document,
-        definition,
-        Some(receipt.revision_id.unwrap_or(receipt.base_id)),
-        patch,
-    )))
+        let entity = format!("weftext-node://{workspace}/{owner_id}");
+        let entry = resolve_entity(&inventory, &entity).map_err(|_| {
+            CoreError::new(
+                "committedResultUnavailable",
+                "The original definition was saved; its live owner is now unavailable",
+            )
+        })?;
+        let document = core.open(entry.path, Some(location.root.clone()))?;
+        if document.node_id.as_deref() != Some(&owner_id) || document.kind != "managed" {
+            return Err(CoreError::new(
+                "committedResultUnavailable",
+                "The original effect is retained, but its current source changed identity",
+            ));
+        }
+        Ok(document)
+    })();
+    Ok(Some((document, definition, outcome, patch)))
 }
 
 fn definition_write_response(
@@ -2719,17 +2737,34 @@ fn definition_write_response(
     serial: u64,
     before_source: &str,
 ) -> ApiResult {
-    let (document, definition, revision, patch) = write;
-    let document = value(document)?;
-    remember(state, &document)?;
-    let committed_source = patch.source.clone();
-    let source_matches_commit = document_matches_committed_source(&document, &committed_source);
-    let Json(patch_output) = patch_response(patch, serial, before_source)?;
-    Ok(Json(
-        json!({"document":document,"definition":definition,"definitionRevision":revision,
-        "committedSource":committed_source,"documentSourceMatchesCommit":source_matches_commit,
-        "patches":patch_output["patches"],"serial":serial,"sourceHash":patch_output["sourceHash"]}),
-    ))
+    let (document, definition, outcome, patch) = write;
+    let mut output = value(&outcome)?;
+    output["status"] = json!("committed");
+    output["definition"] = value(definition)?;
+    output["definitionRevision"] = json!(
+        outcome
+            .receipt
+            .revision_id
+            .as_ref()
+            .unwrap_or(&outcome.receipt.base_id)
+    );
+    output["committedSource"] = json!(patch.source);
+    let delivered = (|| -> Result<(), ApiError> {
+        let document = value(document.map_err(ApiError::from)?)?;
+        remember(state, &document)?;
+        output["documentSourceMatchesCommit"] =
+            json!(document_matches_committed_source(&document, &patch.source));
+        output["document"] = document;
+        let Json(patch_output) = patch_response(patch, serial, before_source)?;
+        output["patches"] = patch_output["patches"].clone();
+        output["serial"] = json!(serial);
+        output["sourceHash"] = patch_output["sourceHash"].clone();
+        Ok(())
+    })();
+    if let Err(error) = delivered {
+        output["documentError"] = json!({"code":error.code,"message":error.message});
+    }
+    Ok(Json(output))
 }
 
 fn document_matches_committed_source(document: &Value, committed_source: &str) -> bool {
@@ -3093,7 +3128,7 @@ mod tests {
     fn temporary_query_cuts_release_all_lifecycles_on_success_and_error() {
         let (_directory, state, root) = fixture();
         let mut core = state.core.lock().unwrap();
-        core.create_note(&root, &root, "Retained").unwrap();
+        core.create_note_fixture(&root, &root, "Retained").unwrap();
         let retained = query_snapshot(&mut core, &root, Default::default()).unwrap();
         let retained_bases = query_base_ids(&retained);
         for fail in [false, true] {
@@ -3150,7 +3185,7 @@ mod tests {
             .core
             .lock()
             .unwrap()
-            .create_note(&root, &root, "One")
+            .create_note_fixture(&root, &root, "One")
             .unwrap();
         let (retained, retained_bases, invalid, invalid_bases) = {
             let mut core = state.core.lock().unwrap();
@@ -3198,7 +3233,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let (path, source) = {
             let mut core = state.core.lock().unwrap();
-            let note = core.create_note(&root, &root, "Observed").unwrap();
+            let note = core.create_note_fixture(&root, &root, "Observed").unwrap();
             let preview = core
                 .prepare_operation(CoreOperationRequest {
                     root: root.clone(),
@@ -3269,7 +3304,7 @@ mod tests {
                 &uuid::Uuid::new_v4().to_string(),
             )?;
             core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)?;
-            let document = core.create_note(&initial_root, &initial_root, "Definition")?;
+            let document = core.create_note_fixture(&initial_root, &initial_root, "Definition")?;
             Ok((prepared.target_ref, document))
         })
         .await);
@@ -3376,7 +3411,7 @@ mod tests {
         assert!(
             weftext_data::execute_query(&invalid.input, &invalid.plan, &invalid.schema).is_err()
         );
-        core.create_note(&root, &root, "one").unwrap();
+        core.create_note_fixture(&root, &root, "one").unwrap();
         let mut original = query_snapshot(&mut core, &root, plan.clone()).unwrap();
         let mut missing_tags = query_snapshot(&mut core, &root, plan.clone()).unwrap();
         let basis = core.read_tag_registry(&root).unwrap();
@@ -3449,7 +3484,7 @@ mod tests {
             let (initial, draft, changed) = {
                 let mut core = state.core.lock().unwrap();
                 let initial = if managed {
-                    core.create_note(&root, &root, "Launch").unwrap()
+                    core.create_note_fixture(&root, &root, "Launch").unwrap()
                 } else {
                     let path = Path::new(&root).join("ordinary.typ");
                     std::fs::write(&path, "Original ordinary source").unwrap();
@@ -3498,7 +3533,7 @@ mod tests {
             .core
             .lock()
             .unwrap()
-            .create_note(&root, &root, "Launch")
+            .create_note_fixture(&root, &root, "Launch")
             .unwrap();
         state.initial = Some(Arc::new(serde_json::to_value(&initial).unwrap()));
         let draft = format!("{}\nRetain across movement", initial.source);
@@ -3521,7 +3556,7 @@ mod tests {
                 .unwrap();
             core.execute_operation(&plan.operation_id, &plan.plan_id)
                 .unwrap();
-            let namesake = core.create_note(&root, &root, "Launch").unwrap();
+            let namesake = core.create_note_fixture(&root, &root, "Launch").unwrap();
             assert_ne!(namesake.node_id, initial.node_id);
         }
         let Json(result) = ok(crate::bootstrap(State(state.clone())).await);
@@ -3567,11 +3602,15 @@ mod tests {
             Json(task_capture(&root, "Native", &operation)),
         )
         .await);
+        assert_eq!(first["status"], "committed");
+        let first = first["document"].clone();
         let Json(retry) = ok(capture(
             State(state.clone()),
             Json(task_capture(&root, "Native", &operation)),
         )
         .await);
+        assert_eq!(retry["status"], "committed");
+        let retry = retry["document"].clone();
         assert_eq!(first["nodeId"], retry["nodeId"]);
         assert_eq!(first["source"], retry["source"]);
         let source = first["source"].as_str().unwrap();
@@ -3619,6 +3658,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let original = document["source"].as_str().unwrap().to_string();
         let source = format!("// 前😀\r\n{original}");
         let session = document["sessionId"].as_str().unwrap().to_string();
@@ -3744,6 +3785,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let entity = format!(
             "weftext-node://{}/{}",
             document["workspaceId"].as_str().unwrap(),
@@ -3918,6 +3961,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let Json(saved) = ok(save_definition(
             State(state.clone()),
             Json(definition_request(
@@ -4014,6 +4059,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let owner = format!(
             "weftext-node://{}/{}",
             document["workspaceId"].as_str().unwrap(),
@@ -4201,7 +4248,19 @@ mod tests {
             operation_id: operation.clone(),
         };
         let Json(created) = ok(create_period(State(state.clone()), Json(make())).await);
+        assert_eq!(created["status"], "committed");
+        let created = created["document"].clone();
+        let schema_path = Path::new(&root).join(".weftext-schema.json");
+        let original_schema = std::fs::read(&schema_path).ok();
+        std::fs::write(&schema_path, b"invalid current schema").unwrap();
         let Json(retry) = ok(create_period(State(state.clone()), Json(make())).await);
+        match original_schema {
+            Some(bytes) => std::fs::write(&schema_path, bytes).unwrap(),
+            None => std::fs::remove_file(&schema_path).unwrap(),
+        }
+
+        assert_eq!(retry["status"], "committed");
+        let retry = retry["document"].clone();
         assert_eq!(created["nodeId"], retry["nodeId"]);
         let Json(found) = ok(resolve_period(
             State(state.clone()),
@@ -4278,6 +4337,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let source_directory = Path::new(document["path"].as_str().unwrap())
             .parent()
             .unwrap()
@@ -4370,6 +4431,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let committed = format!("{}\nowned B\n", document["source"].as_str().unwrap());
         let save = SaveRequest {
             session_id: document["sessionId"].as_str().unwrap().into(),
@@ -4396,7 +4459,11 @@ mod tests {
             core.read_source_revision(
                 root,
                 &owner,
-                receipt.revision_id.as_deref().unwrap_or(&receipt.base_id),
+                receipt
+                    .receipt
+                    .revision_id
+                    .as_deref()
+                    .unwrap_or(&receipt.receipt.base_id),
             )
         })
         .await);
@@ -4417,6 +4484,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let request = definition_request(
             &document,
             document["source"].as_str().unwrap().into(),
@@ -4494,6 +4563,8 @@ mod tests {
             )),
         )
         .await);
+        assert_eq!(document["status"], "committed");
+        let document = document["document"].clone();
         let owner = format!(
             "weftext-node://{}/{}",
             document["workspaceId"].as_str().unwrap(),
@@ -4551,4 +4622,156 @@ mod tests {
 
     #[cfg(windows)]
     include!("data_lifecycle_tests.rs");
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn original_capture_replay_precedes_current_schema_interpretation() {
+        let (_directory, state, root) = fixture();
+        let id = uuid::Uuid::new_v4().to_string();
+        let Json(first) = ok(capture(
+            State(state.clone()),
+            Json(task_capture(&root, "Original", &id)),
+        )
+        .await);
+        assert_eq!(first["status"], "committed");
+        std::fs::write(
+            Path::new(&root).join(".weftext-schema.json"),
+            b"invalid current schema",
+        )
+        .unwrap();
+        let Json(retry) = ok(capture(
+            State(state.clone()),
+            Json(task_capture(&root, "Original", &id)),
+        )
+        .await);
+        assert_eq!(retry["operationId"], id);
+        assert_eq!(retry["status"], "committed");
+        assert_eq!(retry["document"]["nodeId"], first["document"]["nodeId"]);
+        let changed = task_capture(&root, "Changed", &id);
+        assert_eq!(
+            capture(State(state), Json(changed))
+                .await
+                .err()
+                .unwrap()
+                .code,
+            "operationConflict"
+        );
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn actual_postcommit_open_failure_keeps_original_receipt_and_does_not_recreate() {
+        let (_directory, state, root) = fixture();
+        let id = uuid::Uuid::new_v4().to_string();
+        let original_root = root.clone();
+        let operation = id.clone();
+        let (preview, receipt) = core_call(&state, move |core| {
+            let receipt =
+                core.create_note_with_id(&original_root, &original_root, "Committed", &operation)?;
+            Ok((core.operation_details(&operation)?, receipt))
+        })
+        .await
+        .map_err(|e| e.message)
+        .unwrap();
+        let original = PathBuf::from(&receipt.path);
+        let retained = PathBuf::from(&root).join("retained-original");
+        std::fs::rename(&original, &retained).unwrap();
+        let output = crate::knowledge_api::operation_output(&state, preview, receipt, None)
+            .await
+            .map_err(|e| e.message)
+            .unwrap();
+        assert_eq!(output["status"], "committed");
+        assert_eq!(output["operationId"], id);
+        assert!(output["documentError"]["code"].is_string());
+        assert!(output["document"].is_null());
+        let retry = crate::create_note(
+            State(state.clone()),
+            Json(crate::CreateNote {
+                root: root.clone(),
+                parent: root,
+                name: "Committed".into(),
+                operation_id: Some(id.clone()),
+            }),
+        )
+        .await
+        .map_err(|e| e.message)
+        .unwrap()
+        .0;
+        assert_eq!(retry["status"], "committed");
+        assert_eq!(retry["operationId"], id);
+        assert!(!original.exists());
+        assert!(retained.join("Committed.typ").is_file());
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn rejected_definition_reservation_can_be_fenced_and_a_new_label_saved() {
+        let (_directory, state, root) = fixture();
+        install_bundled_schema(&state, &root).await;
+        let Json(created) = ok(capture(
+            State(state.clone()),
+            Json(task_capture(
+                &root,
+                "Definitions",
+                &uuid::Uuid::new_v4().to_string(),
+            )),
+        )
+        .await);
+        let document = &created["document"];
+        let Json(saved) = ok(save_definition(
+            State(state.clone()),
+            Json(definition_request(
+                document,
+                document["source"].as_str().unwrap().into(),
+                None,
+                "open",
+            )),
+        )
+        .await);
+        let document = &saved["document"];
+        let bad = definition_request(
+            document,
+            document["source"].as_str().unwrap().into(),
+            None,
+            "open",
+        );
+        let id = bad.operation_id.clone();
+        assert!(
+            save_definition(State(state.clone()), Json(bad))
+                .await
+                .is_err()
+        );
+        let settled = core_call(&state, {
+            let id = id.clone();
+            move |core| core.settle_local_attempt(&id, "save", &"a".repeat(64))
+        })
+        .await
+        .map_err(|e| e.message)
+        .unwrap();
+        assert_eq!(settled["status"], "resolved");
+        let mut next = definition_request(
+            document,
+            document["source"].as_str().unwrap().into(),
+            None,
+            "open",
+        );
+        next.label = "weftext-query-distinct".into();
+        let Json(saved) = ok(save_definition(State(state.clone()), Json(next)).await);
+        assert_eq!(saved["status"], "committed");
+        let destination = Path::new(&root)
+            .parent()
+            .unwrap()
+            .join("backup-after-rejected-definition");
+        core_call(&state, move |core| {
+            let p = core.prepare_operation(CoreOperationRequest {
+                operation_id: uuid::Uuid::new_v4().to_string(),
+                root,
+                intent: OperationIntent::BackupLibrary {
+                    destination: destination.to_string_lossy().into_owned(),
+                },
+            })?;
+            core.execute_operation(&p.operation_id, &p.plan_id)?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.message)
+        .unwrap();
+    }
 }

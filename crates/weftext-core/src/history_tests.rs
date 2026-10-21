@@ -15,7 +15,7 @@ impl HistoryFixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let doc = core.create_note(&root, &root, "Note").unwrap();
+        let doc = core.create_note_fixture(&root, &root, "Note").unwrap();
         Self {
             core,
             _temp: temp,
@@ -37,7 +37,7 @@ impl HistoryFixture {
             })
             .unwrap();
         self.doc.source = source.clone();
-        self.doc.base_id = receipt.base_id;
+        self.doc.base_id = receipt.receipt.base_id;
         (operation_id, source)
     }
     fn initial_version(&self) -> String {
@@ -46,7 +46,7 @@ impl HistoryFixture {
             .unwrap()
             .versions
             .iter()
-            .find(|v| v.kind == "createNote")
+            .find(|v| v.kind == "newNode")
             .unwrap()
             .version_id
             .clone()
@@ -270,7 +270,10 @@ fn configured_owner_history_reads_exact_admitted_revision_without_other_sources(
     );
     drop(f.core);
     f.core = Core::new(&f.data).unwrap();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let guard = fs::OpenOptions::new()
         .read(true)
         .share_mode(0)
@@ -978,7 +981,10 @@ fn history_reused_note_name_does_not_inherit_prebirth_moves() {
         source: display(&f.root.join("Note")),
         name: "Previous".into(),
     });
-    let fresh_note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let fresh_note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let fresh_history = f.core.list_history(&fresh_note.session_id).unwrap();
     assert_ne!(fresh_note.node_id, original_id);
     assert_eq!(fresh_history.versions.len(), 1);

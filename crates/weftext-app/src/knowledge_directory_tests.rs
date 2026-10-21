@@ -1,6 +1,8 @@
 //! Real local Directory operations keep child documents in the existing
 //! namespace-result contract; the shared editor/draft is never replaced here.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::{Arc, Mutex};
@@ -27,7 +29,7 @@ fn admit_directory(core: &mut Core, root: &Path, directory: &Path) {
 }
 
 fn note(core: &mut Core, root: &Path, parent: &Path, name: &str) -> OpenedDocument {
-    let opened = core.create_note(root, parent, name).unwrap();
+    let opened = core.create_note_fixture(root, parent, name).unwrap();
     core.save(SaveRequest {
         session_id: opened.session_id,
         base_id: opened.base_id,
@@ -48,7 +50,7 @@ fn fixture() -> Fixture {
     let nested = source.join("Nested");
     admit_directory(&mut core, &root, &nested);
     let target = root.join("Target");
-    core.create_note(&root, &root, "Target").unwrap();
+    core.create_note_fixture(&root, &root, "Target").unwrap();
     let first = note(&mut core, &root, &source, "First");
     let second = note(&mut core, &root, &nested, "Second");
     let outside = note(&mut core, &root, &root, "FolderSibling");

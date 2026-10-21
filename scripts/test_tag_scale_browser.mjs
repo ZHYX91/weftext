@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // TAG10: actual embedded local/hosted controls consume one Core-imported forest.
 // This is a bounded Windows browser acceptance, not OS IME/AT or timing parity.
 import assert from 'node:assert/strict';
@@ -70,7 +71,7 @@ async function releaseQuery(holder, query, before, focusName, keepWatching = fal
   assert.deepEqual(after.state, before, 'A late actual Query response must preserve the original controls, raw inputs and selections'); assert.deepEqual(after.removals, [], 'Original Query inputs and navigation must remain mounted throughout response delivery'); assert.equal(after.focused, true, 'Actual focused Query control must retain keyboard focus'); assert.deepEqual(result.routeErrors, []); return after;
 }
 try {
-  await start(); await api('/api/library/create', { path: root, operationId: randomUUID() }); const anchor = await api('/api/note/create', { root, parent: root, name: 'Anchor', operationId: randomUUID() });
+  await start(); await api('/api/library/create', { path: root, operationId: randomUUID() }); const anchor = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Anchor', operationId: randomUUID() }));
   const schema = await api('/api/data/schema', { root }); await writeFile(path.join(out, 'schema.json'), schema.source);
   const helper = path.join(out, 'owned-native-fixture.py'); await writeFile(helper, String.raw`import json,sys
 from pathlib import Path

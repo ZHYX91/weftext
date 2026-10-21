@@ -782,13 +782,15 @@ impl Core {
         // Plan's captured tree. Compare the original unfinished writer's frozen
         // addresses against both namespace scopes, rather than scanning current
         // files or treating absent children as unowned slots.
-        for other in self.operations.values().filter(|other| {
-            other.operation_id != plan.operation_id
-                && !self.committed(&other.operation_id)
-                && !self.resolved(&other.operation_id)
-                && (other.transaction.is_none()
-                    || self.journal_path(&other.operation_id, "install").exists())
-        }) {
+        for other in self.operations.values() {
+            if other.operation_id == plan.operation_id
+                || self.committed(&other.operation_id)
+                || self.resolved(&other.operation_id)?
+                || (other.transaction.is_some()
+                    && !self.journal_path(&other.operation_id, "install").exists())
+            {
+                continue;
+            }
             let mut paths = Vec::new();
             if let Some(transaction) = &other.transaction {
                 paths.extend(

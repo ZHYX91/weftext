@@ -134,6 +134,22 @@ impl Core {
         valid_operation_id(operation_id)?;
         let path = path.as_ref();
         let fingerprint = request_fingerprint(path, &options)?;
+        if !self.operations.contains_key(operation_id)
+            && let Some(record) = self.resolution_record(operation_id)?
+        {
+            if record.attempt.as_ref().is_some_and(|attempt| {
+                attempt.request_kind != "createLibrary" || attempt.wire_digest != fingerprint
+            }) {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "This cancelled attempt belongs to different input",
+                ));
+            }
+            return Err(CoreError::new(
+                "operationCanceled",
+                "The original creation attempt is durably cancelled",
+            ));
+        }
         if let Some(plan) = self.operations.get(operation_id) {
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
@@ -141,7 +157,7 @@ impl Core {
                     "This operationId already belongs to different input",
                 ));
             }
-            if self.resolved(operation_id) {
+            if !self.committed(operation_id) && self.resolved(operation_id)? {
                 return Err(CoreError::new(
                     "operationCanceled",
                     "The original creation was durably canceled or retained without activation",
@@ -225,28 +241,17 @@ impl Core {
             }
             return self.resolve_recovery(operation_id, "keepCurrent");
         }
-        let plan = journal::Plan::file(
-            operation_id.into(),
-            fingerprint,
-            root,
-            None,
-            serde_json::to_vec(&options)?,
-            None,
-            "cancelLibraryCreation",
-        );
-        if !is_cancellation(&plan) {
+        if let Some(record) = self.resolution_record(operation_id)?
+            && record.attempt.as_ref().is_some_and(|attempt| {
+                attempt.request_kind != "createLibrary" || attempt.wire_digest != fingerprint
+            })
+        {
             return Err(CoreError::new(
-                "invalidPlan",
-                "Cancellation must have no author participants",
+                "operationConflict",
+                "This cancelled attempt belongs to different input",
             ));
         }
-        // This narrow terminal record deliberately has no author stage or sync
-        // publication. Ordinary mutation plans continue through Core::stage.
-        journal::private_create(
-            &self.journal_path(operation_id, "plan"),
-            &serde_json::to_vec(&plan)?,
-        )?;
-        self.operations.insert(operation_id.into(), plan);
+        self.settle_local_attempt(operation_id, "createLibrary", &fingerprint)?;
         self.inspect_recovery(operation_id)
     }
 
@@ -490,7 +495,7 @@ impl Core {
     ) -> Result<RecoveryInfo> {
         let mut result = self.inspect_transaction_recovery(plan)?;
         if !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
+            && !self.resolved(&plan.operation_id)?
             && self.journal_path(&plan.operation_id, "install").exists()
             && result.members.iter().all(|m| {
                 if m.role == "write" {
@@ -510,7 +515,7 @@ impl Core {
         plan: &journal::Plan,
         action: &str,
     ) -> Result<RecoveryInfo> {
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
             return self.inspect_library_creation_recovery(plan);
         }
         let t = plan

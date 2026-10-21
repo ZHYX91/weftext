@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real hosted Query/embedded acceptance in owned fixtures. EXE and a new evidence
 // directory are required. Playwright comes from a general installation; Python
 // (only ZIP verification) must be supplied as an absolute general runtime path.
@@ -55,7 +56,7 @@ try {
   const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
   const originalSchema = await api('/api/data/schema', { root }), schema = JSON.parse(originalSchema.source), schemaOp = randomUUID(); schema.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const schemaPlan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(schema, null, 2), beforeSource: originalSchema.source, beforeRevision: originalSchema.revision, operationId: schemaOp }); await api('/api/data/schema/install', { operationId: schemaOp, planId: schemaPlan.planId });
-  const shared = await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() }), other = await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() });
+  const shared = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() })), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }));
   const inventory = await api('/api/library/open', { path: root }), sharedRef = `weftext-node://${inventory.workspaceId}/${shared.nodeId}`, otherRef = `weftext-node://${inventory.workspaceId}/${other.nodeId}`;
   const relation = schema.relations.find(item => item.field === 'people/parents').id;
   const source = (node, name, status, parents = '') => `#metadata((id: "${node.nodeId}", types: ("task", "person"), status: "${status}"${parents}, private: "PRIVATE_${name}_NEVER_QUERY")) <weftext>\n#set document(title: [文档${name}])\n#title()\n====== 深标题${name}😀\n正文${name}🌿\n`;

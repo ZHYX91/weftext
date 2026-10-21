@@ -21,7 +21,7 @@ impl Fixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let bytes = include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec();
         let schema = Schema::from_author_json(std::str::from_utf8(&bytes).unwrap()).unwrap();
         let operation = fresh();
@@ -296,7 +296,10 @@ fn hosted_definition_request_fingerprint_owner_actor_category_and_base_are_fence
             .code,
         "operationConflict"
     );
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let other = f
         .core
         .with_actor(ACTOR, |c| c.open(&other.path, Some(f.root.clone())))
@@ -589,7 +592,10 @@ fn hosted_definition_save_fingerprint_freezes_the_explicit_id_set() {
 fn hosted_definition_guard_holds_schema_and_callee_but_excludes_owner_and_deduplicates() {
     let mut f = Fixture::new();
     let doc = f.open();
-    let callee = f.core.create_note(&f.root, &f.root, "Callee").unwrap();
+    let callee = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Callee")
+        .unwrap();
     let schema_path = f.root.join(".weftext-schema.json");
     let paths = vec![display(&f.path), display(&schema_path), callee.path.clone()];
     let snapshots = f.core.read_snapshot(&f.root, &paths).unwrap().files;
@@ -894,7 +900,7 @@ fn hosted_definition_guard_rejects_competing_witnesses_absence_budget_and_other_
     f.core.create_library(&foreign_root).unwrap();
     let foreign = f
         .core
-        .create_note(&foreign_root, &foreign_root, "Note")
+        .create_note_fixture(&foreign_root, &foreign_root, "Note")
         .unwrap();
     let foreign = f
         .core

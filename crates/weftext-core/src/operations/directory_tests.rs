@@ -24,11 +24,11 @@ fn fixture() -> Fixture {
     core.execute_operation(&directory.preview.operation_id, &directory.preview.plan_id)
         .unwrap();
     let child = core
-        .create_note(&root, root.join("Folder"), "Child")
+        .create_note_fixture(&root, root.join("Folder"), "Child")
         .unwrap()
         .node_id
         .unwrap();
-    core.create_note(&root, &root, "Parent").unwrap();
+    core.create_note_fixture(&root, &root, "Parent").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     Fixture {
         temp,
@@ -533,9 +533,11 @@ fn directory_relocation_same_bytes_marker_replacement_after_original_move_refuse
 fn directory_relocation_node_guard_rejects_both_separator_recursions_and_allows_adjacent_prefix() {
     let mut f = fixture();
     let source = f.root.join("Folder").join("Child");
-    f.core.create_note(&f.root, &source, "Grand").unwrap();
     f.core
-        .create_note(&f.root, f.root.join("Folder"), "ChildNext")
+        .create_note_fixture(&f.root, &source, "Grand")
+        .unwrap();
+    f.core
+        .create_note_fixture(&f.root, f.root.join("Folder"), "ChildNext")
         .unwrap();
     let canonical = source.join("Child.typ");
     let before = capture_optional(&canonical).unwrap().unwrap();
@@ -604,8 +606,12 @@ fn directory_relocation_ordinal_unicode_descendants_refuse_and_adjacent_prefix_i
     f.core
         .execute_operation(&admitted.preview.operation_id, &admitted.preview.plan_id)
         .unwrap();
-    f.core.create_note(&f.root, &source, "Inside").unwrap();
-    f.core.create_note(&f.root, &f.root, "äNeighbor").unwrap();
+    f.core
+        .create_note_fixture(&f.root, &source, "Inside")
+        .unwrap();
+    f.core
+        .create_note_fixture(&f.root, &f.root, "äNeighbor")
+        .unwrap();
     let alias = f.root.join("ä");
     let identity = ParentGuard::acquire(&source.join("weftext.directory.json"))
         .unwrap()

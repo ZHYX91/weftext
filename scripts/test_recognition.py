@@ -6,6 +6,7 @@ no models. Set WEFTEXT_RECOGNITION_RUNTIME explicitly for the additional real
 text-PDF / DOCX worker checks; absent runtime cases are reported as skipped.
 This entry does not establish browser, invoice quality, Office or OS IME passes.
 """
+from _creation_result import created_document
 import argparse
 import base64
 from contextlib import contextmanager
@@ -301,7 +302,7 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
         self.server = http.Server(['--no-browser', '--data-dir', str(self.data)])
         self.addCleanup(lambda: self.server.close())
         self.api('/api/library/create', {'path': str(self.root), 'operationId': http.uid()})
-        self.original = self.api('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'TEST-origin', 'operationId': http.uid()})
+        self.original = created_document(self.api('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'TEST-origin', 'operationId': http.uid()}))
         config = self.api('/api/data/schema', {'root': str(self.root)})
         plan = self.api('/api/data/schema/prepare', {'root': str(self.root), 'source': config['source'], 'beforeSource': config['source'], 'beforeRevision': config['revision'], 'operationId': http.uid()})
         self.api('/api/data/schema/install', {'operationId': plan['operationId'], 'planId': plan['planId']})

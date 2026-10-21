@@ -892,7 +892,7 @@ mod tests {
             let root = temp.path().join("Library");
             let mut core = Core::new(temp.path().join("private")).unwrap();
             core.create_library(&root).unwrap();
-            let note = core.create_note(&root, &root, "Note").unwrap();
+            let note = core.create_note_fixture(&root, &root, "Note").unwrap();
             let source = PathBuf::from(&note.path);
             let plan = core
                 .prepare_import_resource(

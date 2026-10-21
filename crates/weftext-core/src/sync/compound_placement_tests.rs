@@ -191,7 +191,7 @@ impl Pair {
             let directory = PathBuf::from(relative);
             let name = directory.file_name().unwrap().to_str().unwrap();
             let parent = ar.join(directory.parent().unwrap());
-            let doc = a.create_note(&ar, &parent, name).unwrap();
+            let doc = a.create_note_fixture(&ar, &parent, name).unwrap();
             let id = doc.node_id.unwrap();
             save(
                 &mut a,
@@ -392,7 +392,7 @@ impl Pair {
                 if matches!(layout, Layout::ExtractDirectoryWithNewChild) {
                     let created = self
                         .a
-                        .create_note(&self.ar, self.ar.join("Parent"), "NewChild")
+                        .create_note_fixture(&self.ar, self.ar.join("Parent"), "NewChild")
                         .unwrap();
                     self.selected
                         .insert(ObjectKey::Node(created.node_id.unwrap()));
@@ -1006,7 +1006,7 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
         )
         .unwrap();
     assert!(pair.b.committed(&creation_id));
-    let child_key = ObjectKey::Node(child.node_id.unwrap());
+    let child_key = ObjectKey::Node(child.node_ids[0].clone());
     let after_local = pair
         .b
         .sync_local_state(pair.b.sync_setup_for(&pair.br).unwrap())
@@ -1942,6 +1942,7 @@ fn compound_exchange_explicit_actor_draft_resolution_does_not_resurrect_consumed
                     operation_id: fresh(),
                     source: merged.clone(),
                 })?
+                .receipt
                 .revision_id)
         })
         .unwrap();

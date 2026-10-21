@@ -3,6 +3,7 @@
 These cases use owned fixtures and the real Core journal/HTTP boundary. Local
 routes only provision the initial library/schema while its server is stopped.
 """
+from _creation_result import created_document
 import json
 import sys
 import unittest
@@ -288,8 +289,8 @@ class HostedDefinition(HostedQuery):
         self.provision()
         doc = self.open()
         prepared, request = self.proposal(doc, source=doc['source'] + '\nORIGINAL_OWNER_PRIVATE_PROPOSAL😀')
-        replacement = self.local(lambda api: api('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                                                                     'name': 'Replacement', 'operationId': uid()}))
+        replacement = self.local(lambda api: created_document(api('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                                                                     'name': 'Replacement', 'operationId': uid()})))
         original_bytes = (self.root / 'Shared/Shared.typ').read_bytes()
         other_bytes = (self.root / 'Replacement/Replacement.typ').read_bytes()
         self.server.close()

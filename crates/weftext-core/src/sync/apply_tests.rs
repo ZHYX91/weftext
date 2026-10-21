@@ -23,7 +23,7 @@ fn pair(names: &[&str]) -> Pair {
     a.create_library(&ar).unwrap();
     let keys: BTreeSet<_> = names
         .iter()
-        .map(|n| ObjectKey::Node(a.create_note(&ar, &ar, n).unwrap().node_id.unwrap()))
+        .map(|n| ObjectKey::Node(a.create_note_fixture(&ar, &ar, n).unwrap().node_id.unwrap()))
         .collect();
     let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;
     let mut b = Core::new(&bd).unwrap();
@@ -146,7 +146,7 @@ fn cancellation_of_unstarted_sync_is_durable_but_install_marker_requires_recover
             .code,
         "recoveryPending"
     );
-    assert!(!p.b.resolved(&preview.operation_id));
+    assert!(!p.b.resolved(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -943,8 +943,10 @@ fn retained_legacy_tag_branch_is_readable_but_cannot_install_over_current_hierar
 #[test]
 fn partial_replica_hydrates_new_tree_and_compound_existing_update_in_one_decision() {
     let mut p = pair(&["Note"]);
-    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
-    let child = p.a.create_note(&p.ar, p.ar.join("New"), "Child").unwrap();
+    let new = p.a.create_note_fixture(&p.ar, &p.ar, "New").unwrap();
+    let child =
+        p.a.create_note_fixture(&p.ar, p.ar.join("New"), "Child")
+            .unwrap();
     let resource =
         p.a.prepare_import_resource(&p.ar, &child.path, "new.bin", vec![1, 0, 255], &fresh())
             .unwrap();
@@ -1028,7 +1030,7 @@ fn partial_replica_hydrates_new_tree_and_compound_existing_update_in_one_decisio
 #[test]
 fn hydration_rechecks_absent_directory_and_does_not_advance_existing_source_on_collision() {
     let mut p = pair(&["Note"]);
-    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
+    let new = p.a.create_note_fixture(&p.ar, &p.ar, "New").unwrap();
     p.keys.insert(ObjectKey::Node(new.node_id.unwrap()));
     save(&mut p.a, &p.ar, "Note", "incoming existing update");
     transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
@@ -1057,7 +1059,7 @@ fn hydrated_node_afterimage_recovery_uses_original_objects_and_keeps_unrelated_s
     let unrelated =
         p.b.open(p.br.join("Note/Note.typ"), Some(p.br.clone()))
             .unwrap();
-    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
+    let new = p.a.create_note_fixture(&p.ar, &p.ar, "New").unwrap();
     let selected = BTreeSet::from([ObjectKey::Node(new.node_id.clone().unwrap())]);
     transfer(&p.a, &p.ar, &p.b, &p.identity, &selected);
     let preview = run(
@@ -1122,7 +1124,7 @@ fn hydration_carries_new_directory_bookmark_root_bookmark_tags_and_owned_child()
         &root_bookmark.preview.plan_id,
     )
     .unwrap();
-    let child = p.a.create_note(&p.ar, &folder, "Child").unwrap();
+    let child = p.a.create_note_fixture(&p.ar, &folder, "Child").unwrap();
     let registry = p.a.read_tag_registry(&p.ar).unwrap();
     let tag =
         p.a.prepare_create_tag(&p.ar, "new synchronized tag", &registry.base_id, &fresh())
@@ -1179,7 +1181,7 @@ fn hydration_carries_new_directory_bookmark_root_bookmark_tags_and_owned_child()
         "managed"
     );
     let newborn =
-        p.b.create_note(&p.br, p.br.join("Folder"), "LocalChild")
+        p.b.create_note_fixture(&p.br, p.br.join("Folder"), "LocalChild")
             .unwrap();
     p.b.publish_sync(&p.br).unwrap();
     let graph = p.b.read_sync_history(&p.identity).unwrap();
@@ -1334,7 +1336,7 @@ fn actual_source_and_resource_revisions_keep_annotation_anchor_exact_after_clone
         })
         .unwrap();
     assert_eq!(
-        no_op.revision_id.as_deref(),
+        no_op.receipt.revision_id.as_deref(),
         Some(current.revision_id.as_str())
     );
     assert_eq!(
@@ -1621,7 +1623,9 @@ fn received_rename_retains_resources_history_draft_and_physical_identity() {
 #[test]
 fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_consumers() {
     let mut p = pair(&["Note", "Destination"]);
-    let child = p.a.create_note(&p.ar, p.ar.join("Note"), "Child").unwrap();
+    let child =
+        p.a.create_note_fixture(&p.ar, p.ar.join("Note"), "Child")
+            .unwrap();
     let child_key = ObjectKey::Node(child.node_id.clone().unwrap());
     p.keys.insert(child_key.clone());
     transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);

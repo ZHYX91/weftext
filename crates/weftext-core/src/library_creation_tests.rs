@@ -564,7 +564,7 @@ fn library_creation_staged_before_tree_can_cancel_but_partial_tree_cannot() {
         let result = core.cancel_library_creation_with_options_and_id(&root, options(true), &op);
         if partial {
             assert_eq!(result.unwrap_err().code, "recoveryConflict");
-            assert!(!core.resolved(&op));
+            assert!(!core.resolved(&op).unwrap());
             assert!(root.exists());
         } else {
             assert_eq!(result.unwrap().status, "resolved");
@@ -657,10 +657,10 @@ fn library_creation_invalid_raw_request_cancellation_is_single_durable_terminal_
             .status,
         "resolved"
     );
-    assert!(!core.journal_path(&op, "resolution").exists());
-    assert!(is_cancellation(&core.operations[&op]));
-    // The Plan is already the complete cancel fact: the old two-record crash
-    // window cannot leave a raw path pending, even with no resolution record.
+    assert!(core.journal_path(&op, "resolution").exists());
+    assert!(!core.journal_path(&op, "plan").exists());
+    assert!(!core.operations.contains_key(&op));
+    // The one original resolution is a device fence, never an author Plan.
     drop(core);
     let mut core = Core::new(&data).unwrap();
     let status = core.inspect_recovery(&op).unwrap();
@@ -697,7 +697,16 @@ fn library_creation_cancel_terminal_recognizer_rejects_author_participants_or_ch
     let op = fresh();
     core.cancel_library_creation_with_options_and_id(&root, options(true), &op)
         .unwrap();
-    let original = core.operations[&op].clone();
+    let original = journal::Plan::file(
+        op.clone(),
+        request_fingerprint(&root, &options(true)).unwrap(),
+        &root,
+        None,
+        serde_json::to_vec(&options(true)).unwrap(),
+        None,
+        "cancelLibraryCreation",
+    );
+    assert!(is_cancellation(&original));
     let other = prepare(
         &mut core,
         &temp.path().join("other"),

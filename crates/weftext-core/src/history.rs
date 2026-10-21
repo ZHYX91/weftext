@@ -98,10 +98,16 @@ pub struct HistoryRestoreResult {
     pub source: String,
     pub version_id: String,
     pub protected_drafts: Vec<DraftAlternative>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_issue: Option<RecoveryIssue>,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryRestoreStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<Receipt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_error: Option<RecoveryIssue>,
     pub operation_id: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -800,6 +806,7 @@ impl Core {
             source: decode(&plan.after)?,
             version_id: binding.version_id.clone(),
             protected_drafts,
+            recovery_issue: None,
         })
     }
     fn authorize_restore_result(&self, binding: &RestoreBinding) -> Result<()> {
@@ -860,8 +867,15 @@ impl Core {
         let Some(plan) = self.operations.get(operation_id) else {
             return Ok(HistoryRestoreStatus {
                 operation_id: operation_id.into(),
-                status: "missing".into(),
+                status: if self.resolved(operation_id)? {
+                    "resolved"
+                } else {
+                    "missing"
+                }
+                .into(),
                 result: None,
+                receipt: None,
+                result_error: None,
             });
         };
         if plan.history_restore.is_none() {
@@ -871,42 +885,76 @@ impl Core {
             ));
         }
         let committed = self.committed(operation_id);
+        let (result, result_error) = if committed {
+            match self.restore_result(plan) {
+                Ok(result) => (Some(result), None),
+                Err(error) => (
+                    None,
+                    Some(RecoveryIssue {
+                        code: error.code,
+                        message: error.message,
+                    }),
+                ),
+            }
+        } else {
+            (None, None)
+        };
         Ok(HistoryRestoreStatus {
+            receipt: if committed {
+                plan.receipt.clone()
+            } else {
+                None
+            },
+            result_error,
             operation_id: operation_id.into(),
             status: if committed {
                 "committed"
-            } else if self.resolved(operation_id) {
+            } else if self.resolved(operation_id)? {
                 "resolved"
             } else {
                 "recoveryPending"
             }
             .into(),
-            result: if committed {
-                Some(self.restore_result(plan)?)
-            } else {
-                None
-            },
+            result,
         })
     }
-    pub fn restore_history(
-        &mut self,
-        request: HistoryRestoreRequest,
-    ) -> Result<HistoryRestoreResult> {
+    /// Result-delivery fallback must still belong to the exact original input;
+    /// an error code alone cannot distinguish conflict from a later read error.
+    pub fn history_restore_status_for_request(
+        &self,
+        request: &HistoryRestoreRequest,
+    ) -> Result<HistoryRestoreStatus> {
         valid_operation_id(&request.operation_id)?;
-        let fingerprint = hash(&serde_json::to_vec(&request)?);
-        // Reconcile the original exact operation before current session/Base
-        // checks. A lost response may have already advanced that Base.
+        self.check_restore_request(request)?;
+        self.history_restore_status(&request.operation_id)
+    }
+    fn check_restore_request(&self, request: &HistoryRestoreRequest) -> Result<()> {
         if let Some(plan) = self.operations.get(&request.operation_id) {
+            let fingerprint = hash(&serde_json::to_vec(request)?);
             if plan
                 .history_restore
                 .as_ref()
-                .is_none_or(|b| b.fingerprint != fingerprint)
+                .is_none_or(|binding| binding.fingerprint != fingerprint)
             {
                 return Err(CoreError::new(
                     "operationConflict",
                     "The original restore input is immutable; this operationId belongs to a different request",
                 ));
             }
+        }
+        Ok(())
+    }
+    pub fn restore_history(
+        &mut self,
+        request: HistoryRestoreRequest,
+    ) -> Result<HistoryRestoreResult> {
+        valid_operation_id(&request.operation_id)?;
+        self.check_attempt_not_cancelled(&request.operation_id)?;
+        let fingerprint = hash(&serde_json::to_vec(&request)?);
+        // Reconcile the original exact operation before current session/Base
+        // checks. A lost response may have already advanced that Base.
+        if let Some(plan) = self.operations.get(&request.operation_id) {
+            self.check_restore_request(&request)?;
             if self.committed(&request.operation_id) {
                 return self.restore_result(plan);
             }
@@ -1024,7 +1072,7 @@ impl Core {
             workspace_id: context.birth.workspace_id,
             identity: context.birth.identity,
         };
-        self.save_with_restore(
+        let outcome = self.save_with_restore(
             SaveRequest {
                 session_id: request.session_id,
                 base_id: request.base_id,
@@ -1033,11 +1081,13 @@ impl Core {
             },
             Some(binding),
         )?;
-        if let Some((root, path)) = explicit_owner {
-            self.restore_result_at(&self.operations[&operation_id], root, path)
+        let mut result = if let Some((root, path)) = explicit_owner {
+            self.restore_result_at(&self.operations[&operation_id], root, path)?
         } else {
-            self.restore_result(&self.operations[&operation_id])
-        }
+            self.restore_result(&self.operations[&operation_id])?
+        };
+        result.recovery_issue = outcome.recovery_issue;
+        Ok(result)
     }
 }
 fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {

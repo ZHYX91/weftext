@@ -1,6 +1,7 @@
 /** Transient history presentation only. Core owns versions, retention and Draft persistence. */
 import type { DocumentBasis } from "./data-panel";
 import type { Receipt } from "./types";
+import { freezeOriginalAttempt, originalFence, type FrozenOriginalAttempt, type OriginalFence } from "./original-operation";
 
 export interface HistoryContext extends DocumentBasis {
   baseSource: string;
@@ -79,8 +80,12 @@ export interface HistoryRestoreResult {
 export interface HistoryOperationStatus {
   operationId: string;
   status: "missing" | "committed" | "recoveryPending" | "resolved";
+  receipt?: Receipt;
   result?: HistoryRestoreResult;
+  resultError?: { code: string; message: string };
 }
+/** The generic settlement route returns a flat original fact, never a history result. */
+export interface HistorySettlement extends Partial<Receipt> { operationId: string; status: string }
 export interface HistoryRestoreBasis extends HistoryContext { selectedVersionId: string; selectedSource: string }
 export interface HistoryRestoreReview {
   basis: Readonly<HistoryRestoreBasis>;
@@ -92,13 +97,19 @@ export interface HistoryTransport {
   list(request: { sessionId: string }): Promise<HistoryList>;
   read(request: { sessionId: string; versionId: string }): Promise<HistorySource>;
   compare(request: { sessionId: string; versionId: string }): Promise<SavedHistoryComparison>;
-  restore(request: HistoryRestoreRequest): Promise<HistoryRestoreResult>;
+  restore(request: HistoryRestoreRequest): Promise<HistoryOperationStatus>;
   status(request: { operationId: string }): Promise<HistoryOperationStatus>;
+  settle(request: OriginalFence): Promise<HistorySettlement>;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
 const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code });
 const codeOf = (error: unknown): string => typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+function validRestoreReceipt(value: unknown, operationId: string): value is Receipt {
+  if (!value || typeof value !== "object") return false;
+  const receipt = value as Partial<Receipt>;
+  return receipt.operationId === operationId && ["saved", "committed"].includes(receipt.status ?? "") && typeof receipt.baseId === "string" && receipt.baseId.length > 0 && typeof receipt.path === "string" && receipt.path.length > 0 && typeof receipt.message === "string";
+}
 export function uncertainHistoryOperation(error: unknown): boolean {
   const code = codeOf(error);
   return !code || ["unknown", "resultUnknown", "recoveryPending", "pending", "in-progress", "pending_reconciliation"].includes(code);
@@ -164,13 +175,14 @@ export class HistoryController {
   review: HistoryRestoreReview | null = null;
   busy = false;
   uncertain = false;
-  operationState: HistoryOperationStatus["status"] | null = null;
+  private operation: HistoryOperationStatus | null = null;
   private generation = 0;
-  private rejected = false;
-  private pending: { request: Readonly<HistoryRestoreRequest>; basis: Readonly<HistoryRestoreBasis> } | null = null;
+  private pending: { request: Readonly<HistoryRestoreRequest>; basis: Readonly<HistoryRestoreBasis>; attempt: FrozenOriginalAttempt } | null = null;
   constructor(readonly host: HistoryTransport, readonly note: Readonly<HistoryContext>) {}
   get operationId(): string | null { return this.pending?.request.operationId ?? null; }
   get pendingBasis(): Readonly<HistoryRestoreBasis> | null { return this.pending?.basis ?? null; }
+  get operationState(): HistoryOperationStatus["status"] | null { return this.operation?.status ?? null; }
+  get originalReceipt(): Readonly<Receipt> | null { return this.operation?.receipt ?? null; }
   get locked(): boolean { return this.busy || this.pending !== null; }
   private context(): HistoryContext {
     const current = this.host.current();
@@ -244,30 +256,64 @@ export class HistoryController {
     if (!sameHistoryDraft(basis, current)) throw fail("draftChanged", "确认前草稿或保存基线已变化，请重新准备；输入已保留。");
     if ((basis.dirty || basis.source !== basis.baseSource) && draftAction !== "retain") throw fail("draftProtectionRequired", "请明确选择保留未保存草稿，再恢复旧版。");
     const request = Object.freeze({ sessionId: basis.sessionId, baseId: basis.baseId, versionId: basis.selectedVersionId, operationId: this.host.id(), draftAction, ...(draftAction === "retain" ? { draftSource: basis.source } : {}) });
-    this.pending = { request, basis }; this.operationState = null;
+    this.pending = { request, basis, attempt: freezeOriginalAttempt(request, "save") }; this.operation = null;
     return this.execute();
   }
   async retryOriginal(): Promise<HistoryRestoreResult> {
     if (!this.pending || this.busy) throw fail("operationPending", "没有可重试的原恢复，或原操作仍在处理。");
+    if (this.operation?.status === "committed") {
+      const result = await this.inspectOriginal();
+      if (result) return result;
+      throw fail("resultUnavailable", "原恢复已提交，准确结果尚不可交付；原回执和编号继续保留。");
+    }
     return this.execute();
   }
   private validateRestore(result: HistoryRestoreResult): void {
     const pending = this.pending!;
-    if (!result || result.receipt?.operationId !== pending.request.operationId || !["saved", "committed"].includes(result.receipt.status) || !result.receipt.baseId || typeof result.receipt.path !== "string" || result.source !== pending.basis.selectedSource || result.versionId !== pending.basis.selectedVersionId || !Array.isArray(result.protectedDrafts) || result.protectedDrafts.some(draft => !draft || typeof draft.source !== "string" || typeof draft.baseSource !== "string" || typeof draft.path !== "string" || typeof draft.baseKnown !== "boolean")) throw fail("resultUnknown", "恢复回执不完整或不对应原操作；请查询原结果。");
+    if (!result || !validRestoreReceipt(result.receipt, pending.request.operationId) || result.source !== pending.basis.selectedSource || result.versionId !== pending.basis.selectedVersionId || !Array.isArray(result.protectedDrafts) || result.protectedDrafts.some(draft => !draft || typeof draft.source !== "string" || typeof draft.baseSource !== "string" || typeof draft.path !== "string" || typeof draft.baseKnown !== "boolean")) throw fail("resultUnknown", "恢复回执不完整或不对应原操作；请查询原结果。");
   }
   private accept(result: HistoryRestoreResult): HistoryRestoreResult {
     this.validateRestore(result);
-    this.pending = null; this.review = null; this.uncertain = false; this.operationState = "committed";
+    this.pending = null; this.review = null; this.uncertain = false;
     return clone(result);
+  }
+  private remember(status: HistoryOperationStatus): void {
+    if (status.operationId !== this.pending!.request.operationId || !["missing", "committed", "recoveryPending", "resolved"].includes(status.status)) throw fail("resultUnknown", "查询回执不对应原恢复操作。");
+    if (this.operation?.status === "committed" && status.status !== "committed") throw fail("resultUnknown", "原恢复已确认提交；后续状态不一致，保留原回执与编号。");
+    if (status.status === "committed") {
+      const priorReceipt = this.operation?.status === "committed" && validRestoreReceipt(this.operation.receipt, status.operationId) ? this.operation.receipt : undefined;
+      const valid = validRestoreReceipt(status.receipt, status.operationId);
+      if (priorReceipt && valid && (status.receipt!.baseId !== priorReceipt.baseId || status.receipt!.path !== priorReceipt.path)) throw fail("resultUnknown", "后续回执与已确认原保存不一致；保留原回执与编号。");
+      this.operation = clone({ operationId: status.operationId, status: "committed", receipt: valid ? status.receipt : priorReceipt });
+      this.uncertain = false;
+      if (status.receipt !== undefined && !valid) throw fail("resultUnknown", "原恢复已提交，但这份保存回执无效；保留原编号继续查询。");
+      return;
+    }
+    this.operation = { operationId: status.operationId, status: status.status }; this.uncertain = status.status !== "resolved";
+  }
+  private consume(status: HistoryOperationStatus): HistoryRestoreResult | null {
+    this.remember(status);
+    if (status.status === "committed") {
+      const receipt = this.operation?.receipt;
+      if (!validRestoreReceipt(receipt, status.operationId)) throw fail("resultUnknown", "原恢复已提交，但原回执不完整；保留原编号继续查询。");
+      if (!status.result) return null;
+      if (status.result.receipt?.baseId !== receipt.baseId || status.result.receipt?.path !== receipt.path) throw fail("resultUnknown", "原恢复结果与提交回执不一致；保留原回执继续查询。");
+      return this.accept(status.result);
+    }
+    if (status.status === "resolved") { this.pending = null; this.review = null; }
+    return null;
   }
   private async execute(): Promise<HistoryRestoreResult> {
     this.busy = true;
-    try { return this.accept(await this.host.restore(clone(this.pending!.request))); }
+    try {
+      const status = await this.host.restore(clone(this.pending!.request)), result = this.consume(status);
+      if (result) return result;
+      throw fail("resultUnavailable", status.status === "committed" ? `原恢复已提交，准确结果暂不可交付；原回执和编号已保留。${status.resultError?.message ?? "请查询原恢复结果。"}` : "原恢复尚未交付完成结果，请查询原编号。");
+    }
     catch (error) {
       // Even an ordinary API error can arise while reading evidence after a
       // commit. Only the original operation status can prove no registered save.
-      this.rejected = !uncertainHistoryOperation(error);
-      this.uncertain = true; this.operationState = null;
+      this.uncertain = this.operation?.status !== "committed";
       throw error;
     } finally { this.busy = false; }
   }
@@ -275,18 +321,22 @@ export class HistoryController {
     if (!this.pending || this.busy) throw fail("operationPending", "没有可查询的原恢复，或查询仍在进行。");
     this.busy = true;
     try {
-      const result = await this.host.status({ operationId: this.pending.request.operationId });
-      if (result.operationId !== this.pending.request.operationId) throw fail("resultUnknown", "查询回执不对应原恢复操作。");
-      this.operationState = result.status;
-      if (result.status === "committed") {
-        if (!result.result) throw fail("resultUnknown", "原操作已提交但准确回执未取得，请继续查询原结果。");
-        return this.accept(result.result);
+      let result = await this.host.status({ operationId: this.pending.request.operationId });
+      this.remember(result);
+      if (result.status === "missing") {
+        const settled = await this.host.settle(await originalFence(this.pending.attempt));
+        if (settled.operationId !== this.pending.request.operationId) throw fail("resultUnknown", "终结回执不对应原恢复操作。");
+        if (["committed", "saved"].includes(settled.status)) {
+          const receipt = validRestoreReceipt(settled, settled.operationId) ? { operationId: settled.operationId, status: settled.status, baseId: settled.baseId, path: settled.path, message: settled.message } : undefined;
+          this.remember({ operationId: settled.operationId, status: "committed", receipt });
+          // A restore can commit between missing and settle. The generic flat
+          // receipt proves that fact; only history/status delivers its result.
+          result = await this.host.status({ operationId: settled.operationId });
+        } else if (settled.status === "resolved" || settled.status === "recoveryPending") result = { operationId: settled.operationId, status: settled.status };
+        else throw fail("resultUnknown", "原恢复终结结果尚不可确认；保留原编号。");
       }
-      if (result.status === "resolved") { this.pending = null; this.review = null; this.uncertain = false; }
-      else if (result.status === "missing" && this.rejected) { this.pending = null; this.review = null; this.uncertain = false; }
-      else this.uncertain = true;
-      return null;
-    } catch (error) { this.uncertain = true; throw error; }
+      return this.consume(result);
+    } catch (error) { this.uncertain = this.operation?.status !== "committed"; throw error; }
     finally { this.busy = false; }
   }
 }
