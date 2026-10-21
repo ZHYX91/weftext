@@ -1,5 +1,5 @@
 use crate::*;
-use chrono::{Datelike, Days, NaiveDate, Weekday};
+use chrono::{Datelike, Days, NaiveDate, Timelike, Weekday};
 use std::cmp::Ordering;
 
 fn member_text<'a>(v: &'a NativeValue, key: &str) -> Result<&'a str> {
@@ -268,6 +268,10 @@ impl ExactInstant {
                 format!(".{tail}")
             }
         ))
+    }
+    /// Add whole seconds while preserving the exact fractional second.
+    pub fn shifted_seconds(&self, seconds: i64) -> Result<Self> {
+        self.shifted(seconds, &ExactDecimal::parse("0")?)
     }
     pub(crate) fn shifted(&self, seconds: i64, fraction: &ExactDecimal) -> Result<Self> {
         let zero = ExactDecimal::parse("0")?;
@@ -1425,6 +1429,21 @@ impl FrozenZone {
         if !matches!(fold, "earlier" | "later") {
             return Err(DataError("Explicit earlier/later fold required".into()));
         }
+        let candidates = self.instant_candidates(local, fraction)?;
+        Ok(if fold == "earlier" {
+            candidates.first()
+        } else {
+            candidates.last()
+        }
+        .cloned())
+    }
+    /// All proven candidates, so a single-shot reminder never guesses a fold
+    /// or silently treats a skipped civil time as an absent reminder.
+    pub(crate) fn instant_candidates(
+        &self,
+        local: chrono::NaiveDateTime,
+        fraction: &ExactDecimal,
+    ) -> Result<Vec<ExactInstant>> {
         let seconds = local.and_utc().timestamp();
         let earliest = ExactInstant {
             utc_seconds: seconds - self.max_offset,
@@ -1453,12 +1472,76 @@ impl FrozenZone {
             .collect::<Vec<_>>();
         candidates.sort_by(ExactInstant::compare);
         candidates.dedup_by(|a, b| a.compare(b).is_eq());
-        Ok(if fold == "earlier" {
-            candidates.first()
-        } else {
-            candidates.last()
+        Ok(candidates)
+    }
+    /// First proven exit from this exact civil minute after a selected fold.
+    /// A transition may end a minute early or keep the clock in it longer;
+    /// never extend a window under an offset which already stopped applying.
+    pub(crate) fn reminder_minute_end(
+        &self,
+        selected: &ExactInstant,
+        local: chrono::NaiveDateTime,
+    ) -> Result<ExactInstant> {
+        let zero = ExactDecimal::parse("0")?;
+        let local_start = local.and_utc().timestamp() - i64::from(local.second());
+        let local_end = ExactInstant {
+            utc_seconds: local_start + 60,
+            fraction: zero.clone(),
+        };
+        let local_start = ExactInstant {
+            utc_seconds: local_start,
+            fraction: zero.clone(),
+        };
+        let mut active = false;
+        for (start, end, offset) in &self.segments {
+            if !active {
+                if selected.compare(start).is_lt() || !selected.compare(end).is_lt() {
+                    continue;
+                }
+                active = true;
+            } else {
+                let after = ExactInstant {
+                    utc_seconds: start
+                        .utc_seconds
+                        .checked_add(*offset)
+                        .ok_or_else(|| DataError("Reminder minute overflow".into()))?,
+                    fraction: start.fraction.clone(),
+                };
+                if after.compare(&local_start).is_lt() || !after.compare(&local_end).is_lt() {
+                    return Ok(start.clone());
+                }
+            }
+            let natural = ExactInstant {
+                utc_seconds: local_end
+                    .utc_seconds
+                    .checked_sub(*offset)
+                    .ok_or_else(|| DataError("Reminder minute overflow".into()))?,
+                fraction: zero.clone(),
+            };
+            if natural.compare(end).is_lt() {
+                return Ok(natural);
+            }
         }
-        .cloned())
+        Err(DataError(
+            "Zone coverage unavailable for the complete reminder minute".into(),
+        ))
+    }
+}
+
+pub(crate) fn reminder_civil_day(
+    value: &NativeValue,
+    schema: &Schema,
+) -> std::result::Result<NaiveDate, Cell> {
+    match endpoint(value, schema)? {
+        Endpoint::Civil {
+            precision, lo, hi, ..
+        } if precision == "day" && lo == hi => i32::try_from(lo)
+            .ok()
+            .and_then(NaiveDate::from_num_days_from_ce_opt)
+            .ok_or_else(|| invalid("Reminder civil day outside supported bounds")),
+        _ => Err(invalid(
+            "A due-day reminder requires one complete civil due date",
+        )),
     }
 }
 /// Converts civil Period bounds only with the exact series zone. A skipped gap

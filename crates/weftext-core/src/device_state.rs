@@ -10,6 +10,26 @@ use std::path::PathBuf;
 pub(crate) const DEVICE_STATE_ROOT: &str = "device-state";
 const MAX_RECORD_BYTES: usize = 16 * 1024 * 1024;
 const MAX_NAMESPACE_MEMBERS: usize = 128;
+#[cfg(all(test, windows))]
+thread_local! {static FAILPOINT:std::cell::Cell<Option<&'static str>>=const{std::cell::Cell::new(None)};}
+#[cfg(all(test, windows))]
+pub(crate) fn set_test_failpoint(point: &'static str) {
+    FAILPOINT.with(|active| active.set(Some(point)));
+}
+#[cfg(all(test, windows))]
+fn test_failpoint(point: &str) -> Result<()> {
+    FAILPOINT.with(|active| {
+        if active.get() == Some(point) {
+            active.set(None);
+            Err(CoreError::new(
+                "injectedFailure",
+                format!("Interrupted device record at {point}"),
+            ))
+        } else {
+            Ok(())
+        }
+    })
+}
 
 /// A retained identity is current only when its OS protection, Windows user and
 /// original physical Core directory all match. Copies are never silently adopted.
@@ -180,9 +200,11 @@ impl Core {
             DeviceRecordKind::DesktopPreferences => {
                 crate::desktop_preferences::validate_record(bytes)?
             }
-            // Their owners perform strict typed validation before this shared
-            // primitive. Backup will reject them until their real validator is linked.
-            DeviceRecordKind::Reminders | DeviceRecordKind::ClientPreferences => {}
+            DeviceRecordKind::Reminders => {
+                crate::reminder_device_state::validate_reminder_device_record(bytes)?
+            }
+            // Client preferences remain owned by their separate typed consumer.
+            DeviceRecordKind::ClientPreferences => {}
         }
         if let Some(expected) = expected_digest
             && (expected.len() != 64
@@ -211,11 +233,15 @@ impl Core {
         file.write_all(bytes)?;
         file.sync_all()?;
         drop(file);
+        #[cfg(all(test, windows))]
+        test_failpoint("beforePublish")?;
         if expected_digest.is_some() {
             crate::backend::publish_private_replace(&temporary, &path)?;
         } else {
             crate::backend::publish_private_create(&temporary, &path)?;
         }
+        #[cfg(all(test, windows))]
+        test_failpoint("afterPublish")?;
         let actual = self
             .read_device_record(kind, MAX_RECORD_BYTES)?
             .ok_or_else(|| evidence("Published device record readback is missing"))?;
@@ -304,7 +330,15 @@ pub(crate) fn validate_backup_record(kind: DeviceRecordKind, bytes: &[u8]) -> Re
     match kind {
         DeviceRecordKind::Identity => validate_identity_record(bytes).map(|_| ()),
         DeviceRecordKind::DesktopPreferences => crate::desktop_preferences::validate_record(bytes),
-        DeviceRecordKind::Reminders | DeviceRecordKind::ClientPreferences => Err(evidence(
+        DeviceRecordKind::Reminders => {
+            crate::reminder_device_state::validate_reminder_device_record(bytes).map_err(|error| {
+                evidence(&format!(
+                    "Invalid task reminder device record: {}",
+                    error.message
+                ))
+            })
+        }
+        DeviceRecordKind::ClientPreferences => Err(evidence(
             "This build has no strict validator for this device record type",
         )),
     }

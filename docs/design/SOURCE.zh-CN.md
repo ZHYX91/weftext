@@ -325,7 +325,7 @@ relationship分支与target.ref/text是两件独立事实。表单改称谓不�
 | --- | --- | --- |
 | Person | 共用names/phones/emails/addresses/websites；accounts(service/serviceKey/identifier/usage/customLabel)；avatar资源；nationality_states/legal_sex_states/gender_identity_states(value)；professions(text/context)；engagements(employer/department/position/rank{system,level}/status)；life_events(kind/customKind/event_time/description/confidence)；measurements(kind/quantity{value,unit,precision}/observed_at)；九类人物关系 | 名称一份业务权威；所有有用期间/备注/来源保在同record，默认不必填。preferred/selected多项时显式歧义，不能最后一项胜出。生日从所选birth event或其MonthDay派生，不另双写birthday。任职相关条件同项绑定，测量单位量纲校验，人物文字target不造节点/反向。 |
 | Org | 共用联系组；organization_states、identifiers、classifications、sites；十二类组织关系 | scheme/value独立，site不偷换website；parent最多一项，关系target使用RefTarget，不允许literal逃目标类型域；所有Org目标按Org类型校验；目录parent无互推，人员名册只派生engagement。 |
-| Task | required status；priority/start/due/completed_at；dependencies数组record(target node_ref,during/note/sources/status)；project node_ref | status改动和完成时间是显式独立效果；dependencies目标Task，inverse dependent派生；project普通笔记，不强制Project类型。正文即详情，无镜像。 |
+| Task | required status；priority/start/due/completed_at/reminder；dependencies数组record(target node_ref,during/note/sources/status)；project node_ref | status改动和完成时间是显式独立效果；dependencies目标Task，inverse dependent派生；project普通笔记，不强制Project类型。正文即详情，无镜像。单一提醒意图见§5.2。 |
 | Work/Paper | 一份publication record：kind、identifiers、publication_history、resources、保序contributors(agent/credited_as/family/given/roles/affiliations)、venue、version_of、title/alternative_titles/issued/container/volume/issue/pages/abstract/citation_key/url/keywords/language/sources | formal数据一份；creator可ref Person/Org或显式literal，venue ref Work/Org、version_of ref Work，均最多1。角色/作者顺序完整，未知作者不强建人。完整引用输出操作才检查所需title/kind/authors，不反推所有Work必填。 |
 | Period | required period含series_key/kind/calendar/calendar_version/rule/key/zone/zone_version | 集中series policy决定scope/multiplicity，不写第二份政策。period provider验证真实key→半开bound；week ISO week-year；先查已有，再明确新建。unique需Core完整current负范围和并发事务。 |
 | Range | required range(start,end_exclusive)，TemporalEndpoint保年/月/日或instant、至少一端有界，两端同域且start<end | 开放端缺席，非none/现在/极值。半开overlap统一，duration派生。UI包含末日仅表示选择，保原exclusive端点精度。 |
@@ -360,6 +360,22 @@ relationship分支与target.ref/text是两件独立事实。表单改称谓不�
 历法/节假日pack是获权服务上下文，停用不删日期；不在源复制单isHoliday。ICS UID/RECURRENCE-ID/SEQUENCE是外部来源控制而非笔记身份；导入保原件/unknown property、附件与损失报告；subscribe/upsert仍需独立连接能力，普通导入不冒同步。完整HR/CRM、单位换算、国家职级pack、工商/文献connector、投稿/协同审稿、完整Projects/Assets/Places等仍候选或后置；不能从“所有类型”原则发明首发范围。Diary只是周期笔记/模板使用方式，不增平行身份。
 
 publication.citation_key仅是新绑定建议，稳定引用声明见§1.2。DOI只存publication.identifiers的scheme/value项，不再另存doi镜像。Work与paper共享一份publication记录，paper requires work；kind、publication_history、resources、contributors、venue、version_of及正式引用数据都在该记录，不另建Library副本。DOI 是 external identifier，不自动成为笔记 ID，也不默默合并不同稿件/版本。导入按获权候选确认创建/匹配/更新；未知信息和源文件保留，未支持的引用字段列损失报告。已知值与导入原值冲突需要选择，不能覆盖。
+
+### 5.2 单一任务提醒意图
+
+可选 FieldId `tasks/reminder`、作者 key `reminder` 是一个 closed union；未填不提醒，`none` 不代替缺席。每个分支都有稳定小写 UUIDv4 `id`，这是提醒业务身份，不是所有原生值的通用行 ID。切换分支保留该 ID；复制任务仍须按新 NodeRef 在本设备明确启用。不得将推导触发时刻双写为另一可编辑字段。
+
+| kind | 准确成员 | 语义 |
+| --- | --- | --- |
+| `absolute` | `id,kind,at` | `at` 为带显式偏移的 exact instant；可无 due，不随 due 改期。 |
+| `due_before` | `id,kind,before` | `before` 为非负 exact_seconds 字符串；due 必须为 exact instant。用精确十进制相减，保留 due 和提前量的秒及更细精度。 |
+| `due_day` | `id,kind,clock,zone,zone_version`，可选 `fold` | due 必须是完整 civil day；`clock` 为 `(time: native time, fraction?: exact_decimal)`，fraction 属 `[0,1)`；显式冻结 zone/key+version，fold 仅 `earlier/later`。 |
+
+三个分支及 clock 均拒绝未知或重复成员。提前量上限为 128849018820 秒。年月精度、未知历法／时区版本、coverage 外时间、DST gap、歧义而未选 fold 和闰秒不能猜成可执行时刻。捆绑配置当前仅提供 `UTC/fixed-utc.v1` 时区；不存在宿主 IANA 数据回退。自定义冻结规则必须由同一批准 provider 资格化。唯一解析函数返回 ready/absent/invalid/unavailable、精确 UTC trigger、目标 civil minute 的 exclusive end 和实际 provider 指纹，不读取时钟或文件。
+
+Type validator `temporal/task-reminder`（`temporal/rules` 的 `task-reminder` 操作）静态声明 reminder 与 due 两个 Field 输入；两者均至多一个值，不因分支绕过必要读资格。分支解析只将实际时间依赖计入定义摘要：absolute 不依赖 due；due_before 依赖准确 due 与提前量；due_day 依赖完整日、clock、所选 zone/version 与实际触发结果。无关正文、title、路径或整个 Schema 修订不成为执行键版本。Query、字段修改校验与表单共用这一语义；改 due 时会重新校验受影响的 reminder。
+
+分钟辅助输入仅替换日期／小时／分钟，保留已有秒、小数和显式偏移；提前分钟使用精确整数运算并保留原秒余量。全天不变成宿主零点，语言与设备时区只影响显示。提醒随原作者字节走普通保存、历史与同步，设备启用、处理状态及 OS 提交结果不写入作者字段。Event 的既有 `reminders` 仍是事件意图，不据此触发任务投递。
 
 ## 6. 表单、Query、导出与安全编辑
 

@@ -409,6 +409,37 @@ fn validate_type_constraint(
                 }
             }
         }
+        "task-reminder" => {
+            let reminder = match constraint_values(c, "reminder", p) {
+                Ok(v) => v,
+                Err(e) => {
+                    out.unavailable.push(e);
+                    return out;
+                }
+            };
+            let due = match constraint_values(c, "due", p) {
+                Ok(v) => v,
+                Err(e) => {
+                    out.unavailable.push(e);
+                    return out;
+                }
+            };
+            if reminder.len() > 1 || due.len() > 1 {
+                out.diagnostics
+                    .push("Task reminder inputs must each select at most one value".into());
+                return out;
+            }
+            let resolution = crate::resolve_task_reminder(
+                reminder.first().copied(),
+                due.first().copied(),
+                schema,
+            );
+            match resolution.validation() {
+                Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(diagnostics),
+                Cell::Unavailable { reason } => out.unavailable.push(reason),
+                _ => {}
+            }
+        }
         "event" => {
             let recurrence = match constraint_values(c, "recurrence", p) {
                 Ok(v) => v,
@@ -1592,3 +1623,52 @@ pub fn capture_template(
 #[path = "narrow.rs"]
 mod narrow;
 pub use narrow::*;
+
+#[cfg(test)]
+mod reminder_constraint_tests {
+    use super::*;
+    #[test]
+    fn reminder_constraint_rejects_multi_value_selector_instead_of_ignoring_later_input() {
+        let schema = Schema::bundled().unwrap();
+        let mut constraint = schema
+            .types
+            .iter()
+            .find(|t| t.id == "tasks/task")
+            .unwrap()
+            .constraints
+            .iter()
+            .find(|c| c.validator == "temporal/task-reminder")
+            .unwrap()
+            .clone();
+        constraint.inputs.insert(
+            "due".into(),
+            Selector::Field {
+                id: "tasks/due".into(),
+                path: vec![SchemaPath::Each],
+            },
+        );
+        let source = "#metadata((id: \"6fc0e4b4-8a30-4dfe-b093-0d334f24d8ad\", types: (\"task\",), status: \"open\")) <weftext>";
+        let mut projection = project(source, &schema);
+        projection
+            .fields
+            .iter_mut()
+            .find(|f| f.field_id == "tasks/due")
+            .unwrap()
+            .cell = Cell::Value {
+            value: NativeValue::Array(vec![
+                NativeValue::Text("2026-10-23T09:00:00Z".into()),
+                NativeValue::Text("invalid later due".into()),
+            ]),
+        };
+        let result = validate_type_constraint(
+            &constraint,
+            &projection,
+            &schema,
+            &ValidationContext::default(),
+        );
+        assert!(
+            result.diagnostics.iter().any(|d| d.contains("at most one")),
+            "{result:?}"
+        );
+    }
+}

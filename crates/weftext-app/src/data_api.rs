@@ -15,10 +15,13 @@ use weftext_data::{NativeValue, Schema, ValuePath};
 
 const BUNDLED_SCHEMA_SOURCE: &str =
     include_str!("../../../docs/design/examples/schema.authoring.json");
+#[path = "reminder_api.rs"]
+mod reminder_api;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .merge(crate::capture_api::router())
+        .merge(reminder_api::router())
         .route("/api/data/schema", post(schema))
         .route("/api/data/schema/prepare", post(prepare_schema))
         .route("/api/data/schema/install", post(install_schema))
