@@ -166,7 +166,13 @@ Acceptance of the established 0.6.0 Windows/NTFS structural, semantic and separa
 
 Candidate acceptance runs frontend/Rust tests, baseline/feature/output HTTP scenarios, formatting/Clippy, fonts and documentation/bounded-model checks. Actual browser and Office checks are recorded separately; XML inspection does not replace opening, numbering updates or editability in a target application. See the delivery record for exact candidate results rather than reusing earlier pass counts as this version's evidence.
 
-Requires Rust, Node.js/npm, Python 3.11+ and Windows C++ build tools. This work used Rust 1.98, Node.js 24 and official Typst 0.15.1.
+Requires Rust through rustup, Node.js/npm, Python 3.11+ and Windows C++ build tools. The repository's `rust-toolchain.toml` selects the same Rust 1.99.1 and components for local work and CI without changing the machine default. Earlier candidate evidence used Rust 1.98; Node.js 24 and official Typst 0.15.1 remain in use.
+
+The first 0.7 host-foundation refactor reuses the `weftext-app` library and its `LocalService::bind` / `browser_url` / `serve_until` boundary. The existing console still provides the local browser or `--no-browser` service and the `--server-config` hosted service. The version remains `0.6.3-rc.4`; this does not complete tray support, reminders, Mobile or all of 0.7. One Core owns the private-directory lease. The host selects shutdown; browsers and future native windows do not create another writer.
+
+Explicit `--data-dir` still selects persistent state for the current local service. Windows retains `%LOCALAPPDATA%/Weftext-MVP`; macOS selects `$HOME/Library/Application Support/Weftext`, and Linux selects absolute `$XDG_DATA_HOME/weftext` or `$HOME/.local/share/weftext` when that variable is unset. A missing, empty or non-absolute default root fails explicitly rather than selecting temporary storage. Core still checks actual backend capability; choosing a directory does not implement a non-Windows write backend. This is the existing portable service's data policy, without an established MSIX guarantee for recovery drafts outside the package or uninstall preservation.
+
+Default-browser handoff uses Windows Shell, macOS `/usr/bin/open` or Linux `xdg-open`. A failed handoff is reported explicitly while the local service and its printed address remain available; `--no-browser` skips it. Handoff waits at most ten seconds, then reports an unconfirmed outcome without retrying; the OS may still process the original request. HTTP responds during handoff, and stopping the service does not wait for an unfinished handoff. Windows uses an independent OS-call thread so it cannot hold the host runtime's shutdown. OS acceptance does not prove that a browser page loaded or qualify an untested platform. Internal worker flags cannot mix with user launch modes, and `--root` requires `--open`.
 
 ```text
 python scripts/mvp.py build
@@ -174,7 +180,7 @@ python scripts/mvp.py check
 python scripts/mvp.py package
 ```
 
-The default builds a local debug candidate; `--release` selects optimization. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
+The default builds a local debug candidate; `--release` selects optimization. The entry uses Cargo's reported executable path, including `CARGO_TARGET_DIR` or Cargo configuration overrides, for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
 
 Packaging creates a new `dist/` directory, retains previous candidates and does not push or publish. It includes the working-tree source snapshot, licenses, font manifests and build dependency notices. The inventory includes test/build dependencies, not a claim every item is in the binary. Published releases follow [WORKFLOW](WORKFLOW.md).
 

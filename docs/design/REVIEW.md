@@ -8,7 +8,7 @@ translation_status: synced
 
 # Final design acceptance and evidence limits
 
-This file retains the fixed final disposition and subsequent refinement limits. Earlier rounds and CI links belong to the archived repository. Section number 7 preserves the original reference. Required bounded experiments remain in [examples](examples/) and [probes](probes/). Repository consolidation does not claim product implementation or another global technical review.
+This file retains the fixed final disposition and subsequent refinement limits. Earlier rounds and CI links belong to the archived repository. Section number 7 preserves the original reference. Required bounded experiments remain in [examples](examples/) and [probes](probes/). Section 7's fixed design acceptance and §8's bounded refinements on 2026-10-13 are historical evidence; their unimplemented/unrun statements describe only those baselines and rounds. [MVP](../MVP.md) / [ROADMAP](../ROADMAP.md) record current implementation, actual support and unverified scope. Later slices verify their actual impact; earlier design acceptance establishes neither current product acceptance nor another global technical review, and does not claim whole-version or whole-architecture implementation. Historical technical dispositions and evidence limits below remain verbatim.
 
 ## 7. f951 independent global final review: design accepted
 

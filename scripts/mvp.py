@@ -25,16 +25,34 @@ def run(*args, capture=False, env=None):
 def build(release):
     run(NPM, '--prefix', 'app', 'ci', '--ignore-scripts')
     run(NPM, '--prefix', 'app', 'run', 'build')
-    args = ['cargo', 'build', '--locked', '-p', 'weftext-app']
+    args = ['cargo', 'build', '--locked', '-p', 'weftext-app',
+            '--message-format=json-render-diagnostics']
     if release:
         args.append('--release')
-    run(*args)
-    return ROOT / 'target' / ('release' if release else 'debug') / ('weftext.exe' if os.name == 'nt' else 'weftext')
+    executable = None
+    # Cargo owns the output location, including target-dir and target overrides.
+    # Never check or package an old default-target executable after a new build.
+    with subprocess.Popen(args, cwd=ROOT, stdout=subprocess.PIPE,
+                          text=True, encoding='utf-8') as process:
+        for line in process.stdout:
+            message = json.loads(line)
+            if (message.get('reason') == 'compiler-artifact'
+                    and message.get('target', {}).get('name') == 'weftext'
+                    and 'bin' in message['target']['kind']
+                    and message.get('executable')):
+                executable = Path(message['executable'])
+        if process.wait():
+            raise subprocess.CalledProcessError(process.returncode, args)
+    if executable is None or not executable.is_file():
+        raise RuntimeError('Cargo did not report the built Weftext executable')
+    print(f'Built executable: {executable}')
+    return executable
 
 
-def source_files():
+def source_files(target_directory):
     for directory, children, names in os.walk(ROOT):
-        children[:] = [name for name in children if name not in IGNORED]
+        children[:] = [name for name in children if name not in IGNORED
+                       and Path(directory) / name != target_directory]
         for name in names:
             p = Path(directory) / name
             if p.suffix not in {'.pyc', '.pyo'}:
@@ -44,6 +62,11 @@ def source_files():
 def package(executable):
     # Refuse to overwrite an existing candidate; a tested artifact keeps its identity.
     import datetime
+    metadata = json.loads(run('cargo', 'metadata', '--locked', '--format-version', '1', capture=True))
+    target_directory = Path(metadata['target_directory'])
+    if (target_directory.is_relative_to(ROOT)
+            and not target_directory.is_relative_to(ROOT / 'target')):
+        raise RuntimeError('Packaging requires target/ or a Cargo target directory outside the source tree')
     stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     destination = ROOT / 'dist' / f'weftext-{VERSION}-local-{stamp}'
     destination.mkdir(parents=True, exist_ok=False)
@@ -57,9 +80,8 @@ def package(executable):
         guide = re.sub(r'\[([^]]+)\]\([^)]+\)', r'\1 (source.zip/docs)', guide)
         (destination / f'README{lang}.txt').write_text(guide, encoding='utf-8')
     with zipfile.ZipFile(destination / 'source.zip', 'w', zipfile.ZIP_DEFLATED, strict_timestamps=False) as archive:
-        for file in source_files():
+        for file in source_files(target_directory):
             archive.write(file, file.relative_to(ROOT))
-    metadata = json.loads(run('cargo', 'metadata', '--locked', '--format-version', '1', capture=True))
     inventory = []
     licenses = destination / 'third-party'
 
