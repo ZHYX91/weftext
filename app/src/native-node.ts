@@ -1,5 +1,6 @@
 import { nativeStyleProperties } from "./native-style";
 import type { RenderNode } from "./types";
+import { LONG_TEXT_RUN } from "./text-layout";
 
 /** Shared allowlist for local and hosted projections; never inject author HTML. */
 export function nativeElement(node: RenderNode): HTMLElement | MathMLElement {
@@ -8,6 +9,9 @@ export function nativeElement(node: RenderNode): HTMLElement | MathMLElement {
     const tag = node.tag?.toLowerCase() ?? "span";
     const element: HTMLElement | MathMLElement = math.has(tag) ? document.createElementNS("http://www.w3.org/1998/Math/MathML", tag) : document.createElement(allowed.has(tag) ? tag : "div");
     element.classList.add("native-node");
+    // Huge unbroken runs make native kerning prohibitively expensive in Chrome.
+    // Keep the same text nodes, source mappings and wrapping on both clients.
+    if ((node.text?.length ?? 0) > LONG_TEXT_RUN || node.children.some(child => child.kind === "text" && (child.text?.length ?? 0) > LONG_TEXT_RUN)) element.style.fontKerning = "none";
     // Only individual semantic attributes are consumed. Author HTML/CSS is never injected.
     for (const attr of ["colspan", "rowspan", "start", "value", "aria-level"]) {
       const raw = node.attrs[attr]; const value = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : raw; if (typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 10000) element.setAttribute(attr, String(value));

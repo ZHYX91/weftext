@@ -6,6 +6,9 @@ import { bracketMatching, indentOnInput } from "@codemirror/language";
 import type { SyntaxToken } from "./types";
 import { currentSourceStyleBasis, retireSourceStylesEffect, sourceStyleModeEffect, sourceStyles, sourceTokensEffect, type SourceStyleBasis } from "./source-style";
 import { sourceCompositionHistory, SourceHistoryRequests, type SourceHistoryCommand } from "./source-history";
+import { sourceCodePointCount, sourceLongLines } from "./source-statistics";
+
+const boundedSourceShaping = EditorView.contentAttributes.compute([sourceLongLines], state => ({ class: state.field(sourceLongLines).length ? "cm-long-line" : "" }));
 
 export interface SourceSelection { from: number; to: number }
 export interface SourcePatch { from: number; to: number; expected: string; insert: string }
@@ -95,7 +98,6 @@ export function createSourceState(source: string, extensions: Extension[] = []):
 export class SourceEditor {
   view: EditorView;
   private editable = new Compartment();
-  private wrapped = new Compartment();
   private gutters = new Compartment();
   private listeners = new Set<(event: SourceEditorEvent) => void>();
   private inputComposition = false;
@@ -121,11 +123,11 @@ export class SourceEditor {
   constructor(source: string, onChange: (source: string) => void, save: () => void) {
     this.view = new EditorView({
       state: createSourceState(source, [
-          history(), this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
+          history(), sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
           bracketMatching(), indentOnInput(), highlightSelectionMatches(), sourceStyles, sourceRevealExtensions,
           sourceCompositionHistory(() => this.activeCompositionEpoch, transaction => !!transaction.annotation(nativeEdit)),
           this.editable.of(EditorView.editable.of(true)),
-          this.wrapped.of(EditorView.lineWrapping),
+          EditorView.lineWrapping, boundedSourceShaping,
           keymap.of([{ key: "Mod-s", run: () => { save(); return true; } }, { key: "Mod-Shift-z", run: () => this.requestHistory("redo", true), preventDefault: true }, ...defaultKeymap,
             ...historyKeymap.map(binding => ({ ...binding, run: binding.run === undo ? () => this.requestHistory("undo", true) : binding.run === redo ? () => this.requestHistory("redo", true) : binding.run })), ...searchKeymap, indentWithTab]),
           EditorView.contentAttributes.of({ "aria-label": "Typst 源码编辑器", spellcheck: "false" }),
@@ -158,7 +160,7 @@ export class SourceEditor {
           EditorView.updateListener.of(update => {
             const styleStatus = update.state.field(sourceStyles).status;
             this.styleNotice.hidden = styleStatus !== "pending";
-            if (update.docChanged) { this.pendingTokens = undefined; this.generation++; onChange(update.state.doc.toString()); this.emit("source"); }
+            if (update.docChanged) { this.pendingTokens = undefined; this.generation++; onChange(this.source); this.emit("source"); }
             if (update.selectionSet) this.emit("selection");
             if (update.docChanged && update.startState.field(revealField) && !update.state.field(revealField)) {
               this.view.dom.classList.remove("cm-local-source");
@@ -180,6 +182,7 @@ export class SourceEditor {
             "&": { height: "100%", fontSize: "15px" },
             ".cm-content": { fontFamily: "'Noto Sans Mono CJK SC', 'Noto Sans Mono CJK TC', 'DejaVu Sans Mono', monospace", padding: "24px 0 80px", lineHeight: "1.8", caretColor: "#426f68" },
             ".cm-line": { padding: "0 26px" },
+            ".cm-content.cm-long-line": { fontKerning: "none" },
             ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "#a8aaa4", padding: "24px 0 0 10px" },
             ".cm-activeLine": { backgroundColor: "#f0f4ef80" },
             ".cm-activeLineGutter": { backgroundColor: "transparent", color: "#567a72" },
@@ -201,6 +204,7 @@ export class SourceEditor {
     if (this.sourceSnapshot?.doc !== doc) this.sourceSnapshot = { doc, source: doc.toString() };
     return this.sourceSnapshot.source;
   }
+  get characterCount(): number { return this.view.state.field(sourceCodePointCount); }
   get selection(): SourceSelection { const main = this.view.state.selection.main; return { from: main.from, to: main.to }; }
   get composing(): boolean { return this.inputComposition || this.view.compositionStarted || this.view.composing || this.historyRequests.composing; }
   get revealed(): SourceReveal | null { return this.view.state.field(revealField); }

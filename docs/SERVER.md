@@ -10,7 +10,7 @@ translation_status: synced
 
 The established `0.6.0` Windows/NTFS Server / WebUI, multiuser authorization and same-owner synchronization scope is complete, with the complete HTTP matrix, affected browsers and real NAS HTTPS passing on the same final optimized executable; it is not formally published. It reuses single-writer Core file guards, original operations and recovery evidence with isolated personal Drafts. See [MVP](MVP.md) for current scope/limits and the [roadmap](ROADMAP.md) for subsequent versions.
 
-The working tree is the `0.6.3-alpha.2` second-stage candidate, retaining `0.6.2` material import and recognition, inheriting the 0.6.1 tables, equations, references, notes, processing settings and actual evidence limits. New capabilities retain separate hosted authorization and original-operation recovery; local implementation or these contracts cannot establish a pass.
+The working tree is the `0.6.3-rc.3` stabilization candidate, with whole-version acceptance still in progress. Earlier-stage passes retain their original artifact boundaries. It retains material import/recognition, tables, equations, references, notes and processing settings, and connects hierarchical tags and knowledge views. Large hosted drafts use synchronous compact recovery with the actual Base and original pending save request. New capabilities retain separate hosted authorization and original-operation recovery. See MVP for scope and unverified items; local implementation or these contracts cannot establish a pass.
 
 ## Properties and multiple Query organization
 
@@ -42,6 +42,8 @@ The default bind is `127.0.0.1:47821`. Open the service URL and enter a personal
 TLS, password accounts, SSO, service installation and high availability are not built in. For LAN deployment, run behind a trusted HTTPS reverse proxy with an exact `origin`, such as `https://notes.example.test`, preserve that Host, and send tokens only over encrypted connections. `bind` selects the actual listener. The app neither changes firewalls nor deploys a proxy. Non-loopback HTTP requires explicit `allowInsecureHttp: true` for controlled test networks; WebUI secure-context features still require HTTPS or loopback. Host and any Origin must match exactly; forwarded headers never grant authority. Local HTTP/browser tests do not establish cross-machine TLS deployment acceptance.
 
 ## Writing, conflicts and disconnection
+
+At connection, panels initialize under their individual permissions. A temporarily failed catalog is reported unavailable while other authorized panels continue; unavailable library configuration does not suppress content import. “All documents” retries while preserving the source Draft and updates connection status on success. Identity or authorization changes retire the old connection; failure isolation never restores read authority.
 
 The WebUI provides source, styled source, on-demand syntax, visual writing and reading views, Typst preview within explicit authorized dependencies, title/source-text search within authorized configuration, exact historical source viewing, and saved-source download. Search explicitly covers configured readable sources, reporting incomplete results on budget exhaustion or read failure. This search entry is separate from the field-authorized CEL Query below. Ordinary files without admitted note history report it unavailable.
 

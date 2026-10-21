@@ -119,6 +119,8 @@ This round also connects a two-dimensional relationship graph and separate read-
 
 The stabilization candidate on 2026-10-21 is `0.6.3-rc.2`. Derived source-byte positions, rendered-leaf indexes and exact structure lookup are reused within one operation/paint; the CodeMirror string updates with its immutable document object. They are neither persistent source, cached Query results nor writing qualification across serials. Native copy from an independent browser HTML page and real paste separately check the common local/hosted table. Candidate evidence and unverified items follow WORKFLOW, retaining actual rc.1 and original K conclusions.
 
+The subsequent 2026-10-21 `0.6.3-rc.4` retains the original connection identity/authorization gate while isolating independent panel failures in the same initialization chain. Retired or revoked chains still stop, without a second connection authority. Actual-browser injection of library failure while content import remains available and the original 12 import groups follow WORKFLOW and the same candidate record. Original rc.3, IME/K anomaly and complete comparison/performance conclusions retain their boundaries.
+
 ## 5. Targeted checks for this refinement
 
 - `Inbox/loose.typ` and directories without a primary file remain visible/expandable and Unmanaged. Explicit unmanaged subtrees stop Node discovery, not ordinary browsing. Missing admitted primaries retain identity diagnostics; ignored content never silently becomes Nodes.

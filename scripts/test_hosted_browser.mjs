@@ -11,7 +11,7 @@ const {chromium}=require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const exe=path.resolve(process.argv[2]), out=path.resolve(process.argv[3]);
 await mkdir(out,{recursive:false});
 const sha=b=>createHash('sha256').update(b).digest('hex');
-const result={exe,sha256:sha(await readFile(exe)),version:execFileSync(exe,['--version'],{windowsHide:true}).toString().trim(),cases:[],pageErrors:[],consoleErrors:[],completed:false};
+const result={exe,sha256:sha(await readFile(exe)),harnessSha256:sha(await readFile(new URL(import.meta.url))),version:execFileSync(exe,['--version'],{windowsHide:true}).toString().trim(),cases:[],pageErrors:[],consoleErrors:[],completed:false};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 let local,server,browser,page,base,localToken,config,stderr='';
 const token={alice:randomBytes(32).toString('hex'),bob:randomBytes(32).toString('hex'),admin:randomBytes(32).toString('hex')};
@@ -117,15 +117,31 @@ try{
  await page.locator('#render').screenshot({path:path.join(out,'visible-preview.png')});
  await page.screenshot({path:path.join(out,'hosted-editor.png'),fullPage:true});result.cases.push('actual preview, exact saved-source download and authorized history');
 
- let releaseOpen, observedOpen;
+ let releaseOpen, observedOpen, observedClose, failedClose;
  const openHeld=new Promise(resolve=>observedOpen=resolve);
  const resumeOpen=new Promise(resolve=>releaseOpen=resolve);
- await bob.route('**/api/hosted/open',async route=>{observedOpen();await resumeOpen;await route.continue();});
+ const staleTargetClosed=new Promise((resolve,reject)=>{observedClose=resolve;failedClose=reject;});
+ await bob.route('**/api/hosted/open',async route=>{
+  observedOpen();await resumeOpen;
+  try {
+   const response=await route.fetch();assert.equal(response.status(),200);const opened=await response.json();assert.equal(typeof opened.sessionId,'string');
+   const closed=bob.waitForResponse(reply=>reply.url().endsWith('/api/hosted/close')&&reply.request().postDataJSON()?.sessionId===opened.sessionId);
+   await route.fulfill({response});assert.ok((await closed).ok());observedClose();
+  } catch(error) { failedClose(error); }
+ });
+ const beforeReopen=await sourceValue(bob);
+ await bob.locator('#source .cm-content').evaluate(node=>{window.__reopenSourceNode=node;});
  await bob.getByRole('button',{name:'重新读取与核对',exact:true}).click();await openHeld;
- assert.equal(await bob.locator('#source .cm-content').getAttribute('contenteditable'),'false');
- releaseOpen();await bob.locator('#source .cm-content[contenteditable=true]').waitFor();await bob.unroute('**/api/hosted/open');
+ assert.equal(await bob.locator('#source .cm-content').getAttribute('contenteditable'),'true');
+ await bob.locator('#source .cm-content').press('ControlOrMeta+End');await bob.keyboard.insertText('\n等待核验期间的新输入😀');
+ const duringReopen=beforeReopen+'\n等待核验期间的新输入😀';assert.equal(await sourceValue(bob),duringReopen);
+ releaseOpen();await staleTargetClosed;await bob.unroute('**/api/hosted/open');
+ assert.equal(await sourceValue(bob),duringReopen);
+ assert.equal(await bob.locator('#source .cm-content').evaluate(node=>node===window.__reopenSourceNode&&node.isConnected),true);
+ await bob.locator('#source .cm-content').press('ControlOrMeta+z');assert.equal(await sourceValue(bob),beforeReopen);
+ await bob.locator('#source .cm-content').press('ControlOrMeta+Shift+KeyZ');assert.equal(await sourceValue(bob),duringReopen);
  await fillSource(bob,initial+'乙未提交草稿仍保留');
- result.cases.push('reopening fences input until the new source and retained draft are reconciled');
+ result.cases.push('held reopen retains the editable owner and Undo/Redo; new typing rejects and closes the late target session');
  await page.getByRole('button',{name:'更新写作预览',exact:true}).click();
  await page.locator('#source [role=status]').filter({hasText:'预览对应当前草稿'}).waitFor({timeout:30000});
  await page.getByRole('button',{name:'V04 可视写作',exact:true}).click();
