@@ -180,9 +180,10 @@ impl Core {
             DeviceRecordKind::DesktopPreferences => {
                 crate::desktop_preferences::validate_record(bytes)?
             }
-            // Their owners perform strict typed validation before this shared
-            // primitive. Backup will reject them until their real validator is linked.
-            DeviceRecordKind::Reminders | DeviceRecordKind::ClientPreferences => {}
+            // Every linked record owner validates at this shared write boundary.
+            // Reminder validation remains with its owner until its validator is linked.
+            DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes)?,
+            DeviceRecordKind::Reminders => {}
         }
         if let Some(expected) = expected_digest
             && (expected.len() != 64
@@ -304,7 +305,8 @@ pub(crate) fn validate_backup_record(kind: DeviceRecordKind, bytes: &[u8]) -> Re
     match kind {
         DeviceRecordKind::Identity => validate_identity_record(bytes).map(|_| ()),
         DeviceRecordKind::DesktopPreferences => crate::desktop_preferences::validate_record(bytes),
-        DeviceRecordKind::Reminders | DeviceRecordKind::ClientPreferences => Err(evidence(
+        DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes),
+        DeviceRecordKind::Reminders => Err(evidence(
             "This build has no strict validator for this device record type",
         )),
     }
