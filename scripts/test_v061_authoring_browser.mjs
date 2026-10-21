@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Owned-library browser acceptance of the embedded native authoring controls.
 // Headless keyboard input does not establish real operating-system IME support.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -31,17 +32,17 @@ async function readOwnedOriginal(file) {
   }
 }
 async function start(args = []) {
-  const child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
   for (let i = 0; i < 300; i++) {
-    const match = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) { base = match[1]; token = match[2]; return child; }
+    const match = serveReady(child);
+    if (match) { base = match.base; token = match.token; return child; }
     if (child.exitCode !== null) throw new Error(stderr || 'Candidate exited before startup');
     await pause(100);
   }
-  child.kill(); throw new Error('Candidate startup timeout');
+  await stopServe(child); throw new Error('Candidate startup timeout');
 }
-async function stop() { if (server && server.exitCode === null && server.signalCode === null) { const done = new Promise(resolve => server.once('exit', resolve)); server.kill(); await done; } server = null; }
+async function stop() { await stopServe(server); server = null; }
 async function api(route, body) {
   const reply = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: body === undefined ? undefined : JSON.stringify(body) });
   const value = await reply.json(); assert.equal(reply.status, 200, JSON.stringify(value)); return value;
@@ -56,7 +57,7 @@ async function undoRedo(before, after) {
   await content().click(); await content().press('ControlOrMeta+z'); await waitSource(before);
   await content().press('ControlOrMeta+Shift+Z'); await waitSource(after);
 }
-async function passed(description) { result.cases.push(description); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); process.stdout.write(description + '\n'); }
+async function passed(description) { result.cases.push(description); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); process.stdout.write(description + '\n'); }
 const inspector = () => page.locator('.workspace-inspector');
 async function refreshCitations() {
   await page.getByText('草稿预览已更新', { exact: true }).waitFor();
@@ -136,6 +137,6 @@ try {
 } finally {
   await browser?.close(); await stop();
   result.originals = await Promise.all(originals.map(async original => { const bytes = await readFile(original.path); return { path: original.path, expectedSha256: sha(Buffer.from(original.source)), actualSha256: sha(bytes), unchanged: bytes.equals(Buffer.from(original.source)) }; }));
-  result.stderr = stderr; await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
+  result.stderr = stderr; await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2));
 }
-process.stdout.write(JSON.stringify(result, null, 2));
+process.stdout.write(stringifyServeJson(result, 2));

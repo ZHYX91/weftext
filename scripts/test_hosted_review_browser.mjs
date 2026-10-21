@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
 // through WEFTEXT_PLAYWRIGHT_MODULE, plus EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -17,10 +18,10 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 let local,server,browser,page,base,localToken,config,stderr='';
 const token={alice:randomBytes(32).toString('hex'),bob:randomBytes(32).toString('hex'),writer:randomBytes(32).toString('hex'),admin:randomBytes(32).toString('hex')};
 async function start(args,hosted=false){
- const p=spawn(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
- for(let i=0;i<300;i++){const match=text.match(hosted?/(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/:/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);if(match){base=match[1];localToken=match[2];return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}p.kill();throw new Error('startup timeout');
+ const p=spawnServe(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
+ for(let i=0;i<300;i++){const match=serveReady(p);if(match){base=match.base;localToken=match.token;return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}await stopServe(p);throw new Error('startup timeout');
 }
-async function stop(p){if(p && p.exitCode===null && p.signalCode===null){const done=new Promise(resolve=>p.once('exit',resolve));p.kill();await done;}}
+async function stop(p){ await stopServe(p); }
 async function api(route,data,actor){
  const r=await fetch(base+route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(actor?{Authorization:'Bearer '+token[actor]}:{'X-Weftext-Token':localToken})},body:data===undefined?undefined:JSON.stringify(data)});const body=await r.json();assert.ok(r.ok,JSON.stringify(body));return body;
 }
@@ -30,7 +31,7 @@ async function changePolicy(edit){const p=await api('/api/hosted/admin/policy',u
 async function readReview(p=page, label='重新读取批注'){const r=p.waitForResponse(r=>r.url().endsWith('/api/hosted/review/read'));await p.getByRole('button',{name:label,exact:true}).click();assert.equal((await r).status(),200);await p.getByLabel('批注内容',{exact:true}).waitFor();}
 async function commit(p=page){const r=p.waitForResponse(r=>r.url().endsWith('/api/hosted/review/commit'));await p.getByRole('button',{name:'确认提交批注操作',exact:true}).click();assert.equal((await r).status(),200);await p.locator('#review').getByText('原批注操作已提交。请重新读取批注；正文变更仍须与个人草稿核对。',{exact:true}).waitFor();}
 try{
- const data=path.join(out,'state'),root=path.join(out,'library');local=await start(['--no-browser','--data-dir',data]);
+ const data=path.join(out,'state'),root=path.join(out,'library');local=await start(['--data-dir',data]);
  await api('/api/library/create',{path:root,operationId:randomUUID()});
  const note=createdDocument(await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()}));
  const initial=note.source+'\n这里有错别字，配对（未结束。\n批注范围😀';
@@ -38,7 +39,7 @@ try{
  config={deployment:'review-browser',bind:'127.0.0.1:0',root,adminTokenSha256:sha(token.admin),files:{shared:{path:'Shared/Shared.typ',title:'共同文档',editable:true}},users:{
   alice:{enabled:true,tokenSha256:sha(token.alice),grants:{shared:{read:true,write:true,annotations:{read:true,write:true,target:true,accept:true,proofread:true}}}},
   bob:{enabled:true,tokenSha256:sha(token.bob),grants:{shared:{annotations:{read:true,write:true}}}}}};
- const configPath=path.join(out,'server.json');await writeFile(configPath,JSON.stringify(config,null,2));server=await start(['--no-browser','--data-dir',data,'--server-config',configPath],true);
+ const configPath=path.join(out,'server.json');await writeFile(configPath,JSON.stringify(config,null,2));server=await start(['--data-dir',data,'--server-config',configPath],true);
  browser=await chromium.launch({channel:'chrome',headless:true});result.browser=browser.version();
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}}), ctxB=await browser.newContext({viewport:{width:1280,height:1000}});page=await ctx.newPage();const bob=await ctxB.newPage();
  for(const p of [page,bob]){p.on('pageerror',e=>result.pageErrors.push(String(e)));p.on('console',m=>{if(m.type()==='error')result.consoleErrors.push(m.text());});}
@@ -84,4 +85,4 @@ try{
  result.cases.push('late authorization polling from a logged-out actor cannot clear the new actor draft or replace its identity');
  assert.deepEqual(result.pageErrors,[]);result.completed=true;
 }catch(e){result.failure=String(e.stack??e);if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});throw e;}
-finally{await browser?.close();await stop(local);await stop(server);await writeFile(path.join(out,'results.json'),JSON.stringify(result,null,2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors}));}
+finally{await browser?.close();await stop(local);await stop(server);await writeFile(path.join(out,'results.json'),stringifyServeJson(result, 2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors}));}

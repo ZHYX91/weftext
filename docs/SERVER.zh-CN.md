@@ -33,8 +33,10 @@ translation_status: source
 
 ```text
 python scripts/server_config.py --root "D:\Notes" --out "D:\Weftext-Service\server.json" --document shared=Shared/Shared.typ --document other=Other/Other.typ --user alice --user bob
-weftext.exe --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State" --no-browser
+weftext-cli.exe serve --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State"
 ```
+
+示例程序名指本次产品入口打印的固定 CLI 角色完整路径；保留同目录的双程序及 `artifact-catalog.json`。Server 的监听地址来自配置 `bind`，不另传 `--port`。
 
 默认绑定 `127.0.0.1:47821`。浏览器打开服务地址，输入个人凭据；管理员凭据不用于正文登录。配置中 `root`、文件 ID / 相对路径 / 显示标题 / `editable`、明确的 `inputs` 依赖和部署 ID 由受信管理员选择。客户端只传对象 ID 或已打开的会话，不能传本机路径、依赖根或自行声明用户身份。每个用户的每个对象有分别的 `read`、`write`、`history`、`download`；缺项拒绝，禁用用户拒绝全部访问。后三项还要求 `read`；资源可以单独获权，输入依赖不继承主文档权限。
 

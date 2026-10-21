@@ -49,10 +49,8 @@ class EvidenceServer(hosted_harness.Server):
     def close(self):
         if self.closed:
             return
+        stdout, stderr = super().close()
         self.closed = True
-        if self.process.poll() is None:
-            self.process.terminate()
-        stdout, stderr = self.process.communicate(timeout=15)
         # Hosted output has no bearer tokens; bootstrap's startup URL was
         # consumed by the harness and its remaining output is redacted too.
         if self.token:
@@ -84,7 +82,7 @@ class SharedProcessingIntegration(HostedLibrary):
         self.data = self.folder / 'state'
         self.root = self.folder / 'library'
         self.server = None
-        local = EvidenceServer(['--no-browser', '--data-dir', str(self.data)],
+        local = EvidenceServer([ '--data-dir', str(self.data)],
                                self.folder / 'bootstrap')
         try:
             def call(route, request):
@@ -127,7 +125,7 @@ class SharedProcessingIntegration(HostedLibrary):
     def start(self):
         retained_json(self.config_path, self.config)
         self.start_number += 1
-        self.server = EvidenceServer(['--no-browser', '--data-dir', str(self.data),
+        self.server = EvidenceServer([ '--data-dir', str(self.data),
             '--server-config', str(self.config_path)],
             self.folder / f'hosted-{self.start_number:02d}', hosted=True)
 

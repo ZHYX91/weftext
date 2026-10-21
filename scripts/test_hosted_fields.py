@@ -11,7 +11,7 @@ from test_hosted_editor import HostedEditor
 class HostedFields(HostedEditor):
     def prepare_fields(self):
         self.server.close()
-        local = Server(['--no-browser', '--data-dir', str(self.data)])
+        local = Server([ '--data-dir', str(self.data)])
         try:
             code, schema, _ = local.call('/api/data/schema', {'root': str(self.root)})
             self.assertEqual(code, 200, schema)

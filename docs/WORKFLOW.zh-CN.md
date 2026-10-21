@@ -23,6 +23,10 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
+`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时只调整相关本地 crate 真实入口的 mtime，字节不改，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
+
+入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序，不冒实际产品验收。
+
 宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
 
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业按锁文件安装前端依赖，运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
@@ -42,7 +46,7 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 
 | 影响范围 | 优先执行环境 | 可证明的边界 |
 | --- | --- | --- |
-| 算法、Core、Query、保存协议与接口 | 仓库现有引擎测试、故障注入和实际程序 HTTP 场景；本地程序以 `--no-browser` 启动 | 证明所跑算法、接口及故障模型；进程中断不冒实际断电，Windows／NTFS 结果不外推其他文件系统。 |
+| 算法、Core、Query、保存协议与接口 | 仓库现有引擎测试、故障注入和实际程序 HTTP 场景；以同批固定 `weftext-cli.exe serve` 启动自有服务 | 证明所跑算法、接口及故障模型；进程中断不冒实际断电，Windows／NTFS 结果不外推其他文件系统。 |
 | 浏览器布局、五档、草稿、导航与资源呈现 | 无头或独立后台浏览器，在相同候选上检查实际渲染及浏览器交互 | 记录真实浏览器与场景；前端单元测试不等于浏览器实测，浏览器模拟输入不建立 OS IME 或完整 AT 通过。 |
 | Windows 安装／更新、系统文件集成、真实 IME 与辅助技术 | 已有实际输入、捕获和正常关闭证据的隔离 Windows Sandbox 或独立 Windows VM | 在客体内完成输入与观察，验证产物回收及宿主焦点隔离。Sandbox 可启动不代表最小化、断开查看器或无人值守可用；涉及重启、持久系统状态等能力时使用具备该能力的 VM。 |
 | Linux／macOS 桌面及其文件后端 | 对应真实 OS 的独立测试机或合适 VM | 分别验证安装、文件语义、键盘／IME／AT、字体与关闭恢复；Windows、容器或 WSL 的命令行结果不建立该桌面通过。 |
@@ -54,9 +58,11 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 
 ## 复现、回归与候选
 
+下述浏览器／HTTP 命令的 `EXE` 均指定本次固定角色映射中的 `weftext-cli.exe` 绝对路径。浏览器脚本使用具备 JSON 整数原文及原样序列化能力的 Node.js 24 或更新工具链，以准确保留 Windows FILETIME 的 u64；缺少相应能力明确拒绝执行。共享启动器消费唯一 Ready JSON，正常关闭须核准确 OwnerIdentity 的关闭回执及原进程实际成功退出；未知结果保留现场，不作通过或自动重试。
+
 问题复现保留原候选、环境和最小触发步骤，记录实际观察；只复现一个故障不能报整场景通过。修复后用新候选重跑反例和直接受影响的正常路径；实现、依赖与环境没有变化且身份可确认的通过结果可以复用。发布验收另核对目标平台承诺、此前未验证项及候选完整性，不能把复现或执行环境资格当成发布通过。
 
-复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。当前 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；本轮按是否需要打包选其一，不串联 `build`、`check`、`package` 重复构建。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
+复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。当前 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；本轮按是否需要打包选其一，不串联 `build`、`check`、`package` 重复构建。Windows 打包参数、同次构建的 GUI／CLI 角色及严格离线材料前置见 [PACKAGING](PACKAGING.zh-CN.md)：`package` 在固定源码副本检查和生成，材料不全则拒绝完整候选。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
 
 每个可交付切片只保留一份简短验收记录：提交或候选标识（必要时产物哈希）、目标 OS／浏览器／客体或设备版本、改动影响及场景、实际命令／手动步骤、通过／失败／未验证／工具错误、已知限制与必要证据位置。环境资格与产品结果分清；仅失败或关键操作保必要截图／片段，正常日志保摘要，不新建另一套验收事实库。用户真实输入与输出分开放置，原件不被测试覆盖。文档链接检查和有限模型不计作产品验收。
 

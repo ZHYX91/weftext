@@ -60,7 +60,7 @@ class RetainedHTTP(unittest.TestCase):
         self.servers = []
 
     def server(self, label, state, config=None):
-        args = ['--no-browser', '--data-dir', str(state)]
+        args = [ '--data-dir', str(state)]
         if config is not None:
             args += ['--server-config', str(config)]
         server = Server(args, hosted=config is not None)
@@ -74,9 +74,7 @@ class RetainedHTTP(unittest.TestCase):
     def close_server(self, server):
         if server.evidence_closed:
             return
-        if server.process.poll() is None:
-            server.process.terminate()
-        stdout, stderr = server.process.communicate(timeout=15)
+        stdout, stderr = server.close()
         server.evidence_closed = True
         stem = f'server-{server.evidence_index:02}-{server.evidence_label}'
         (self.folder / f'{stem}.stdout.log').write_text(stdout, encoding='utf-8')

@@ -327,7 +327,7 @@ def browser_fixture(output):
         case.layout = 'exchange'
         case.produce(case.layout)
         case.close_server(case.b)
-        case.b = case.start_server(['--no-browser', '--data-dir', str(case.folder / 'state-b'),
+        case.b = case.start_server([ '--data-dir', str(case.folder / 'state-b'),
                                    '--open', str(case.rb / 'Left/Left.typ'), '--root', str(case.rb)], 'B-ui')
         base = case.open(case.b, case.rb, Path('Left/Left.typ'))
         fixture = {'folder': str(case.folder), 'root': str(case.rb), 'url': case.b.url, 'token': case.b.token,

@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Real hosted Query/embedded acceptance in owned fixtures. EXE and a new evidence
 // directory are required. Playwright comes from a general installation; Python
 // (only ZIP verification) must be supplied as an absolute general runtime path.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -38,12 +39,12 @@ async function readOtherFixture(file) {
 }
 
 async function start(args, hosted = false) {
-  const process = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
+  const process = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
   process.stdout.on('data', bytes => stdout += bytes); process.stderr.on('data', bytes => stderr += bytes);
-  for (let i = 0; i < 300; i++) { const match = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; localToken = match[2]; return process; } if (process.exitCode !== null) throw new Error(stderr); await pause(100); }
-  process.kill(); throw new Error('startup timeout');
+  for (let i = 0; i < 300; i++) { const match = serveReady(process); if (match) { base = match.base; localToken = match.token; return process; } if (process.exitCode !== null) throw new Error(stderr); await pause(100); }
+  await stopServe(process); throw new Error('startup timeout');
 }
-async function stop(process) { if (process && process.exitCode === null && process.signalCode === null) { const done = new Promise(resolve => process.once('exit', resolve)); process.kill(); await done; } }
+async function stop(process) { await stopServe(process); }
 async function api(route, body, actor) { const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + token[actor] } : { 'X-Weftext-Token': localToken }) }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.ok(response.ok, JSON.stringify(value)); return value; }
 async function click(name, host = page) { await host.getByRole('button', { name, exact: true }).click(); }
 async function connected(target, actor) { await target.goto(base); await target.getByLabel('访问凭据', { exact: true }).fill(token[actor]); await click('连接', target); await target.getByLabel('托管完整查询计划（JSON）', { exact: true }).waitFor(); await target.getByLabel('查询对象 shared', { exact: true }).waitFor(); await target.getByLabel('Office 输出格式', { exact: true }).waitFor(); }
@@ -53,7 +54,7 @@ async function scopes(target = page) { await target.getByLabel('查询对象 sha
 async function policy(edit) { const current = await api('/api/hosted/admin/policy', undefined, 'admin'); edit(current.users); return api('/api/hosted/admin/policy', { expectedGeneration: current.generation, users: current.users }, 'admin'); }
 const column = (expr = 'status', name = 'status') => ({ name, expr });
 try {
-  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
+  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
   const originalSchema = await api('/api/data/schema', { root }), schema = JSON.parse(originalSchema.source), schemaOp = randomUUID(); schema.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const schemaPlan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(schema, null, 2), beforeSource: originalSchema.source, beforeRevision: originalSchema.revision, operationId: schemaOp }); await api('/api/data/schema/install', { operationId: schemaOp, planId: schemaPlan.planId });
   const shared = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() })), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }));
@@ -72,7 +73,7 @@ try {
     alice: { enabled: true, tokenSha256: sha(token.alice), grants: { shared: { read: true, write: true, fields, query: queryRights, office }, other: { read: true, write: true, fields, query: queryRights, office } } },
     bob: { enabled: true, tokenSha256: sha(token.bob), grants: { shared: { fields, query: { ...queryRights, definitionHistory: false }, office }, other: { fields, query: { ...queryRights, definitionHistory: false }, office } } },
   } };
-  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true);
+  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--data-dir', data, '--server-config', configPath], true);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, acceptDownloads: true }), bobContext = await browser.newContext({ viewport: { width: 1280, height: 1050 } }); page = await context.newPage(); const bob = await bobContext.newPage(); let localConsumerCalls = 0;
   for (const target of [page, bob]) { target.on('pageerror', error => result.pageErrors.push(String(error))); target.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); }); target.on('dialog', dialog => dialog.accept()); target.on('request', request => { const pathname = new URL(request.url()).pathname; if (pathname.startsWith('/api/') && !pathname.startsWith('/api/hosted/')) localConsumerCalls++; }); }
@@ -128,4 +129,4 @@ try {
   await plan(branch, {}, bob); assert.equal((await query(bob)).result.rows[0].cells.status.value.value, 'open'); result.cases.push('injected removeItem failure clears all protected views, rejects late Query delivery, and server actor-epoch namespaces prevent old preview/source/plan restoration across refresh, reload and reconnect; unrelated actor remains authorized');
   assert.equal(localConsumerCalls, 0); assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
-finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }
+finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }

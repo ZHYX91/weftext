@@ -139,7 +139,7 @@ BibTeX、CSL JSON 和 RIS 导入先展示完整字段映射、未知数据和冲
 
 已纳管笔记顶部的“时间线”列出 Core 实际保留的保存记录，显示保存时间、未知时间或准确源码缺失。可以只读查看并与当前已保存内容或明确选择的草稿快照比较。恢复前确认保护草稿，旧版成为一次新的保存，后来的记录保留；原脏稿及期间的新输入仍在编辑器和恢复记录中。历史预览目前为准确源码与文本差异，不重建旧字体、模块或配置的富预览。
 
-私有数据默认在 `%LOCALAPPDATA%\Weftext-MVP`，包括草稿、操作前后稿和实际身份记录，不是可随意删除的缓存。同一数据目录只允许一个进程使用；不要用不同数据目录同时操作同一资料树。升级候选继续使用原数据目录，相同文件 ID 本身不能重建接纳证据。
+Windows 默认 Core 私有数据在 `%LOCALAPPDATA%\Weftext-MVP\core`，包括草稿、操作前后稿和实际身份记录，不是可随意删除的缓存。同一产品保全范围下的 `host-state` 独立保存此 OS 用户的私有宿主元数据，显式 Core 与它不能相同或互为祖先／子孙。旧顶层 Core 不自动采用，原件需保留并显式导入或一次性转换。同一数据目录只允许一个进程使用；不要用不同数据目录同时操作同一资料树。相同文件 ID 本身不能重建接纳证据。
 
 保存核对实际文件对象和原文，拒绝用旧稿覆盖外部新稿。另存为只创建不存在的目标，并核对重新打开结果；期间输入仍留在草稿与 Undo。改名、移动、回收后按原对象衔接打开会话与草稿；多个保留稿需要比较，不静默择一。
 
@@ -169,19 +169,18 @@ Server 已按独立权限接通五档编辑、窄字段与高级／内嵌 Query�
 
 0.7 的首个宿主基础重构复用 `weftext-app` 库及其 `LocalService::bind`／`browser_url`／`serve_until`，现有控制台仍提供本机浏览器或 `--no-browser` 服务和 `--server-config` 托管服务。版本暂保 `0.6.3-rc.4`，不代表托盘、提醒、Mobile 或整版 0.7 已完成。服务由一个 Core 持有私有目录租约；宿主选择停止信号，浏览器和未来原生窗口不自行创建另一写入者。
 
-显式 `--data-dir` 仍指定当前本机服务的持久状态。默认 Windows 继续使用 `%LOCALAPPDATA%/Weftext-MVP`；macOS 目录选择为 `$HOME/Library/Application Support/Weftext`，Linux 为绝对 `$XDG_DATA_HOME/weftext` 或未设置该变量时的 `$HOME/.local/share/weftext`。默认根目录缺失、为空或不是绝对路径时明确失败，不回退临时目录；Core 仍会核实际后端能力，目录选择不表示非 Windows 写后端已支持。这是现有便携服务的数据策略，尚未建立 MSIX 下包外恢复稿保全或卸载保证。
+显式 `--data-dir` 仍指定当前本机服务的 Core 持久状态。Windows 默认使用 `%LOCALAPPDATA%/Weftext-MVP/core`，私有宿主元数据使用独立的 `Weftext-MVP/host-state`；旧顶层 Core 不自动采用。macOS 目录选择为 `$HOME/Library/Application Support/Weftext`，Linux 为绝对 `$XDG_DATA_HOME/weftext` 或未设置该变量时的 `$HOME/.local/share/weftext`。默认根目录缺失、为空或不是绝对路径时明确失败，不回退临时目录；Core 仍会核实际后端能力，目录选择不表示非 Windows 写后端已支持。MSIX 保全声明覆盖整个准确 Weftext-MVP 范围，实际升级／卸载保证仍须同一候选验收。
 
 默认浏览器交接使用 Windows Shell、macOS `/usr/bin/open` 或 Linux `xdg-open`；交接失败会明确报告，本机服务及其已打印地址继续可用，`--no-browser` 可跳过交接。交接最多等待 10 秒，超时报告未确认且不重发；OS 仍可能继续处理原请求。HTTP 在交接期间响应，停止服务不等待未完成的交接；Windows OS 调用使用独立线程，避免卡住宿主运行时退出。系统接受交接不代表浏览器页面已加载，也不授予未验平台通过。内部 worker 参数不能与用户启动模式混用，`--root` 必须与 `--open` 同用。
 
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
-python scripts/mvp.py package
 ```
 
 默认构建本地调试候选，`--release` 使用优化构建。入口使用 Cargo 实际报告的程序路径，包括 `CARGO_TARGET_DIR` 或 Cargo 配置覆盖，供后续检查与打包使用。打包要求使用仓库的 `target/` 树或源码树以外的构建目录，并从源码快照排除该构建树。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
 
-打包在 `dist/` 创建新目录，保留旧候选，不推送或发布。包含工作树源码快照、许可证、字体清单与构建依赖声明；声明含测试／构建依赖，不表示每项进入二进制。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
+Windows 双程序 ZIP／MSIX 使用同一入口的 `package` 动作，必须提供准确 SDK、离线材料目录与实际 MSVC linker，完整命令和当前缺项见 [打包合同](PACKAGING.zh-CN.md)。它从固定源码副本构建、检查并在 `dist/` 创建新目录，保留旧候选，不推送或发布。源码、两个 PE、原许可、字体清单与构建依赖声明绑定同一候选；声明含测试／构建依赖，不表示每项进入二进制。未取得资格的离线材料会在构建前明确拒绝，不能用旧单程序包替代。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
 
 
 ## 同所有者本地副本同步入口

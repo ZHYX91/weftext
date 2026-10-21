@@ -1,6 +1,7 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real local/hosted authoring UI over owned fixtures. No desktop input or Save.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
@@ -24,7 +25,7 @@ test_hosted.EXE=Path(sys.argv[2]);out=Path(sys.argv[3]);c=test_hosted.Hosted("ru
 body='\n= 一、重复标题 <alpha>\n\n正文#footnote[*中文脚注*] <memo>。再次#footnote(<memo>)。\n\n#figure(table(columns:2,[甲],[乙]),caption:[原始表题]) <tab>\n\n$ x+y $\n\n= 一、重复标题 <beta>\n'
 c.setUp()
 try:
- c.server.close();local=test_hosted.Server(['--no-browser','--data-dir',str(c.data)])
+ c.server.close();local=test_hosted.Server(['--data-dir',str(c.data)])
  try:
   code,doc,_=local.call('/api/open',{'path':str(c.root/'Shared/Shared.typ'),'root':str(c.root)});assert code==200,doc
   source=doc['source']+body;code,receipt,_=local.call('/api/save',{'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':source,'operationId':str(uuid.uuid4())});assert code==200,receipt
@@ -39,7 +40,7 @@ try:
   for actor in ['alice','bob','reader']:users[actor]['resourceCollections']={'notes-assets':{'read':True,'download':True,'import':actor=='alice'}}
  c.policy(grant_collections)
  c.server.close()
- localroot=out/'local-library';localdata=out/'local-state';local=test_hosted.Server(['--no-browser','--data-dir',str(localdata)])
+ localroot=out/'local-library';localdata=out/'local-state';local=test_hosted.Server(['--data-dir',str(localdata)])
  try:
   code,value,_=local.call('/api/library/create',{'path':str(localroot),'operationId':str(uuid.uuid4())});assert code==200,value
   code,ldoc,_=local.call('/api/note/create',{'root':str(localroot),'parent':str(localroot),'name':'Notes','operationId':str(uuid.uuid4())});assert code==200,ldoc
@@ -59,11 +60,11 @@ async function savedSource(file) {
   }
 }
 async function start(args, isHosted) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }), scope = isHosted ? 'hosted' : 'local'; let stdout = ''; child.stdout.on('data', value => stdout += value); child.stderr.on('data', value => { const text = String(value); stderr += text; stderrByScope[scope] += text; stderrEvents.push({ at: new Date().toISOString(), scope, pid: child.pid, text }); });
-  for (let count = 0; count < 300; count++) { const match = stdout.match(isHosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) return { child, base: match[1], token: match[2] }; if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
-  child.kill(); throw new Error('startup timeout');
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }), scope = isHosted ? 'hosted' : 'local'; let stdout = ''; child.stdout.on('data', value => stdout += value); child.stderr.on('data', value => { const text = String(value); stderr += text; stderrByScope[scope] += text; stderrEvents.push({ at: new Date().toISOString(), scope, pid: child.pid, text }); });
+  for (let count = 0; count < 300; count++) { const match = serveReady(child); if (match) return { child, base: match.base, token: match.token }; if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
+  await stopServe(child); throw new Error('startup timeout');
 }
-async function stop(server) { if (server?.child.exitCode === null && server.child.signalCode === null) { const done = new Promise(resolve => server.child.once('exit', resolve)); server.child.kill(); await done; } }
+async function stop(server) { await stopServe(server?.child); }
 async function observedPage(scope) {
   const context = await browser.newContext({ viewport: { width: 1480, height: 1080 }, recordHar: { path: path.join(out, `${scope}.har`), content: 'embed', mode: 'full', urlFilter: '**/api/**' } }); contexts.add(context); context.on('close', () => contexts.delete(context));
   const page = await context.newPage(); page.on('pageerror', error => result.pageErrors.push(error.message)); page.on('dialog', dialog => dialog.dismiss());
@@ -183,7 +184,7 @@ async function hostedAPI(route, body, actor = 'alice') { const response = await 
 try {
   execFileSync(python, [helper, repo, exe, out], { windowsHide: true }); fixture = JSON.parse(await readFile(path.join(out, 'fixture.json'), 'utf8'));
   browser = await chromium.launch({ headless: true, ...(process.env.WEFTEXT_CHROMIUM ? { executablePath: process.env.WEFTEXT_CHROMIUM } : { channel: 'chrome' }) });
-  local = await start(['--no-browser', '--data-dir', fixture.localData, '--open', fixture.localPath, '--root', fixture.localRoot], false);
+  local = await start(['--data-dir', fixture.localData, '--open', fixture.localPath, '--root', fixture.localRoot], false);
   const page = await observedPage('local');
   await page.goto(await frontendFor(local,false) + '/#token=' + local.token); await waitNotes(page); const localOriginal = await rawSource(page); assert.equal(localOriginal, fixture.localSource);
   await applyNoteAndUndo(page, localOriginal, false); assert.equal(await savedSource(fixture.localPath), fixture.localSource); result.cases.push('local native note source editing, shared Undo/Redo and cancellation leave the saved original unchanged');
@@ -192,7 +193,7 @@ try {
   await installAndInsertEndnote(page, false); assert.equal(await savedSource(fixture.localPath), fixture.localSource); await page.screenshot({ path: path.join(out, 'local-notes.png'), fullPage: true }); result.cases.push('local explicit fixed module resource installation and editable native endnote insertion do not save the author draft');
   await numberingWithEndnote(page, false); assert.equal(await savedSource(fixture.localPath), fixture.localSource); result.cases.push('local heading numbering over the same unsaved native endnote draft uses a real frozen preview, retains module/body/identity and restores the exact original draft with one Undo');
   await page.context().close(); await stop(local); local = undefined;
-  hosted = await start(['--no-browser', '--data-dir', fixture.data, '--server-config', fixture.configPath], true);
+  hosted = await start(['--data-dir', fixture.data, '--server-config', fixture.configPath], true);
   const hp = await observedPage('hosted');
   await hp.goto(await frontendFor(hosted,true)); await connectActor(hp, 'alice'); await hp.locator('#documents').getByRole('button', { name: 'Shared', exact: true }).click(); await waitNotes(hp);
   await applyNoteAndUndo(hp, fixture.source, true); assert.equal(await savedSource(path.join(fixture.root, 'Shared', 'Shared.typ')), fixture.source); await numbering(hp, true); await captionsAndReading(hp, true); await installAndInsertEndnote(hp, true); result.cases.push('hosted native notes, captions, equation numbering, read navigation, heading numbering preview and owned module resource import use actor-bound routes while retaining personal Draft/Undo and original saved bytes');
@@ -223,9 +224,9 @@ finally {
   for (const context of contexts) await finish(() => context.close());
   await finish(() => browser?.close()); for(const server of viteServers) await finish(() => server.close()); await finish(() => stop(local)); await finish(() => stop(hosted));
   if (cleanupErrors.length) { result.cleanupErrors = cleanupErrors; result.completed = false; result.failure ??= 'Owned browser/backend cleanup failed'; }
-  await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
+  await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   for (const [scope, text] of Object.entries(stderrByScope)) await writeFile(path.join(out, `${scope}.stderr.log`), text);
   await writeFile(path.join(out, 'stderr-events.json'), JSON.stringify(stderrEvents, null, 2)); await writeFile(path.join(out, 'api-events.json'), JSON.stringify(apiEvents, null, 2));
   if (cleanupErrors.length && !failed) throw new Error(result.failure);
 }
-process.stdout.write(JSON.stringify(result, null, 2));
+process.stdout.write(stringifyServeJson(result, 2));

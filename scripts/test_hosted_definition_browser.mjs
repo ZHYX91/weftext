@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Actual hosted definition proposals use owned fixtures and the one author
 // editor. EXE and a fresh evidence directory are required; no ambient server.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -15,12 +16,12 @@ const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(ex
 const token = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let local, server, browser, page, base, localToken, stderr = '', localConsumerCalls = 0;
 async function start(args, hosted = false) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
   child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
-  for (let i = 0; i < 300; i++) { const match = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; localToken = match[2]; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
-  child.kill(); throw new Error('startup timeout');
+  for (let i = 0; i < 300; i++) { const match = serveReady(child); if (match) { base = match.base; localToken = match.token; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
+  await stopServe(child); throw new Error('startup timeout');
 }
-async function stop(child) { if (child && child.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function stop(child) { await stopServe(child); }
 async function api(route, body, actor) { const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + token[actor] } : { 'X-Weftext-Token': localToken }) }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.ok(response.ok, JSON.stringify(value)); return value; }
 async function click(name, target = page) { await target.getByRole('button', { name, exact: true }).click(); }
 async function connected(target, actor) { await target.goto(base); await target.getByLabel('访问凭据', { exact: true }).fill(token[actor]); await click('连接', target); await target.getByLabel('新保存定义原生标签', { exact: true }).waitFor(); await target.getByLabel('Office 输出格式', { exact: true }).waitFor(); }
@@ -38,7 +39,7 @@ function heldRoute(pattern) {
   return { pattern, handler, observed, release: () => release() };
 }
 try {
-  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
+  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
   const originalSchema = await api('/api/data/schema', { root }), schema = JSON.parse(originalSchema.source), schemaId = randomUUID(); schema.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const schemaPlan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(schema, null, 2), beforeSource: originalSchema.source, beforeRevision: originalSchema.revision, operationId: schemaId }); await api('/api/data/schema/install', { operationId: schemaId, planId: schemaPlan.planId });
   const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Owner', operationId: randomUUID() })), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }));
@@ -49,7 +50,7 @@ try {
     alice: { enabled: true, tokenSha256: sha(token.alice), grants: { owner: { read: true, write: true, fields, query }, other: { read: true, write: true, fields, query } } },
     bob: { enabled: true, tokenSha256: sha(token.bob), grants: { owner: { fields, query } } },
   } };
-  const configPath = path.join(out, 'server.json'), sourcePath = path.join(root, 'Owner/Owner.typ'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true);
+  const configPath = path.join(out, 'server.json'), sourcePath = path.join(root, 'Owner/Owner.typ'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--data-dir', data, '--server-config', configPath], true);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version(); const context = await browser.newContext({ viewport: { width: 1440, height: 1100 } }), bobContext = await browser.newContext({ viewport: { width: 1280, height: 1050 } }); page = await context.newPage(); const bob = await bobContext.newPage();
   for (const target of [page, bob]) { target.on('pageerror', error => result.pageErrors.push(String(error))); target.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); }); target.on('dialog', dialog => dialog.accept()); target.on('request', request => { const pathname = new URL(request.url()).pathname; if (pathname.startsWith('/api/') && !pathname.startsWith('/api/hosted/')) localConsumerCalls++; }); }
   await connected(bob, 'bob'); assert.equal(await bob.locator('#documents button').count(), 0); assert.equal(await bob.getByRole('button', { name: '将临时计划提为当前正文的新保存定义', exact: true }).isDisabled(), true);
@@ -86,4 +87,4 @@ try {
   assert.equal(await bob.getByRole('button', { name: '将临时计划提为当前正文的新保存定义', exact: true }).isDisabled(), true); result.cases.push('revocation disposes source/proposal/comparison DOM before held delivery; denied removeItem leaves old bytes but server actor-epoch cache isolation prevents reload resurrection');
   assert.equal(localConsumerCalls, 0); assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
-finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }
+finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }

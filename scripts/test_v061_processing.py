@@ -5,18 +5,16 @@ libraries are created; originals, personal Drafts, settings and logs are retaine
 This script does not establish browser Undo, IME, Office or platform acceptance.
 The explicit suite includes only the new tests, never inherited harness suites.
 """
+from _cli_serve import launch_serve
 import argparse
 import copy
 import hashlib
 import json
 from pathlib import Path
-import queue
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -45,43 +43,12 @@ class LocalProcessing(local_harness.LocalFeatures):
     @classmethod
     def restart_same_state(cls):
         """Restart the owned process, retaining its exact data directory and logs."""
-        cls.process.terminate()
-        cls.process.wait(timeout=15)
-        cls.reader.join(timeout=2)
-        cls.stderr.close()
-        cls.stdout.close()
+        cls.owner.stop()
         cls.restart_number = getattr(cls, 'restart_number', 0) + 1
         prefix = cls.root / f'server.restart-{cls.restart_number}'
-        cls.stderr = Path(str(prefix) + '.stderr.log').open('w', encoding='utf-8')
-        cls.stdout = Path(str(prefix) + '.stdout.log').open('w', encoding='utf-8')
-        cls.process = subprocess.Popen(
-            [str(local_harness.EXE), '--no-browser', '--data-dir', str(cls.data_dir)],
-            stdout=subprocess.PIPE, stderr=cls.stderr, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        lines = queue.Queue()
-
-        def read_lines():
-            for line in cls.process.stdout:
-                cls.stdout.write(re.sub(r'#token=\w+', '#token=<redacted>', line))
-                cls.stdout.flush()
-                lines.put(line)
-            lines.put(None)
-
-        cls.reader = threading.Thread(target=read_lines, daemon=True)
-        cls.reader.start()
-        try:
-            while True:
-                line = lines.get(timeout=40)
-                if line is None:
-                    raise RuntimeError('Owned application exited during same-state restart')
-                match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-                if match:
-                    cls.url, cls.token = match.groups()
-                    return
-        except Exception:
-            cls.process.terminate()
-            cls.process.wait(timeout=10)
-            raise
+        cls.owner = launch_serve(local_harness.EXE, ['--data-dir', str(cls.data_dir)], log_prefix=prefix)
+        cls.process = cls.owner.process
+        cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
 
     def processing_read(self, root):
         return self.api('/api/processing/read', {'root': str(root)})
@@ -442,10 +409,8 @@ class LoggedHostedServer(hosted_harness.Server):
     def close(self):
         if self.closed:
             return
+        stdout, stderr = super().close()
         self.closed = True
-        if self.process.poll() is None:
-            self.process.terminate()
-        stdout, stderr = self.process.communicate(timeout=15)
         self.log_prefix.with_suffix('.stdout.log').write_text(stdout, encoding='utf-8')
         self.log_prefix.with_suffix('.stderr.log').write_text(stderr, encoding='utf-8')
 
@@ -459,7 +424,7 @@ class HostedProcessing(HostedLibrary):
     def start(self):
         retained_json(self.config_path, self.config)
         self.start_number = getattr(self, 'start_number', 0) + 1
-        self.server = LoggedHostedServer(['--no-browser', '--data-dir', str(self.data),
+        self.server = LoggedHostedServer([ '--data-dir', str(self.data),
             '--server-config', str(self.config_path)], self.folder / f'hosted-{self.start_number:02d}')
 
     def test_v061_hosted_processing_settings_use_original_role_operation_and_personal_draft(self):

@@ -299,7 +299,7 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
         self.folder = self.artifacts / self._testMethodName.removeprefix('test_')
         self.folder.mkdir()
         self.root, self.data = self.folder / 'TEST-library', self.folder / 'state'
-        self.server = http.Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = http.Server([ '--data-dir', str(self.data)])
         self.addCleanup(lambda: self.server.close())
         self.api('/api/library/create', {'path': str(self.root), 'operationId': http.uid()})
         self.original = created_document(self.api('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'TEST-origin', 'operationId': http.uid()}))
@@ -413,7 +413,7 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
         self.assertFalse((self.root / target['name']).exists())
         prepared = self.recognition('prepare', {'target': target, 'jobId': req['jobId'], 'operationId': http.uid(), 'review': review(job)})
         self.server.close()
-        self.server = http.Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = http.Server([ '--data-dir', str(self.data)])
         opened = self.api('/api/open', {'root': str(self.root), 'path': self.original['path']})
         reconnected = {**target, 'sessionId': opened['sessionId']}
         status = self.recognition('operation', {'target': reconnected, 'operationId': prepared['operationId']})
@@ -484,7 +484,7 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
         self.recognition('start', req)
         job_dir = self.observe_checkpoint(req, 'observed-host-checkpoint')
         self.server.close()
-        self.server = http.Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = http.Server([ '--data-dir', str(self.data)])
         opened = self.api('/api/open', {'root': str(self.root), 'path': self.original['path']})
         target['sessionId'] = opened['sessionId']
         recovered = self.recognition('status', {'jobId': req['jobId']})

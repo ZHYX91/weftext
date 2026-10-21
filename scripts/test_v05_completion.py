@@ -6,17 +6,14 @@ input or clipboard is used. These checks establish HTTP and exact-source
 behavior; they do not establish the LHT/IQV browser interaction clauses,
 five-view controls, focus, touch, keyboard, Undo or late browser result handling.
 """
+from _cli_serve import launch_serve
 import argparse
 import copy
 import hashlib
 import io
 import json
 from pathlib import Path
-import queue
-import re
-import subprocess
 import sys
-import threading
 import time
 import unittest
 import zipfile
@@ -132,37 +129,11 @@ class V05Completion(features.LocalFeatures):
 
     @classmethod
     def restart_owned_server(cls):
-        """Restart our no-browser process against its existing private journal."""
-        cls.process.terminate()
-        cls.process.wait(timeout=15)
-        cls.reader.join(timeout=2)
-        cls.stderr.close()
-        cls.stdout.close()
-        cls.stderr = (cls.root / 'server.stderr.log').open('a', encoding='utf-8')
-        cls.stdout = (cls.root / 'server.stdout.log').open('a', encoding='utf-8')
-        cls.process = subprocess.Popen(
-            [str(features.EXE), '--no-browser', '--data-dir', str(cls.data_dir)],
-            stdout=subprocess.PIPE, stderr=cls.stderr, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        lines = queue.Queue()
-
-        def read_lines():
-            for line in cls.process.stdout:
-                cls.stdout.write(re.sub(r'#token=\w+', '#token=<redacted>', line))
-                cls.stdout.flush()
-                lines.put(line)
-            lines.put(None)
-
-        cls.reader = threading.Thread(target=read_lines, daemon=True)
-        cls.reader.start()
-        while True:
-            line = lines.get(timeout=40)
-            if line is None:
-                raise RuntimeError('Owned application exited before printing its local URL')
-            match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-            if match:
-                cls.url, cls.token = match.groups()
-                return
+        """Drain the exact owner, then restart against its private journal."""
+        cls.owner.stop()
+        cls.owner = launch_serve(features.EXE, ['--data-dir', str(cls.data_dir)], log_prefix=cls.root / 'server')
+        cls.process = cls.owner.process
+        cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
 
     def test_01_new_endpoints_require_token_and_same_origin(self):
         paths = ['/api/history/list', '/api/history/read', '/api/history/compare',
@@ -937,7 +908,7 @@ if __name__ == '__main__':
             'browserInteraction': 'Not established: LHT/IQV view controls, focus, keyboard/touch, shared Undo, cancellation UI and late browser result handling require separate browser acceptance',
             'recoveryPendingInjection': 'Owned restore commit witness was temporarily parked and restored to check pending status/access/retry refusal; actual process crash and power-loss were not injected',
             'multiplayerHistory': 'Not run; v0.6 authorization/synchronization scenarios remain outside this local candidate',
-            'hostInput': 'None; owned server runs --no-browser with CREATE_NO_WINDOW',
+            'hostInput': 'None; owned console server runs serve with CREATE_NO_WINDOW',
             'fixturesRetained': str(V05Completion.root),
         }, ensure_ascii=False, indent=2), encoding='utf-8')
     sys.exit(0 if result.wasSuccessful() else 1)

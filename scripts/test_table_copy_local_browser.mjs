@@ -1,7 +1,8 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Narrow real local-client counterpart of the hosted table-copy regression.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -17,8 +18,8 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex'), pause = m
 const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), frontend: dev ? 'current Vite development sources' : 'embedded candidate', cases: [], pageErrors: [], copyLifecycles: [], clipboard: {}, completed: false, limits: ['Owned headless Chrome. No OS IME, full AT or external application clipboard producer claim.'] };
 const root = path.join(out, 'library'), data = path.join(out, 'state'); let child, browser, page, vite, base, token, stderr = '';
 async function until(check, label, timeout = 30000) { const deadline = Date.now() + timeout; let last; while (Date.now() < deadline) { try { if (await check()) return; } catch (error) { last = error; } await pause(80); } throw last ?? new Error('Timed out: ' + label); }
-async function start(args = []) { child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); await until(() => { const match = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; token = match[2]; return true; } if (child.exitCode !== null) throw new Error(stderr); return false; }, 'owned local server'); }
-async function stop() { if (child?.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function start(args = []) { child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); await until(() => { const match = serveReady(child); if (match) { base = match.base; token = match.token; return true; } if (child.exitCode !== null) throw new Error(stderr); return false; }, 'owned local server'); }
+async function stop() { await stopServe(child); }
 async function api(route, body) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json(); assert.equal(reply.status, 200, route + ': ' + JSON.stringify(value)); return value; }
 const click = label => page.getByRole('button', { name: label, exact: true }).click(), surface = () => page.locator('.writing-table-surface').first();
 async function source() { return page.locator('.source-host .cm-content').evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual source editor unavailable'); return view.state.doc.toString(); }); }
@@ -42,5 +43,5 @@ try {
   }
   assert.deepEqual(result.pageErrors, []); await page.screenshot({ path: path.join(out, 'local-copy.png'), fullPage: true }); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-ui.txt'), await page.locator('body').innerText().catch(() => 'unavailable')); } throw error;
-} finally { await browser?.close(); await vite?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); }
+} finally { await browser?.close(); await vite?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); }
 console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, ownedProcessesClosed: result.ownedProcessesClosed }));

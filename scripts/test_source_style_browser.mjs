@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Embedded-product source appearance regression. All libraries/processes belong
 // to this run. Browser text insertion is not real Windows/OS IME acceptance.
 // Usage: node scripts/test_source_style_browser.mjs EXE NEW_OUT [--hosted]
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -25,22 +26,19 @@ let server, browser, page, base, token, stderr = '', original, doc;
 const pendingResponses = new Set();
 let nextHttp = 0;
 async function start(args = [], hosted = false) {
-  const child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  const identity = { pid: child.pid, args: ['--no-browser', '--data-dir', data, ...args], started: new Date().toISOString() }; result.processes.push(identity);
+  const child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const identity = { pid: child.pid, args: child.spawnargs.slice(1), started: new Date().toISOString() }; result.processes.push(identity);
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
   child.once('exit', (code, signal) => Object.assign(identity, { exitCode: code, signal, closed: new Date().toISOString() }));
   for (let index = 0; index < 300; index++) {
-    const found = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (found) { base = found[1]; token = found[2]; return child; }
+    const found = serveReady(child);
+    if (found) { base = found.base; token = found.token; return child; }
     if (child.exitCode !== null) throw new Error(stderr || 'Owned candidate exited before startup');
     await pause(100);
   }
-  child.kill(); throw new Error('Owned candidate startup timeout');
+  await stopServe(child); throw new Error('Owned candidate startup timeout');
 }
-async function stop() {
-  if (server?.exitCode === null && server.signalCode === null) { const done = new Promise(resolve => server.once('exit', resolve)); server.kill(); await done; }
-  server = undefined;
-}
+async function stop() { await stopServe(server); server = undefined; }
 async function api(route, body, actor) {
   const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + actors[actor] } : { 'X-Weftext-Token': token }) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const value = await response.json(); assert.equal(response.status, 200, JSON.stringify(value)); return value;
@@ -91,7 +89,7 @@ async function collect(name) {
   const file = name + '-frames.json'; await writeFile(path.join(out, file), JSON.stringify(observed, null, 2)); return { observed, file };
 }
 async function passed(description, evidence = {}) {
-  result.cases.push({ description, ...evidence }); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); process.stdout.write(description + '\n');
+  result.cases.push({ description, ...evidence }); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); process.stdout.write(description + '\n');
 }
 async function attachPage(viewport) {
   page = await browser.newPage({ viewport }); page.setDefaultTimeout(30000);
@@ -205,6 +203,6 @@ try {
 } finally {
   await Promise.allSettled([...pendingResponses]); await browser?.close(); result.browserClosed = !!browser; await stop();
   if (doc && original) { const bytes = await readFile(doc.path); result.original = { path: doc.path, expectedSha256: sha(Buffer.from(original)), actualSha256: sha(bytes), unchanged: bytes.equals(Buffer.from(original)) }; }
-  result.stderr = stderr; await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
+  result.stderr = stderr; await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2));
   process.stdout.write(JSON.stringify({ out, completed: result.completed, cases: result.cases.length, failure: result.failure, pageErrors: result.pageErrors }, null, 2) + '\n');
 }

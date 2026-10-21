@@ -14,7 +14,7 @@ class LinkDiagnostics(unittest.TestCase):
     def setUp(self):
         self.folder=Path(tempfile.mkdtemp(prefix='weftext-links-'))
         self.root=self.folder/'library'
-        self.server=Server(['--no-browser','--data-dir',str(self.folder/'state')])
+        self.server=Server(['--data-dir',str(self.folder/'state')])
         self.call('/api/library/create',{'path':str(self.root),'operationId':uid()})
         self.target=self.note('目标','= 路线图 <route>\n\n目标正文')
         self.current=self.note('来源','路线图 route\n\n#link("'+self.ref(self.target)+'#lost")[片段失效]\n#link("weftext-node://'+self.target['workspaceId']+'/'+uid()+'")[缺失]\n')

@@ -34,8 +34,10 @@ Create configuration outside the document root. This example exposes two existin
 
 ```text
 python scripts/server_config.py --root "D:\Notes" --out "D:\Weftext-Service\server.json" --document shared=Shared/Shared.typ --document other=Other/Other.typ --user alice --user bob
-weftext.exe --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State" --no-browser
+weftext-cli.exe serve --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State"
 ```
+
+The example executable means the fixed CLI role's full path printed by this attempt's product entry point; retain both executables and `artifact-catalog.json` in that directory. Server listens at the configured `bind`; do not additionally pass `--port`.
 
 The default bind is `127.0.0.1:47821`. Open the service URL and enter a personal token; the administrator token cannot log into the editor. A trusted operator chooses `root`, resource IDs/relative paths/display titles/`editable`, explicit dependency `inputs`, and deployment ID. Clients supply resource IDs or opened sessions, never filesystem paths, dependency roots or asserted actor identities. Each actor/resource has separate `read`, `write`, `history`, and `download` grants. Missing grants deny access; a disabled user loses all access. The latter three require `read`. Resources are authorized separately; dependencies do not inherit main-source permission.
 

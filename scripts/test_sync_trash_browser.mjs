@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Real public producers and the local Trash UI, with owned replicas and Chrome.
 // Route interception only drops an actual completed response; it never invents
 // an object, version, plan, receipt, or successful HTTP payload.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, appendFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -25,18 +26,14 @@ async function until(read, predicate, label, milliseconds = 30000) {
   throw new Error(`${label} timeout; last=${JSON.stringify(value)}`);
 }
 async function start(label, args) {
-  const child = spawn(exe, ['--no-browser', ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnServe(exe, [...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const server = { child, label, stdout: '', stderr: '' }; servers.push(server);
   child.stdout.on('data', bytes => server.stdout += bytes); child.stderr.on('data', bytes => server.stderr += bytes);
-  await until(() => server.stdout, value => /http:\/\/127\.0\.0\.1:\d+\/#token=\w+/.test(value), `${label} startup`);
-  const match = server.stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-  return Object.assign(server, { base: match[1], token: match[2] });
+  await until(() => serveReady(child), Boolean, `${label} startup`);
+  const match = serveReady(child);
+  return Object.assign(server, { base: match.base, token: match.token });
 }
-async function stop(server) {
-  if (!server || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  server.child.kill();
-  await until(() => server.child.exitCode !== null || server.child.signalCode !== null, Boolean, `${server.label} owned process close`, 15000);
-}
+async function stop(server) { await stopServe(server?.child); }
 async function api(server, route, request, expected = 200) {
   const response = await fetch(server.base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token }, body: JSON.stringify(request), signal: AbortSignal.timeout(45000) });
   const value = await response.json();
@@ -226,6 +223,6 @@ try {
   result.serverStderrBytes = servers.reduce((sum, server) => sum + Buffer.byteLength(server.stderr), 0);
   for (const [index, server] of servers.entries()) { await writeFile(path.join(out, `server-${index}-${server.label}.stdout.log`), server.stdout); await writeFile(path.join(out, `server-${index}-${server.label}.stderr.log`), server.stderr); }
   await writeFile(path.join(out, 'browser-requests.json'), JSON.stringify(requests, null, 2)); await writeFile(path.join(out, 'browser-responses.json'), JSON.stringify(responses, null, 2));
-  await writeFile(path.join(out, 'observed-original-operations.json'), JSON.stringify(observed, null, 2)); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'observed-original-operations.json'), JSON.stringify(observed, null, 2)); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2));
   console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors: result.routeErrors, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

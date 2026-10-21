@@ -126,8 +126,8 @@ class SyncCompound(unittest.TestCase):
                 json.dumps({'test': self._testMethodName}) + '\n', encoding='utf-8')
         self.transfer_number = 0
         self.servers = []
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B')
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.docs = {}
@@ -224,9 +224,7 @@ class SyncCompound(unittest.TestCase):
     def close_server(self, server):
         if server.evidence_closed:
             return
-        if server.process.poll() is None:
-            server.process.terminate()
-        stdout, stderr = server.process.communicate(timeout=15)
+        stdout, stderr = server.close()
         server.evidence_closed = True
         stem = f'server-{server.evidence_index:02}-{server.evidence_name}'
         (self.folder / f'{stem}.stdout.log').write_text(stdout, encoding='utf-8')
@@ -402,7 +400,7 @@ class SyncCompound(unittest.TestCase):
 
     def restart_b(self):
         self.close_server(self.b)
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B-restart')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B-restart')
 
     def retain_original(self, source, retained):
         """Move only the current test's originals to an unused owned path."""

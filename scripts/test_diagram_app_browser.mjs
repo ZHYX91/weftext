@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real embedded-client Mermaid acceptance over an owned ordinary document.
 // No mocked host, injected application state, Vite server or native Office.
 // Usage: node scripts/test_diagram_app_browser.mjs <exe> <new-owned-output-dir>
 // Pure ledger checks only: node scripts/test_diagram_app_browser.mjs --self-test
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -166,25 +167,20 @@ async function readOwnedFile() {
   }
 }
 async function start() {
-  server = spawn(exe, ['--no-browser', '--data-dir', stateRoot, '--open', file, '--root', authorRoot],
+  server = spawnServe(exe, ['--data-dir', stateRoot, '--open', file, '--root', authorRoot],
     { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   result.serverPid = server.pid;
   server.stdout.on('data', bytes => stdout += bytes);
   server.stderr.on('data', bytes => stderr += bytes);
   for (let count = 0; count < 400; count++) {
-    const found = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (found) { base = found[1]; token = found[2]; result.loopbackBase = base; return; }
+    const found = serveReady(server);
+    if (found) { base = found.base; token = found.token; result.loopbackBase = base; return; }
     if (server.exitCode !== null) throw new Error(stderr || 'Owned executable exited before startup');
     await pause(100);
   }
   throw new Error('Owned executable startup timeout');
 }
-async function stop() {
-  if (server && server.exitCode === null && server.signalCode === null) {
-    const stopped = new Promise(resolve => server.once('exit', resolve)); server.kill(); await stopped;
-  }
-  result.serverStopped = !!server && (server.exitCode !== null || server.signalCode !== null);
-}
+async function stop() { await stopServe(server);  result.serverStopped = !!server && server.exitCode === 0 && server.signalCode === null; }
 const click = (name, scope = page) => scope.getByRole('button', { name, exact: true }).click();
 const surface = () => page.locator('.source-host .cm-content');
 const dialog = () => page.locator('dialog.diagram-panel[open]');
@@ -215,7 +211,7 @@ async function readFinalUiSource(expected) {
   return { source: copied.source, method: 'Actual editor select-all and in-memory clipboard copy; no system clipboard', dom };
 }
 async function passed(message) {
-  result.cases.push(message); await writeFile(path.join(output, 'progress.json'), JSON.stringify(result, null, 2));
+  result.cases.push(message); await writeFile(path.join(output, 'progress.json'), stringifyServeJson(result, 2));
   process.stdout.write(message + '\n');
 }
 async function renderCurrent() {
@@ -450,7 +446,7 @@ try {
   result.saveWrites = saveWrites.map(write => ({ sourceSha256: hash(Buffer.from(write.source)), operationId: write.operationId, status: write.status, receiptStatus: write.receipt?.status }));
   await writeFile(path.join(output, 'server.stdout.log'), stdout.replace(/#token=\w+/g, '#token=<redacted>'));
   await writeFile(path.join(output, 'server.stderr.log'), stderr);
-  await writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(output, 'result.json'), stringifyServeJson(result, 2));
   if (lateGateFailure) throw lateGateFailure;
 }
-process.stdout.write(JSON.stringify(result, null, 2));
+process.stdout.write(stringifyServeJson(result, 2));

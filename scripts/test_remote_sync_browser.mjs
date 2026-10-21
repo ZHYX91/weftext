@@ -1,7 +1,7 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Three actual programs and headless browser controls. No desktop interaction.
 import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -15,16 +15,16 @@ const result = { exe, sha256: digest(await readFile(exe)), cases: [], pageErrors
 const children = []; let browser, aPage, bPage, stderr = '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function start(args, hosted = false) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); children.push(child);
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); children.push(child);
   let output = ''; child.stdout.on('data', b => output += b); child.stderr.on('data', b => stderr += b);
   for (let i = 0; i < 300; i++) {
-    const match = output.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) return { child, base: match[1], token: match[2] };
+    const match = serveReady(child);
+    if (match) return { child, base: match.base, token: match.token };
     if (child.exitCode !== null) throw new Error(stderr); await sleep(100);
   }
   throw new Error('startup timeout');
 }
-async function stop(child) { if (child.exitCode === null && child.signalCode === null) { const done = new Promise(r => child.once('exit', r)); child.kill(); await done; } }
+async function stop(child) { await stopServe(child); }
 async function api(server, route, data, token) {
   const response = await fetch(server.base + route, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : { 'X-Weftext-Token': server.token }) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
@@ -35,12 +35,12 @@ async function transfer(panel, name) { await panel.getByRole('button', { name, e
 try {
   const ra = path.join(out, 'a'), rb = path.join(out, 'b'), relayRoot = path.join(out, 'relay-files'); await mkdir(relayRoot);
   const da = path.join(out, 'state-a'), db = path.join(out, 'state-b');
-  let a = await start(['--no-browser', '--data-dir', da]);
+  let a = await start(['--data-dir', da]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
   const note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
   createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Other', operationId: randomUUID() }));
-  await stop(a.child); a = await start(['--no-browser', '--data-dir', da, '--open', note.path, '--root', ra]);
-  const b = await start(['--no-browser', '--data-dir', db]);
+  await stop(a.child); a = await start(['--data-dir', da, '--open', note.path, '--root', ra]);
+  const b = await start(['--data-dir', db]);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   aPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); bPage = await browser.newPage({ viewport: { width: 1280, height: 960 } });
   for (const page of [aPage, bPage]) page.on('pageerror', error => result.pageErrors.push(String(error)));
@@ -50,7 +50,7 @@ try {
   const ownerToken = randomBytes(32).toString('hex'), adminToken = randomBytes(32).toString('hex');
   const config = { deployment: 'browser-sync', bind: '127.0.0.1:0', root: relayRoot, adminTokenSha256: digest(adminToken), syncIdentity: identity, files: {}, users: { owner: { enabled: true, tokenSha256: digest(ownerToken), syncOwner: true, grants: {} } } };
   const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2));
-  const relay = await start(['--no-browser', '--data-dir', path.join(out, 'relay-state'), '--server-config', configPath], true);
+  const relay = await start(['--data-dir', path.join(out, 'relay-state'), '--server-config', configPath], true);
   await pa.getByLabel('远端服务地址', { exact: true }).fill(relay.base); await pa.getByLabel('完整同步凭据', { exact: true }).fill(ownerToken);
   let lostStart = false;
   await aPage.route('**/api/sync/remote/start', async route => {
@@ -94,11 +94,11 @@ try {
   result.cases.push('remote credentials absent from browser storage and cleared on close; revocation rejects fresh remote reads and clears the remote directory');
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) {
-  result.failure = String(error.stack ?? error); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
+  result.failure = String(error.stack ?? error); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2));
   for (const [name, p] of [['a', aPage], ['b', bPage]]) if (p) await p.screenshot({ path: path.join(out, `failure-${name}.png`), fullPage: true }).catch(() => {});
   throw error;
 } finally {
   await browser?.close(); for (const child of children) await stop(child);
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors }));
 }

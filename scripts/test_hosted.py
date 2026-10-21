@@ -1,12 +1,11 @@
 """Real hosted HTTP boundaries against owned disposable libraries; no desktop input."""
+from _cli_serve import launch_serve
 from _creation_result import created_document
 import copy
 import hashlib
 import json
 from pathlib import Path
-import re
 import secrets
-import subprocess
 import tempfile
 import unittest
 from urllib.error import HTTPError
@@ -21,25 +20,15 @@ def uid(): return str(uuid.uuid4())
 def digest(text): return hashlib.sha256(text.encode()).hexdigest()
 
 class Server:
-    def __init__(self, args, hosted=False):
-        self.process = subprocess.Popen([str(EXE), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        text=True, encoding='utf-8', creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        self.token = None
-        for _ in range(4):
-            line = self.process.stdout.readline()
-            match = re.search(r'(http://127\.0\.0\.1:\d+)/' + (r'\s*$' if hosted else r'#token=(\w+)'), line)
-            if match:
-                self.url = match[1]
-                if not hosted: self.token = match[2]
-                break
-        else:
-            self.close()
-            raise RuntimeError('Server did not start')
+    def __init__(self, args, hosted=False, *, expected_default_data_dir=None, evidence_parent=None):
+        self.owner = launch_serve(EXE, args, hosted=hosted, expected_default_data_dir=expected_default_data_dir,
+                                  evidence_parent=evidence_parent)
+        self.process = self.owner.process
+        self.url, self.token = self.owner.ready['base'], self.owner.ready['token']
         self.hosted = hosted
 
     def close(self):
-        self.process.terminate()
-        self.process.communicate(timeout=15)
+        return self.owner.stop()
 
     def call(self, route, data=None, token=None, headers=None):
         auth = {'Authorization': 'Bearer ' + (token or '')} if self.hosted else {'X-Weftext-Token': self.token}
@@ -65,7 +54,7 @@ class Hosted(unittest.TestCase):
         self.folder.mkdir()
         self.data = self.folder / 'state'
         self.root = self.folder / 'library'
-        local = Server(['--no-browser','--data-dir',str(self.data)])
+        local = Server(['--data-dir',str(self.data)])
         try:
             self.assertEqual(local.call('/api/library/create', {'path':str(self.root),'operationId':uid()})[0],200)
             self.docs = {}
@@ -93,7 +82,7 @@ class Hosted(unittest.TestCase):
 
     def start(self):
         self.config_path.write_text(json.dumps(self.config),'utf-8')
-        self.server = Server(['--no-browser','--data-dir',str(self.data),'--server-config',str(self.config_path)],hosted=True)
+        self.server = Server(['--data-dir',str(self.data),'--server-config',str(self.config_path)],hosted=True)
 
     def tearDown(self): self.server.close()
 

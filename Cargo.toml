@@ -1,6 +1,9 @@
 [workspace]
-members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export", "crates/weftext-messages"]
+members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export", "crates/weftext-messages", "crates/weftext-enrollment", "crates/weftext-worker-broker"]
 resolver = "2"
+
+[workspace.dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [patch.crates-io]
 typst-html = { path = "crates/weftext-engine/vendor/typst-html" }

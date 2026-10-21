@@ -9,7 +9,7 @@ weftext-engine = { path = "../weftext-engine" }
 weftext-data = { path = "../weftext-data" }
 typst-syntax = "=0.15.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { workspace = true }
 url = "2"
 uuid = "1"
 aho-corasick = "1"

@@ -15,7 +15,7 @@ def plan(): return {'scope':{'descendants':True,'lifecycle':'live'},'types':[],'
 class QueryOrganization(unittest.TestCase):
     def setUp(self):
         self.folder=Path(tempfile.mkdtemp(prefix='weftext-org-')); print('Query organization evidence:',self.folder,flush=True)
-        self.data=self.folder/'state'; self.root=self.folder/'Library'; self.server=test_hosted.Server(['--no-browser','--data-dir',str(self.data)]); self.addCleanup(lambda:self.server.close()); self.serial=0
+        self.data=self.folder/'state'; self.root=self.folder/'Library'; self.server=test_hosted.Server(['--data-dir',str(self.data)]); self.addCleanup(lambda:self.server.close()); self.serial=0
         self.options={'initialRoot':{'title':'我的首页😀','queries':['tasks','events']}}
         self.operation=uid(); self.receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options})
         self.doc=self.call('/api/open',{'root':str(self.root),'path':self.receipt['rootNotePath']})
@@ -70,7 +70,7 @@ class QueryOrganization(unittest.TestCase):
     def test_root_user_changes_survive_restart_and_original_creation_retry(self):
         owner=self.doc['nodeId']; source=f'#metadata((id: "{owner}", types: ())) <weftext>\n\n用户清空预设后自己的正文😀\n'
         self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':source,'operationId':uid()})
-        self.server.close(); self.server=test_hosted.Server(['--no-browser','--data-dir',str(self.data)])
+        self.server.close(); self.server=test_hosted.Server(['--data-dir',str(self.data)])
         receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual(receipt,self.receipt)
         self.doc=self.call('/api/open',{'root':str(self.root),'path':receipt['rootNotePath']}); self.assertEqual(self.doc['source'],source); self.serial=0
         self.assertEqual(self.discover()[1],[])
@@ -78,7 +78,7 @@ class QueryOrganization(unittest.TestCase):
         envelope=(self.root/'.weftext-workspace.json').read_bytes()
         binding=self.call('/api/sync/enable',{'root':str(self.root),'operationId':uid()}); identity=binding['identity']; objects=[{'kind':'node','id':self.doc['nodeId']},{'kind':'schema'}]; exchange=self.folder/'exchange'
         self.call('/api/sync/export',{'root':str(self.root),'directory':str(exchange),'objects':objects})
-        replica=test_hosted.Server(['--no-browser','--data-dir',str(self.folder/'replica-state')]); self.addCleanup(replica.close); destination=self.folder/'Replica'
+        replica=test_hosted.Server(['--data-dir',str(self.folder/'replica-state')]); self.addCleanup(replica.close); destination=self.folder/'Replica'
         def call(route,body):
             code,value,_=replica.call(route,body); self.assertEqual(code,200,(route,value)); return value
         call('/api/sync/receive',{'identity':identity,'directory':str(exchange)})

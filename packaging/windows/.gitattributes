@@ -1,0 +1,4 @@
+# Preserve the exact third-party license bytes qualified in provenance/locks.
+licenses/vc-runtime/** -text -whitespace
+licenses/webview2-rust/** -text -whitespace
+licenses/webview2-sdk/** -text -whitespace
