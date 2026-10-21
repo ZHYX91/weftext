@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "defaultLocale": "zh-CN",
+  "locales": [
+    "zh-CN",
+    "en-US"
+  ],
+  "messages": {
+    "app.title": {
+      "zh-CN": "Weftext · 写作与知识",
+      "en-US": "Weftext · Writing and knowledge",
+      "params": {}
+    },
+    "app.hostedTitle": {
+      "zh-CN": "Weftext · 远端写作",
+      "en-US": "Weftext · Remote writing",
+      "params": {}
+    },
+    "locale.label": {
+      "zh-CN": "界面语言",
+      "en-US": "Interface language",
+      "params": {}
+    },
+    "locale.zhCN": {
+      "zh-CN": "简体中文",
+      "en-US": "简体中文",
+      "params": {}
+    },
+    "locale.enUS": {
+      "zh-CN": "English",
+      "en-US": "English",
+      "params": {}
+    },
+    "locale.unsaved": {
+      "zh-CN": "本次界面语言尚未可靠保存；当前稿和原操作未改变。",
+      "en-US": "The interface language has not been durably saved. Your draft and original operation are unchanged.",
+      "params": {}
+    },
+    "locale.unavailable": {
+      "zh-CN": "界面语言偏好暂不可读取，使用默认语言；当前稿和原操作未改变。",
+      "en-US": "The interface language preference is unavailable. Using the default language; your draft and original operation are unchanged.",
+      "params": {}
+    },
+    "common.save": {
+      "zh-CN": "保存",
+      "en-US": "Save",
+      "params": {}
+    },
+    "common.cancel": {
+      "zh-CN": "取消",
+      "en-US": "Cancel",
+      "params": {}
+    },
+    "common.close": {
+      "zh-CN": "关闭",
+      "en-US": "Close",
+      "params": {}
+    },
+    "common.retry": {
+      "zh-CN": "重试",
+      "en-US": "Retry",
+      "params": {}
+    },
+    "common.open": {
+      "zh-CN": "打开",
+      "en-US": "Open",
+      "params": {}
+    },
+    "common.unknown": {
+      "zh-CN": "未知",
+      "en-US": "Unknown",
+      "params": {}
+    },
+    "common.unavailable": {
+      "zh-CN": "暂不可用",
+      "en-US": "Unavailable",
+      "params": {}
+    },
+    "common.originalDiagnostic": {
+      "zh-CN": "原始诊断",
+      "en-US": "Original diagnostic",
+      "params": {}
+    },
+    "common.operation": {
+      "zh-CN": "原操作：{operationId}",
+      "en-US": "Original operation: {operationId}",
+      "params": {
+        "operationId": "text"
+      }
+    },
+    "desktop.library": {
+      "zh-CN": "资料库",
+      "en-US": "Library",
+      "params": {}
+    },
+    "desktop.capture": {
+      "zh-CN": "新增碎片",
+      "en-US": "New capture",
+      "params": {}
+    },
+    "desktop.showLibrary": {
+      "zh-CN": "打开资料库窗口",
+      "en-US": "Open library window",
+      "params": {}
+    },
+    "desktop.exit": {
+      "zh-CN": "退出 Weftext",
+      "en-US": "Exit Weftext",
+      "params": {}
+    },
+    "desktop.resident": {
+      "zh-CN": "关闭窗口后继续常驻",
+      "en-US": "Keep running after closing windows",
+      "params": {}
+    },
+    "desktop.loginStartup": {
+      "zh-CN": "登录时启动 Weftext",
+      "en-US": "Start Weftext at login",
+      "params": {}
+    },
+    "desktop.openInterface": {
+      "zh-CN": "启动时打开界面",
+      "en-US": "Open the interface at startup",
+      "params": {}
+    },
+    "desktop.unsavedClose": {
+      "zh-CN": "恢复稿尚未确认持久保存，窗口保持打开。",
+      "en-US": "The recovery draft is not confirmed durable. The window remains open.",
+      "params": {}
+    },
+    "desktop.waitingForInput": {
+      "zh-CN": "正在等待输入完成和草稿保存。",
+      "en-US": "Waiting for input to finish and the draft to be saved.",
+      "params": {}
+    },
+    "desktop.startupDisabled": {
+      "zh-CN": "系统已禁用登录启动；Weftext 不会自行恢复此设置。",
+      "en-US": "The system has disabled login startup. Weftext will not re-enable it automatically.",
+      "params": {}
+    },
+    "capture.title": {
+      "zh-CN": "新增碎片",
+      "en-US": "New capture",
+      "params": {}
+    },
+    "capture.body": {
+      "zh-CN": "正文",
+      "en-US": "Body",
+      "params": {}
+    },
+    "capture.target": {
+      "zh-CN": "目标资料库",
+      "en-US": "Target library",
+      "params": {}
+    },
+    "capture.saveClose": {
+      "zh-CN": "保存并关闭",
+      "en-US": "Save and close",
+      "params": {}
+    },
+    "capture.saveNext": {
+      "zh-CN": "保存并再记一条",
+      "en-US": "Save and capture another",
+      "params": {}
+    },
+    "capture.openNote": {
+      "zh-CN": "打开已创建笔记",
+      "en-US": "Open created note",
+      "params": {}
+    },
+    "capture.saved": {
+      "zh-CN": "碎片已保存。",
+      "en-US": "Capture saved.",
+      "params": {}
+    },
+    "capture.persisting": {
+      "zh-CN": "正在可靠保存恢复稿。",
+      "en-US": "Saving the recovery draft durably.",
+      "params": {}
+    },
+    "capture.pending": {
+      "zh-CN": "原操作结果尚未确认；恢复稿和原编号已保留。",
+      "en-US": "The original operation is unconfirmed. Its draft and original ID are retained.",
+      "params": {}
+    },
+    "reminder.label": {
+      "zh-CN": "任务提醒",
+      "en-US": "Task reminder",
+      "params": {}
+    },
+    "reminder.absolute": {
+      "zh-CN": "独立时刻",
+      "en-US": "Independent instant",
+      "params": {}
+    },
+    "reminder.beforeDue": {
+      "zh-CN": "截止前提醒",
+      "en-US": "Before the due time",
+      "params": {}
+    },
+    "reminder.dueDay": {
+      "zh-CN": "截止日指定时间",
+      "en-US": "Time on the due day",
+      "params": {}
+    },
+    "reminder.enabledDevice": {
+      "zh-CN": "在本设备启用此提醒",
+      "en-US": "Enable this reminder on this device",
+      "params": {}
+    },
+    "reminder.submitted": {
+      "zh-CN": "系统已接受提醒；不代表用户已读。",
+      "en-US": "The system accepted the reminder. This does not mean it was read.",
+      "params": {}
+    },
+    "reminder.unknown": {
+      "zh-CN": "系统提交结果未知，未盲目重发。",
+      "en-US": "The system submission result is unknown. It was not blindly resubmitted.",
+      "params": {}
+    },
+    "reminder.unavailable": {
+      "zh-CN": "当前条件不允许提交系统通知。",
+      "en-US": "System notifications cannot be submitted under the current conditions.",
+      "params": {}
+    },
+    "reminder.missed": {
+      "zh-CN": "有 {count} 项有效的错过提醒。",
+      "en-US": "Valid missed reminders: {count}.",
+      "params": {
+        "count": "integer"
+      }
+    },
+    "editor.source": {
+      "zh-CN": "Typst 源码编辑器",
+      "en-US": "Typst source editor",
+      "params": {}
+    },
+    "editor.revealedSource": {
+      "zh-CN": "Typst 原生源码片段",
+      "en-US": "Native Typst source fragment",
+      "params": {}
+    },
+    "editor.search": {
+      "zh-CN": "查找",
+      "en-US": "Find",
+      "params": {}
+    },
+    "editor.replace": {
+      "zh-CN": "替换",
+      "en-US": "Replace",
+      "params": {}
+    },
+    "error.request": {
+      "zh-CN": "请求未完成（{status}）。",
+      "en-US": "The request did not complete ({status}).",
+      "params": {
+        "status": "integer"
+      }
+    },
+    "error.resourceRead": {
+      "zh-CN": "资源读取未完成。",
+      "en-US": "The resource could not be read.",
+      "params": {}
+    },
+    "cli.description": {
+      "zh-CN": "正式命令行：读取、写作、查询、交换与同步。",
+      "en-US": "Command-line access for reading, writing, querying, interchange and synchronization.",
+      "params": {}
+    },
+    "cli.requestRetained": {
+      "zh-CN": "准确原请求已保留在 {path}；原操作：{operationId}。",
+      "en-US": "The exact original request is retained at {path}; original operation: {operationId}.",
+      "params": {
+        "path": "text",
+        "operationId": "text"
+      }
+    },
+    "cli.complete": {
+      "zh-CN": "命令已完成。",
+      "en-US": "Command completed.",
+      "params": {}
+    },
+    "cli.partial": {
+      "zh-CN": "仅所述范围已完成，其余范围未计为成功。",
+      "en-US": "Only the reported scope is complete. Other scope is not counted as successful.",
+      "params": {}
+    },
+    "cli.unknown": {
+      "zh-CN": "原操作 {operationId} 的效果尚未确认；请求保留在 {path}，仅按原编号查询。",
+      "en-US": "The effect of original operation {operationId} is unconfirmed. Its request is retained at {path}; inspect the original ID.",
+      "params": {
+        "operationId": "text",
+        "path": "text"
+      }
+    },
+    "cli.error": {
+      "zh-CN": "命令未完成，代码：{code}。",
+      "en-US": "The command did not complete. Code: {code}.",
+      "params": {
+        "code": "text"
+      }
+    },
+    "cli.deliveryFailed": {
+      "zh-CN": "本机交付未完成；原操作 {operationId} 与请求文件 {path} 已保留，不重复提交业务效果。",
+      "en-US": "Local delivery is incomplete. Original operation {operationId} and request file {path} are retained; the business effect is not resubmitted.",
+      "params": {
+        "operationId": "text",
+        "path": "text"
+      }
+    },
+    "cli.requestFileRequired": {
+      "zh-CN": "此命令可能产生持久或外部效果，须指定新的 request-file；首次发送前保存准确输入，不包含凭据。",
+      "en-US": "This command can have a persistent or external effect. Provide a new request-file to retain the exact input before its first submission, without credentials.",
+      "params": {}
+    },
+    "cli.invalidInput": {
+      "zh-CN": "输入不完整、格式或 UTF-8 无效，或超出预算；未发送请求。",
+      "en-US": "Input is incomplete, has invalid format or UTF-8, or exceeds its budget. No request was sent.",
+      "params": {}
+    },
+    "cli.invalidEndpoint": {
+      "zh-CN": "远端须明确使用不含用户信息、查询参数或片段的 HTTPS origin；不接受跨 origin 重定向。",
+      "en-US": "A remote endpoint requires an explicit HTTPS origin without user information, query or fragment. Cross-origin redirects are rejected.",
+      "params": {}
+    },
+    "cli.credentialsRequired": {
+      "zh-CN": "远端凭据从受保护文件或明确的环境变量读取；不接受包含密钥的命令行参数。",
+      "en-US": "Read remote credentials from a protected file or an explicit environment variable. Secret command-line arguments are not accepted.",
+      "params": {}
+    },
+    "cli.requestConflict": {
+      "zh-CN": "原请求定位器或内容不一致，未重新发送。",
+      "en-US": "The original request locator or content differs. It was not resubmitted.",
+      "params": {}
+    },
+    "cli.unsupported": {
+      "zh-CN": "当前执行端或命令未提供此能力。",
+      "en-US": "This endpoint or command does not provide this capability.",
+      "params": {}
+    },
+    "cli.outputExists": {
+      "zh-CN": "输出路径 {path} 已存在，拒绝覆盖原件。",
+      "en-US": "Output path {path} already exists. The original is not overwritten.",
+      "params": {
+        "path": "text"
+      }
+    },
+    "cli.helpCommands": {
+      "zh-CN": "使用 --help 查看命令；使用 <命令> --help 查看该命令的参数。",
+      "en-US": "Use --help to list commands, or <command> --help for that command's arguments.",
+      "params": {}
+    }
+  }
+}

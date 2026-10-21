@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export"]
+members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export", "crates/weftext-messages"]
 resolver = "2"
 
 [patch.crates-io]
