@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export", "crates/weftext-messages", "crates/weftext-enrollment"]
+members = ["crates/weftext-app", "crates/weftext-core", "crates/weftext-engine", "crates/weftext-data", "crates/weftext-knowledge", "crates/weftext-export", "crates/weftext-messages", "crates/weftext-enrollment", "crates/weftext-worker-broker"]
 resolver = "2"
 
 [workspace.dependencies]

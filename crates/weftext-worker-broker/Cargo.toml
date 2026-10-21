@@ -1,0 +1,27 @@
+[package]
+name = "weftext-worker-broker"
+version = "0.7.0-dev"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+autobins = false
+
+[features]
+boundary-probe = []
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+sha2 = "0.10"
+weftext-enrollment = { path = "../weftext-enrollment" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "weftext-worker-broker"
+path = "src/main.rs"
+
+[[bin]]
+name = "weftext-worker-boundary-probe"
+path = "src/bin/boundary_probe.rs"
+required-features = ["boundary-probe"]
