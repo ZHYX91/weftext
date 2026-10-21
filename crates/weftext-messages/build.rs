@@ -1,4 +1,6 @@
 use serde::Deserialize;
+#[path = "src/message_template.rs"]
+mod message_template;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
@@ -63,29 +65,22 @@ fn identifiers(key: &str) -> (String, String) {
 }
 
 fn parameters(template: &str) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
-    let mut remainder = template;
-    while let Some(start) = remainder.find('{') {
-        remainder = &remainder[start + 1..];
-        let end = remainder.find('}').expect("Unclosed UI placeholder");
-        let name = &remainder[..end];
-        identifiers(name);
-        names.insert(name.to_owned());
-        remainder = &remainder[end + 1..];
-    }
-    names
+    message_template::placeholders(template)
+        .map(|(_, name)| name.to_owned())
+        .collect()
 }
 
 fn main() {
     let source = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .join("../../assets/ui-messages.json");
     println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-changed=src/message_template.rs");
     let catalog: Catalog = serde_json::from_slice(&fs::read(source).unwrap()).unwrap();
     assert_eq!(catalog.version, 1);
     assert_eq!(catalog.default_locale, "zh-CN");
     assert_eq!(catalog.locales, ["zh-CN", "en-US"]);
     let mut variants = BTreeSet::new();
-    let mut output = "#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]\n#[serde(tag = \"key\", content = \"params\", deny_unknown_fields)]\npub enum UiMessage {\n".to_owned();
+    let mut output = "#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]\n#[serde(tag = \"key\", content = \"params\", deny_unknown_fields)]\npub enum UiMessage {\n".to_owned();
     let mut arms = String::new();
     let mut key_arms = String::new();
     for (key, message) in catalog.messages {
