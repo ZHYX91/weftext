@@ -72,9 +72,10 @@ test("revocation recovery keeps newly entered Unicode without redisplaying old n
   tracker.input("新增甲旧稿秘密😀新增乙", { from: 9, to: 9, inputType: "insertFromPaste" });
   assert.equal(tracker.newInput(), "新增甲\n新增乙");
   tracker.input("新增甲旧稿秘密😀", { from: 0, to: 0, inputType: "historyUndo" });
-  assert.equal(tracker.newInput(), "新增甲");
+  assert.equal(tracker.newInput(), "", "native history has no ownership token");
+  assert.equal(tracker.recoveryInput(), "新增甲\n新增乙", "known author text stays independently recoverable");
   tracker.input("新增甲旧稿秘密😀新增乙", { from: 0, to: 0, inputType: "historyRedo" });
-  assert.equal(tracker.newInput(), "新增甲\n新增乙");
+  assert.equal(tracker.newInput(), ""); assert.ok(!tracker.recoveryInput().includes("旧稿秘密"));
   tracker.input("unproven combined browser change"); assert.equal(tracker.newInput(), "");
 });
 

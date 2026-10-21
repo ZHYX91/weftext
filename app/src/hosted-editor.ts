@@ -21,6 +21,8 @@ import "./writing.css";
 import "./hosted-editor.css";
 import "./embedded-query.css";
 import type { HostedQueryDependencies } from "./hosted-query-state";
+import type { PersonalInputRecord } from "./personal-input-recovery";
+import type { InputOrigin } from "./source-input-origin";
 
 interface Projection { ok: boolean; tree: RenderNode | null; source: string; serial: number; message: string; sourceInfo: { syntaxTokens: SyntaxToken[]; notes?: import("./document-notes").NotesSourceMap } }
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
@@ -34,8 +36,7 @@ export interface HostedEditorQueryHost {
   navigateReference?(reference: string): Promise<void>;
   navigateResource?(reference: string): Promise<void>;
   dependencies?(): HostedQueryDependencies;
-  noteInputAudience?(): string | null;
-  pendingNoteInput?(audience: string, value: string): void;
+  personalInputChanged?(): void;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = "", name = ""): HTMLElementTagNameMap[K] { const el = document.createElement(tag); el.textContent = text; el.className = name; return el; }
@@ -68,6 +69,8 @@ export class HostedEditor {
   private personalAudience = "";
   private retained = new Map<string, { editor: SourceEditor; writing: WritingController; queries?: EmbeddedQueryController; mode: ViewMode; scroll: number; sourceScroll: number; windowScroll:number }>();
   private restoredView?: { resource:string; scroll:number; sourceScroll:number; windowScroll:number };
+  private personalReferences = new Map<string, string>();
+  private literalPersonal = new Map<string, { resource: string; text: string; revision: number }>();
   constructor(private container: HTMLElement, private request: Request, private changed: () => void, private save: () => void, private error: (e: Error) => void, private queryHost?: HostedEditorQueryHost) {
     this.fonts = new OfflineFontLoader({ fonts: document.fonts, readManifest: () => request("fonts") });
     this.authoringAssets = new AuthoringAssetsAdapter({ request, prefix: "editor/endnotes-module", context: () => this.sessionId && !this.paused && !this.blocked && this.mode !== "read" && this.personalAudience ? { sessionId: this.sessionId, audience: this.personalAudience } : null, changed: async () => { this.projection = undefined; this.queries?.invalidate(); this.generation++; await this.compile(); } });
@@ -86,6 +89,19 @@ export class HostedEditor {
   get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
   get pausedSession(): boolean { return this.paused; }
   get composing(): boolean { return !!this.editor?.composing || !!this.writing?.state.composing; }
+  personalInputRecords(): Omit<PersonalInputRecord, "sequence">[] {
+    const editors = [...this.retained].map(([resource, saved]) => ({ resource, editor: saved.editor }));
+    if (this.editor) editors.push({ resource: this.resource, editor: this.editor });
+    return [
+      ...editors.map(({ resource, editor }) => { const input = editor.personalInput(); return { id: input.id, resource, baseHash: input.baseHash, reference: this.personalReferences.get(resource), origin: input.origin }; }),
+      ...[...this.literalPersonal].map(([id, value]) => ({ id, resource: value.resource, reference: this.personalReferences.get(value.resource), origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id, text: value.text }] : [], revision: value.revision } })),
+    ];
+  }
+  personalInputReference(resource: string, reference: string): void { this.personalReferences.set(resource, reference); this.queryHost?.personalInputChanged?.(); }
+  restorePersonalInput(value: string, origin: InputOrigin, baseHash: string, basis: EmbeddedQueryBasis): void {
+    if (!this.editor || this.blocked || this.paused || this.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis)) throw new Error("当前草稿或会话已变化，未覆盖新输入。");
+    this.editor.restorePersonalInput(value, origin, baseHash); this.schedule(0);
+  }
   revealRendered(key: string, expected?: StructureHeading): boolean {
     if (this.paused || !this.current() || !this.flow.isConnected || !this.flow.getClientRects().length) return false;
     if (expected && !headingMatchesDisplay(this.projection?.tree, expected)) return false;
@@ -152,7 +168,7 @@ export class HostedEditor {
         if(this.mode==="write")saved.writing.restoreNavigationFocus();
       } else {
       if (saved) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); }
-      this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save);
+      this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save, () => this.queryHost?.personalInputChanged?.());
       const editor = this.editor;
       this.writing = new WritingController({ editor,
         refreshMap: basis => this.request("editor/map",basis),
@@ -160,6 +176,10 @@ export class HostedEditor {
         editable: () => this.editor === editor && !this.blocked && this.mode !== "read",
         request: request => this.requestEdit(request), onError: this.error,
         onPendingSource: () => { this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
+        onPersonalInput: (id, text) => {
+          const old = this.literalPersonal.get(id); this.literalPersonal.set(id, { resource, text, revision: (old?.revision ?? 0) + 1 });
+          try { this.queryHost?.personalInputChanged?.(); } catch (error) { this.error(error instanceof Error ? error : new Error(String(error))); }
+        },
         onState: () => {
           this.deferredPaint.flush(() => this.editor === editor ? this.paintBasis() : undefined, () => !!this.writing?.retainInput || !!this.editor?.composing, () => this.paint());
         },
@@ -198,7 +218,7 @@ export class HostedEditor {
   }
   clear(clearRetained = true): void {
     this.deferredPaint.clear();
-    if (clearRetained) { for (const saved of this.retained.values()) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); } this.retained.clear(); }
+    if (clearRetained) { for (const saved of this.retained.values()) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); } this.retained.clear(); this.personalReferences.clear(); this.literalPersonal.clear(); }
     this.restoredView=undefined; this.authoringAssets.invalidate(); this.notesMount?.dispose(); this.notesMount = undefined; this.personalKeys = undefined; this.personalAudience = "";
     this.sessionId = ""; this.projection = undefined; if (this.writing) retireDocumentNotes(this.writing);
     clearTimeout(this.timer); this.generation++; this.queries?.dispose(); this.queries = undefined; this.queryPreview = false; this.writing?.dispose(); this.editor?.destroy();
@@ -220,7 +240,6 @@ export class HostedEditor {
   }
   private authoringEnvironment(): AuthoringPanelsEnvironment {
     const writing = this.writing, editor = this.editor; if (!writing || !editor) throw new Error("当前正文尚未打开。");
-    const inputAudience = this.queryHost?.noteInputAudience?.() ?? this.personalAudience;
     const readable = () => this.editor === editor && this.writing === writing && !!this.sessionId && !this.paused;
     return {
       controller: writing, readable, editable: () => readable() && !this.blocked && this.mode !== "read",
@@ -232,7 +251,7 @@ export class HostedEditor {
       retryEndnoteModule: async () => { await this.preparePersonalNumbering(); await this.authoringAssets.retryOriginal(); this.message.textContent = "原尾注模块安装已确认，正文尚未保存。"; },
       restartEndnoteModule: async () => { await this.preparePersonalNumbering(); await this.authoringAssets.restartAfterCancelled(); this.message.textContent = "已核对原操作明确取消并准备新模块资源；正文尚未保存。"; },
       settleEndnoteModule: async () => { await this.preparePersonalNumbering(); const receipt = await this.authoringAssets.settleOriginal(); this.message.textContent = `原模块操作：${receipt.status}`; },
-      pendingInput: value => { if (inputAudience) this.queryHost?.pendingNoteInput?.(inputAudience, value); }, onError: this.error,
+      onError: this.error,
     };
   }
   private async openNumbering(): Promise<void> {

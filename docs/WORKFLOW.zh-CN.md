@@ -61,6 +61,8 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 
 同一输入脚本可用 `EXE NEW_OUTPUT --hosted --smoke --fixture=100k-lines --recovery-check` 检查大稿恢复：实际阻断服务端草稿交付，刷新后核完整未保存正文，关闭自有后端释放文件租约后核磁盘原件未变。该模式的少量输入只作校准，不替代完整时延矩阵；失败现场与普通退出回执分别保留。
 
+`node scripts/test_hosted_personal_input_browser.mjs EXE NEW_OUTPUT` 在自有 TEST 库和独立无头浏览器验证未上传本人输入：仅注入后台草稿网络失败，实际撤权／401 后重新认证，核纯输入、账号分隔、准确基线恢复、共享 Undo、迟到原生回应、存储失败及原保存编号。程序赋值／IME 负向用例不授予保护文字来源。设置 `WEFTEXT_PLAYWRIGHT_MODULE` 可指定已安装的通用 Playwright 模块；不操作用户浏览器。该定向检查不代替完整候选验收或真实系统 IME。
+
 ## 发布
 
 当前 `python scripts/mvp.py check` 检查本地实现，`package` 生成带源码和声明的本地候选，不上传发布。正式发布复用已验收的同一产物，不在发布步骤重新构建另一份。发布前明确目标版本、平台、未通过项和用户授权；发布后核对下载内容及最小运行场景。

@@ -7,6 +7,7 @@ import type { SyntaxToken } from "./types";
 import { currentSourceStyleBasis, retireSourceStylesEffect, sourceStyleModeEffect, sourceStyles, sourceTokensEffect, type SourceStyleBasis } from "./source-style";
 import { sourceCompositionHistory, SourceHistoryRequests, type SourceHistoryCommand } from "./source-history";
 import { sourceCodePointCount, sourceLongLines } from "./source-statistics";
+import { inputOriginKind, personalInputId, personalTextEffect, restoreInputOrigin, sourceInputOrigin, sourceInputOrigins, type InputOrigin, type PersonalText } from "./source-input-origin";
 
 const boundedSourceShaping = EditorView.contentAttributes.compute([sourceLongLines], state => ({ class: state.field(sourceLongLines).length ? "cm-long-line" : "" }));
 
@@ -119,11 +120,13 @@ export class SourceEditor {
     },
   });
   generation = 0;
+  readonly inputId = personalInputId();
+  private inputBaseHash?: string;
 
-  constructor(source: string, onChange: (source: string) => void, save: () => void) {
+  constructor(source: string, onChange: (source: string) => void, save: () => void, personalInputReady?: () => void) {
     this.view = new EditorView({
       state: createSourceState(source, [
-          history(), sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
+          history(), sourceInputOrigins, sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
           bracketMatching(), indentOnInput(), highlightSelectionMatches(), sourceStyles, sourceRevealExtensions,
           sourceCompositionHistory(() => this.activeCompositionEpoch, transaction => !!transaction.annotation(nativeEdit)),
           this.editable.of(EditorView.editable.of(true)),
@@ -198,6 +201,17 @@ export class SourceEditor {
     this.styleNotice.setAttribute("role", "note");
     this.styleNotice.hidden = true;
     this.view.dom.append(this.styleNotice);
+    // Only the hash survives authorization retirement; the original text is
+    // never copied into the independent personal-input record.
+    if (crypto.subtle) void crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)).then(bytes => {
+      this.inputBaseHash = [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+      if (!this.disposed) personalInputReady?.();
+    });
+  }
+  personalInput(): { id: string; baseHash?: string; origin: InputOrigin } { return { id: this.inputId, baseHash: this.inputBaseHash, origin: this.view.state.field(sourceInputOrigin) }; }
+  restorePersonalInput(source: string, origin: InputOrigin, baseHash: string): void {
+    if (this.inputBaseHash !== baseHash) throw new Error("当前编辑器的原基线不同，保留新输入，未自动恢复。");
+    this.view.dispatch({ changes: { from: 0, to: this.source.length, insert: source }, userEvent: "input.personal.recovery", annotations: [inputOriginKind.of("protected"), nativeEdit.of(true), isolateHistory.of("full")], effects: restoreInputOrigin.of(origin) });
   }
   get source(): string {
     const doc = this.view.state.doc;
@@ -219,22 +233,23 @@ export class SourceEditor {
   apply(from: number, to: number, text: string): void {
     this.applyPatches(this.source, [{ from, to, expected: this.source.slice(from, to), insert: text }], { from: from + text.length, to: from + text.length });
   }
-  applyPatches(expectedSource: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent = "input.native", isolated = true): void {
+  applyPatches(expectedSource: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent = "input.native", isolated = true, personalText?: PersonalText): void {
     if (this.source !== expectedSource) throw new Error("草稿已变化，未应用旧编辑提案。");
     const result = applySourcePatches(expectedSource, patches);
     const selected = selection ?? { from: patches[0]?.from ?? this.selection.from, to: patches[0]?.from ?? this.selection.to };
     if (!Number.isSafeInteger(selected.from) || !Number.isSafeInteger(selected.to) || selected.from < 0 || selected.to < selected.from || selected.to > result.length || !sourceBoundary(result, selected.from) || !sourceBoundary(result, selected.to)) throw new Error("原生编辑选区无效，未应用修改。");
-    this.view.dispatch({ changes: [...patches].sort((a, b) => a.from - b.from).map(patch => ({ from: patch.from, to: patch.to, insert: patch.insert })), selection: { anchor: selected.from, head: selected.to }, userEvent, annotations: isolated ? [nativeEdit.of(true), isolateHistory.of("full")] : nativeEdit.of(true) });
+    this.view.dispatch({ changes: [...patches].sort((a, b) => a.from - b.from).map(patch => ({ from: patch.from, to: patch.to, insert: patch.insert })), selection: { anchor: selected.from, head: selected.to }, userEvent, effects: personalText ? personalTextEffect.of(personalText) : [], annotations: [nativeEdit.of(true), inputOriginKind.of("protected"), ...(isolated ? [isolateHistory.of("full")] : [])] });
   }
   insert(before: string, after = "", placeholder = ""): void {
     const selection = this.view.state.selection.main;
     const selected = this.view.state.sliceDoc(selection.from, selection.to);
     const body = selected || placeholder;
     this.view.dispatch({
-      changes: { from: selection.from, to: selection.to, insert: before + body + after },
+      // Wrapping never reclassifies selected old source as new author input.
+      changes: selected ? [{ from: selection.from, insert: before }, { from: selection.to, insert: after }] : { from: selection.from, to: selection.to, insert: before + body + after },
       selection: { anchor: selection.from + before.length, head: selection.from + before.length + body.length },
       userEvent: "input",
-      annotations: isolateHistory.of("full"),
+      annotations: [inputOriginKind.of("author"), isolateHistory.of("full")],
     });
     this.view.focus();
   }

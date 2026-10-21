@@ -2,6 +2,8 @@ import { applySourcePatches, sourceBoundary, type SourceEditorEvent, type Source
 import { encodeLiteral } from "./session";
 import type { RenderNode } from "./types";
 import { ChangeSet } from "@codemirror/state";
+import { DocumentNotesInputTracker } from "./personal-input-text";
+import { personalInputId, type PersonalText } from "./source-input-origin";
 import { sourceByteOffsets } from "./source-offsets";
 
 /** Addresses are native-parser products scoped to one source, never saved IDs. */
@@ -64,7 +66,7 @@ export interface WritingResult { source: string; sourceHash: string; patches: Na
 export interface WritingTransition { before: WritingSnapshot; after: WritingSnapshot; patches: readonly SourcePatch[]; map: WritingMap }
 export interface WritingBuffer {
   readonly source: string; readonly generation: number; readonly selection: SourceSelection; readonly composing: boolean;
-  applyPatches(source: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent?: string, isolated?: boolean): void;
+  applyPatches(source: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent?: string, isolated?: boolean, personalText?: PersonalText): void;
   observe(listener: (event: SourceEditorEvent) => void): () => void;
   select(from: number, to: number, focus?: boolean): void; undo(): void; redo(): void;
 }
@@ -79,6 +81,8 @@ export interface WritingHost {
   onState?(state: WritingState): void;
   onError?(error: Error): void;
   onPendingSource?(source: string): void;
+  /** Pure author-entered text, excluding the initial protected literal value. */
+  onPersonalInput?(id: string, text: string): void;
   onApplied?(result: WritingResult): void;
   debounceMs?: number;
 }
@@ -88,6 +92,7 @@ interface LiteralInput {
   selection: SourceSelection; generation: number; composing: boolean; compositionCommit: boolean;
   input?: HTMLTextAreaElement; failure: Error | null;
   append: boolean;
+  personalText?: PersonalText;
   /** Checkpoint proposal only; it never becomes a rich-edit capability. */
   recoveryOnly?: { basis: MapBasis; range: WritingRange; prefix: string };
 }
@@ -377,11 +382,11 @@ export class WritingController {
     }
   }
   private report(error: unknown): Error { const failure = error instanceof Error ? error : new Error(String(error)); this.failure = failure; this.host.onError?.(failure); this.notify(); return failure; }
-  private apply(basis: MapBasis, result: WritingResult, event: string, isolated: boolean, selection = result.selection): void {
+  private apply(basis: MapBasis, result: WritingResult, event: string, isolated: boolean, selection = result.selection, personalText?: PersonalText): void {
     if (!this.unchanged(basis)) throw new Error("草稿在处理期间已变化，旧提案未应用；当前输入保留。");
     const patches = validateWritingResult(basis.source, result);
     this.installing = true;
-    try { this.host.editor.applyPatches(basis.source, patches, selection, event, isolated); } finally { this.installing = false; }
+    try { this.host.editor.applyPatches(basis.source, patches, selection, event, isolated, personalText); } finally { this.installing = false; }
     const current = this.host.basis();
     if (current.source !== result.source || this.host.editor.source !== result.source) throw new Error("共享草稿未接受原生编辑结果。");
     const transition: WritingTransition = { before: basis, after: this.snapshot, patches, map: result.map };
@@ -520,7 +525,7 @@ export class WritingController {
         if (active.composing) return;
         if (active.recoveryOnly) throw new Error("后续输入已保留为完整恢复草稿；文字结构已变化，请复制文字并在源码中合并。");
         if (!this.unchanged(active.basis)) throw new Error("文字回写时源码已变化，输入保留在当前文字框中。");
-        const submitted = active.text, inputGeneration = active.generation, caret = { ...active.selection }, basis = active.basis;
+        const submitted = active.text, inputGeneration = active.generation, caret = { ...active.selection }, basis = active.basis, personalText = active.personalText && { ...active.personalText };
         const result = await this.host.request({ sessionId: basis.sessionId, source: basis.source, serial: basis.serial, sourceHash: basis.map.sourceHash, intent: active.append ? { kind: "insertBlock", at: active.region.range.from, block: { kind: "paragraph", text: submitted } } : { kind: "replaceLiteral", range: active.region.range, text: submitted } });
         // Match a fresh native slot by its exact replacement interval. Equal
         // text elsewhere (e.g. two table cells) is never a targeting fallback.
@@ -537,7 +542,8 @@ export class WritingController {
           const from = literalSourceOffset(next[0].range.raw, submitted, acceptedCaret.from), to = literalSourceOffset(next[0].range.raw, submitted, acceptedCaret.to);
           if (from != null && to != null) selected = { from: next[0].range.utf16From + from, to: next[0].range.utf16From + to };
         }
-        this.apply(basis, result, active.compositionCommit ? "input.compose" : "input.type", active.compositionCommit, selected);
+        this.apply(basis, result, active.compositionCommit ? "input.compose" : "input.type", active.compositionCommit, selected, personalText);
+        if (personalText && active.generation === inputGeneration) this.host.onPersonalInput?.(personalText.id, "");
         active.compositionCommit = false;
         active.acceptedText = submitted;
         if (next.length !== 1) {
@@ -572,10 +578,20 @@ export class WritingController {
 
   /** Native text input: multiline typing, source selection, shared undo, IME. */
   bindLiteral(input: HTMLTextAreaElement, region: WritingLiteral, append = false): () => void {
+    input.dataset.personalInputManaged = "literal";
     const binding = { input, region, append, valid: true }; this.bindings.add(binding);
     input.value = region.text; input.spellcheck = false; input.dataset.sourceFrom = String(region.range.utf16From); input.dataset.sourceTo = String(region.range.utf16To);
-    const capture = () => {
-      try { if (!binding.valid) throw new Error("这段文字入口已过期，请等待当前预览后继续。"); this.stageLiteral(binding.region.range, binding.region.text, input.value, { from: input.selectionStart, to: input.selectionEnd }, input, binding.append); }
+    const inputId = personalInputId(); let tracker = new DocumentNotesInputTracker(input.value);
+    let edit: { from: number; to: number; inputType: string } | undefined;
+    let composition: { tracker: DocumentNotesInputTracker; from: number; to: number } | undefined;
+    const capture = (event?: Event) => {
+      const data = event && "data" in event ? (event as InputEvent | CompositionEvent).data : undefined;
+      if (composition) { tracker = composition.tracker.copy(); tracker.observe(input.value, { from: composition.from, to: composition.to, inputType: "insertCompositionText" }, data); }
+      else if (event) tracker.observe(input.value, edit, data ?? (event as InputEvent).dataTransfer?.getData("text/plain"));
+      else tracker.input(input.value, edit);
+      edit = undefined;
+      this.host.onPersonalInput?.(inputId, tracker.recoveryInput());
+      try { if (!binding.valid) throw new Error("这段文字入口已过期，请等待当前预览后继续。"); this.stageLiteral(binding.region.range, binding.region.text, input.value, { from: input.selectionStart, to: input.selectionEnd }, input, binding.append); if (this.active?.input === input) this.active.personalText = { id: inputId, text: tracker.recoveryInput() }; }
       catch (error) { this.report(error); }
       select();
       input.style.height = "auto"; input.style.height = `${Math.max(input.scrollHeight, 28)}px`;
@@ -585,8 +601,8 @@ export class WritingController {
         const old = this.active.input; void this.flush().then(() => { this.active = null; capture(); }).catch(() => old.focus());
       } else capture();
     };
-    const compositionstart = () => { capture(); this.compositionStart(); };
-    const compositionend = () => { capture(); this.compositionEnd(); };
+    const compositionstart = () => { capture(); composition = { tracker: tracker.copy(), from: input.selectionStart, to: input.selectionEnd }; this.compositionStart(); };
+    const compositionend = (event: CompositionEvent) => { capture(event); composition = undefined; this.compositionEnd(); };
     const blur = () => { if (this.active?.input === input && !this.active.composing) void this.flush().then(() => { if (this.active?.input === input && this.active.text === this.active.acceptedText && typeof document !== "undefined" && document.activeElement !== input) { this.active = null; this.notify(); } }).catch(() => undefined); };
     const select = () => {
       const active = this.active?.input === input ? this.active : null;
@@ -610,11 +626,14 @@ export class WritingController {
           const at = input.selectionStart;
           void this.execute(() => { const structure = enclosingList(this.active?.region.range ?? binding.region.range); if (!structure) throw new Error("当前列表项已变化，请重新选择。"); return { kind: "listEdit", range: structure.range, action: { kind: "split", at } }; }).catch(error => this.report(error));
         } else if (binding.region.role === "body" || binding.append) {
-          event.preventDefault(); input.setRangeText("\n\n", input.selectionStart, input.selectionEnd, "end"); capture();
+          event.preventDefault(); edit = { from: input.selectionStart, to: input.selectionEnd, inputType: "insertText" }; input.setRangeText("\n\n", input.selectionStart, input.selectionEnd, "end"); capture();
         }
       }
     };
-    const beforeinput = (event: InputEvent) => { if (event.inputType === "historyUndo" || event.inputType === "historyRedo") { event.preventDefault(); void (event.inputType === "historyUndo" ? this.undo() : this.redo()).catch(error => this.report(error)); } };
+    const beforeinput = (event: InputEvent) => {
+      if (event.inputType === "historyUndo" || event.inputType === "historyRedo") { event.preventDefault(); void (event.inputType === "historyUndo" ? this.undo() : this.redo()).catch(error => this.report(error)); }
+      else edit = { from: input.selectionStart, to: input.selectionEnd, inputType: event.inputType };
+    };
     input.addEventListener("focus", focus); input.addEventListener("input", capture); input.addEventListener("compositionstart", compositionstart); input.addEventListener("compositionend", compositionend); input.addEventListener("blur", blur); input.addEventListener("select", select); input.addEventListener("keyup", select); input.addEventListener("keydown", keydown); input.addEventListener("beforeinput", beforeinput);
     if (this.focusSelection && this.host.editor.selection.from >= region.range.utf16From && this.host.editor.selection.to <= region.range.utf16To) {
       const selected = this.host.editor.selection, focusSnapshot = this.snapshot;

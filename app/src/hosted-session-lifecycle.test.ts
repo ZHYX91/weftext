@@ -4,11 +4,12 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { HostedDraftCache } from "./hosted-draft-cache";
+import { PersonalInputRecovery } from "./personal-input-recovery";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "persistPersonalInputs"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -28,12 +29,14 @@ function fixture() {
     el, window: { addEventListener(name: string, listener: (event: any) => void) { listeners.set(name, listener); } },
     document: { querySelectorAll() { return []; } },
     everydayNavigation: { clear() {} }, everydayBar: { replaceChildren() {} },
+    personalControls: { clear() {} },
     renderEverydayBar() {}, noteInputAudience() { return null; }, noteInputRecovery: { count() { return 0; } },
     authoringEditable() { return false; }, actionVersion: 0,
     requestEpoch: 0, authorizationEpoch: 0, cachePrefix: "weftext-hosted-draft:space:alice:0:",
     doc: { sessionId: "alice-original", resource: "Shared", rights: { read: true, write: true } },
     draft: { source: "unsaved draft", baseSource: "saved source" },
     identity: { actor: "alice", deployment: "space", generation: 0 }, token: "alice-credential",
+    verifiedPersonalAudience: JSON.stringify(["space", "alice"]),
     stableReference: undefined, retiredStructureSessions: new Set<string>(), retiredStructureSources: new Set<string>(),
     structureDocuments: [], compareRequired: false, busy: false, expiredSessionId: undefined, draftTimer: undefined,
     clearNodeNavigation() {}, clearTimeout, AbortSignal,
@@ -46,6 +49,8 @@ function fixture() {
     context[name] = { value: "unsaved draft", viewMode: "source", pausedSession: false, clear() { cleared.push(name); }, revoke() { cleared.push(name); }, hasPending() { return false; } };
   }
   context.draftCache = new HostedDraftCache(context.sessionStorage, () => context.cachePrefix);
+  context.personalInputs = new PersonalInputRecovery(context.sessionStorage);
+  context.source.personalInputRecords = () => [];
   vm.createContext(context); vm.runInContext(compiled, context);
   return { context, nodes, listeners, calls, storage, cleared };
 }

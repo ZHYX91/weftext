@@ -36,6 +36,17 @@ const result = {
   ],
   measurements: [], pageErrors: [], pageCrashes: [], ownedRootProcesses: [], completed: false,
 };
+async function readOwnedOriginal(file) {
+  assert.ok(path.resolve(file).startsWith(out + path.sep), 'Sharing-lock retry is limited to this owned fixture');
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try { return await readFile(file, 'utf8'); }
+    catch (error) {
+      if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 199) throw error;
+      (result.ownedOriginalReadRetries ??= []).push({ path: file, code: error.code, attempt: attempt + 1 });
+      await pause(50);
+    }
+  }
+}
 await mkdir(out, { recursive: false });
 const harness = await readFile(fileURLToPath(import.meta.url)); result.harnessSha256 = sha(harness);
 await writeFile(path.join(out, 'executed-harness.mjs'), harness, { flag: 'wx' });
@@ -219,7 +230,10 @@ try {
     for (const phase of ['cold-client', 'warm-reload']) {
       if (phase === 'warm-reload') await openPage(token, true);
       const measurement = await measure(dir, original, phase); measurement.fixture = fixture; measurement.round = round;
-      assert.equal(await readFile(note.path, 'utf8'), original); measurement.diskUnchanged = true;
+      // The native preview worker may hold a Windows sharing lease throughout
+      // the measurement. Verify exact original bytes after the owned backend
+      // closes, rather than mistaking an active read lease for author changes.
+      measurement.originalCheck = 'deferred until owned backend releases file leases';
       result.measurements.push(measurement); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2));
       console.log(JSON.stringify({ fixture, round, phase, p95Ms: measurement.feedbackUpperBoundMs.p95, maximumLayoutMs: measurement.layoutTaskMs.maximum, feedbackP95Met: measurement.feedbackP95Met, layoutMaximumMet: measurement.layoutMaximumMet }));
     }
@@ -239,10 +253,11 @@ try {
       Object.assign(result.recovery, { sourceBytes: Buffer.byteLength(expected), sourceSha256: sha(expected), completeDraftAfterReload: true });
     }
     await browser.close(); browser = undefined; await browserServer.close(); browserServer = undefined; await vite?.close(); vite = undefined; await stop();
+    assert.equal(await readOwnedOriginal(note.path), original);
+    for (const measurement of result.measurements.filter(item => item.fixture === fixture && item.round === round)) measurement.diskUnchanged = true;
     if (recoveryCheck) {
       // This recovery-only case reloads an unsaved Draft and starts compilation.
       // Check the unchanged original once its owned backend releases file leases.
-      assert.equal(await readFile(note.path, 'utf8'), original);
       Object.assign(result.recovery, { completed: true, diskUnchanged: true }); console.log(JSON.stringify(result.recovery));
     }
   }

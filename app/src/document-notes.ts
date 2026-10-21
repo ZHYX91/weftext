@@ -1,3 +1,5 @@
+import { DocumentNotesInputTracker } from "./personal-input-text";
+export { DocumentNotesInputTracker } from "./personal-input-text";
 import { exactWritingRange, type WritingController, type WritingRange, type WritingSnapshot, type WritingStructure } from "./writing";
 import type { RenderNode } from "./types";
 
@@ -176,35 +178,6 @@ function select(choices: [string, string][], value: string, title: string): HTML
 function button(title: string, work: () => void | Promise<void>, report: (error: unknown) => void): HTMLButtonElement { const node = element("button", "document-notes-button", title); node.type = "button"; node.onclick = () => { Promise.resolve().then(work).catch(report); }; return node; }
 function failure(error: unknown): Error { return error instanceof Error ? error : new Error(String(error)); }
 const categoryName = (value: string) => value === "table" ? "表" : value === "equation" ? "公式" : value === "figure" ? "图" : value;
-/** Track input ownership as edits occur; an old substring between two edits is never recovered. */
-export class DocumentNotesInputTracker {
-  private value: string;
-  private owned: boolean[];
-  private history = new Map<string, boolean[]>();
-  constructor(value: string) { this.value = value; this.owned = Array(value.length).fill(false); this.remember(); }
-  copy(): DocumentNotesInputTracker { const copy = new DocumentNotesInputTracker(this.value); copy.owned = [...this.owned]; copy.history = new Map([...this.history].map(([value, owned]) => [value, [...owned]])); return copy; }
-  private remember() { this.history.set(this.value, [...this.owned]); }
-  input(value: string, edit?: { from: number; to: number; inputType: string }): void {
-    if (value === this.value) return;
-    if (edit?.inputType.startsWith("history")) { this.owned = [...(this.history.get(value) ?? Array(value.length).fill(false))]; this.value = value; return; }
-    const exact = edit && value.startsWith(this.value.slice(0, edit.from)) && value.endsWith(this.value.slice(edit.to)) && value.length >= edit.from + this.value.length - edit.to;
-    if (exact) {
-      const inserted = value.length - this.value.length + edit.to - edit.from;
-      // A drag may move source text. It is not independent new author input.
-      const fresh = edit.inputType.startsWith("insert") && edit.inputType !== "insertFromDrop";
-      this.owned = [...this.owned.slice(0, edit.from), ...Array(inserted).fill(fresh), ...this.owned.slice(edit.to)];
-    } else {
-      // Missing/ambiguous browser edit evidence cannot grant old text recovery.
-      this.owned = Array(value.length).fill(false);
-    }
-    this.value = value; this.remember();
-  }
-  newInput(): string {
-    let result = "", separated = false;
-    for (let at = 0; at < this.value.length; at++) { if (this.owned[at]) { if (separated && result) result += "\n"; result += this.value[at]; separated = false; } else separated = !!result; }
-    return result;
-  }
-}
 /** Single proven replacement helper, retained for callers that have one edit. */
 export function documentNotesNewInput(before: string, after: string): string {
   let from = 0, to = before.length, end = after.length;
@@ -282,9 +255,9 @@ export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "f
     let edit: { from: number; to: number; inputType: string } | undefined;
     let composition: { tracker: DocumentNotesInputTracker; from: number; to: number } | undefined;
     input.addEventListener("beforeinput", event => { edit = { from: input.selectionStart, to: input.selectionEnd, inputType: (event as InputEvent).inputType }; });
-    const track = () => { if (composition) { tracker = composition.tracker.copy(); tracker.input(input.value, { from: composition.from, to: composition.to, inputType: "insertCompositionText" }); } else tracker.input(input.value, edit); edit = undefined; pendingValue = input.value; dirty = true; };
+    const track = (event: Event) => { const data = (event as InputEvent | CompositionEvent).data; if (composition) { tracker = composition.tracker.copy(); tracker.observe(input.value, { from: composition.from, to: composition.to, inputType: "insertCompositionText" }, data); } else tracker.observe(input.value, edit, data ?? (event as InputEvent).dataTransfer?.getData("text/plain")); edit = undefined; pendingValue = input.value; dirty = true; };
     input.oninput = track;
-    input.addEventListener("compositionstart", () => { composition = { tracker: tracker.copy(), from: input.selectionStart, to: input.selectionEnd }; localComposition = true; updateState(); }); input.addEventListener("compositionend", () => { track(); composition = undefined; localComposition = false; updateState(); });
+    input.addEventListener("compositionstart", () => { composition = { tracker: tracker.copy(), from: input.selectionStart, to: input.selectionEnd }; localComposition = true; updateState(); }); input.addEventListener("compositionend", event => { track(event); composition = undefined; localComposition = false; updateState(); });
     const format = select([["literal", "纯文字（按原生文字编码）"], ["source", "原生 Typst 内容（保留格式与子内容）"]], textMode, "注释内容模式"); format.onchange = () => { dirty = true; };
     editor.append(label("内容模式", format), label("内容", input), element("p", "document-notes-help", "原生模式编辑准确内容槽，可保留段落、强调、列表、链接和已支持公式；编号由原生编译派生。"));
     return { input, body: (): NoteBodyInput => ({ mode: format.value as "literal" | "source", value: pendingValue }) };
@@ -356,7 +329,7 @@ export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "f
     if (!readable) {
       list.replaceChildren(); editor.replaceChildren();
       if (dirty && !retainedInput) {
-        const added = tracker.newInput(); retainedInput = true;
+        const added = tracker.recoveryInput(); retainedInput = true;
         if (added) { host.onPendingInput?.(added); const recovery = element("textarea", "document-notes-input"); recovery.value = added; recovery.readOnly = true; recovery.dataset.documentNotesRecovery = "true"; recovery.setAttribute("aria-label", "保留的本次新输入"); editor.append(label("本次新输入（原件文字已隐藏，可系统复制）", recovery)); }
       }
       status.textContent = "原来源当前不可读；已隐藏原文，未应用的新输入单独保留供复制或恢复。";

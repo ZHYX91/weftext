@@ -1,4 +1,5 @@
 import { createTableGrid } from "./table-grid";
+import { retainProgrammaticControlInput } from "./personal-control-input";
 import { delimitedTable, parseHTMLTable, type ClipboardTable } from "./table-clipboard";
 import { rectangularTSV, textareaSourceDraft, type WritingController, type WritingRange, type WritingStructure, type WritingIntent, type WritingBlock, type WritingSnapshot } from "./writing";
 
@@ -162,13 +163,13 @@ export async function insertClipboardTable(controller: WritingController): Promi
     input.setAttribute("aria-label", "待插入的表格输入"); preview.setAttribute("aria-live", "polite"); let parsed: ClipboardTable | null = null;
     const refresh = () => { parsed = null; try { parsed = format.value === "html" ? parseHTMLTable(input.value) : delimitedTable(input.value, format.value === "csv" ? "," : "\t"); preview.textContent = `${parsed.rows} 行 × ${parsed.columns} 列，${parsed.cells.length} 个作者单元格；全部一次插入。\n${parsed.losses.join("\n")}`; acceptLoss.field.hidden = !parsed.losses.length; } catch (failure) { preview.textContent = failure instanceof Error ? failure.message : String(failure); acceptLoss.field.hidden = true; } acceptLoss.input.checked = false; };
     input.oninput = refresh; format.onchange = refresh;
-    input.onpaste = event => { const html = event.clipboardData?.getData("text/html"); if (html && /<table[\s>]/i.test(html)) { event.preventDefault(); format.value = "html"; input.value = html; refresh(); } };
+    input.onpaste = event => { const html = event.clipboardData?.getData("text/html"); if (html && /<table[\s>]/i.test(html)) { event.preventDefault(); retainProgrammaticControlInput(input, html); format.value = "html"; input.value = html; refresh(); } };
     const read = action("读取剪贴板表格", async () => {
       if (navigator.clipboard?.read) {
         const items = await navigator.clipboard.read();
-        for (const item of items) if (item.types.includes("text/html")) { input.value = await (await item.getType("text/html")).text(); format.value = "html"; refresh(); return; }
+        for (const item of items) if (item.types.includes("text/html")) { const value = await (await item.getType("text/html")).text(); retainProgrammaticControlInput(input, value); input.value = value; format.value = "html"; refresh(); return; }
       }
-      if (!navigator.clipboard?.readText) throw new Error("当前环境不能读取剪贴板；请在输入框使用系统粘贴，原稿未变。"); input.value = await navigator.clipboard.readText(); format.value = "tsv"; refresh();
+      if (!navigator.clipboard?.readText) throw new Error("当前环境不能读取剪贴板；请在输入框使用系统粘贴，原稿未变。"); const value = await navigator.clipboard.readText(); retainProgrammaticControlInput(input, value); input.value = value; format.value = "tsv"; refresh();
     }, { onError: failure => { error.hidden = false; error.textContent = failure.message; } });
     form.append(field("输入格式", format), read, field("表格输入（也可直接系统粘贴）", input), preview, acceptLoss.field); refresh(); actions(form, done, "插入表格");
     submit(form, error, done, async () => { if (!parsed) throw new Error("请先修正表格输入，尚未插入任何内容。"); if (parsed.losses.length && !acceptLoss.input.checked) throw new Error("请明确接受预览中的格式损失，或取消并保留输入。"); await controller.execute(guard(controller, snapshot, { kind: "insertBlock", at, block: { kind: "clipboardTable", rows: parsed.rows, columns: parsed.columns, cells: parsed.cells } })); });

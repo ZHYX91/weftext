@@ -62,6 +62,8 @@ Measure input with `node scripts/test_input_latency_browser.mjs EXE NEW_OUTPUT`;
 
 Use the same input entry with `EXE NEW_OUTPUT --hosted --smoke --fixture=100k-lines --recovery-check` for large-draft recovery: block actual server draft delivery, reload and verify the complete unsaved body, then verify the unchanged disk original after closing the owned backend and releasing file leases. Its small input sample only calibrates; it does not replace the full latency matrix. Preserve failures and normal-close receipts separately.
 
+`node scripts/test_hosted_personal_input_browser.mjs EXE NEW_OUTPUT` uses an owned TEST library and separate headless browser to check unuploaded personal input. It injects only background-draft network failure, performs real revocation/401 and reauthentication, and checks pure input, actor separation, exact-base recovery, shared Undo, late native replies, storage failure and original save IDs. Programmatic-value/IME negative cases never grant protected text ownership. `WEFTEXT_PLAYWRIGHT_MODULE` can select an installed general Playwright module; the user's browser is untouched. This targeted check does not replace complete candidate acceptance or real system IME.
+
 ## Release
 
 `python scripts/mvp.py check` checks the current local implementation; `package` generates a local candidate with source and notices without uploading or publishing it. Release the same accepted artifact without rebuilding different bytes. Establish version, platforms, failures and user authorization before publication, then verify the download and a minimal runtime scenario.
