@@ -25,7 +25,7 @@ translation_status: source
 
 `scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时只调整相关本地 crate 真实入口的 mtime，字节不改，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
 
-入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序，不冒实际产品验收。
+入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。Python 在读取输出或等待期间被中断时，仍排空自有子进程的输出，确认该确切进程退出后才释放锁，并重抛最初异常；收尾期间再次中断也不提前释放锁。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序；另用自有 Python 子进程核受控的仅父进程 SIGINT、输出／等待及重复中断。这些用例不冒实际产品验收或真实终端键盘行为。
 
 宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
 

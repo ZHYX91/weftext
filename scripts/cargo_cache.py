@@ -10,8 +10,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -126,6 +128,56 @@ def compiler_inputs(root, target, metadata, extra_inputs=EXTRA_INPUTS):
     for item in packages.values():
         item['sha256'] = digest_json({'common': common, 'package': item.pop('files')})
     return packages
+
+
+def stream_owned_process(command, root, environment, consume):
+    """Do not return or raise while the exact owned child is still running."""
+    process = subprocess.Popen(command, cwd=root, env=environment, stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    failure = None
+    deferred, previous_handler = False, None
+    def remember_failure():
+        nonlocal failure, deferred, previous_handler
+        failure = failure or sys.exc_info()
+        if not deferred and threading.current_thread() is threading.main_thread():
+            previous_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            deferred = True
+    try:
+        try:
+            for line in process.stdout:
+                consume(line)
+        except BaseException:
+            remember_failure()
+        # Popen.__exit__ only briefly waits after KeyboardInterrupt. In
+        # particular, a signal delivered only to Python need not stop Cargo.
+        # Drain without invoking the failed consumer again, retaining the lock
+        # and the first exception even if another interrupt arrives meanwhile.
+        try:
+            while True:
+                try:
+                    for _line in process.stdout:
+                        pass
+                    break
+                except (KeyboardInterrupt, SystemExit):
+                    remember_failure()
+        except BaseException:
+            remember_failure()
+        finally:
+            while True:
+                try:
+                    code = process.wait()
+                    break
+                except (KeyboardInterrupt, SystemExit):
+                    remember_failure()
+        if failure is not None:
+            raise failure[1].with_traceback(failure[2])
+        return code
+    finally:
+        try:
+            process.stdout.close()
+        finally:
+            if deferred:
+                signal.signal(signal.SIGINT, previous_handler)
 
 
 class CargoCache:
@@ -283,41 +335,30 @@ class CargoCache:
                     raise ValueError('Local entry changed while invalidating Cargo mtime')
         artifacts = []
         build_outputs = []
-        callback_error = None
         log = None if output is None else Path(output).open('xb')
         try:
-            with subprocess.Popen(command, cwd=self.root, env=self.environment, stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
-                for line in process.stdout:
-                    if log:
-                        log.write(line)
-                        log.flush()
-                    try:
-                        message = json.loads(line)
-                    except (ValueError, UnicodeError):
-                        print(line.decode('utf-8', errors='replace'), end='', file=sys.stderr)
-                        continue
-                    if not isinstance(message, dict):
-                        continue
-                    if message.get('reason') == 'compiler-artifact':
-                        artifacts.append(message)
-                        if on_message and callback_error is None:
-                            try:
-                                on_message(message)
-                            except BaseException as error:
-                                # Drain the exact owned Cargo pipe before
-                                # propagating a consumer failure. Waiting with
-                                # an unread full pipe could strand the child.
-                                callback_error = error
-                    elif message.get('reason') == 'build-script-executed':
-                        build_outputs.append(message)
-                    elif message.get('reason') == 'compiler-message' and message.get('message', {}).get('rendered'):
-                        print(message['message']['rendered'], end='', file=sys.stderr)
-                code = process.wait()
-                if callback_error is not None:
-                    raise callback_error
-                if code:
-                    raise subprocess.CalledProcessError(process.returncode, command)
+            def consume(line):
+                if log:
+                    log.write(line)
+                    log.flush()
+                try:
+                    message = json.loads(line)
+                except (ValueError, UnicodeError):
+                    print(line.decode('utf-8', errors='replace'), end='', file=sys.stderr)
+                    return
+                if not isinstance(message, dict):
+                    return
+                if message.get('reason') == 'compiler-artifact':
+                    artifacts.append(message)
+                    if on_message:
+                        on_message(message)
+                elif message.get('reason') == 'build-script-executed':
+                    build_outputs.append(message)
+                elif message.get('reason') == 'compiler-message' and message.get('message', {}).get('rendered'):
+                    print(message['message']['rendered'], end='', file=sys.stderr)
+            code = stream_owned_process(command, self.root, self.environment, consume)
+            if code:
+                raise subprocess.CalledProcessError(code, command)
             current = compiler_inputs(self.root, self.target, metadata, self.extra_inputs)
             if {key: item['sha256'] for key, item in current.items()} != {key: item['sha256'] for key, item in inputs.items()}:
                 raise ValueError('Compiler inputs changed during Cargo; source hint remains pending')

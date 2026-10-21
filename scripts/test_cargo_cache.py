@@ -153,6 +153,154 @@ class InputInventory(unittest.TestCase):
                                 f'Undeclared external compiler input: {name} -> {relative}')
 
 
+class OwnedProcessLifecycle(unittest.TestCase):
+    def test_parent_only_sigint_keeps_lock_until_owned_child_exits(self):
+        # Exercise the very same Popen helper as Cargo, with a real owned Python
+        # child. This controlled parent signal is not a terminal/GUI Ctrl+C test.
+        for stage in ('stdout', 'wait'):
+            with self.subTest(stage=stage):
+                root = BASE / ('parent-sigint-' + stage)
+                root.mkdir()
+                scripts = {
+                    'child.py': '''import json,os,sys,time
+from pathlib import Path
+root=Path(sys.argv[1]); stage=sys.argv[2]
+(root/'child-ready.json').write_text(json.dumps({'pid':os.getpid()}))
+if stage=='wait':
+    os.close(1); os.close(2)
+deadline=time.monotonic()+30
+streaming=stage=='stdout'
+output_closed_early=False
+while not (root/'release').exists() and time.monotonic()<deadline:
+    if streaming:
+        try:
+            sys.stdout.buffer.write(b'x'*65536+b'\\n'); sys.stdout.buffer.flush()
+        except OSError:
+            output_closed_early=True
+            streaming=False
+    time.sleep(.01)
+code=0 if (root/'release').exists() else 9
+(root/'child-exit.json').write_text(json.dumps({'pid':os.getpid(),'exitCode':code,'outputClosedEarly':output_closed_early}))
+os._exit(code)
+''',
+                    'parent.py': '''import inspect,json,os,signal,sys,threading,time
+from pathlib import Path
+from cargo_cache import STATE,stream_owned_process,target_lock
+root=Path(sys.argv[1]); stage=sys.argv[2]; target=root/'target'
+count=0; owned=None
+def interrupt(_signal,_frame):
+    global count
+    count+=1
+    (root/('signal-'+str(count)+'.json')).write_text(json.dumps({'pid':os.getpid(),'childPid':owned.pid,'childLive':owned.poll() is None}))
+    raise KeyboardInterrupt('owned-parent-interrupt-'+str(count))
+signal.signal(signal.SIGINT,interrupt)
+lines,start=inspect.getsourcelines(stream_owned_process)
+wait_lines={start+i for i,line in enumerate(lines) if 'process.wait()' in line}
+output_lines={start+i for i,line in enumerate(lines) if 'consume(line)' in line or 'for line in process.stdout' in line}
+def trace(frame,event,_arg):
+    global owned
+    if event=='line' and frame.f_code is stream_owned_process.__code__:
+        process=frame.f_locals.get('process')
+        if process is not None and (root/'child-ready.json').exists() and process.poll() is None:
+            owned=process
+            first=count==0 and frame.f_lineno in (output_lines if stage=='stdout' else wait_lines)
+            if first:
+                signal.raise_signal(signal.SIGINT)
+    return trace
+def repeat_signal():
+    deadline=time.monotonic()+20
+    while not (root/'interrupt-again').exists() and time.monotonic()<deadline:
+        time.sleep(.01)
+    if (root/'interrupt-again').exists():
+        signal.raise_signal(signal.SIGINT)
+        (root/'repeat-signal-returned').write_text('SIGINT raised only in parent')
+if stage=='stdout':
+    threading.Thread(target=repeat_signal,daemon=True).start()
+with target_lock(target):
+    (target/STATE).write_text(json.dumps({'schemaVersion':1,'pending':True,'modes':{}}))
+    try:
+        sys.settrace(trace)
+        stream_owned_process([sys.executable,str(root/'child.py'),str(root),stage],root,dict(os.environ),lambda _line: None)
+    except BaseException as error:
+        sys.settrace(None)
+        (root/'propagated.json').write_text(json.dumps({'error':str(error),'type':type(error).__name__,'childPid':owned.pid,'childExitCode':owned.poll(),'signalsHandled':count,'handlerRestored':signal.getsignal(signal.SIGINT) is interrupt}))
+        raise
+    finally:
+        sys.settrace(None)
+''',
+                    'waiter.py': '''import json,sys,time
+from pathlib import Path
+from cargo_cache import target_lock
+root=Path(sys.argv[1])
+(root/'waiter-waiting').write_text('waiting')
+with target_lock(root/'target'):
+    (root/'waiter-acquired.json').write_text(json.dumps({'childExitPresent':(root/'child-exit.json').exists()}))
+''',
+                }
+                for name, content in scripts.items():
+                    (root / name).write_text(content, encoding='utf-8', newline='\n')
+                environment = {**os.environ, 'PYTHONPATH': str(ROOT / 'scripts')}
+                before = memory_gate()
+                parent = waiter = None
+                observed = {}
+                def await_file(name, timeout=10):
+                    deadline = time.monotonic() + timeout
+                    while not (root / name).exists() and time.monotonic() < deadline:
+                        time.sleep(.01)
+                    self.assertTrue((root / name).exists(), name)
+                with (root / 'parent-output.log').open('xb') as parent_log, (root / 'waiter-output.log').open('xb') as waiter_log:
+                    try:
+                        parent = subprocess.Popen([sys.executable, str(root / 'parent.py'), str(root), stage],
+                                                  env=environment, stdin=subprocess.DEVNULL,
+                                                  stdout=parent_log, stderr=subprocess.STDOUT)
+                        await_file('signal-1.json')
+                        waiter = subprocess.Popen([sys.executable, str(root / 'waiter.py'), str(root)],
+                                                  env=environment, stdin=subprocess.DEVNULL,
+                                                  stdout=waiter_log, stderr=subprocess.STDOUT)
+                        await_file('waiter-waiting')
+                        time.sleep(.4)  # Exceed Popen.__exit__'s short SIGINT grace.
+                        observed.update(parentLiveAfterInterrupt=parent.poll() is None,
+                                        childStillGated=not (root / 'child-exit.json').exists(),
+                                        waiterBlocked=not (root / 'waiter-acquired.json').exists())
+                        if stage == 'stdout' and observed['parentLiveAfterInterrupt']:
+                            (root / 'interrupt-again').touch()
+                            await_file('repeat-signal-returned')
+                            time.sleep(.2)
+                            observed['waiterBlockedAfterRepeatedSignal'] = not (root / 'waiter-acquired.json').exists()
+                    finally:
+                        (root / 'release').touch()
+                        if parent is not None:
+                            parent.wait(timeout=30)
+                        if waiter is not None:
+                            waiter.wait(timeout=30)
+                        if parent is not None:
+                            await_file('child-exit.json')
+                        (root / 'RUNTIME.json').write_text(json.dumps({
+                            'mechanism': 'actual owned Python child; controlled parent-only signal.raise_signal(SIGINT)',
+                            'stage': stage, 'observed': observed, 'parentPid': None if parent is None else parent.pid,
+                            'parentExitCode': None if parent is None else parent.returncode,
+                            'waiterPid': None if waiter is None else waiter.pid,
+                            'waiterExitCode': None if waiter is None else waiter.returncode,
+                            'hostFreeBefore': before, 'hostFreeAfter': memory_gate(),
+                            'productBuild': False, 'parentAndWaiterReturned': True,
+                            'childExitMarkerPresent': (root / 'child-exit.json').exists(),
+                        }, indent=2), encoding='utf-8')
+                self.assertTrue(all(observed.values()), observed)
+                self.assertNotEqual(parent.returncode, 0)
+                self.assertEqual(waiter.returncode, 0)
+                self.assertEqual(json.loads((root / 'child-exit.json').read_bytes())['exitCode'], 0)
+                self.assertFalse(json.loads((root / 'child-exit.json').read_bytes())['outputClosedEarly'])
+                self.assertTrue(json.loads((root / 'signal-1.json').read_bytes())['childLive'])
+                propagated = json.loads((root / 'propagated.json').read_bytes())
+                self.assertEqual(propagated['type'], 'KeyboardInterrupt')
+                self.assertEqual(propagated['error'], 'owned-parent-interrupt-1')
+                self.assertEqual(propagated['childExitCode'], 0)
+                self.assertEqual(propagated['signalsHandled'], 1)
+                self.assertTrue(propagated['handlerRestored'])
+                self.assertTrue(json.loads((root / 'waiter-acquired.json').read_bytes())['childExitPresent'])
+                self.assertTrue(json.loads((root / 'target' / STATE).read_bytes())['pending'])
+
+
 class ActualCargo(unittest.TestCase):
     def test_same_target_product_lock_precedes_cargo_and_success_hint(self):
         fixture = Fixture('concurrent-product-lock')
