@@ -4445,6 +4445,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "weftext-enrollment"
+version = "0.6.3-rc.4"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "weftext-export"
 version = "0.6.3-rc.4"
 dependencies = [
