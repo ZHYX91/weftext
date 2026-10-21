@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "build": "node ../scripts/generate_ui_messages.mjs --check && tsc --noEmit && vite build",
+    "typecheck": "node ../scripts/generate_ui_messages.mjs --check && tsc --noEmit",
+    "test": "node ../scripts/generate_ui_messages.mjs --check && tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.0",
