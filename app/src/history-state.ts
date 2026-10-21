@@ -4,6 +4,8 @@ import type { Receipt } from "./types";
 import { freezeOriginalAttempt, originalFence, type FrozenOriginalAttempt, type OriginalFence } from "./original-operation";
 
 export interface HistoryContext extends DocumentBasis {
+  /** One live editor buffer survives Core Session rebinding. */
+  ownerKey?: string;
   baseSource: string;
   dirty: boolean;
   readOnly?: boolean;
@@ -76,6 +78,7 @@ export interface HistoryRestoreResult {
   source: string;
   versionId: string;
   protectedDrafts: ProtectedHistoryDraft[];
+  recoveryIssue?: { code: string; message: string };
 }
 export interface HistoryOperationStatus {
   operationId: string;
@@ -115,10 +118,12 @@ export function uncertainHistoryOperation(error: unknown): boolean {
   return !code || ["unknown", "resultUnknown", "recoveryPending", "pending", "in-progress", "pending_reconciliation"].includes(code);
 }
 export function sameHistoryNote(a: HistoryContext, b: HistoryContext | null): boolean {
-  return !!b && a.sessionId === b.sessionId && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId;
+  return !!b && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId && (a.ownerKey !== undefined || b.ownerKey !== undefined ? !!a.ownerKey && a.ownerKey === b.ownerKey : a.sessionId === b.sessionId);
 }
+export function historyOwnerKey(context: HistoryContext): string { return JSON.stringify([context.ownerKey ?? context.sessionId, context.workspaceId, context.nodeId]); }
+function sameHistorySession(a: HistoryContext, b: HistoryContext | null): boolean { return sameHistoryNote(a, b) && a.sessionId === b!.sessionId; }
 export function sameHistoryDraft(a: HistoryContext, b: HistoryContext | null): boolean {
-  return sameHistoryNote(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.source === b!.source;
+  return sameHistorySession(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.source === b!.source;
 }
 /** The source owner uses this before applying a restore receipt; newer input always survives. */
 export function restoreBufferDisposition(basis: HistoryRestoreBasis, current: HistoryContext | null): "replaceClean" | "retainDraft" | "unrelated" {
@@ -184,6 +189,10 @@ export class HistoryController {
   get operationState(): HistoryOperationStatus["status"] | null { return this.operation?.status ?? null; }
   get originalReceipt(): Readonly<Receipt> | null { return this.operation?.receipt ?? null; }
   get locked(): boolean { return this.busy || this.pending !== null; }
+  finishCommittedDelivery(): void {
+    if (this.operation?.status !== "committed") throw fail("operationPending", "只有原提交已确定后才可结束本页交付。");
+    this.pending = null; this.review = null; this.uncertain = false;
+  }
   private context(): HistoryContext {
     const current = this.host.current();
     if (!sameHistoryNote(this.note, current)) throw fail("noteChanged", "请切回原笔记后继续；这里的准确旧版仍保持只读。");
@@ -196,7 +205,7 @@ export class HistoryController {
   async refresh(): Promise<boolean> {
     const current = this.context(), generation = ++this.generation;
     const result = await this.host.list({ sessionId: current.sessionId });
-    if (generation !== this.generation || !sameHistoryNote(current, this.host.current())) return false;
+    if (generation !== this.generation || !sameHistorySession(current, this.host.current())) return false;
     if (result.nodeId !== current.nodeId || result.workspaceId !== current.workspaceId) throw fail("identityPending", "历史身份与当前笔记不一致，请先处理身份变化。");
     this.list = clone(result);
     return true;
@@ -207,7 +216,7 @@ export class HistoryController {
     const row = this.list?.versions.find(version => version.versionId === versionId);
     if (row && row.status !== "available") throw fail("historyUnavailable", row.message || "所选准确旧版不可用，不能用最新版本替代。");
     const result = await this.host.read({ sessionId: current.sessionId, versionId });
-    if (generation !== this.generation || !sameHistoryNote(current, this.host.current())) return false;
+    if (generation !== this.generation || !sameHistorySession(current, this.host.current())) return false;
     this.validateRead(result, versionId);
     this.selected = clone(result); return true;
   }
@@ -219,7 +228,7 @@ export class HistoryController {
     if (!selected) throw fail("selectVersion", "请先选择一个可用的已保存版本。");
     const generation = ++this.generation;
     const result = await this.host.compare({ sessionId: current.sessionId, versionId: selected.versionId });
-    if (generation !== this.generation || !sameHistoryNote(current, this.host.current())) return false;
+    if (generation !== this.generation || !sameHistorySession(current, this.host.current())) return false;
     this.validateRead(result.selected, selected.versionId);
     if (result.comparison !== "currentSaved" || typeof result.current.source !== "string" || !result.current.baseId) throw fail("historyUnavailable", "当前已保存比较基线不可用。");
     this.selected = clone(result.selected); this.comparison = clone(result); return true;

@@ -399,10 +399,13 @@ fn library_creation_same_path_replacement_root_never_becomes_original_result() {
     ] {
         fs::copy(held.join(name), root.join(name)).unwrap();
     }
+    let receipt = core
+        .create_library_with_options_and_id(&root, options(true), &op)
+        .unwrap();
+    assert_eq!(receipt.operation_id, op);
+    assert_eq!(receipt.status, "committed");
     assert_eq!(
-        core.create_library_with_options_and_id(&root, options(true), &op)
-            .unwrap_err()
-            .code,
+        core.reopen_local_library_creation(&op).err().unwrap().code,
         "committedResultUnavailable"
     );
     assert!(core.workspace(&root).unwrap().is_none());

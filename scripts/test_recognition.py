@@ -381,8 +381,35 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
                 self.assertEqual(receipt['status'], 'committed')
                 self.assertEqual(self.commit(target, plan)['nodeRefs'], receipt['nodeRefs'])
                 source = self.assert_tree(self.root / target['name'], payload, receipt)
-                opened = self.api('/api/open', {'root': str(self.root), 'path': str(source)})
+                original_member = {'target': target, 'operationId': operation, 'node': receipt['nodeRefs'][0]}
+                opened = self.recognition('open', original_member)
                 self.assertEqual(opened['nodeId'], receipt['nodeRefs'][0]['nodeId'])
+                if format == 'pdf':
+                    original_source = source.read_bytes()
+                    physical = (source.stat().st_dev, source.stat().st_ino)
+                    parent = created_document(self.api('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'TEST-delivery-parent', 'operationId': http.uid()}))
+                    move = self.api('/api/operations/prepare', {'root': str(self.root), 'operationId': http.uid(), 'intent': {'kind': 'moveNode', 'source': str(source.parent), 'parent': str(Path(parent['path']).parent)}})
+                    self.api('/api/operations/commit', {'operationId': move['operationId'], 'planId': move['planId']})
+                    y = created_document(self.api('/api/note/create', {'root': str(self.root), 'parent': str(source.parent.parent), 'name': source.parent.name, 'operationId': http.uid()}))
+                    moved = self.recognition('open', original_member)
+                    current = Path(moved['path'])
+                    self.assertEqual(moved['nodeId'], opened['nodeId'])
+                    self.assertNotEqual(moved['nodeId'], y['nodeId'])
+                    self.assertEqual((current.stat().st_dev, current.stat().st_ino), physical)
+                    self.assertEqual(current.read_bytes(), original_source)
+                    self.recognition('open', {**original_member, 'node': {'workspaceId': y['workspaceId'], 'nodeId': y['nodeId']}}, 409)
+                    journal = {p.name: p.read_bytes() for p in (self.data / 'journal').iterdir() if p.is_file()}
+                    retained = self.folder / 'TEST-retained-recognition-original.typ'
+                    current.rename(retained); current.write_bytes(original_source)
+                    try:
+                        self.recognition('open', original_member, 409)
+                        self.assertEqual(self.recognition('operation', {'target': target, 'operationId': operation})['status'], 'committed')
+                        self.assertEqual({p.name: p.read_bytes() for p in (self.data / 'journal').iterdir() if p.is_file()}, journal)
+                        self.assertEqual(retained.read_bytes(), original_source)
+                    finally:
+                        current.rename(self.folder / 'TEST-retained-recognition-substitute.typ')
+                        retained.rename(current)
+                    self.assertEqual(self.recognition('open', original_member)['nodeId'], opened['nodeId'])
         self.assertEqual(Path(self.original['path']).read_text('utf-8'), self.original['source'])
 
     def test_local_closed_requests_and_frozen_job_identity(self):

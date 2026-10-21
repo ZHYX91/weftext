@@ -1,4 +1,4 @@
-import { deliverCommitted } from "./original-operation";
+import { committedDeliveryComplete, deliverCommitted, originalCommitted } from "./original-operation";
 import "./data-view.css";
 import "./style-panel.css";
 import "./export-panel.css";
@@ -59,7 +59,7 @@ export class WorkspaceTools {
   private active: WorkspacePanelKind | null = null;
   private readonly styles = new Map<string, NativeStyleController>();
   private refreshTimer?: ReturnType<typeof setTimeout>;
-  private pendingImport: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
+  private pendingImport: { plan: KnowledgePlan; context: KnowledgeContext; receipt?: KnowledgeReceipt } | null = null;
 
   constructor(private readonly host: WorkspaceToolsHost) {
     this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
@@ -225,9 +225,15 @@ export class WorkspaceTools {
     if (this.pendingImport) {
       const pending = this.pendingImport;
       const status = await api<KnowledgeReceipt>("/api/operations/status", { operationId: pending.plan.operationId, context: pending.context });
-      if (["committed", "saved", "complete", "success"].includes(status.status)) { await this.host.applyReceipt(status, pending.context); this.pendingImport = null; this.host.notify("已确认上一次资源导入成功。"); return; }
-      if (["failed", "conflict", "rejected"].includes(status.status)) { this.pendingImport = null; throw new Error("上一次导入未完成，原文件仍保留。请再次选择后重新准备。"); }
-      await this.commit(pending.plan, pending.context); this.pendingImport = null; return;
+      if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(status)) throw new Error("原导入已确认提交，后续状态不一致；原回执与编号保留。");
+      pending.receipt = status;
+      if (originalCommitted(status)) {
+        const delivered = await deliverCommitted(status, value => this.host.applyReceipt(value, pending.context));
+        if (!committedDeliveryComplete(delivered)) throw new Error(delivered.deliveryError?.message ?? delivered.documentError?.message ?? "原资源导入已提交，交付尚未完成。");
+        this.pendingImport = null; this.host.notify("已确认上一次资源导入成功。"); return;
+      }
+      if (status.status === "resolved") { this.pendingImport = null; throw new Error("原导入已明确终结，原文件仍保留。请重新选择后准备。"); }
+      throw new Error("原导入尚未完成，请继续查询原操作或处理其恢复状态。");
     }
     if (file.size > 64 * 1024 * 1024) throw new Error("单个资源导入上限为 64 MiB，原文件保持不变。");
     await this.host.beforeAction();
@@ -248,7 +254,7 @@ export class WorkspaceTools {
     });
     if (!accepted) return;
     this.pendingImport = { plan, context };
-    try { const result = await this.commit(plan, context); if (["committed", "saved", "complete", "success"].includes(result.status)) this.pendingImport = null; }
+    try { const result = await this.commit(plan, context); this.pendingImport.receipt = result; if (committedDeliveryComplete(result)) this.pendingImport = null; else throw new Error(result.deliveryError?.message ?? result.documentError?.message ?? "原导入结果仍待核对。"); }
     catch (error) { this.host.notify("资源导入结果待确认。再次导入会先检查原操作。", true); throw error; }
   }
   private async commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt> {

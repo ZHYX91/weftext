@@ -28,6 +28,29 @@ test("restore records and announces a confirmed write before a failing open, ret
   await assert.rejects(flow.deliverCommitted(), /newer editor input/); assert.deepEqual(order, ["D:/original-root", "open", "open"]);
 });
 
+test("restore accepts only the actual Core operation status and later malformed states cannot downgrade an original commit", async () => {
+  let status = "complete", ready = false, deliveries = 0, commits = 0;
+  const flow = new LibraryTrashRestoreFlow(harness(async <T>(route: string): Promise<T> => {
+    if (route.endsWith("prepare")) return plan as T;
+    if (route.endsWith("commit")) commits++;
+    return { ...plan, status, ...(ready ? { document } : {}) } as T;
+  }, async () => { deliveries++; }), () => "restore-once");
+  await flow.prepare("D:/notes", entry, "D:/notes", "A");
+  const original = flow.pending!.request;
+  for (status of ["complete", "success", "saved", "after", "created"]) {
+    await assert.rejects(flow.reconcile()); assert.equal(flow.pending?.request, original);
+    assert.equal(flow.pending?.state, "unknown"); assert.equal(flow.pending?.delivered, false);
+  }
+  status = "committed"; await flow.reconcile(); const receipt = flow.pending!.receipt;
+  for (status of ["prepared", "resolved", "unknown", "recoveryPending", "complete"]) {
+    await assert.rejects(flow.reconcile()); assert.equal(flow.pending?.state, "committed");
+    assert.equal(flow.pending?.receipt, receipt); assert.equal(flow.pending?.request, original);
+    assert.equal(flow.blocksNewRestore, true);
+  }
+  status = "committed"; ready = true; await flow.reconcile();
+  assert.equal(flow.pending?.delivered, true); assert.equal(deliveries, 1); assert.equal(commits, 0);
+});
+
 test("preparation does not execute; confirmation commits only the exact frozen IDs", async () => {
   const calls: { route: string; body: unknown }[] = [];
   const host = harness(async <T>(route: string, body?: unknown): Promise<T> => { calls.push({ route, body }); return (route.endsWith("prepare") ? plan : { ...plan, status: "committed", document }) as T; });

@@ -25,6 +25,20 @@ pub(crate) enum ActorLibraryHeader {
 pub(crate) fn read_actor_library_header(
     file: &mut (impl Read + Seek),
 ) -> Result<ActorLibraryHeader> {
+    match read_first_metadata(file, "library")? {
+        Some(value) => {
+            let binding: ActorLibraryBinding = serde_json::from_slice(&value)?;
+            binding.validate()?;
+            Ok(ActorLibraryHeader::Bound(binding))
+        }
+        None => Ok(ActorLibraryHeader::LegacyUnbound),
+    }
+}
+
+pub(crate) fn read_first_metadata(
+    file: &mut (impl Read + Seek),
+    expected_key: &str,
+) -> Result<Option<Vec<u8>>> {
     let original = file.stream_position()?;
     file.seek(SeekFrom::Start(0))?;
     let result = (|| {
@@ -69,8 +83,8 @@ pub(crate) fn read_actor_library_header(
                 "Invalid actor metadata separator",
             ));
         }
-        if key != "library" {
-            return Ok(ActorLibraryHeader::LegacyUnbound);
+        if key != expected_key {
+            return Ok(None);
         }
         let first = next_nonspace(&mut byte)?;
         if first != b'{' {
@@ -112,9 +126,7 @@ pub(crate) fn read_actor_library_header(
                 }
             }
         }
-        let binding: ActorLibraryBinding = serde_json::from_slice(&value)?;
-        binding.validate()?;
-        Ok(ActorLibraryHeader::Bound(binding))
+        Ok(Some(value))
     })();
     file.seek(SeekFrom::Start(original))?;
     result
@@ -160,7 +172,7 @@ impl Core {
         self.validate_actor_backup_record(path, bytes, binding, false)
     }
 
-    pub(crate) fn validate_legacy_actor_backup_record(
+    pub(crate) fn validate_unbound_actor_backup_record(
         &self,
         path: &Path,
         bytes: &[u8],
@@ -174,7 +186,7 @@ impl Core {
         path: &Path,
         bytes: &[u8],
         binding: &ActorLibraryBinding,
-        allow_legacy: bool,
+        allow_unbound_authority: bool,
     ) -> Result<()> {
         let relative = crate::history::history_relative_path(path, &self.data_dir.join("actors"))
             .ok_or_else(|| {
@@ -216,14 +228,31 @@ impl Core {
             claim.actor
         } else {
             let record: ActorOperation = serde_json::from_slice(bytes)?;
-            Self::actor_operation_bytes(&record)?;
+            self.actor_operation_bytes(&record)?;
+            if !matches!(record.scope, ActorInputScope::Qualified { .. }) {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    "A no-input device fence has no library backup owner",
+                ));
+            }
             let categories = usize::from(record.field.is_some())
                 + usize::from(record.feature.is_some())
                 + usize::from(record.definition.is_some())
                 + usize::from(record.history.is_some())
                 + usize::from(record.owner_backup.is_some());
-            let legacy = allow_legacy && record.library.is_none();
-            if (record.library.as_ref() != Some(binding) && !legacy)
+            let unbound_authority = allow_unbound_authority && record.library.is_none();
+            if unbound_authority
+                && !matches!(&record.scope, ActorInputScope::Qualified {
+                    scope: QualifiedInputScope::Library { binding: original }
+                } if Some(&original.workspace_id) == binding.workspace_id.as_ref()
+                    && original.root_identity == binding.root_identity)
+            {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    "Unbound actor input has a different original backup owner",
+                ));
+            }
+            if (record.library.as_ref() != Some(binding) && !unbound_authority)
                 || categories > 1
                 || (categories != 0 && !record.save_definition_reservations.is_empty())
             {
@@ -237,53 +266,19 @@ impl Core {
             if !(record.cancelled && record.fingerprint.is_empty()) {
                 feature::valid_fingerprint(&record.fingerprint)?;
             }
-            if let Some(plan) = self.operations.get(&record.core_operation_id)
-                && plan.workspace_id.is_some()
-                && plan.workspace_id != binding.workspace_id
-            {
-                return Err(CoreError::new(
-                    "privateEvidence",
-                    "Original actor plan belongs to another library",
-                ));
-            }
-            if legacy {
-                let plan = self
-                    .operations
-                    .get(&record.core_operation_id)
-                    .ok_or_else(|| {
-                        CoreError::new(
-                            "privateEvidence",
-                            "Legacy actor record has no original Plan",
-                        )
-                    })?;
-                let exact_workspace =
-                    binding.workspace_id.is_some() && plan.workspace_id == binding.workspace_id;
-                let exact_birth = plan
-                    .identity
-                    .as_ref()
-                    .and_then(|identity| self.admitted_binding(identity))
-                    .is_some_and(|birth| {
-                        Some(&birth.workspace_id) == binding.workspace_id.as_ref()
-                    });
-                let exact_original_path = binding.workspace_id.as_ref().is_some_and(|workspace| {
-                    self.operations.values().any(|original| {
-                        self.committed(&original.operation_id)
-                            && matches!(original.kind.as_str(), "createLibrary" | "cloneSync")
-                            && original.workspace_id.as_ref() == Some(workspace)
-                            && crate::history::history_relative_path(
-                                Path::new(&plan.path),
-                                Path::new(&original.path),
-                            )
-                            .is_some()
-                    })
-                });
-                if !exact_workspace && !exact_birth && !exact_original_path {
+            if let Some(plan) = self.operations.get(&record.core_operation_id) {
+                if matches!(plan.kind.as_str(), "save" | "saveAs") {
+                    self.validate_actor_file_input(&record)?;
+                } else if let Some(workspace) = &plan.workspace_id
+                    && !matches!(&record.scope, ActorInputScope::Qualified { scope: QualifiedInputScope::Library { binding } } if &binding.workspace_id == workspace)
+                {
                     return Err(CoreError::new(
                         "privateEvidence",
-                        "Legacy original Plan does not prove this library",
+                        "Original actor Plan and input owners differ",
                     ));
                 }
             }
+
             record.actor
         };
         if actor.is_empty() || actor.len() > 256 || hash(actor.as_bytes()) != parts[0] {
@@ -293,17 +288,6 @@ impl Core {
             ));
         }
         Ok(())
-    }
-
-    pub(crate) fn draft_session_library(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<ActorLibraryBinding>> {
-        let session = self
-            .sessions
-            .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
-        self.draft_library_for_root(&session.root)
     }
 
     pub(crate) fn draft_library_for_root(
@@ -434,7 +418,8 @@ impl Core {
         Ok(())
     }
 
-    pub(super) fn actor_operation_bytes(record: &ActorOperation) -> Result<Vec<u8>> {
+    pub(super) fn actor_operation_bytes(&self, record: &ActorOperation) -> Result<Vec<u8>> {
+        self.validate_actor_input_record(record)?;
         let bytes = serde_json::to_vec(record)?;
         let maximum = if record.history.is_some() {
             16 * 1024 * 1024

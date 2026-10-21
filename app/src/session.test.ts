@@ -144,3 +144,18 @@ test("a later current source or changed owner/Session cannot borrow the original
     assert.deepEqual(session.opened, before); assert.equal(session.source, "new input Y"); assert.equal(session.baseId, "b");
   }
 });
+test("an ordinary file within an admitted workspace retains that exact workspace on qualified save delivery", () => {
+  const session = new DocumentSession({ ...opened, workspaceId: "workspace" });
+  session.edit("input Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "foreign", source: "saved S" }), false);
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "workspace", source: "saved S", baseId: "fresh" }), true);
+  assert.equal(session.baseId, "fresh"); assert.equal(session.source, "input Y");
+});
+
+test("qualified ordinary save delivery can restore its actual ancestor owner after a default-parent open", () => {
+  const session = new DocumentSession({ ...opened, path: "D:/A/nested/ordinary.typ", root: "D:/A/nested" });
+  session.edit("Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "S" }, { ...session.opened, workspaceId: "qualified-A", root: "D:/A", source: "S", baseId: "fresh" }), true);
+  assert.equal(session.source, "Y");
+  assert.equal(session.opened.workspaceId, "qualified-A");
+});

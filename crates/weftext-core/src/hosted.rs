@@ -5,7 +5,9 @@ use super::*;
 use std::collections::BTreeMap;
 #[path = "hosted_library.rs"]
 mod library;
-pub(crate) use library::{ActorLibraryBinding, ActorLibraryHeader, read_actor_library_header};
+pub(crate) use library::{
+    ActorLibraryBinding, ActorLibraryHeader, read_actor_library_header, read_first_metadata,
+};
 #[path = "hosted_backup.rs"]
 mod backup;
 pub use backup::{ActorOwnerBackupStatus, OwnerBackupArtifact};
@@ -167,9 +169,31 @@ pub struct ActorSaveStatus {
     pub recovery_issue: Option<RecoveryIssue>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum ActorInputScope {
+    NoInput,
+    Qualified { scope: QualifiedInputScope },
+}
+pub(crate) fn read_actor_input_header(
+    file: &mut (impl Read + std::io::Seek),
+) -> Result<ActorInputScope> {
+    let value = read_first_metadata(file, "scope")?.ok_or_else(|| {
+        CoreError::new(
+            "unsupportedInputScope",
+            "Actor proposal has no supported original input scope; original bytes remain unchanged",
+        )
+    })?;
+    let scope: ActorInputScope = serde_json::from_slice(&value)?;
+    if let ActorInputScope::Qualified { scope } = &scope {
+        scope.validate()?;
+    }
+    Ok(scope)
+}
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ActorOperation {
+    scope: ActorInputScope,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     library: Option<ActorLibraryBinding>,
     actor: String,
@@ -334,6 +358,189 @@ impl Core {
         private_replace(&self.data_dir.join("hosted-policy.json"), bytes)
     }
 
+    pub(super) fn actor_input_scope_for_root(&self, root: &Path) -> Result<ActorInputScope> {
+        Ok(ActorInputScope::Qualified {
+            scope: self.capture_file_save_scope(&root.join(".actor-input-prospective"))?,
+        })
+    }
+    pub(super) fn actor_attempt_input_scope(&self) -> Result<ActorInputScope> {
+        self.actor_library_path
+            .as_ref()
+            .map_or(Ok(ActorInputScope::NoInput), |root| {
+                self.actor_input_scope_for_root(root)
+            })
+    }
+    fn validate_actor_input_record(&self, record: &ActorOperation) -> Result<()> {
+        Self::validate_actor_input_shape(record)?;
+        match &record.scope {
+            ActorInputScope::NoInput => {
+                if self.operations.contains_key(&record.core_operation_id) {
+                    return Err(CoreError::new(
+                        "privateEvidence",
+                        "A no-input actor fence references an actual Core Plan",
+                    ));
+                }
+                self.validate_unregistered_fence_namespace(&record.core_operation_id)?;
+            }
+            ActorInputScope::Qualified { scope } => {
+                if (record
+                    .feature
+                    .as_ref()
+                    .is_some_and(|feature| !feature.is_empty_fence())
+                    || record.owner_backup.is_some())
+                    && !matches!(scope, QualifiedInputScope::Library { .. })
+                {
+                    return Err(CoreError::new(
+                        "privateEvidence",
+                        "A library author proposal requires its original qualified library owner",
+                    ));
+                }
+                self.validate_original_input_scope(scope)?;
+                for owner in record
+                    .definition
+                    .as_ref()
+                    .and_then(|definition| definition.input_owner())
+                    .into_iter()
+                    .chain(
+                        record
+                            .history
+                            .as_ref()
+                            .and_then(|history| history.input_owner()),
+                    )
+                {
+                    if !matches!(scope, QualifiedInputScope::Library { binding } if binding.workspace_id == owner.workspace_id)
+                    {
+                        return Err(CoreError::new(
+                            "privateEvidence",
+                            "Typed actor proposal and original input owners differ",
+                        ));
+                    }
+                }
+                if let Some(plan) = self.operations.get(&record.core_operation_id) {
+                    if matches!(plan.kind.as_str(), "save" | "saveAs") {
+                        self.validate_file_save_plan(plan)?;
+                        if &plan.file_save.as_ref().unwrap().scope != scope {
+                            return Err(CoreError::new(
+                                "operationConflict",
+                                "Actor input and original file-save Plan scopes differ",
+                            ));
+                        }
+                    } else if let Some(workspace) = &plan.workspace_id
+                        && !matches!(scope, QualifiedInputScope::Library { binding } if &binding.workspace_id == workspace)
+                    {
+                        return Err(CoreError::new(
+                            "privateEvidence",
+                            "Actor input and original transaction owners differ",
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    fn validate_actor_input_shape(record: &ActorOperation) -> Result<()> {
+        match &record.scope {
+            ActorInputScope::NoInput => {
+                let empty = record.cancelled
+                    && record.fingerprint.is_empty()
+                    && record.library.is_none()
+                    && record.save_definition_reservations.is_empty()
+                    && record
+                        .field
+                        .as_ref()
+                        .is_none_or(|field| field.cell.is_null())
+                    && record
+                        .feature
+                        .as_ref()
+                        .is_none_or(|feature| feature.is_empty_fence())
+                    && record
+                        .definition
+                        .as_ref()
+                        .is_none_or(|definition| definition.input_owner().is_none())
+                    && record
+                        .history
+                        .as_ref()
+                        .is_none_or(|history| history.input_owner().is_none())
+                    && record.owner_backup.is_none();
+                if !empty {
+                    return Err(CoreError::new(
+                        "unsupportedInputScope",
+                        "Only an actual empty cancelled actor fence can have no input scope",
+                    ));
+                }
+            }
+            ActorInputScope::Qualified { scope } => scope.validate()?,
+        }
+        Ok(())
+    }
+    pub(crate) fn validate_no_input_actor_fence(&self, path: &Path, bytes: &[u8]) -> Result<()> {
+        if bytes.len() > 4096 {
+            return Err(CoreError::new(
+                "budget",
+                "No-input actor fence exceeds its metadata budget",
+            ));
+        }
+        let record: ActorOperation = serde_json::from_slice(bytes)?;
+        if record.scope != ActorInputScope::NoInput {
+            return Err(CoreError::new(
+                "privateEvidence",
+                "Actor fence scope changed",
+            ));
+        }
+        self.validate_actor_input_record(&record)?;
+        valid_operation_id(&record.core_operation_id)?;
+        feature::valid_resource(&record.resource)?;
+        let relative = history::history_relative_path(path, &self.data_dir.join("actors"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "privateEvidence",
+                    "Actor fence is outside its private namespace",
+                )
+            })?;
+        let parts = relative
+            .components()
+            .map(|part| part.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| CoreError::new("privateEvidence", "Invalid actor fence namespace"))?;
+        if parts.len() != 3
+            || parts[0] != hash(record.actor.as_bytes())
+            || parts[1] != "operations"
+            || record.actor.is_empty()
+            || record.actor.len() > 256
+        {
+            return Err(CoreError::new(
+                "privateEvidence",
+                "Actor fence namespace differs",
+            ));
+        }
+        let leaf = parts[2]
+            .strip_suffix(".json")
+            .ok_or_else(|| CoreError::new("privateEvidence", "Invalid actor fence leaf"))?;
+        valid_operation_id(leaf)?;
+        Ok(())
+    }
+    fn validate_actor_file_input(&self, record: &ActorOperation) -> Result<()> {
+        let ActorInputScope::Qualified { scope } = &record.scope else {
+            if record.cancelled && record.fingerprint.is_empty() {
+                return Ok(());
+            }
+            return Err(CoreError::new(
+                "unsupportedInputScope",
+                "Original author input has no qualified owner",
+            ));
+        };
+        scope.validate()?;
+        if let Some(plan) = self.operations.get(&record.core_operation_id) {
+            self.validate_file_save_plan(plan)?;
+            if &plan.file_save.as_ref().unwrap().scope != scope {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "Actor input and original file-save Plan scopes differ",
+                ));
+            }
+        }
+        Ok(())
+    }
     fn actor_record(&self, operation: &str) -> Result<PathBuf> {
         valid_operation_id(operation)?;
         if self.actor.is_none() {
@@ -354,6 +561,7 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         if record.feature.is_some()
             || record.definition.is_some()
@@ -382,6 +590,7 @@ impl Core {
                 "The scoped source save references a different operation kind",
             ));
         }
+        self.validate_actor_file_input(&record)?;
         let saved = self.file_save_fact(&record.core_operation_id)?;
         Ok(Some(ActorSaveStatus {
             operation_id: operation.into(),
@@ -412,6 +621,7 @@ impl Core {
         let mut record = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<ActorOperation>(&bytes)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -439,7 +649,7 @@ impl Core {
             return Ok(status);
         }
         record.cancelled = true;
-        private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+        private_replace(&path, &self.actor_operation_bytes(&record)?)?;
         self.actor_save_status(operation)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing settled record"))
     }
@@ -470,6 +680,7 @@ impl Core {
         let record = match fs::read(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                self.validate_actor_input_record(&record)?;
                 self.check_actor_library(&record.library)?;
                 if record.actor != *self.actor.as_ref().unwrap()
                     || record.resource != resource
@@ -522,6 +733,9 @@ impl Core {
                     )?
                 };
                 let record = ActorOperation {
+                    scope: ActorInputScope::Qualified {
+                        scope: self.draft_session_scope(&request.session_id)?,
+                    },
                     library: self.actor_library.clone(),
                     actor: self.actor.clone().unwrap(),
                     resource: resource.into(),
@@ -535,7 +749,7 @@ impl Core {
                     history: None,
                     owner_backup: None,
                 };
-                journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+                journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
                 record
             }
             Err(e) => return Err(e.into()),
@@ -572,6 +786,7 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         let field = record
             .field
@@ -634,6 +849,7 @@ impl Core {
         match fs::read(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                self.validate_actor_input_record(&record)?;
                 self.check_actor_library(&record.library)?;
                 let status = self
                     .actor_field_status(resource, field_id, &request.operation_id)?
@@ -653,6 +869,9 @@ impl Core {
         }
         self.check_actor_session(&request.session_id)?;
         let record = ActorOperation {
+            scope: ActorInputScope::Qualified {
+                scope: self.draft_session_scope(&request.session_id)?,
+            },
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -669,7 +888,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+        journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -694,6 +913,7 @@ impl Core {
             .is_none()
         {
             let record = ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -712,7 +932,7 @@ impl Core {
             };
             journal::private_create(
                 &self.actor_record(operation)?,
-                &Self::actor_operation_bytes(&record)?,
+                &self.actor_operation_bytes(&record)?,
             )?;
         } else {
             self.actor_settle(resource, operation)?;

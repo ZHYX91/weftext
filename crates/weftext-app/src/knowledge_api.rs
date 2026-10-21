@@ -2861,14 +2861,6 @@ async fn operation_delivery(
         output["affectedSource"] = json!(source.path);
     }
     let loc = context.and_then(|context| location(state, &context.session_id).ok());
-    let root = if let Some(loc) = &loc {
-        Some(loc.root.clone())
-    } else {
-        let id = receipt.operation_id.clone();
-        Some(PathBuf::from(
-            core_call(state, move |core| core.local_operation_root(&id)).await?,
-        ))
-    };
     let result = PathBuf::from(&receipt.path);
     let expected_source = if preview.kind == "updateFiles" {
         let operation_id = receipt.operation_id.clone();
@@ -2935,7 +2927,12 @@ async fn operation_delivery(
     };
     if let Some((path, disposition)) = destination {
         output["documentDisposition"] = json!(disposition);
-        match core_call(state, move |core| core.open(path, root)).await {
+        let id = receipt.operation_id.clone();
+        match core_call(state, move |core| {
+            core.reopen_local_operation_node(&id, &path.to_string_lossy())
+        })
+        .await
+        {
             Ok(document) => {
                 let document = value(document)?;
                 remember(state, &document)?;
@@ -2990,7 +2987,8 @@ async fn operation_delivery(
                 } else {
                     result.join(relative)
                 };
-            match core_call(state,move|core|core.open(path,Some(loc.root))).await {
+            let operation_id = receipt.operation_id.clone();
+            match core_call(state,move|core|core.reopen_local_operation_node(&operation_id,&path.to_string_lossy())).await {
                 Ok(document)=>{let document=value(document)?;remember(state,&document)?;affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","document":document}));},
                 Err(error)=>affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","documentError":{"code":error.code,"message":error.message}})),
             }
@@ -3113,6 +3111,16 @@ async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest
         Ok((fact, transaction))
     })
     .await?;
+    if transaction
+        .as_ref()
+        .is_some_and(|(preview, _)| preview.kind == "createLibrary")
+    {
+        let id = request.operation_id.clone();
+        let receipt = core_call(&state, move |core| core.local_library_creation_info(&id)).await?;
+        return super::library_creation_output(&state, receipt)
+            .await
+            .map(Json);
+    }
     match transaction {
         Some((preview, receipt)) => {
             operation_output(&state, preview, receipt, request.context.as_ref())
@@ -3120,31 +3128,32 @@ async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest
                 .map(Json)
         }
         None => {
-            let mut output = fact;
-            if output["status"] == "committed" && output["baseId"].is_string() {
-                let id = request.operation_id;
-                match core_call(&state, move |core| core.reopen_local_save(&id)).await {
-                    Ok((source, document)) => {
-                        output["committedSource"] = json!(source);
-                        let document = value(document)?;
-                        output["documentSourceMatchesCommit"] =
-                            json!(document["source"] == output["committedSource"]);
-                        match remember(&state, &document) {
-                            Ok(()) => output["document"] = document,
-                            Err(error) => {
-                                output["documentError"] =
-                                    json!({"code":error.code,"message":error.message})
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        output["documentError"] = json!({"code":error.code,"message":error.message})
-                    }
-                }
+            if fact["status"] == "committed" && fact["baseId"].is_string() {
+                Ok(Json(
+                    file_save_delivery(&state, request.operation_id, fact).await,
+                ))
+            } else {
+                Ok(Json(fact))
             }
-            Ok(Json(output))
         }
     }
+}
+pub(crate) async fn file_save_delivery(state: &AppState, id: String, mut output: Value) -> Value {
+    let delivered = async {
+        let (source, document) = core_call(state, move |core| core.reopen_local_save(&id)).await?;
+        output["committedSource"] = json!(source);
+        let document = value(document)?;
+        output["documentSourceMatchesCommit"] =
+            json!(document["source"] == output["committedSource"]);
+        remember(state, &document)?;
+        output["document"] = document;
+        Ok::<(), ApiError>(())
+    }
+    .await;
+    if let Err(error) = delivered {
+        output["documentError"] = json!({"code":error.code,"message":error.message});
+    }
+    output
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
