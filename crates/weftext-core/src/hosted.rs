@@ -257,13 +257,29 @@ impl Core {
             ));
         }
         let root = self.data_dir.join("actors").join(hash(actor.as_bytes()));
-        for directory in ["drafts", "draft-history", "operations"] {
+        for directory in [
+            "drafts",
+            "draft-history",
+            "operations",
+            capture_draft::CAPTURE_DIRECTORY,
+        ] {
             fs::create_dir_all(root.join(directory))?;
         }
-        let _guards = ["drafts", "draft-history", "operations"]
-            .map(|directory| ParentGuard::acquire(&root.join(directory).join(".scope")))
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+        let _guards = [
+            "drafts",
+            "draft-history",
+            "operations",
+            capture_draft::CAPTURE_DIRECTORY,
+        ]
+        .map(|directory| ParentGuard::acquire(&root.join(directory).join(".scope")))
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        let staging = self
+            .data_dir
+            .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
+            .join(hash(actor.as_bytes()));
+        fs::create_dir_all(&staging)?;
+        let _staging_guard = ParentGuard::acquire(&staging.join(".capture-staging-scope"))?;
         self.actor = Some(actor.into());
         let result = action(self);
         self.actor = None;

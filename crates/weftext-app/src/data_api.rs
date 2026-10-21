@@ -18,6 +18,7 @@ const BUNDLED_SCHEMA_SOURCE: &str =
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
+        .merge(crate::capture_api::router())
         .route("/api/data/schema", post(schema))
         .route("/api/data/schema/prepare", post(prepare_schema))
         .route("/api/data/schema/install", post(install_schema))

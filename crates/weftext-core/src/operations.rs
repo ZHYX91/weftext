@@ -4426,6 +4426,7 @@ impl Core {
                     "private/journal".into(),
                     "private/drafts".into(),
                     "private/draft-history".into(),
+                    "private/capture-drafts".into(),
                 ];
                 for (index, d) in directories.iter().enumerate() {
                     let (base, prefix) = if index < library_dirs {

@@ -5,7 +5,15 @@ pub use author_order::{
     NavigationOrderMember, NavigationOrderSnapshot, navigation_orders_changed,
     validate_workspace_settings,
 };
+mod capture_draft;
 mod compile_dependencies;
+pub use capture_draft::{
+    CaptureBodyMode, CaptureDraft, CaptureFieldInput, CaptureFlushReceipt, CaptureFormBasis,
+    CaptureInput, CaptureMutation, CaptureMutationCommand, CaptureMutationLookup,
+    CaptureMutationTarget, CaptureParent, CaptureRawInput, CaptureResolvedTarget,
+    CaptureStorageStatus, CaptureTarget, CaptureText, FrozenCaptureRequest,
+    MAX_CAPTURE_DOMAIN_BYTES, MAX_CAPTURE_RECORD_BYTES, MAX_CAPTURE_RECORDS,
+};
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
 };
@@ -316,11 +324,21 @@ impl Core {
         fs::create_dir_all(data_dir.join("drafts"))?;
         fs::create_dir_all(data_dir.join("draft-history"))?;
         fs::create_dir_all(data_dir.join(device_state::DEVICE_STATE_ROOT))?;
+        fs::create_dir_all(data_dir.join(capture_draft::CAPTURE_DIRECTORY))?;
+        fs::create_dir_all(data_dir.join(capture_draft::CAPTURE_STAGING_DIRECTORY))?;
+        fs::create_dir_all(
+            data_dir
+                .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
+                .join("local"),
+        )?;
         let private_guards = [
             "journal",
             "drafts",
             "draft-history",
             device_state::DEVICE_STATE_ROOT,
+            capture_draft::CAPTURE_DIRECTORY,
+            capture_draft::CAPTURE_STAGING_DIRECTORY,
+            "capture-staging/local",
         ]
         .into_iter()
         .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
