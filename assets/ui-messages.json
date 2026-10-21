@@ -349,6 +349,206 @@
       "zh-CN": "使用 --help 查看命令；使用 <命令> --help 查看该命令的参数。",
       "en-US": "Use --help to list commands, or <command> --help for that command's arguments.",
       "params": {}
+    },
+    "cli.usageHeading": {
+      "zh-CN": "用法",
+      "en-US": "Usage",
+      "params": {}
+    },
+    "cli.commandsHeading": {
+      "zh-CN": "命令",
+      "en-US": "Commands",
+      "params": {}
+    },
+    "cli.optionsHeading": {
+      "zh-CN": "选项",
+      "en-US": "Options",
+      "params": {}
+    },
+    "cli.argumentsHeading": {
+      "zh-CN": "参数",
+      "en-US": "Arguments",
+      "params": {}
+    },
+    "cli.invalidArguments": {
+      "zh-CN": "参数无效；请运行 --help",
+      "en-US": "Invalid arguments; run --help",
+      "params": {}
+    },
+    "cli.helpFlag": {
+      "zh-CN": "显示帮助",
+      "en-US": "Show help",
+      "params": {}
+    },
+    "cli.versionFlag": {
+      "zh-CN": "显示版本",
+      "en-US": "Show version",
+      "params": {}
+    },
+    "reminder.id": {
+      "zh-CN": "提醒标识",
+      "en-US": "Reminder identifier",
+      "params": {}
+    },
+    "reminder.at": {
+      "zh-CN": "带显式偏移的精确瞬间",
+      "en-US": "Exact instant with an explicit offset",
+      "params": {}
+    },
+    "reminder.beforeSeconds": {
+      "zh-CN": "截止前秒数",
+      "en-US": "Seconds before due",
+      "params": {}
+    },
+    "reminder.clock": {
+      "zh-CN": "当天时间",
+      "en-US": "Time of day",
+      "params": {}
+    },
+    "reminder.fraction": {
+      "zh-CN": "精确秒小数",
+      "en-US": "Exact fractional seconds",
+      "params": {}
+    },
+    "reminder.zone": {
+      "zh-CN": "时区",
+      "en-US": "Time zone",
+      "params": {}
+    },
+    "reminder.zoneVersion": {
+      "zh-CN": "时区规则版本",
+      "en-US": "Time zone rules version",
+      "params": {}
+    },
+    "reminder.fold": {
+      "zh-CN": "重复时间选择",
+      "en-US": "Repeated time choice",
+      "params": {}
+    },
+    "reminder.foldNone": {
+      "zh-CN": "无重复时间选择",
+      "en-US": "No repeated time choice",
+      "params": {}
+    },
+    "reminder.foldEarlier": {
+      "zh-CN": "较早的瞬间",
+      "en-US": "Earlier instant",
+      "params": {}
+    },
+    "reminder.foldLater": {
+      "zh-CN": "较晚的瞬间",
+      "en-US": "Later instant",
+      "params": {}
+    },
+    "reminder.minuteHelper": {
+      "zh-CN": "按分钟填写，保留已有秒数和偏移",
+      "en-US": "Enter minutes while preserving existing seconds and offset",
+      "params": {}
+    },
+    "reminder.saveFirst": {
+      "zh-CN": "先保存准确提醒再启用",
+      "en-US": "Save the exact reminder before enabling it",
+      "params": {}
+    },
+    "reminder.libraryEnabled": {
+      "zh-CN": "本设备启用此资料库",
+      "en-US": "Enable this library on this device",
+      "params": {}
+    },
+    "reminder.enable": {
+      "zh-CN": "启用",
+      "en-US": "Enable",
+      "params": {}
+    },
+    "reminder.disable": {
+      "zh-CN": "停用",
+      "en-US": "Disable",
+      "params": {}
+    },
+    "reminder.handled": {
+      "zh-CN": "已处理",
+      "en-US": "Handled",
+      "params": {}
+    },
+    "reminder.handle": {
+      "zh-CN": "标记已处理",
+      "en-US": "Mark as handled",
+      "params": {}
+    },
+    "reminder.cancelled": {
+      "zh-CN": "已取消",
+      "en-US": "Cancelled",
+      "params": {}
+    },
+    "reminder.upcoming": {
+      "zh-CN": "尚未到时",
+      "en-US": "Upcoming",
+      "params": {}
+    },
+    "reminder.due": {
+      "zh-CN": "已到时",
+      "en-US": "Due",
+      "params": {}
+    },
+    "reminder.retryOriginal": {
+      "zh-CN": "重试原请求",
+      "en-US": "Retry original request",
+      "params": {}
+    },
+    "reminder.pendingResult": {
+      "zh-CN": "原请求结果待确认",
+      "en-US": "Original request outcome is unconfirmed",
+      "params": {}
+    },
+    "reminder.settingsPending": {
+      "zh-CN": "本设备设置请求待确认",
+      "en-US": "Device settings request outcome is unconfirmed",
+      "params": {}
+    },
+    "reminder.refresh": {
+      "zh-CN": "刷新",
+      "en-US": "Refresh",
+      "params": {}
+    },
+    "reminder.help": {
+      "zh-CN": "日期截止与精确瞬间分别保留原语义；Provider 不提供默认时区。",
+      "en-US": "Date-only due values and exact instants retain their own semantics; providers supply no default time zone.",
+      "params": {}
+    },
+    "reminder.invalidInput": {
+      "zh-CN": "输入不完整或格式无效，请保留后修正",
+      "en-US": "Input is incomplete or invalid; preserve it and correct it",
+      "params": {}
+    },
+    "reminder.mode": {
+      "zh-CN": "提醒方式",
+      "en-US": "Reminder mode",
+      "params": {}
+    },
+    "reminder.minutes": {
+      "zh-CN": "分钟",
+      "en-US": "Minutes",
+      "params": {}
+    },
+    "reminder.discardPending": {
+      "zh-CN": "放弃这次设置请求",
+      "en-US": "Discard this settings request",
+      "params": {}
+    },
+    "reminder.pendingDiscardHelp": {
+      "zh-CN": "放弃不会撤销可能已经生效的设置；刷新查看当前状态",
+      "en-US": "Discarding does not undo settings that may already have taken effect; refresh to inspect current state",
+      "params": {}
+    },
+    "reminder.offset": {
+      "zh-CN": "明确时区偏移",
+      "en-US": "Explicit timezone offset",
+      "params": {}
+    },
+    "reminder.exactValue": {
+      "zh-CN": "准确值（保留精度）",
+      "en-US": "Exact value (precision preserved)",
+      "params": {}
     }
   }
 }
