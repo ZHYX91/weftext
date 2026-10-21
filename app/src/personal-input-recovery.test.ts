@@ -8,7 +8,7 @@ class Storage {
   removeItem(key: string) { this.data.delete(key); }
 }
 const audience = JSON.stringify(["deployment", "alice"]), other = JSON.stringify(["deployment", "bob"]);
-function record(text = "OWN"): Omit<PersonalInputRecord, "sequence"> { return { id: "test-id", resource: "Shared", reference: "weftext-node://w/n", baseHash: "a".repeat(64), origin: { baseLength: 999, pieces: [{ base: 0, length: 500 }, { text }, { base: 500, length: 499 }], detached: [], revision: 1 } }; }
+function record(text = "OWN"): Omit<PersonalInputRecord, "sequence"> { return { id: "test-id", owner: { kind: "body", resource: "Shared", reference: "weftext-node://w/n" }, baseHash: "a".repeat(64), origin: { baseLength: 999, pieces: [{ base: 0, length: 500 }, { text }, { base: 500, length: 499 }], detached: [], revision: 1 } }; }
 test("independent actor input survives protected cache clearing without holding its Base or token", () => {
   const storage = new Storage(), recovery = new PersonalInputRecovery(storage); recovery.update(audience, [record()]);
   storage.setItem("weftext-hosted-draft:old", "PRIVATE_BASE"); for (const key of storage.data.keys()) if (key.startsWith("weftext-hosted-draft:")) storage.removeItem(key);
@@ -44,4 +44,14 @@ test("over-budget live input can be explicitly reduced until persistence is poss
   recovery.remove(audience, recovery.list(audience)[0]); assert.equal(recovery.list(audience).length, 129); assert.match(recovery.notice(audience)!, /只从内存/);
   recovery.remove(audience, recovery.list(audience)[0]); assert.equal(recovery.list(audience).length, 128); assert.equal(recovery.notice(audience), undefined);
   assert.equal(new PersonalInputRecovery(storage).list(audience).length, 128);
+});
+
+test("original committed candidate promotes S and cannot be downgraded by a later live unresolved retain", () => {
+  const storage = new Storage(), recovery = new PersonalInputRecovery(storage), update = { ...record("X"), pending: { operationId: "one", status: "unresolved" as const }, candidate: { operationId: "one", baseHash: "b".repeat(64), origin: { baseLength: 1000, pieces: [{ base: 0, length: 1000 }, { text: "Y" }], detached: [], revision: 2 } } };
+  recovery.update(audience, [update]); recovery.settle(audience, recovery.list(audience)[0], "committed"); recovery.update(audience, [update]);
+  const restored = new PersonalInputRecovery(storage).list(audience)[0]; assert.equal(restored.pending?.status, "committed"); assert.equal(restored.baseHash, "b".repeat(64)); assert.equal(personalInputText(restored), "Y"); assert.equal(restored.candidate, undefined);
+});
+test("field and library pure payloads keep their actual owner without a current body", () => {
+  const storage = new Storage(), recovery = new PersonalInputRecovery(storage); recovery.update(audience, [{ ...record("FIELD"), owner: { kind: "field", resource: "other", fieldId: "actual" } }, { ...record("STYLE"), id: "style", owner: { kind: "library", role: "style" } }]);
+  assert.deepEqual(new PersonalInputRecovery(storage).list(audience).map(item => item.owner), [{kind:"field",resource:"other",fieldId:"actual"},{kind:"library",role:"style"}]);
 });

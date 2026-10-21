@@ -1,3 +1,4 @@
+import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, ui } from "./data-panel";
 import { hostedCachePrefix } from "./hosted-state";
 import { sameHostedLinksIdentity, type HostedLinksIdentity } from "./hosted-knowledge-links-state";
@@ -9,11 +10,12 @@ type Job = { request: RegistryRequest; receipt?: RegistryReceipt; commit?: { ope
 type Cache = { draft: RegistryDraft; job?: Job };
 const initial = (): Cache => ({ draft: { kind: "admitDirectory", slot: "", reference: "", displayName: "", parentRef: null } });
 const ended = (status?: string) => ["committed", "resolved", "cancelled"].includes(status ?? "");
-export interface HostedRegistryHost { identity(): HostedLinksIdentity | null; authorizationChanged(message: string, current: { actor: string; deployment: string; generation: number }): void; registryChanged?(): void }
+export interface HostedRegistryHost { authorInputs?: AuthorInputFactory; identity(): HostedLinksIdentity | null; authorizationChanged(message: string, current: { actor: string; deployment: string; generation: number }): void; registryChanged?(): void }
 function selection(label: string, values: [string, string][], value: string) { const select = ui("select", "data-input"); select.setAttribute("aria-label", label); if (value && !values.some(([id]) => id === value)) values.push([value, "原选择（当前不可用）"]); for (const [id, text] of values) { const option = ui("option", "", text); option.value = id; select.append(option); } select.value = value; return select; }
 /** Directory navigation is a capability of its own, never a Query scan. */
 export class HostedNavigationRegistry {
   private epoch = 0;
+  private inputScopes: AuthorInputScopes;
   private key = "";
   private cache = initial();
   private catalog?: RegistryCatalog;
@@ -26,9 +28,9 @@ export class HostedNavigationRegistry {
   private message = ui("p", "hint");
   private editor = ui("section");
   private resolved = ui("section");
-  constructor(private host: HTMLElement, private request: Request, private owner: HostedRegistryHost) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private owner: HostedRegistryHost) { this.inputScopes = new AuthorInputScopes(owner.authorInputs); this.clear(false); }
   clear(removeCache = true): void {
-    this.catalogSerial++; this.resolveSerial++;
+    this.inputScopes.clear(); this.catalogSerial++; this.resolveSerial++;
     this.epoch++; this.key = ""; this.cache = initial(); this.catalog = undefined; this.catalogTree = undefined; this.busy = false; this.verified = false; this.unreadable = undefined; this.message.textContent = ""; this.editor.replaceChildren(); this.resolved.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true;
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-navigation-registry:")) sessionStorage.removeItem(key);
   }
@@ -82,15 +84,15 @@ export class HostedNavigationRegistry {
       if (this.catalogTree) this.editor.append(tagPicker(this.catalogTree, { label: "获权标签目录 · 选择后核对地址", changed: reference => this.selectTag(reference) }));
     }
     const draft = this.cache.draft, form = ui("fieldset"); form.append(ui("legend", "", "导航提案"));
-    const kind = selection("导航操作类型", [["admitDirectory", "明确纳入目录"], ["createTag", "新建标签"], ["renameTag", "重命名标签"], ["moveTag", "标签换父／移至根"]], draft.kind); kind.onchange = () => { draft.kind = kind.value as RegistryDraft["kind"]; this.keep(); this.render(); }; form.append(kind);
-    if (draft.kind === "admitDirectory") { const slots = selection("目录纳入槽位", [["", "明确选择槽位"], ...(catalog?.admissionSlots ?? []).map(s => [s.slot, s.title] as [string, string])], draft.slot); slots.onchange = () => { draft.slot = slots.value; this.keep(); this.render(); }; form.append(slots); }
+    const kind = selection("导航操作类型", [["admitDirectory", "明确纳入目录"], ["createTag", "新建标签"], ["renameTag", "重命名标签"], ["moveTag", "标签换父／移至根"]], draft.kind); kind.onchange = () => { if (kind.isConnected === false) return; this.inputScopes.clear(); draft.kind = kind.value as RegistryDraft["kind"]; this.keep(); this.render(); }; form.append(kind);
+    if (draft.kind === "admitDirectory") { const slots = selection("目录纳入槽位", [["", "明确选择槽位"], ...(catalog?.admissionSlots ?? []).map(s => [s.slot, s.title] as [string, string])], draft.slot); slots.onchange = () => { if (slots.isConnected === false) return; this.inputScopes.clear(); draft.slot = slots.value; this.keep(); this.render(); }; form.append(slots); }
     else {
       if (this.catalogTree) { const tree = this.catalogTree;
-        if (draft.kind !== "createTag") form.append(tagPicker(tree, { label: "待操作标签", value: draft.reference, changed: reference => { draft.reference = reference ?? ""; this.keep(); this.render(); } }));
-        if (draft.kind !== "renameTag") form.append(tagPicker(tree, { label: "新父标签", value: draft.parentRef ?? "", root: true, excludedRoot: draft.kind === "moveTag" ? tree.byRef.get(draft.reference)?.tagId : undefined, changed: reference => { draft.parentRef = reference; this.keep(); } }));
+        if (draft.kind !== "createTag") form.append(tagPicker(tree, { label: "待操作标签", value: draft.reference, changed: reference => { this.inputScopes.clear(); draft.reference = reference ?? ""; this.keep(); this.render(); } }));
+        if (draft.kind !== "renameTag") form.append(tagPicker(tree, { label: "新父标签", value: draft.parentRef ?? "", root: true, excludedRoot: draft.kind === "moveTag" ? tree.byRef.get(draft.reference)?.tagId : undefined, changed: reference => { this.inputScopes.clear(); draft.parentRef = reference; this.keep(); } }));
       }
       else form.append(ui("p", "hint", "完整标签结构未获权读取；暂停父级选择及结构操作，原输入保留。"));
-      if (draft.kind !== "moveTag") { const name = ui("input", "data-input"), duplicates = ui("div", "hint"); name.setAttribute("aria-label", "标签显示名称"); name.value = draft.displayName; const showNames = () => { duplicates.replaceChildren(); if (draft.kind !== "createTag" || !this.catalogTree || !name.value) return; const same = [...this.catalogTree.byId.values()].filter(tag => tag.displayName === name.value); if (same.length) duplicates.append(ui("p", "", `已有 ${same.length} 个同名标签；仍创建会产生新的独立身份，不合并。`), ...same.slice(0, 100).map(tag => ui("p", "", this.catalogTree!.label(tag.reference)))); }; name.oninput = () => { draft.displayName = name.value; this.keep(); showNames(); }; showNames(); form.append(name, duplicates); }
+      if (draft.kind !== "moveTag") { const name = ui("input", "data-input"), duplicates = ui("div", "hint"); name.setAttribute("aria-label", "标签显示名称"); name.value = draft.displayName; const epoch = this.epoch, target = JSON.stringify([draft.kind, draft.slot, draft.reference, draft.parentRef]); this.inputScopes.get(draft, { kind: "registry", target }, () => this.epoch === epoch && this.cache.draft === draft && JSON.stringify([draft.kind, draft.slot, draft.reference, draft.parentRef]) === target)?.bind(name, "display-name"); const showNames = () => { duplicates.replaceChildren(); if (draft.kind !== "createTag" || !this.catalogTree || !name.value) return; const same = [...this.catalogTree.byId.values()].filter(tag => tag.displayName === name.value); if (same.length) duplicates.append(ui("p", "", `已有 ${same.length} 个同名标签；仍创建会产生新的独立身份，不合并。`), ...same.slice(0, 100).map(tag => ui("p", "", this.catalogTree!.label(tag.reference)))); }; name.oninput = () => { draft.displayName = name.value; this.keep(); showNames(); }; showNames(); form.append(name, duplicates); }
     }
     const canPrepare = !!catalog && (draft.kind === "admitDirectory" ? catalog.admissionSlots.some(s => s.slot === draft.slot) : catalog.tags.read && catalog.tags.coverage === "complete" && !!catalog.tags.basis && (draft.kind === "createTag" ? catalog.tags.create : draft.kind === "moveTag" ? catalog.tags.move : catalog.tags.rename));
     const prepare = action("准备导航提案", () => { void this.run(() => this.prepare()); }); prepare.disabled = this.busy || !!this.cache.job || !canPrepare; form.append(prepare); this.editor.append(form);

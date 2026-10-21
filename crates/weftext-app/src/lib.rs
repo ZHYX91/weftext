@@ -49,7 +49,9 @@ impl CoreTestFixture for Core {
 
 mod bibliography_import_api;
 mod builtin_module_api;
+mod capture_api;
 mod citation_api;
+pub mod client_protocol;
 mod data_api;
 mod embedded_output;
 mod embedded_query_api;

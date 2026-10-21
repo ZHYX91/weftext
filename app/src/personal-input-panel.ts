@@ -15,7 +15,7 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
     row.append(input, action("复制本人新增文字", async () => { input.focus(); input.select(); if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(input.value); status.textContent = "文字已选中或复制；原恢复记录继续保留。"; }));
     if (record.pending) { const operation = document.createElement("p"); operation.textContent = `原保存操作 ${record.pending.operationId} · ${record.pending.status}`; row.append(operation); }
     if (record.pending?.status === "unresolved") row.append(action("查询并核定原保存操作", () => actions.operation(record)));
-    row.append(action("核对原基线并恢复为草稿", () => actions.restore(record)));
+    if (record.owner.kind === "body") row.append(action("核对原基线并恢复为草稿", () => actions.restore(record)));
     const remove = action("已取回，移除此份", () => { recovery.remove(audience, record); row.remove(); }); remove.disabled = record.pending?.status === "unresolved";
     row.append(remove, status); host.append(row);
   }

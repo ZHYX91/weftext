@@ -92,6 +92,7 @@ export function numberingHost(environment: AuthoringPanelsEnvironment, personal:
     personalDefaultKey: personal.defaultKey, personalNoteKey: personal.noteKey, displayPersonal: personal.display,
     readable: environment.readable, composing: () => controller.state.composing,
     binding: () => { const now = controller.snapshot; return JSON.stringify([now.sessionId, now.serial, now.generation]); },
+    authorInputs: () => controller.authorInputs(), closeGuard: guard => controller.registerCloseGuard(guard),
     observeState: (element: HTMLElement, update: () => void) => controller.observeSurface(element, update),
   };
 }

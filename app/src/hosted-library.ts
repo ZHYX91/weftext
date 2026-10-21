@@ -1,3 +1,4 @@
+import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, ui } from "./data-panel";
 import { nativeStyleControlInput, nativeStyleControlReason, type NativeStyleControl, type NativeStyleValue } from "./style-panel";
 import { decodeProcessingDocument, defaultProcessingDocument } from "./processing-settings-panel";
@@ -14,6 +15,11 @@ const labelSource = "托管库配置完整源码";
 /** Role drafts are proposals; only the original Core operation installs bytes. */
 export class HostedLibrary {
   private epoch = 0;
+  private inputScopes: AuthorInputScopes;
+  private authorSession(draft: LibraryDraft) {
+    const role = this.role, epoch = this.epoch; if (!role) return;
+    return this.inputScopes.get(draft, { kind: "library", role }, () => this.epoch === epoch && this.draft === draft && this.role === role, () => draft.revision);
+  }
   private prefix = "";
   private catalog: Catalog = { roles: [], styleUse: false };
   private role?: LibraryRole;
@@ -33,10 +39,10 @@ export class HostedLibrary {
   private orderParent = "";
   private order?: HostedOrder;
   private orderHost = ui("section");
-  constructor(private host: HTMLElement, private request: Request, private changed: (role: LibraryRole) => void | Promise<void>) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private changed: (role: LibraryRole) => void | Promise<void>, authorInputs?: AuthorInputFactory) { this.inputScopes = new AuthorInputScopes(authorInputs); this.clear(false); }
   get hasPending() { return !!this.draft?.pending || this.pendingRoles.size > 0; }
   clear(remove = true) {
-    this.epoch++; this.catalog = { roles: [], styleUse: false }; this.role = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false; this.pendingRoles.clear(); this.prefix = ""; this.order = undefined; this.orderParent = ""; this.orderHost.replaceChildren();
+    this.inputScopes.clear(); this.epoch++; this.catalog = { roles: [], styleUse: false }; this.role = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false; this.pendingRoles.clear(); this.prefix = ""; this.order = undefined; this.orderParent = ""; this.orderHost.replaceChildren();
     this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.actions.replaceChildren(); this.picker.replaceChildren(); this.message.textContent = ""; this.source.value = ""; this.enabled.checked = false; this.inputs = []; this.comparison = undefined;
     const failures: unknown[] = [];
     if (remove) { try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-library:")) { try { sessionStorage.removeItem(key); } catch (error) { failures.push(error); } } } catch (error) { failures.push(error); } }
@@ -58,7 +64,7 @@ export class HostedLibrary {
   private select(role: LibraryRole) {
     if (!this.catalog.roles.some(item => item.role === role && item.read)) throw new Error("配置角色当前不可读取。");
     try { this.retain(); } catch (error) { if (this.role) this.picker.value = this.role; throw error; }
-    this.role = role; this.picker.hidden = false; this.picker.value = role; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.editor.replaceChildren(); this.actions.replaceChildren(); this.source.value = ""; this.inputs = []; this.comparison = undefined; this.order=undefined;
+    this.inputScopes.clear(); this.role = role; this.picker.hidden = false; this.picker.value = role; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.editor.replaceChildren(); this.actions.replaceChildren(); this.source.value = ""; this.inputs = []; this.comparison = undefined; this.order=undefined;
     sessionStorage.setItem(this.prefix + "selection", role); const raw = sessionStorage.getItem(this.key());
     if (raw !== null) { try { this.draft = decodeLibraryDraft(raw, role); } catch { this.unreadable = raw; } }
     this.message.textContent = this.draft?.pending ? "原配置操作待核对；无需当前读取依据也可查询原编号。" : "选择角色后读取准确配置。恢复输入不会被读取覆盖。"; this.render();
@@ -134,7 +140,7 @@ export class HostedLibrary {
         const raw = draft.changes[control.key], value: NativeStyleValue = raw === undefined ? control.value : control.kind === "select" ? control.options?.[Number(raw)]?.value ?? control.value : raw;
         const label = ui("label", "", control.label + (control.unit ? `（${control.unit}）` : "")), input = nativeStyleControlInput(control, value); input.setAttribute("aria-label", `托管库样式 ${control.key}`);
         if (raw !== undefined && control.kind !== "boolean" && control.kind !== "select") input.value = String(raw);
-        input.disabled = !this.writable() || !control.editable || draft.source !== draft.baseSource; input.oninput = () => { draft.changes[control.key] = control.kind === "boolean" ? (input as HTMLInputElement).checked : input.value; this.edited(); }; label.append(input); if (control.reason) label.append(ui("span", "hint", nativeStyleControlReason(control.reason))); controls.append(label); this.inputs.push({ control, input });
+        if (input instanceof HTMLInputElement && control.kind !== "boolean") this.authorSession(draft)?.bind(input, `style:${control.key}`); input.disabled = !this.writable() || !control.editable || draft.source !== draft.baseSource; input.oninput = () => { draft.changes[control.key] = control.kind === "boolean" ? (input as HTMLInputElement).checked : input.value; this.edited(); }; label.append(input); if (control.reason) label.append(ui("span", "hint", nativeStyleControlReason(control.reason))); controls.append(label); this.inputs.push({ control, input });
       }
       this.editor.append(controls, ui("p", "hint", "控件修改准确原生参数；完整源码保留未知规则。编辑完整源码时控件暂停，不能同时提交两份输入。"));
       for (const [key, value] of Object.entries(draft.changes)) if (!profile?.controls?.some(control => control.key === key && control.editable)) this.editor.append(ui("p", "hint", `未映射原控件 ${key}：${String(value)}（保留，不能静默提交）`), action(`放弃原控件输入 ${key}`, () => { delete draft.changes[key]; this.edited(); this.render(); }));
@@ -152,12 +158,12 @@ export class HostedLibrary {
           const create = action("添加共享通用处理建议", () => { settings.processing = defaultProcessingDocument(); draft.source = JSON.stringify(settings, null, 2); this.edited(); this.render(); }); create.disabled = !this.writable(); processing.append(create);
         } else {
           const document = decodeProcessingDocument(settings.processing);
-          const label = ui("label", "", "默认建议语言／文字体系／地区（可多选，未知地区省略）"), input = ui("input", "knowledge-input"); input.value = document.defaults.languages.map(processingLanguageTag).join(", "); input.disabled = !this.writable(); input.onchange = () => { try { document.defaults.languages = parseProcessingLanguages(input.value); settings.processing = document; draft.source = JSON.stringify(settings, null, 2); this.edited(); this.render(); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }; label.append(input); processing.append(label, ui("p", "hint", `通用方案；${document.rules.length} 条词典规则、${document.scopedAllowlist.length} 条有范围白名单。词条、适用范围及准确版本在下方同一 JSON 中编辑，未知规则保源。`));
+          const label = ui("label", "", "默认建议语言／文字体系／地区（可多选，未知地区省略）"), input = ui("input", "knowledge-input"); input.value = document.defaults.languages.map(processingLanguageTag).join(", "); this.authorSession(draft)?.bind(input, "processing-languages"); input.disabled = !this.writable(); input.onchange = () => { try { document.defaults.languages = parseProcessingLanguages(input.value); settings.processing = document; draft.source = JSON.stringify(settings, null, 2); this.edited(); this.render(); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }; label.append(input); processing.append(label, ui("p", "hint", `通用方案；${document.rules.length} 条词典规则、${document.scopedAllowlist.length} 条有范围白名单。词条、适用范围及准确版本在下方同一 JSON 中编辑，未知规则保源。`));
         }
       } catch { processing.append(ui("p", "hint", "当前共享处理设置不能由友好控件安全解析，原 JSON 已保留；请在源码中核对，未覆盖未知规则。")); }
       this.editor.append(processing);
     }
-    const sourceLabel = ui("label", "", this.role === "style" ? "完整原生 Typst 样式源码" : "完整 JSON 配置源码"); this.source.rows = 14; this.source.spellcheck = false; this.source.setAttribute("aria-label", labelSource); if (this.source.value !== draft.source) this.source.value = draft.source; this.source.readOnly = !this.writable(); this.source.oninput = () => { draft.source = this.source.value; this.edited(); }; sourceLabel.append(this.source); this.editor.append(sourceLabel);
+    const sourceLabel = ui("label", "", this.role === "style" ? "完整原生 Typst 样式源码" : "完整 JSON 配置源码"); this.source = ui("textarea"); this.source.rows = 14; this.source.spellcheck = false; this.source.setAttribute("aria-label", labelSource); if (this.source.value !== draft.source) this.source.value = draft.source; this.authorSession(draft)?.bind(this.source, "source"); this.source.readOnly = !this.writable(); this.source.oninput = () => { draft.source = this.source.value; this.edited(); }; sourceLabel.append(this.source); this.editor.append(sourceLabel);
     if (this.needsComparison()) { this.editor.append(ui("h3", "", "配置依据已变化，保留双方原文"), ui("p", "", "原读取依据"), ui("pre", "", draft.baseSource), ui("p", "", "当前服务端配置"), ui("pre", "", profile!.source)); const compare = action("已核对配置，以当前原文作为新依据", () => this.run(() => { if (draft.pending) throw new Error("先核对或结束原操作，再确认新依据。"); draft.baseSource = profile!.source; draft.baseEnabled = profile!.enabled; this.edited(); this.render(); })); this.comparison = compare; this.editor.append(compare); }
     this.renderActions(); if (selection) { this.source.focus(); this.source.setSelectionRange(selection[0], selection[1]); }
   }

@@ -3,6 +3,7 @@ import { encodeLiteral } from "./session";
 import type { RenderNode } from "./types";
 import { ChangeSet } from "@codemirror/state";
 import { DocumentNotesInputTracker } from "./personal-input-text";
+import type { AuthorInputSession } from "./author-input";
 import { personalInputId, type PersonalText } from "./source-input-origin";
 import { sourceByteOffsets } from "./source-offsets";
 
@@ -72,6 +73,7 @@ export interface WritingBuffer {
 }
 export interface WritingState { pending: boolean; busy: boolean; composing: boolean; error: string | null; mapCurrent: boolean }
 export interface WritingHost {
+  authorInputs?(): AuthorInputSession | undefined;
   actionAvailable?(): boolean;
   refreshMap?(basis: WritingBasis): Promise<WritingMap>;
   editor: WritingBuffer;
@@ -82,7 +84,7 @@ export interface WritingHost {
   onError?(error: Error): void;
   onPendingSource?(source: string): void;
   /** Pure author-entered text, excluding the initial protected literal value. */
-  onPersonalInput?(id: string, text: string): void;
+  onPersonalInput?(id: string, text: string, revision: number): void;
   onApplied?(result: WritingResult): void;
   debounceMs?: number;
 }
@@ -93,6 +95,7 @@ interface LiteralInput {
   input?: HTMLTextAreaElement; failure: Error | null;
   append: boolean;
   personalText?: PersonalText;
+  acknowledgePersonal?(submitted: PersonalText): void;
   /** Checkpoint proposal only; it never becomes a rich-edit capability. */
   recoveryOnly?: { basis: MapBasis; range: WritingRange; prefix: string };
 }
@@ -299,6 +302,9 @@ export class WritingController {
   private failure: Error | null = null;
   private bindings = new Set<InputBinding>();
   private focusSelection = false;
+  private closeGuards = new Set<() => boolean>();
+  registerCloseGuard(guard: () => boolean): () => void { this.closeGuards.add(guard); return () => { this.closeGuards.delete(guard); }; }
+  assertCloseReady(): void { if (this.state.composing || [...this.closeGuards].some(guard => guard())) throw new Error("作者提案或输入法组合尚未可靠保留，当前窗口继续保留输入。"); }
   private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; lease?: WritingSurfaceLease; connected: boolean }>();
 
   constructor(private host: WritingHost) {
@@ -337,6 +343,7 @@ export class WritingController {
     if(!this.installMap(map,basis.source,basis.serial))throw new Error("准备操作期间出现新输入，请重新选择；原稿已保留。");
   }
   get snapshot(): WritingSnapshot { return { ...this.host.basis(), generation: this.host.editor.generation }; }
+  authorInputs(): AuthorInputSession | undefined { return this.host.authorInputs?.(); }
   isSnapshotCurrent(snapshot: WritingSnapshot): boolean { const now = this.snapshot; return now.sessionId === snapshot.sessionId && now.source === snapshot.source && now.serial === snapshot.serial && now.generation === snapshot.generation; }
   /** Valid literal input and qualified commands retain presentation; idle grid focus does not. */
   get retainInput(): boolean {
@@ -543,7 +550,7 @@ export class WritingController {
           if (from != null && to != null) selected = { from: next[0].range.utf16From + from, to: next[0].range.utf16From + to };
         }
         this.apply(basis, result, active.compositionCommit ? "input.compose" : "input.type", active.compositionCommit, selected, personalText);
-        if (personalText && active.generation === inputGeneration) this.host.onPersonalInput?.(personalText.id, "");
+        if (personalText) active.acknowledgePersonal?.(personalText);
         active.compositionCommit = false;
         active.acceptedText = submitted;
         if (next.length !== 1) {
@@ -581,17 +588,26 @@ export class WritingController {
     input.dataset.personalInputManaged = "literal";
     const binding = { input, region, append, valid: true }; this.bindings.add(binding);
     input.value = region.text; input.spellcheck = false; input.dataset.sourceFrom = String(region.range.utf16From); input.dataset.sourceTo = String(region.range.utf16To);
-    const inputId = personalInputId(); let tracker = new DocumentNotesInputTracker(input.value);
+    let inputId = personalInputId(); let tracker = new DocumentNotesInputTracker(input.value), personalRevision = 0;
     let edit: { from: number; to: number; inputType: string } | undefined;
     let composition: { tracker: DocumentNotesInputTracker; from: number; to: number } | undefined;
     const capture = (event?: Event) => {
+      const observedEdit = !!event || !!edit;
       const data = event && "data" in event ? (event as InputEvent | CompositionEvent).data : undefined;
       if (composition) { tracker = composition.tracker.copy(); tracker.observe(input.value, { from: composition.from, to: composition.to, inputType: "insertCompositionText" }, data); }
       else if (event) tracker.observe(input.value, edit, data ?? (event as InputEvent).dataTransfer?.getData("text/plain"));
       else tracker.input(input.value, edit);
       edit = undefined;
-      this.host.onPersonalInput?.(inputId, tracker.recoveryInput());
-      try { if (!binding.valid) throw new Error("这段文字入口已过期，请等待当前预览后继续。"); this.stageLiteral(binding.region.range, binding.region.text, input.value, { from: input.selectionStart, to: input.selectionEnd }, input, binding.append); if (this.active?.input === input) this.active.personalText = { id: inputId, text: tracker.recoveryInput() }; }
+      if (observedEdit) { personalRevision++; this.host.onPersonalInput?.(inputId, tracker.recoveryInput(), personalRevision); }
+      try { if (!binding.valid) throw new Error("这段文字入口已过期，请等待当前预览后继续。"); this.stageLiteral(binding.region.range, binding.region.text, input.value, { from: input.selectionStart, to: input.selectionEnd }, input, binding.append); if (this.active?.input === input) {
+        const active = this.active;
+        if (personalRevision) active.personalText = { id: inputId, revision: personalRevision, text: tracker.recoveryInput() };
+        active.acknowledgePersonal = submitted => {
+          if (submitted.id !== inputId || submitted.revision !== personalRevision || composition || edit || !tracker.matches(input.value)) return;
+          this.host.onPersonalInput?.(inputId, "", personalRevision);
+          tracker = new DocumentNotesInputTracker(input.value); inputId = personalInputId(); personalRevision = 0; active.personalText = undefined;
+        };
+      } }
       catch (error) { this.report(error); }
       select();
       input.style.height = "auto"; input.style.height = `${Math.max(input.scrollHeight, 28)}px`;
@@ -681,5 +697,5 @@ export class WritingController {
     if (!map.bodyInsertion?.writable) throw new Error(map.unavailableReason || "当前没有可安全添加内容的正文位置。");
     return map.bodyInsertion.from;
   }
-  dispose(): void { this.disposed = true; clearTimeout(this.timer); this.stopObserve(); this.bindings.clear(); this.surfaces.clear(); const error = new Error("编辑会话已关闭，未应用待处理动作。"); for (const action of this.afterInput.splice(0)) action.reject(error); }
+  dispose(): void { this.disposed = true; clearTimeout(this.timer); this.stopObserve(); this.bindings.clear(); this.surfaces.clear(); this.closeGuards.clear(); const error = new Error("编辑会话已关闭，未应用待处理动作。"); for (const action of this.afterInput.splice(0)) action.reject(error); }
 }

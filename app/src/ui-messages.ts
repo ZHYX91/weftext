@@ -64,7 +64,51 @@ export const zhCN = {
   "cli.requestConflict": "原请求定位器或内容不一致，未重新发送。",
   "cli.unsupported": "当前执行端或命令未提供此能力。",
   "cli.outputExists": "输出路径 {path} 已存在，拒绝覆盖原件。",
-  "cli.helpCommands": "使用 --help 查看命令；使用 <命令> --help 查看该命令的参数。"
+  "cli.helpCommands": "使用 --help 查看命令；使用 <命令> --help 查看该命令的参数。",
+  "cli.usageHeading": "用法",
+  "cli.commandsHeading": "命令",
+  "cli.optionsHeading": "选项",
+  "cli.argumentsHeading": "参数",
+  "cli.invalidArguments": "参数无效；请运行 --help",
+  "cli.helpFlag": "显示帮助",
+  "cli.versionFlag": "显示版本",
+  "reminder.id": "提醒标识",
+  "reminder.at": "带显式偏移的精确瞬间",
+  "reminder.beforeSeconds": "截止前秒数",
+  "reminder.clock": "当天时间",
+  "reminder.fraction": "精确秒小数",
+  "reminder.zone": "时区",
+  "reminder.zoneVersion": "时区规则版本",
+  "reminder.fold": "重复时间选择",
+  "reminder.foldNone": "无重复时间选择",
+  "reminder.foldEarlier": "较早的瞬间",
+  "reminder.foldLater": "较晚的瞬间",
+  "reminder.minuteHelper": "按分钟填写，保留已有秒数和偏移",
+  "reminder.saveFirst": "先保存准确提醒再启用",
+  "reminder.libraryEnabled": "本设备启用此资料库",
+  "reminder.enable": "启用",
+  "reminder.disable": "停用",
+  "reminder.handled": "已处理",
+  "reminder.handle": "标记已处理",
+  "reminder.cancelled": "已取消",
+  "reminder.upcoming": "尚未到时",
+  "reminder.due": "已到时",
+  "reminder.retryOriginal": "重试原请求",
+  "reminder.pendingResult": "原请求结果待确认",
+  "reminder.settingsPending": "本设备设置请求待确认",
+  "reminder.refresh": "刷新",
+  "reminder.help": "日期截止与精确瞬间分别保留原语义；Provider 不提供默认时区。",
+  "reminder.invalidInput": "输入不完整或格式无效，请保留后修正",
+  "reminder.mode": "提醒方式",
+  "reminder.minutes": "分钟",
+  "reminder.discardPending": "放弃这次设置请求",
+  "reminder.pendingDiscardHelp": "放弃不会撤销可能已经生效的设置；刷新查看当前状态",
+  "reminder.offset": "明确时区偏移",
+  "reminder.exactValue": "准确值（保留精度）",
+  "reminder.overview": "提醒状态与设置",
+  "reminder.more": "继续读取下一页",
+  "reminder.noDeliveryRecords": "本设备尚无已记录的投递",
+  "reminder.openTask": "打开当前获权任务"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -134,6 +178,50 @@ export interface MessageParamsMap {
   "cli.unsupported": {  };
   "cli.outputExists": { path: string };
   "cli.helpCommands": {  };
+  "cli.usageHeading": {  };
+  "cli.commandsHeading": {  };
+  "cli.optionsHeading": {  };
+  "cli.argumentsHeading": {  };
+  "cli.invalidArguments": {  };
+  "cli.helpFlag": {  };
+  "cli.versionFlag": {  };
+  "reminder.id": {  };
+  "reminder.at": {  };
+  "reminder.beforeSeconds": {  };
+  "reminder.clock": {  };
+  "reminder.fraction": {  };
+  "reminder.zone": {  };
+  "reminder.zoneVersion": {  };
+  "reminder.fold": {  };
+  "reminder.foldNone": {  };
+  "reminder.foldEarlier": {  };
+  "reminder.foldLater": {  };
+  "reminder.minuteHelper": {  };
+  "reminder.saveFirst": {  };
+  "reminder.libraryEnabled": {  };
+  "reminder.enable": {  };
+  "reminder.disable": {  };
+  "reminder.handled": {  };
+  "reminder.handle": {  };
+  "reminder.cancelled": {  };
+  "reminder.upcoming": {  };
+  "reminder.due": {  };
+  "reminder.retryOriginal": {  };
+  "reminder.pendingResult": {  };
+  "reminder.settingsPending": {  };
+  "reminder.refresh": {  };
+  "reminder.help": {  };
+  "reminder.invalidInput": {  };
+  "reminder.mode": {  };
+  "reminder.minutes": {  };
+  "reminder.discardPending": {  };
+  "reminder.pendingDiscardHelp": {  };
+  "reminder.offset": {  };
+  "reminder.exactValue": {  };
+  "reminder.overview": {  };
+  "reminder.more": {  };
+  "reminder.noDeliveryRecords": {  };
+  "reminder.openTask": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -219,7 +307,51 @@ export const messageParamTypes = {
   "cli.outputExists": {
     "path": "text"
   },
-  "cli.helpCommands": {}
+  "cli.helpCommands": {},
+  "cli.usageHeading": {},
+  "cli.commandsHeading": {},
+  "cli.optionsHeading": {},
+  "cli.argumentsHeading": {},
+  "cli.invalidArguments": {},
+  "cli.helpFlag": {},
+  "cli.versionFlag": {},
+  "reminder.id": {},
+  "reminder.at": {},
+  "reminder.beforeSeconds": {},
+  "reminder.clock": {},
+  "reminder.fraction": {},
+  "reminder.zone": {},
+  "reminder.zoneVersion": {},
+  "reminder.fold": {},
+  "reminder.foldNone": {},
+  "reminder.foldEarlier": {},
+  "reminder.foldLater": {},
+  "reminder.minuteHelper": {},
+  "reminder.saveFirst": {},
+  "reminder.libraryEnabled": {},
+  "reminder.enable": {},
+  "reminder.disable": {},
+  "reminder.handled": {},
+  "reminder.handle": {},
+  "reminder.cancelled": {},
+  "reminder.upcoming": {},
+  "reminder.due": {},
+  "reminder.retryOriginal": {},
+  "reminder.pendingResult": {},
+  "reminder.settingsPending": {},
+  "reminder.refresh": {},
+  "reminder.help": {},
+  "reminder.invalidInput": {},
+  "reminder.mode": {},
+  "reminder.minutes": {},
+  "reminder.discardPending": {},
+  "reminder.pendingDiscardHelp": {},
+  "reminder.offset": {},
+  "reminder.exactValue": {},
+  "reminder.overview": {},
+  "reminder.more": {},
+  "reminder.noDeliveryRecords": {},
+  "reminder.openTask": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -287,5 +419,49 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "cli.requestConflict": "The original request locator or content differs. It was not resubmitted.",
   "cli.unsupported": "This endpoint or command does not provide this capability.",
   "cli.outputExists": "Output path {path} already exists. The original is not overwritten.",
-  "cli.helpCommands": "Use --help to list commands, or <command> --help for that command's arguments."
+  "cli.helpCommands": "Use --help to list commands, or <command> --help for that command's arguments.",
+  "cli.usageHeading": "Usage",
+  "cli.commandsHeading": "Commands",
+  "cli.optionsHeading": "Options",
+  "cli.argumentsHeading": "Arguments",
+  "cli.invalidArguments": "Invalid arguments; run --help",
+  "cli.helpFlag": "Show help",
+  "cli.versionFlag": "Show version",
+  "reminder.id": "Reminder identifier",
+  "reminder.at": "Exact instant with an explicit offset",
+  "reminder.beforeSeconds": "Seconds before due",
+  "reminder.clock": "Time of day",
+  "reminder.fraction": "Exact fractional seconds",
+  "reminder.zone": "Time zone",
+  "reminder.zoneVersion": "Time zone rules version",
+  "reminder.fold": "Repeated time choice",
+  "reminder.foldNone": "No repeated time choice",
+  "reminder.foldEarlier": "Earlier instant",
+  "reminder.foldLater": "Later instant",
+  "reminder.minuteHelper": "Enter minutes while preserving existing seconds and offset",
+  "reminder.saveFirst": "Save the exact reminder before enabling it",
+  "reminder.libraryEnabled": "Enable this library on this device",
+  "reminder.enable": "Enable",
+  "reminder.disable": "Disable",
+  "reminder.handled": "Handled",
+  "reminder.handle": "Mark as handled",
+  "reminder.cancelled": "Cancelled",
+  "reminder.upcoming": "Upcoming",
+  "reminder.due": "Due",
+  "reminder.retryOriginal": "Retry original request",
+  "reminder.pendingResult": "Original request outcome is unconfirmed",
+  "reminder.settingsPending": "Device settings request outcome is unconfirmed",
+  "reminder.refresh": "Refresh",
+  "reminder.help": "Date-only due values and exact instants retain their own semantics; providers supply no default time zone.",
+  "reminder.invalidInput": "Input is incomplete or invalid; preserve it and correct it",
+  "reminder.mode": "Reminder mode",
+  "reminder.minutes": "Minutes",
+  "reminder.discardPending": "Discard this settings request",
+  "reminder.pendingDiscardHelp": "Discarding does not undo settings that may already have taken effect; refresh to inspect current state",
+  "reminder.offset": "Explicit timezone offset",
+  "reminder.exactValue": "Exact value (precision preserved)",
+  "reminder.overview": "Reminder status and settings",
+  "reminder.more": "Read the next page",
+  "reminder.noDeliveryRecords": "No recorded deliveries on this device",
+  "reminder.openTask": "Open the currently authorized task"
 };

@@ -13,6 +13,8 @@ import { PersonalInputRecovery, type PersonalInputRecord } from "./personal-inpu
 import { renderPersonalInputs } from "./personal-input-panel";
 import { replayPersonalInput } from "./source-input-origin";
 import { PersonalControlInput } from "./personal-control-input";
+import type { AuthorInputFactory } from "./author-input";
+import { freezeOriginalAttempt } from "./original-operation";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
 import { HostedStructure } from "./hosted-structure";
@@ -36,7 +38,11 @@ import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHost
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
 type Me = { actor: string; deployment: string; generation: number; version: string };
-type SaveStatus = { status: string; operationId: string; baseId?: string };
+type SaveStatus = { status: string; operationId: string; resource?: string; baseId?: string };
+function checkedSaveStatus(result: SaveStatus, operationId: string, resource: string): SaveStatus {
+  if (!result || typeof result !== "object" || result.operationId !== operationId || !["committed", "cancelled", "resolved", "recoveryPending", "notCommitted", "notRegistered"].includes(result.status) || result.status !== "notRegistered" && result.resource !== resource || result.status === "committed" && (typeof result.baseId !== "string" || !result.baseId)) throw new Error("原保存回执的编号、目标或基线不匹配；没有采用该结果。");
+  return result;
+}
 const root = document.querySelector<HTMLElement>("#hosted")!;
 root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 · 0.6 预览版</span><button id="logout" hidden>退出并清除本页缓存</button></header>
 <form id="login"><h1>连接写作空间</h1><p>输入管理员提供的个人访问凭据。</p><label>访问凭据<input id="token" type="password" autocomplete="off" required minlength="32"></label><button>连接</button></form>
@@ -88,11 +94,13 @@ function renderEverydayBar() {
   add("插入与块操作",()=>openEverydayMenu("插入与块操作",source.commands(),status),busy);
 }
 const personalInputs = new PersonalInputRecovery(sessionStorage);
-const personalControls = new PersonalControlInput(document, () => { const audience = personalAudience(); return audience && doc ? { audience, resource: doc.resource, reference: draft?.reference, epoch: authorizationEpoch } : null; }, (context, id, text) => {
-  try { personalInputs.update(context.audience, [{ id, resource: context.resource, reference: context.reference, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, text }] : [], revision: 0 } }]); controls(); }
+const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text }) => {
+  if (context.owner.kind === "capture") throw new Error("捕获输入不能写入正文恢复域。");
+  try { personalInputs.update(context.audience, [{ id, owner: context.owner, slot: context.slot, path: context.path, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, revision, text }] : [], revision } }]); controls(); }
   catch (error) { status(error instanceof Error ? error.message : "本人表单输入仅保留在内存，请先取回。"); }
 });
-const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged("标签或获权字段已修改；原结果保留为旧依据，请明确重跑查询。"));
+const authorInputs: AuthorInputFactory = (owner, current, sink, leaseRevision) => { const audience = personalAudience(); return audience ? personalControls.session(audience, authorizationEpoch, owner, current, sink, leaseRevision) : undefined; };
+const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged("标签或获权字段已修改；原结果保留为旧依据，请明确重跑查询。"), authorInputs);
 const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
   canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
   openRow: row => { const target = row as HostedQueryRow; if (target.canOpen !== true || !target.resource) return Promise.reject(new Error("此查询行没有独立正文读取资格。")); return openQueryResource(target.resource); },
@@ -104,6 +112,7 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
   navigateResource,
   dependencies: () => queries.dependencies(),
   personalInputChanged: () => { try { persistPersonalInputs(); controls(); } catch (error) { status(error instanceof Error ? error.message : "本人输入尚未可靠写入存储；内存原文保留。"); } },
+  authorInputs,
 });
 const review: HostedReview = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
@@ -111,7 +120,7 @@ const review: HostedReview = new HostedReview(el("review"), request, () => doc ?
   pending: !!draft?.pending, selection: source.selection,
 } : null, () => source.flush(), (from, to) => source.select(from, to), (resource, changed) => {
   if (changed && doc?.resource === resource) { compareRequired = true; knowledgeAuthorChanged(); controls(); status("建议已提交到服务端；个人草稿保留，请重新读取与核对正文。"); }
-}, { context: () => media.context(), open: (asset, revision, initial) => media.openAsset(asset, revision, initial) }, readSharedProcessingDefaults);
+}, { context: () => media.context(), open: (asset, revision, initial) => media.openAsset(asset, revision, initial) }, readSharedProcessingDefaults, authorInputs);
 let token = sessionStorage.getItem("weftext-hosted-token") ?? "";
 let identity: Me | undefined;
 let verifiedPersonalAudience = "";
@@ -129,6 +138,7 @@ let draftTimer: ReturnType<typeof setTimeout> | undefined;
 let expiredSessionId: string | undefined;
 const authoringEditable = (): boolean => !!doc?.rights.write && !busy && !source.pausedSession && source.viewMode !== "read" && !compareRequired && !draft?.pending && !history.hasPending(doc.resource);
 const authoringHost: PanelHost = {
+  authorInputs: basis => { const selected = doc; return selected ? authorInputs({ kind: "body", resource: selected.resource, reference: draft?.reference }, () => doc === selected && doc.sessionId === basis.sessionId && !source.pausedSession, undefined, () => source.serial) : undefined; },
   request: <T>(path: string, body?: unknown): Promise<T> => {
     if (path !== "/api/editor/preview") return Promise.reject(new Error("此写作控件没有该托管读取入口。"));
     return request<T>("editor/preview", body);
@@ -187,6 +197,7 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
   context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
   prepareBasis: () => source.prepareQueryBasis(),
   apply: (patches, basis) => source.applyQueryPatches(patches, basis, "input.query.definition.proposal"),
+  authorInputs,
   reservations: (resource, receipts, includeReserved = false) => {
     if (!doc || !draft || resource !== doc.resource) return;
     draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved); retain();
@@ -217,10 +228,10 @@ const citations = new HostedCitations(el("citations"), request, {
   identity: hostedIdentity,
   context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
   basis: () => source.historyBasis(true), apply: async (patches, basis) => { retain(); await source.applyQueryPatches(patches, basis, "input.citation.proposal"); },
-  selection: () => source.selection, select: (from, to) => source.selectSourceRange(from, to), navigate: navigateReference, authorizationChanged: authorizationsChanged,
+  authorInputs, selection: () => source.selection, select: (from, to) => source.selectSourceRange(from, to), navigate: navigateReference, authorizationChanged: authorizationsChanged,
 });
 function knowledgeAuthorChanged() { knowledgeLinks.documentChanged(); citations.documentChanged(); }
-const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged, registryChanged: () => queries.environmentChanged("标签结构已修改；原冻结结果保留为旧依据，请明确重跑查询。") });
+const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { authorInputs, identity: hostedIdentity, authorizationChanged: authorizationsChanged, registryChanged: () => queries.environmentChanged("标签结构已修改；原冻结结果保留为旧依据，请明确重跑查询。") });
 const contentImport = new HostedContentImport(el("content-import"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged, open: openQueryResource });
 const recognitionPanel = new RecognitionPanel({
   request: (path, body) => request(`recognition${path}`, body),
@@ -240,7 +251,7 @@ const library = new HostedLibrary(el("library"), request, async role => {
   source.refreshEnvironment(); queries.environmentChanged(); knowledgeLinks.environmentChanged(); el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   if (role === "schema" || role === "rules") await queries.refreshCatalog();
   if (epoch === requestEpoch) status("库配置原操作已提交，受影响预览重新编译；正文草稿与撤销历史保留，未保存正文。");
-});
+}, authorInputs);
 const media: HostedMedia = new HostedMedia(el("media"), (path, body, signal) => request(path, body, false, 0, signal), context => review.mediaChanged(context), context => review.openMedia(context));
 let structureDocuments: { resource: string; title: string }[] = [];
 const structures = new HostedStructure(el("structure"), request, {
@@ -486,13 +497,12 @@ function personalAudience(): string | null { const current = identity ? JSON.str
 function persistPersonalInputs(): void {
   const audience = personalAudience(); if (!audience) return;
   const updates = source.personalInputRecords();
-  if (doc && draft?.pending) updates.push({ id: `operation:${draft.pending.operationId}`, resource: doc.resource, reference: draft.reference, origin: { baseLength: 0, pieces: [], detached: [], revision: 0 }, pending: { operationId: draft.pending.operationId, status: "unresolved" } });
   personalInputs.update(audience, updates);
 }
 function finishPersonalOperation(operationId: string, terminal: "committed" | "cancelled" | "resolved"): void {
+  source.settlePersonalSave(operationId, terminal === "committed");
   const audience = personalAudience(); if (!audience) return;
-  const record = personalInputs.list(audience).find(record => record.pending?.operationId === operationId);
-  if (record) personalInputs.settle(audience, record, terminal);
+  for (const record of personalInputs.list(audience).filter(record => record.pending?.operationId === operationId)) personalInputs.settle(audience, record, terminal);
 }
 function showPersonalInputs(): void {
   const audience = personalAudience(); if (!audience) throw new Error("请先重新认证原账号；没有根据旧凭据展示本人输入。");
@@ -506,27 +516,31 @@ async function verifyPersonalIdentity(audience: string, epoch: number): Promise<
 }
 async function recoverPersonalOperation(record: PersonalInputRecord, audience: string): Promise<void> {
   const epoch = authorizationEpoch; await verifyPersonalIdentity(audience, epoch); record = personalInputs.current(audience, record);
-  if (!record.pending) throw new Error("此记录没有原保存编号。");
+  if (!record.pending || record.owner.kind !== "body") throw new Error("此记录没有正文原保存编号。");
   let outcome = await request<SaveStatus>("operation", { operationId: record.pending.operationId });
   if (authorizationEpoch !== epoch || personalAudience() !== audience) return;
-  if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource: record.resource, operationId: record.pending.operationId });
+  checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
+  if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource: record.owner.resource, operationId: record.pending.operationId });
   if (authorizationEpoch !== epoch || personalAudience() !== audience) return;
   personalInputs.current(audience, record);
+  checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
   if (!["committed", "cancelled", "resolved"].includes(outcome.status)) throw new Error("原保存结果仍未知或待恢复；原编号保留，没有重发或换号。");
-  personalInputs.settle(audience, record, outcome.status as "committed" | "cancelled" | "resolved");
+  finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved");
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
+  if (record.owner.kind !== "body") throw new Error("此表单输入只供取回；没有借用当前正文目标自动重放。");
+  const owner = record.owner;
   const selected = doc, epoch = authorizationEpoch;
   if (!selected || !draft || !selected.rights.write || compareRequired || draft.pending) throw new Error("请先打开原笔记并核清当前草稿与原操作；未覆盖现有内容。");
   await source.flush(); await verifyPersonalIdentity(audience, epoch); record = personalInputs.current(audience, record);
   if (doc !== selected || !draft || source.value !== selected.source || draft.source !== selected.source) throw new Error("当前已有草稿输入，请先保留并处理；未用恢复稿覆盖。");
-  if (personalInputs.list(audience).some(other => other.pending?.status === "unresolved" && (other.reference && other.reference === record.reference || other.resource === record.resource))) throw new Error("原保存操作尚未核定；先查询同一编号，没有再次创建保存。");
+  if (personalInputs.list(audience).some(other => other.pending?.status === "unresolved" && other.owner.kind === "body" && (other.owner.reference && other.owner.reference === owner.reference || other.owner.resource === owner.resource))) throw new Error("原保存操作尚未核定；先查询同一编号，没有再次创建保存。");
   const basis = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
   const reference = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId });
   const hash = await nodeSourceHash(basis.source);
   if (authorizationEpoch !== epoch || personalAudience() !== audience || doc !== selected || source.value !== basis.source || source.serial !== basis.serial) throw new Error("核对期间出现新输入或对象变化，恢复记录保留。");
   personalInputs.current(audience, record);
-  if (!record.reference || reference.reference !== record.reference || reference.resource !== selected.resource || !record.baseHash || hash !== record.baseHash) throw new Error("原目标或准确基线不同；本人文字仍可取回，未按同名或旧范围自动重放。");
+  if (!owner.reference || reference.reference !== owner.reference || reference.resource !== selected.resource || !record.baseHash || hash !== record.baseHash) throw new Error("原目标或准确基线不同；本人文字仍可取回，未按同名或旧范围自动重放。");
   const restored = replayPersonalInput(record.origin, basis.source);
   source.restorePersonalInput(restored, record.origin, record.baseHash, basis);
   retain(); status("本人输入已在核对后的原基线上恢复为草稿；正文尚未保存，原恢复记录继续保留。");
@@ -606,7 +620,9 @@ async function open(resource: string) {
     }
     if (targetDraft.pending) {
       let outcome = await request<SaveStatus>("operation", { operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
       if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
       if (outcome.status === "committed") { finishPersonalOperation(targetDraft.pending.operationId, "committed"); targetDraft = applySaveResult(targetDraft, targetDraft.pending.source); recoveredSave = true; }
       else if (["cancelled", "resolved"].includes(outcome.status)) { finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved"); delete targetDraft.pending; }
     }
@@ -649,11 +665,18 @@ async function save() {
   const sent = draft.source;
   const epoch = requestEpoch;
   const op = crypto.randomUUID();
-  const exactRequest = freezeHostedSave(draft, doc.sessionId, doc.baseId, op);
+  const selected = doc;
+  // Freeze the exact wire independently of the mutable editor before hashing.
+  const frozen = freezeOriginalAttempt(freezeHostedSave(draft, doc.sessionId, doc.baseId, op), "save");
+  const exactRequest = JSON.parse(frozen.wire);
+  await source.beginPersonalSave(op, sent);
+  if (epoch !== requestEpoch || doc !== selected || !draft) { source.settlePersonalSave(op, false); return; }
+  draft.source = source.value;
   draft.pending = {operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged(); knowledgeAuthorChanged();
   try {
     const result = await request<SaveStatus>("save",exactRequest);
-    if (epoch !== requestEpoch || !doc || !draft) return;
+    if (epoch !== requestEpoch || doc !== selected || !draft) return;
+    checkedSaveStatus(result, op, selected.resource);
     if (result.status !== "committed") { status("保存尚未确认，请核对原操作结果。"); return; }
     doc.baseId = result.baseId!; doc.source = sent;
     finishPersonalOperation(op, "committed");
@@ -663,7 +686,11 @@ async function save() {
     // Network/unknown failure keeps the exact original ID until status lookup.
     if (error instanceof HostedError && error.http === 409) {
       let result = await request<SaveStatus>("operation",{operationId:op});
-      if (["notRegistered","notCommitted"].includes(result.status)) result = await request<SaveStatus>("operation/settle",{resource:doc!.resource,operationId:op});
+      if (epoch !== requestEpoch || doc !== selected || !draft) throw error;
+      checkedSaveStatus(result, op, selected.resource);
+      if (["notRegistered","notCommitted"].includes(result.status)) result = await request<SaveStatus>("operation/settle",{resource:selected.resource,operationId:op});
+      if (epoch !== requestEpoch || doc !== selected || !draft) throw error;
+      checkedSaveStatus(result, op, selected.resource);
       if (result.status === "cancelled") { finishPersonalOperation(op, "cancelled"); delete draft.pending; compareRequired = true; }
     }
     retain(); throw error;

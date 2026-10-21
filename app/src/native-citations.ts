@@ -1,3 +1,4 @@
+import type { AuthorInputSession } from "./author-input";
 import { action, ui } from "./data-panel";
 
 export type CitationForm = "normal" | "prose" | "author" | "year" | "full" | "none";
@@ -36,28 +37,28 @@ export function citationCandidateKey(data: NativeCitationSnapshot, work: string)
 const forms: [string, string][] = [["normal", "普通"], ["prose", "叙述式"], ["author", "仅作者"], ["year", "仅年份"], ["full", "完整条目"], ["none", "仅加入文献表"]];
 function select(values: [string, string][], value: string, label: string): HTMLSelectElement { const control = ui("select", "data-input"); control.setAttribute("aria-label", label); for (const [key, text] of values) { const option = ui("option", "", text); option.value = key; control.append(option); } control.value = value; return control; }
 function input(value: string, label: string): HTMLInputElement { const control = ui("input", "data-input"); control.value = value; control.setAttribute("aria-label", label); control.placeholder = label; return control; }
-export function renderNativeCitations(container: HTMLElement, data: NativeCitationSnapshot | undefined, state: NativeCitationInputs, host: { writable: boolean; at(): number; perform(title: string, intent: Record<string, unknown>): Promise<unknown>; select(range: NativeCitationRange): void; navigate(reference: string): void; repaint(): void }): void {
+export function renderNativeCitations(container: HTMLElement, data: NativeCitationSnapshot | undefined, state: NativeCitationInputs, host: { inputs?: AuthorInputSession; writable: boolean; at(): number; perform(title: string, intent: Record<string, unknown>): Promise<unknown>; select(range: NativeCitationRange): void; navigate(reference: string): void; repaint(): void }): void {
   if (!data) { container.append(ui("p", "hint", "当前引用目录不可用，请刷新当前获权知识信息。")); return; }
   if(state.sourceHash!==data.editor.sourceHash){state.target="";state.sourceHash=data.editor.sourceHash;}
   const run = async (title: string, intent: Record<string, unknown>): Promise<void> => { await host.perform(title, { ...intent, generation: data.generation }); };
   container.append(ui("p", "hint", data.coverage === "partial" ? "当前获权引用目录部分可用；未发现不代表全库没有引用。" : "当前获权范围已读取。"));
-  const mode = select([["link", "普通笔记链接"], ["citation", "正式文献引用"], ["reference", "本篇交叉引用"]], state.mode, "插入引用类型"); mode.onchange = () => { state.mode = mode.value; host.repaint(); }; container.append(mode);
-  const form = select(forms, state.form, "引用形式"); form.onchange = () => { state.form = form.value as CitationForm; };
-  const supplement = input(state.supplement, "页码或章节补充（纯文字）"); supplement.oninput = () => { state.supplement = supplement.value; };
-  const display = input(state.text, "自定义显示文字（空值使用当前标题）"); display.oninput = () => { state.text = display.value; };
+  const mode = select([["link", "普通笔记链接"], ["citation", "正式文献引用"], ["reference", "本篇交叉引用"]], state.mode, "插入引用类型"); mode.onchange = () => { if (!mode.isConnected) return; host.inputs?.invalidate("insert"); state.mode = mode.value; host.repaint(); }; container.append(mode);
+  const form = select(forms, state.form, "引用形式"); form.onchange = () => { if (form.isConnected === false) return; state.form = form.value as CitationForm; };
+  const supplement = input(state.supplement, "页码或章节补充（纯文字）"); host.inputs?.bind(supplement, "insert", [{kind:"member",key:"supplement"}]); supplement.oninput = () => { if (!supplement.isConnected) return; state.supplement = supplement.value; };
+  const display = input(state.text, "自定义显示文字（空值使用当前标题）"); host.inputs?.bind(display, "insert", [{kind:"member",key:"display"}]); display.oninput = () => { if (!display.isConnected) return; state.text = display.value; };
   if (state.mode !== "reference") {
     const search = input(state.search, "搜索获权笔记或论文"); search.oninput = () => { state.search = search.value; const term = search.value.toLocaleLowerCase(); for (const option of choice.options) option.hidden = !!option.value && !option.text.toLocaleLowerCase().includes(term); };
     const choices = data.choices.filter(choice => !state.search || choice.title.toLocaleLowerCase().includes(state.search.toLocaleLowerCase()) || choice.reference === state.work);
     const choice = select([["", "选择目标"], ...choices.map(choice => [choice.reference, choice.title] as [string, string])], state.work, "笔记或文献目标");
-    const reason = ui("p", "hint"); const key = input(state.key, "原生引用键（已有绑定优先复用）"); key.oninput = () => { state.key = key.value; };
+    const reason = ui("p", "hint"); const key = input(state.key, "原生引用键（已有绑定优先复用）"); host.inputs?.bind(key, "insert", [{kind:"member",key:"key"}]); key.oninput = () => { if (!key.isConnected) return; state.key = key.value; };
     const describe = (): void => { const candidate = data.choices.find(choice => choice.reference === state.work); reason.textContent = state.mode === "citation" ? !candidate?.citationReady ? candidate?.reason || "选择具备获权出版数据的 Work。" : citationCandidateKey(data, state.work).reason || "引用形式独立于样式；实际显示取决于当前出版数据及原生样式。" : "显示文字写入作者源；目标改名后保持原文字。"; insert.disabled = !host.writable || !candidate || state.mode === "citation" && !candidate.citationReady; };
-    choice.onchange = () => { state.work = choice.value; const suggestion = citationCandidateKey(data, state.work); state.key = suggestion.key; key.value = state.key; describe(); };
+    choice.onchange = () => { if (!choice.isConnected) return; host.inputs?.invalidate("insert"); state.work = choice.value; const suggestion = citationCandidateKey(data, state.work); state.key = suggestion.key; host.repaint(); };
     const insert = action(state.mode === "citation" ? "插入正式文献引用" : "插入普通笔记链接", () => run("插入原生引用", state.mode === "citation" ? { kind: "nativeCitationInsert", at: host.at(), work: state.work, key: state.key, form: state.form, supplement: state.supplement } : { kind: "nativeCitationLink", at: host.at(), target: state.work, text: state.text }));
     container.append(search, choice, reason); if (state.mode === "citation") container.append(key, form, supplement); else container.append(display); container.append(insert); describe();
   } else {
-    const targets = select([["", "选择本篇原生目标"], ...data.editor.targets.map(target => [target.label, `${target.kind} · ${target.label}`] as [string, string]), ...(data.unlabelledTargets??[]).map(target=>[`new:${target.range.from}`,`${target.kind} · 补唯一标签：${target.title}`] as [string,string])], state.target, "本篇交叉引用目标"); targets.onchange = () => { state.target = targets.value; host.repaint(); };
-    const referenceForm = select([["normal", "原生编号引用"], ["page", "页码引用（仅实际分页输出）"], ["text", "自定义文字链接"]], state.referenceForm, "交叉引用形式"); referenceForm.onchange = () => { state.referenceForm = referenceForm.value; };
-    const label=input(state.newLabel,"为未标记对象明确填写唯一原生标签");label.oninput=()=>{state.newLabel=label.value;};
+    const targets = select([["", "选择本篇原生目标"], ...data.editor.targets.map(target => [target.label, `${target.kind} · ${target.label}`] as [string, string]), ...(data.unlabelledTargets??[]).map(target=>[`new:${target.range.from}`,`${target.kind} · 补唯一标签：${target.title}`] as [string,string])], state.target, "本篇交叉引用目标"); targets.onchange = () => { if (!targets.isConnected) return; host.inputs?.invalidate("insert"); state.target = targets.value; host.repaint(); };
+    const referenceForm = select([["normal", "原生编号引用"], ["page", "页码引用（仅实际分页输出）"], ["text", "自定义文字链接"]], state.referenceForm, "交叉引用形式"); referenceForm.onchange = () => { if (referenceForm.isConnected === false) return; state.referenceForm = referenceForm.value; };
+    const label=input(state.newLabel,"为未标记对象明确填写唯一原生标签");host.inputs?.bind(label, "insert", [{kind:"member",key:"label"}]);label.oninput=()=>{if(!label.isConnected)return;state.newLabel=label.value;};
     const insert = action("插入本篇交叉引用", () => {const target=(data.unlabelledTargets??[]).find(target=>`new:${target.range.from}`===state.target);return run("插入本篇交叉引用",target?{kind:"nativeReferenceInsertWithLabel",at:host.at(),target:target.range,label:state.newLabel,form:state.referenceForm}:{ kind: "nativeReferenceInsert", at: host.at(), label: state.target, form: state.referenceForm, text: state.text });}); insert.disabled = !host.writable;
     container.append(targets, label, referenceForm, display, ui("p", "hint", "标签必须唯一且有准确来源；补标签与引用进入同一草稿及一次 Undo。新标记目前支持编号／页码引用，自定义文字可在已有标签上插入；流式阅读不提供页码。"), insert);
     const rename=action("预览所选标签改名范围",()=>run("重命名当前作者范围的标签",{kind:"nativeReferenceRename",old:state.target,new:state.newLabel}));rename.disabled=!host.writable||!data.editor.renameAvailable||!state.target||state.target.startsWith("new:");container.append(rename,ui("p","hint","标签改名只覆盖当前作者完整获证范围；其它笔记或外部复制的旧片段地址不保证仍有效。"));
@@ -70,7 +71,7 @@ export function renderNativeCitations(container: HTMLElement, data: NativeCitati
     else if(data.bibliographyOwnership==="unavailable")group.append(ui("p","hint","文献表归属或动态环境未获完整证明；实际原生 key 不按同名猜接此 Work。"));
     if (choice) group.append(action("打开获权目标", () => host.navigate(binding.work)));
     const renameId=`${data.editor.sourceHash}:${binding.key}`;
-    const rename = input(state.rename[renameId] ?? "", `将 ${binding.key} 改名为`); rename.oninput = () => { state.rename[renameId] = rename.value; };
+    const rename = input(state.rename[renameId] ?? "", `将 ${binding.key} 改名为`); host.inputs?.bind(rename, `rename:${renameId}`); rename.oninput = () => { if (!rename.isConnected) return; state.rename[renameId] = rename.value; };
     const apply = action("预览完整改键范围", () => run("重命名当前归属引用键", { kind: "nativeCitationRename", old: binding.key, new: state.rename[renameId] })); apply.disabled = !host.writable || !data.editor.renameAvailable;
     group.append(rename, apply); if (data.editor.renameReason) group.append(ui("p", "hint", data.editor.renameReason));
     for (const slot of binding.authoredSlots) {
@@ -78,9 +79,9 @@ export function renderNativeCitations(container: HTMLElement, data: NativeCitati
       const row = ui("article", "knowledge-card"); row.append(action(`定位源码：${slot.key}`, () => host.select(slot.range)), ui("p", "hint", `形式：${slot.form ?? (slot.formExplicit ? "显式原生表达（见源码）" : "继承原生 set 规则")}；样式：${slot.style ?? (slot.styleExplicit ? "显式原生表达（见源码）" : "继承原生规则 / bibliography")}${slot.form === "none" ? "；仅文献表，不显示正文标记" : ""}`));
       if (!slot.editable) row.append(ui("p", "hint", slot.reason || "此合法原生表达没有安全控件；请从源码编辑。"));
       const type = select([["", "保持当前形式 / 继承规则"], ...forms], values.form, `${slot.key} 引用形式`); const extra = input(values.supplement, `${slot.key} 定位补充`);
-      const update = action("仅更新本次改动参数", () => run("更新一个引用", { kind: "nativeCitationUpdate", range: slot.range, ...(values.form ? { form: values.form } : {}), ...(values.supplementChanged ? { supplement: values.supplement } : {}) }));
-      const enabled = (): void => { update.disabled = !host.writable || !slot.editable || !values.form && !values.supplementChanged; }; type.onchange = () => { values.form = type.value as CitationForm | ""; enabled(); }; extra.oninput = () => { values.supplement = extra.value; values.supplementChanged = true; enabled(); }; enabled();
-      const style = input(values.style, "本引用样式（空值恢复继承；如 apa、ieee、vancouver-superscript）"); style.oninput = () => { values.style = style.value; values.styleChanged=true; }; const updateStyle = action("仅更新此引用样式", () => run("更新一个引用的原生样式", { kind: "nativeCitationStyle", range: slot.range, style: values.style })); updateStyle.disabled = !host.writable || !slot.editable;
+      host.inputs?.bind(extra, `citation:${id}:supplement`); const update = action("仅更新本次改动参数", () => run("更新一个引用", { kind: "nativeCitationUpdate", range: slot.range, ...(values.form ? { form: values.form } : {}), ...(values.supplementChanged ? { supplement: values.supplement } : {}) }));
+      const enabled = (): void => { update.disabled = !host.writable || !slot.editable || !values.form && !values.supplementChanged; }; type.onchange = () => { if (type.isConnected === false) return; values.form = type.value as CitationForm | ""; enabled(); }; extra.oninput = () => { if (!extra.isConnected) return; values.supplement = extra.value; values.supplementChanged = true; enabled(); }; enabled();
+      const style = input(values.style, "本引用样式（空值恢复继承；如 apa、ieee、vancouver-superscript）"); host.inputs?.bind(style, `citation:${id}:style`); style.oninput = () => { if (!style.isConnected) return; values.style = style.value; values.styleChanged=true; }; const updateStyle = action("仅更新此引用样式", () => run("更新一个引用的原生样式", { kind: "nativeCitationStyle", range: slot.range, style: values.style })); updateStyle.disabled = !host.writable || !slot.editable;
       row.append(type, extra, update, style, updateStyle); group.append(row);
     }
     container.append(group);

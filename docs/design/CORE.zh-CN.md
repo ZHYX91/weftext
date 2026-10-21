@@ -99,6 +99,22 @@ v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.js
 
 准备、取消、未知结果查询、安装／恢复及设置同步沿原 Core 操作与对象链。同步传完整 Settings 对象，不按列表项自动合并；历史或部分副本的引用不授予当前导航身份。取消仅能终结未安装的准确原计划，已可能安装则保现场交原恢复；重启不分配替代操作。托管通用设置写入若实际改变该成员，除设置读写权外另需当前 `library.reorderNodes`，并须对每个变更父级有准确匹配的 `navigation.directories` 获权配置；目录成员披露不由重排权扩展到全库，也不授正文／字段／媒体读取。提交及未决操作重验两项资格，成员权撤销也清除旧预览；设置权、字段权或个人排序均不隐含作者重排权。
 
+### 2.5 私有捕获稿与关闭确认
+
+尚未创建的捕获输入由 Core 私有 `capture-drafts/<draftId>.json` 保存，不能伪造已有文件的 FileIdentity 塞进普通 Draft。记录只有 v1：首字段 `scope` 固定设备本人或服务端推导的 actor，以及准确库绑定或明确 `deviceUnassigned`；后者不属于当前打开的库。已选库固定 root 物理身份和 WorkspaceId，父容器保实际稳定引用及其真实目录身份摘要。路径仅用于重新定位；同路径替换库／目录不得复用旧资格，合法同对象移动须重新解析原引用。一条已绑定捕获稿不改绑另一库。
+
+`currentInput` 与不可变 `pending` 同一记录原子替换。名称、标题、正文、位置／参数原文和所有字段控件原文使用显式 UTF-16 code units，保留 lone surrogate、NUL、组合中间输入；标识符仍为合法字符串。合法 native value 仅为可选候选，不能替代所有控件原文，DOM validity 也不能证明字符串可转 UTF-8。形成真实作者源时才严格转换，失败保原 code units，不使用替换字符。类型／字段用稳定 ID，控件地址用 FieldId、值路径和 controlRole，不用 ARIA 文案。恢复稿不附旧 Base、Schema 全文、目录／预览或权限能力。
+
+`revision` 是整记录 CAS，`inputRevision` 单独记录输入变化和同值 ABA，均限制在 JavaScript 准确整数范围。`mutationId` 及命令指纹使最后一笔持久写丢回执后可同号查询／重放；只读恢复查询必须携已冻结的原 typed command 及原 expected revision，不能仅凭同 ID 证明另一命令已保存。同 ID 换命令或旧 revision 不覆盖新稿。负查询仅表示已被后续写替代或未知，不能证明该写从未发生。更新不存在的记录不隐式新建。
+
+首次作者请求发送前可靠固定 pending 的原 operationId、requestKind、准确 JSON wire、该 wire 的 SHA-256 及输入修订；不按新 currentInput 重采原请求。读取顶层身份时只解码操作／目标字段，其余载荷用 serde 的 IgnoredAny 校验语法，原 wire 不转成 Value；因此含 escaped lone surrogate 的原被拒请求仍能保留准确摘要。原提交、原号 status／settle 和 typed resolution 继续归 journal，捕获稿不保存第二份 Receipt 账本。hosted 必须另核当前 actor／原库／批准槽，私有记录或摘要均不授予权限。
+
+正式记录完整上限 16 MiB，每个 local／actor 域最多 128 条、记录与保留暂存合计 64 MiB；最终作者源仍受 2 MiB 限制，wire 最多 3 MiB。本地 capture HTTP 请求另限 16 MiB＋16 KiB。列表在读取正文前累计预算。未发布写位于独立 `capture-staging/<owner>/<draftId>.<stageId>.stage`，失败或中断保留原件及旧正式稿；已识别暂存只计容量、不会被当成正式稿或自动提升。原子发布期间最多额外保留一份旧记录（16 MiB），不声称实际掉电事务保证。未知版本／非闭合编码拒读，不建立旧格式回退。
+
+完整 owner backup 同批认识 capture 路径及同一严格 validator：先在原受保护句柄读有界 scope 头，再只读所选库正文；外库或 device-unassigned 的坏／大正文不进入选中预算。actor 路径由真实 owner 重算，不能借当前 actor 或同 draftId 串户。暂存不是库作者参与者，不伪作已确认稿或提交事实。既有 64 MiB／5000 成员总备份预算及显式恢复限制不变。
+
+`capture_flush_receipt` 只在受保护读回与期望 draftId、recordRevision、inputRevision、lastMutationId 完全一致后返回摘要和原 pending 编号。这是持久快照 ACK，**不是 native ClosePermit**。宿主必须先处理 IME 并冻结输入，再把 ACK 绑定当前 surface／epoch／本地 edit serial；任何新输入、迟到回执或持久失败均拒绝关闭。操作结果 unknown 但完整 pending 已持久时可关闭 UI 后继续恢复，不能因此宣称已提交。真实窗口生命周期和消费者按对应切片验收，不因存储 API 接通而通过 DSK02。
+
 ## 3. 身份、版本与当前读取
 
 保留随机 UUIDv4：WorkspaceId 与各 Node/Resource/Annotation/Directory/Tag ID 使用完整类型化 `EntityRef`，解决改名稳定引用、离线创建及复制独立身份，且不把名字/路径变成身份。UUID 的价值是稳定随机标识，不是安全凭证。Directory/Tag只补导航必需身份，不成为笔记或逐值事实ID。Core 分配新身份；源码/sidecar中的 ID 是声明。已有身份须匹配已接纳创建事实、当前唯一文件绑定和 lifecycle；重复 ID、外部复制带 ID、缺元数据或 partial sync 不自动新建或重发 ID。
