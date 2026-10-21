@@ -32,6 +32,7 @@ export class LatexInsertionPanel {
     const dialog = document.createElement("dialog"); dialog.className = "modal writing-dialog latex-insertion";
     const close = document.createElement("button"); close.type = "button"; close.textContent = "关闭";
     const panel = createLatexMathPanel({
+      authorInputs: this.host.authorInputs?.(basis),
       preview: async result => {
         if (!current()) throw new Error("原笔记或选区依据已变化，请保留输入并重新选择插入位置。");
         const candidate = proposed(result.typst);

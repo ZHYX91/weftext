@@ -232,6 +232,7 @@ export function convertLatexMath(original: string, options: LatexMathOptions = {
 
 export type ConvertedLatexMath = Extract<LatexMathConversion, { ok: true }>;
 export interface LatexMathPanelHost {
+  authorInputs?: import("./author-input").AuthorInputSession;
   /** Insert through the existing editor Draft/Undo command; do not mutate a second formula authority. */
   apply(result: ConvertedLatexMath): void | Promise<void>;
   /** Optional real Typst rendering. Return only a trusted local node or plain text; input is never HTML. */
@@ -258,7 +259,7 @@ export function createLatexMathPanel(host: LatexMathPanelHost): LatexMathPanel {
   let generation = 0, current: ConvertedLatexMath | null = null, disposed = false, applying = false;
   confirm.disabled = true;
   const invalidate = (): void => { generation++; current = null; confirm.disabled = true; source.textContent = ""; rendered.replaceChildren(); status.textContent = "输入已变化，请重新转换并查看预览。"; };
-  input.oninput = invalidate; mode.onchange = invalidate;
+  host.authorInputs?.bind(input, "latex"); input.oninput = invalidate; mode.onchange = invalidate;
   convert.onclick = () => { void (async () => {
     if (applying || disposed) return;
     const request = ++generation, result = convertLatexMath(input.value, { display: mode.value === "display" });
@@ -279,5 +280,5 @@ export function createLatexMathPanel(host: LatexMathPanelHost): LatexMathPanel {
     finally { applying = false; if (!disposed) { input.readOnly = false; mode.disabled = false; convert.disabled = false; cancel.disabled = false; } }
   })(); };
   cancel.onclick = () => { if (!applying) { invalidate(); status.textContent = "已取消本次插入；原始 LaTeX 已保留，草稿未改动。"; host.cancel?.(); } };
-  return { element, setInput(value, display = false) { if (applying) throw new Error("正在插入公式，不能替换本次输入。"); input.value = value; mode.value = display ? "display" : "inline"; invalidate(); }, destroy() { disposed = true; generation++; input.oninput = null; mode.onchange = null; convert.onclick = confirm.onclick = cancel.onclick = null; element.remove(); } };
+  return { element, setInput(value, display = false) { if (applying) throw new Error("正在插入公式，不能替换本次输入。"); input.value = value; mode.value = display ? "display" : "inline"; invalidate(); }, destroy() { disposed = true; host.authorInputs?.retire(); generation++; input.oninput = null; mode.onchange = null; convert.onclick = confirm.onclick = cancel.onclick = null; element.remove(); } };
 }

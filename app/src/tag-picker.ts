@@ -20,6 +20,6 @@ export function tagPicker(tree: TagTree, options: TagPickerOptions): HTMLElement
     full.disabled = !selected || !tree.byRef.has(selected); path.textContent = selected && tree.byRef.has(selected) ? tree.label(selected) : "";
   };
   search.oninput = () => { offset = 0; render(); }; previous.onclick = () => { offset -= 100; render(); }; next.onclick = () => { offset += 100; render(); };
-  select.onchange = () => { selected = select.value; options.changed(selected || null); render(); }; full.onclick = () => { path.textContent = tree.label(selected, true); };
+  select.onchange = () => { if (select.isConnected === false) return; selected = select.value; options.changed(selected || null); render(); }; full.onclick = () => { path.textContent = tree.label(selected, true); };
   host.append(search, select, previous, next, status, full, path); render(); return host;
 }

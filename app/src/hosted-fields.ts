@@ -1,3 +1,4 @@
+import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, emptyNativeValue, formatNativeValue, ui, valueEditor, type Cell, type DataSchema, type NativeValue, type Shape, type FormReferences } from "./data-panel";
 import { hostedCachePrefix } from "./hosted-state";
 import { TagTree } from "./tag-tree";
@@ -15,6 +16,7 @@ const schema: DataSchema = { definitions: {}, fields: [], types: [], aliases: {}
 
 export class HostedFields {
   private epoch = 0;
+  private inputScopes: AuthorInputScopes;
   private prefix = "";
   private selected?: Grant;
   private profile?: Profile;
@@ -32,11 +34,11 @@ export class HostedFields {
   private readonly editor = ui("section");
   private readonly message = ui("p", "hint");
   private readonly results = ui("section");
-  constructor(private host: HTMLElement, private request: Request, private onQuery?: (id: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, private changed?: () => void) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private onQuery?: (id: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, private changed?: () => void, authorInputs?: AuthorInputFactory) { this.inputScopes = new AuthorInputScopes(authorInputs); this.clear(false); }
   canEdit(resource: string, fieldId: string): boolean { return this.grants.some(grant => grant.resource === resource && grant.fieldId === fieldId && grant.write); }
   async openGranted(resource: string, fieldId: string): Promise<void> { const grant = this.grants.find(grant => grant.resource === resource && grant.fieldId === fieldId && grant.write); if (!grant) throw new Error("此字段没有独立写入权限"); await this.run(() => this.open(grant)); this.host.scrollIntoView({ block: "start" }); this.editor.querySelector<HTMLElement>("input,select,textarea")?.focus({ preventScroll: true }); }
   clear(removeCache = true) {
-    this.epoch++; this.profile = undefined; this.selected = undefined; this.draft = undefined; this.references = { nodes: [], state: "unavailable", messages: [] }; this.tagCatalog = undefined; this.verifiedTagOperation = undefined;
+    this.inputScopes.clear(); this.epoch++; this.profile = undefined; this.selected = undefined; this.draft = undefined; this.references = { nodes: [], state: "unavailable", messages: [] }; this.tagCatalog = undefined; this.verifiedTagOperation = undefined;
     this.grants = []; this.busy = false; this.form = undefined; this.formDraft = undefined; this.unreadableDraft = undefined; this.picker.replaceChildren(); this.editor.replaceChildren(); this.results.replaceChildren();
     this.host.replaceChildren(); this.host.hidden = true; this.prefix = "";
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-field:")) sessionStorage.removeItem(key);
@@ -102,7 +104,7 @@ export class HostedFields {
   }
   private async open(grant: Grant) {
     if (!grant) return;
-    this.retain();
+    this.retain(); this.inputScopes.clear();
     const epoch = this.epoch;
     const stored = sessionStorage.getItem(this.key(grant));
     this.selected = grant; this.profile = undefined; this.draft = undefined; this.unreadableDraft = undefined; this.tagCatalog = undefined; this.verifiedTagOperation = undefined;
@@ -131,6 +133,7 @@ export class HostedFields {
       })); return;
     }
     if (!draft || !this.selected) return;
+    const selected = this.selected, epoch = this.epoch, inputs = this.inputScopes.get(draft, { kind: "field", resource: selected.resource, fieldId: selected.fieldId }, () => this.epoch === epoch && this.draft === draft && this.selected === selected);
     this.editor.append(ui("h3", "", `${this.selected.resource} · ${profile?.field.key ?? this.selected.fieldId}`));
     this.editor.append(ui("p", "", profile ? `当前字段：${this.cellText(profile.field.cell)}` : "当前字段未读取成功；保留的输入与原操作仍可核对。"));
     const form = ui("fieldset"); form.disabled = this.busy || !profile?.field.writable || !!draft.pending || !!draft.tagCreation;
@@ -138,7 +141,7 @@ export class HostedFields {
     if (shape) form.append(valueEditor(shape, draft.value, schema, value => {
       draft.value = value;
       try { this.retain(); this.message.textContent = "字段输入已保留，尚未保存。"; } catch { this.message.textContent = "无法保留恢复信息，请先复制输入。"; }
-    }, "字段输入", 0, this.references));
+    }, "字段输入", 0, this.references, inputs ? { session: inputs, slot: "value", path: [] } : undefined));
     else form.append(ui("pre", "", formatNativeValue(draft.value)));
     if (profile?.field.nullable) form.append(action("设为空值", () => { draft.value = { kind: "none" }; this.retain(); this.render(); }));
     this.editor.append(form);
@@ -185,7 +188,7 @@ export class HostedFields {
   private renderTagCreation(): void {
     const draft = this.draft!, profile = this.profile, section = ui("section"); section.append(ui("h3", "", "新建标签并首次赋值 · 同一原操作")); draft.newTag ??= { displayName: "", parentRef: null };
     const form = ui("fieldset"); form.disabled = this.busy || !!draft.pending || !!draft.tagCreation || !profile?.field.writable || this.compare;
-    const name = ui("input", "data-input"); name.setAttribute("aria-label", "新建并赋值标签名称"); name.value = draft.newTag.displayName; const duplicateNames = ui("p", "hint"); const names = () => { const count = this.tagCatalog?.tags.items.filter(tag => tag.displayName === name.value).length ?? 0; duplicateNames.textContent = count ? `已有 ${count} 个同名标签，准备后仍可明确创建新身份，不合并。请先在选择器中核对。` : ""; }; name.oninput = () => { draft.newTag!.displayName = name.value; this.retain(); names(); }; names(); form.append(name, duplicateNames);
+    const name = ui("input", "data-input"); name.setAttribute("aria-label", "新建并赋值标签名称"); name.value = draft.newTag.displayName; const selected = this.selected!, epoch = this.epoch; this.inputScopes.get(draft, { kind: "field", resource: selected.resource, fieldId: selected.fieldId }, () => this.epoch === epoch && this.draft === draft && this.selected === selected)?.bind(name, "new-tag-name"); const duplicateNames = ui("p", "hint"); const names = () => { const count = this.tagCatalog?.tags.items.filter(tag => tag.displayName === name.value).length ?? 0; duplicateNames.textContent = count ? `已有 ${count} 个同名标签，准备后仍可明确创建新身份，不合并。请先在选择器中核对。` : ""; }; name.oninput = () => { draft.newTag!.displayName = name.value; this.retain(); names(); }; names(); form.append(name, duplicateNames);
     if (this.references.tagTree) form.append(tagPicker(this.references.tagTree, { label: "首次赋值新标签的父级", value: draft.newTag.parentRef ?? "", root: true, changed: parentRef => { draft.newTag!.parentRef = parentRef; this.retain(); } }));
     else form.append(ui("p", "hint", "完整标签结构不可用；保留字段输入，暂停新建并赋值。"));
     const prepare = action("预览新建并赋值", () => this.run(async () => {

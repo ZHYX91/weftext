@@ -1,35 +1,58 @@
 import { RecoveryTextCache, type StoragePort } from "./recovery-text-cache";
-import { hasPersonalInput, inputTexts, type InputOrigin, type InputPiece } from "./source-input-origin";
+import { hasPersonalInput, inputTexts, type InputOrigin, type InputPiece, type PendingInputCheckpoint, type PersonalText } from "./source-input-origin";
+import type { AuthorInputOwner, ValuePath } from "./author-input";
 
 export interface PersonalInputRecord {
-  id: string; resource: string; reference?: string; baseHash?: string; origin: InputOrigin;
+  id: string; owner: Exclude<AuthorInputOwner, { kind: "capture" }>; slot?: string; path?: readonly ValuePath[];
+  baseHash?: string; origin: InputOrigin; candidate?: PendingInputCheckpoint;
   pending?: { operationId: string; status: "unresolved" | "committed" | "cancelled" | "resolved" };
   sequence: number;
 }
 type PersonalInputUpdate = Omit<PersonalInputRecord, "sequence">;
-interface Records { version: 1; records: PersonalInputRecord[] }
+interface Records { version: 2; records: PersonalInputRecord[] }
 const invalid = () => new Error("本人输入恢复记录无法完整读取；原件保留，未采用旧正文或资格。");
 const integer = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0;
 function mapTexts(value: unknown, convert: (value: unknown, key: string) => unknown): Records {
   const data = value as Records;
-  if (!data || data.version !== 1 || !Array.isArray(data.records) || data.records.length > 128) throw invalid();
+  if (!data || data.version !== 2 || !Array.isArray(data.records) || data.records.length > 128) throw invalid();
   const ids = new Set<string>();
-  return { version: 1, records: data.records.map(record => {
-    if (!record || typeof record.id !== "string" || !/^[a-zA-Z0-9:-]{1,96}$/.test(record.id) || ids.has(record.id) || typeof record.resource !== "string" || !record.resource || !integer(record.sequence)) throw invalid();
+  return { version: 2, records: data.records.map(record => {
+    if (!record || typeof record.id !== "string" || !/^[a-zA-Z0-9:-]{1,128}$/.test(record.id) || ids.has(record.id) || !integer(record.sequence)) throw invalid();
     ids.add(record.id);
-    if (record.reference !== undefined && (typeof record.reference !== "string" || !record.reference.startsWith("weftext-node://")) || record.baseHash !== undefined && !/^[a-f0-9]{64}$/.test(record.baseHash)) throw invalid();
-    const origin = record.origin;
+    const string = (value: unknown, max = 4096): string => { if (typeof value !== "string" || !value || value.length > max) throw invalid(); return value; };
+    const rawOwner = record.owner; let owner: PersonalInputRecord["owner"];
+    if (!rawOwner || typeof rawOwner !== "object") throw invalid();
+    switch (rawOwner.kind) {
+      case "body": owner = { kind: "body", resource: string(rawOwner.resource), ...(rawOwner.reference ? { reference: string(rawOwner.reference) } : {}) }; if (owner.reference && !owner.reference.startsWith("weftext-node://")) throw invalid(); break;
+      case "field": owner = { kind: "field", resource: string(rawOwner.resource), fieldId: string(rawOwner.fieldId) }; break;
+      case "review": owner = { kind: "review", resource: string(rawOwner.resource), ...(rawOwner.annotationId ? { annotationId: string(rawOwner.annotationId) } : {}), ...(rawOwner.asset ? { asset: string(rawOwner.asset) } : {}), ...(rawOwner.revision ? { revision: string(rawOwner.revision) } : {}) }; break;
+      case "library": owner = { kind: "library", role: string(rawOwner.role, 128) }; break;
+      case "registry": owner = { kind: "registry", target: string(rawOwner.target) }; break;
+      default: throw invalid();
+    }
+    if (record.slot !== undefined && (typeof record.slot !== "string" || record.slot.length > 4096) || record.path !== undefined && (!Array.isArray(record.path) || record.path.length > 32)) throw invalid();
+    const path = record.path?.map(part => { if (part.kind === "member") return { kind: "member" as const, key: string(part.key) }; if (part.kind === "index" && integer(part.index)) return { kind: "index" as const, index: part.index }; throw invalid(); });
+    if (record.baseHash !== undefined && !/^[a-f0-9]{64}$/.test(record.baseHash)) throw invalid();
+    const readOrigin = (origin: InputOrigin, scope: string): InputOrigin => {
     if (!origin || !integer(origin.baseLength) || !integer(origin.revision) || !Array.isArray(origin.pieces) || !Array.isArray(origin.detached) || origin.pieces.length > 100000 || origin.detached.length > 10000) throw invalid();
     const pieces = origin.pieces.map((piece, index): InputPiece => {
       if (!piece || typeof piece !== "object") throw invalid();
-      if ("text" in piece) return { text: convert(piece.text, `${record.id}/piece/${index}`) as string };
+      if ("text" in piece) return { text: convert(piece.text, `${record.id}/${scope}/piece/${index}`) as string };
       if ("base" in piece && integer(piece.base) && integer(piece.length) && piece.base + piece.length <= origin.baseLength) return { base: piece.base, length: piece.length };
       if ("opaque" in piece && integer(piece.opaque)) return { opaque: piece.opaque };
       throw invalid();
     });
+    const texts = (entries: PersonalText[] | undefined, name: string): PersonalText[] => {
+      if (entries === undefined) return []; if (!Array.isArray(entries) || entries.length > 10000) throw invalid();
+      return entries.map(entry => { if (!entry || typeof entry.id !== "string" || !/^[a-zA-Z0-9:-]{1,128}$/.test(entry.id) || !integer(entry.revision)) throw invalid(); return { id: entry.id, revision: entry.revision, text: convert(entry.text, `${record.id}/${scope}/${name}/${entry.id}`) as string }; });
+    };
+    return { baseLength: origin.baseLength, revision: origin.revision, pieces, detached: texts(origin.detached, "detached"), copyOnly: texts(origin.copyOnly, "copy") };
+    };
     const pending = record.pending;
     if (pending && (typeof pending.operationId !== "string" || !pending.operationId || !["unresolved", "committed", "cancelled", "resolved"].includes(pending.status))) throw invalid();
-    return { id: record.id, resource: record.resource, ...(record.reference ? { reference: record.reference } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), sequence: record.sequence, origin: { baseLength: origin.baseLength, revision: origin.revision, pieces, detached: origin.detached.map(entry => { if (!entry || typeof entry.id !== "string" || !/^[a-zA-Z0-9:-]{1,96}$/.test(entry.id)) throw invalid(); return { id: entry.id, text: convert(entry.text, `${record.id}/detached/${entry.id}`) as string }; }) }, ...(pending ? { pending: { operationId: pending.operationId, status: pending.status } } : {}) };
+    const candidate = record.candidate;
+    if (candidate && (owner.kind !== "body" || candidate.operationId !== pending?.operationId || candidate.baseHash !== undefined && !/^[a-f0-9]{64}$/.test(candidate.baseHash))) throw invalid();
+    return { id: record.id, owner, ...(record.slot !== undefined ? { slot: record.slot } : {}), ...(path ? { path } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), sequence: record.sequence, origin: readOrigin(record.origin, "confirmed"), ...(candidate ? { candidate: { operationId: candidate.operationId, baseHash: candidate.baseHash, origin: readOrigin(candidate.origin, "candidate") } } : {}), ...(pending ? { pending: { operationId: pending.operationId, status: pending.status } } : {}) };
   }) };
 }
 
@@ -47,8 +70,8 @@ export class PersonalInputRecovery {
     if (!audience) throw invalid(); this.audience = audience;
     let state = this.memory.get(audience);
     if (!state) {
-      try { state = this.cache.read("state") ?? { version: 1, records: [] }; }
-      catch (error) { state = { version: 1, records: [] }; this.readFailures.set(audience, error instanceof Error ? error : invalid()); }
+      try { state = this.cache.read("state") ?? { version: 2, records: [] }; }
+      catch (error) { state = { version: 2, records: [] }; this.readFailures.set(audience, error instanceof Error ? error : invalid()); }
       this.memory.set(audience, state);
     }
     return state;
@@ -60,7 +83,9 @@ export class PersonalInputRecovery {
     const hadRecords = !!state.records.length;
     for (const update of updates) {
       const old = state.records.findIndex(record => record.id === update.id);
-      const record = { ...structuredClone(update), ...(!update.pending && old >= 0 && state.records[old].pending ? { pending: state.records[old].pending } : {}), sequence: (old < 0 ? 0 : state.records[old].sequence) + 1 };
+      let record = { ...structuredClone(update), ...(!update.pending && old >= 0 && state.records[old].pending ? { pending: state.records[old].pending } : {}), sequence: (old < 0 ? 0 : state.records[old].sequence) + 1 };
+      const known = old >= 0 ? state.records[old].pending : undefined;
+      if (known && known.operationId === record.pending?.operationId && known.status !== "unresolved") record = settledRecord(record, known.status);
       if (!hasPersonalInput(record.origin) && !record.pending) { if (old >= 0) state.records.splice(old, 1); }
       else if (old < 0) state.records.push(record); else state.records[old] = record;
     }
@@ -78,7 +103,7 @@ export class PersonalInputRecovery {
   }
   settle(audience: string, record: PersonalInputRecord, status: "committed" | "cancelled" | "resolved"): void {
     const current = this.current(audience, record); if (!current.pending) throw invalid();
-    this.update(audience, [{ ...current, pending: { ...current.pending, status } }]);
+    this.update(audience, [settledRecord(current, status)]);
   }
   remove(audience: string, record: PersonalInputRecord): void {
     const current = this.current(audience, record);
@@ -91,3 +116,8 @@ export class PersonalInputRecovery {
   }
 }
 export function personalInputText(record: PersonalInputRecord): string { return inputTexts(record.origin).join("\n"); }
+function settledRecord<T extends Omit<PersonalInputRecord, "sequence">>(record: T, status: "committed" | "cancelled" | "resolved"): T {
+  if (!record.pending) throw invalid();
+  const { candidate, ...retained } = record;
+  return { ...retained, ...(status === "committed" && candidate ? { baseHash: candidate.baseHash, origin: candidate.origin } : {}), pending: { ...record.pending, status } } as T;
+}

@@ -1,21 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PersonalControlInput, type PersonalControlContext } from "./personal-control-input";
+import { PersonalControlInput } from "./personal-control-input";
+import { captureAuthorInput, type AuthorInputSnapshot, type AuthorInputOwner } from "./author-input";
 
-test("form ownership rejects programmatic resets, stale composition scope and missing edit evidence", () => {
-  class Control { value = "A"; dataset = {}; isConnected = true; readOnly = false; disabled = false; id = ""; type = "text"; selectionStart = 1; selectionEnd = 1; }
-  const previous = [globalThis.HTMLInputElement, globalThis.HTMLTextAreaElement];
-  Object.assign(globalThis, { HTMLInputElement: Control, HTMLTextAreaElement: Control });
-  const listeners = new Map<string, ((event: unknown) => void)[]>(), document = { addEventListener(type: string, listener: (event: unknown) => void) { listeners.set(type, [...listeners.get(type) ?? [], listener]); } };
-  const fire = (control: Control, type: string, data?: string, inputType = "insertText") => { for (const listener of listeners.get(type) ?? []) listener({ target: control, data, inputType }); };
-  let context: PersonalControlContext = { audience: "actor", resource: "one", epoch: 1 }; const saved: { context: PersonalControlContext; text: string }[] = [];
-  try {
-    new PersonalControlInput(document as unknown as Document, () => context, (context, _id, text) => saved.push({ context, text }));
-    const control = new Control(); fire(control, "compositionstart"); control.value = "ASECRETX"; fire(control, "compositionend", "X"); assert.equal(saved.at(-1)?.text, "X");
-    assert.ok(saved.every(item => !item.text.includes("SECRET")));
-    const normal = new Control(); fire(normal, "compositionstart"); normal.value = "A中文"; fire(normal, "input", "中文", "insertCompositionText"); fire(normal, "compositionend", "中文"); assert.equal(saved.at(-1)?.text, "中文");
-    const stale = new Control(); fire(stale, "compositionstart"); const count = saved.length; context = { ...context, resource: "two" }; stale.value = "ABSECRET"; fire(stale, "compositionend", "BSECRET"); assert.equal(saved.length, count);
-    const first = new Control(); first.value = "BASEX"; fire(first, "input", "X"); assert.equal(saved.at(-1)?.text, "X");
-    const reset = new Control(); fire(reset, "beforeinput"); reset.value = "AA"; fire(reset, "input", "A"); reset.value = "AAPROTECTED"; reset.selectionStart = reset.selectionEnd = reset.value.length; fire(reset, "beforeinput"); reset.value += "Z"; fire(reset, "input", "Z"); assert.equal(saved.at(-1)?.text, "A\nZ");
-  } finally { Object.assign(globalThis, { HTMLInputElement: previous[0], HTMLTextAreaElement: previous[1] }); }
-});
+function fixture(run: (f: ReturnType<typeof setup>) => void) {
+  class Control { value = "A"; dataset = {}; isConnected = true; readOnly = false; disabled = false; id = ""; type = "text"; selectionStart = 1; selectionEnd = 1; matches() { return false; } }
+  const previous = [globalThis.HTMLInputElement, globalThis.HTMLTextAreaElement]; Object.assign(globalThis, { HTMLInputElement: Control, HTMLTextAreaElement: Control });
+  function setup() {
+    const listeners = new Map<string, ((event: unknown) => void)[]>(), document = { addEventListener(type: string, listener: (event: unknown) => void) { listeners.set(type, [...listeners.get(type) ?? [], listener]); } };
+    const saved: AuthorInputSnapshot[] = []; let epoch = 1, audience = "alice", resource = "one", producerRevision = 0;
+    const collector = new PersonalControlInput(document as unknown as Document, context => context.epoch === epoch && context.audience === audience, input => { saved.push(structuredClone(input)); });
+    const session = (owner: AuthorInputOwner = { kind: "body", resource }) => { const selected = resource; return collector.session(audience, epoch, owner, () => resource === selected, undefined, () => producerRevision); };
+    const control = (value = "A") => { const c = new Control(); c.value = value; c.selectionStart = c.selectionEnd = value.length; return c as unknown as HTMLInputElement; };
+    const fire = (control: HTMLInputElement, type: string, data?: string, inputType = "insertText") => { for (const listener of listeners.get(type) ?? []) listener({ target: control, data, inputType }); };
+    const type = (c: HTMLInputElement, text: string) => { fire(c, "beforeinput"); c.value = c.value.slice(0, c.selectionStart!) + text + c.value.slice(c.selectionEnd!); c.selectionStart = c.selectionEnd = c.value.length; fire(c, "input", text); };
+    return { saved, collector, session, control, fire, type, actor(next: string) { audience = next; epoch++; }, resource(next: string) { resource = next; }, nextRevision() { producerRevision++; } };
+  }
+  try { run(setup()); } finally { Object.assign(globalThis, { HTMLInputElement: previous[0], HTMLTextAreaElement: previous[1] }); }
+}
+test("unregistered document search, filters and temporary parameters never enter personal recovery", () => fixture(f => { const search = f.control("PRIVATE"); f.type(search, "query"); assert.deepEqual(f.saved, []); }));
+test("only positive actual field owner is retained even when another body is selected", () => fixture(f => { const input = f.control("PRIVATE"); f.session({ kind: "field", resource: "field-B", fieldId: "actual" }).bind(input, "value", [{ kind: "member", key: "name" }]); f.type(input, "X"); assert.equal(f.saved[0].text, "X"); assert.deepEqual(f.saved[0].context.owner, { kind: "field", resource: "field-B", fieldId: "actual" }); assert.ok(!f.saved[0].text.includes("PRIVATE")); }));
+test("programmatic reset protects new baseline while retaining only proved old A and new X", () => fixture(f => { const input = f.control(""); f.session().bind(input, "body"); f.type(input, "A"); input.value = "ASECRET"; input.selectionStart = input.selectionEnd = 7; f.type(input, "X"); assert.equal(f.saved.at(-1)?.text, "A\nX"); }));
+test("first input without beforeinput retains event payload only", () => fixture(f => { const input = f.control("BASE"); f.session().bind(input, "body"); input.value = "BASEX"; f.fire(input, "input", "X"); assert.equal(f.saved.at(-1)?.text, "X"); }));
+test("same-value exact replacement still proves fresh author payload", () => fixture(f => { const input = f.control("PRIVATE"); f.session().bind(input, "body"); input.selectionStart = 0; input.selectionEnd = 3; f.fire(input, "beforeinput"); f.fire(input, "input", "PRI"); assert.equal(f.saved.at(-1)?.text, "PRI"); }));
+test("normal IME proves observed text and unexpected programmatic composition value stays protected", () => fixture(f => { const input = f.control("BASE"); f.session().bind(input, "body"); f.fire(input, "compositionstart"); input.value = "BASE中文"; f.fire(input, "input", "中文", "insertCompositionText"); f.fire(input, "compositionend", "中文"); assert.equal(f.saved.at(-1)?.text, "中文"); const other = f.control("A"); f.session().bind(other, "other"); f.fire(other, "compositionstart"); other.value = "ASECRETX"; f.fire(other, "compositionend", "X"); assert.equal(f.saved.at(-1)?.text, "X"); }));
+test("same DOM A-to-B-to-A during composition is retired through terminal events", () => fixture(f => { const input = f.control(), first = f.session(); first.bind(input, "one"); f.fire(input, "compositionstart"); first.retire(); f.resource("two"); assert.throws(() => f.session().bind(input, "two"), /旧组合/); f.resource("one"); assert.throws(() => f.session().bind(input, "one"), /旧组合/); input.value = "ASECRET"; f.fire(input, "compositionend", "SECRET"); f.fire(input, "input", "SECRET"); assert.deepEqual(f.saved, []); }));
+test("clipboard lease captured before await rejects retired binding and equal-byte owner ABA", () => fixture(f => { const input = f.control(), session = f.session(); session.bind(input, "one"); const lease = captureAuthorInput(input)!; session.invalidate("one"); assert.throws(() => session.bind(input, "one"), /新控件/); session.bind(f.control(), "one"); assert.equal(lease.apply("SECRET"), false); assert.equal(input.value, "A"); assert.deepEqual(f.saved, []); }));
+test("clipboard lease rejects newer input and producer revision, accepting only original live target", () => fixture(f => { const input = f.control(), session = f.session(); session.bind(input, "one"); const old = captureAuthorInput(input)!; f.nextRevision(); assert.equal(old.apply("OLD"), false); const next = captureAuthorInput(input)!; f.type(input, "X"); assert.equal(next.apply("OLD"), false); const current = captureAuthorInput(input)!; assert.equal(current.apply("PASTE"), true); assert.equal(f.saved.at(-1)?.text, "X\nPASTE"); }));
+test("harmless repaint preserves proposal slot ID and previous proved ownership", () => fixture(f => { const session = f.session(), input = f.control(); session.bind(input, "one"); f.type(input, "X"); const first = f.saved.at(-1)!; Object.defineProperty(input, "isConnected", { value: false }); const next = f.control("AX"); session.bind(next, "one"); f.type(next, "Y"); assert.equal(f.saved.at(-1)?.id, first.id); assert.equal(f.saved.at(-1)?.text, "XY"); }));
+test("password, disabled and old actor controls never publish even if mistakenly registered", () => fixture(f => { for (const type of ["password", "search", "hidden"]) { const input = f.control(); input.type = type; f.session().bind(input, type); f.type(input, "SECRET"); } const input = f.control(); f.session().bind(input, "old"); f.actor("bob"); f.type(input, "OLD"); assert.deepEqual(f.saved, []); }));
+test("capture owner requires its own Core sink rather than borrowing current body recovery", () => fixture(f => { assert.throws(() => f.session({ kind: "capture", draftId: "actual" }), /Core/); }));
+
+test("a completed composition still requires a new DOM node for another owner before its terminal input", () => fixture(f => { const input = f.control(), first = f.session(); first.bind(input, "one"); f.fire(input, "compositionstart"); input.value = "A中文"; f.fire(input, "compositionend", "中文"); const count = f.saved.length; input.value = "PROTECTED-B"; assert.throws(() => f.session({kind:"body",resource:"B"}).bind(input, "other"), /新控件/); f.fire(input, "input", "中文"); assert.equal(f.saved.length, count); }));

@@ -3,6 +3,8 @@ export interface HeadingNumberingIntent { scheme: HeadingNumberingScheme; start:
 export interface HeadingNumberingInspection { sourceHash: string; settings: HeadingNumberingIntent | null; editable: boolean; reason: string | null }
 export interface HeadingNumberingPreview { beforeSource: string; afterSource: string; headings?: { text: string; before: string | null; after: string | null }[] }
 export interface NumberingHost {
+  authorInputs?(): import("./author-input").AuthorInputSession | undefined;
+  closeGuard?(guard: () => boolean): () => void;
   source(): string;
   inspection(): HeadingNumberingInspection;
   preview(action: HeadingNumberingIntent): Promise<HeadingNumberingPreview>;
@@ -69,6 +71,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLEleme
 export async function openNumberingPanel(host: NumberingHost): Promise<void> {
   const focus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const controller = new NumberingController(host), dialog = el("dialog"); dialog.className = "modal library-style-panel"; dialog.setAttribute("aria-label", "当前笔记编号控制");
+  const authorInputs = host.authorInputs?.(), stopCloseGuard = host.closeGuard?.(() => dialog.open);
   let composing = false;
   dialog.addEventListener("compositionstart", () => { composing = true; controller.invalidate(); draw(); });
   dialog.addEventListener("compositionend", () => { composing = false; changed(); });
@@ -82,6 +85,7 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
   const start = el("input"); start.type = "number"; start.min = "1"; start.max = "1000000"; start.value = String(controller.action.start); start.setAttribute("aria-label", "文档编号起始值");
   const level = el("input"); level.type = "number"; level.min = "1"; level.max = "6"; level.value = String(controller.action.maxLevel); level.setAttribute("aria-label", "文档编号最大层级");
   const exclude = el("input"); exclude.value = controller.action.excludeLabels.join(", "); exclude.placeholder = "稳定标题标记，用逗号分隔"; exclude.setAttribute("aria-label", "文档编号排除标题标记");
+  authorInputs?.bind(start, "numbering-start"); authorInputs?.bind(level, "numbering-level"); authorInputs?.bind(exclude, "numbering-exclude");
   const message = el("p"); message.setAttribute("role", "status"); const preview = el("div");
   const actions = el("div"); actions.className = "modal-actions";
   const button = (text: string, run: () => void | Promise<void>) => { const b = el("button", text); b.type = "button"; b.className = "button-secondary"; b.onclick = () => { void (async () => { try { if (composing || host.composing?.()) throw new Error("请先完成输入法组合。"); const promise = run(); draw(); await promise; } catch (e) { message.textContent = e instanceof Error ? e.message : String(e); } draw(); })(); }; actions.append(b); return b; };
@@ -104,5 +108,5 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
     }
   }
   dialog.append(title, el("h3", "个人显示"), el("p", "个人辅助序号仅供当前用户导航；不会隐藏作者原有编号、修改源、原生引用或导出。恢复默认只移除此篇个人覆盖。"), personal, defaultLabel, el("h3", "文档编号：单篇原生覆盖"), el("p", "编号方案、起始值及排除项影响真实引用和输出；已有字面前缀保持原文。排除项必须对应当前源中唯一、已有的标题标记。"), scheme, start, level, exclude, preview, message, actions);
-  document.body.append(dialog); const stopObserving = controller.observeSurface(dialog, draw); draw(); dialog.showModal(); await new Promise<void>(resolve => { dialog.addEventListener("close", () => { stopObserving(); controller.cancel(); dialog.remove(); if (focus?.isConnected) focus.focus(); resolve(); }, { once: true }); dialog.addEventListener("cancel", e => { if (controller.busy || composing || host.composing?.()) e.preventDefault(); }); });
+  document.body.append(dialog); const stopObserving = controller.observeSurface(dialog, draw); draw(); dialog.showModal(); await new Promise<void>(resolve => { dialog.addEventListener("close", () => { stopCloseGuard?.(); authorInputs?.retire(); stopObserving(); controller.cancel(); dialog.remove(); if (focus?.isConnected) focus.focus(); resolve(); }, { once: true }); dialog.addEventListener("cancel", e => { if (controller.busy || composing || host.composing?.()) e.preventDefault(); }); });
 }

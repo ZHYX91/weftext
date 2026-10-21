@@ -4,6 +4,7 @@ import type { EverydayCommand } from "./everyday-navigation";
 import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from "./embedded-query";
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
+import type { AuthorInputFactory } from "./author-input";
 import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
 import { createWritingToolbar, createStructureControls, insertWritingLink } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
@@ -37,6 +38,7 @@ export interface HostedEditorQueryHost {
   navigateResource?(reference: string): Promise<void>;
   dependencies?(): HostedQueryDependencies;
   personalInputChanged?(): void;
+  authorInputs?: AuthorInputFactory;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = "", name = ""): HTMLElementTagNameMap[K] { const el = document.createElement(tag); el.textContent = text; el.className = name; return el; }
@@ -93,11 +95,21 @@ export class HostedEditor {
     const editors = [...this.retained].map(([resource, saved]) => ({ resource, editor: saved.editor }));
     if (this.editor) editors.push({ resource: this.resource, editor: this.editor });
     return [
-      ...editors.map(({ resource, editor }) => { const input = editor.personalInput(); return { id: input.id, resource, baseHash: input.baseHash, reference: this.personalReferences.get(resource), origin: input.origin }; }),
-      ...[...this.literalPersonal].map(([id, value]) => ({ id, resource: value.resource, reference: this.personalReferences.get(value.resource), origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id, text: value.text }] : [], revision: value.revision } })),
+      ...editors.map(({ resource, editor }) => { const input = editor.personalInput(); return { ...input, owner: { kind: "body" as const, resource, reference: this.personalReferences.get(resource) }, ...(input.candidate ? { pending: { operationId: input.candidate.operationId, status: "unresolved" as const } } : {}) }; }),
+      ...[...this.literalPersonal].map(([id, value]) => ({ id, owner: { kind: "body" as const, resource: value.resource, reference: this.personalReferences.get(value.resource) }, slot: "literal-pending", origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id, revision: value.revision, text: value.text }] : [], revision: value.revision } })),
     ];
   }
   personalInputReference(resource: string, reference: string): void { this.personalReferences.set(resource, reference); this.queryHost?.personalInputChanged?.(); }
+  async beginPersonalSave(operationId: string, submitted: string): Promise<void> {
+    const editor = this.editor, resource = this.resource, sessionId = this.sessionId;
+    if (!editor || this.paused || this.composing) throw new Error("当前正文输入尚未落定，未开始保存。");
+    await editor.beginPersonalSave(operationId, submitted);
+    if (this.editor !== editor || this.resource !== resource || this.sessionId !== sessionId || this.paused) {
+      editor.settlePersonalSave(operationId, false);
+      throw new Error("原保存编辑器已变化，未将旧基线绑定到新文档。");
+    }
+  }
+  settlePersonalSave(operationId: string, committed: boolean): void { this.editor?.settlePersonalSave(operationId, committed); for (const saved of this.retained.values()) saved.editor.settlePersonalSave(operationId, committed); }
   restorePersonalInput(value: string, origin: InputOrigin, baseHash: string, basis: EmbeddedQueryBasis): void {
     if (!this.editor || this.blocked || this.paused || this.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis)) throw new Error("当前草稿或会话已变化，未覆盖新输入。");
     this.editor.restorePersonalInput(value, origin, baseHash); this.schedule(0);
@@ -171,20 +183,23 @@ export class HostedEditor {
       this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save, () => this.queryHost?.personalInputChanged?.());
       const editor = this.editor;
       this.writing = new WritingController({ editor,
+        authorInputs: () => { const sessionId = this.sessionId; return this.queryHost?.authorInputs?.({ kind: "body", resource, reference: this.personalReferences.get(resource) }, () => this.editor === editor && this.sessionId === sessionId && !this.paused, undefined, () => editor.generation); },
         refreshMap: basis => this.request("editor/map",basis),
         basis: () => ({ sessionId: this.sessionId, source: editor.source, serial: editor.generation }),
         editable: () => this.editor === editor && !this.blocked && this.mode !== "read",
         request: request => this.requestEdit(request), onError: this.error,
         onPendingSource: () => { this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
-        onPersonalInput: (id, text) => {
-          const old = this.literalPersonal.get(id); this.literalPersonal.set(id, { resource, text, revision: (old?.revision ?? 0) + 1 });
+        onPersonalInput: (id, text, revision) => {
+          this.literalPersonal.set(id, { resource, text, revision });
           try { this.queryHost?.personalInputChanged?.(); } catch (error) { this.error(error instanceof Error ? error : new Error(String(error))); }
+          if (!text) this.literalPersonal.delete(id);
         },
         onState: () => {
           this.deferredPaint.flush(() => this.editor === editor ? this.paintBasis() : undefined, () => !!this.writing?.retainInput || !!this.editor?.composing, () => this.paint());
         },
       });
       if (this.queryHost) this.queries = new EmbeddedQueryController({
+        authorInputs: () => { const sessionId = this.sessionId; return this.queryHost?.authorInputs?.({ kind: "body", resource, reference: this.personalReferences.get(resource) }, () => this.editor === editor && this.sessionId === sessionId && !this.paused, undefined, () => editor.generation); },
         catalog: async () => (await this.request<{ formSchema?: import("./data-panel").DataSchema }>("query/catalog")).formSchema ?? null,
         basis: () => ({ sessionId: this.sessionId, source: this.value, serial: this.serial }), mode: () => this.mode,
         editable: () => this.editor === editor && !this.blocked && this.mode !== "read" && !this.writing?.state.composing,

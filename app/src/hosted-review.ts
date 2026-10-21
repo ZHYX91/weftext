@@ -1,3 +1,4 @@
+import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, ui } from "./data-panel";
 import { ProofreadingPanel, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
 import type { KnowledgeAnnotation, KnowledgeContext, KnowledgeIntent } from "./knowledge-panel";
@@ -23,6 +24,14 @@ interface MediaHost { context(): HostedMediaSelection | null; open(asset: string
 /** Discussion drafts and original transactions are independent from source saves. */
 export class HostedReview {
   private epoch = 0;
+  private inputScopes: AuthorInputScopes;
+  private replyScopes = new Map<string, object>();
+  private authorSession(draft: Draft, annotationId?: string) {
+    const resource = this.resource, media = draft.media, epoch = this.epoch; if (!resource) return;
+    let key: object = draft;
+    if (annotationId) { key = this.replyScopes.get(annotationId) ?? {}; this.replyScopes.set(annotationId, key); }
+    return this.inputScopes.get(key, { kind: "review", resource, ...(annotationId ? { annotationId } : {}), ...(media ? { asset: media.asset, revision: media.revision } : {}) }, () => this.epoch === epoch && this.draft === draft && this.resource === resource && draft.media?.asset === media?.asset && draft.media?.revision === media?.revision);
+  }
   private prefix = "";
   private catalog: Catalog[] = [];
   private resource?: string;
@@ -35,7 +44,7 @@ export class HostedReview {
   private editor = ui("section");
   private proofread = ui("section");
   private message = ui("p", "hint");
-  constructor(private host: HTMLElement, private request: Request, private context: () => SourceContext | null, private flush: () => Promise<void>, private select: (from: number, to: number) => void, private changed: (resource: string, sourceChanged: boolean) => void, private media?: MediaHost, private processingDefaults?: () => Promise<ProcessingDefaultsSuggestion>) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private context: () => SourceContext | null, private flush: () => Promise<void>, private select: (from: number, to: number) => void, private changed: (resource: string, sourceChanged: boolean) => void, private media?: MediaHost, private processingDefaults?: () => Promise<ProcessingDefaultsSuggestion>, authorInputs?: AuthorInputFactory) { this.inputScopes = new AuthorInputScopes(authorInputs); this.clear(false); }
   mediaChanged(context: HostedMediaSelection | null) {
     if (!this.draft) return;
     if (context && context.descriptor.owner === this.resource && ["media", "mediaWhole"].includes(this.draft.target)) { this.draft.media = { asset: context.descriptor.asset, resource: context.descriptor.resource, revision: context.descriptor.revision, target: context.target && { ...context.target } }; this.keepInput(); }
@@ -46,7 +55,7 @@ export class HostedReview {
     await this.run(() => this.open(context.descriptor.owner, context.descriptor.asset));
   }
   clear(remove = true) {
-    this.epoch++; this.panel?.dispose(); this.panel = undefined; this.catalog = []; this.resource = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false;
+    this.inputScopes.clear(); this.replyScopes.clear(); this.epoch++; this.panel?.dispose(); this.panel = undefined; this.catalog = []; this.resource = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false;
     this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.proofread.replaceChildren(); this.message.textContent = ""; this.prefix = "";
     if (remove) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-review:")) sessionStorage.removeItem(key);
   }
@@ -69,7 +78,7 @@ export class HostedReview {
   }
   private async open(resource: string, asset?: string) {
     if (!resource) return;
-    this.retain(); this.panel?.dispose(); this.panel = undefined; this.proofread.replaceChildren();
+    this.retain(); this.inputScopes.clear(); this.replyScopes.clear(); this.panel?.dispose(); this.panel = undefined; this.proofread.replaceChildren();
     this.resource = resource; this.profile = undefined; this.draft = undefined; this.unreadable = undefined;
     const raw = sessionStorage.getItem(this.key());
     try { const draft = raw ? JSON.parse(raw) as Draft : newDraft(); if (!draft || typeof draft.body !== "string" || !draft.replies) throw new Error(); this.draft = draft; }
@@ -150,12 +159,12 @@ export class HostedReview {
     if (!draft || !this.resource) return;
     const disabled = this.busy || !!draft.pending;
     const form = ui("fieldset"); form.disabled = disabled || !profile?.rights.write || !profile.basis;
-    const body = ui("textarea"); body.value = draft.body; body.rows = 3; body.setAttribute("aria-label", "批注内容"); body.oninput = () => { draft.body = body.value; this.keepInput(); };
+    const body = ui("textarea"); body.value = draft.body; body.rows = 3; this.authorSession(draft)?.bind(body, "body"); body.setAttribute("aria-label", "批注内容"); body.oninput = () => { draft.body = body.value; this.keepInput(); };
     const purpose = ui("select"); purpose.setAttribute("aria-label", "批注类型");
     for (const [value, label] of [["comment", "讨论"], ["mark", "标记"], ["suggestion", "修改建议"]]) { const o = ui("option", "", label); o.value = value; purpose.append(o); } purpose.value = draft.purpose; purpose.onchange = () => { draft.purpose = purpose.value; this.keepInput(); };
     const target = ui("select"); target.setAttribute("aria-label", "批注目标");
     for (const [value, label] of [["selection", "当前选区或插入点"], ["whole", "整篇笔记"], ["media", "真实媒体区域或区间"], ["mediaWhole", "整份准确媒体资源"]]) { const o = ui("option", "", label); o.value = value; target.append(o); } target.value = draft.target; target.onchange = () => { draft.target = target.value; const current = this.media?.context(); if (current && current.descriptor.owner === this.resource && ["media", "mediaWhole"].includes(draft.target)) draft.media = { asset: current.descriptor.asset, resource: current.descriptor.resource, revision: current.descriptor.revision, target: current.target }; this.keepInput(); this.render(); };
-    const replacement = ui("textarea"); replacement.rows = 2; replacement.value = draft.replacement; replacement.setAttribute("aria-label", "建议替换文字"); replacement.oninput = () => { draft.replacement = replacement.value; this.keepInput(); };
+    const replacement = ui("textarea"); replacement.rows = 2; replacement.value = draft.replacement; this.authorSession(draft)?.bind(replacement, "replacement"); replacement.setAttribute("aria-label", "建议替换文字"); replacement.oninput = () => { draft.replacement = replacement.value; this.keepInput(); };
     const create = action("准备新批注", () => this.run(() => this.prepare("新增批注", { kind: "annotationCreate", body: draft.body, purpose: draft.purpose, replacement: draft.replacement, target: this.target() })));
     const mediaTarget = ["media", "mediaWhole"].includes(draft.target), mediaContext = this.media?.context();
     create.disabled = !profile?.rights.target || (mediaTarget ? !mediaContext || mediaContext.descriptor.owner !== this.resource || profile.media?.asset !== mediaContext.descriptor.asset || profile.media.revision !== mediaContext.descriptor.revision || mediaContext.descriptor.lifecycle !== "live" || !(draft.target === "mediaWhole" ? mediaContext.descriptor.wholeAnnotationReady : mediaContext.descriptor.annotationReady && !!mediaContext.target) : !profile?.rights.sourceRead);
@@ -187,7 +196,7 @@ export class HostedReview {
       for (const reply of annotation.replies ?? []) card.append(ui("p", "", `${reply.author ?? ""}：${reply.body}`));
       if (profile?.rights.write) {
         const controls = ui("fieldset"); controls.disabled = disabled || !profile.basis;
-        const reply = ui("textarea"); reply.rows = 2; reply.setAttribute("aria-label", `回复 ${annotation.id}`); reply.value = draft.replies[annotation.id] ?? ""; reply.oninput = () => { draft.replies[annotation.id] = reply.value; this.keepInput(); };
+        const reply = ui("textarea"); reply.rows = 2; reply.setAttribute("aria-label", `回复 ${annotation.id}`); reply.value = draft.replies[annotation.id] ?? ""; this.authorSession(draft, annotation.id)?.bind(reply, `reply:${annotation.id}`); reply.oninput = () => { draft.replies[annotation.id] = reply.value; this.keepInput(); };
         controls.append(reply, action("准备回复", () => this.run(() => this.prepare("回复批注", { kind: "annotationReply", annotationId: annotation.id, body: draft.replies[annotation.id] ?? "" }))), action(annotation.reviewState === "resolved" ? "准备重新打开讨论" : "准备解决讨论", () => this.run(() => this.prepare("改变讨论状态", { kind: "annotationResolve", annotationId: annotation.id, resolved: annotation.reviewState !== "resolved" }))));
         if (annotation.suggestionState === "pending") {
           controls.append(action("准备拒绝建议", () => this.run(() => this.prepare("拒绝建议", { kind: "annotationReject", annotationId: annotation.id }))));

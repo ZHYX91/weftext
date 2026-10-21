@@ -121,6 +121,49 @@ const toastHost = el("div", "toast-host"); toastHost.setAttribute("aria-live", "
 shell.append(sidebar, workspace); workspace.append(topbar, tabs, workspaceBody, statusbar); workspaceBody.append(content); app.append(shell, toastHost);
 let inventory: Inventory | null = null;
 let documents: LiveDocument[] = [];
+let bodyCloseFrozen = false;
+const bodyOwners = new WeakMap<LiveDocument, { sessionId: string; generation: string }>();
+function bodySnapshot(doc: LiveDocument) {
+  const sessionId = doc.session.opened.sessionId; let owner = bodyOwners.get(doc);
+  if (!owner || owner.sessionId !== sessionId) { owner = { sessionId, generation: crypto.randomUUID() }; bodyOwners.set(doc, owner); }
+  return { doc, sessionId, generation: owner.generation, baseId: doc.session.baseId, source: doc.session.source, serial: doc.session.serial, editorGeneration: doc.editor.generation };
+}
+function currentBody(snapshot: ReturnType<typeof bodySnapshot>): boolean {
+  const { doc } = snapshot;
+  return documents.includes(doc) && bodyOwners.get(doc)?.generation === snapshot.generation && doc.session.opened.sessionId === snapshot.sessionId && doc.session.baseId === snapshot.baseId && doc.session.source === snapshot.source && doc.session.serial === snapshot.serial && doc.editor.generation === snapshot.editorGeneration && doc.editor.source === snapshot.source && !doc.session.savePending && !doc.lastSave && !doc.editor.composing && !doc.writing.state.composing && !doc.writing.state.busy;
+}
+let preparedBody: { request: string; snapshots: ReturnType<typeof bodySnapshot>[] } | undefined;
+function thawBodyClose(): void { bodyCloseFrozen = false; preparedBody = undefined; for (const doc of documents) doc.editor.thawAfterClose(doc.mode === "read" || doc.mode === "write" || readOnlySource(doc)); }
+/** Body-only close preparation. Other producer owners must supply their own
+ * Core proof or block close; this never marks the whole surface ready. */
+export const bodyCloseParticipant = {
+  async prepare(request: object) {
+    preparedBody = undefined; if (bodyCloseFrozen) throw new Error("窗口关闭核对仍冻结，未开始另一轮正文准备。");
+    const owned = [...documents], snapshots: ReturnType<typeof bodySnapshot>[] = [], proofs = [];
+    for (const doc of owned) {
+      doc.writing.assertCloseReady();
+      if (doc.editor.composing || doc.session.savePending || doc.lastSave || doc.queries.hasUnappliedAuthorInputs) throw new Error("正文组合、作者提案或原保存仍待核对，当前窗口继续保留输入。");
+      await doc.writing.settleForSessionChange(); await persistDraft(doc);
+      const snapshot = bodySnapshot(doc);
+      if (doc.session.lastDraftSource !== snapshot.source || doc.session.lastDraftSerial !== snapshot.serial) throw new Error("准备关闭期间又有新输入，未把旧草稿回执当作新输入的保留证明。");
+      const sourceDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(snapshot.source)))].map(value => value.toString(16).padStart(2, "0")).join("");
+      const result = await api<{ sessionId: string; baseId: string; sourceDigest: string; recordDigest: string }>("/api/desktop/document-flush", { sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest });
+      if (!currentBody(snapshot) || !result || result.sessionId !== snapshot.sessionId || result.baseId !== snapshot.baseId || result.sourceDigest !== sourceDigest || typeof result.recordDigest !== "string" || !/^[a-f0-9]{64}$/.test(result.recordDigest)) throw new Error("尚未确认准确正文恢复稿，未放行窗口关闭。");
+      doc.writing.assertCloseReady(); snapshots.push(snapshot);
+      proofs.push({ kind: "document" as const, ownerId: JSON.stringify([doc.session.opened.workspaceId ?? "local", doc.session.opened.nodeId ?? doc.session.path]), ownerGeneration: snapshot.generation, sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest, recordDigest: result.recordDigest });
+    }
+    if (documents.length !== owned.length || owned.some((doc, at) => documents[at] !== doc) || snapshots.some(snapshot => !currentBody(snapshot))) throw new Error("正文对象或输入在准备期间变化，原稿保留，请重新核对关闭。");
+    preparedBody = { request: JSON.stringify(request), snapshots }; return proofs;
+  },
+  freeze(request: object): boolean {
+    if (!preparedBody || preparedBody.request !== JSON.stringify(request) || preparedBody.snapshots.length !== documents.length || preparedBody.snapshots.some((snapshot, at) => documents[at] !== snapshot.doc || !currentBody(snapshot) || snapshot.doc.queries.hasUnappliedAuthorInputs)) return false;
+    try { for (const snapshot of preparedBody.snapshots) snapshot.doc.writing.assertCloseReady(); } catch { return false; }
+    bodyCloseFrozen = true;
+    for (const snapshot of preparedBody.snapshots) if (!snapshot.doc.editor.freezeForClose()) { thawBodyClose(); return false; }
+    return true;
+  },
+  thaw: thawBodyClose,
+};
 let current: LiveDocument | null = null;
 let renderedDocument: LiveDocument | null = null;
 let renderedMode: ViewMode | null = null;
@@ -1035,6 +1078,7 @@ function revealWritingSource(doc: LiveDocument, range: WritingRange): void {
 
 function scheduleDraft(doc: LiveDocument): void { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc).catch(showError); }, 450); }
 async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise<void> {
+  if (bodyCloseFrozen) throw new Error("正文关闭核对已冻结，未启动另一轮恢复写入。");
   clearTimeout(doc.draftTimer);
   const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source; const serial = doc.session.serial;
   const request = doc.draftChain.catch(() => undefined).then(async () => {
@@ -1115,7 +1159,7 @@ async function createNote(): Promise<void> {
   workspaceTools.invalidateQueryEnvironment(opened.root);
   addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
 }
-async function prepareSwitch(): Promise<void> { captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
+async function prepareSwitch(): Promise<void> { if (bodyCloseFrozen) throw new Error("窗口关闭核对已冻结，未切换正文对象。"); captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
 async function openDocument(path: string, root?: string): Promise<void> {
   const existing = documents.find(doc => normalize(doc.session.path) === normalize(path)); if (existing && !existing.sourceTrashed) { await activateDocument(existing); return; }
   const generation=++navigationGeneration;
@@ -1127,6 +1171,7 @@ async function openDocument(path: string, root?: string): Promise<void> {
 }
 function readOnlySource(doc: LiveDocument): boolean { return doc.session.opened.readOnly === true || doc.session.opened.kind === "trash" || doc.session.opened.kind === "managedTrash"; }
 function addDocument(opened: OpenedDocument): void {
+  if (bodyCloseFrozen) throw new Error("窗口关闭核对已冻结，迟到的打开结果未替换正文。");
   const session = new DocumentSession(opened);
   let doc!: LiveDocument;
   const editor = new SourceEditor(session.source, source => { session.edit(source); doc.queries.invalidate(); readingSelection = null; workspaceTools.documentChanged(); if (current === doc) pagedPreview?.invalidate(); scheduleDraft(doc); scheduleRender(doc); if (current === doc) refreshChrome(); }, () => { void saveDocument(doc).catch(showError); });
@@ -1141,7 +1186,7 @@ function addDocument(opened: OpenedDocument): void {
     editor, basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }),
     // A temporary consumer pause cannot revoke pending literal settlement.
     // Only the reviewed placement conflict blocks new native visual actions.
-    editable: () => !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget) && doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
+    editable: () => !bodyCloseFrozen && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget) && doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
     onState: () => {
       if (!doc) return;
       doc.deferredProjection.flush(() => current === doc && renderHost ? projectionPresentation(doc) : undefined, () => doc.writing.retainInput || doc.editor.composing, () => renderProjection(doc));
@@ -1214,6 +1259,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
 }
 
 async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
+  if (bodyCloseFrozen) throw new Error("正文关闭核对已冻结，未创建另一保存操作。");
   if (doc.session.savePending) return;
   if ((doc.sourceTrashed || readOnlySource(doc)) && !path) { toast("笔记已移入回收站，请先恢复或将草稿另存为。", true); return; }
   if (doc.writing.state.composing) { await doc.writing.deferUntilCompositionEnds(() => saveDocument(doc, path)); return; }

@@ -1,12 +1,22 @@
 //! Scope-first capture of the original private recovery records. The only
 //! persisted routing witness is one digest in the original frozen operation.
 use super::*;
+use crate::capture_draft::{self, CaptureLibrary};
 use crate::hosted::{ActorLibraryBinding, ActorLibraryHeader, read_actor_library_header};
 use crate::journal::Plan;
 use std::io::{Seek, SeekFrom};
 
 const BAD_ATTRIBUTES: u32 = 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000;
 const MAX_ROUTING_MEMBERS: usize = 5000;
+const PRIVATE_ROOTS: [&str; 7] = [
+    "journal",
+    "drafts",
+    "draft-history",
+    "actors",
+    "sync",
+    "capture-drafts",
+    crate::device_state::DEVICE_STATE_ROOT,
+];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RecordKind {
@@ -14,6 +24,7 @@ enum RecordKind {
     Draft,
     Actor,
     Output,
+    Capture,
 }
 fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
     let relative = path
@@ -30,6 +41,7 @@ fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
         ["actors", _, "drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "operations", _] => Ok(RecordKind::Actor),
         ["actors", _, "operations", "outputs", _] => Ok(RecordKind::Output),
+        ["capture-drafts", _] | ["actors", _, "capture-drafts", _] => Ok(RecordKind::Capture),
         _ => Err(private_evidence()),
     }
 }
@@ -324,16 +336,9 @@ impl Core {
         let mut base_names = base_entries
             .into_iter()
             .filter(|(name, _)| {
-                [
-                    "journal",
-                    "drafts",
-                    "draft-history",
-                    "actors",
-                    "sync",
-                    crate::device_state::DEVICE_STATE_ROOT,
-                ]
-                .iter()
-                .any(|p| name.to_string_lossy().eq_ignore_ascii_case(p))
+                PRIVATE_ROOTS
+                    .iter()
+                    .any(|p| name.to_string_lossy().eq_ignore_ascii_case(p))
             })
             .collect::<Vec<_>>();
         base_names.sort_by(|a, b| a.0.cmp(&b.0));
@@ -344,17 +349,7 @@ impl Core {
         capture.guards.push(base_guard);
         let mut queue = Vec::new();
         for (name, attrs) in base_names {
-            if ![
-                "journal",
-                "drafts",
-                "draft-history",
-                "actors",
-                "sync",
-                crate::device_state::DEVICE_STATE_ROOT,
-            ]
-            .iter()
-            .any(|p| name == *p)
-            {
+            if !PRIVATE_ROOTS.iter().any(|p| name == *p) {
                 return Err(private_evidence());
             }
             if attrs & BAD_ATTRIBUTES != 0 || attrs & 0x10 == 0 {
@@ -593,6 +588,31 @@ fn classify_record(
     remaining: usize,
     size: u64,
 ) -> Result<(bool, String)> {
+    if record_kind(core, path)? == RecordKind::Capture {
+        let header = capture_draft::read_capture_header(file)?;
+        capture_draft::validate_capture_header_path(path, &core.data_dir, &header)?;
+        let selected = match &header.library {
+            CaptureLibrary::DeviceUnassigned => false,
+            CaptureLibrary::Bound { binding } => {
+                if binding != expected
+                    && (binding.workspace_id == expected.workspace_id
+                        || binding.root.eq_ignore_ascii_case(&expected.root))
+                {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "Capture original library identity differs",
+                    ));
+                }
+                binding == expected
+            }
+        };
+        if selected
+            && (size > remaining as u64 || size > capture_draft::MAX_CAPTURE_RECORD_BYTES as u64)
+        {
+            return Err(backup_budget());
+        }
+        return Ok((selected, serde_json::to_string(&header)?));
+    }
     match read_actor_library_header(file)? {
         ActorLibraryHeader::Bound(binding) => {
             let selected = binding == *expected;
@@ -661,6 +681,18 @@ fn route_selected_bytes(
     expected: &ActorLibraryBinding,
     selected_plans: &BTreeSet<&str>,
 ) -> Result<String> {
+    if record_kind(core, path)? == RecordKind::Capture {
+        let header = capture_draft::read_capture_header(&mut std::io::Cursor::new(bytes))?;
+        capture_draft::validate_capture_header_path(path, &core.data_dir, &header)?;
+        if header.library
+            != (CaptureLibrary::Bound {
+                binding: expected.clone(),
+            })
+        {
+            return Err(private_evidence());
+        }
+        return Ok(serde_json::to_string(&header)?);
+    }
     if record_kind(core, path)? == RecordKind::Journal {
         if !selected_plans.iter().any(|id| {
             path.file_name()
@@ -726,6 +758,19 @@ fn validate_selected_record(
                     return Err(private_evidence());
                 }
             }
+        }
+        return Ok(());
+    }
+    if kind == RecordKind::Capture {
+        let draft = capture_draft::validate_capture_record(path, &core.data_dir, bytes)?;
+        let guard = ParentGuard::acquire(&root.join(".backup-capture-prospective"))?;
+        let expected = ActorLibraryBinding {
+            root: display(&guard.directory_coordinates()?),
+            root_identity: guard.directory_identity()?,
+            workspace_id: Some(workspace_id.into()),
+        };
+        if draft.scope.library != (CaptureLibrary::Bound { binding: expected }) {
+            return Err(private_evidence());
         }
         return Ok(());
     }

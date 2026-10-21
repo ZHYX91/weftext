@@ -1,3 +1,4 @@
+import type { AuthorInputSession } from "./author-input";
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { diagnosticText, fieldNames, formatNativeValue, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls, queryCallControls } from "./query-plan-controls";
@@ -91,9 +92,10 @@ export class EmbeddedQueryRunGate {
 interface QueryPresentation {
   view: OccurrenceView;
   gate: EmbeddedQueryRunGate; result?: QueryResult; resultBasis?: EmbeddedQueryBasis; resultPlan?: QueryPlan;
-  loading: boolean; error?: string; expanded: boolean; builderOpen: boolean; parameters: string; planDraft?: QueryPlan; planBasis?: EmbeddedQueryBasis; autoRunBasis?: EmbeddedQueryBasis;
+  loading: boolean; error?: string; expanded: boolean; builderOpen: boolean; parameters: string; authorInputs?: AuthorInputSession; planDraft?: QueryPlan; planBasis?: EmbeddedQueryBasis; autoRunBasis?: EmbeddedQueryBasis;
 }
 export interface EmbeddedQueryHost {
+  authorInputs?(): AuthorInputSession | undefined;
   preferenceIdentity?(): string | null;
   catalog?(): Promise<DataSchema | null>;
   openDefinition?(owner: string, key: string): Promise<void>;
@@ -133,10 +135,12 @@ export class EmbeddedQueryController {
   private associations = new Map<string, EmbeddedQueryAssociation>();
   constructor(private readonly host: EmbeddedQueryHost) {}
   dispose(): void {
+    for (const state of this.states.values()) state.authorInputs?.retire();
     this.formSchema = null;
     this.invalidate(); this.dialog?.close(); this.dialog?.remove(); this.dialog = null;
     this.discovery = null; this.discoveryBasis = null; this.states.clear(); this.mounts.clear(); this.associations.clear();
   }
+  get hasUnappliedAuthorInputs(): boolean { return !!this.dialog?.open || [...this.states.values()].some(state => !!state.planDraft); }
   get hasQueries(): boolean { return !!this.discovery?.occurrences.length; }
   get occurrences(): readonly EmbeddedQueryOccurrence[] { return this.discovery?.occurrences ?? []; }
   outputSelections(): EmbeddedQuerySelection[] {
@@ -280,15 +284,16 @@ export class EmbeddedQueryController {
   private renderBuilder(mount: HTMLElement, association: EmbeddedQueryAssociation, state: QueryPresentation): void {
     const item = association.occurrence!, plan = state.planDraft ?? structuredClone(item.plan!); state.planDraft = plan; state.planBasis ??= { ...this.host.basis() };
     const builder = element("form", "embedded-query-builder"); builder.append(element("strong", "", "修改此查询定义"));
-    builder.append(plan.advanced?.call ? queryCallControls(plan) : queryPlanControls(plan, this.formSchema, () => {}));
-    const add = (label: string, value: string, update: (value: string) => void, multiline = false): HTMLInputElement | HTMLTextAreaElement => { const field = element("label", "embedded-query-field", label), input = multiline ? element("textarea", "embedded-query-input") : element("input", "embedded-query-input"); input.value = value; input.setAttribute("aria-label", `${item.label} ${label}`); input.oninput = () => update(input.value); field.append(input); builder.append(field); return input; };
+    const inputs = state.authorInputs ??= this.host.authorInputs?.();
+    builder.append(plan.advanced?.call ? queryCallControls(plan, inputs) : queryPlanControls(plan, this.formSchema, () => {}, undefined, inputs));
+    const add = (label: string, value: string, update: (value: string) => void, multiline = false): HTMLInputElement | HTMLTextAreaElement => { const field = element("label", "embedded-query-field", label), input = multiline ? element("textarea", "embedded-query-input") : element("input", "embedded-query-input"); input.value = value; inputs?.bind(input, `query-author:${label}`); input.setAttribute("aria-label", `${item.label} ${label}`); input.oninput = () => update(input.value); field.append(input); builder.append(field); return input; };
     if (!plan.advanced?.call) { add("类型（逗号分隔）", plan.types.join(", "), value => { plan.types = value.split(",").map(item => item.trim()).filter(Boolean); });
     add("条件（CEL）", plan.where ?? "", value => { if (value.trim()) plan.where = value; else delete plan.where; }, true);
     const take = add("显示上限（留空为未设置）", plan.take == null ? "" : String(plan.take), value => { if (!value.trim()) delete plan.take; else plan.take = Number(value); }); if (take instanceof HTMLInputElement) { take.type = "number"; take.min = "1"; take.step = "1"; }
     const descendants = element("input"); descendants.type = "checkbox"; descendants.checked = plan.scope.descendants; descendants.onchange = () => { plan.scope.descendants = descendants.checked; }; const scope = element("label", "embedded-query-field", "包含子目录"); scope.append(descendants); builder.append(scope);
     }
     builder.append(element("p", "embedded-query-help", "应用是一个共享草稿操作，可与源码输入一起撤销；不保存笔记。未改动的原生成员和注释由后端保留。"));
-    const apply = action("应用查询修改", () => this.edit(association, { plan: parseQueryPlan(JSON.stringify(plan)) }, "input.query.builder", state.planBasis).then(() => { state.planDraft = undefined; state.planBasis = undefined; state.builderOpen = false; }), this.host); apply.dataset.queryEdit = "builder"; builder.onsubmit = event => { event.preventDefault(); apply.click(); }; builder.append(apply, action("放弃构建器输入", () => { state.planDraft = undefined; state.planBasis = undefined; state.builderOpen = false; this.refresh(item); }, this.host)); mount.append(builder);
+    const apply = action("应用查询修改", () => this.edit(association, { plan: parseQueryPlan(JSON.stringify(plan)) }, "input.query.builder", state.planBasis).then(() => { state.authorInputs?.retire(); state.authorInputs = undefined; state.planDraft = undefined; state.planBasis = undefined; state.builderOpen = false; }), this.host); apply.dataset.queryEdit = "builder"; builder.onsubmit = event => { event.preventDefault(); apply.click(); }; builder.append(apply, action("放弃构建器输入", () => { state.authorInputs?.retire(); state.authorInputs = undefined; state.planDraft = undefined; state.planBasis = undefined; state.builderOpen = false; this.refresh(item); }, this.host)); mount.append(builder);
   }
   private confirmRemoval(association: EmbeddedQueryAssociation): void {
     const item = association.occurrence; if (!item) return;
@@ -319,8 +324,8 @@ export class EmbeddedQueryController {
   private async editSource(association: EmbeddedQueryAssociation): Promise<void> {
     const item = association.occurrence; if (!item || !this.current(association) || !this.canWrite(association) || this.host.mode() !== "write") return;
     const basis = { ...this.host.basis() }; this.dialog?.close();
-    const dialog = element("dialog", "embedded-query-dialog"), form = element("form"), input = element("textarea", "embedded-query-input embedded-query-source-proposal"), feedback = element("p", "embedded-query-warning"); input.value = item.range.raw; input.rows = 14; input.spellcheck = false; input.setAttribute("aria-label", `${item.label} 尚未应用的原生源码提案`);
+    const dialog = element("dialog", "embedded-query-dialog"), form = element("form"), input = element("textarea", "embedded-query-input embedded-query-source-proposal"), feedback = element("p", "embedded-query-warning"); input.value = item.range.raw; const inputs = this.host.authorInputs?.(); inputs?.bind(input, `query-source:${item.id}`); input.rows = 14; input.spellcheck = false; input.setAttribute("aria-label", `${item.label} 尚未应用的原生源码提案`);
     form.append(element("h2", "", `编辑查询源码 · ${item.label}`), element("p", "embedded-query-help", "此窗口保留尚未应用的提案。取消不改共享草稿；确认只改打开时定位的查询范围，并进入同一撤销历史。"), input, feedback);
-    const buttons = element("div", "embedded-query-heading"), confirm = action("确认应用到草稿", async () => { confirm.disabled = true; try { const replacement = textareaSourceDraft(item.range.raw, input.value); if (replacement !== item.range.raw) await this.edit(association, { replacement }, "input.query.source", basis); dialog.close(); } catch (error) { feedback.textContent = error instanceof Error ? error.message : String(error); } finally { confirm.disabled = false; } }, this.host); confirm.dataset.queryEdit = "source"; buttons.append(action("取消并保留共享草稿", () => dialog.close(), this.host), confirm); form.append(buttons); form.onsubmit = event => { event.preventDefault(); confirm.click(); }; dialog.append(form); document.body.append(dialog); this.dialog = dialog; dialog.addEventListener("close", () => { dialog.remove(); if (this.dialog === dialog) this.dialog = null; }, { once: true }); dialog.showModal(); input.focus();
+    const buttons = element("div", "embedded-query-heading"), confirm = action("确认应用到草稿", async () => { confirm.disabled = true; try { const replacement = textareaSourceDraft(item.range.raw, input.value); if (replacement !== item.range.raw) await this.edit(association, { replacement }, "input.query.source", basis); dialog.close(); } catch (error) { feedback.textContent = error instanceof Error ? error.message : String(error); } finally { confirm.disabled = false; } }, this.host); confirm.dataset.queryEdit = "source"; buttons.append(action("取消并保留共享草稿", () => dialog.close(), this.host), confirm); form.append(buttons); form.onsubmit = event => { event.preventDefault(); confirm.click(); }; dialog.append(form); document.body.append(dialog); this.dialog = dialog; dialog.addEventListener("close", () => { inputs?.retire(); dialog.remove(); if (this.dialog === dialog) this.dialog = null; }, { once: true }); dialog.showModal(); input.focus();
   }
 }
