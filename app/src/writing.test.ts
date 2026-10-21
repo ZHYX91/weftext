@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { history, isolateHistory, undo, redo, undoDepth } from "@codemirror/commands";
 import { applySourcePatches, createSourceState, sourceRevealEffect, sourceRevealExtensions, type SourceEditorEvent, type SourcePatch, type SourceSelection } from "./editor";
-import { encodeWritingLiteral, encodeWritingTableLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult, type WritingTransition } from "./writing";
+import { encodeWritingLiteral, encodeWritingTableLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, writingStructureIndex, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult, type WritingTransition } from "./writing";
 import type { RenderNode } from "./types";
 import { DocumentSession, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
 import { DeferredPaint } from "./deferred-paint";
@@ -321,6 +321,21 @@ test("render grouping uses exact native provenance and rejects duplicate occurre
   assert.deepEqual(groupWritingRenderNodes(tree(nodes), sourceMap, source)[0].memberKeys, ["a", "b", "c"]);
   assert.equal(groupWritingRenderNodes(tree([...nodes, ...nodes]), sourceMap, source).length, 0);
   assert.equal(groupWritingRenderNodes(tree([leaf("wrong", 0, 4, "别的")]), sourceMap, source).length, 0);
+});
+
+test("indexed native grouping distinguishes equal text, preserves render order and rejects corrupt byte addresses", () => {
+  const source = "同😀\n同😀", nativeMap = map(source), first = writingRange(source, 0, 3), second = writingRange(source, 4, 7);
+  nativeMap.literalRegions = [first, second].map(range => ({ range, text: "同😀", role: "body" }));
+  const leaf = (key: string, range: typeof first): RenderNode => ({ key, kind: "text", tag: null, text: "同😀", children: [], attrs: {}, writable: true, origin: { path: "a.typ", ...range, isMain: true, syntaxKind: "Text" } });
+  const tree: RenderNode = { key: "root", kind: "element", tag: "p", text: null, children: [leaf("second", second), leaf("first", first)], attrs: {}, origin: null, writable: false };
+  assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["first"], ["second"]]);
+  nativeMap.literalRegions[0].range = { ...first, to: first.to - 1 };
+  assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["second"]]);
+  nativeMap.literalRegions = [{ range: writingRange(source, 0, 7), text: "同😀同😀", role: "body" }];
+  assert.equal(groupWritingRenderNodes(tree, nativeMap, source).length, 0, "sorting for lookup must never certify reordered output");
+  const original = { kind: "heading", range: first, runIn: false }, other = { kind: "table", range: first, runIn: false };
+  nativeMap.structures = [original, other];
+  assert.equal(writingStructureIndex(nativeMap).get("0:3"), original, "the first native structure remains the owner at a shared range");
 });
 
 test("rectangular TSV validation preserves repeated and empty cell values and refuses partial ragged paste", () => {

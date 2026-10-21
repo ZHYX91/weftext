@@ -4,7 +4,7 @@ import type { EverydayCommand } from "./everyday-navigation";
 import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from "./embedded-query";
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, type WritingMap, type WritingRange } from "./writing";
+import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
 import { createWritingToolbar, createStructureControls, insertWritingLink } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, retireDocumentNotes, type DocumentNotesMount } from "./document-notes";
@@ -339,9 +339,11 @@ export class HostedEditor {
       return;
     }
     if (!current) this.flow.append(node("p", "显示上次预览；旧范围不能用于可视编辑。", "hint"));
-    const groups = current && writing.map ? groupWritingRenderNodes(projection.tree, writing.map, editor.source) : [];
+    const writingMap = writable ? writing.map : null;
+    const structures = writingStructureIndex(writingMap);
+    const groups = writingMap ? groupWritingRenderNodes(projection.tree, writingMap, editor.source) : [];
     const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key,group] as const)));
-    const empty = new Map((current && writing.map ? groupWritingEmptySlots(projection.tree, writing.map, editor.source) : []).map(slot => [slot.nodeKey,slot.region]));
+    const empty = new Map((writingMap ? groupWritingEmptySlots(projection.tree, writingMap, editor.source) : []).map(slot => [slot.nodeKey,slot.region]));
     const input = (label: string, region: Parameters<WritingController["bindLiteral"]>[1]) => { const el = node("textarea", "", "literal-input"); el.rows = 1; el.spellcheck = false; el.setAttribute("aria-label", label); writing.bindLiteral(el, region); return el; };
     let personalHeadingOrdinal = 0;
     const draw = (item: RenderNode): Node => {
@@ -385,8 +387,8 @@ export class HostedEditor {
       if (current && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) el.append(this.button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(this.authoringEnvironment()), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId)));
       const slot = empty.get(item.key); if (writable && slot) el.append(input("编辑空内容", slot));
       if (writable && item.origin?.isMain) {
-        const range = writing.map?.structures.find(s => s.range.utf16From === item.origin!.utf16From && s.range.utf16To === item.origin!.utf16To)?.range;
-        const controls = range && createStructureControls(writing, range, { ...options, renderedTable: el });
+        const structure = structures.get(`${item.origin.utf16From}:${item.origin.utf16To}`);
+        const controls = structure && createStructureControls(writing, structure, { ...options, renderedTable: el });
         if (controls) { const wrapper = node("div"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(el, controls); if (openReference) wrapper.append(openReference); return wrapper; }
       }
       if (openReference) { const wrapper = node("div"); wrapper.append(el, openReference); return wrapper; }

@@ -16,6 +16,8 @@ The **established v0.6 scope is complete for 0.6.0 on Windows/NTFS and has passe
 
 Current status on 2026-10-20: the working tree is being consolidated as `0.6.3-rc.1`, with hierarchical tags, graph/headings, authored order and media thumbnails connected. Whole-version TAG01–10/UX01–12 and final-candidate acceptance remain in progress. Dated earlier-stage descriptions above and below apply to their original point in time, without promoting old passes to current completion.
 
+Stabilization on 2026-10-21: the current candidate is `0.6.3-rc.2`, removing repeated byte encoding, whole-tree scans and per-node complete-source comparisons for near-budget documents. Native copy/real paste from an independent browser HTML producer has separate local and hosted checks. The complete rc.1 automated scope remains a fact of its original artifact. Revalidate this candidate item by item in the same record; these fixes do not automatically close real IME, the original K anomaly or the full reference/performance gates. Other platforms retain the v0.7 acceptance scope.
+
 | Milestone | What users can accomplish | Main requirements and completion conditions |
 | --- | --- | --- |
 | v0.1 Local writing MVP | Create/open a Windows local library and `A/A.typ` notes; browse unmanaged entries; open ordinary `.typ` files outside libraries; source editing, native preview, basic five views, search, basic links, save and recovery. | Bounded slices of RQ01–03,12,22,24–26. Deliver a runnable artifact and test draft retention, refusal to overwrite external changes, Save As, empty documents and safe text editing. Full rich editing, sync and Office are outside this version. |

@@ -12,7 +12,7 @@ import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import { DocumentSession, encodeLiteral, canRebindSaveAs, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
+import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
 import { ensureOfflineFonts } from "./font-readiness";
@@ -884,16 +884,19 @@ function renderProjection(doc: LiveDocument): void {
   }
   const projection = doc.session.projection;
   if (!projection) { const waiting = el("div", "projection-empty"); fillProjectionEmpty(waiting, doc); host.append(waiting); return; }
-  if (!doc.session.projectionCurrent) { const stale = el("div", "preview-stale", projectionStaleMessage(doc)); host.append(stale); }
+  const projectionCurrent = doc.session.projectionCurrent;
+  if (!projectionCurrent) { const stale = el("div", "preview-stale", projectionStaleMessage(doc)); host.append(stale); }
   if (!projection.ok || !projection.tree) {
     const failed = el("div", "projection-empty"); failed.append(icon("alert"), el("h3", "", "草稿暂时无法预览"), el("p", "", "完整输入保留在当前窗口；恢复草稿和保存状态以单独提示为准。可使用源码入口继续编辑。"), button("查看源码", () => changeMode("source"), "button-secondary", "code")); host.append(failed); return;
   }
   let writableCount = 0, personalHeadingOrdinal = 0;
   const renderedTree = projection.tree, renderedSource = projection.source;
   projectionMappings = [];
-  const groups = doc.session.projectionCurrent && doc.writing.map ? groupWritingRenderNodes(projection.tree, doc.writing.map, doc.session.source) : [];
+  const writingMap = doc.mode === "write" && !readOnlySource(doc) && projectionCurrent ? doc.writing.map : null;
+  const structures = writingStructureIndex(writingMap);
+  const groups = writingMap ? groupWritingRenderNodes(projection.tree, writingMap, doc.session.source) : [];
   const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key, group] as const)));
-  const emptySlots = new Map((doc.session.projectionCurrent && doc.writing.map ? groupWritingEmptySlots(projection.tree, doc.writing.map, doc.session.source) : []).map(slot => [slot.nodeKey, slot.region]));
+  const emptySlots = new Map((writingMap ? groupWritingEmptySlots(projection.tree, writingMap, doc.session.source) : []).map(slot => [slot.nodeKey, slot.region]));
   doc.queries.beginProjection(projection.tree, { sessionId: doc.session.opened.sessionId, source: projection.source, serial: projection.serial });
   function draw(node: RenderNode): Node {
     const query = doc.queries.forNode(node); if (query) return query;
@@ -921,7 +924,7 @@ function renderProjection(doc: LiveDocument): void {
     element.setAttribute("data-document-node-key", node.key);
     const semanticRole = node.attrs["data-weftext-role"], noteId = node.attrs["data-weftext-note-id"], targetId = node.attrs["data-weftext-target-id"];
     if (semanticRole === "heading") markPersonalHeading(element, ++personalHeadingOrdinal);
-    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-reference", "endnote-reference"].includes(String(semanticRole))) {
+    if (projectionCurrent && typeof noteId === "string" && ["footnote-reference", "endnote-reference"].includes(String(semanticRole))) {
       element.setAttribute("role", "button"); element.setAttribute("tabindex", "0"); element.setAttribute("aria-label", `查看${semanticRole === "endnote-reference" ? "尾注" : "脚注"}正文与全部标记`);
       const open = () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-reference" ? "endnote" : "footnote", noteId);
       element.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); void open().catch(showError); }, true);
@@ -932,18 +935,18 @@ function renderProjection(doc: LiveDocument): void {
 
     for (const child of node.children ?? []) element.append(draw(child));
     if (node.text) element.append(document.createTextNode(node.text));
-    if (doc.session.projectionCurrent && typeof targetId === "string" && ["figure", "equation"].includes(String(semanticRole))) { const actions = el("span", "document-notes-object-actions"); actions.append(button(semanticRole === "equation" ? "公式编号与题注" : "此对象题注与编号", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), "caption", targetId), "text-button")); element.append(actions); }
-    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) element.append(button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId), "text-button"));
+    if (projectionCurrent && typeof targetId === "string" && ["figure", "equation"].includes(String(semanticRole))) { const actions = el("span", "document-notes-object-actions"); actions.append(button(semanticRole === "equation" ? "公式编号与题注" : "此对象题注与编号", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), "caption", targetId), "text-button")); element.append(actions); }
+    if (projectionCurrent && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) element.append(button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId), "text-button"));
     const empty = emptySlots.get(node.key);
     if (doc.mode === "write" && !readOnlySource(doc) && empty) { const input = el("textarea", "literal-input empty-slot-input"); input.rows = 1; input.setAttribute("aria-label", "编辑空内容"); doc.writing.bindLiteral(input, empty); element.append(input); writableCount++; }
-    if (doc.mode === "write" && !readOnlySource(doc) && doc.session.projectionCurrent && node.origin?.isMain) {
-      const range = doc.writing.map?.structures.find(item => item.range.utf16From === node.origin!.utf16From && item.range.utf16To === node.origin!.utf16To)?.range;
-      if (range) { const controls = createStructureControls(doc.writing, range, { onError: showError, revealSource: slot => revealWritingSource(doc, slot), renderedTable: element }); if (controls) { const wrapper = el("div", "writing-structure"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(element, controls); return wrapper; } }
+    if (writingMap && node.origin?.isMain) {
+      const structure = structures.get(`${node.origin.utf16From}:${node.origin.utf16To}`);
+      if (structure) { const controls = createStructureControls(doc.writing, structure, { onError: showError, revealSource: slot => revealWritingSource(doc, slot), renderedTable: element }); if (controls) { const wrapper = el("div", "writing-structure"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(element, controls); return wrapper; } }
     }
     if (doc.mode === "write" && node.origin?.isMain && !node.writable && ["pre", "table", "figure"].includes(tag)) {
       const wrapper = el("div", "readonly-construct"); wrapper.append(element, button("此部分只读 · 查看源码", () => revealSource(node.origin!), "source-entry", "code")); return wrapper;
     }
-    if (tag === "math" && doc.session.projectionCurrent) {
+    if (tag === "math" && projectionCurrent) {
       const wrapper = el("div", "math-discussion-target");
       const isCurrent = (): boolean => doc === current && doc.session.projection === projection && doc.session.projectionCurrent && sourceConsumersAvailable(doc);
       wrapper.append(element, createMathSelectionControls({ math: node, tree: renderedTree, source: renderedSource,

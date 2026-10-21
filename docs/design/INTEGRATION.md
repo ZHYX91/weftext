@@ -117,6 +117,8 @@ On 2026-10-20, REQUIREMENTS §5.1.1 inserted the hierarchical-tag slice after v0
 
 This round also connects a two-dimensional relationship graph and separate read-only heading structure, authored sibling order in the original Settings, common on-demand thumbnails and their local/hosted consumers. The current target is `0.6.3-rc.1`, with whole-version acceptance in progress. Under WORKFLOW, local checks lead and cloud CI runs in parallel. Complete UX01–12 and affected authorization/synchronization/recovery/Office paths on the same final source/artifact, reusing one candidate record. Real IME, candidate K's original Undo anomaly and whole-version same-task references remain open. Connected code, component checks and targeted passes establish neither whole-version completion nor public release.
 
+The stabilization candidate on 2026-10-21 is `0.6.3-rc.2`. Derived source-byte positions, rendered-leaf indexes and exact structure lookup are reused within one operation/paint; the CodeMirror string updates with its immutable document object. They are neither persistent source, cached Query results nor writing qualification across serials. Native copy from an independent browser HTML page and real paste separately check the common local/hosted table. Candidate evidence and unverified items follow WORKFLOW, retaining actual rc.1 and original K conclusions.
+
 ## 5. Targeted checks for this refinement
 
 - `Inbox/loose.typ` and directories without a primary file remain visible/expandable and Unmanaged. Explicit unmanaged subtrees stop Node discovery, not ordinary browsing. Missing admitted primaries retain identity diagnostics; ignored content never silently becomes Nodes.
