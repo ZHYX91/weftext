@@ -189,6 +189,14 @@ mod platform {
         )
     }
     pub(crate) fn publish_private_create(from: &Path, to: &Path) -> Result<()> {
+        publish_private(from, to, 8)
+    }
+    pub(crate) fn publish_private_replace(from: &Path, to: &Path) -> Result<()> {
+        // REPLACE_EXISTING | WRITE_THROUGH; caller holds the qualified parent
+        // closure and owns the Core lease/CAS for this private record.
+        publish_private(from, to, 1 | 8)
+    }
+    fn publish_private(from: &Path, to: &Path, flags: u32) -> Result<()> {
         let wide = |p: &Path| {
             let absolute = p.as_os_str().to_string_lossy().replace('/', "\\");
             let extended = if absolute.starts_with("\\\\?\\") {
@@ -200,8 +208,8 @@ mod platform {
         };
         let from_wide = wide(from);
         let to_wide = wide(to);
-        // MOVEFILE_WRITE_THROUGH, without REPLACE_EXISTING or COPY_ALLOWED.
-        if unsafe { MoveFileExW(from_wide.as_ptr(), to_wide.as_ptr(), 8) } == 0 {
+        // Never COPY_ALLOWED: publication cannot silently cross volumes.
+        if unsafe { MoveFileExW(from_wide.as_ptr(), to_wide.as_ptr(), flags) } == 0 {
             return Err(std::io::Error::last_os_error().into());
         }
         Ok(())
@@ -1744,10 +1752,16 @@ mod platform {
             "Windows backend required",
         ))
     }
+    pub(crate) fn publish_private_replace(_: &Path, _: &Path) -> Result<()> {
+        Err(CoreError::new(
+            "unsupportedPlatform",
+            "Windows backend required",
+        ))
+    }
 }
 pub(crate) use platform::{
     MultiNamespaceGuard, NamespaceGuard, ParentGuard, attributes, file_coordinates,
-    publish_private_create, stamp,
+    publish_private_create, publish_private_replace, stamp,
 };
 pub(crate) fn namespace_relative_path(path: &Path, prefix: &Path) -> Result<Option<PathBuf>> {
     let mut path = path.components();

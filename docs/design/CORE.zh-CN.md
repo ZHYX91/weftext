@@ -372,6 +372,8 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 ## 10. 最小消费接口
 
+本机设备身份、三项桌面设置及其私有记录/CAS/库备份边界见[本机设备状态](DEVICE-STATE.zh-CN.md)。这层基础不代表原生 UI、提醒或安装已经通过验收。
+
 | 接口 / 对象 | 各 owner 的责任 |
 | --- | --- |
 | `openLogicalCut` / `readEntity` / `readScope` / `validate` → `SourceSnapshot, ReadBasis, DependencySet, LogicalCut` | Core 负责获权字节、当前对象和完整范围；SOURCE解释官方源/值，FEATURES消费同查询范围，EDITOR不从文件再扫描。 |

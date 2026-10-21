@@ -373,6 +373,8 @@ Hosted producers use separate `recognition {run,read,import,download}` grants on
 
 ## 10. Minimal consumer interface
 
+See [local device state](DEVICE-STATE.md) for device identity, three desktop intents and their private-record/CAS/library-backup boundaries. This foundation does not establish native UI, reminder or installation acceptance.
+
 | Interface / objects | Owner responsibilities |
 | --- | --- |
 | `openLogicalCut` / `readEntity` / `readScope` / `validate` → `SourceSnapshot, ReadBasis, DependencySet, LogicalCut` | Core owns authorized bytes, current objects and complete scopes. SOURCE interprets official source/values; FEATURES consumes the same Query scope; EDITOR does not rediscover files. |

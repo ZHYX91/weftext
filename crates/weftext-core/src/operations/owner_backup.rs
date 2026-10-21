@@ -108,6 +108,67 @@ fn qualified_journal_suffix<'a>(id: &str, name: &'a str) -> Result<&'a str> {
     }
     Ok(suffix)
 }
+fn route_device_state(
+    core: &Core,
+    digest: &mut Sha256,
+    capture: &mut PrivateCapture,
+) -> Result<()> {
+    let guard = core.device_namespace(false)?.ok_or_else(private_evidence)?;
+    let folder = core.data_dir.join(crate::device_state::DEVICE_STATE_ROOT);
+    let (mut entries, complete) = guard.directory_entries(128)?;
+    if !complete {
+        return Err(backup_budget());
+    }
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut inspected_bytes = 0u64;
+    for (name, attrs) in &entries {
+        let kind = name
+            .to_str()
+            .and_then(crate::device_state::device_member_kind)
+            .ok_or_else(private_evidence)?;
+        if attrs & (BAD_ATTRIBUTES | 0x10) != 0 {
+            return Err(private_evidence());
+        }
+        let path = folder.join(name);
+        let file_guard = ParentGuard::acquire(&path)?;
+        let mut file = file_guard.open_read_guard_file()?;
+        let actual = stamp(&file)?;
+        inspected_bytes = inspected_bytes
+            .checked_add(actual.size)
+            .filter(|size| *size <= 32 * 1024 * 1024)
+            .ok_or_else(backup_budget)?;
+        if actual.size > kind.max_bytes() as u64 {
+            return Err(backup_budget());
+        }
+        let mut bytes = Vec::new();
+        std::io::Read::by_ref(&mut file)
+            .take(kind.max_bytes() as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > kind.max_bytes() || stamp(&file)? != actual {
+            return Err(private_evidence());
+        }
+        crate::device_state::validate_backup_record(kind, &bytes)?;
+        // Keep the same handles used for validation; no device bytes become
+        // CapturedFile, selected input, or an author's exported backup payload.
+        capture.guards.push(file_guard);
+        capture.handles.push(file);
+    }
+    // Device-global content is excluded, so a resident setting or reminder
+    // ledger update must not invalidate an author's frozen library backup.
+    // Revalidate the closed namespace and strict records above on every pass;
+    // bind only this physical root and its explicit non-library classification.
+    digest_json(
+        digest,
+        &(
+            display(&folder),
+            guard.directory_identity()?,
+            "deviceGlobal:v1",
+        ),
+    )?;
+    capture.guards.push(guard);
+    Ok(())
+}
+
 impl Core {
     pub(super) fn capture_owner_backup_private(
         &self,
@@ -258,13 +319,21 @@ impl Core {
         }
         digest_json(&mut digest, &base_guard.directory_identity()?)?;
         // Credentials, policy, instance lock and unrelated roots are not backup
-        // input. Only the namespace of the five original fact roots matters.
+        // input. Device-global state has its own closed, strictly validated
+        // route and is never selected as author-library backup payload.
         let mut base_names = base_entries
             .into_iter()
             .filter(|(name, _)| {
-                ["journal", "drafts", "draft-history", "actors", "sync"]
-                    .iter()
-                    .any(|p| name.to_string_lossy().eq_ignore_ascii_case(p))
+                [
+                    "journal",
+                    "drafts",
+                    "draft-history",
+                    "actors",
+                    "sync",
+                    crate::device_state::DEVICE_STATE_ROOT,
+                ]
+                .iter()
+                .any(|p| name.to_string_lossy().eq_ignore_ascii_case(p))
             })
             .collect::<Vec<_>>();
         base_names.sort_by(|a, b| a.0.cmp(&b.0));
@@ -275,9 +344,16 @@ impl Core {
         capture.guards.push(base_guard);
         let mut queue = Vec::new();
         for (name, attrs) in base_names {
-            if !["journal", "drafts", "draft-history", "actors", "sync"]
-                .iter()
-                .any(|p| name == *p)
+            if ![
+                "journal",
+                "drafts",
+                "draft-history",
+                "actors",
+                "sync",
+                crate::device_state::DEVICE_STATE_ROOT,
+            ]
+            .iter()
+            .any(|p| name == *p)
             {
                 return Err(private_evidence());
             }
@@ -285,7 +361,9 @@ impl Core {
                 return Err(private_evidence());
             }
             let path = self.data_dir.join(&name);
-            if name == "sync" {
+            if name == crate::device_state::DEVICE_STATE_ROOT {
+                route_device_state(self, &mut digest, &mut capture)?;
+            } else if name == "sync" {
                 // Its other workspace bodies are never opened. Fix the selected
                 // workspace's presence and parent identity; its subtree uses
                 // the existing complete CapturedDirectory/CapturedFile path.

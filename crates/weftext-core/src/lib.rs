@@ -9,7 +9,15 @@ mod compile_dependencies;
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
 };
+mod device_state;
 mod directory_identity;
+pub use device_state::DeviceIdentity;
+mod profile_identity;
+pub use profile_identity::{QualifiedProfile, qualify_profile};
+mod desktop_preferences;
+pub use desktop_preferences::{DesktopPreferences, DesktopPreferencesSnapshot};
+#[cfg(all(test, windows))]
+mod device_state_tests;
 mod draft_recovery;
 mod exchange;
 mod export_read;
@@ -307,10 +315,16 @@ impl Core {
         fs::create_dir_all(data_dir.join("journal"))?;
         fs::create_dir_all(data_dir.join("drafts"))?;
         fs::create_dir_all(data_dir.join("draft-history"))?;
-        let private_guards = ["journal", "drafts", "draft-history"]
-            .into_iter()
-            .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
-            .collect::<Result<Vec<_>>>()?;
+        fs::create_dir_all(data_dir.join(device_state::DEVICE_STATE_ROOT))?;
+        let private_guards = [
+            "journal",
+            "drafts",
+            "draft-history",
+            device_state::DEVICE_STATE_ROOT,
+        ]
+        .into_iter()
+        .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
+        .collect::<Result<Vec<_>>>()?;
         let mut core = Self {
             actor_library: None,
             actor_library_path: None,
