@@ -168,6 +168,12 @@ Candidate acceptance runs frontend/Rust tests, baseline/feature/output HTTP scen
 
 Requires Rust, Node.js/npm, Python 3.11+ and Windows C++ build tools. This work used Rust 1.98, Node.js 24 and official Typst 0.15.1.
 
+The first 0.7 host-foundation refactor reuses the `weftext-app` library and its `LocalService::bind` / `browser_url` / `serve_until` boundary. The existing console still provides the local browser or `--no-browser` service and the `--server-config` hosted service. The version remains `0.6.3-rc.4`; this does not complete tray support, reminders, Mobile or all of 0.7. One Core owns the private-directory lease. The host selects shutdown; browsers and future native windows do not create another writer.
+
+Explicit `--data-dir` still selects persistent state for the current local service. Windows retains `%LOCALAPPDATA%/Weftext-MVP`; macOS selects `$HOME/Library/Application Support/Weftext`, and Linux selects absolute `$XDG_DATA_HOME/weftext` or `$HOME/.local/share/weftext` when that variable is unset. A missing, empty or non-absolute default root fails explicitly rather than selecting temporary storage. Core still checks actual backend capability; choosing a directory does not implement a non-Windows write backend. This is the existing portable service's data policy, without an established MSIX guarantee for recovery drafts outside the package or uninstall preservation.
+
+Default-browser handoff uses Windows Shell, macOS `/usr/bin/open` or Linux `xdg-open`. A failed handoff is reported explicitly while the local service and its printed address remain available; `--no-browser` skips it. Handoff waits at most ten seconds, then reports an unconfirmed outcome without retrying; the OS may still process the original request. HTTP responds during handoff, and stopping the service does not wait for an unfinished handoff. Windows uses an independent OS-call thread so it cannot hold the host runtime's shutdown. OS acceptance does not prove that a browser page loaded or qualify an untested platform. Internal worker flags cannot mix with user launch modes, and `--root` requires `--open`.
+
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check

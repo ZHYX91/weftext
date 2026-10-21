@@ -8,7 +8,7 @@ translation_status: synced
 
 # New Typst architecture design
 
-Status: **design-refinement-not-implemented**. The refinement keeps the main architecture, clarifies requirements/CEL/copy contracts and simplifies builtin configuration. [REVIEW](REVIEW.md) §§7–8 separately record earlier fixed acceptance and current checks.
+This directory maintains the current technical owners and evolving contracts. [REVIEW](REVIEW.md) §7 records independent design acceptance of the fixed earlier baseline on 2026-10-13; §8 records that period's bounded requirement/CEL/copy-contract and builtin-configuration refinements. Their unimplemented/unrun states are historical snapshots. [MVP](../MVP.md) and [ROADMAP](../ROADMAP.md) define current implementation, actual support and unverified scope. Earlier design acceptance does not replace current product acceptance, and an earlier stage's status does not describe later implementation.
 
 The 2026-10-20 hierarchical-tag addition specifies REQUIREMENTS §5.1.1: CORE §2.3 owns forests/identity/upgrades, FEATURES §§5.6,7.4 own trusted queries/interaction, with SOURCE/SERVER/INTEGRATION aligned. It requires necessary shared implementation refactoring and is not accepted alpha.3 behavior. ROADMAP TAG01–10 contains its completion gates.
 
@@ -25,4 +25,4 @@ This directory replaces the prior `typst-native` technical solution as the curre
 
 Source uses standard Typst; schemas and explicit role conventions supply application meaning. Common interfaces stay simple without deleting necessary nesting, multiple values, relations or history because of old AsciiDoc attribute limits. Compiling data alone does not establish forms, Query, authorization or export; those consumers require coordinated validation.
 
-This round refines documents and bounded prototypes without changing real materials. Earlier fixed acceptance and current refinements are recorded separately. Refactoring follows vertical capability slices, each with risk-appropriate implementation acceptance. Design review, limited prototypes, product acceptance and release are distinct states.
+The 2026-10-13 refinement round changed documents and bounded prototypes without changing real materials; its evidence and earlier baseline acceptance remain separate. Subsequent product implementation/refactoring follows vertical capability slices, each verifying its actual impact and consumers. MVP/ROADMAP and the corresponding candidate records retain current results. Design review, limited prototypes, product acceptance and release are distinct states; this directory's overview does not establish whole-version or whole-architecture completion.
