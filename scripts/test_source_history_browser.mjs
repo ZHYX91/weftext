@@ -16,7 +16,7 @@ await mkdir(out, { recursive: false });
 const fixture = path.join(out, 'fixture');
 await mkdir(fixture);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const sourceFiles = ['app/src/editor.ts', 'app/src/source-history.ts', 'app/src/source-style.ts', 'app/src/writing.ts'];
+const sourceFiles = ['app/src/editor.ts', 'app/src/source-history.ts', 'app/src/source-style.ts', 'app/src/source-statistics.ts', 'app/src/text-layout.ts', 'app/src/native-node.ts', 'app/src/writing.ts'];
 const hashes = async () => Object.fromEntries(await Promise.all(sourceFiles.map(async name => [name, sha(await readFile(path.join(repo, name)))])));
 const result = { scope: 'Current SourceEditor, WritingController and CodeMirror over real DOM; isolated Vite component',
   limits: ['Synthetic composition/beforeinput events only; no OS input method or candidate window.', 'No backend, library, save transaction or packaged-app acceptance.'],
@@ -26,6 +26,7 @@ await writeFile(path.join(fixture, 'index.html'), '<!doctype html><html lang="zh
 await writeFile(path.join(fixture, 'fixture.js'), `
 import { SourceEditor } from ${JSON.stringify(modulePath('app/src/editor.ts'))};
 import { WritingController } from ${JSON.stringify(modulePath('app/src/writing.ts'))};
+import { nativeElement } from ${JSON.stringify(modulePath('app/src/native-node.ts'))};
 const base = '#metadata((id: "00000000-0000-0000-0000-000000000001", types: ())) <weftext>\\n\\n= Owned composition history\\n\\n正文输入区：保留正文\\n\\n#table(columns: 3, [普通格], table.cell(colspan: 2)[合并格], [])\\n';
 let editor, controller, events, dispatches, outside, changes, requests;
 const pause = () => new Promise(resolve => setTimeout(resolve, 100));
@@ -58,6 +59,22 @@ function finalDom(insert = 'bu') {
   const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
 }
 window.fixture = {
+  async longText() {
+    controller?.dispose(); editor?.destroy(); document.querySelector('#host').replaceChildren();
+    const initial = '前😀\\n', long = 'A'.repeat(1024 * 1024), full = long + '😀\\n';
+    editor = new SourceEditor(initial, () => {}, () => {}); editor.mount(document.querySelector('#host'));
+    const policy = () => ({ count: editor.characterCount, wraps: editor.view.lineWrapping, long: editor.view.contentDOM.classList.contains('cm-long-line'), kerning: getComputedStyle(editor.view.contentDOM).fontKerning });
+    const before = policy(); editor.apply(0, initial.length, full);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (editor.source !== full) throw Error('Full long source changed'); const inserted = policy();
+    const paragraph = nativeElement({ key: 'owned-long-preview', kind: 'element', tag: 'p', text: null, children: [{ kind: 'text', text: long }], origin: null, writable: false, attrs: {} });
+    paragraph.textContent = long; paragraph.style.width = '600px'; paragraph.style.overflowWrap = 'anywhere'; document.body.append(paragraph);
+    const range = document.createRange(); range.selectNodeContents(paragraph);
+    const preview = { count: paragraph.textContent.length, completeCopy: range.toString() === long, kerning: getComputedStyle(paragraph).fontKerning, height: paragraph.getBoundingClientRect().height };
+    paragraph.remove(); editor.undo(); const undone = policy(); if (editor.source !== initial) throw Error('Long-source Undo changed original');
+    editor.redo(); const redone = policy(); if (editor.source !== full) throw Error('Long-source Redo changed Draft');
+    return { before, inserted, preview, undone, redone };
+  },
   async run(kind) {
     const before = await reset();
     if (kind === 'ordinary') { const prevented = nativeHistory('historyUndo'), immediate = snapshot(); return { before, prevented, immediate, after: snapshot() }; }
@@ -166,6 +183,12 @@ try {
   const disposed = await observe('disposed'); waiting(disposed);
   assert.equal(disposed.after.source, golden); assert.deepEqual(historyEvents(disposed.after), []);
   await passed('Destroying the owner cancels pending history and its scheduled settlement.');
+  const longText = await page.evaluate(() => window.fixture.longText());
+  await writeFile(path.join(out, 'long-text.json'), JSON.stringify(longText, null, 2));
+  for (const state of [longText.inserted, longText.redone]) { assert.equal(state.count, 1024 * 1024 + 2); assert.equal(state.wraps, true); assert.equal(state.long, true); assert.equal(state.kerning, 'none'); }
+  for (const state of [longText.before, longText.undone]) { assert.equal(state.count, 3); assert.equal(state.wraps, true); assert.equal(state.long, false); }
+  assert.equal(longText.preview.count, 1024 * 1024); assert.equal(longText.preview.completeCopy, true); assert.equal(longText.preview.kerning, 'none'); assert.ok(longText.preview.height > 20);
+  await passed('Complete 1 MiB source and preview retain wrapping/copy; code-point counts and long-text kerning follow the same Undo/Redo.');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.requestFailures, []);
   result.finalInputHashes = await hashes(); assert.deepEqual(result.finalInputHashes, result.inputHashes);
   result.completed = true;

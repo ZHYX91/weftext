@@ -1,4 +1,5 @@
 import "./hosted.css";
+import { HostedDraftCache } from "./hosted-draft-cache";
 import { EverydayNavigation, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
 import { HostedFields } from "./hosted-fields";
@@ -109,6 +110,7 @@ let identity: Me | undefined;
 let doc: Doc | undefined;
 let draft: HostedDraft | undefined;
 let cachePrefix = "";
+const draftCache = new HostedDraftCache(sessionStorage, () => cachePrefix);
 let busy = false;
 let actionVersion = 0;
 let requestEpoch = 0;
@@ -308,8 +310,8 @@ async function navigateReference(reference: string) {
         staged = await request<Doc>("open", { resource: resolved.resource }); target = staged;
         if (!sameHostedNodeAudience(captured, nodeAudience())) return;
         if (target.resource !== resolved.resource) throw new Error("暂存目标与获权对象不符，未安装正文。");
-        const raw = sessionStorage.getItem(cachePrefix + target.resource); let local: HostedDraft | undefined;
-        try { local = raw === null ? undefined : JSON.parse(raw) as HostedDraft; } catch { throw new Error("目标的本页恢复稿无法解析；原记录保留，未安装另一份正文。"); }
+        let local: HostedDraft | undefined;
+        try { local = cached(target.resource); } catch { throw new Error("目标的本页恢复稿无法解析；原记录保留，未安装另一份正文。"); }
         targetDraft = nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, source.pausedSession && draft?.reference === parts.base ? { ...draft, source: source.value } : local);
       }
       const retainedAlias = !currentTarget && source.pausedSession && draft?.reference === parts.base;
@@ -340,7 +342,7 @@ async function navigateReference(reference: string) {
 }
 async function readReference(selected: Doc, epoch: number) {
   stableReference = undefined; el("stable-link").hidden = true; el<HTMLInputElement>("node-reference").value = "";
-  try { const result = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || doc !== selected || !draft) return; if (result.resource !== selected.resource || !/^weftext-node:\/\//.test(result.reference)) throw new Error("当前笔记没有获权稳定身份。"); const qualified = bindHostedDraftReference({ ...draft, source: source.value }, result.reference); sessionStorage.setItem(cachePrefix + selected.resource, JSON.stringify(qualified)); draft = qualified; stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: result.reference }; el<HTMLInputElement>("node-reference").value = result.reference; el("stable-link").hidden = false; controls(); } catch (error) { if (epoch === requestEpoch && doc === selected) status(error instanceof Error ? error.message : "稳定身份当前不可用。"); }
+  try { const result = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || doc !== selected || !draft) return; if (result.resource !== selected.resource || !/^weftext-node:\/\//.test(result.reference)) throw new Error("当前笔记没有获权稳定身份。"); const qualified = bindHostedDraftReference({ ...draft, source: source.value }, result.reference); draftCache.write(selected.resource, qualified); draft = qualified; stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: result.reference }; el<HTMLInputElement>("node-reference").value = result.reference; el("stable-link").hidden = false; controls(); } catch (error) { if (epoch === requestEpoch && doc === selected) status(error instanceof Error ? error.message : "稳定身份当前不可用。"); }
 }
 async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied" | "superseded"> {
   const selected = doc, epoch = requestEpoch;
@@ -395,6 +397,7 @@ function clearDisplay(message: string, clearToken = false) {
   retiredStructureSessions.clear(); retiredStructureSources.clear(); structureDocuments = [];
   clearNodeNavigation();
   requestEpoch++; authorizationEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
+  draftCache.clearMemory();
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
@@ -408,7 +411,7 @@ function clearDisplay(message: string, clearToken = false) {
   el("comparison").hidden = true; el("history-list").hidden = true;
   el("note-inputs").replaceChildren(); el("note-inputs").hidden = true;
   const remove = (key: string) => { try { sessionStorage.removeItem(key); } catch (error) { clearErrors.push(error); } };
-  try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-draft:")) remove(key); } catch (error) { clearErrors.push(error); }
+  try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-draft:") || key.startsWith("weftext-hosted-draft-text:")) remove(key); } catch (error) { clearErrors.push(error); }
   if (clearToken) { token = ""; identity = undefined; remove("weftext-hosted-token"); remove("weftext-hosted-identity"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
   controls(); status(clearErrors.length ? `${message.split(/[，。]/)[0]}。受保护展示已清除；浏览器拒绝删除部分恢复缓存，请在浏览器中清除此站点数据。` : message);
 }
@@ -459,10 +462,10 @@ function retain() {
   draft.source = source.value;
   // Storage failure is visible and prevents a save request that could lose an
   // unknown operation receipt on reload.
-  sessionStorage.setItem(cachePrefix + doc.resource, JSON.stringify(draft));
+  draftCache.write(doc.resource, draft);
 }
 function cached(resource: string): HostedDraft | undefined {
-  try { const raw = sessionStorage.getItem(cachePrefix + resource); return raw ? JSON.parse(raw) as HostedDraft : undefined; } catch { return undefined; }
+  return draftCache.read(resource);
 }
 async function connect() {
   const epoch = requestEpoch, credential = token;
@@ -527,7 +530,7 @@ async function open(resource: string) {
     targetDraft = hostedOpenedDraft(opened.source, targetDraft);
     // A quota failure must happen while the original editor and session still
     // exist. This exact prepared cache is not written again during install.
-    try { sessionStorage.setItem(cachePrefix + opened.resource, JSON.stringify(targetDraft)); }
+    try { draftCache.write(opened.resource, targetDraft); }
     catch { throw new Error("浏览器无法可靠保留目标恢复稿；当前草稿、Undo 与原会话保留，未切换文档。"); }
     // Install only after every target qualification/recovery succeeds. Closing
     // the former session uses its captured actor and cannot clear the new view.

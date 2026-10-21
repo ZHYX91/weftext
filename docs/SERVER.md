@@ -10,7 +10,7 @@ translation_status: synced
 
 The established `0.6.0` Windows/NTFS Server / WebUI, multiuser authorization and same-owner synchronization scope is complete, with the complete HTTP matrix, affected browsers and real NAS HTTPS passing on the same final optimized executable; it is not formally published. It reuses single-writer Core file guards, original operations and recovery evidence with isolated personal Drafts. See [MVP](MVP.md) for current scope/limits and the [roadmap](ROADMAP.md) for subsequent versions.
 
-The working tree is the `0.6.3-alpha.2` second-stage candidate, retaining `0.6.2` material import and recognition, inheriting the 0.6.1 tables, equations, references, notes, processing settings and actual evidence limits. New capabilities retain separate hosted authorization and original-operation recovery; local implementation or these contracts cannot establish a pass.
+The working tree is the `0.6.3-rc.3` stabilization candidate, with whole-version acceptance still in progress. Earlier-stage passes retain their original artifact boundaries. It retains material import/recognition, tables, equations, references, notes and processing settings, and connects hierarchical tags and knowledge views. Large hosted drafts use synchronous compact recovery with the actual Base and original pending save request. New capabilities retain separate hosted authorization and original-operation recovery. See MVP for scope and unverified items; local implementation or these contracts cannot establish a pass.
 
 ## Properties and multiple Query organization
 

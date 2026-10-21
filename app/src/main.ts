@@ -3,6 +3,7 @@ import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
 import { SourceEditor, applySourcePatches } from "./editor";
+import { countSourceCodePoints } from "./source-statistics";
 import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
@@ -685,7 +686,7 @@ function renderStatus(): void {
   if (!current) { statusbar.append(el("span", "", "文件保存在你的设备上"), el("span", "", "Weftext 本机预览版")); return; }
   const doc = current; const session = doc.session;
   const left = el("div", "status-left");
-  const chars = [...session.source].length; left.append(el("span", "", `${chars.toLocaleString()} 字符`), el("span", "status-kind", session.opened.nodeId ? "资料库笔记" : "普通 Typst 文件"));
+  const chars = doc.editor.source === session.source ? doc.editor.characterCount : countSourceCodePoints(session.source); left.append(el("span", "", `${chars.toLocaleString()} 字符`), el("span", "status-kind", session.opened.nodeId ? "资料库笔记" : "普通 Typst 文件"));
   const right = el("div", "status-right");
   if (doc.writing.state.pending || doc.writing.state.busy) right.append(el("span", "pending-label", doc.writing.state.busy ? "文字更新中…" : "文字正在同步至草稿"));
   else if (!sourceConsumersAvailable(doc)) right.append(el("span", "pending-label", doc.sourceRefreshing ? "正在核对同步结果" : "预览与批注等待明确比较"));
