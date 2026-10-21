@@ -49142,6 +49142,356 @@
       "zh-CN": "原冻结请求缺少操作 ID",
       "en-US": "Original frozen request is missing its operation ID",
       "params": {}
+    },
+    "error.core.backend.controlledRootRequired": {
+      "zh-CN": "此平台需要显式登记的受控服务根目录",
+      "en-US": "This platform requires an explicitly enrolled controlled-service root",
+      "params": {}
+    },
+    "error.core.backend.descriptorAuthorityRequired": {
+      "zh-CN": "文件描述符没有受控根目录资格",
+      "en-US": "File descriptor has no controlled-root authority",
+      "params": {}
+    },
+    "error.core.backend.deviceAuthenticationKeyUnavailable": {
+      "zh-CN": "设备认证密钥不可用",
+      "en-US": "Device authentication key is unavailable",
+      "params": {}
+    },
+    "error.core.backend.entryBindingUnavailable": {
+      "zh-CN": "目录项绑定暂不可用",
+      "en-US": "Entry binding is unavailable",
+      "params": {}
+    },
+    "error.core.backend.unsupportedStorageProfile": {
+      "zh-CN": "此库的存储档位不受支持；请保留原件并显式导入或转换",
+      "en-US": "The workspace storage profile is unsupported; preserve its originals and use explicit import or conversion",
+      "params": {}
+    },
+    "error.core.backend.deviceBindingUnsupported": {
+      "zh-CN": "设备绑定不是严格的当前物理记录",
+      "en-US": "Device binding plaintext is not a strict current physical record",
+      "params": {}
+    },
+    "error.core.backend.deviceAuthorityRequired": {
+      "zh-CN": "设备绑定需要合格的平台权限",
+      "en-US": "Device binding requires a qualified platform authority",
+      "params": {}
+    },
+    "error.core.backend.deviceProtectionUnavailable": {
+      "zh-CN": "此平台没有可用的设备保护提供方",
+      "en-US": "Device protection is unavailable on this platform",
+      "params": {}
+    },
+    "error.core.posix.fileScopeUnavailable": {
+      "zh-CN": "文件作用域 lease 暂不可用",
+      "en-US": "File scope leases are unavailable",
+      "params": {}
+    },
+    "error.core.posix.incompatibleFileScope": {
+      "zh-CN": "原文件仍有不相容的读写作用域",
+      "en-US": "The original file has a retained incompatible read or write scope",
+      "params": {}
+    },
+    "error.core.posix.nonUtf8Name": {
+      "zh-CN": "文件系统名称必须是有效 UTF-8",
+      "en-US": "Non-UTF8 filesystem names are unsupported",
+      "params": {}
+    },
+    "error.core.posix.nulName": {
+      "zh-CN": "文件系统名称不能含 NUL",
+      "en-US": "A filesystem name contains NUL",
+      "params": {}
+    },
+    "error.core.posix.basenameRequired": {
+      "zh-CN": "此操作需要准确的目录项 basename",
+      "en-US": "An exact filesystem basename is required",
+      "params": {}
+    },
+    "error.core.posix.nativeFilesystemRequired": {
+      "zh-CN": "Linux 服务档位需要支持 opaque handle 的原生 ext4 或 XFS",
+      "en-US": "The Linux profile requires native ext4 or XFS with opaque file handles",
+      "params": {}
+    },
+    "error.core.posix.opaqueHandleSizeUnsupported": {
+      "zh-CN": "文件系统返回的 opaque handle 长度不受支持",
+      "en-US": "The filesystem returned an unsupported opaque handle size",
+      "params": {}
+    },
+    "error.core.posix.serviceCredentialsRequired": {
+      "zh-CN": "服务必须使用已登记的非 root UID、空附加组和无 capabilities",
+      "en-US": "The service requires its enrolled non-root UID, empty supplementary groups and no capabilities",
+      "params": {}
+    },
+    "error.core.posix.absoluteEnrollmentRequired": {
+      "zh-CN": "enrollment 必须使用管理员拥有的绝对路径",
+      "en-US": "Enrollment must use an absolute administrator-owned path",
+      "params": {}
+    },
+    "error.core.posix.traversalForbidden": {
+      "zh-CN": "路径不能含遍历分量",
+      "en-US": "Enrollment path contains traversal",
+      "params": {}
+    },
+    "error.core.posix.administratorEnrollmentRequired": {
+      "zh-CN": "enrollment 和所有祖先必须由管理员拥有且不可由服务或其他用户写入",
+      "en-US": "Enrollment and every ancestor must be administrator-owned and not writable by the service or other users",
+      "params": {}
+    },
+    "error.core.posix.distinctOsIdentitiesRequired": {
+      "zh-CN": "服务、客户端和 worker 必须使用不同的非 root OS 身份",
+      "en-US": "Service, client and worker require distinct non-root OS identities",
+      "params": {}
+    },
+    "error.core.posix.enrollmentUuidRequired": {
+      "zh-CN": "enrollment 需要规范的随机 UUID",
+      "en-US": "Enrollment identity is not a canonical UUID",
+      "params": {}
+    },
+    "error.core.posix.foreignMachine": {
+      "zh-CN": "enrollment 属于另一台 OS 机器",
+      "en-US": "Enrollment belongs to a different OS machine identity",
+      "params": {}
+    },
+    "error.core.posix.deviceKeyProtectionRequired": {
+      "zh-CN": "设备密钥需要位于 profile 外、由 root 拥有并仅供服务组读取的 32 字节私有记录",
+      "en-US": "Device key requires a 32-byte root-owned service-group-readable private record outside the profile",
+      "params": {}
+    },
+    "error.core.posix.deviceKeyOutsideProfileRequired": {
+      "zh-CN": "设备密钥不能位于受控库或私有 profile 内",
+      "en-US": "Device key cannot reside inside the controlled library or private profile tree",
+      "params": {}
+    },
+    "error.core.posix.nonLoginServiceRequired": {
+      "zh-CN": "服务必须使用专属非登录账号",
+      "en-US": "The service account must be a dedicated non-login account",
+      "params": {}
+    },
+    "error.core.posix.absoluteRootRequired": {
+      "zh-CN": "受控根目录必须使用绝对路径",
+      "en-US": "Controlled root must be absolute",
+      "params": {}
+    },
+    "error.core.posix.administratorRootParentRequired": {
+      "zh-CN": "受控根目录需要管理员拥有的父目录",
+      "en-US": "The controlled root needs an administrator-owned parent",
+      "params": {}
+    },
+    "error.core.posix.invalidRoot": {
+      "zh-CN": "受控根目录路径无效",
+      "en-US": "Invalid controlled root",
+      "params": {}
+    },
+    "error.core.posix.physicalRootMismatch": {
+      "zh-CN": "enrollment 指向的物理根目录已不同",
+      "en-US": "The enrollment names a different physical root",
+      "params": {}
+    },
+    "error.core.posix.rootRegistryUnavailable": {
+      "zh-CN": "受控根目录登记表暂不可用",
+      "en-US": "Controlled root registry is unavailable",
+      "params": {}
+    },
+    "error.core.posix.overlappingWriter": {
+      "zh-CN": "受控根目录与现有 writer 权限范围重叠",
+      "en-US": "This controlled root overlaps an existing writer authority",
+      "params": {}
+    },
+    "error.core.posix.authorityChanged": {
+      "zh-CN": "原受控根目录的权限资格已改变",
+      "en-US": "The original controlled root authority changed",
+      "params": {}
+    },
+    "error.core.posix.outsideControlledRoot": {
+      "zh-CN": "路径位于已接纳的受控服务根目录之外",
+      "en-US": "The path is outside its admitted controlled-service root",
+      "params": {}
+    },
+    "error.core.posix.privateOrdinaryEntryRequired": {
+      "zh-CN": "受控项须由服务拥有、权限私有且为普通单链接文件或目录",
+      "en-US": "Controlled entries require service ownership, private permissions and ordinary single-link files or directories",
+      "params": {}
+    },
+    "error.core.posix.filesystemChanged": {
+      "zh-CN": "目录项跨越了原合格文件系统",
+      "en-US": "The entry crossed its qualified filesystem",
+      "params": {}
+    },
+    "error.core.posix.namespaceReadsUnavailable": {
+      "zh-CN": "namespace 读作用域暂不可用",
+      "en-US": "Namespace read scopes are unavailable",
+      "params": {}
+    },
+    "error.core.posix.namespaceReadConflict": {
+      "zh-CN": "仍保留的源或依赖读作用域阻止了此次目录项移动",
+      "en-US": "A retained source or dependency read scope excludes this namespace mutation",
+      "params": {}
+    },
+    "error.core.posix.readParentUnavailable": {
+      "zh-CN": "读作用域的父目录暂不可用",
+      "en-US": "Read scope parent is unavailable",
+      "params": {}
+    },
+    "error.core.posix.depthBudget": {
+      "zh-CN": "受控根目录超过目录深度预算",
+      "en-US": "Controlled root exceeds the directory-depth budget",
+      "params": {}
+    },
+    "error.core.posix.admissionBudget": {
+      "zh-CN": "受控根目录接纳需要在 5000 项预算内完整枚举",
+      "en-US": "Controlled root admission requires complete enumeration within 5000 entries",
+      "params": {}
+    },
+    "error.core.posix.symbolicOrSpecialEntry": {
+      "zh-CN": "不支持符号链接或特殊文件系统项",
+      "en-US": "The controlled root contains a symbolic link or special filesystem entry",
+      "params": {}
+    },
+    "error.core.posix.controlledAuthorityRequired": {
+      "zh-CN": "路径没有已接纳的受控服务写入资格",
+      "en-US": "The path has no admitted controlled-service authority",
+      "params": {}
+    },
+    "error.core.posix.descriptorAuthorityRequired": {
+      "zh-CN": "描述符没有受控根目录资格",
+      "en-US": "The descriptor has no controlled-root authority",
+      "params": {}
+    },
+    "error.core.posix.originalEntryChangedBeforeOpen": {
+      "zh-CN": "数据访问前原目录项已改变",
+      "en-US": "The inspected original entry changed before data access",
+      "params": {}
+    },
+    "error.core.posix.negativeModifiedTime": {
+      "zh-CN": "不支持负的文件系统修改时间",
+      "en-US": "Negative filesystem modification times are unsupported",
+      "params": {}
+    },
+    "error.core.posix.modifiedTimeRange": {
+      "zh-CN": "文件系统修改时间超出支持范围",
+      "en-US": "Filesystem modification time is outside the supported range",
+      "params": {}
+    },
+    "error.core.posix.currentCoordinateUnavailable": {
+      "zh-CN": "保留文件当前没有可用的文件系统坐标",
+      "en-US": "The retained file has no current filesystem coordinate",
+      "params": {}
+    },
+    "error.core.posix.truncatedDirectoryEntry": {
+      "zh-CN": "Linux 目录项被截断",
+      "en-US": "Truncated Linux directory entry",
+      "params": {}
+    },
+    "error.core.posix.invalidDirectoryEntry": {
+      "zh-CN": "Linux 目录项长度无效",
+      "en-US": "Invalid Linux directory entry length",
+      "params": {}
+    },
+    "error.core.posix.unterminatedDirectoryEntry": {
+      "zh-CN": "Linux 目录项名称未结束",
+      "en-US": "Unterminated Linux directory entry",
+      "params": {}
+    },
+    "error.core.posix.leafRequired": {
+      "zh-CN": "此操作需要叶项路径",
+      "en-US": "A leaf path is required",
+      "params": {}
+    },
+    "error.core.posix.crossRootMove": {
+      "zh-CN": "移动不能跨越受控根目录权限范围",
+      "en-US": "A move cannot cross controlled-root authority",
+      "params": {}
+    },
+    "error.core.posix.entryParentUnavailable": {
+      "zh-CN": "目录项父目录绑定暂不可用",
+      "en-US": "Entry parent binding is unavailable",
+      "params": {}
+    },
+    "error.core.posix.rootMoveForbidden": {
+      "zh-CN": "受控根目录本身不能移动",
+      "en-US": "The controlled root itself cannot move",
+      "params": {}
+    },
+    "error.core.posix.entryBindingUnavailable": {
+      "zh-CN": "目录项绑定暂不可用",
+      "en-US": "Entry binding is unavailable",
+      "params": {}
+    },
+    "error.core.posix.originalEntryChanged": {
+      "zh-CN": "原目录项在移动前已改变",
+      "en-US": "The original namespace entry changed before movement",
+      "params": {}
+    },
+    "error.core.posix.parentRequired": {
+      "zh-CN": "此操作需要父目录",
+      "en-US": "Source lacks a parent",
+      "params": {}
+    },
+    "error.core.posix.participantBudget": {
+      "zh-CN": "namespace 参与者超出有效预算",
+      "en-US": "Invalid namespace participant budget",
+      "params": {}
+    },
+    "error.core.posix.crossRootParticipants": {
+      "zh-CN": "namespace 参与者属于不同的根目录权限范围",
+      "en-US": "Namespace participants have different root authorities",
+      "params": {}
+    },
+    "error.core.posix.independentRootsRequired": {
+      "zh-CN": "namespace 根目录和目标父目录必须相互独立",
+      "en-US": "Namespace roots and parents must be independent",
+      "params": {}
+    },
+    "error.core.posix.participantMissing": {
+      "zh-CN": "缺少 namespace 参与者",
+      "en-US": "Missing namespace participant",
+      "params": {}
+    },
+    "error.core.posix.canonicalWitnessChanged": {
+      "zh-CN": "最终源的 canonical 见证已改变",
+      "en-US": "Final source canonical witness changed",
+      "params": {}
+    },
+    "error.core.posix.directoryWitnessChanged": {
+      "zh-CN": "最终源目录见证已改变",
+      "en-US": "Final source directory witness changed",
+      "params": {}
+    },
+    "error.core.posix.movingRootMissing": {
+      "zh-CN": "原移动根目录未被保留",
+      "en-US": "Original moving root is not retained",
+      "params": {}
+    },
+    "error.core.posix.sourceParentMissing": {
+      "zh-CN": "缺少源父目录",
+      "en-US": "Missing source parent",
+      "params": {}
+    },
+    "error.core.posix.directoryNotRetained": {
+      "zh-CN": "目录未被保留",
+      "en-US": "Directory is not retained",
+      "params": {}
+    },
+    "error.core.posix.targetParentMissing": {
+      "zh-CN": "缺少目标父目录",
+      "en-US": "Missing target parent",
+      "params": {}
+    },
+    "error.core.posix.directoryAlreadyRetained": {
+      "zh-CN": "目录已经被保留",
+      "en-US": "Directory is already retained",
+      "params": {}
+    },
+    "error.api.workerOutputBudget": {
+      "zh-CN": "编译工作进程输出超过 24 MiB 限制；输入保留。",
+      "en-US": "Compiler worker output exceeds the 24 MiB limit; the input is retained.",
+      "params": {}
+    },
+    "error.api.workerDiagnosticBudget": {
+      "zh-CN": "编译工作进程诊断超过 256 KiB 限制；输入保留。",
+      "en-US": "Compiler worker diagnostics exceed the 256 KiB limit; the input is retained.",
+      "params": {}
     }
   }
 }

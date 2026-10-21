@@ -9465,7 +9465,77 @@ export const zhCN = {
   "error.core.captureDraft.wireMemberDuplicate": "原冻结请求的顶层成员重复",
   "error.core.captureDraft.wireMembersExceeded": "原冻结请求的顶层成员超出数量预算",
   "error.core.captureDraft.wireOperationMismatch": "原冻结请求属于另一个操作 ID",
-  "error.core.captureDraft.wireOperationMissing": "原冻结请求缺少操作 ID"
+  "error.core.captureDraft.wireOperationMissing": "原冻结请求缺少操作 ID",
+  "error.core.backend.controlledRootRequired": "此平台需要显式登记的受控服务根目录",
+  "error.core.backend.descriptorAuthorityRequired": "文件描述符没有受控根目录资格",
+  "error.core.backend.deviceAuthenticationKeyUnavailable": "设备认证密钥不可用",
+  "error.core.backend.entryBindingUnavailable": "目录项绑定暂不可用",
+  "error.core.backend.unsupportedStorageProfile": "此库的存储档位不受支持；请保留原件并显式导入或转换",
+  "error.core.backend.deviceBindingUnsupported": "设备绑定不是严格的当前物理记录",
+  "error.core.backend.deviceAuthorityRequired": "设备绑定需要合格的平台权限",
+  "error.core.backend.deviceProtectionUnavailable": "此平台没有可用的设备保护提供方",
+  "error.core.posix.fileScopeUnavailable": "文件作用域 lease 暂不可用",
+  "error.core.posix.incompatibleFileScope": "原文件仍有不相容的读写作用域",
+  "error.core.posix.nonUtf8Name": "文件系统名称必须是有效 UTF-8",
+  "error.core.posix.nulName": "文件系统名称不能含 NUL",
+  "error.core.posix.basenameRequired": "此操作需要准确的目录项 basename",
+  "error.core.posix.nativeFilesystemRequired": "Linux 服务档位需要支持 opaque handle 的原生 ext4 或 XFS",
+  "error.core.posix.opaqueHandleSizeUnsupported": "文件系统返回的 opaque handle 长度不受支持",
+  "error.core.posix.serviceCredentialsRequired": "服务必须使用已登记的非 root UID、空附加组和无 capabilities",
+  "error.core.posix.absoluteEnrollmentRequired": "enrollment 必须使用管理员拥有的绝对路径",
+  "error.core.posix.traversalForbidden": "路径不能含遍历分量",
+  "error.core.posix.administratorEnrollmentRequired": "enrollment 和所有祖先必须由管理员拥有且不可由服务或其他用户写入",
+  "error.core.posix.distinctOsIdentitiesRequired": "服务、客户端和 worker 必须使用不同的非 root OS 身份",
+  "error.core.posix.enrollmentUuidRequired": "enrollment 需要规范的随机 UUID",
+  "error.core.posix.foreignMachine": "enrollment 属于另一台 OS 机器",
+  "error.core.posix.deviceKeyProtectionRequired": "设备密钥需要位于 profile 外、由 root 拥有并仅供服务组读取的 32 字节私有记录",
+  "error.core.posix.deviceKeyOutsideProfileRequired": "设备密钥不能位于受控库或私有 profile 内",
+  "error.core.posix.nonLoginServiceRequired": "服务必须使用专属非登录账号",
+  "error.core.posix.absoluteRootRequired": "受控根目录必须使用绝对路径",
+  "error.core.posix.administratorRootParentRequired": "受控根目录需要管理员拥有的父目录",
+  "error.core.posix.invalidRoot": "受控根目录路径无效",
+  "error.core.posix.physicalRootMismatch": "enrollment 指向的物理根目录已不同",
+  "error.core.posix.rootRegistryUnavailable": "受控根目录登记表暂不可用",
+  "error.core.posix.overlappingWriter": "受控根目录与现有 writer 权限范围重叠",
+  "error.core.posix.authorityChanged": "原受控根目录的权限资格已改变",
+  "error.core.posix.outsideControlledRoot": "路径位于已接纳的受控服务根目录之外",
+  "error.core.posix.privateOrdinaryEntryRequired": "受控项须由服务拥有、权限私有且为普通单链接文件或目录",
+  "error.core.posix.filesystemChanged": "目录项跨越了原合格文件系统",
+  "error.core.posix.namespaceReadsUnavailable": "namespace 读作用域暂不可用",
+  "error.core.posix.namespaceReadConflict": "仍保留的源或依赖读作用域阻止了此次目录项移动",
+  "error.core.posix.readParentUnavailable": "读作用域的父目录暂不可用",
+  "error.core.posix.depthBudget": "受控根目录超过目录深度预算",
+  "error.core.posix.admissionBudget": "受控根目录接纳需要在 5000 项预算内完整枚举",
+  "error.core.posix.symbolicOrSpecialEntry": "不支持符号链接或特殊文件系统项",
+  "error.core.posix.controlledAuthorityRequired": "路径没有已接纳的受控服务写入资格",
+  "error.core.posix.descriptorAuthorityRequired": "描述符没有受控根目录资格",
+  "error.core.posix.originalEntryChangedBeforeOpen": "数据访问前原目录项已改变",
+  "error.core.posix.negativeModifiedTime": "不支持负的文件系统修改时间",
+  "error.core.posix.modifiedTimeRange": "文件系统修改时间超出支持范围",
+  "error.core.posix.currentCoordinateUnavailable": "保留文件当前没有可用的文件系统坐标",
+  "error.core.posix.truncatedDirectoryEntry": "Linux 目录项被截断",
+  "error.core.posix.invalidDirectoryEntry": "Linux 目录项长度无效",
+  "error.core.posix.unterminatedDirectoryEntry": "Linux 目录项名称未结束",
+  "error.core.posix.leafRequired": "此操作需要叶项路径",
+  "error.core.posix.crossRootMove": "移动不能跨越受控根目录权限范围",
+  "error.core.posix.entryParentUnavailable": "目录项父目录绑定暂不可用",
+  "error.core.posix.rootMoveForbidden": "受控根目录本身不能移动",
+  "error.core.posix.entryBindingUnavailable": "目录项绑定暂不可用",
+  "error.core.posix.originalEntryChanged": "原目录项在移动前已改变",
+  "error.core.posix.parentRequired": "此操作需要父目录",
+  "error.core.posix.participantBudget": "namespace 参与者超出有效预算",
+  "error.core.posix.crossRootParticipants": "namespace 参与者属于不同的根目录权限范围",
+  "error.core.posix.independentRootsRequired": "namespace 根目录和目标父目录必须相互独立",
+  "error.core.posix.participantMissing": "缺少 namespace 参与者",
+  "error.core.posix.canonicalWitnessChanged": "最终源的 canonical 见证已改变",
+  "error.core.posix.directoryWitnessChanged": "最终源目录见证已改变",
+  "error.core.posix.movingRootMissing": "原移动根目录未被保留",
+  "error.core.posix.sourceParentMissing": "缺少源父目录",
+  "error.core.posix.directoryNotRetained": "目录未被保留",
+  "error.core.posix.targetParentMissing": "缺少目标父目录",
+  "error.core.posix.directoryAlreadyRetained": "目录已经被保留",
+  "error.api.workerOutputBudget": "编译工作进程输出超过 24 MiB 限制；输入保留。",
+  "error.api.workerDiagnosticBudget": "编译工作进程诊断超过 256 KiB 限制；输入保留。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -18936,6 +19006,76 @@ export interface MessageParamsMap {
   "error.core.captureDraft.wireMembersExceeded": {  };
   "error.core.captureDraft.wireOperationMismatch": {  };
   "error.core.captureDraft.wireOperationMissing": {  };
+  "error.core.backend.controlledRootRequired": {  };
+  "error.core.backend.descriptorAuthorityRequired": {  };
+  "error.core.backend.deviceAuthenticationKeyUnavailable": {  };
+  "error.core.backend.entryBindingUnavailable": {  };
+  "error.core.backend.unsupportedStorageProfile": {  };
+  "error.core.backend.deviceBindingUnsupported": {  };
+  "error.core.backend.deviceAuthorityRequired": {  };
+  "error.core.backend.deviceProtectionUnavailable": {  };
+  "error.core.posix.fileScopeUnavailable": {  };
+  "error.core.posix.incompatibleFileScope": {  };
+  "error.core.posix.nonUtf8Name": {  };
+  "error.core.posix.nulName": {  };
+  "error.core.posix.basenameRequired": {  };
+  "error.core.posix.nativeFilesystemRequired": {  };
+  "error.core.posix.opaqueHandleSizeUnsupported": {  };
+  "error.core.posix.serviceCredentialsRequired": {  };
+  "error.core.posix.absoluteEnrollmentRequired": {  };
+  "error.core.posix.traversalForbidden": {  };
+  "error.core.posix.administratorEnrollmentRequired": {  };
+  "error.core.posix.distinctOsIdentitiesRequired": {  };
+  "error.core.posix.enrollmentUuidRequired": {  };
+  "error.core.posix.foreignMachine": {  };
+  "error.core.posix.deviceKeyProtectionRequired": {  };
+  "error.core.posix.deviceKeyOutsideProfileRequired": {  };
+  "error.core.posix.nonLoginServiceRequired": {  };
+  "error.core.posix.absoluteRootRequired": {  };
+  "error.core.posix.administratorRootParentRequired": {  };
+  "error.core.posix.invalidRoot": {  };
+  "error.core.posix.physicalRootMismatch": {  };
+  "error.core.posix.rootRegistryUnavailable": {  };
+  "error.core.posix.overlappingWriter": {  };
+  "error.core.posix.authorityChanged": {  };
+  "error.core.posix.outsideControlledRoot": {  };
+  "error.core.posix.privateOrdinaryEntryRequired": {  };
+  "error.core.posix.filesystemChanged": {  };
+  "error.core.posix.namespaceReadsUnavailable": {  };
+  "error.core.posix.namespaceReadConflict": {  };
+  "error.core.posix.readParentUnavailable": {  };
+  "error.core.posix.depthBudget": {  };
+  "error.core.posix.admissionBudget": {  };
+  "error.core.posix.symbolicOrSpecialEntry": {  };
+  "error.core.posix.controlledAuthorityRequired": {  };
+  "error.core.posix.descriptorAuthorityRequired": {  };
+  "error.core.posix.originalEntryChangedBeforeOpen": {  };
+  "error.core.posix.negativeModifiedTime": {  };
+  "error.core.posix.modifiedTimeRange": {  };
+  "error.core.posix.currentCoordinateUnavailable": {  };
+  "error.core.posix.truncatedDirectoryEntry": {  };
+  "error.core.posix.invalidDirectoryEntry": {  };
+  "error.core.posix.unterminatedDirectoryEntry": {  };
+  "error.core.posix.leafRequired": {  };
+  "error.core.posix.crossRootMove": {  };
+  "error.core.posix.entryParentUnavailable": {  };
+  "error.core.posix.rootMoveForbidden": {  };
+  "error.core.posix.entryBindingUnavailable": {  };
+  "error.core.posix.originalEntryChanged": {  };
+  "error.core.posix.parentRequired": {  };
+  "error.core.posix.participantBudget": {  };
+  "error.core.posix.crossRootParticipants": {  };
+  "error.core.posix.independentRootsRequired": {  };
+  "error.core.posix.participantMissing": {  };
+  "error.core.posix.canonicalWitnessChanged": {  };
+  "error.core.posix.directoryWitnessChanged": {  };
+  "error.core.posix.movingRootMissing": {  };
+  "error.core.posix.sourceParentMissing": {  };
+  "error.core.posix.directoryNotRetained": {  };
+  "error.core.posix.targetParentMissing": {  };
+  "error.core.posix.directoryAlreadyRetained": {  };
+  "error.api.workerOutputBudget": {  };
+  "error.api.workerDiagnosticBudget": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -30210,7 +30350,77 @@ export const messageParamTypes = {
   "error.core.captureDraft.wireMemberDuplicate": {},
   "error.core.captureDraft.wireMembersExceeded": {},
   "error.core.captureDraft.wireOperationMismatch": {},
-  "error.core.captureDraft.wireOperationMissing": {}
+  "error.core.captureDraft.wireOperationMissing": {},
+  "error.core.backend.controlledRootRequired": {},
+  "error.core.backend.descriptorAuthorityRequired": {},
+  "error.core.backend.deviceAuthenticationKeyUnavailable": {},
+  "error.core.backend.entryBindingUnavailable": {},
+  "error.core.backend.unsupportedStorageProfile": {},
+  "error.core.backend.deviceBindingUnsupported": {},
+  "error.core.backend.deviceAuthorityRequired": {},
+  "error.core.backend.deviceProtectionUnavailable": {},
+  "error.core.posix.fileScopeUnavailable": {},
+  "error.core.posix.incompatibleFileScope": {},
+  "error.core.posix.nonUtf8Name": {},
+  "error.core.posix.nulName": {},
+  "error.core.posix.basenameRequired": {},
+  "error.core.posix.nativeFilesystemRequired": {},
+  "error.core.posix.opaqueHandleSizeUnsupported": {},
+  "error.core.posix.serviceCredentialsRequired": {},
+  "error.core.posix.absoluteEnrollmentRequired": {},
+  "error.core.posix.traversalForbidden": {},
+  "error.core.posix.administratorEnrollmentRequired": {},
+  "error.core.posix.distinctOsIdentitiesRequired": {},
+  "error.core.posix.enrollmentUuidRequired": {},
+  "error.core.posix.foreignMachine": {},
+  "error.core.posix.deviceKeyProtectionRequired": {},
+  "error.core.posix.deviceKeyOutsideProfileRequired": {},
+  "error.core.posix.nonLoginServiceRequired": {},
+  "error.core.posix.absoluteRootRequired": {},
+  "error.core.posix.administratorRootParentRequired": {},
+  "error.core.posix.invalidRoot": {},
+  "error.core.posix.physicalRootMismatch": {},
+  "error.core.posix.rootRegistryUnavailable": {},
+  "error.core.posix.overlappingWriter": {},
+  "error.core.posix.authorityChanged": {},
+  "error.core.posix.outsideControlledRoot": {},
+  "error.core.posix.privateOrdinaryEntryRequired": {},
+  "error.core.posix.filesystemChanged": {},
+  "error.core.posix.namespaceReadsUnavailable": {},
+  "error.core.posix.namespaceReadConflict": {},
+  "error.core.posix.readParentUnavailable": {},
+  "error.core.posix.depthBudget": {},
+  "error.core.posix.admissionBudget": {},
+  "error.core.posix.symbolicOrSpecialEntry": {},
+  "error.core.posix.controlledAuthorityRequired": {},
+  "error.core.posix.descriptorAuthorityRequired": {},
+  "error.core.posix.originalEntryChangedBeforeOpen": {},
+  "error.core.posix.negativeModifiedTime": {},
+  "error.core.posix.modifiedTimeRange": {},
+  "error.core.posix.currentCoordinateUnavailable": {},
+  "error.core.posix.truncatedDirectoryEntry": {},
+  "error.core.posix.invalidDirectoryEntry": {},
+  "error.core.posix.unterminatedDirectoryEntry": {},
+  "error.core.posix.leafRequired": {},
+  "error.core.posix.crossRootMove": {},
+  "error.core.posix.entryParentUnavailable": {},
+  "error.core.posix.rootMoveForbidden": {},
+  "error.core.posix.entryBindingUnavailable": {},
+  "error.core.posix.originalEntryChanged": {},
+  "error.core.posix.parentRequired": {},
+  "error.core.posix.participantBudget": {},
+  "error.core.posix.crossRootParticipants": {},
+  "error.core.posix.independentRootsRequired": {},
+  "error.core.posix.participantMissing": {},
+  "error.core.posix.canonicalWitnessChanged": {},
+  "error.core.posix.directoryWitnessChanged": {},
+  "error.core.posix.movingRootMissing": {},
+  "error.core.posix.sourceParentMissing": {},
+  "error.core.posix.directoryNotRetained": {},
+  "error.core.posix.targetParentMissing": {},
+  "error.core.posix.directoryAlreadyRetained": {},
+  "error.api.workerOutputBudget": {},
+  "error.api.workerDiagnosticBudget": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -39679,5 +39889,75 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.captureDraft.wireMemberDuplicate": "Original frozen request has a duplicate top-level member",
   "error.core.captureDraft.wireMembersExceeded": "Original frozen request exceeds the top-level member budget",
   "error.core.captureDraft.wireOperationMismatch": "Original frozen request belongs to another operation ID",
-  "error.core.captureDraft.wireOperationMissing": "Original frozen request is missing its operation ID"
+  "error.core.captureDraft.wireOperationMissing": "Original frozen request is missing its operation ID",
+  "error.core.backend.controlledRootRequired": "This platform requires an explicitly enrolled controlled-service root",
+  "error.core.backend.descriptorAuthorityRequired": "File descriptor has no controlled-root authority",
+  "error.core.backend.deviceAuthenticationKeyUnavailable": "Device authentication key is unavailable",
+  "error.core.backend.entryBindingUnavailable": "Entry binding is unavailable",
+  "error.core.backend.unsupportedStorageProfile": "The workspace storage profile is unsupported; preserve its originals and use explicit import or conversion",
+  "error.core.backend.deviceBindingUnsupported": "Device binding plaintext is not a strict current physical record",
+  "error.core.backend.deviceAuthorityRequired": "Device binding requires a qualified platform authority",
+  "error.core.backend.deviceProtectionUnavailable": "Device protection is unavailable on this platform",
+  "error.core.posix.fileScopeUnavailable": "File scope leases are unavailable",
+  "error.core.posix.incompatibleFileScope": "The original file has a retained incompatible read or write scope",
+  "error.core.posix.nonUtf8Name": "Non-UTF8 filesystem names are unsupported",
+  "error.core.posix.nulName": "A filesystem name contains NUL",
+  "error.core.posix.basenameRequired": "An exact filesystem basename is required",
+  "error.core.posix.nativeFilesystemRequired": "The Linux profile requires native ext4 or XFS with opaque file handles",
+  "error.core.posix.opaqueHandleSizeUnsupported": "The filesystem returned an unsupported opaque handle size",
+  "error.core.posix.serviceCredentialsRequired": "The service requires its enrolled non-root UID, empty supplementary groups and no capabilities",
+  "error.core.posix.absoluteEnrollmentRequired": "Enrollment must use an absolute administrator-owned path",
+  "error.core.posix.traversalForbidden": "Enrollment path contains traversal",
+  "error.core.posix.administratorEnrollmentRequired": "Enrollment and every ancestor must be administrator-owned and not writable by the service or other users",
+  "error.core.posix.distinctOsIdentitiesRequired": "Service, client and worker require distinct non-root OS identities",
+  "error.core.posix.enrollmentUuidRequired": "Enrollment identity is not a canonical UUID",
+  "error.core.posix.foreignMachine": "Enrollment belongs to a different OS machine identity",
+  "error.core.posix.deviceKeyProtectionRequired": "Device key requires a 32-byte root-owned service-group-readable private record outside the profile",
+  "error.core.posix.deviceKeyOutsideProfileRequired": "Device key cannot reside inside the controlled library or private profile tree",
+  "error.core.posix.nonLoginServiceRequired": "The service account must be a dedicated non-login account",
+  "error.core.posix.absoluteRootRequired": "Controlled root must be absolute",
+  "error.core.posix.administratorRootParentRequired": "The controlled root needs an administrator-owned parent",
+  "error.core.posix.invalidRoot": "Invalid controlled root",
+  "error.core.posix.physicalRootMismatch": "The enrollment names a different physical root",
+  "error.core.posix.rootRegistryUnavailable": "Controlled root registry is unavailable",
+  "error.core.posix.overlappingWriter": "This controlled root overlaps an existing writer authority",
+  "error.core.posix.authorityChanged": "The original controlled root authority changed",
+  "error.core.posix.outsideControlledRoot": "The path is outside its admitted controlled-service root",
+  "error.core.posix.privateOrdinaryEntryRequired": "Controlled entries require service ownership, private permissions and ordinary single-link files or directories",
+  "error.core.posix.filesystemChanged": "The entry crossed its qualified filesystem",
+  "error.core.posix.namespaceReadsUnavailable": "Namespace read scopes are unavailable",
+  "error.core.posix.namespaceReadConflict": "A retained source or dependency read scope excludes this namespace mutation",
+  "error.core.posix.readParentUnavailable": "Read scope parent is unavailable",
+  "error.core.posix.depthBudget": "Controlled root exceeds the directory-depth budget",
+  "error.core.posix.admissionBudget": "Controlled root admission requires complete enumeration within 5000 entries",
+  "error.core.posix.symbolicOrSpecialEntry": "The controlled root contains a symbolic link or special filesystem entry",
+  "error.core.posix.controlledAuthorityRequired": "The path has no admitted controlled-service authority",
+  "error.core.posix.descriptorAuthorityRequired": "The descriptor has no controlled-root authority",
+  "error.core.posix.originalEntryChangedBeforeOpen": "The inspected original entry changed before data access",
+  "error.core.posix.negativeModifiedTime": "Negative filesystem modification times are unsupported",
+  "error.core.posix.modifiedTimeRange": "Filesystem modification time is outside the supported range",
+  "error.core.posix.currentCoordinateUnavailable": "The retained file has no current filesystem coordinate",
+  "error.core.posix.truncatedDirectoryEntry": "Truncated Linux directory entry",
+  "error.core.posix.invalidDirectoryEntry": "Invalid Linux directory entry length",
+  "error.core.posix.unterminatedDirectoryEntry": "Unterminated Linux directory entry",
+  "error.core.posix.leafRequired": "A leaf path is required",
+  "error.core.posix.crossRootMove": "A move cannot cross controlled-root authority",
+  "error.core.posix.entryParentUnavailable": "Entry parent binding is unavailable",
+  "error.core.posix.rootMoveForbidden": "The controlled root itself cannot move",
+  "error.core.posix.entryBindingUnavailable": "Entry binding is unavailable",
+  "error.core.posix.originalEntryChanged": "The original namespace entry changed before movement",
+  "error.core.posix.parentRequired": "Source lacks a parent",
+  "error.core.posix.participantBudget": "Invalid namespace participant budget",
+  "error.core.posix.crossRootParticipants": "Namespace participants have different root authorities",
+  "error.core.posix.independentRootsRequired": "Namespace roots and parents must be independent",
+  "error.core.posix.participantMissing": "Missing namespace participant",
+  "error.core.posix.canonicalWitnessChanged": "Final source canonical witness changed",
+  "error.core.posix.directoryWitnessChanged": "Final source directory witness changed",
+  "error.core.posix.movingRootMissing": "Original moving root is not retained",
+  "error.core.posix.sourceParentMissing": "Missing source parent",
+  "error.core.posix.directoryNotRetained": "Directory is not retained",
+  "error.core.posix.targetParentMissing": "Missing target parent",
+  "error.core.posix.directoryAlreadyRetained": "Directory is already retained",
+  "error.api.workerOutputBudget": "Compiler worker output exceeds the 24 MiB limit; the input is retained.",
+  "error.api.workerDiagnosticBudget": "Compiler worker diagnostics exceed the 256 KiB limit; the input is retained."
 };
