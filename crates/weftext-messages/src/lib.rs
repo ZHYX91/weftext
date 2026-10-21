@@ -480,14 +480,14 @@ impl ErrorDescription {
         mut self,
         code: impl Into<String>,
         cause: ErrorDescription,
-    ) -> Result<Self, CauseBoundary> {
+    ) -> Result<Self, Box<CauseBoundary>> {
         let code = code.into();
         if self.causes.0.len() + 1 + cause.causes.0.len() > ErrorCauses::MAX {
-            return Err(CauseBoundary {
+            return Err(Box::new(CauseBoundary {
                 outer: self,
                 code,
                 original: cause,
-            });
+            }));
         }
         self.causes.0.push(ErrorCause {
             code,
@@ -610,6 +610,63 @@ mod tests {
             serde_json::to_value(message).unwrap()["params"]["count"],
             UiInteger::MAX
         );
+    }
+
+    #[test]
+    fn complete_catalog_metadata_preserves_typed_wire_and_literal_parameters() {
+        for definition in &MESSAGE_DEFINITIONS {
+            let params = definition
+                .params
+                .iter()
+                .map(|parameter| {
+                    let value = match parameter.kind {
+                        ParameterKind::Text => {
+                            serde_json::json!(format!("原件<{}>😀\0{{literal}}", parameter.name))
+                        }
+                        ParameterKind::Integer => serde_json::json!(UiInteger::MAX),
+                    };
+                    (parameter.name.to_owned(), value)
+                })
+                .collect::<serde_json::Map<_, _>>();
+            let expected = serde_json::json!({"key":definition.key,"params":params});
+            let message: UiMessage = serde_json::from_value(expected.clone()).unwrap();
+            assert_eq!(message.key(), definition.key);
+            assert_eq!(serde_json::to_value(&message).unwrap(), expected);
+            for locale in [UiLocale::ZhCn, UiLocale::EnUs] {
+                let rendered = message.render(locale);
+                assert!(!rendered.is_empty(), "{}", definition.key);
+                for value in expected["params"].as_object().unwrap().values() {
+                    let literal = value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string());
+                    assert!(rendered.contains(&literal), "{}", definition.key);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_worker_and_controlled_root_factories_use_their_exact_canonical_keys() {
+        for (message, key) in [
+            (
+                UiMessage::error_api_worker_output_budget(),
+                "error.api.workerOutputBudget",
+            ),
+            (
+                UiMessage::error_api_worker_diagnostic_budget(),
+                "error.api.workerDiagnosticBudget",
+            ),
+            (
+                UiMessage::error_core_backend_controlled_root_required(),
+                "error.core.backend.controlledRootRequired",
+            ),
+        ] {
+            assert_eq!(message.key(), key);
+            let wire = serde_json::to_value(&message).unwrap();
+            assert_eq!(wire, serde_json::json!({"key":key,"params":{}}));
+            assert_eq!(serde_json::from_value::<UiMessage>(wire).unwrap(), message);
+        }
     }
 
     #[test]
