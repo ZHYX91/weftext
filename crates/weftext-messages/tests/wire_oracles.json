@@ -1,0 +1,49 @@
+{
+  "wire": [
+    {"name":"emptyParams","json":"{\"key\":\"common.save\",\"params\":{}}","valid":true,"canonical":{"key":"common.save","params":{}}},
+    {"name":"reorderedEnvelopeAndParameters","json":"{\"params\":{\"p1\":1e0,\"p0\":\"原件\"},\"key\":\"heading.scopeSummary\"}","valid":true,"canonical":{"key":"heading.scopeSummary","params":{"p0":"原件","p1":1}}},
+    {"name":"scalarText","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":\"原件😀\\u0000{count}\"}}","valid":true,"canonical":{"key":"common.operation","params":{"operationId":"原件😀\u0000{count}"}}},
+    {"name":"surrogatePair","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":\"\\ud83d\\ude00\"}}","valid":true,"canonical":{"key":"common.operation","params":{"operationId":"😀"}}},
+    {"name":"decimalOne","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":1.0}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":1}}},
+    {"name":"exponentOne","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":1e0}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":1}}},
+    {"name":"negativeZero","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":-0.0}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":0}}},
+    {"name":"maximumSafeInteger","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":9007199254740991}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":9007199254740991}}},
+    {"name":"maximumSafeDecimal","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":9007199254740991.0}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":9007199254740991}}},
+    {"name":"maximumSafeExponent","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":9007199254740991e0}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":9007199254740991}}},
+    {"name":"minimumSafeInteger","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":-9007199254740991}}","valid":true,"canonical":{"key":"reminder.missed","params":{"count":-9007199254740991}}},
+    {"name":"positiveOutsideDomain","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":9007199254740992}}","valid":false},
+    {"name":"roundedOutsideDomain","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":9007199254740993}}","valid":false},
+    {"name":"negativeOutsideDomain","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":-9007199254740992}}","valid":false},
+    {"name":"fraction","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":1.5}}","valid":false},
+    {"name":"nonfinite","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":1e309}}","valid":false},
+    {"name":"stringForInteger","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":\"1\"}}","valid":false},
+    {"name":"integerForText","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":1}}","valid":false},
+    {"name":"booleanForInteger","json":"{\"key\":\"reminder.missed\",\"params\":{\"count\":true}}","valid":false},
+    {"name":"loneHighSurrogate","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":\"\\ud800\"}}","valid":false},
+    {"name":"loneLowSurrogate","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":\"\\udc00\"}}","valid":false},
+    {"name":"unknownKey","json":"{\"key\":\"unknown.message\",\"params\":{}}","valid":false},
+    {"name":"missingParams","json":"{\"key\":\"common.save\"}","valid":false},
+    {"name":"missingParameter","json":"{\"key\":\"common.operation\",\"params\":{}}","valid":false},
+    {"name":"extraParameter","json":"{\"key\":\"common.save\",\"params\":{\"extra\":\"original\"}}","valid":false},
+    {"name":"wrongNamesWithCorrectCount","json":"{\"key\":\"heading.scopeSummary\",\"params\":{\"p0\":\"original\",\"other\":1}}","valid":false},
+    {"name":"extraWireField","json":"{\"key\":\"common.save\",\"params\":{},\"locale\":\"en-US\"}","valid":false},
+    {"name":"tupleShape","json":"[\"common.save\",{}]","valid":false},
+    {"name":"parameterTupleShape","json":"{\"key\":\"common.save\",\"params\":[]}","valid":false},
+    {"name":"duplicateKey","json":"{\"key\":\"common.save\",\"key\":\"common.save\",\"params\":{}}","valid":false},
+    {"name":"duplicateParams","json":"{\"key\":\"common.save\",\"params\":{},\"params\":{}}","valid":false},
+    {"name":"duplicateNamedParameter","json":"{\"key\":\"common.operation\",\"params\":{\"operationId\":\"first\",\"operationId\":\"second\"}}","valid":false}
+  ],
+  "templates": [
+    {"name":"literalCodeBraces","template":"{array,binding} {\"limit\":10} \\text{…}","params":[],"placeholders":[],"expected":"{array,binding} {\"limit\":10} \\text{…}"},
+    {"name":"nestedLatex","template":"\\end{{p1}} {p1}","params":[["p1","matrix"]],"placeholders":["p1","p1"],"expected":"\\end{matrix} matrix"},
+    {"name":"parameterIsNotTemplate","template":"{p1} {not_declared} {p2}","params":[["p1","{p2}"],["p2","原件😀"]],"placeholders":["p1","p2"],"expected":"{p2} {not_declared} 原件😀"}
+  ],
+  "locales": [
+    {"value":"zh-CN","valid":true},
+    {"value":"en-US","valid":true},
+    {"value":"en","valid":false},
+    {"value":"zh","valid":false},
+    {"value":"de-DE","valid":false},
+    {"value":null,"valid":false}
+  ]
+}
