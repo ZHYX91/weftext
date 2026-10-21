@@ -136,7 +136,226 @@ fn render_template(template: &str, params: &[(&str, String)]) -> String {
     output
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct UiMessage {
+    // Only generated factories and validated wire decoding can choose this
+    // process-local index. The canonical key is the sole serialized identity.
+    index: usize,
+    values: Vec<UiParameterValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+enum UiParameterValue {
+    Text(String),
+    Integer(UiInteger),
+}
+impl Serialize for UiParameterValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Text(value) => value.serialize(serializer),
+            Self::Integer(value) => value.serialize(serializer),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+enum ParameterKind {
+    Text,
+    Integer,
+}
+struct MessageParameter {
+    name: &'static str,
+    kind: ParameterKind,
+}
+struct MessageDefinition {
+    key: &'static str,
+    zh: &'static str,
+    en: &'static str,
+    params: &'static [MessageParameter],
+}
+
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
+
+impl UiMessage {
+    pub fn key(&self) -> &'static str {
+        MESSAGE_DEFINITIONS[self.index].key
+    }
+    pub fn render(&self, locale: UiLocale) -> String {
+        let definition = &MESSAGE_DEFINITIONS[self.index];
+        let params = definition
+            .params
+            .iter()
+            .zip(&self.values)
+            .map(|(parameter, value)| {
+                (
+                    parameter.name,
+                    match value {
+                        UiParameterValue::Text(value) => value.clone(),
+                        UiParameterValue::Integer(value) => value.to_string(),
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        render_template(
+            match locale {
+                UiLocale::ZhCn => definition.zh,
+                UiLocale::EnUs => definition.en,
+            },
+            &params,
+        )
+    }
+}
+
+struct MessageValues<'a>(&'a UiMessage);
+impl Serialize for MessageValues<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{Error, SerializeMap};
+        let definition = &MESSAGE_DEFINITIONS[self.0.index];
+        if definition.params.len() != self.0.values.len() {
+            return Err(S::Error::custom(
+                "Invalid generated product-message parameters",
+            ));
+        }
+        let mut map = serializer.serialize_map(Some(definition.params.len()))?;
+        for (parameter, value) in definition.params.iter().zip(&self.0.values) {
+            map.serialize_entry(parameter.name, value)?;
+        }
+        map.end()
+    }
+}
+impl fmt::Debug for UiMessage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Parameters<'a>(&'a UiMessage);
+        impl fmt::Debug for Parameters<'_> {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter
+                    .debug_map()
+                    .entries(
+                        MESSAGE_DEFINITIONS[self.0.index]
+                            .params
+                            .iter()
+                            .zip(&self.0.values)
+                            .map(|(parameter, value)| (parameter.name, value)),
+                    )
+                    .finish()
+            }
+        }
+        formatter
+            .debug_struct("UiMessage")
+            .field("key", &self.key())
+            .field("params", &Parameters(self))
+            .finish()
+    }
+}
+impl Serialize for UiMessage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut value = serializer.serialize_struct("UiMessage", 2)?;
+        value.serialize_field("key", self.key())?;
+        value.serialize_field("params", &MessageValues(self))?;
+        value.end()
+    }
+}
+struct WireParameters(std::collections::BTreeMap<String, UiParameterValue>);
+impl<'de> Deserialize<'de> for WireParameters {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ParametersVisitor;
+        impl<'de> serde::de::Visitor<'de> for ParametersVisitor {
+            type Value = WireParameters;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a bounded product-message parameter object")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = std::collections::BTreeMap::new();
+                while let Some(name) = map.next_key::<String>()? {
+                    if values.contains_key(&name) {
+                        return Err(serde::de::Error::custom(
+                            "Duplicate product-message parameter",
+                        ));
+                    }
+                    if values.len() == MESSAGE_MAX_PARAMS {
+                        return Err(serde::de::Error::invalid_length(values.len() + 1, &self));
+                    }
+                    values.insert(name, map.next_value()?);
+                }
+                Ok(WireParameters(values))
+            }
+        }
+        deserializer.deserialize_map(ParametersVisitor)
+    }
+}
+impl<'de> Deserialize<'de> for UiMessage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct MessageVisitor;
+        impl<'de> serde::de::Visitor<'de> for MessageVisitor {
+            type Value = UiMessage;
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an exact product-message object")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                use serde::de::Error;
+                let mut key: Option<String> = None;
+                let mut params: Option<WireParameters> = None;
+                while let Some(field) = map.next_key::<String>()? {
+                    match field.as_str() {
+                        "key" => {
+                            if key.is_some() {
+                                return Err(A::Error::duplicate_field("key"));
+                            }
+                            key = Some(map.next_value()?);
+                        }
+                        "params" => {
+                            if params.is_some() {
+                                return Err(A::Error::duplicate_field("params"));
+                            }
+                            params = Some(map.next_value()?);
+                        }
+                        _ => return Err(A::Error::unknown_field(&field, &["key", "params"])),
+                    }
+                }
+                let key = key.ok_or_else(|| A::Error::missing_field("key"))?;
+                let mut params = params.ok_or_else(|| A::Error::missing_field("params"))?.0;
+                let index = MESSAGE_DEFINITIONS
+                    .binary_search_by_key(&key.as_str(), |definition| definition.key)
+                    .map_err(|_| {
+                        A::Error::invalid_value(
+                            serde::de::Unexpected::Str(&key),
+                            &"a canonical product-message key",
+                        )
+                    })?;
+                let definition = &MESSAGE_DEFINITIONS[index];
+                if params.len() != definition.params.len() {
+                    return Err(A::Error::invalid_length(
+                        params.len(),
+                        &"the exact named product-message parameters",
+                    ));
+                }
+                let mut values = Vec::with_capacity(definition.params.len());
+                for parameter in definition.params {
+                    let value = params
+                        .remove(parameter.name)
+                        .ok_or_else(|| A::Error::missing_field(parameter.name))?;
+                    if !matches!(
+                        (parameter.kind, &value),
+                        (ParameterKind::Text, UiParameterValue::Text(_))
+                            | (ParameterKind::Integer, UiParameterValue::Integer(_))
+                    ) {
+                        return Err(A::Error::custom("Incorrect product-message parameter type"));
+                    }
+                    values.push(value);
+                }
+                Ok(UiMessage { index, values })
+            }
+        }
+        deserializer.deserialize_map(MessageVisitor)
+    }
+}
 
 /// Provenance of an unmodified diagnostic produced outside the product message catalog.
 /// Product validation and policy explanations always use `UiMessage` instead.
@@ -261,14 +480,14 @@ impl ErrorDescription {
         mut self,
         code: impl Into<String>,
         cause: ErrorDescription,
-    ) -> Result<Self, CauseBoundary> {
+    ) -> Result<Self, Box<CauseBoundary>> {
         let code = code.into();
         if self.causes.0.len() + 1 + cause.causes.0.len() > ErrorCauses::MAX {
-            return Err(CauseBoundary {
+            return Err(Box::new(CauseBoundary {
                 outer: self,
                 code,
                 original: cause,
-            });
+            }));
         }
         self.causes.0.push(ErrorCause {
             code,
@@ -318,6 +537,139 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shared_wire_template_and_scalar_oracles() {
+        let oracles: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/wire_oracles.json")).unwrap();
+        for case in oracles["wire"].as_array().unwrap() {
+            let decoded = serde_json::from_str::<UiMessage>(case["json"].as_str().unwrap());
+            assert_eq!(
+                decoded.is_ok(),
+                case["valid"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+            if let Ok(message) = decoded {
+                assert_eq!(
+                    serde_json::to_value(&message).unwrap(),
+                    case["canonical"],
+                    "{}",
+                    case["name"]
+                );
+            }
+        }
+        for case in oracles["templates"].as_array().unwrap() {
+            let template = case["template"].as_str().unwrap();
+            let params = case["params"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pair| {
+                    (
+                        pair[0].as_str().unwrap(),
+                        pair[1].as_str().unwrap().to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                render_template(template, &params),
+                case["expected"].as_str().unwrap(),
+                "{}",
+                case["name"]
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    message_template::placeholders(template)
+                        .map(|(_, name)| name)
+                        .collect::<Vec<_>>()
+                )
+                .unwrap(),
+                case["placeholders"],
+                "{}",
+                case["name"]
+            );
+        }
+        for case in oracles["locales"].as_array().unwrap() {
+            assert_eq!(
+                serde_json::from_value::<UiLocale>(case["value"].clone()).is_ok(),
+                case["valid"].as_bool().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn actual_json_parser_keeps_maximum_safe_decimal_before_message_validation() {
+        // The previous non-roundtrip parser rounded the significand before its
+        // division and changed this safe JSON integer from 991 to 990.
+        let number: f64 = serde_json::from_str("9007199254740991.0").unwrap();
+        assert_eq!(number, UiInteger::MAX as f64);
+        let message: UiMessage = serde_json::from_str(
+            r#"{"key":"reminder.missed","params":{"count":9007199254740991.0}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(message).unwrap()["params"]["count"],
+            UiInteger::MAX
+        );
+    }
+
+    #[test]
+    fn complete_catalog_metadata_preserves_typed_wire_and_literal_parameters() {
+        for definition in &MESSAGE_DEFINITIONS {
+            let params = definition
+                .params
+                .iter()
+                .map(|parameter| {
+                    let value = match parameter.kind {
+                        ParameterKind::Text => {
+                            serde_json::json!(format!("原件<{}>😀\0{{literal}}", parameter.name))
+                        }
+                        ParameterKind::Integer => serde_json::json!(UiInteger::MAX),
+                    };
+                    (parameter.name.to_owned(), value)
+                })
+                .collect::<serde_json::Map<_, _>>();
+            let expected = serde_json::json!({"key":definition.key,"params":params});
+            let message: UiMessage = serde_json::from_value(expected.clone()).unwrap();
+            assert_eq!(message.key(), definition.key);
+            assert_eq!(serde_json::to_value(&message).unwrap(), expected);
+            for locale in [UiLocale::ZhCn, UiLocale::EnUs] {
+                let rendered = message.render(locale);
+                assert!(!rendered.is_empty(), "{}", definition.key);
+                for value in expected["params"].as_object().unwrap().values() {
+                    let literal = value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string());
+                    assert!(rendered.contains(&literal), "{}", definition.key);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_worker_and_controlled_root_factories_use_their_exact_canonical_keys() {
+        for (message, key) in [
+            (
+                UiMessage::error_api_worker_output_budget(),
+                "error.api.workerOutputBudget",
+            ),
+            (
+                UiMessage::error_api_worker_diagnostic_budget(),
+                "error.api.workerDiagnosticBudget",
+            ),
+            (
+                UiMessage::error_core_backend_controlled_root_required(),
+                "error.core.backend.controlledRootRequired",
+            ),
+        ] {
+            assert_eq!(message.key(), key);
+            let wire = serde_json::to_value(&message).unwrap();
+            assert_eq!(wire, serde_json::json!({"key":key,"params":{}}));
+            assert_eq!(serde_json::from_value::<UiMessage>(wire).unwrap(), message);
+        }
+    }
+
+    #[test]
     fn native_templates_match_the_web_placeholder_grammar_in_code_examples() {
         let example =
             "{array,binding} {\"limit\":10} \\text{…} \\end{{p1}} {p1} {not_declared} {p2}";
@@ -335,7 +687,7 @@ mod tests {
 
     #[test]
     fn error_wire_is_closed_and_diagnostics_keep_their_original_bytes() {
-        let original = ErrorDescription::new(UiMessage::CommonSave {})
+        let original = ErrorDescription::new(UiMessage::common_save())
             .diagnostic(DiagnosticOrigin::Typst, "raw 中文 <source>\n{count}\0😀");
         let value = serde_json::to_value(&original).unwrap();
         assert_eq!(value["causes"], serde_json::json!([]));
@@ -367,14 +719,16 @@ mod tests {
 
     #[test]
     fn full_cause_chain_rejects_extension_without_losing_either_description() {
-        let mut full = ErrorDescription::new(UiMessage::CommonSave {});
+        let mut full = ErrorDescription::new(UiMessage::common_save());
         for index in 0..ErrorCauses::MAX {
             full = full
                 .try_caused_by(
                     format!("cause{index}"),
-                    ErrorDescription::new(UiMessage::CommonOperation {
-                        operation_id: index.to_string(),
-                    })
+                    ErrorDescription::new(UiMessage::common_operation(
+                        crate::params::CommonOperation {
+                            operation_id: index.to_string(),
+                        },
+                    ))
                     .diagnostic(DiagnosticOrigin::Dependency, format!("original {index}")),
                 )
                 .unwrap();
@@ -384,9 +738,11 @@ mod tests {
             serde_json::from_value::<ErrorDescription>(value.clone()).unwrap(),
             full
         );
-        let outer = ErrorDescription::new(UiMessage::CommonOperation {
-            operation_id: "outer".into(),
-        });
+        let outer = ErrorDescription::new(UiMessage::common_operation(
+            crate::params::CommonOperation {
+                operation_id: "outer".into(),
+            },
+        ));
         let boundary = outer
             .clone()
             .try_caused_by("originalCode", full.clone())
@@ -414,9 +770,9 @@ mod tests {
 
     #[test]
     fn native_and_web_message_share_exact_identity_and_params() {
-        let message = UiMessage::CommonOperation {
+        let message = UiMessage::common_operation(crate::params::CommonOperation {
             operation_id: "original<{count}>😀".into(),
-        };
+        });
         assert_eq!(
             serde_json::to_value(&message).unwrap(),
             serde_json::json!({"key":"common.operation","params":{"operationId":"original<{count}>😀"}})

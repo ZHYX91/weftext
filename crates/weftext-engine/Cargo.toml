@@ -14,7 +14,7 @@ typst-kit = { version = "=0.15.1", default-features = false, features = ["scan-f
 typst-syntax = "=0.15.1"
 typst-assets = {version="=0.15.1", features=["fonts"]}
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { workspace = true }
 sha2 = "0.10"
 
 [dev-dependencies]
