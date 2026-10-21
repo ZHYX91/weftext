@@ -1,7 +1,7 @@
 """Actual local HTTP commit/delivery and original-attempt recovery, in owned TEST data.
 
-All evidence and original files are retained. Processes stop by controlled process
-termination; this test does not certify graceful UI shutdown or power loss.
+All evidence and original files are retained. Processes stop by an exact typed
+owner shutdown; this test does not certify UI shutdown or power loss.
 """
 import argparse
 import hashlib
@@ -26,7 +26,7 @@ def run(executable, evidence):
 
     def start():
         nonlocal server
-        server = test_hosted.Server(['--no-browser', '--data-dir', str(state)])
+        server = test_hosted.Server([ '--data-dir', str(state)])
         owned.append({'pid': server.process.pid, 'url': server.url, 'startedAt': time.time()})
 
     def stop():
@@ -34,8 +34,7 @@ def run(executable, evidence):
         if server is None:
             return
         pid = server.process.pid
-        server.process.terminate()
-        stdout, stderr = server.process.communicate(timeout=20)
+        stdout, stderr = server.close()
         (evidence / f'{pid}-stdout.log').write_text(stdout, encoding='utf-8')
         (evidence / f'{pid}-stderr.log').write_text(stderr, encoding='utf-8')
         owned[-1]['exitCode'] = server.process.returncode

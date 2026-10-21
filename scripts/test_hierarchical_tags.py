@@ -63,7 +63,7 @@ class HierarchicalTags(unittest.TestCase):
         (self.folder / 'test-case.txt').write_text(self._testMethodName, 'utf-8')
         self.data, self.root = self.folder / 'state', self.folder / 'Library'
         self.timings = []
-        self.server = Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = Server([ '--data-dir', str(self.data)])
         self.library = self.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})
         self.doc = self.note('Anchor')
         print('Hierarchical tags evidence:', self.folder, flush=True)
@@ -265,7 +265,7 @@ class HierarchicalTags(unittest.TestCase):
         # Discard the response body rather than accepting its receipt.
         connection.close()
         self.server.close()
-        self.server = Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = Server([ '--data-dir', str(self.data)])
         status = self.call('/api/operations/status', {'operationId': preview['operationId']})
         self.assertEqual(status['status'], 'committed')
         replay = self.call('/api/navigation/create-tag', request)

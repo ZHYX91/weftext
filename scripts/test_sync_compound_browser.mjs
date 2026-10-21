@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Owned replicas and headless Chrome. Requires the compound ApplySync candidate.
 // Producers use real rename/save Plans; routes only drop actual HTTP responses.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -46,23 +47,19 @@ async function until(read, predicate, label, milliseconds = 15000) {
   throw new Error(`${label} timeout; last=${JSON.stringify(value)}`);
 }
 async function start(folder, label, args) {
-  const child = spawn(exe, ['--no-browser', ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnServe(exe, [...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const server = { child, folder, label, stdout: '', stderr: '' }; servers.push(server);
   child.stdout.on('data', bytes => server.stdout += bytes); child.stderr.on('data', bytes => server.stderr += bytes);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const match = server.stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) return Object.assign(server, { base: match[1], token: match[2], port: new URL(match[1]).port });
+    const match = serveReady(child);
+    if (match) return Object.assign(server, { base: match.base, token: match.token, port: new URL(match.base).port });
     if (child.exitCode !== null || child.signalCode !== null) throw new Error(`${label} startup failed: ${server.stderr}`);
     await pause(80);
   }
   throw new Error(`${label} startup timeout`);
 }
-async function stop(server) {
-  if (!server || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  const exited = new Promise(resolve => server.child.once('exit', resolve));
-  server.child.kill(); await bounded(exited, 15000, `${server.label} owned process exit`);
-}
+async function stop(server) { await stopServe(server?.child); }
 async function api(server, route, data, expected = 200) {
   const response = await fetch(server.base + route, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token },
@@ -590,6 +587,6 @@ try {
     await writeFile(path.join(server.folder, `server-${index}-${server.label}.stdout.log`), server.stdout);
     await writeFile(path.join(server.folder, `server-${index}-${server.label}.stderr.log`), server.stderr);
   }
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2));
   console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors: result.routeErrors, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

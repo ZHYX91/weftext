@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Real owned browser tasks; no desktop input, real OS IME or reference-host claim.
 
 import assert from 'node:assert/strict';
 
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 
@@ -29,9 +30,9 @@ let server, base, token, browser, page, vite, stderr = '', phase = 'local';
 
 async function until(test) { let last; for (let i = 0; i < 450; i++) { try { if (await test()) return; } catch (error) { last = error; } await pause(100); } throw last ?? Error('Condition timed out'); }
 
-async function start(args = [], hosted = false) { server = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore','pipe','pipe'] }); let stdout = ''; server.stdout.on('data', bytes => stdout += bytes); server.stderr.on('data', bytes => stderr += bytes); await until(() => { const match = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; token = match[2]; return true; } if (server.exitCode !== null) throw Error(stderr); return false; }); }
+async function start(args = [], hosted = false) { server = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore','pipe','pipe'] }); let stdout = ''; server.stdout.on('data', bytes => stdout += bytes); server.stderr.on('data', bytes => stderr += bytes); await until(() => { const match = serveReady(server); if (match) { base = match.base; token = match.token; return true; } if (server.exitCode !== null) throw Error(stderr); return false; }); }
 
-async function stop() { if (server && server.exitCode === null && server.signalCode === null) { const closed = new Promise(resolve => server.once('exit', resolve)); server.kill(); await closed; } server = undefined; }
+async function stop() { await stopServe(server); server = undefined; }
 
 async function api(route, body, actor, expected = 200) { const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + tokens[actor] } : { 'X-Weftext-Token': token }) }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.equal(response.status, expected, JSON.stringify(value)); return value; }
 
@@ -269,4 +270,4 @@ try {
 
 } catch(error) { result.failure=String(error.stack??error); if(page&&!page.isClosed()) result.failureToasts=await page.locator('.toast-host').innerText().catch(()=>''); if(page&&!page.isClosed()){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(path.join(out,'failure.html'),await page.content().catch(()=>''));} throw error; }
 
-finally { await browser?.close(); await vite?.close(); await stop(); await writeFile(path.join(out,'results.json'),JSON.stringify(result,null,2)); await writeFile(path.join(out,'server.stderr.log'),stderr); console.log(JSON.stringify({out,completed:result.completed,cases:result.cases.length,failure:result.failure})); }
+finally { await browser?.close(); await vite?.close(); await stop(); await writeFile(path.join(out,'results.json'),stringifyServeJson(result, 2)); await writeFile(path.join(out,'server.stderr.log'),stderr); console.log(JSON.stringify({out,completed:result.completed,cases:result.cases.length,failure:result.failure})); }

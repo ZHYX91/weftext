@@ -71,8 +71,8 @@ class SyncRevalidation(SyncCompound):
         (self.folder / 'case.json').write_text(
             json.dumps({'test': self._testMethodName}) + '\n', encoding='utf-8')
         self.servers, self.transfer_number = [], 0
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B')
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.with_schema = 'absent_schema' not in self._testMethodName
@@ -558,7 +558,7 @@ class SyncRevalidation(SyncCompound):
 
     def restart_a(self):
         self.close_server(self.a)
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A-restart')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A-restart')
 
     def new_received_source(self, suffix):
         self.saved = self.save(self.a, self.ra, Path('Note/Note.typ'), suffix)['source']

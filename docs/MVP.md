@@ -177,12 +177,11 @@ Default-browser handoff uses Windows Shell, macOS `/usr/bin/open` or Linux `xdg-
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
-python scripts/mvp.py package
 ```
 
 The default builds a local debug candidate; `--release` selects optimization. The entry uses Cargo's reported executable path, including `CARGO_TARGET_DIR` or Cargo configuration overrides, for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
 
-Packaging creates a new `dist/` directory, retains previous candidates and does not push or publish. It includes the working-tree source snapshot, licenses, font manifests and build dependency notices. The inventory includes test/build dependencies, not a claim every item is in the binary. Published releases follow [WORKFLOW](WORKFLOW.md).
+Windows dual-executable ZIP/MSIX uses the same entry's `package` action with exact SDK, offline material directory and actual MSVC linker; see the [packaging contract](PACKAGING.md) for the full command and current gaps. It builds/checks a fixed source copy, creates a new `dist/` candidate, retains previous candidates and does not push or publish. Source, both PEs, original licenses, font manifests and dependency notices belong to that candidate. The inventory includes test/build dependencies, not a claim every item is in the binary. Unqualified offline materials refuse generation before building; the old single-executable package cannot substitute. Published releases follow [WORKFLOW](WORKFLOW.md).
 
 
 ## Same-owner local replica controls

@@ -176,12 +176,11 @@ Server 已按独立权限接通五档编辑、窄字段与高级／内嵌 Query�
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
-python scripts/mvp.py package
 ```
 
 默认构建本地调试候选，`--release` 使用优化构建。入口使用 Cargo 实际报告的程序路径，包括 `CARGO_TARGET_DIR` 或 Cargo 配置覆盖，供后续检查与打包使用。打包要求使用仓库的 `target/` 树或源码树以外的构建目录，并从源码快照排除该构建树。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
 
-打包在 `dist/` 创建新目录，保留旧候选，不推送或发布。包含工作树源码快照、许可证、字体清单与构建依赖声明；声明含测试／构建依赖，不表示每项进入二进制。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
+Windows 双程序 ZIP／MSIX 使用同一入口的 `package` 动作，必须提供准确 SDK、离线材料目录与实际 MSVC linker，完整命令和当前缺项见 [打包合同](PACKAGING.zh-CN.md)。它从固定源码副本构建、检查并在 `dist/` 创建新目录，保留旧候选，不推送或发布。源码、两个 PE、原许可、字体清单与构建依赖声明绑定同一候选；声明含测试／构建依赖，不表示每项进入二进制。未取得资格的离线材料会在构建前明确拒绝，不能用旧单程序包替代。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
 
 
 ## 同所有者本地副本同步入口

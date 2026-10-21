@@ -29,7 +29,7 @@ class HostedQuery(HostedFields):
 
     def local(self, action):
         self.server.close()
-        local = Server(['--no-browser', '--data-dir', str(self.data)])
+        local = Server([ '--data-dir', str(self.data)])
         def api(route, data=None):
             code, result, _ = local.call(route, data)
             self.assertEqual(code, 200, str(result)[:1500])

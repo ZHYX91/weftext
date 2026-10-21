@@ -98,7 +98,7 @@ class HostedLegacyOffice(HostedOffice):
         self.folder = EVIDENCE
         self.data = RUN_ROOT / ('Weftext-MVP' if MODE == 'default' else 's')
         self.root = RUN_ROOT / 'l'
-        local = Server(['--no-browser', *self.data_args()])
+        local = Server([ *self.data_args()])
         try:
             self.assertEqual(local.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})[0], 200)
             code, doc, _ = local.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'Shared', 'operationId': uid()})
@@ -123,7 +123,7 @@ class HostedLegacyOffice(HostedOffice):
 
     def start(self):
         self.config_path.write_text(json.dumps(self.config), 'utf-8')
-        self.server = Server(['--no-browser', *self.data_args(), '--server-config', str(self.config_path)], hosted=True)
+        self.server = Server([ *self.data_args(), '--server-config', str(self.config_path)], hosted=True)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
         result = super().call(route, data, actor, status, headers)

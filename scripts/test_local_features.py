@@ -6,6 +6,7 @@ workspace cleanup. No caller-supplied library or private data directory is used.
 This checks server behavior; IME, accessibility and shared client Undo require
 the separate client acceptance and are not established by these tests.
 """
+from _cli_serve import launch_serve
 from _creation_result import created_document
 import argparse
 import base64
@@ -14,13 +15,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import queue
-import re
 import struct
-import subprocess
 import sys
 import tempfile
-import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -80,49 +77,18 @@ class LocalFeatures(unittest.TestCase):
     def setUpClass(cls):
         cls.root = Path(tempfile.mkdtemp(prefix='weftext-features-', dir=ARTIFACT_PARENT))
         cls.data_dir = cls.root / 'private-state'
-        cls.stderr = (cls.root / 'server.stderr.log').open('w', encoding='utf-8')
-        cls.stdout = (cls.root / 'server.stdout.log').open('w', encoding='utf-8')
-        cls.process = subprocess.Popen(
-            [str(EXE), '--no-browser', '--data-dir', str(cls.data_dir)],
-            stdout=subprocess.PIPE, stderr=cls.stderr, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        lines = queue.Queue()
-
-        def read_lines():
-            for line in cls.process.stdout:
-                # The token is deliberately omitted from the retained log.
-                cls.stdout.write(re.sub(r'#token=\w+', '#token=<redacted>', line))
-                cls.stdout.flush()
-                lines.put(line)
-            lines.put(None)
-
-        cls.reader = threading.Thread(target=read_lines, daemon=True)
-        cls.reader.start()
         try:
-            while True:
-                line = lines.get(timeout=40)
-                if line is None:
-                    raise RuntimeError('Application exited before printing its local URL')
-                match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-                if match:
-                    cls.url, cls.token = match.groups()
-                    break
+            cls.owner = launch_serve(EXE, ['--data-dir', str(cls.data_dir)], log_prefix=cls.root / 'server')
+            cls.process = cls.owner.process
+            cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
         except Exception:
-            cls.process.terminate()
-            cls.process.wait(timeout=10)
-            cls.stderr.close()
-            cls.stdout.close()
             print(f'Retained failed startup fixtures: {cls.root}', file=sys.stderr)
             raise
         print(f'Acceptance fixtures (retained): {cls.root}', flush=True)
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
-        cls.process.wait(timeout=15)
-        cls.reader.join(timeout=2)
-        cls.stderr.close()
-        cls.stdout.close()
+        cls.owner.stop()
         print(f'Retained acceptance fixtures: {cls.root}', flush=True)
 
     def raw(self, path, data=None, status=200, headers=None, token=True):

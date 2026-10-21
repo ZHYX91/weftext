@@ -1,0 +1,2 @@
+# Preserve the exact third-party license bytes qualified in provenance/locks.
+licenses/** -text -whitespace

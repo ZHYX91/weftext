@@ -1,7 +1,8 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Real embedded hosted UI regression. Pass EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -14,12 +15,12 @@ const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(aw
 const tokens = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let base, localToken, local, server, browser;
 async function start(args, hosted = false) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }), record = { pid: child.pid, args, stdout: '', stderr: '' }; result.processes.push(record);
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }), record = { pid: child.pid, args: child.spawnargs.slice(1), stdout: '', stderr: '' }; result.processes.push(record);
   child.stdout.on('data', bytes => record.stdout += bytes.toString()); child.stderr.on('data', bytes => record.stderr += bytes.toString()); child.once('exit', (code, signal) => { record.exit = { code, signal }; });
-  for (let i = 0; i < 300; i++) { const match = record.stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; localToken = match[2]; record.base = base; return child; } if (child.exitCode !== null) throw new Error(record.stderr); await pause(100); }
+  for (let i = 0; i < 300; i++) { const match = serveReady(child); if (match) { base = match.base; localToken = match.token; record.base = base; return child; } if (child.exitCode !== null) throw new Error(record.stderr); await pause(100); }
   await stop(child); throw new Error('Owned test backend startup timed out');
 }
-async function stop(child) { if (child && child.exitCode === null && child.signalCode === null) { const exited = new Promise(resolve => child.once('exit', resolve)); child.kill(); await exited; } }
+async function stop(child) { await stopServe(child); }
 async function api(route, data, actor = 'alice') {
   const response = await fetch(base + route, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + tokens[actor] } : { 'X-Weftext-Token': localToken }) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
@@ -53,14 +54,14 @@ async function recoveryRow(page, marker) {
 }
 try {
   const data = path.join(out, 'state'), root = path.join(out, 'TEST-library');
-  local = await start(['--no-browser', '--data-dir', data]);
+  local = await start(['--data-dir', data]);
   await api('/api/library/create', { path: root, operationId: randomUUID() }, null);
   const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'TEST-Shared', operationId: randomUUID() }, null));
   const secret = 'PRIVATE_PROTECTED_BASE_NOT_PERSONAL', initial = note.source + '\n' + secret + '\n';
   await api('/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: initial, operationId: randomUUID() }, null); await stop(local); local = null;
   const rights = { read: true, write: true, history: true, download: true };
   const config = { deployment: 'TEST-personal-input', bind: '127.0.0.1:0', root, adminTokenSha256: sha(tokens.admin), files: { shared: { path: 'TEST-Shared/TEST-Shared.typ', title: 'TEST共同文档', editable: true } }, users: Object.fromEntries(['alice', 'bob'].map(actor => [actor, { enabled: true, tokenSha256: sha(tokens[actor]), grants: { shared: rights } }])) };
-  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true);
+  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--data-dir', data, '--server-config', configPath], true);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   {
     const { page, context } = await freshPage(), marker = 'OWN_UNUPLOADED_中文😀'; await append(page, marker); await pause(900); await assertOnlyOwn(page, marker, secret);
@@ -122,5 +123,5 @@ try {
 finally {
   await browser?.close(); await stop(local); await stop(server); for (const process of result.processes) process.stdout = process.stdout.replace(/#token=\w+/g, '#token=[TEST credential redacted]');
   result.closeMethod = 'Owned browser.close and exact owned child.kill; Windows process termination, not graceful-shutdown qualification';
-  await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, failure: result.failure }));
+  await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, failure: result.failure }));
 }

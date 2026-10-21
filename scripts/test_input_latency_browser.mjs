@@ -1,9 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Trusted source-editor key events on an explicit embedded candidate.
 // The second animation-frame receipt is a conservative feedback bound, not an
 // OS keyboard/IME measurement. Chrome Layout tracing and JS heap have separate scopes.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -64,21 +65,18 @@ function recordProcess(process, kind) {
 }
 
 async function start(data, extra = [], server = false) {
-  child = spawn(exe, ['--no-browser', '--data-dir', data, ...extra], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawnServe(exe, ['--data-dir', data, ...extra], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   recordProcess(child, server ? 'hosted backend' : 'local backend');
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const match = stdout.match(server ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) { base = match[1]; ownerToken = match[2]; return; }
+    const match = serveReady(child);
+    if (match) { base = match.base; ownerToken = match.token; return; }
     if (child.exitCode !== null) throw Error(stderr); await pause(80);
   }
   throw Error('Owned backend startup timeout');
 }
-async function stop() {
-  if (child?.exitCode === null && child.signalCode === null) { const ended = new Promise(resolve => child.once('exit', resolve)); child.kill(); await ended; }
-  child = undefined;
-}
+async function stop() { await stopServe(child); child = undefined; }
 async function api(route, body) {
   const response = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': ownerToken }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) });
   const value = await response.json(); assert.ok(response.ok, route + ': ' + JSON.stringify(value)); return value;
@@ -235,7 +233,7 @@ try {
       // the measurement. Verify exact original bytes after the owned backend
       // closes, rather than mistaking an active read lease for author changes.
       measurement.originalCheck = 'deferred until owned backend releases file leases';
-      result.measurements.push(measurement); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2));
+      result.measurements.push(measurement); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2));
       console.log(JSON.stringify({ fixture, round, phase, p95Ms: measurement.feedbackUpperBoundMs.p95, maximumLayoutMs: measurement.layoutTaskMs.maximum, feedbackP95Met: measurement.feedbackP95Met, layoutMaximumMet: measurement.layoutMaximumMet }));
     }
     if (recoveryCheck) {
@@ -279,5 +277,5 @@ finally {
   for (const close of [() => browser?.close(), () => browserServer?.close(), async () => { await vite?.close(); vite = undefined; }, () => stop()]) { try { await close(); } catch (error) { result.cleanupErrors.push(String(error)); } }
   result.ownedProcessesClosed = result.ownedRootProcesses.every(item => item.exitObservedAt) && result.cleanupErrors.length === 0 && !vite;
   if (!result.ownedProcessesClosed) process.exitCode = 1;
-  await writeFile(path.join(out, 'server.stderr.log'), stderr); await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'server.stderr.log'), stderr); await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2));
 }

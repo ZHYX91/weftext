@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // External browser HTML producer: native copy and trusted default paste, without
 // manufactured ClipboardEvent/DataTransfer or replaying HTML into the clipboard.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -21,18 +22,18 @@ const hostedToken = randomUUID(), adminToken = randomUUID();
 result.client = hosted ? 'controlled hosted writer' : 'local owner';
 let child, browser, page, vite, base, token, stderr = '';
 async function start(args = [], server = false) {
-  child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const match = stdout.match(server ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) { base = match[1]; token = match[2]; return; }
+    const match = serveReady(child);
+    if (match) { base = match.base; token = match.token; return; }
     if (child.exitCode !== null) throw new Error(stderr);
     await new Promise(resolve => setTimeout(resolve, 80));
   }
   throw new Error('Owned server startup timeout');
 }
-async function stop() { if (child?.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function stop() { await stopServe(child); }
 async function api(route, body) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json(); assert.equal(reply.status, 200, route + ': ' + JSON.stringify(value)); return value; }
 const click = label => page.getByRole('button', { name: label, exact: true }).click();
 const mode = label => click(hosted ? label === '源码' ? 'V01 源码' : 'V04 可视写作' : label);
@@ -101,5 +102,5 @@ try {
   assert.equal(await readFile(doc.path, 'utf8'), initial); assert.deepEqual(result.pageErrors, []);
   result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-ui.txt'), await page.locator('body').innerText().catch(() => 'unavailable')); } throw error;
-} finally { await browser?.close(); await vite?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); }
+} finally { await browser?.close(); await vite?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); }
 console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases.length, ownedProcessesClosed: result.ownedProcessesClosed }));

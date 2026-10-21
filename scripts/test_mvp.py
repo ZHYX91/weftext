@@ -1,10 +1,9 @@
 """Exercise the built local application against disposable files, never a real library."""
+from _cli_serve import launch_serve
 from _creation_result import created_document
 import argparse
 import json
 from pathlib import Path
-import re
-import subprocess
 import tempfile
 import unittest
 from urllib.error import HTTPError
@@ -30,26 +29,13 @@ class LocalApplication(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory(prefix='weftext-mvp-test-')
         cls.root = Path(cls.temp.name)
-        cls.process = subprocess.Popen(
-            [str(EXE), '--no-browser', '--data-dir', str(cls.root / 'state')],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        address = None
-        for _ in range(4):
-            line = cls.process.stdout.readline()
-            match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-            if match:
-                address = match
-                break
-        if not address:
-            cls.process.terminate()
-            raise RuntimeError('The built application did not print its local address')
-        cls.url, cls.token = address.groups()
+        cls.owner = launch_serve(EXE, ['--data-dir', str(cls.root / 'state')])
+        cls.process = cls.owner.process
+        cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
-        cls.process.communicate(timeout=10)
+        cls.owner.stop()
         cls.temp.cleanup()
 
     def api(self, path, data=None, status=200, headers=None):

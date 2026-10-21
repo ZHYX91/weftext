@@ -261,7 +261,7 @@ class SyncStructure(SyncCompound):
 
     def restart_a(self):
         self.close_server(self.a)
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A-restart')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A-restart')
 
     def assert_native_after_enable(self, case):
         target = self.ra / case['request']['name']
@@ -309,7 +309,7 @@ class SyncStructure(SyncCompound):
 
     def clone_native_after_enable(self, case, imported):
         clone_root = self.folder / 'library-native-clone'
-        clone = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-native-clone')], 'C-clone')
+        clone = self.start_server([ '--data-dir', str(self.folder / 'state-native-clone')], 'C-clone')
         received = self.transfer(self.a, self.ra, clone, [imported['nodeKey']])
         received_keys = [entry['object'] for entry in received['objects']]
         self.assertIn(imported['nodeKey'], received_keys)
