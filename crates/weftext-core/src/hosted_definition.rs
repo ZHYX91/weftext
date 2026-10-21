@@ -436,7 +436,7 @@ impl Core {
                     saved = Some(admissions.save_operation_id);
                     break;
                 }
-                if !self.resolved(&plan.operation_id) {
+                if !self.resolved(&plan.operation_id)? {
                     state = "recoveryPending";
                     saved = Some(admissions.save_operation_id);
                 }

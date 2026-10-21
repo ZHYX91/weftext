@@ -1,6 +1,7 @@
 """Actual two-replica + hosted-relay acceptance. All roots/state are owned
 disposable fixtures, retained for diagnosis; no desktop or external service.
 """
+from _creation_result import created_document
 import base64
 import copy
 import hashlib
@@ -30,8 +31,8 @@ class RemoteSync(unittest.TestCase):
         self.b = Server(['--no-browser','--data-dir',str(self.folder/'state-b')]); self.addCleanup(lambda:self.b.close())
         self.ra, self.rb = self.folder/'a', self.folder/'b'
         self.local(self.a,'/api/library/create',path=str(self.ra),operationId=uid())
-        self.note = self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Note',operationId=uid())
-        self.other = self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Other',operationId=uid())
+        self.note = created_document(self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Note',operationId=uid()))
+        self.other = created_document(self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Other',operationId=uid()))
         self.key = {'kind':'node','id':self.note['nodeId']}; self.other_key = {'kind':'node','id':self.other['nodeId']}
         self.identity = self.local(self.a,'/api/sync/enable',root=str(self.ra),operationId=uid())['identity']
         self.tokens = {name:secrets.token_hex(32) for name in ['admin','owner','owner2','author']}

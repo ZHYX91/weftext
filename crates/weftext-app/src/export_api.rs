@@ -2,6 +2,8 @@
 //! download never recompile, rerun a Query, or alter an author document.
 use super::export_conversions::{generate, template_slots};
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use base64::Engine as _;
 use std::{
     collections::BTreeMap,
@@ -1231,7 +1233,7 @@ mod tests {
         let (opened, bytes) = {
             let mut core = state.core.lock().unwrap();
             core.create_library(&root).unwrap();
-            let opened = core.create_note(&root, &root, "Original").unwrap();
+            let opened = core.create_note_fixture(&root, &root, "Original").unwrap();
             let bytes = core.export_native_package(&root).unwrap();
             (opened, bytes)
         };

@@ -5,6 +5,7 @@ per-request timings are retained in fresh directories; no existing library or
 private journal is rewritten. --artifacts-dir selects the current workspace's
 temporary parent; the portable default stays inside this repository's target.
 """
+from _creation_result import created_document
 import argparse
 import base64
 import copy
@@ -97,8 +98,8 @@ class HierarchicalTags(unittest.TestCase):
         return error
 
     def note(self, name):
-        return self.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                                            'name': name, 'operationId': uid()})
+        return created_document(self.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                                            'name': name, 'operationId': uid()}))
 
     def registry(self):
         value = self.call('/api/navigation/tags', {'root': str(self.root)})

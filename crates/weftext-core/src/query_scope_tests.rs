@@ -18,7 +18,9 @@ impl Fixture {
         }
     }
     fn node(&mut self, parent: &Path, name: &str) -> OpenedDocument {
-        self.core.create_note(&self.root, parent, name).unwrap()
+        self.core
+            .create_note_fixture(&self.root, parent, name)
+            .unwrap()
     }
     fn owner(&self, doc: &OpenedDocument) -> weftext_knowledge::NodeRef {
         weftext_knowledge::NodeRef {
@@ -532,7 +534,7 @@ fn query_scope_genuine_legacy_absence_is_readable_but_not_a_guarded_save_basis()
     core.commit(&p).unwrap();
     drop(directory);
     drop(guard);
-    let n = core.create_note(&root, &root, "OldNote").unwrap();
+    let n = core.create_note_fixture(&root, &root, "OldNote").unwrap();
     let owner = weftext_knowledge::NodeRef {
         workspace_id: workspace,
         node_id: n.node_id.clone().unwrap(),

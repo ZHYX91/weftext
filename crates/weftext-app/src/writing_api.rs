@@ -2,6 +2,8 @@
 //! Draft proposals remain in the shared source buffer; Core owns persistence.
 
 use super::{ApiError, ApiResult, AppState, core_call, location, value};
+#[cfg(test)]
+use crate::CoreTestFixture;
 use axum::{
     Json, Router,
     body::Body,
@@ -899,7 +901,7 @@ mod tests {
         let root = directory.path().join("library");
         let mut core = weftext_core::Core::new(directory.path().join("private-state")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let source = note.source.clone();
         let session_id = note.session_id.clone();
         let note_path = PathBuf::from(note.path);

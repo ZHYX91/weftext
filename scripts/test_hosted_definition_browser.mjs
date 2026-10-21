@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Actual hosted definition proposals use owned fixtures and the one author
 // editor. EXE and a fresh evidence directory are required; no ambient server.
 import { createRequire } from 'node:module';
@@ -40,7 +41,7 @@ try {
   const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() });
   const originalSchema = await api('/api/data/schema', { root }), schema = JSON.parse(originalSchema.source), schemaId = randomUUID(); schema.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const schemaPlan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(schema, null, 2), beforeSource: originalSchema.source, beforeRevision: originalSchema.revision, operationId: schemaId }); await api('/api/data/schema/install', { operationId: schemaId, planId: schemaPlan.planId });
-  const note = await api('/api/note/create', { root, parent: root, name: 'Owner', operationId: randomUUID() }), other = await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() });
+  const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Owner', operationId: randomUUID() })), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }));
   const initial = `#metadata((id: "${note.nodeId}", types: ("task",), status: "open")) <weftext>\r\n原生正文😀保持原文\r\n`;
   await api('/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: initial, operationId: randomUUID() }); await stop(local); local = null;
   const query = { definitions: true, definitionHistory: true }, fields = { 'tasks/status': { read: true } };

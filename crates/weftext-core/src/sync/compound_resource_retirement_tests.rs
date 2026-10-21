@@ -120,7 +120,7 @@ impl Fixture {
             ("Left", vec!["asset-a.bin", "asset-b.bin", "keep.bin"]),
             ("Right", vec!["asset-c.bin", "keep.bin"]),
         ] {
-            let note = a.create_note(&ar, &ar, name).unwrap();
+            let note = a.create_note_fixture(&ar, &ar, name).unwrap();
             for asset in assets {
                 let imported = a
                     .prepare_import_resource(

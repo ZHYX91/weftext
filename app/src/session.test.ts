@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
+import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison } from "./session";
 import type { OpenedDocument, RenderOutput } from "./types";
 import { createSourceState } from "./editor";
 import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
@@ -123,4 +123,24 @@ test("Save As reopens only the exact saved target and never qualifies its old pr
   assert.equal(original.baseId, "b");
   assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted }), true);
   assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted, recoveredDraftConflict: true }), false);
+});
+
+test("original save delivery rebinds a lost Session with its actual base while preserving newer input and editor state", () => {
+  const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" });
+  session.edit("submitted"); const frozen = { sessionId: session.opened.sessionId, source: session.source };
+  session.edit("submitted + waiting input");
+  const sourceState = createSourceState(session.source), selection = sourceState.selection;
+  const fresh = { ...session.opened, sessionId: "reopened", source: "submitted", baseId: "actual-fresh-base" };
+  assert.equal(rebindCommittedSave(session, frozen, fresh), true);
+  assert.equal(session.source, "submitted + waiting input"); assert.equal(session.baseSource, "submitted");
+  assert.equal(session.baseId, "actual-fresh-base"); assert.equal(session.opened.sessionId, "reopened");
+  assert.equal(sourceState.doc.toString(), "submitted + waiting input"); assert.equal(sourceState.selection, selection);
+});
+test("a later current source or changed owner/Session cannot borrow the original receipt base", () => {
+  for (const change of [{ source: "later committed T" }, { nodeId: "different" }, { workspaceId: "different" }]) {
+    const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" }); session.edit("new input Y");
+    const before = structuredClone(session.opened);
+    assert.equal(rebindCommittedSave(session, { sessionId: "s", source: "submitted S" }, { ...session.opened, source: "submitted S", baseId: "actual-T-base", ...change }), false);
+    assert.deepEqual(session.opened, before); assert.equal(session.source, "new input Y"); assert.equal(session.baseId, "b");
+  }
 });

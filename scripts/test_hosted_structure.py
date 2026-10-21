@@ -3,6 +3,7 @@
 Local APIs only establish the fixture's admissions. All tested effects and new
 object entry points use hosted HTTP without rewriting operator configuration.
 """
+from _creation_result import created_document
 import base64
 import copy
 import json
@@ -134,7 +135,7 @@ class HostedStructure(HostedHistory):
     def test_structure_copy_requires_explicit_tree_read_export_and_fresh_identity(self):
         self.prepare_structure()
         def child(api):
-            note = api('/api/note/create', {'root': str(self.root), 'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()})
+            note = created_document(api('/api/note/create', {'root': str(self.root), 'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()}))
             self.child_source = note['source'] + '\nWHOLE_TREE_OPT_IN_PRIVATE_CHILD'
             api('/api/save', {'sessionId': note['sessionId'], 'baseId': note['baseId'], 'source': self.child_source, 'operationId': uid()})
         self.local(child)
@@ -200,8 +201,8 @@ class HostedStructure(HostedHistory):
         self.prepare_structure()
         # A legitimate local Core birth is still not the original hosted
         # producer authorized for a future destination slot.
-        self.local(lambda api: api('/api/note/create', {
-            'root': str(self.root), 'parent': str(self.root), 'name': 'Copied', 'operationId': uid()}))
+        self.local(lambda api: created_document(api('/api/note/create', {
+            'root': str(self.root), 'parent': str(self.root), 'name': 'Copied', 'operationId': uid()})))
         self.call('open', {'resource': 'Copied'}, status=404)
         self.grant(destinations={'Created': {'create': True}})
         request = self.request('create', 'Created', destination='Created')

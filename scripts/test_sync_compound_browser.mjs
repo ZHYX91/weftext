@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Owned replicas and headless Chrome. Requires the compound ApplySync candidate.
 // Producers use real rename/save Plans; routes only drop actual HTTP responses.
 import { createRequire } from 'node:module';
@@ -162,7 +163,7 @@ async function setup(id) {
   await api(s.a, '/api/library/create', { path: s.ra, operationId: randomUUID() });
   s.nodes = [];
   for (const [name, title] of [['Left', '左原稿'], ['Right', '右原稿']]) {
-    const note = await api(s.a, '/api/note/create', { root: s.ra, parent: s.ra, name, operationId: randomUUID() });
+    const note = createdDocument(await api(s.a, '/api/note/create', { root: s.ra, parent: s.ra, name, operationId: randomUUID() }));
     note.source += `\n= ${title}\n\n原始内容 ${name} 😀\n`;
     await api(s.a, '/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: note.source, operationId: randomUUID() });
     s.nodes.push({ ...note, name, key: { kind: 'node', id: note.nodeId }, nextName: name === 'Left' ? '左改名' : '右改名' });
@@ -227,7 +228,7 @@ async function produce(s) {
 }
 async function produceNewParent(s) {
   const creation = { root: s.ra, parent: s.ra, name: 'NewParent', operationId: randomUUID() };
-  const created = await api(s.a, '/api/note/create', creation);
+  const created = createdDocument(await api(s.a, '/api/note/create', creation));
   const parentSource = created.source + '\n= 真实新父节点\n\nA 新父正文 中文😀\n';
   const saveRequest = { sessionId: created.sessionId, baseId: created.baseId, source: parentSource, operationId: randomUUID() };
   const saved = await api(s.a, '/api/save', saveRequest);
@@ -498,7 +499,7 @@ const cases = [
   }],
   [4, 'A real foreign destination blocks compound prepare before any effect; both original trees, occupied object and the original editor/Draft/Undo remain', async s => {
     const name = s.nodes[1].nextName;
-    const occupant = await api(s.b, '/api/note/create', { root: s.rb, parent: s.rb, name, operationId: randomUUID() });
+    const occupant = createdDocument(await api(s.b, '/api/note/create', { root: s.rb, parent: s.rb, name, operationId: randomUUID() }));
     await produce(s); const panel = await receive(s), refused = await prepare(s, panel, { expected: 409 });
     assert.ok(refused.response.error?.code); assert.notEqual(refused.response.error.code, 'syncStructureRequired');
     assert.equal((await pending(s.page)).plan, undefined);

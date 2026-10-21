@@ -80,7 +80,10 @@ impl Fixture {
             .unwrap()
     }
     fn node(&mut self, name: &str) -> weftext_knowledge::NodeRef {
-        let doc = self.core.create_note(&self.root, &self.root, name).unwrap();
+        let doc = self
+            .core
+            .create_note_fixture(&self.root, &self.root, name)
+            .unwrap();
         self.core
             .qualified_node_at(&self.root, Path::new(&doc.path))
             .unwrap()

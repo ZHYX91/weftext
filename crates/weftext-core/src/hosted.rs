@@ -163,6 +163,8 @@ pub struct ActorSaveStatus {
     pub resource: String,
     pub status: String,
     pub base_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_issue: Option<RecoveryIssue>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -205,6 +207,8 @@ pub struct ActorFieldStatus {
     pub field_id: String,
     pub status: String,
     pub cell: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_issue: Option<RecoveryIssue>,
 }
 
 impl Core {
@@ -352,17 +356,36 @@ impl Core {
                 "Operation belongs to a different actor",
             ));
         }
-        let saved = self.saved_operation_source(&record.core_operation_id)?;
+        if self
+            .operations
+            .get(&record.core_operation_id)
+            .is_some_and(|plan| plan.kind != "save")
+        {
+            return Err(CoreError::new(
+                "operationConflict",
+                "The scoped source save references a different operation kind",
+            ));
+        }
+        let saved = self.file_save_fact(&record.core_operation_id)?;
         Ok(Some(ActorSaveStatus {
             operation_id: operation.into(),
             resource: record.resource,
             status: if record.cancelled {
                 "cancelled"
             } else {
-                saved.as_ref().map_or("notCommitted", |s| s.status.as_str())
+                if saved.is_some() {
+                    "committed"
+                } else if self.resolved(&record.core_operation_id)? {
+                    "resolved"
+                } else if self.operations.contains_key(&record.core_operation_id) {
+                    "recoveryPending"
+                } else {
+                    "notCommitted"
+                }
             }
             .into(),
-            base_id: saved.and_then(|s| s.receipt.map(|r| r.base_id)),
+            base_id: saved.map(|r| r.base_id),
+            recovery_issue: None,
         }))
     }
     /// Fence a request whose response was lost before allowing a new proposal.
@@ -504,16 +527,19 @@ impl Core {
         #[cfg(all(test, windows))]
         definition_test_failpoint("actorSaveDurable")?;
         self.freeze_definition_save_reservations(&request, &record)?;
-        self.save(SaveRequest {
+        let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
             source: request.source,
             operation_id: record.core_operation_id,
         })?;
-        self.actor_save_status(&request.operation_id)?
+        let mut status = self
+            .actor_save_status(&request.operation_id)?
             .ok_or_else(|| {
                 CoreError::new("invalidState", "The original operation record is missing")
-            })
+            })?;
+        status.recovery_issue = outcome.recovery_issue;
+        Ok(status)
     }
 
     /// A narrow receipt discloses neither the internal source/base nor another
@@ -547,6 +573,7 @@ impl Core {
             field_id: field_id.into(),
             cell: (status.status == "committed").then_some(field.cell),
             status: status.status,
+            recovery_issue: status.recovery_issue,
         }))
     }
 
@@ -627,14 +654,17 @@ impl Core {
             owner_backup: None,
         };
         journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
-        self.save(SaveRequest {
+        let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
             source: request.source,
             operation_id: record.core_operation_id,
         })?;
-        self.actor_field_status(resource, field_id, &request.operation_id)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original field operation"))
+        let mut status = self
+            .actor_field_status(resource, field_id, &request.operation_id)?
+            .ok_or_else(|| CoreError::new("invalidState", "Missing original field operation"))?;
+        status.recovery_issue = outcome.recovery_issue;
+        Ok(status)
     }
 
     pub fn actor_field_settle(

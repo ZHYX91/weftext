@@ -180,7 +180,7 @@ impl Core {
         let state = if let Some(plan) = plan {
             if self.committed(&plan.operation_id) {
                 "committed"
-            } else if self.resolved(&plan.operation_id) {
+            } else if self.resolved(&plan.operation_id)? {
                 "resolved"
             } else {
                 "recoveryPending"

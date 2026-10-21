@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Actual local stage-three UI, in owned headless Chrome. Synthetic events are not OS IME acceptance.
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -13,7 +14,7 @@ const root=path.join(out,'library'),data=path.join(out,'state'),pause=ms=>new Pr
 async function start(args=[]){child=spawn(exe,['--no-browser','--data-dir',data,...args],{windowsHide:true,stdio:['ignore','pipe','pipe']});let stdout='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);for(let i=0;i<300;i++){const m=stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);if(m){base=m[1];token=m[2];return;}if(child.exitCode!==null)throw Error(stderr);await pause(100);}throw Error('startup timeout');}
 async function stop(){if(child?.exitCode===null&&child.signalCode===null){const done=new Promise(r=>child.once('exit',r));child.kill();await done;}}
 async function api(route,body){const response=await fetch(base+route,{method:'POST',headers:{'Content-Type':'application/json','X-Weftext-Token':token},body:JSON.stringify(body)});const value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;}
-async function note(name,body){const doc=await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()});await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:doc.source+'\n\n'+body,operationId:randomUUID()});return api('/api/open',{root,path:doc.path});}
+async function note(name,body){const doc=createdDocument(await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()}));await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:doc.source+'\n\n'+body,operationId:randomUUID()});return api('/api/open',{root,path:doc.path});}
 const click=(name,scope=page)=>scope.getByRole('button',{name,exact:true}).click();
 const cm=()=>page.locator('.source-host .cm-content');
 async function source(){return cm().evaluate(e=>e.cmTile.root.view.state.doc.toString());}

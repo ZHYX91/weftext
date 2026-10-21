@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Two owned replicas; real sidecar synchronization and delayed UI delivery.
 // Composition events test the browser gate, not an operating-system IME.
 import { createRequire } from 'node:module';
@@ -35,7 +36,7 @@ try {
   let a = await start(['--no-browser', '--data-dir', da]);
   const b = await start(['--no-browser', '--data-dir', db]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
-  let note = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() });
+  let note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
   const savedSource = note.source + '\n= 同步正文\n\n准确正文😀\n';
   await api(a, '/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: savedSource, operationId: randomUUID() });
   const { identity } = await api(a, '/api/sync/enable', { root: ra, operationId: randomUUID() });

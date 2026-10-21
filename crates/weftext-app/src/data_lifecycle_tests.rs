@@ -10,6 +10,8 @@ async fn retire_query_task(state: &AppState, root: &str) -> PathBuf {
         )),
     )
     .await);
+    assert_eq!(document["status"],"committed");
+    let document=document["document"].clone();
     let mut core = state.core.lock().unwrap();
     let retired = core
         .prepare_operation(CoreOperationRequest {
@@ -83,6 +85,8 @@ async fn mixed_lifecycle_definition_save_run_and_callee_use_both_original_read_c
         )),
     )
     .await);
+    assert_eq!(live["status"],"committed");
+    let live=live["document"].clone();
     let trash_path = retire_query_task(&state, &root).await;
     let trash_bytes = std::fs::read(&trash_path).unwrap();
     let mut request =
@@ -190,6 +194,8 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
         )),
     )
     .await);
+    assert_eq!(live["status"],"committed");
+    let live=live["document"].clone();
     let trash_path = retire_query_task(&state, &root).await;
     let trash_bytes = std::fs::read(&trash_path).unwrap();
     let Json(saved) = ok(save_definition(

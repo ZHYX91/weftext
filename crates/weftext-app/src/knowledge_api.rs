@@ -1,6 +1,8 @@
 //! Knowledge adapters consume guarded Core snapshots. Draft patches remain
 //! proposals; all persistent changes enter the existing Core operation journal.
 use super::{ApiError, ApiResult, AppState, core_call, location, remember, value};
+#[cfg(test)]
+use crate::CoreTestFixture;
 use crate::writing_api::{check_snapshot, observe_snapshot};
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,7 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/operations/prepare", post(prepare_operation))
         .route("/api/operations/commit", post(commit))
         .route("/api/operations/status", post(status))
+        .route("/api/operations/settle", post(settle))
 }
 
 /// Navigation returns stable admitted identities. The host opens those through
@@ -267,7 +270,7 @@ fn resource_qualifications(bundle: &Bundle) -> Vec<knowledge::ResourceFragmentQu
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Context {
+pub(crate) struct Context {
     session_id: String,
     source: String,
     serial: u64,
@@ -2830,13 +2833,25 @@ fn canonical_leaf(directory: &Path) -> Result<PathBuf, ApiError> {
         .ok_or_else(|| ApiError::bad("操作结果缺少准确节点名称"))?;
     Ok(directory.join(format!("{name}.typ")))
 }
-async fn operation_output(
+pub(crate) async fn operation_output(
     state: &AppState,
     preview: weftext_core::OperationPreview,
     receipt: weftext_core::OperationReceipt,
     context: Option<&Context>,
 ) -> Result<Value, ApiError> {
     let mut output = value(&receipt)?;
+    if let Err(error) = operation_delivery(state, &preview, &receipt, context, &mut output).await {
+        output["documentError"] = json!({"code":error.code,"message":error.message});
+    }
+    Ok(output)
+}
+async fn operation_delivery(
+    state: &AppState,
+    preview: &weftext_core::OperationPreview,
+    receipt: &weftext_core::OperationReceipt,
+    context: Option<&Context>,
+    output: &mut Value,
+) -> Result<(), ApiError> {
     output["kind"] = json!(preview.kind);
     if let Some(source) = preview
         .changes
@@ -2846,7 +2861,14 @@ async fn operation_output(
         output["affectedSource"] = json!(source.path);
     }
     let loc = context.and_then(|context| location(state, &context.session_id).ok());
-    let root = loc.as_ref().map(|loc| loc.root.clone());
+    let root = if let Some(loc) = &loc {
+        Some(loc.root.clone())
+    } else {
+        let id = receipt.operation_id.clone();
+        Some(PathBuf::from(
+            core_call(state, move |core| core.local_operation_root(&id)).await?,
+        ))
+    };
     let result = PathBuf::from(&receipt.path);
     let expected_source = if preview.kind == "updateFiles" {
         let operation_id = receipt.operation_id.clone();
@@ -2975,7 +2997,7 @@ async fn operation_output(
         }
         output["affectedDocuments"] = json!(affected);
     }
-    Ok(output)
+    Ok(())
 }
 #[cfg(all(test, windows))]
 #[path = "knowledge_directory_tests.rs"]
@@ -3068,26 +3090,84 @@ async fn link_copy(
     ))
 }
 async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest>) -> ApiResult {
-    let operation_id = request.operation_id.clone();
-    let outcome = core_call(&state, move |core| {
-        Ok((
-            core.operation_details(&operation_id)?,
-            core.committed_operation_receipt(&operation_id)?,
-        ))
+    let id = request.operation_id.clone();
+    let (fact, transaction) = core_call(&state, move |core| {
+        let fact = core.local_operation_status(&id)?;
+        let transaction = if fact["status"] == "committed" {
+            match core.operation_details(&id) {
+                Ok(preview) => Some((
+                    preview,
+                    core.committed_operation_receipt(&id)?.ok_or_else(|| {
+                        weftext_core::CoreError::new(
+                            "invalidState",
+                            "Committed original has no receipt",
+                        )
+                    })?,
+                )),
+                Err(error) if error.code == "operationMissing" => None,
+                Err(error) => return Err(error),
+            }
+        } else {
+            None
+        };
+        Ok((fact, transaction))
     })
-    .await;
-    match outcome {
-        Ok((preview, Some(receipt))) => {
+    .await?;
+    match transaction {
+        Some((preview, receipt)) => {
             operation_output(&state, preview, receipt, request.context.as_ref())
                 .await
                 .map(Json)
         }
-        Ok((preview, None)) => Ok(Json(value(preview)?)),
-        Err(error) if error.code == "operationMissing" => Ok(Json(
-            json!({"operationId":request.operation_id,"status":"unknown","message":"原操作尚无可确认记录；请保留草稿和原操作 ID"}),
-        )),
-        Err(error) => Err(error),
+        None => {
+            let mut output = fact;
+            if output["status"] == "committed" && output["baseId"].is_string() {
+                let id = request.operation_id;
+                match core_call(&state, move |core| core.reopen_local_save(&id)).await {
+                    Ok((source, document)) => {
+                        output["committedSource"] = json!(source);
+                        let document = value(document)?;
+                        output["documentSourceMatchesCommit"] =
+                            json!(document["source"] == output["committedSource"]);
+                        match remember(&state, &document) {
+                            Ok(()) => output["document"] = document,
+                            Err(error) => {
+                                output["documentError"] =
+                                    json!({"code":error.code,"message":error.message})
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        output["documentError"] = json!({"code":error.code,"message":error.message})
+                    }
+                }
+            }
+            Ok(Json(output))
+        }
     }
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SettleRequest {
+    operation_id: String,
+    request_kind: String,
+    wire_digest: String,
+}
+async fn settle(State(state): State<AppState>, Json(request): Json<SettleRequest>) -> ApiResult {
+    if request.wire_digest.len() != 64
+        || !request.wire_digest.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err(ApiError::bad("原请求字节摘要必须是 64 位十六进制 SHA-256"));
+    }
+    let fact = core_call(&state, move |core| {
+        core.settle_local_attempt(
+            &request.operation_id,
+            &request.request_kind,
+            &request.wire_digest,
+        )
+    })
+    .await?;
+    Ok(Json(fact))
 }
 
 const TEMPLATE_SOURCE: &str = "#metadata((id: \"00000000-0000-4000-8000-000000000000\", types: ())) <weftext>\n\n#set document(title: [标题])\n#title()\n\n正文\n";
@@ -3772,7 +3852,7 @@ mod tests {
         let root = temp.path().join("library");
         let mut core = weftext_core::Core::new(temp.path().join("state")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let captured = core.admitted_compile_snapshot(&root, "live").unwrap();
         let admitted = captured
             .snapshot
@@ -3980,7 +4060,9 @@ mod tests {
         let library = root.join("library");
         core.create_library(&library).unwrap();
         // Exercise original v0.1 admissions; no migration replaces these files.
-        let opened = core.create_note(&library, &library, "原始笔记").unwrap();
+        let opened = core
+            .create_note_fixture(&library, &library, "原始笔记")
+            .unwrap();
         let source = format!("{}原文\n", opened.source);
         let receipt = core
             .save(weftext_core::SaveRequest {
@@ -4008,7 +4090,7 @@ mod tests {
             session_id: document["sessionId"].as_str().unwrap().into(),
             source,
             serial: 0,
-            base_id: receipt.base_id,
+            base_id: receipt.receipt.base_id,
             dirty: false,
         };
         (state, context)
@@ -4104,7 +4186,7 @@ mod tests {
         let identities=core_call(&state,move|core| {
             let mut ids=vec![];
             for (name,title,alias) in [("甲","白云山",None),("乙","白云山2026",Some("白云山")),("丙","山",None)] {
-                let opened=core.create_note(&root,&root,name)?;
+                let opened=core.create_note_fixture(&root,&root,name)?;
                 let id=weftext_engine::inspect_metadata(&opened.source).id.unwrap();
                 let alias=alias.map(|alias|format!(", aliases: (\"{alias}\",)")).unwrap_or_default();
                 let source=format!("#metadata((id: \"{id}\", types: (\"person\",){alias})) <weftext>\n#title[{title}]\n");
@@ -4520,7 +4602,7 @@ mod tests {
         let child = core_call(&state, {
             let root = loc.root.clone();
             let parent = loc.path.parent().unwrap().to_path_buf();
-            move |core| core.create_note(root, parent, "子笔记")
+            move |core| core.create_note_fixture(root, parent, "子笔记")
         })
         .await
         .map_err(|error| error.message)

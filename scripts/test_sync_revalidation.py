@@ -8,6 +8,7 @@ transcripts and owned-process evidence stay in a fresh explicit output directory
 Run: python scripts/test_sync_revalidation.py EXE [exact_test_name ...]
 Set WEFTEXT_SYNC_EVIDENCE_DIR to a new workspace output directory.
 """
+from _creation_result import created_document
 import copy
 import hashlib
 import json
@@ -77,8 +78,8 @@ class SyncRevalidation(SyncCompound):
         self.with_schema = 'absent_schema' not in self._testMethodName
         if self.with_schema:
             self.install_schema(self.a, self.ra, 'semantic_baseline_title')
-        doc = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
-                        name='Note', operationId=uid())
+        doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
+                        name='Note', operationId=uid()))
         self.key = {'kind': 'node', 'id': doc['nodeId']}
         self.keys = {'Note': self.key}
         if 'missing_annotation_target' in self._testMethodName:
@@ -210,8 +211,8 @@ class SyncRevalidation(SyncCompound):
             names.append('Unrelated')
         self.native_keys = {}
         for name in names:
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
-                            name=name, operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
+                            name=name, operationId=uid()))
             key = {'kind': 'node', 'id': doc['nodeId']}
             self.native_keys[name] = key
             metadata = f'#metadata((id: "{doc["nodeId"]}"'

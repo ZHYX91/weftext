@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Trusted source-editor key events on an explicit embedded candidate.
 // The second animation-frame receipt is a conservative feedback bound, not an
 // OS keyboard/IME measurement. Chrome Layout tracing and JS heap have separate scopes.
@@ -196,7 +197,7 @@ try {
   for (const fixture of fixtures) for (let round = 1; round <= rounds; round++) {
     const dir = path.join(out, fixture + '-' + round); await mkdir(dir); const root = path.join(dir, 'lib'), data = path.join(dir, 'state');
     await start(data); await api('/api/library/create', { path: root, operationId: randomUUID() });
-    const note = await api('/api/note/create', { root, parent: root, name: 'Input', operationId: randomUUID() });
+    const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Input', operationId: randomUUID() }));
     const body = fixture === 'ordinary' ? '普通输入与草稿保持。\n'.repeat(160) : fixture === '100k-lines' ? '0123456789abcdefghi\n'.repeat(100000) : 'A'.repeat(1024 * 1024) + '\n';
     const original = note.source + '\n' + body;
     assert.ok(Buffer.byteLength(original) < 2 * 1024 * 1024);

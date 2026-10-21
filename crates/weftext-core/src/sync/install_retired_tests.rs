@@ -36,12 +36,16 @@ fn fixture() -> Fixture {
     let data = temp.path().join("receiver-private");
     let mut first = Core::new(temp.path().join("source-private")).unwrap();
     first.create_library(&source).unwrap();
-    let parent = first.create_note(&source, &source, "Parent").unwrap();
-    let child = first
-        .create_note(&source, source.join("Parent"), "Child")
+    let parent = first
+        .create_note_fixture(&source, &source, "Parent")
         .unwrap();
-    let other = first.create_note(&source, &source, "Other").unwrap();
-    let live = first.create_note(&source, &source, "Live").unwrap();
+    let child = first
+        .create_note_fixture(&source, source.join("Parent"), "Child")
+        .unwrap();
+    let other = first
+        .create_note_fixture(&source, &source, "Other")
+        .unwrap();
+    let live = first.create_note_fixture(&source, &source, "Live").unwrap();
     let resource = first
         .prepare_import_resource(
             &source,
@@ -598,14 +602,16 @@ fn clone_preexisting_trash(nested: bool) {
     let target = temp.path().join("receiver");
     let mut first = Core::new(temp.path().join("source-private")).unwrap();
     first.create_library(&source).unwrap();
-    let parent = first.create_note(&source, &source, "Parent").unwrap();
+    let parent = first
+        .create_note_fixture(&source, &source, "Parent")
+        .unwrap();
     let parent_id = parent.node_id.unwrap();
     let child = nested.then(|| {
         first
-            .create_note(&source, source.join("Parent"), "Child")
+            .create_note_fixture(&source, source.join("Parent"), "Child")
             .unwrap()
     });
-    let live = first.create_note(&source, &source, "Live").unwrap();
+    let live = first.create_note_fixture(&source, &source, "Live").unwrap();
     let owner_source = child
         .as_ref()
         .map_or(parent.path.as_str(), |child| child.path.as_str());

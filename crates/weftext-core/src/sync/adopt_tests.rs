@@ -19,7 +19,7 @@ fn fixture() -> Fixture {
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let node = ObjectKey::Node(note.node_id.unwrap());
     let resource = core
         .prepare_import_resource(
@@ -456,7 +456,10 @@ fn sync_adoption_definition_stale_observation_and_pending_keep_original_records(
 #[test]
 fn sync_adoption_external_citation_uses_exact_selected_work_publication() {
     let mut f = fixture();
-    let work = f.core.create_note(&f.root, &f.root, "Work").unwrap();
+    let work = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Work")
+        .unwrap();
     let work_id = work.node_id.unwrap();
     let work_path = PathBuf::from(work.path);
     let publication = format!(

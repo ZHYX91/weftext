@@ -79,7 +79,7 @@ impl Fixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let doc = core.create_note(&root, &root, "Note").unwrap();
+        let doc = core.create_note_fixture(&root, &root, "Note").unwrap();
         Self {
             _temp: temp,
             data,
@@ -331,7 +331,7 @@ fn hosted_feature_settle_fences_unknown_delayed_prepare_and_cancels_uninstalled_
             .status,
         "cancelled"
     );
-    assert!(f.core.resolved(&internal));
+    assert!(f.core.resolved(&internal).unwrap());
     f.restart();
     assert_eq!(
         f.core
@@ -435,7 +435,7 @@ fn hosted_feature_install_marker_cannot_be_cancelled_or_blindly_replayed() {
             .status,
         "recoveryPending"
     );
-    assert!(!f.core.resolved(&internal));
+    assert!(!f.core.resolved(&internal).unwrap());
     assert_eq!(fs::read(&f.source).unwrap(), source_before);
     assert!(!f.sidecar.exists());
     f.core.resolve_record(&internal, "keepCurrent").unwrap();
@@ -928,7 +928,7 @@ fn hosted_feature_docx_unknown_fence_and_install_marker_survive_restart() {
         "recoveryPending"
     );
     assert!(!f.root.join("Imported").exists());
-    assert!(!f.core.resolved(&internal));
+    assert!(!f.core.resolved(&internal).unwrap());
 }
 
 #[test]

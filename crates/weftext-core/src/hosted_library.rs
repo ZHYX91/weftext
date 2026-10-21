@@ -22,7 +22,9 @@ pub(crate) enum ActorLibraryHeader {
 /// New scoped records put library first; old records remain unscoped. The same
 /// protected file handle must be retained by the caller through classification
 /// and any subsequent full capture. Restore its original position on all paths.
-pub(crate) fn read_actor_library_header(file: &mut File) -> Result<ActorLibraryHeader> {
+pub(crate) fn read_actor_library_header(
+    file: &mut (impl Read + Seek),
+) -> Result<ActorLibraryHeader> {
     let original = file.stream_position()?;
     file.seek(SeekFrom::Start(0))?;
     let result = (|| {

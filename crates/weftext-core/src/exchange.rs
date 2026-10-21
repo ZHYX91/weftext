@@ -875,7 +875,7 @@ mod tests {
         let mut core = Core::new(&private).unwrap();
         let origin = temp.path().join("Origin");
         let origin_info = core.create_library(&origin).unwrap();
-        let note = core.create_note(&origin, &origin, "Note").unwrap();
+        let note = core.create_note_fixture(&origin, &origin, "Note").unwrap();
         let config = core.read_config(&origin, ConfigRole::Schema).unwrap();
         let schema_bytes =
             include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec();
@@ -1055,9 +1055,11 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let origin = temp.path().join("Origin");
         core.create_library(&origin).unwrap();
-        let parent = core.create_note(&origin, &origin, "Parent").unwrap();
+        let parent = core
+            .create_note_fixture(&origin, &origin, "Parent")
+            .unwrap();
         if placement == 2 {
-            core.create_note(&origin, origin.join("Parent"), "Child")
+            core.create_note_fixture(&origin, origin.join("Parent"), "Child")
                 .unwrap();
         }
         let claimed = fresh();
@@ -1182,7 +1184,9 @@ mod tests {
         let mut core = Core::new(&private).unwrap();
         let origin = temp.path().join("Origin");
         core.create_library(&origin).unwrap();
-        let parent = core.create_note(&origin, &origin, "Parent").unwrap();
+        let parent = core
+            .create_note_fixture(&origin, &origin, "Parent")
+            .unwrap();
         let claimed = fresh();
         let bytes = serde_json::to_vec(&serde_json::json!({"directoryId":claimed})).unwrap();
         let resource = core
@@ -1351,7 +1355,7 @@ mod tests {
         let mut core = Core::new(&private).unwrap();
         let origin = temp.path().join("Origin");
         core.create_library(&origin).unwrap();
-        let original = core.create_note(&origin, &origin, "Note").unwrap();
+        let original = core.create_note_fixture(&origin, &origin, "Note").unwrap();
         let imported = core
             .prepare_import_resource(
                 &origin,
@@ -1506,7 +1510,7 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let origin = temp.path().join("Origin");
         let origin_info = core.create_library(&origin).unwrap();
-        let note = core.create_note(&origin, &origin, "Note").unwrap();
+        let note = core.create_note_fixture(&origin, &origin, "Note").unwrap();
         let original_id = note.node_id.clone().unwrap();
         let source = format!(
             "{}\r\n#link(\"weftext-node://{}/{}\")[Self]\r\n#read(\"data.txt\")",
@@ -1610,7 +1614,7 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let root = temp.path().join("Library");
         core.create_library(&root).unwrap();
-        core.create_note(&root, &root, "Note").unwrap();
+        core.create_note_fixture(&root, &root, "Note").unwrap();
         let error = core
             .prepare_native_import(&root, &root, "Bad", b"not a zip".to_vec(), &fresh(), true)
             .unwrap_err();
@@ -1685,7 +1689,7 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let root = temp.path().join("Library");
         core.create_library(&root).unwrap();
-        core.create_note(&root, &root, "Note").unwrap();
+        core.create_note_fixture(&root, &root, "Note").unwrap();
         let bytes = core.export_native_package(&root).unwrap();
         let preview = core
             .prepare_native_import(&root, &root, "Frozen", bytes, &fresh(), false)
@@ -1710,7 +1714,7 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let origin = temp.path().join("Origin");
         core.create_library(&origin).unwrap();
-        let note = core.create_note(&origin, &origin, "Note").unwrap();
+        let note = core.create_note_fixture(&origin, &origin, "Note").unwrap();
         let mut package =
             read_native_package(&core.export_native_package(&origin).unwrap()).unwrap();
         weftext_export::exchange::append_generated_bibliography(

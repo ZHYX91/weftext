@@ -39,7 +39,7 @@ impl Core {
         let installing = self.journal_path(&plan.operation_id, "install").exists();
         let status = if self.committed(&plan.operation_id) {
             "committed"
-        } else if self.resolved(&plan.operation_id) {
+        } else if self.resolved(&plan.operation_id)? {
             "resolved"
         } else if !installing {
             "prepared"
@@ -53,7 +53,7 @@ impl Core {
             }
         };
         let mut allowed_actions = Vec::new();
-        if !self.committed(&plan.operation_id) && !self.resolved(&plan.operation_id) {
+        if !self.committed(&plan.operation_id) && !self.resolved(&plan.operation_id)? {
             if capture.coherence == "knownBefore" {
                 allowed_actions.push("keepCurrent".into());
             }
@@ -102,7 +102,7 @@ impl Core {
                 "Choose an action permitted by the inspected original plan",
             ));
         }
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
             return self.inspect_transaction_recovery(plan);
         }
         let t = plan.transaction.as_ref().unwrap();
@@ -283,7 +283,7 @@ impl Core {
             compound: None,
         };
         if !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
+            && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_operation_pending(plan)
         {
             capture.members.push(RecoveryMember {
@@ -305,7 +305,7 @@ impl Core {
         }
         if plan.sync_application.is_some()
             && !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
+            && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_sync_recovery_cut(plan)
         {
             capture.members.push(RecoveryMember {

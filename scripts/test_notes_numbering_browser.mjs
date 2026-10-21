@@ -19,6 +19,7 @@ await writeFile(helper, String.raw`import json,sys,uuid
 from pathlib import Path
 sys.path.insert(0,sys.argv[1]+"/scripts")
 import test_hosted
+from _creation_result import created_document
 test_hosted.EXE=Path(sys.argv[2]);out=Path(sys.argv[3]);c=test_hosted.Hosted("runTest");c.evidence=out
 body='\n= 一、重复标题 <alpha>\n\n正文#footnote[*中文脚注*] <memo>。再次#footnote(<memo>)。\n\n#figure(table(columns:2,[甲],[乙]),caption:[原始表题]) <tab>\n\n$ x+y $\n\n= 一、重复标题 <beta>\n'
 c.setUp()
@@ -42,6 +43,7 @@ try:
  try:
   code,value,_=local.call('/api/library/create',{'path':str(localroot),'operationId':str(uuid.uuid4())});assert code==200,value
   code,ldoc,_=local.call('/api/note/create',{'root':str(localroot),'parent':str(localroot),'name':'Notes','operationId':str(uuid.uuid4())});assert code==200,ldoc
+  ldoc=created_document(ldoc)
   local_source=ldoc['source']+body;code,value,_=local.call('/api/save',{'sessionId':ldoc['sessionId'],'baseId':ldoc['baseId'],'source':local_source,'operationId':str(uuid.uuid4())});assert code==200,value
  finally:local.close()
  (out/'fixture.json').write_text(json.dumps({'root':str(c.root),'data':str(c.data),'configPath':str(c.config_path),'tokens':c.tokens,'source':source,'localRoot':str(localroot),'localData':str(localdata),'localPath':ldoc['path'],'localSource':local_source},ensure_ascii=False),'utf-8')

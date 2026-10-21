@@ -22,7 +22,7 @@ impl Fixture {
         let data = temp.path().join("private");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let source = PathBuf::from(&note.path);
         let imported = core
             .prepare_import_resource(
@@ -380,7 +380,7 @@ fn sync_adoption_removed_member_original_prepared_and_recovery_keep_negative_slo
                 );
             }
             assert!(!f.core.committed(&preview.operation_id));
-            assert!(!f.core.resolved(&preview.operation_id));
+            assert!(!f.core.resolved(&preview.operation_id).unwrap());
             let current_source = capture_optional(&f.source).unwrap().unwrap();
             let current_manifest = capture_optional(&f.manifest).unwrap().unwrap();
             assert_eq!(current_source.bytes, source.bytes);

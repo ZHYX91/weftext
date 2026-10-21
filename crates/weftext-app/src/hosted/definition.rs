@@ -1,6 +1,8 @@
 //! Core allocates definition identities; proposals only edit the original Draft.
 //! Admission uses the ordinary actor source save with explicit original IDs.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use weftext_core::{
     ActorDefinitionProposal, ActorDefinitionStatus, ActorSaveStatus, HostedSaveRequest,
 };
@@ -604,7 +606,7 @@ mod integration_tests {
         let root = temp.path().join("library");
         let mut core = Core::new(temp.path().join("state")).unwrap();
         core.create_library(&root).unwrap();
-        let local = core.create_note(&root, &root, "Shared").unwrap();
+        let local = core.create_note_fixture(&root, &root, "Shared").unwrap();
         core.close_session(&local.session_id).unwrap();
         let schema =
             include_bytes!("../../../../docs/design/examples/schema.authoring.json").to_vec();

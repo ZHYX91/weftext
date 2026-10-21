@@ -12,6 +12,7 @@ Run: python scripts/test_sync_structure.py <candidate.exe> [exact_test_name ...]
 Only this class's structure cases run. Unknown selections fail before startup;
 unsupported planner refusals cannot count as successful negative cases.
 """
+from _creation_result import created_document
 import base64
 import copy
 import hashlib
@@ -170,8 +171,8 @@ class SyncStructure(SyncCompound):
 
     def new_parent_changes(self, existing_sender_parent=None):
         """A creates the missing parent and all versions through real HTTP."""
-        self.new_parent = existing_sender_parent or self.call(
-            self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='NewParent', operationId=uid())
+        self.new_parent = existing_sender_parent or created_document(self.call(
+            self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='NewParent', operationId=uid()))
         self.new_parent_key = {'kind': 'node', 'id': self.new_parent['nodeId']}
         self.keys['NewParent'] = self.new_parent_key
         self.save(self.a, self.ra, Path('NewParent/NewParent.typ'), 'A 新父节点原生正文😀')
@@ -677,10 +678,10 @@ class SyncStructure(SyncCompound):
 
     def test_sync_structure_new_nodes_in_moving_tree_keep_births_and_resource(self):
         self.changes()
-        child = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed'),
-                          name='NewChild', operationId=uid())
-        nested = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed/NewChild'),
-                           name='Nested', operationId=uid())
+        child = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed'),
+                          name='NewChild', operationId=uid()))
+        nested = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Renamed/NewChild'),
+                           name='Nested', operationId=uid()))
         self.save(self.a, self.ra, Path('Renamed/NewChild/NewChild.typ'), 'Actual new child within moving tree 中文😀')
         self.import_resource(self.a, self.ra, Path('Renamed/NewChild/Nested/Nested.typ'), 'nested.bin', bytes([7, 0, 255]))
         created = [(child, Path('Renamed/NewChild/NewChild.typ')),

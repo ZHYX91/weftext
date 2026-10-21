@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // External browser HTML producer: native copy and trusted default paste, without
 // manufactured ClipboardEvent/DataTransfer or replaying HTML into the clipboard.
 import assert from 'node:assert/strict';
@@ -47,7 +48,7 @@ async function target() {
 }
 try {
   await start(); await api('/api/library/create', { path: root, operationId: randomUUID() });
-  const doc = await api('/api/note/create', { root, parent: root, name: 'External Paste', operationId: randomUUID() });
+  const doc = createdDocument(await api('/api/note/create', { root, parent: root, name: 'External Paste', operationId: randomUUID() }));
   const initial = doc.source + '\n表前保留。\n\n#table(columns: 3, [头甲], [头乙], [头丙], [旧甲], [旧乙], [右边保留], [旧丙], [旧丁], [末格保留])\n\n表后保留。\n';
   await api('/api/save', { sessionId: doc.sessionId, baseId: doc.baseId, source: initial, operationId: randomUUID() }); await stop();
   if (hosted) {

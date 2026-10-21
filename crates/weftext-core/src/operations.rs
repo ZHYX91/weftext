@@ -390,7 +390,16 @@ struct ResourceBirth {
     identity: FileIdentity,
 }
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct DefinitionReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
+    #[serde(
+        default,
+        rename = "operationId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    operation_id: Option<String>,
     owner_id: String,
     source: RevisionReservation,
     key: String,
@@ -514,7 +523,16 @@ pub(crate) struct RevisionFact {
     pub(crate) revision: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RevisionReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) library: Option<hosted::ActorLibraryBinding>,
+    #[serde(
+        default,
+        rename = "operationId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) operation_id: Option<String>,
     pub(crate) path: String,
     pub(crate) stamp: FileStamp,
     pub(crate) bytes: Vec<u8>,
@@ -930,6 +948,64 @@ impl Core {
         }
         Ok(current)
     }
+    pub(crate) fn validate_source_reservation(
+        &self,
+        id: &str,
+        suffix: &str,
+        bytes: &[u8],
+    ) -> Result<hosted::ActorLibraryBinding> {
+        let invalid = || {
+            CoreError::new(
+                "resolutionUnavailable",
+                "Original source reservation cannot be qualified to this attempt and owner",
+            )
+        };
+        let (library, original, source, owner, key) = if suffix == "definition-reservation" {
+            let record: DefinitionReservation =
+                serde_json::from_slice(bytes).map_err(|_| invalid())?;
+            (
+                record.library,
+                record.operation_id,
+                record.source,
+                Some(record.owner_id),
+                Some(record.key),
+            )
+        } else if suffix == "revision-reservation" {
+            let record: RevisionReservation =
+                serde_json::from_slice(bytes).map_err(|_| invalid())?;
+            (
+                record.library.clone(),
+                record.operation_id.clone(),
+                record,
+                None,
+                None,
+            )
+        } else {
+            return Err(invalid());
+        };
+        let binding = library.ok_or_else(invalid)?;
+        let original_root = self.validate_original_reservation_library(&binding)?;
+        if original.as_deref() != Some(id)
+            || !Path::new(&source.path).starts_with(&original_root)
+            || source.bytes.len() > MAX_SOURCE_BYTES
+            || source.stamp.size != source.bytes.len() as u64
+        {
+            return Err(invalid());
+        }
+        valid_operation_id(&source.revision)?;
+        let birth = self
+            .admitted_binding(&source.stamp.identity)
+            .ok_or_else(invalid)?;
+        if binding.workspace_id.as_ref() != Some(&birth.workspace_id)
+            || owner.is_some_and(|owner| owner != birth.node_id)
+        {
+            return Err(invalid());
+        }
+        if let Some(key) = key {
+            valid_operation_id(&key)?;
+        }
+        Ok(binding)
+    }
     pub fn saved_operation_source(
         &self,
         operation_id: &str,
@@ -961,7 +1037,7 @@ impl Core {
             definition_key,
             status: if committed {
                 "committed"
-            } else if self.resolved(operation_id) {
+            } else if self.resolved(operation_id)? {
                 "resolved"
             } else {
                 "recoveryPending"
@@ -1423,6 +1499,7 @@ impl Core {
         operation_id: &str,
     ) -> Result<String> {
         valid_operation_id(operation_id)?;
+        self.check_attempt_not_cancelled(operation_id)?;
         let root = absolute_path(root.as_ref())?;
         let path = absolute_path(owner_path.as_ref())?;
         let current = self.managed_node(
@@ -1461,8 +1538,12 @@ impl Core {
         journal::private_create(
             &record,
             &serde_json::to_vec(&DefinitionReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 owner_id: owner.node_id,
                 source: RevisionReservation {
+                    library: None,
+                    operation_id: None,
                     path: current.path,
                     stamp: current.stamp,
                     bytes: current.bytes,
@@ -1511,6 +1592,7 @@ impl Core {
                 && reservation.source.stamp.identity == node.stamp.identity
                 && reservation.key == key
                 && !self.committed(id)
+                && !self.resolved(id)?
             {
                 if found.is_some() {
                     return Err(CoreError::new(
@@ -2671,6 +2753,7 @@ impl Core {
         operation_id: &str,
     ) -> Result<String> {
         valid_operation_id(operation_id)?;
+        self.check_attempt_not_cancelled(operation_id)?;
         let root = absolute_path(root.as_ref())?;
         let path = absolute_path(path.as_ref())?;
         let current = self.managed_node(
@@ -2705,6 +2788,8 @@ impl Core {
         journal::private_create(
             &reservation_path,
             &serde_json::to_vec(&RevisionReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 path: current.path,
                 stamp: current.stamp,
                 bytes: current.bytes,
@@ -3542,7 +3627,7 @@ impl Core {
             }
             return self.operation_details(operation_id).map(Some);
         }
-        if self.resolved(operation_id) {
+        if self.resolved(operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
                 "The original operation was cancelled before preparation",
@@ -3629,6 +3714,26 @@ impl Core {
         request: OperationRequest,
         cut_id: &str,
     ) -> Result<OperationPreview> {
+        self.prepare_admitted_internal(request, cut_id, None)
+    }
+    pub fn prepare_admitted_feature_operation(
+        &mut self,
+        request: OperationRequest,
+        cut_id: &str,
+        canonical_author_intent: &serde_json::Value,
+    ) -> Result<OperationPreview> {
+        self.prepare_admitted_internal(
+            request,
+            cut_id,
+            Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
+        )
+    }
+    fn prepare_admitted_internal(
+        &mut self,
+        request: OperationRequest,
+        cut_id: &str,
+        fingerprint: Option<String>,
+    ) -> Result<OperationPreview> {
         let cut = self.admitted_cuts.get(cut_id).cloned().ok_or_else(|| {
             CoreError::new(
                 "cutExpired",
@@ -3647,7 +3752,7 @@ impl Core {
                 "A Trash read cut cannot authorize a new generic author operation",
             ));
         }
-        self.prepare_internal(request, Some(cut), None, &[], &[], None, &[], None)
+        self.prepare_internal(request, Some(cut), fingerprint, &[], &[], None, &[], None)
     }
     #[allow(clippy::too_many_arguments)]
     fn prepare_internal(
@@ -3672,7 +3777,7 @@ impl Core {
             }
             return self.operation_details(&request.operation_id);
         }
-        if self.resolved(&request.operation_id) {
+        if self.resolved(&request.operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
                 "The original operation was cancelled before preparation",
@@ -4853,7 +4958,7 @@ impl Core {
         let mut preview = p.preview.clone();
         preview.status = if self.committed(operation_id) {
             "committed"
-        } else if self.resolved(operation_id) {
+        } else if self.resolved(operation_id)? {
             "resolved"
         } else if self.journal_path(operation_id, "install").exists() {
             "recoveryPending"
@@ -4868,9 +4973,16 @@ impl Core {
         operation_id: &str,
         plan_id: &str,
     ) -> Result<OperationReceipt> {
+        // Reading a damaged decision must fail before a mutation, never become
+        // a guessed absence inside the error-classification closure below.
+        let resolved = if self.committed(operation_id) {
+            false
+        } else {
+            self.resolved(operation_id)?
+        };
         let result = self.execute_operation_inner(operation_id, plan_id);
         result.map_err(|error|{
-            if self.journal_path(operation_id,"install").exists()&&!self.committed(operation_id)&&!self.resolved(operation_id){
+            if self.journal_path(operation_id,"install").exists()&&!self.committed(operation_id)&&!resolved{
                 CoreError::new("recoveryPending",format!("Operation {operation_id} began installation and is not committed. Keep the original plan and inspect recovery; underlying {}: {}",error.code,error.message))
             }else{error}
         })
@@ -4907,7 +5019,7 @@ impl Core {
         if self.committed(operation_id) {
             return Ok(t.receipt.clone());
         }
-        if self.resolved(operation_id) || self.journal_path(operation_id, "install").exists() {
+        if self.resolved(operation_id)? || self.journal_path(operation_id, "install").exists() {
             return Err(CoreError::new(
                 "recoveryPending",
                 "The original operation may have effects; inspect it and do not execute again",

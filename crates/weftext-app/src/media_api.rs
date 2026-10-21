@@ -1,6 +1,8 @@
 //! Resource reads use the Core's owned manifest and exact current snapshot.
 //! Container metadata is derived from the same bytes that the viewer receives.
 use super::{ApiError, ApiResult, AppState, core_call, location, value};
+#[cfg(test)]
+use crate::CoreTestFixture;
 use axum::{
     Json, Router,
     body::Body,
@@ -1387,7 +1389,9 @@ mod tests {
         let mut core = weftext_core::Core::new(root.join("private")).unwrap();
         let library = root.join("library");
         core.create_library(&library).unwrap();
-        let opened = core.create_note(&library, &library, "媒体").unwrap();
+        let opened = core
+            .create_note_fixture(&library, &library, "媒体")
+            .unwrap();
         let bytes = wave();
         let operation_id = uuid::Uuid::new_v4().to_string();
         let preview = core
@@ -1482,7 +1486,9 @@ mod tests {
         let mut core = weftext_core::Core::new(root.join("private")).unwrap();
         let library = root.join("library");
         core.create_library(&library).unwrap();
-        let opened = core.create_note(&library, &library, "缩略图").unwrap();
+        let opened = core
+            .create_note_fixture(&library, &library, "缩略图")
+            .unwrap();
         let mut image = Cursor::new(Vec::new());
         image::DynamicImage::new_rgb8(3, 2)
             .write_to(&mut image, image::ImageFormat::Png)

@@ -1,5 +1,70 @@
 use super::*;
 
+const MAX_RESOLUTION_BYTES: u64 = 4096;
+
+/// A decision in the original journal, never an author participant or a second
+/// operation ledger. A missing Plan can only have an attempt cancellation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ResolutionRecord {
+    pub operation_id: String,
+    pub action: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<AttemptFence>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AttemptFence {
+    pub request_kind: String,
+    pub wire_digest: String,
+}
+
+pub(crate) fn decode_resolution(id: &str, bytes: &[u8]) -> Result<ResolutionRecord> {
+    valid_operation_id(id)?;
+    if bytes.len() as u64 > MAX_RESOLUTION_BYTES {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            "Resolution metadata exceeds its bounded budget",
+        ));
+    }
+    let record: ResolutionRecord = serde_json::from_slice(bytes).map_err(|_| {
+        CoreError::new(
+            "resolutionUnavailable",
+            "Original resolution metadata is invalid; preserve it without retrying the operation",
+        )
+    })?;
+    if record.operation_id != id
+        || !matches!(
+            record.action.as_str(),
+            "keepCurrent" | "createRejected" | "cancelPrepared"
+        )
+        || record.message.len() > 2048
+        || record.attempt.as_ref().is_some_and(|attempt| {
+            record.action != "cancelPrepared"
+                || !matches!(
+                    attempt.request_kind.as_str(),
+                    "save"
+                        | "saveAs"
+                        | "newNode"
+                        | "capture"
+                        | "period"
+                        | "operation"
+                        | "createLibrary"
+                )
+                || attempt.wire_digest.len() != 64
+                || !attempt.wire_digest.bytes().all(|b| b.is_ascii_hexdigit())
+        })
+    {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            "Resolution identity, action or request binding is invalid",
+        ));
+    }
+    Ok(record)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Plan {
@@ -179,13 +244,28 @@ impl Core {
                 let bytes = fs::read(&path)?;
                 let plan: Plan = serde_json::from_slice(&bytes)?;
                 valid_operation_id(&plan.operation_id)?;
+                if path.file_name().and_then(|n| n.to_str())
+                    != Some(format!("{}.plan.json", plan.operation_id).as_str())
+                {
+                    return Err(CoreError::new(
+                        "resolutionUnavailable",
+                        "Journal Plan filename and original identity differ",
+                    ));
+                }
+                if plan.kind == "cancelLibraryCreation" && !library_creation::is_cancellation(&plan)
+                {
+                    return Err(CoreError::new(
+                        "resolutionUnavailable",
+                        "A retained library cancellation has author participants or an invalid request",
+                    ));
+                }
                 self.operations.insert(plan.operation_id.clone(), plan);
             }
         }
-        Ok(())
+        self.validate_resolution_namespace()
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
-        if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id) {
+        if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
                 "The original operation was cancelled before preparation",
@@ -256,35 +336,184 @@ impl Core {
                 matches
             })
     }
-    pub(crate) fn resolved(&self, id: &str) -> bool {
-        if self
-            .operations
-            .get(id)
-            .is_some_and(library_creation::is_cancellation)
-        {
-            return true;
+    pub(crate) fn resolution_record(&self, id: &str) -> Result<Option<ResolutionRecord>> {
+        valid_operation_id(id)?;
+        let mut file = match File::open(self.journal_path(id, "resolution")) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(MAX_RESOLUTION_BYTES + 1)
+            .read_to_end(&mut bytes)?;
+        let record = decode_resolution(id, &bytes)?;
+        if !self.operations.contains_key(id) {
+            if record.action != "cancelPrepared" {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    "An unregistered attempt cannot carry an author recovery decision",
+                ));
+            }
+            self.validate_unregistered_fence_namespace(id)?;
+        } else if record.attempt.is_some() {
+            return Err(CoreError::new(
+                "resolutionUnavailable",
+                "An unregistered attempt fence cannot also own an author Plan",
+            ));
         }
-        fs::read(self.journal_path(id, "resolution"))
-            .ok()
-            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-            .is_some_and(|r| {
-                r["operationId"] == id
-                    && matches!(
-                        r["action"].as_str(),
-                        Some("keepCurrent" | "createRejected" | "cancelPrepared")
+        Ok(Some(record))
+    }
+    pub(crate) fn validate_unregistered_fence_namespace(&self, id: &str) -> Result<()> {
+        self.unregistered_attempt_library(id, true, &[]).map(|_| ())
+    }
+    /// Only typed allocations produced before an author Plan may accompany a
+    /// missing-attempt decision. Body reads can be omitted for foreign backup
+    /// routing; selected payloads are validated from their actual guarded file.
+    pub(crate) fn unregistered_attempt_library(
+        &self,
+        id: &str,
+        full: bool,
+        protected: &[operations::CapturedFile],
+    ) -> Result<Option<hosted::ActorLibraryBinding>> {
+        valid_operation_id(id)?;
+        let mut scope = None;
+        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name
+                .to_str()
+                .ok_or_else(|| CoreError::new("resolutionUnavailable", "Invalid journal leaf"))?;
+            let prefix = format!("{id}.");
+            if !name
+                .get(..prefix.len())
+                .is_some_and(|p| p.eq_ignore_ascii_case(&prefix))
+            {
+                continue;
+            }
+            let suffix = name
+                .strip_prefix(&prefix)
+                .and_then(|name| name.strip_suffix(".json"))
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "resolutionUnavailable",
+                        "Journal alias or partial evidence is retained",
                     )
-            })
+                })?;
+            if suffix == "resolution" {
+                continue;
+            }
+            if !matches!(
+                suffix,
+                "definition-reservation"
+                    | "revision-reservation"
+                    | "tag-reservation"
+                    | "directory-reservation"
+            ) {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    "An unregistered attempt has installation or unknown retained evidence",
+                ));
+            }
+            let path = entry.path();
+            let binding = if let Some(original) =
+                protected.iter().find(|file| Path::new(&file.path) == path)
+            {
+                let mut cursor = std::io::Cursor::new(&original.bytes);
+                match hosted::read_actor_library_header(&mut cursor)? {
+                    hosted::ActorLibraryHeader::Bound(binding) => binding,
+                    _ => {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            "Unbound reservation is preserved for inspection",
+                        ));
+                    }
+                }
+            } else {
+                let mut file = File::open(&path)?;
+                let binding = match hosted::read_actor_library_header(&mut file)? {
+                    hosted::ActorLibraryHeader::Bound(binding) => binding,
+                    _ => {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            "Unbound reservation is preserved for inspection",
+                        ));
+                    }
+                };
+                if full {
+                    file.seek(SeekFrom::Start(0))?;
+                    let mut bytes = Vec::new();
+                    Read::by_ref(&mut file)
+                        .take((8 * MAX_SOURCE_BYTES + 65537) as u64)
+                        .read_to_end(&mut bytes)?;
+                    if bytes.len() > 8 * MAX_SOURCE_BYTES + 65536 {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            "Reservation exceeds its bounded retained budget",
+                        ));
+                    }
+                    if self.validate_preplan_reservation(id, suffix, &bytes)? != binding {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            "Reservation library header differs",
+                        ));
+                    }
+                }
+                binding
+            };
+            if scope.as_ref().is_some_and(|original| original != &binding) {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    "One attempt has competing original library scopes",
+                ));
+            }
+            scope = Some(binding);
+        }
+        Ok(scope)
+    }
+    fn validate_resolution_namespace(&self) -> Result<()> {
+        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or_else(|| {
+                CoreError::new("resolutionUnavailable", "Journal filename is invalid")
+            })?;
+            if let Some(id) = name.strip_suffix(".resolution.json") {
+                self.resolution_record(id)?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn resolved(&self, id: &str) -> Result<bool> {
+        let resolution = self.resolution_record(id)?;
+        Ok(resolution.is_some()
+            || self
+                .operations
+                .get(id)
+                .is_some_and(library_creation::is_cancellation))
     }
     pub(crate) fn resolve_record(&self, id: &str, action: &str) -> Result<()> {
         let path = self.journal_path(id, "resolution");
-        if self.resolved(id) {
+        if self.resolved(id)? {
             return Ok(());
         }
-        private_replace(
+        if !self.operations.contains_key(id) {
+            if action != "cancelPrepared" {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    "Only an attempt cancellation can terminate an unregistered operation",
+                ));
+            }
+            self.validate_unregistered_fence_namespace(id)?;
+        }
+        private_create(
             &path,
-            &serde_json::to_vec(
-                &serde_json::json!({"operationId":id,"action":action,"message":"Current files were preserved; original plan remains retained"}),
-            )?,
+            &serde_json::to_vec(&ResolutionRecord {
+                operation_id: id.into(),
+                action: action.into(),
+                message: "Current files were preserved; original plan remains retained".into(),
+                attempt: None,
+            })?,
         )
     }
     pub(crate) fn check_pending(&self, path: &Path) -> Result<()> {
@@ -306,7 +535,7 @@ impl Core {
             if affects
                 && installing
                 && !self.committed(&p.operation_id)
-                && !self.resolved(&p.operation_id)
+                && !self.resolved(&p.operation_id)?
             {
                 return Err(CoreError::new(
                     "recoveryPending",
@@ -339,7 +568,7 @@ impl Core {
                 && (plan.transaction.is_none()
                     || self.journal_path(&plan.operation_id, "install").exists())
                 && !self.committed(&plan.operation_id)
-                && !self.resolved(&plan.operation_id)
+                && !self.resolved(&plan.operation_id)?
             {
                 return Err(CoreError::new(
                     "recoveryPending",
@@ -368,17 +597,16 @@ impl Core {
         Ok(None)
     }
     pub fn recoveries(&self) -> Result<Vec<RecoveryInfo>> {
-        let mut entries = self
-            .operations
-            .values()
-            .filter(|p| {
-                !self.committed(&p.operation_id)
-                    && !self.resolved(&p.operation_id)
-                    && (p.transaction.is_none()
-                        || self.journal_path(&p.operation_id, "install").exists())
-            })
-            .map(|p| self.inspect_recovery(&p.operation_id))
-            .collect::<Result<Vec<_>>>()?;
+        let mut entries = Vec::new();
+        for p in self.operations.values() {
+            if !self.committed(&p.operation_id)
+                && !self.resolved(&p.operation_id)?
+                && (p.transaction.is_none()
+                    || self.journal_path(&p.operation_id, "install").exists())
+            {
+                entries.push(self.inspect_recovery(&p.operation_id)?);
+            }
+        }
         entries.sort_by(|a, b| a.operation_id.cmp(&b.operation_id));
         Ok(entries)
     }
@@ -417,9 +645,27 @@ impl Core {
     pub fn inspect_recovery(&self, operation_id: &str) -> Result<RecoveryInfo> {
         self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
-        let plan = self.operations.get(operation_id).ok_or_else(|| {
-            CoreError::new("operationMissing", "No retained operation has this ID")
-        })?;
+        let Some(plan) = self.operations.get(operation_id) else {
+            if self.resolved(operation_id)? {
+                return Ok(RecoveryInfo {
+                    operation_id: operation_id.into(),
+                    path: String::new(),
+                    status: "resolved".into(),
+                    before_source: None,
+                    after_source: String::new(),
+                    message: "The original attempt is durably fenced without author participants"
+                        .into(),
+                    current_source: None,
+                    coherence: "unavailable".into(),
+                    members: Vec::new(),
+                    allowed_actions: Vec::new(),
+                });
+            }
+            return Err(CoreError::new(
+                "operationMissing",
+                "No retained operation has this ID",
+            ));
+        };
         if library_creation::is_cancellation(plan) {
             return Ok(Self::recovery_info(
                 plan,
@@ -442,7 +688,7 @@ impl Core {
                 None,
             ));
         }
-        if self.resolved(operation_id) {
+        if self.resolved(operation_id)? {
             return Ok(Self::recovery_info(
                 plan,
                 "resolved",
@@ -524,9 +770,6 @@ impl Core {
     }
     pub fn operation_status(&self, operation_id: &str) -> Result<RecoveryInfo> {
         self.inspect_recovery(operation_id)
-    }
-    pub(crate) fn write_birth(&self, id: &str, birth: &Birth) -> Result<()> {
-        private_create(&self.journal_path(id, "birth"), &serde_json::to_vec(birth)?)
     }
     pub(crate) fn read_birth(&self, id: &str) -> Result<Option<Birth>> {
         match fs::read(self.journal_path(id, "birth")) {

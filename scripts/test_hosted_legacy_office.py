@@ -4,6 +4,7 @@ Usage: python scripts/test_hosted_legacy_office.py EXE NEW_EVIDENCE_DIRECTORY [N
 The executable, library, policy, data, conversion processes and artifacts belong
 to this one run. No Word/WPS automation or synthetic conversion receipt is used.
 """
+from _creation_result import created_document
 import base64
 import hashlib
 from html.parser import HTMLParser
@@ -102,6 +103,7 @@ class HostedLegacyOffice(HostedOffice):
             self.assertEqual(local.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})[0], 200)
             code, doc, _ = local.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'Shared', 'operationId': uid()})
             self.assertEqual(code, 200, doc)
+            doc = created_document(doc)
             code, _, _ = local.call('/api/save', {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': doc['source'] + '初始共同正文', 'operationId': uid()})
             self.assertEqual(code, 200)
         finally:

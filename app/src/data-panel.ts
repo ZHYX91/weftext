@@ -1,3 +1,4 @@
+import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
 /** Schema forms operate on native value trees; only the source owner writes Typst. */
 import type { OpenedDocument } from "./types";
 import { TagTree } from "./tag-tree";
@@ -402,18 +403,20 @@ export class QuickCapture {
     form.onsubmit = event => {
       event.preventDefault(); if (!form.reportValidity()) return;
       void (async () => {
+        const retry = this.pending !== null;
         submit.disabled = true; this.operationId ??= crypto.randomUUID(); this.pending ??= { root: this.context.root, parent: parent.value, name: name.value, title: title.value || undefined, types: type.value ? [type.value] : [], fields: Object.fromEntries(values), body: body.value, operationId: this.operationId };
         const submitted = this.pending; let receiptReceived = false;
         try {
-          const result = await this.host.request<{ path?: string; root?: string; status?: string }>("/api/data/capture", this.pending);
+          const result = await submitOriginal<OriginalFact & { document?: OpenedDocument; documentError?: { message?: string } }>(this.host.request, "/api/data/capture", this.pending, "capture", retry);
           if (result.status && !["saved", "created", "committed", "complete", "success"].includes(result.status)) throw new Error(`创建尚未确认：${result.status}`);
           receiptReceived = true;
-          if (this.host.created) await this.host.created(result); else if (result.path) await this.host.openDocument(result.path, result.root ?? this.context.root); else throw new Error("服务未返回真实新对象，输入已保留。");
+          const document = result.document;
+          if (!document) throw new Error(`记录已提交；打开尚未完成：${result.documentError?.message ?? "请确认原操作"}`);
+          if (this.host.created) await this.host.created(document); else await this.host.openDocument(document.path, document.root ?? this.context.root);
           const unchanged = name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
           this.operationId = null; this.pending = null; if (unchanged) { name.value = ""; title.value = ""; body.value = ""; values.clear(); type.value = ""; fields.replaceChildren(); } feedback.className = "data-help"; feedback.textContent = unchanged ? "已创建并打开。可继续记录下一条。" : "提交的记录已创建并打开。等待期间的新输入仍保留，可核对名称后继续记录。"; this.updateContext(); void loadFormReferences(this.host, this.context.root, this.references, this.element);
         } catch (error) {
-          const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-          if (!receiptReceived && !["unknown", "pending", "resultUnknown"].includes(code)) { this.operationId = null; this.pending = null; }
+          if (!receiptReceived && error instanceof TerminatedAttempt) { this.operationId = null; this.pending = null; }
           feedback.className = "data-warning"; feedback.textContent = `${error instanceof Error ? error.message : String(error)}${this.pending ? " 再次创建将查询同一操作结果；原输入保留。" : " 原输入保留。"}`;
         } finally { submit.disabled = false; }
       })();

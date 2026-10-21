@@ -1,3 +1,4 @@
+import { deliverCommitted } from "./original-operation";
 import "./data-view.css";
 import "./style-panel.css";
 import "./export-panel.css";
@@ -103,7 +104,7 @@ export class WorkspaceTools {
       prepare: (intent, context) => api("/api/knowledge/prepare", { operationId: operationId(), context, intent }),
       commit: (plan, context) => this.commit(plan, context),
       navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
-      inspectOperation: async (id, context) => { const receipt = await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }); await host.applyReceipt(receipt, context); return receipt; },
+      inspectOperation: async (id, context) => { const receipt = await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }); return deliverCommitted(receipt, value => host.applyReceipt(value, context)); },
       selectSource: host.selectSource,
       revealHeading: host.revealHeading,
       previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
@@ -260,7 +261,9 @@ export class WorkspaceTools {
       return { status: "committed", operationId: plan.operationId, message: "链接已更新到当前草稿，可撤销。" };
     }
     const receipt = await api<KnowledgeReceipt>("/api/operations/commit", { operationId: plan.operationId, planId: plan.planId, context });
-    await this.host.applyReceipt(receipt, context); return receipt;
+    const delivered = await deliverCommitted(receipt, value => this.host.applyReceipt(value, context));
+    if (delivered.deliveryError) this.host.notify("原操作已提交；界面更新尚未完成，请检查原操作。", true);
+    return delivered;
   }
   private async showStyles(): Promise<void> {
     const library = this.library;

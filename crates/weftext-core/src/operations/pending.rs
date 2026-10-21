@@ -183,13 +183,15 @@ impl Core {
         } else {
             read_scopes(t)
         };
-        for other in self.operations.values().filter(|other| {
-            other.operation_id != plan.operation_id
-                && !self.committed(&other.operation_id)
-                && !self.resolved(&other.operation_id)
-                && (other.transaction.is_none()
-                    || self.journal_path(&other.operation_id, "install").exists())
-        }) {
+        for other in self.operations.values() {
+            if other.operation_id == plan.operation_id
+                || self.committed(&other.operation_id)
+                || self.resolved(&other.operation_id)?
+                || (other.transaction.is_some()
+                    && !self.journal_path(&other.operation_id, "install").exists())
+            {
+                continue;
+            }
             let (other_writes, other_reads) = if let Some(transaction) = &other.transaction {
                 (write_scopes(transaction), read_scopes(transaction))
             } else {

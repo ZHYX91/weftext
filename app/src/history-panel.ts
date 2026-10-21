@@ -67,6 +67,7 @@ class HistoryDialog {
       compare: request => host.request("/api/history/compare", request),
       restore: request => { const basis = this.controller.pendingBasis; if (basis) host.restorePending?.(basis, true); return host.request("/api/history/restore", request); },
       status: request => host.request("/api/history/status", request),
+      settle: request => host.request("/api/operations/settle", request),
     }, Object.freeze(structuredClone(context)));
     this.dialog.setAttribute("aria-label", "本地笔记时间线");
     const header = element("header", "history-header"); header.append(element("h2", "", "本地笔记时间线"), button("关闭时间线", () => this.dialog.close()));
@@ -188,10 +189,10 @@ class HistoryDialog {
     const pending = this.controller.pendingBasis;
     if (pending) {
       const state = this.controller.operationState;
-      const message = state === "missing" ? "原操作尚无已登记结果，可重试完全相同的原操作。" : state === "recoveryPending" ? "原恢复仍需处理；请从应用的操作恢复入口处理后查询。" : "恢复结果待确认；请查询原操作，不会创建新的保存编号。";
+      const message = state === "committed" ? "原恢复已提交，原保存回执已保留；准确结果暂不可交付，请查询原恢复结果。" : state === "missing" ? "原操作尚无已登记结果，可重试完全相同的原操作。" : state === "recoveryPending" ? "原恢复仍需处理；请从应用的操作恢复入口处理后查询。" : "恢复结果待确认；请查询原操作，不会创建新的保存编号。";
       this.operationHost.append(element("p", "history-warning", `${message} 操作编号：${this.controller.operationId}`));
       const inspect = button("查询原恢复结果", () => this.inspect()); const retry = button("重试同一恢复操作", () => this.retry());
-      inspect.disabled = this.controller.busy; retry.disabled = this.controller.busy || state === "recoveryPending";
+      inspect.disabled = this.controller.busy; retry.disabled = this.controller.busy || state === "recoveryPending" || state === "committed";
       this.operationHost.append(inspect, retry);
     }
     if (this.unacknowledged) {
@@ -258,7 +259,7 @@ class HistoryDialog {
       const attempt = this.controller.inspectOriginal(); this.drawControls(); this.drawOperation();
       const result = await attempt;
       if (result) { this.unacknowledged = { result, basis }; await this.acknowledge(); }
-      else this.status.textContent = this.controller.operationState === "resolved" ? "原恢复已处理，未报告新保存。请刷新并重新核对当前稿。" : this.controller.operationId === null ? "Core 已确认被拒绝的原恢复没有登记保存。草稿保持原样，请处理原错误后重新准备。" : "查询没有取得已完成回执，原操作编号继续保留。";
+      else this.status.textContent = this.controller.operationState === "committed" ? "原恢复已提交，原保存回执与编号继续保留；准确结果尚未取得，请继续查询。" : this.controller.operationState === "resolved" ? "原恢复已处理，未报告新保存。请刷新并重新核对当前稿。" : this.controller.operationId === null ? "Core 已确认被拒绝的原恢复没有登记保存。草稿保持原样，请处理原错误后重新准备。" : "查询没有取得已完成回执，原操作编号继续保留。";
     } catch (error) { this.report(error); }
     finally { this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null); this.drawControls(); this.drawOperation(); }
   }

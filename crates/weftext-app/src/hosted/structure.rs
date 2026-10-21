@@ -1,6 +1,8 @@
 //! Operator-bound namespace transactions over the original Core writer.
 //! Source, subtree transfer and destination capabilities are independent.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use std::path::Path;
 use weftext_core::{
     ActorFeatureStatus, ConfigRole, OperationIntent, OperationRequest, SnapshotWitness,
@@ -1473,7 +1475,10 @@ mod tests {
         let (_temp, state, _auth) = fixture();
         let mut inner = state.inner.lock().unwrap();
         let root = inner.config.root.clone();
-        let local = inner.core.create_note(&root, &root, "Created").unwrap();
+        let local = inner
+            .core
+            .create_note_fixture(&root, &root, "Created")
+            .unwrap();
         inner.core.close_session(&local.session_id).unwrap();
         assert!(inner.open("alice", "Created").is_err());
         assert!(guard_slot(&inner, "Created").is_err());

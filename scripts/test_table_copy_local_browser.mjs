@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Narrow real local-client counterpart of the hosted table-copy regression.
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -26,7 +27,7 @@ async function selectRow() { await click('可视编辑'); await surface().getByR
 async function clipboard() { return page.evaluate(async () => { if (!navigator.clipboard?.read) throw new Error('Real Clipboard API read is required'); return Promise.all((await navigator.clipboard.read()).map(async item => ({ types: [...item.types].sort(), payloads: Object.fromEntries(await Promise.all(item.types.map(async type => [type, await (await item.getType(type)).text()]))) }))); }); }
 try {
   await start(); await api('/api/library/create', { path: root, operationId: randomUUID() });
-  const doc = await api('/api/note/create', { root, parent: root, name: 'Local Copy', operationId: randomUUID() }), initial = doc.source + '\n表前保留。\n\n#table(columns: 3, [重复], [], [重复], [甲], [乙], [末])\n\n表后保留。\n';
+  const doc = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Local Copy', operationId: randomUUID() })), initial = doc.source + '\n表前保留。\n\n#table(columns: 3, [重复], [], [重复], [甲], [乙], [末])\n\n表后保留。\n';
   await api('/api/save', { sessionId: doc.sessionId, baseId: doc.baseId, source: initial, operationId: randomUUID() }); await stop(); await start(['--open', doc.path, '--root', root]);
   let frontend = base;
   if (dev) { const app = path.resolve(import.meta.dirname, '../app'), { createServer } = await import(pathToFileURL(path.join(app, 'node_modules/vite/dist/node/index.js')).href); const proxy = { target: base, changeOrigin: true, configure(instance) { instance.on('proxyReq', (request, incoming) => { if (incoming.headers.origin) request.setHeader('Origin', base); }); } }; vite = await createServer({ root: app, configFile: false, server: { host: '127.0.0.1', port: 0, hmr: false, watch: { ignored: ['**/*'] }, proxy: { '/api': proxy, '/fonts': proxy } } }); await vite.listen(); frontend = 'http://127.0.0.1:' + vite.httpServer.address().port; }

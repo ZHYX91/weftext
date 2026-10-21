@@ -1,4 +1,5 @@
 import "./style.css";
+import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
@@ -12,7 +13,7 @@ import { EmbeddedQueryController } from "./embedded-query";
 import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
-import { DocumentSession, encodeLiteral, canRebindSaveAs, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
+import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
 import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
@@ -90,7 +91,7 @@ interface LiveDocument {
   draftFailure: string | null;
   rendering: number;
   renderGeneration: number;
-  lastSave?: { source: string; baseId: string; operationId: string; path?: string };
+  lastSave?: { source: string; baseId: string; operationId: string; sessionId: string; path?: string };
   externalSource?: string;
   comparisonTarget?: OpenedDocument;
   saveAsChangedTarget?: string;
@@ -1081,12 +1082,13 @@ async function compile(doc: LiveDocument): Promise<void> {
 async function flushLiteral(): Promise<void> { if (current) await current.writing.flush(); }
 
 async function chooseLibrary(): Promise<void> { const path = await pathDialog("openLibrary"); if (!path) return; await flushLiteral(); inventory = await api<Inventory>("/api/library/open", { path }); selectedFolder = null; collapsed.clear(); query = ""; renderSidebar(); renderContent(); }
-async function creation<T>(route: string, payload: Record<string, unknown>): Promise<T> {
+async function creation<T extends OriginalFact>(route: string, payload: Record<string, unknown>): Promise<T> {
   if (pendingCreation && pendingCreation.route !== route) throw new Error("上一次创建结果仍待确认，请先重试该创建操作。");
+  const retry = pendingCreation !== null;
   const request = pendingCreation ?? { route, payload: { ...payload, operationId: operationId() } };
   pendingCreation = request;
-  try { const result = await api<T>(request.route, request.payload); pendingCreation = null; return result; }
-  catch (error) { if (error instanceof ApiError && !["unknown", "pending", "resultUnknown"].includes(error.code)) pendingCreation = null; else toast("创建结果待确认，再次点击创建会确认同一操作。", true); throw error; }
+  try { const result = await submitOriginal<T>(api, request.route, request.payload, route === "/api/note/create" ? "newNode" : "createLibrary", retry); pendingCreation = null; return result; }
+  catch (error) { if (error instanceof TerminatedAttempt) pendingCreation = null; else toast("创建结果待确认，再次点击创建会确认同一操作。", true); throw error; }
 }
 async function createLibrary(): Promise<void> {
   if (pendingCreation && pendingCreation.route !== "/api/library/create") throw new Error("上一次创建结果仍待确认，请先重试原创建操作。");
@@ -1107,7 +1109,9 @@ async function createNote(): Promise<void> {
     form.append(el("p", "field-help", "名称用于文件夹与主文件。正文可以不设标题。")); const actions = el("div", "modal-actions"); actions.append(button("取消", () => close(null), "button-secondary")); const submit = el("button", "button-primary", "创建并打开"); submit.type = "submit"; actions.append(submit); form.append(actions); form.onsubmit = event => { event.preventDefault(); if (input.value.trim()) close(input.value.trim()); };
   });
   if (!name) return; await prepareSwitch();
-  const opened = await creation<OpenedDocument>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
+  const receipt = await creation<OriginalFact & { document?: OpenedDocument; documentError?: { message?: string } }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
+  const opened = receipt.document;
+  if (!opened) { await refreshInventory(); throw new Error(`笔记已创建；打开尚未完成：${receipt.documentError?.message ?? "请从文件列表打开原笔记。"}`); }
   workspaceTools.invalidateQueryEnvironment(opened.root);
   addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
 }
@@ -1214,7 +1218,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
   if ((doc.sourceTrashed || readOnlySource(doc)) && !path) { toast("笔记已移入回收站，请先恢复或将草稿另存为。", true); return; }
   if (doc.writing.state.composing) { await doc.writing.deferUntilCompositionEnds(() => saveDocument(doc, path)); return; }
   doc.session.savePending = true; refreshChrome();
-  try { await flushLiteral(); await persistDraft(doc); }
+  try { if (!doc.lastSave) { await flushLiteral(); await persistDraft(doc); } }
   catch (error) { doc.session.savePending = false; refreshChrome(); throw error; }
   if (doc.session.opened.recoveredDraftConflict && !path) { doc.session.savePending = false; refreshChrome(); await showDraftComparison(doc); return; }
   let reservedOperation: string | null = null;
@@ -1225,15 +1229,22 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     catch(error) { doc.session.savePending = false; refreshChrome(); throw error; }
     if (doc.session.source !== source || doc.session.serial !== serial) { doc.session.savePending = false; throw new Error("保存前查询预约核对期间出现新输入，请重新保存；输入已保留。"); }
   }
-  const request = doc.lastSave ?? { source: doc.session.source, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), path };
+  const retry = doc.lastSave !== undefined;
+  const request = doc.lastSave ?? { source: doc.session.source, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
   doc.lastSave = request; doc.session.savePending = true; refreshChrome();
   let receiptReceived = false;
   try {
-    const receipt = await api<Receipt>(request.path ? "/api/save-as" : "/api/save", request.path
-      ? { sessionId: doc.session.opened.sessionId, path: request.path, source: request.source, operationId: request.operationId }
-      : { sessionId: doc.session.opened.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId });
+    const payload = request.path
+      ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId }
+      : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId };
+    const receipt = await submitOriginal<Receipt & OriginalFact & { document?: OpenedDocument; documentError?: { message?: string }; documentSourceMatchesCommit?: boolean }>(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry);
     if (!["saved", "committed", "complete", "after", "success"].includes(receipt.status)) throw new ApiError(receipt.status, receipt.message || "保存尚未确认，草稿已保留。");
     receiptReceived = true;
+    if (doc.lastSave !== request || doc.session.opened.sessionId !== request.sessionId) {
+      doc.lastSave = request;
+      throw new ApiError("committedDeliveryPending", "原内容已提交；等待期间文件会话已改变，原操作和输入保留，请核对原结果。");
+    }
+    if (receipt.recoveryIssue) toast("文件已保存；恢复草稿更新暂不可用，当前输入保留。", true);
     workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
     if (request.path) {
       // Save As creates a new ordinary file. Its path, dependency root, and
@@ -1251,6 +1262,12 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
       doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
       doc.session.projection = null;
       scheduleRender(doc, 0);
+    } else if (receipt.document || receipt.documentError) {
+      if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, request, receipt.document)) {
+        if (receipt.document) { doc.externalSource = receipt.document.source; doc.comparisonTarget = receipt.document; }
+        throw new ApiError("committedDeliveryPending", "原内容已保存；当前文件或会话依据已变化，原操作、输入和撤销记录保留，请核对当前磁盘内容。");
+      }
+      doc.editor.clearTokens(); doc.session.projection = null; scheduleRender(doc, 0);
     } else doc.session.acknowledgeSave(request.source, receipt.baseId, receipt.path);
     doc.saveAsChangedTarget = undefined;
     doc.lastSave = undefined;
@@ -1258,11 +1275,11 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     if(querySaveNotice)toast("正文已按原文保存；部分查询定义尚不可运行，请核对其配置或预约。",true);
     if (inventory) { inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar(); }
   } catch (error) {
-    if (!receiptReceived && error instanceof ApiError && !["unknown", "resultUnknown", "pending"].includes(error.code)) doc.lastSave = undefined;
+    if (!receiptReceived && error instanceof TerminatedAttempt) doc.lastSave = undefined;
     doc.session.error = error instanceof Error ? error.message : String(error);
     if (error instanceof ApiError && error.currentSource != null) doc.externalSource = error.currentSource;
     if (error instanceof ApiError && error.code === "saveAsTargetChanged") doc.session.error = error.message;
-    else if (receiptReceived) doc.session.error = doc.lastSave ? "文件已创建，重新打开尚未完成。请再次保存以确认同一操作。" : `文件已保存；后续恢复信息更新失败：${error instanceof Error ? error.message : String(error)}`;
+    else if (receiptReceived) doc.session.error = doc.lastSave ? "原内容已提交，结果交付尚未完成。原操作与输入保留；再次保存先核对原结果。" : `文件已保存；后续恢复信息更新失败：${error instanceof Error ? error.message : String(error)}`;
     else if (!(error instanceof ApiError)) doc.session.error = "保存结果未知。草稿已保留；再次保存将确认同一操作。";
     if (doc === current) renderContent(); throw error;
   } finally { doc.session.savePending = false; if (doc === current) refreshChrome(); }

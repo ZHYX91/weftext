@@ -1,4 +1,5 @@
 """Exercise the built local application against disposable files, never a real library."""
+from _creation_result import created_document
 import argparse
 import json
 from pathlib import Path
@@ -126,8 +127,8 @@ class LocalApplication(unittest.TestCase):
         lib = self.api('/api/library/create', req)
         self.assertEqual(self.api('/api/library/create', req)['workspaceId'], lib['workspaceId'])
         create = {'root': str(root), 'parent': str(root), 'name': '第一篇', 'operationId': uid()}
-        node = self.api('/api/note/create', create)
-        replay = self.api('/api/note/create', create)
+        node = created_document(self.api('/api/note/create', create))
+        replay = created_document(self.api('/api/note/create', create))
         self.assertEqual(replay['nodeId'], node['nodeId'])
         self.assertEqual(node['kind'], 'managed')
         self.assertEqual(Path(node['path']), root / '第一篇' / '第一篇.typ')

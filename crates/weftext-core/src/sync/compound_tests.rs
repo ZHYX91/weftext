@@ -49,12 +49,15 @@ fn fixture_with_child(child: bool) -> Pair {
     let mut keys = BTreeSet::new();
     for name in ["Left", "Right", "Container", "Still"] {
         keys.insert(ObjectKey::Node(
-            a.create_note(&ar, &ar, name).unwrap().node_id.unwrap(),
+            a.create_note_fixture(&ar, &ar, name)
+                .unwrap()
+                .node_id
+                .unwrap(),
         ));
     }
     if child {
         keys.insert(ObjectKey::Node(
-            a.create_note(&ar, ar.join("Left"), "Child")
+            a.create_note_fixture(&ar, ar.join("Left"), "Child")
                 .unwrap()
                 .node_id
                 .unwrap(),
@@ -748,7 +751,7 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
     let bd = temp.path().join("receiver-private");
     let mut a = Core::new(temp.path().join("author-private")).unwrap();
     a.create_library(&ar).unwrap();
-    let node = a.create_note(&ar, &ar, "Note").unwrap();
+    let node = a.create_note_fixture(&ar, &ar, "Note").unwrap();
     let keys = BTreeSet::from([ObjectKey::Node(node.node_id.unwrap())]);
     let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;
     let mut b = Core::new(&bd).unwrap();

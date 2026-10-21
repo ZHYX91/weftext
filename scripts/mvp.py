@@ -166,6 +166,7 @@ if __name__ == '__main__':
         run('cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings')
         run('cargo', 'test', '--locked', '--workspace', env={**os.environ, 'WEFTEXT_TEST_EXECUTABLE': str(exe)})
         run(sys.executable, 'scripts/test_mvp.py', exe)
+        run(sys.executable, 'scripts/test_commit_delivery.py', exe)
         run(sys.executable, 'scripts/test_local_features.py', exe)
         run(sys.executable, 'scripts/test_outputs.py', exe)
         run(sys.executable, 'scripts/test_v05_completion.py', exe)

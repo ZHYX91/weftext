@@ -419,7 +419,12 @@ fn unknown_marker_payload_does_not_grant_directory_role(route: &str) {
     let mut keys = BTreeSet::new();
     let mut initial = BTreeSet::new();
     for name in ["Note", "Left", "Right"] {
-        let object = ObjectKey::Node(a.create_note(&ar, &ar, name).unwrap().node_id.unwrap());
+        let object = ObjectKey::Node(
+            a.create_note_fixture(&ar, &ar, name)
+                .unwrap()
+                .node_id
+                .unwrap(),
+        );
         keys.insert(object.clone());
         if name != "Note" {
             initial.insert(object);
@@ -1021,7 +1026,7 @@ fn typed_committed_pinned_definition_uses_exact_historical_source_without_invent
             .clone()
             .unwrap();
     let caller = ObjectKey::Node(
-        p.a.create_note(&p.ar, &p.ar, "Caller")
+        p.a.create_note_fixture(&p.ar, &p.ar, "Caller")
             .unwrap()
             .node_id
             .unwrap(),

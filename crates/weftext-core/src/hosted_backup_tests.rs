@@ -60,7 +60,10 @@ fn owner_backup_original_fence_preflight_restart_commit_and_fixed_artifact_prese
  {
     let mut f = Fixture::new();
     fs::create_dir(f.root.join("empty-目录")).unwrap();
-    let note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     for (actor, text) in [
         ("deployment:alice", "ALICE_PRIVATE"),
         ("deployment:bob", "BOB_PRIVATE"),

@@ -22,8 +22,8 @@ fn commit(core: &mut Core, preview: &OperationPreview) {
 #[test]
 fn author_order_preserves_settings_and_replays_exact_original_after_restart() {
     let (_temp, mut core, root, data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
-    core.create_note(&root, &root, "Beta").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Beta").unwrap();
     let before = core
         .read_config(&root, ConfigRole::WorkspaceSettings)
         .unwrap();
@@ -78,8 +78,8 @@ fn author_order_preserves_settings_and_replays_exact_original_after_restart() {
 #[test]
 fn exact_membership_and_generic_updates_cannot_omit_or_forge_siblings() {
     let (_temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
-    core.create_note(&root, &root, "Beta").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Beta").unwrap();
     let snapshot = core.read_navigation_order(&root, &parent).unwrap();
     assert!(
         core.prepare_navigation_reorder(
@@ -126,7 +126,7 @@ fn exact_membership_and_generic_updates_cannot_omit_or_forge_siblings() {
 #[test]
 fn late_sibling_or_replaced_physical_source_prevents_commit() {
     let (temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
     let snapshot = core.read_navigation_order(&root, &parent).unwrap();
     let preview = core
         .prepare_navigation_reorder(
@@ -137,7 +137,7 @@ fn late_sibling_or_replaced_physical_source_prevents_commit() {
             &fresh(),
         )
         .unwrap();
-    core.create_note(&root, &root, "Late").unwrap();
+    core.create_note_fixture(&root, &root, "Late").unwrap();
     assert!(
         core.execute_operation(&preview.operation_id, &preview.plan_id)
             .is_err()
@@ -167,8 +167,8 @@ fn late_sibling_or_replaced_physical_source_prevents_commit() {
 #[test]
 fn moved_children_drop_from_old_order_and_new_children_append_without_path_substitution() {
     let (_temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
-    core.create_note(&root, &root, "Beta").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Beta").unwrap();
     let snapshot = core.read_navigation_order(&root, &parent).unwrap();
     let children = snapshot
         .ordered_refs
@@ -197,7 +197,7 @@ fn moved_children_drop_from_old_order_and_new_children_append_without_path_subst
         })
         .unwrap();
     commit(&mut core, &moved);
-    core.create_note(&root, &root, "Beta").unwrap();
+    core.create_note_fixture(&root, &root, "Beta").unwrap();
     let after = core.read_navigation_order(&root, &parent).unwrap();
     assert!(!after.ordered_refs.contains(&children[0]));
     assert_eq!(after.ordered_refs[0], children[1]);
@@ -261,7 +261,7 @@ fn unadmitted_containers_are_incomplete_and_cancel_is_durable() {
 #[test]
 fn original_created_settings_after_image_recovers_without_treating_it_as_a_new_sibling() {
     let (_temp, mut core, root, data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
     let snapshot = core.read_navigation_order(&root, &parent).unwrap();
     let preview = core
         .prepare_navigation_reorder(
@@ -406,8 +406,8 @@ fn config_read_preserves_invalid_settings_without_granting_navigation_or_write_v
 #[test]
 fn excluded_physical_child_does_not_become_a_complete_subset_reorder() {
     let (_temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Visible").unwrap();
-    core.create_note(&root, &root, "Excluded").unwrap();
+    core.create_note_fixture(&root, &root, "Visible").unwrap();
+    core.create_note_fixture(&root, &root, "Excluded").unwrap();
     let rules = core.read_config(&root, ConfigRole::Rules).unwrap();
     let preview = core
         .prepare_config_save(
@@ -438,7 +438,7 @@ fn excluded_physical_child_does_not_become_a_complete_subset_reorder() {
 #[test]
 fn author_order_uses_whole_settings_cas_and_preserves_a_concurrent_extension_change() {
     let (_temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
     let first = core
         .prepare_config_save(
             &root,
@@ -485,7 +485,7 @@ fn author_order_uses_whole_settings_cas_and_preserves_a_concurrent_extension_cha
 #[test]
 fn missing_previously_committed_settings_are_not_recreated_from_defaults() {
     let (temp, mut core, root, _data, parent) = fixture();
-    core.create_note(&root, &root, "Alpha").unwrap();
+    core.create_note_fixture(&root, &root, "Alpha").unwrap();
     let snapshot = core.read_navigation_order(&root, &parent).unwrap();
     let order = core
         .prepare_navigation_reorder(

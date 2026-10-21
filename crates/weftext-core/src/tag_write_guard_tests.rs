@@ -96,7 +96,7 @@ fn absent_tag_plan_cannot_rebirth_after_competing_commit_loss_and_restart() {
 fn native_package(core: &mut Core, directory: &Path) -> Vec<u8> {
     let root = directory.join("Origin");
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Note").unwrap();
+    core.create_note_fixture(&root, &root, "Note").unwrap();
     let tag = prepare_tag(core, &root, "Imported tag");
     commit(core, &tag.preview);
     core.export_native_package(root).unwrap()

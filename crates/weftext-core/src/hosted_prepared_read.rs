@@ -25,13 +25,14 @@ impl Core {
         let plan = self
             .operations
             .get(&record.core_operation_id)
-            .filter(|plan| {
-                !record.cancelled
-                    && !self.committed(&plan.operation_id)
-                    && !self.resolved(&plan.operation_id)
-                    && !self.journal_path(&plan.operation_id, "install").exists()
-            })
             .ok_or_else(|| fail("Original actor feature is no longer prepared"))?;
+        if record.cancelled
+            || self.committed(&plan.operation_id)
+            || self.resolved(&plan.operation_id)?
+            || self.journal_path(&plan.operation_id, "install").exists()
+        {
+            return Err(fail("Original actor feature is no longer prepared"));
+        }
         let transaction = plan
             .transaction
             .as_ref()
@@ -90,7 +91,7 @@ mod tests {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let settings = root.join(".weftext-settings.json");
         fs::write(&settings, br#"{"version":1,"processing":{"fixture":1}}"#).unwrap();
         let config = core

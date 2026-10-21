@@ -1,4 +1,5 @@
 """Owned real-program acceptance of ordinary root presets and native Query organization."""
+from _creation_result import created_document
 import json
 from pathlib import Path
 import sys
@@ -49,7 +50,7 @@ class QueryOrganization(unittest.TestCase):
     def test_shared_call_pinned_edit_and_copy_keep_real_owner_and_do_not_rewrite_it(self):
         owner_source=self.doc['source']; owner=f"weftext-node://{self.doc['workspaceId']}/{self.doc['nodeId']}"
         definitions=self.call('/api/query/definitions',{'root':str(self.root),'owner':owner}); target=definitions['definitions'][0]
-        self.doc=self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'Caller','operationId':uid()}); self.serial=0
+        self.doc=created_document(self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'Caller','operationId':uid()})); self.serial=0
         call=plan(); call['advanced']={'call':{'owner':owner,'selection':{'mode':'current','key':target['key']},'arguments':{}}}
         operation=uid(); basis=self.basis(); proposal=self.call('/api/query/definition/draft',{**basis,'baseId':self.doc['baseId'],'label':'weftext-query-共享调用','plan':call,'operationId':operation})
         self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':proposal['source'],'operationId':operation})

@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real public producers and the local Trash UI, with owned replicas and Chrome.
 // Route interception only drops an actual completed response; it never invents
 // an object, version, plan, receipt, or successful HTTP payload.
@@ -103,7 +104,7 @@ try {
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
   const notes = {};
   for (const [name, parent] of [['Parent', ra], ['Child', path.join(ra, 'Parent')], ['Other', ra], ['Live', ra], ['Reorder', ra]]) {
-    const document = await api(a, '/api/note/create', { root: ra, parent, name, operationId: randomUUID() });
+    const document = createdDocument(await api(a, '/api/note/create', { root: ra, parent, name, operationId: randomUUID() }));
     const source = document.source + `\nORIGINAL ${name} 中文😀\n`;
     await api(a, '/api/save', { sessionId: document.sessionId, baseId: document.baseId, source, operationId: randomUUID() });
     notes[name] = { ...document, source, key: { kind: 'node', id: document.nodeId } };

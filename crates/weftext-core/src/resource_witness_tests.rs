@@ -16,7 +16,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(temp.path().join("private")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let owner = weftext_knowledge::NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
             node_id: note.node_id.unwrap(),

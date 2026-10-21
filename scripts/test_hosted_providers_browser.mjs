@@ -1,3 +1,4 @@
+import { createdDocument } from './_creation_result.mjs';
 // Real hosted Provider consumers with owned fixtures, state, server and browser.
 // Generic system Node/Playwright/Python runtimes are the only shared inputs.
 import { createRequire } from 'node:module';
@@ -36,7 +37,7 @@ async function policy(edit) { const current = await api('/api/hosted/admin/polic
 try {
   data = path.join(out, 'state'); root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() }, null);
   await schemaInstall(schema => { schema.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' }; const calendar = structuredClone(schema.providers.find(provider => provider.id === 'calendars/gregorian')); calendar.id = 'calendars/private'; calendar.implementation.id = 'weftext.calendar.table.v2'; calendar.data = { kind: 'calendar-table', key: 'private-calendar', version: 'private-v1', epoch_date: '2026-01-01', years: [1, 2].map(year => ({ year, months: [{ number: 1, leap: false, days: 30 }] })) }; schema.providers.push(calendar); const policy = structuredClone(schema.series_policies[0]); Object.assign(policy, { id: 'calendar/private', key: 'private-series', calendar: 'calendars/private', rule: 'table-ordinal-v1', kinds: ['day'] }); schema.series_policies.push(policy); });
-  const owner = await api('/api/note/create', { root, parent: root, name: 'Owner', operationId: randomUUID() }, null), other = await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }, null);
+  const owner = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Owner', operationId: randomUUID() }, null)), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }, null));
   const source = (node, status) => `#metadata((id: "${node.nodeId}", types: ("task",), status: "${status}", private: "PRIVATE_SOURCE_NEVER_QUERY")) <weftext>\r\n中文😀原生正文\r\n`;
   const ownerSource = source(owner, 'open'); await api('/api/save', { sessionId: owner.sessionId, baseId: owner.baseId, source: ownerSource, operationId: randomUUID() }, null); await api('/api/save', { sessionId: other.sessionId, baseId: other.baseId, source: source(other, 'done'), operationId: randomUUID() }, null);
   async function define(plan, key) { const doc = await api('/api/open', { path: other.path, root }, null); return api('/api/query/definition/save', { sessionId: doc.sessionId, baseId: doc.baseId, source: doc.source, sourceHash: sha(doc.source), serial: 1, operationId: randomUUID(), label: 'weftext-query-provider', ...(key ? { key } : {}), plan }, null); }

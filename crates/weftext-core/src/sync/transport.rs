@@ -172,8 +172,8 @@ mod tests {
         let transport = temp.path().join("transport");
         let mut a = Core::new(temp.path().join("a-private")).unwrap();
         a.create_library(&ar).unwrap();
-        let note = a.create_note(&ar, &ar, "Note").unwrap();
-        a.create_note(&ar, &ar, "NotSelected").unwrap();
+        let note = a.create_note_fixture(&ar, &ar, "Note").unwrap();
+        a.create_note_fixture(&ar, &ar, "NotSelected").unwrap();
         a.persist_draft(&note.session_id, "PRIVATE UNSAVED DRAFT")
             .unwrap();
         let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;
@@ -262,7 +262,7 @@ mod tests {
         let data = temp.path().join("private");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let identity = core.enable_sync(&root, &fresh()).unwrap().identity;
         let keys = BTreeSet::from([ObjectKey::Node(note.node_id.unwrap())]);
         for path in [&root, &root.join("transport"), &data, temp.path()] {

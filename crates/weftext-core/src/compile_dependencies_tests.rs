@@ -13,7 +13,7 @@ impl Fixture {
         let mut core = Core::new(temp.path().join("state")).unwrap();
         let root = temp.path().join("library");
         core.create_library(&root).unwrap();
-        core.create_note(&root, &root, "Note").unwrap();
+        core.create_note_fixture(&root, &root, "Note").unwrap();
         let helper = root.join("Note/helper.typ");
         fs::write(&helper, "#let value = 1").unwrap();
         fs::write(root.join("unused.raw"), "unrelated").unwrap();

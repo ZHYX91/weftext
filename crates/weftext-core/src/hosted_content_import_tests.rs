@@ -8,7 +8,10 @@ const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_original_plan_acceptance()
  {
     let mut f = Fixture::new();
-    let note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let mut package = weftext_export::exchange::read_native_package(
         &f.core.export_native_package(&f.root).unwrap(),
     )
@@ -235,7 +238,10 @@ fn content_import_bibliography_original_multinode_receipt_and_metadata_listing_s
 #[test]
 fn content_import_slot_rejects_local_producer_uncommitted_and_samebytes_replacement() {
     let mut f = Fixture::new();
-    let ordinary = f.core.create_note(&f.root, &f.root, "Unrelated").unwrap();
+    let ordinary = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Unrelated")
+        .unwrap();
     assert_eq!(
         f.core
             .content_import_slot_members_at(&f.root, &f.root.join("Unrelated"), "Unrelated")
@@ -290,7 +296,9 @@ fn content_import_slot_rejects_local_producer_uncommitted_and_samebytes_replacem
 #[test]
 fn content_import_native_keeps_original_plan_identity_losses_and_future_slot_binding() {
     let mut f = Fixture::new();
-    f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    f.core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let bytes = f.core.export_native_package(&f.root).unwrap();
     let operation = fresh();
     let request = OperationRequest {

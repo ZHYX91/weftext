@@ -22,6 +22,31 @@ use tokio::{
 };
 use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
 
+#[cfg(test)]
+trait CoreTestFixture {
+    fn create_note_fixture(
+        &mut self,
+        root: impl AsRef<std::path::Path>,
+        parent: impl AsRef<std::path::Path>,
+        name: &str,
+    ) -> weftext_core::Result<weftext_core::OpenedDocument>;
+}
+#[cfg(test)]
+impl CoreTestFixture for Core {
+    fn create_note_fixture(
+        &mut self,
+        root: impl AsRef<std::path::Path>,
+        parent: impl AsRef<std::path::Path>,
+        name: &str,
+    ) -> weftext_core::Result<weftext_core::OpenedDocument> {
+        let receipt = self.create_note(root.as_ref(), parent, name)?;
+        self.open(
+            std::path::Path::new(&receipt.path).join(format!("{name}.typ")),
+            Some(root.as_ref().to_path_buf()),
+        )
+    }
+}
+
 mod bibliography_import_api;
 mod builtin_module_api;
 mod citation_api;
@@ -402,15 +427,17 @@ async fn cancel_library_creation(
     )?))
 }
 async fn create_note(State(state): State<AppState>, Json(req): Json<CreateNote>) -> ApiResult {
-    let doc = value(
-        core_call(&state, move |c| match req.operation_id {
-            Some(id) => c.create_note_with_id(req.root, req.parent, &req.name, &id),
-            None => c.create_note(req.root, req.parent, &req.name),
-        })
-        .await?,
-    )?;
-    remember(&state, &doc)?;
-    Ok(Json(doc))
+    let (preview, receipt) = core_call(&state, move |c| {
+        let id = req
+            .operation_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let receipt = c.create_note_with_id(req.root, req.parent, &req.name, &id)?;
+        Ok((c.operation_details(&id)?, receipt))
+    })
+    .await?;
+    knowledge_api::operation_output(&state, preview, receipt, None)
+        .await
+        .map(Json)
 }
 async fn save(State(state): State<AppState>, Json(req): Json<SaveRequest>) -> ApiResult {
     Ok(Json(value(core_call(&state, move |c| c.save(req)).await?)?))

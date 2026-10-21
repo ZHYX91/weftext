@@ -1,6 +1,7 @@
 """Two actual local programs, separate private state and author trees. Owned
 fixtures are retained; this never drives a desktop or borrows another project.
 """
+from _creation_result import created_document
 import copy
 import json
 from pathlib import Path
@@ -25,8 +26,8 @@ class Sync(unittest.TestCase):
         self.addCleanup(lambda: self.b.close())
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
-        self.note = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Note', operationId=uid())
-        self.other = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Other', operationId=uid())
+        self.note = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Note', operationId=uid()))
+        self.other = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Other', operationId=uid()))
         self.key = {'kind': 'node', 'id': self.note['nodeId']}
         self.other_key = {'kind': 'node', 'id': self.other['nodeId']}
         operation_id = uid()

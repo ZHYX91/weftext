@@ -34,8 +34,8 @@ fn actual_independent_partial_replica_saves_offline_and_retains_both_conflict_br
     let b = temp.path().join("second-library");
     let mut first = Core::new(temp.path().join("first-private")).unwrap();
     first.create_library(&a).unwrap();
-    let note = first.create_note(&a, &a, "Note").unwrap();
-    first.create_note(&a, &a, "NotSelected").unwrap();
+    let note = first.create_note_fixture(&a, &a, "Note").unwrap();
+    first.create_note_fixture(&a, &a, "NotSelected").unwrap();
     let info = first.enable_sync(&a, &fresh()).unwrap();
     let selected = BTreeSet::from([ObjectKey::Node(note.node_id.clone().unwrap())]);
     let second_data = temp.path().join("second-private");
@@ -148,7 +148,7 @@ fn cloned_resources_root_bookmark_and_tags_get_real_receiver_admission() {
     let b = temp.path().join("second-library");
     let mut first = Core::new(temp.path().join("first-private")).unwrap();
     first.create_library(&a).unwrap();
-    let note = first.create_note(&a, &a, "Note").unwrap();
+    let note = first.create_note_fixture(&a, &a, "Note").unwrap();
     let import = first
         .prepare_import_resource(&a, &note.path, "sample.bin", vec![0, 255, 3, 9], &fresh())
         .unwrap();
@@ -208,7 +208,7 @@ fn clone_is_create_only_and_rechecks_target_after_review() {
     let b = temp.path().join("second-library");
     let mut first = Core::new(temp.path().join("first-private")).unwrap();
     first.create_library(&a).unwrap();
-    let note = first.create_note(&a, &a, "Note").unwrap();
+    let note = first.create_note_fixture(&a, &a, "Note").unwrap();
     let info = first.enable_sync(&a, &fresh()).unwrap();
     let keys = BTreeSet::from([ObjectKey::Node(note.node_id.unwrap())]);
     let mut second = Core::new(temp.path().join("second-private")).unwrap();
@@ -301,7 +301,7 @@ fn original_clone_after_images_can_be_adopted_after_commit_marker_failure() {
     let private = temp.path().join("second-private");
     let mut first = Core::new(temp.path().join("first-private")).unwrap();
     first.create_library(&a).unwrap();
-    let note = first.create_note(&a, &a, "Note").unwrap();
+    let note = first.create_note_fixture(&a, &a, "Note").unwrap();
     let info = first.enable_sync(&a, &fresh()).unwrap();
     let keys = BTreeSet::from([ObjectKey::Node(note.node_id.clone().unwrap())]);
     let mut second = Core::new(&private).unwrap();

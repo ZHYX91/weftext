@@ -33,6 +33,9 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 
 查询浏览器验收对自有 `Other.typ` 的物理读盘，仅在 Windows `EBUSY` 共享占用时最多等待 5 秒并记录重试；其它错误直接失败。仍逐次比较原完整文件字节，不改正文、不改原断言或浏览器期限。此观察保护不证明原占用的内部持有者或根因。
 
+
+原提交／结果交付修订沿同一 journal、Core 事务和受权消费者验证：`scripts/test_commit_delivery.py EXE [NEW_EVIDENCE_DIRECTORY]` 使用自有 TEST 库与真实 HTTP，保全部原件、请求／响应及程序对应，核原号重试、旧会话丢失、新输入后的保存依据、当前磁盘改版、坏 schema 下 capture／period 重试、实际提交后打开失败、持久取消与备份、无效 Unicode 的冻结字节摘要终结、UUID 别名及未知安装证据。该脚本接入 `scripts/mvp.py check`；Core 的确定失败注入另核提交后 Draft 更新，不把受控响应替换称为内部 Core 故障。测试专用 creation helper 严格解包新回执，不为产品保留旧响应格式。
+
 ## 按影响选择验证环境
 
 常规改动优先使用纯引擎、HTTP 和可用的无头／后台浏览器，避免占用宿主焦点。按本轮改动和实际消费者选择下表中的最小范围；仅有窄屏视口不算 Mobile，HTTP 或 DOM 赋值也不算真实输入法、触屏或辅助技术操作。
@@ -68,3 +71,5 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 当前 `python scripts/mvp.py check` 检查本地实现，`package` 生成带源码和声明的本地候选，不上传发布。正式发布复用已验收的同一产物，不在发布步骤重新构建另一份。发布前明确目标版本、平台、未通过项和用户授权；发布后核对下载内容及最小运行场景。
 
 仓库保存可独立执行的产品构建/检查/打包入口。个人工作区只负责路径与本地环境，不建立另一套发布平台。发布产物校验与关键交接使用哈希，不对每轮讨论重复计算全库哈希。只有正式交付需要标签和发布记录；当前不创建空发布。
+
+历史交付修订另核真实 Core 结果首次读取失败后恢复可读、持续不可读时仍保 committed/receipt，以及 missing→期间提交→通用终结→typed 历史结果读取。适配器单元测试用自有目录确定移动和复位控制两次读取边界，不制造定时竞态；真实 HTTP 用例复用 test_commit_delivery.py，既有本地历史消费者由 test_v05_completion.py 核验。
