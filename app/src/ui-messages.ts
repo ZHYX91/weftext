@@ -83,7 +83,7 @@ export const zhCN = {
   "reminder.foldNone": "无重复时间选择",
   "reminder.foldEarlier": "较早的瞬间",
   "reminder.foldLater": "较晚的瞬间",
-  "reminder.minuteHelper": "按分钟填写，保留已有秒数和偏移",
+  "reminder.minuteHelper": "按分钟填写，保留秒与小数",
   "reminder.saveFirst": "先保存准确提醒再启用",
   "reminder.libraryEnabled": "本设备启用此资料库",
   "reminder.enable": "启用",
@@ -9481,19 +9481,15 @@ export const zhCN = {
   "error.core.posix.basenameRequired": "此操作需要准确的目录项 basename",
   "error.core.posix.nativeFilesystemRequired": "Linux 服务档位需要支持 opaque handle 的原生 ext4 或 XFS",
   "error.core.posix.opaqueHandleSizeUnsupported": "文件系统返回的 opaque handle 长度不受支持",
-  "error.core.posix.serviceCredentialsRequired": "服务必须使用已登记的非 root UID、空附加组和无 capabilities",
+  "error.core.posix.serviceCredentialsRequired": "服务须使用登记的非 root UID 和主 GID、空补充组及零能力",
   "error.core.posix.absoluteEnrollmentRequired": "enrollment 必须使用管理员拥有的绝对路径",
   "error.core.posix.traversalForbidden": "路径不能含遍历分量",
   "error.core.posix.administratorEnrollmentRequired": "enrollment 和所有祖先必须由管理员拥有且不可由服务或其他用户写入",
   "error.core.posix.distinctOsIdentitiesRequired": "服务、客户端和 worker 必须使用不同的非 root OS 身份",
-  "error.core.posix.enrollmentUuidRequired": "enrollment 需要规范的随机 UUID",
   "error.core.posix.foreignMachine": "enrollment 属于另一台 OS 机器",
   "error.core.posix.deviceKeyProtectionRequired": "设备密钥需要位于 profile 外、由 root 拥有并仅供服务组读取的 32 字节私有记录",
   "error.core.posix.deviceKeyOutsideProfileRequired": "设备密钥不能位于受控库或私有 profile 内",
   "error.core.posix.nonLoginServiceRequired": "服务必须使用专属非登录账号",
-  "error.core.posix.absoluteRootRequired": "受控根目录必须使用绝对路径",
-  "error.core.posix.administratorRootParentRequired": "受控根目录需要管理员拥有的父目录",
-  "error.core.posix.invalidRoot": "受控根目录路径无效",
   "error.core.posix.physicalRootMismatch": "enrollment 指向的物理根目录已不同",
   "error.core.posix.rootRegistryUnavailable": "受控根目录登记表暂不可用",
   "error.core.posix.overlappingWriter": "受控根目录与现有 writer 权限范围重叠",
@@ -9535,7 +9531,254 @@ export const zhCN = {
   "error.core.posix.targetParentMissing": "缺少目标父目录",
   "error.core.posix.directoryAlreadyRetained": "目录已经被保留",
   "error.api.workerOutputBudget": "编译工作进程输出超过 24 MiB 限制；输入保留。",
-  "error.api.workerDiagnosticBudget": "编译工作进程诊断超过 256 KiB 限制；输入保留。"
+  "error.api.workerDiagnosticBudget": "编译工作进程诊断超过 256 KiB 限制；输入保留。",
+  "error.core.posix.freshRootBirthRequired": "受控根目录需要管理员对全新隔离创建的现行证明",
+  "error.core.posix.extendedKeyAclForbidden": "服务认证密钥不接受扩展 ACL",
+  "error.core.posix.exactUtf8BasenameRequired": "文件系统末级名称必须精确且为有效 UTF-8",
+  "error.core.posix.workerAccountRequired": "worker 账号须为专属非登录账号",
+  "error.core.posix.exclusiveServiceGroupRequired": "服务主组不能包含其他账号",
+  "error.core.posix.rootPathRequired": "受控根目录须使用绝对路径且其父目录由管理员拥有",
+  "error.core.posix.rootPermissionsRequired": "受控根目录须由服务拥有并使用私有目录权限",
+  "error.core.posix.enrollmentChanged": "管理员登记配置在接纳后发生变化",
+  "error.core.backend.existingDeviceIdentityUnavailable": "原有设备身份不可用",
+  "loss.core.nativeImport.generatedBibliographyRetained": "派生的文献文件仅保留在原始 ZIP 中，未安装到作者目录树。离线编译引文前，请根据已重映射且当前获权的 Work 数据重新生成。",
+  "loss.core.nativeImport.resourceModuleContextRetained": "Typst 资源模块按原字节保留。模块中的应用身份和相对根目录依赖不会重写；使用前请核对迁移后的上下文。",
+  "loss.core.nativeImport.settingsRetained": "原设置和样式选择保留在原包中；目标资料库继续以自己的设置为准。导入的样式模块是所拥有的资源，不会自动启用为默认样式。",
+  "loss.core.nativeExport.unregisteredFileOmitted": "未登记的原始内容或指定内部子树不属于已接纳的原生内容；本机历史及未知文件需要通过完整备份保留。",
+  "error.core.sync.cloneLayout.trashPlacementRequired": "只有具有放置位置的内容对象才能进入回收站树",
+  "error.core.sync.cloneLayout.placementGraphIncomplete": "所选放置图存在循环或缺少父对象",
+  "error.core.sync.cloneLayout.originalCreateTreeRequired": "克隆必须保留原来的 CreateTree 操作",
+  "error.core.sync.cloneLayout.namespaceOverlap": "克隆文件和目录在实际命名空间中重叠",
+  "error.core.sync.memberRetirement.exactFileRevisionsRequired": "成员移除要求有界且准确的文件修订",
+  "error.core.sync.memberRetirement.placementParentInvalid": "成员移除的放置父对象无效",
+  "error.core.sync.memberRetirement.historicalBlobMissing": "成员移除缺少准确的历史字节对象",
+  "error.core.sync.memberRetirement.fileNamesAliased": "成员移除的文件名存在别名冲突",
+  "error.core.sync.replica.setupNodeDuplicate": "副本设置中出现重复 Node",
+  "error.core.sync.replica.directoryMarkerIdentityMissing": "目录标记缺少身份标识",
+  "error.core.sync.replica.directoryMarkerNotAdmitted": "目录标记当前未获准入",
+  "error.core.sync.replica.capturedFileMissing": "已捕获的副本文件已消失",
+  "error.core.sync.replica.originalCutPhysicalEvidenceMissing": "原副本截面缺少物理文件证据",
+  "error.core.sync.replica.capturedFileChangedDuringBinding": "已捕获的副本文件在绑定期间发生变化",
+  "error.core.sync.replica.capturedNodeCanonicalSourceMissing": "捕获的 Node 中缺少规范源码文件",
+  "error.core.sync.replica.capturedSourceIdentityChanged": "捕获的源码身份发生变化",
+  "error.core.sync.replica.initialParentCheckpointMissing": "缺少初始父对象检查点",
+  "error.core.sync.replica.publicationCommitOrderMissing": "发布缺少持久化提交顺序",
+  "error.core.sync.replica.eventCommitOrderMissing": "副本事件缺少提交顺序",
+  "error.core.sync.replica.publicationObjectLocatorMissing": "发布缺少本地对象定位信息",
+  "error.core.sync.replica.operationCrossesBindings": "作者操作跨越了副本绑定范围",
+  "error.core.sync.replica.compoundOriginalApplicationRequired": "复合命名空间决定需要其原始 SyncApplication",
+  "error.core.sync.replica.relocatedObjectBasisMissing": "已迁移对象缺少副本基准",
+  "error.core.sync.replica.relocatedCanonicalFileBasisMissing": "副本基准中缺少已迁移的规范文件",
+  "error.core.sync.replica.relocatedCanonicalRevisionMissing": "缺少已迁移规范文件的修订",
+  "error.core.sync.replica.nodeCreationIdentityMissing": "创建 Node 缺少身份标识",
+  "error.core.sync.replica.objectFileOutsideOwner": "对象文件位于其所属对象范围之外",
+  "error.core.sync.replica.directoryIdentityMissing": "缺少目录身份标识",
+  "error.core.sync.replica.directoryIdentityAlreadyPresent": "目录身份已存在于该副本中",
+  "error.core.sync.replica.nodeIdentityAlreadyPresent": "Node 身份此前已存在于该副本中",
+  "error.core.sync.replica.originalBlobMissing": "缺少原副本字节对象",
+  "error.core.sync.revalidation.proposalSelectionInvalid": "请选择一个有界且准确的重新验证提案",
+  "error.core.sync.revalidation.unrelatedBlobs": "重新验证包含无关的字节对象",
+  "error.core.sync.revalidation.stateEvidenceInvalid": "重新验证后的状态缺少字节或具有无效的因果前驱",
+  "error.core.sync.revalidation.queryRowNodeOwnerRequired": "实际 Query 行需要准确的 Node 所属对象",
+  "error.core.sync.revalidation.adoptionInstalledOwnerRequired": "接纳要求原来已安装的所属对象",
+  "error.core.sync.revalidation.adoptionObservedAfterMissing": "接纳缺少准确观测的修改后状态",
+  "error.core.sync.revalidationWriter.receivedCutSelectionInvalid": "请选择一个有界且非空的已接收截面",
+  "error.core.sync.revalidationWriter.installationReplicaMismatch": "语义安装指定了另一个本地副本",
+  "error.core.sync.revalidationWriter.reviewReplicaMismatch": "语义评审指定了另一个本地副本",
+  "error.core.sync.revalidationWriter.decisionOriginalApplicationRequired": "语义决定需要其原始 SyncApplication",
+  "error.core.sync.revalidationWriter.proposalAfterStatesMismatch": "原写入者的修改后状态与语义提案不同",
+  "error.core.sync.revalidationWriter.adoptionOriginalApplicationRequired": "接纳需要其原始应用",
+  "error.core.sync.revalidationWriter.adoptionNoWriteTransactionRequired": "接纳需要其原始无写入事务",
+  "error.core.sync.revalidationWriter.adoptionOriginalRequestRequired": "语义接纳需要其准确的原始请求",
+  "error.core.sync.revalidationWriter.adoptionOriginalUpdateRequired": "接纳必须保留原始无写入 Update 操作",
+  "error.core.sync.revalidationWriter.externalAdoptionCannotRewrite": "外部接纳不能重写已观测的作者字节",
+  "error.core.sync.revalidationWriter.adoptionOriginalPublicationRequired": "接纳需要其原始发布",
+  "error.core.sync.revalidationWriter.adoptionPublicationMismatch": "接纳发布与原始应用不同",
+  "error.core.sync.revalidationWriter.adoptionCannotCreateOwner": "接纳不能创建新的所属对象",
+  "error.core.sync.revalidationWriter.adoptionOriginalCutChanged": "接纳改变了原所属对象、放置位置或发布截面",
+  "error.core.sync.revalidationWriter.evidenceOriginalApplicationRequired": "语义证据需要其原始应用",
+  "error.core.sync.revalidationWriter.historicalBlobDigestChanged": "历史语义字节对象改变了其已接纳摘要",
+  "error.core.sync.revalidationWriter.evidenceOriginalRootMismatch": "语义证据属于另一个原始请求根",
+  "error.core.sync.revalidationWriter.absentConfigurationUnsupported": "不支持该缺失语义配置",
+  "error.core.sync.store.storedRecordDigestMismatch": "已存储的可移植记录摘要不一致",
+  "error.core.sync.store.storedManifestNotCanonical": "已存储的清单不符合规范格式",
+  "error.core.sync.store.recordDigestMismatch": "可移植记录摘要不一致",
+  "error.core.sync.store.manifestRecordBudget": "清单记录超过预算",
+  "error.core.sync.store.manifestNotCanonical": "清单不符合规范格式",
+  "error.core.sync.store.blobRecordBudget": "字节对象记录超过预算",
+  "error.core.sync.store.transferRecordBudget": "传输记录超过预算",
+  "error.core.sync.store.receivedRevisionAmbiguous": "已接收的对象修订存在歧义",
+  "error.core.sync.store.replicaFamilyMismatch": "本地存储属于不同的副本族",
+  "error.core.sync.store.recordInventoryIncomplete": "副本记录清单不完整",
+  "error.core.sync.store.recordNameNotUtf8": "副本记录名不是 UTF-8",
+  "error.core.sync.store.recordUnexpected": "出现非预期的副本记录",
+  "error.core.sync.store.recordByteBudget": "副本记录超过其字节预算",
+  "error.core.sync.store.immutableRecordDiffers": "现有不可变记录的内容不同",
+  "error.core.sync.transport.pairedFamilyMismatch": "传输目录属于另一个配对副本族",
+  "error.core.sync.transport.unrelatedEntries": "传输目录包含无关条目",
+  "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection": "注释 {annotationId} 保持不变；目标不可用，等待显式重新关联",
+  "error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable": "本次证据不能确认原注释目标的准确资格",
+  "loss.core.hostedFeature.wordLayout": "正文可编辑；Word 页眉页脚、分页、字体和复杂版式保留在原件。",
+  "loss.core.hostedFeature.wordListNumbering": "列表文字已保留；编号格式、层级和起始值未完整映射。",
+  "loss.core.hostedFeature.wordFormatRevision": "格式修订保留在原件，未转换为可执行文字建议。",
+  "loss.core.hostedFeature.wordCommentTarget": "批注意见已保留；部分目标无法准确定位到新正文。",
+  "loss.core.hostedFeature.wordNestedRevision": "嵌套修订已保留，未获得自动应用资格。",
+  "loss.core.hostedFeature.wordLink": "部分链接目标无法安全映射，可见文字与原件已保留。",
+  "loss.core.hostedFeature.wordImageFormat": "部分图片格式尚不支持，原件已保留。",
+  "loss.core.hostedFeature.wordImageLayout": "图片已保留；浮动位置、裁切和尺寸未完整映射。",
+  "loss.core.hostedFeature.wordImageMissing": "部分图片关系无法读取，原件已保留。",
+  "loss.core.hostedFeature.wordField": "域的可见结果已保留；动态更新语义保留在原件。",
+  "loss.core.hostedFeature.wordStructure": "部分结构未完整映射，可读取文字与原件已保留。",
+  "loss.core.hostedFeature.wordTableLayout": "表格文字和单元格顺序已保留；复杂表格版式未完整映射。",
+  "loss.core.hostedFeature.docxImport": "部分内容未完整映射；请核对新正文和保留的原件。",
+  "loss.core.hostedFeature.generatedBibliography": "生成的文献库仅保留在原件中，不安装到作者资料树；请依据重新映射且当前获权的文献数据重新生成。",
+  "loss.core.hostedFeature.resourceModuleContext": "Typst 资源模块保留原字节；模块内身份和根相对依赖未重新映射，使用前请检查迁移后的上下文。",
+  "loss.core.hostedFeature.settings": "原库设置和样式选择保留在原件中；目标库设置保持有效，不自动启用导入样式。",
+  "loss.core.hostedFeature.unregisteredFiles": "原生资料包省略了部分未登记或库内部资料；此导入不能恢复省略的资料，完整历史和草稿需完整恢复资料备份。",
+  "loss.core.hostedFeature.contentImport": "部分资料不能完整映射；原件和原值已保留，请明确接受原计划中的导入限制。",
+  "loss.core.hostedFeature.structureCopy": "部分引用或批注不能完整迁移；原值已保留，请明确接受原计划中的复制限制。",
+  "desktop.startupManaged": "系统策略控制登录启动，应用不能切换",
+  "desktop.preferenceUpdateFailed": "客户端桌面偏好未确认保存；请重新打开设置查看原值，不自动重发",
+  "error.data.taskReminder.memberTextRequired": "任务提醒成员 {member} 必须为文本",
+  "error.data.taskReminder.directRecordRequired": "任务提醒必须使用直接记录",
+  "error.data.taskReminder.membersNotClosed": "任务提醒包含重复或未知成员",
+  "error.data.taskReminder.requiredMemberMissing": "任务提醒缺少必需成员",
+  "error.data.taskReminder.intentByteBudget": "任务提醒超过 16 KiB 输入上限",
+  "error.data.taskReminder.identityInvalid": "提醒 ID 必须是规范的小写 UUIDv4",
+  "error.data.taskReminder.instantDueRequired": "相对提醒需要准确的瞬时到期时间",
+  "error.data.taskReminder.advanceOutOfRange": "提醒提前量超出支持的非负范围",
+  "error.data.taskReminder.advanceOverflow": "提醒提前量溢出",
+  "error.data.taskReminder.dueDayInputRequired": "到期日提醒需要完整的民用到期日期",
+  "error.data.taskReminder.civilDueUnavailable": "民用到期日期当前不可用",
+  "error.data.taskReminder.civilDueInvalid": "民用到期日期无效",
+  "error.data.taskReminder.calendarProviderUnavailable": "准确版本的日历 Provider 不可用",
+  "error.data.taskReminder.clockMissing": "缺少提醒时钟值",
+  "error.data.taskReminder.nativeTimeRequired": "提醒时钟必须使用原生 time 值",
+  "error.data.taskReminder.clockInvalid": "提醒时钟无效",
+  "error.data.taskReminder.clockNotCanonical": "提醒时钟不符合规范格式",
+  "error.data.taskReminder.clockLeapSecondUnsupported": "提醒时钟不支持闰秒",
+  "error.data.taskReminder.fractionOutOfRange": "提醒的小数秒必须位于 [0,1) 区间",
+  "error.data.taskReminder.zoneProviderUnavailable": "准确版本的提醒时区 Provider 不可用",
+  "error.data.taskReminder.foldInvalid": "提醒的重叠时间选择无效",
+  "error.data.taskReminder.civilTimeInGap": "提醒的民用时间落在时区跳时空缺中",
+  "error.data.taskReminder.civilTimeAmbiguous": "提醒的民用时间存在歧义，必须明确选择较早或较晚的瞬时",
+  "error.data.taskReminder.kindUnknown": "未知的任务提醒类型",
+  "error.data.taskReminder.minuteOverflow": "提醒的分钟边界溢出",
+  "error.data.taskReminder.minuteCoverageUnavailable": "时区覆盖不足以证明提醒的完整分钟区间",
+  "error.data.taskReminder.civilDayOutOfBounds": "提醒的民用日期超出支持的范围",
+  "error.data.taskReminder.completeCivilDueRequired": "到期日提醒需要单一、完整的民用到期日期",
+  "error.data.taskReminder.selectorCardinality": "任务提醒的各个输入选择器最多只能选择一个值",
+  "error.data.taskReminder.validationUnavailable": "无法使用本次冻结输入完成任务提醒验证",
+  "error.data.taskReminder.resolutionInvalid": "任务提醒计算结果的状态或错误类别无效",
+  "desktop.sessionAlreadyAdopted": "已打开文档的会话不能作为未采用结果释放",
+  "desktop.sessionReleaseFailed": "原会话释放未确认（{sessionId}）；本人恢复稿与原操作仍保留",
+  "error.reminder.clockBeforeEpoch": "系统时钟早于支持的纪元。",
+  "error.reminder.clockOverflow": "系统时钟超出支持范围。",
+  "error.reminder.originalNotificationInvalid": "原始通知请求无效。",
+  "error.reminder.deliveryDescriptionBudget": "通知诊断超过安全预算。",
+  "error.reminder.stateInvalid": "提醒状态无效或超过安全预算。",
+  "error.reminder.librarySelectionInvalid": "所选提醒资料库无效。",
+  "error.reminder.subscriptionInvalid": "提醒订阅无效。",
+  "error.reminder.originalEffectInvalid": "原始提醒投递记录无效。",
+  "error.reminder.activationDuplicate": "通知激活标识重复。",
+  "error.reminder.originalSummaryMissing": "缺少原始提醒摘要。",
+  "error.reminder.summaryRequiresPreCallFailure": "只有明确在外部调用前失败的提醒才能加入后续摘要。",
+  "error.reminder.recordBudget": "提醒记录超过安全预算。",
+  "error.reminder.summaryMembersInvalid": "原始提醒摘要成员无效。",
+  "error.reminder.summaryEffectMismatch": "摘要成员未指向其原始且可能已发生的外部投递。",
+  "error.reminder.summaryActivationDuplicate": "摘要通知的激活标识重复。",
+  "error.reminder.settingsMutationInvalid": "提醒设置变更记录无效。",
+  "error.reminder.stateByteBudget": "提醒状态超过 16 MiB。",
+  "error.reminder.librariesMissing": "缺少提醒资料库集合。",
+  "error.reminder.libraryIdentityMissing": "缺少资料库的物理身份。",
+  "error.reminder.libraryIdentityFieldsInvalid": "资料库身份包含未知成员。",
+  "error.reminder.foreignDevice": "提醒状态属于另一台机器、用户或配置目录，不能直接接纳。",
+  "error.reminder.deviceMismatch": "提醒状态的原始设备不匹配。",
+  "error.reminder.revisionOverflow": "提醒状态修订号超出范围。",
+  "error.reminder.recordCursorInvalid": "原始提醒记录的分页游标无效。",
+  "error.reminder.originalRecordMissing": "找不到原始提醒记录。",
+  "error.reminder.originalLibraryMissing": "找不到原始提醒资料库。",
+  "error.reminder.originalLibraryRootChanged": "原始提醒资料库的物理根目录已变化。",
+  "error.reminder.openTargetIdentityChanged": "打开前，原始提醒目标的身份已变化。",
+  "error.reminder.openLibraryChanged": "打开期间，原始提醒资料库已变化。",
+  "error.reminder.reminderIdMissing": "缺少提醒标识。",
+  "error.reminder.definitionMissing": "缺少提醒定义。",
+  "error.reminder.triggerMissing": "缺少提醒触发时刻。",
+  "error.reminder.selectionChanged": "提醒选择已变化，请重新开始有界扫描。",
+  "error.reminder.liveTaskUnavailable": "原始当前任务不可用。",
+  "error.reminder.taskLocationUnavailable": "任务没有当前已接纳的位置。",
+  "error.reminder.taskLocationChanged": "原始提醒位置现已属于另一对象。",
+  "error.reminder.taskReferenceInvalid": "原始任务引用无效。",
+  "error.reminder.taskLibraryMismatch": "任务属于另一所选资料库。",
+  "error.reminder.qualifiedTaskSourceMissing": "缺少已获资格的任务源。",
+  "error.reminder.savedObjectNotTask": "已保存的对象不是合格任务。",
+  "error.reminder.savedTaskStatusInvalid": "已保存的任务状态无效。",
+  "error.reminder.savedTaskStatusUnavailable": "已保存的任务状态不可用。",
+  "error.reminder.sessionUnavailable": "请重新打开原始任务。",
+  "error.reminder.dependencyConflict": "原始提醒依赖相互冲突。",
+  "error.reminder.inputGuardCountBudget": "提醒输入见证数量超过安全预算。",
+  "error.reminder.dependencyOutsideLibrary": "提醒依赖位于原始资料库之外。",
+  "error.reminder.inputParentChanged": "原始提醒输入的父目录已变化。",
+  "error.reminder.inputByteOverflow": "提醒输入预算计算超出范围。",
+  "error.reminder.inputGuardByteBudget": "提醒输入见证超过安全预算。",
+  "error.reminder.inputChangedBeforeDecision": "持久决定前，提醒输入已变化。",
+  "error.reminder.inputChangedDuringDecision": "持久决定期间，提醒输入已变化；请保留原始结果。",
+  "error.reminder.selectedRootMismatch": "此原始资料库选择指向不同的物理根目录。",
+  "error.reminder.libraryChangedDuringSelection": "设备选择期间，原始资料库已变化。",
+  "error.reminder.librarySelectionMissing": "缺少原始提醒资料库选择。",
+  "error.reminder.subscriptionIdentityInvalid": "任务或提醒身份无效。",
+  "error.reminder.subscriptionMissing": "缺少原始提醒订阅。",
+  "error.reminder.saveBeforeEnable": "在此设备启用前，请先保存准确且有效的提醒。",
+  "error.reminder.selectLibraryFirst": "请先在此设备选择该资料库。",
+  "error.reminder.selectedLibraryDisabledOrChanged": "原始所选资料库已停用或身份已变化。",
+  "error.reminder.notDue": "尚未到达原始提醒时刻。",
+  "error.reminder.requiresMissedSummary": "此提醒应进入有界的错过提醒摘要。",
+  "error.reminder.attemptCounterOverflow": "提醒尝试计数超出范围。",
+  "error.reminder.summaryMemberCountInvalid": "错过提醒摘要必须包含 1–64 条原始提醒。",
+  "error.reminder.summaryMemberNotMissed": "某个摘要成员尚未超过其正常投递时间窗。",
+  "error.reminder.summaryMemberDuplicate": "错过提醒摘要包含重复成员。",
+  "error.reminder.summaryMemberHandled": "某个原始摘要成员已处理或已取消。",
+  "error.reminder.summaryMemberEffectPossible": "某个原始摘要成员可能已发生外部投递，请保留其原始结果。",
+  "error.reminder.summaryAttemptCounterOverflow": "摘要尝试计数超出范围。",
+  "error.reminder.permitAlreadyAdmitted": "一次性外部投递许可已获准使用，请保留或查询原始结果。",
+  "error.reminder.permitChanged": "原始通知许可已不是当前许可。",
+  "error.reminder.notificationMemberHandled": "某个通知成员已处理或已失效。",
+  "error.reminder.originalSelectionMissing": "缺少原始资料库选择。",
+  "error.reminder.minuteEndedBeforeCall": "目标分钟在外部调用前已结束，本次普通通知不再获准投递。",
+  "error.reminder.definitionChanged": "原始提醒定义已变化。",
+  "error.reminder.externalPermitAlreadyAdmitted": "原始外部投递许可已获准使用。",
+  "error.reminder.deliveryResultMismatch": "通知结果不属于准确的原始许可和请求。",
+  "error.reminder.unknownCannotBecomePreCallFailure": "结果未知的外部投递不能改判为调用前失败。",
+  "error.reminder.notificationCursorInvalid": "原始通知的分页游标无效。",
+  "error.reminder.originalMemberMissing": "缺少原始提醒成员。",
+  "error.reminder.originalMemberLibraryMissing": "原始提醒缺少资料库选择。",
+  "error.reminder.osHistoryMismatch": "系统历史与完整的原始通知请求不匹配。",
+  "error.reminder.originalEffectMissing": "找不到原始提醒投递记录。",
+  "error.reminder.originalSummaryMemberMissing": "缺少原始摘要成员。",
+  "error.reminder.activationInvalid": "提醒的私有激活标识无效。",
+  "error.reminder.activationUnavailable": "找不到属于此配置目录和设备的原始通知。",
+  "error.reminder.defaultConfigurationOccupied": "原始默认配置位置现已被占用。",
+  "error.reminder.minuteBoundaryMissing": "就绪提醒缺少目标分钟边界。",
+  "error.reminder.mutationIdInvalid": "设置变更必须使用规范的 UUIDv4。",
+  "error.reminder.mutationInputConflict": "设置变更标识已属于不同输入。",
+  "error.reminder.settingsChanged": "提醒设置已变化，请保留原始待定请求。",
+  "error.reminder.settingsRevisionOverflow": "提醒设置修订号超出范围。",
+  "error.reminder.taskNotEligible": "原始任务或提醒不具备投递资格。",
+  "error.reminder.readyDefinitionMissing": "就绪提醒缺少原始定义。",
+  "error.reminder.candidateChanged": "原始提醒目标或定义已变化。",
+  "error.reminder.libraryNotSelected": "此设备未选择该资料库。",
+  "error.reminder.notEnabled": "此设备未启用原始资料库或提醒。",
+  "error.reminder.permitExpired": "外部投递前，通知许可已过期。",
+  "error.reminder.osNotificationMissing": "此执行标识没有对应的原始系统通知。",
+  "error.reminder.temporalValueInvalid": "提醒中的时间值无效。",
+  "error.reminder.savedFieldUnavailable": "已保存的 {field} 无效或不可用。",
+  "error.reminder.libraryIdentityChanged": "原始资料库的物理身份已变化。",
+  "error.reminder.savedTriggerUnavailable": "原始已保存提醒不再解析为准确触发时刻。",
+  "error.reminder.scheduleTargetChanged": "原始物理资料库或已保存提醒的身份已变化。",
+  "status.reminder.externalSubmissionUnknown": "外部投递可能仍在进行或已经完成。请查询原始系统通知，不要盲目重试。",
+  "error.device.reminderRecordInvalid": "任务提醒设备记录无效。",
+  "error.device.recordInterrupted": "设备记录在 {point} 被中断。",
+  "error.reminder.stateVersionUnsupported": "提醒设备记录版本不受支持；此构建只读取版本 2。请保留原件。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19026,14 +19269,10 @@ export interface MessageParamsMap {
   "error.core.posix.traversalForbidden": {  };
   "error.core.posix.administratorEnrollmentRequired": {  };
   "error.core.posix.distinctOsIdentitiesRequired": {  };
-  "error.core.posix.enrollmentUuidRequired": {  };
   "error.core.posix.foreignMachine": {  };
   "error.core.posix.deviceKeyProtectionRequired": {  };
   "error.core.posix.deviceKeyOutsideProfileRequired": {  };
   "error.core.posix.nonLoginServiceRequired": {  };
-  "error.core.posix.absoluteRootRequired": {  };
-  "error.core.posix.administratorRootParentRequired": {  };
-  "error.core.posix.invalidRoot": {  };
   "error.core.posix.physicalRootMismatch": {  };
   "error.core.posix.rootRegistryUnavailable": {  };
   "error.core.posix.overlappingWriter": {  };
@@ -19076,6 +19315,253 @@ export interface MessageParamsMap {
   "error.core.posix.directoryAlreadyRetained": {  };
   "error.api.workerOutputBudget": {  };
   "error.api.workerDiagnosticBudget": {  };
+  "error.core.posix.freshRootBirthRequired": {  };
+  "error.core.posix.extendedKeyAclForbidden": {  };
+  "error.core.posix.exactUtf8BasenameRequired": {  };
+  "error.core.posix.workerAccountRequired": {  };
+  "error.core.posix.exclusiveServiceGroupRequired": {  };
+  "error.core.posix.rootPathRequired": {  };
+  "error.core.posix.rootPermissionsRequired": {  };
+  "error.core.posix.enrollmentChanged": {  };
+  "error.core.backend.existingDeviceIdentityUnavailable": {  };
+  "loss.core.nativeImport.generatedBibliographyRetained": {  };
+  "loss.core.nativeImport.resourceModuleContextRetained": {  };
+  "loss.core.nativeImport.settingsRetained": {  };
+  "loss.core.nativeExport.unregisteredFileOmitted": {  };
+  "error.core.sync.cloneLayout.trashPlacementRequired": {  };
+  "error.core.sync.cloneLayout.placementGraphIncomplete": {  };
+  "error.core.sync.cloneLayout.originalCreateTreeRequired": {  };
+  "error.core.sync.cloneLayout.namespaceOverlap": {  };
+  "error.core.sync.memberRetirement.exactFileRevisionsRequired": {  };
+  "error.core.sync.memberRetirement.placementParentInvalid": {  };
+  "error.core.sync.memberRetirement.historicalBlobMissing": {  };
+  "error.core.sync.memberRetirement.fileNamesAliased": {  };
+  "error.core.sync.replica.setupNodeDuplicate": {  };
+  "error.core.sync.replica.directoryMarkerIdentityMissing": {  };
+  "error.core.sync.replica.directoryMarkerNotAdmitted": {  };
+  "error.core.sync.replica.capturedFileMissing": {  };
+  "error.core.sync.replica.originalCutPhysicalEvidenceMissing": {  };
+  "error.core.sync.replica.capturedFileChangedDuringBinding": {  };
+  "error.core.sync.replica.capturedNodeCanonicalSourceMissing": {  };
+  "error.core.sync.replica.capturedSourceIdentityChanged": {  };
+  "error.core.sync.replica.initialParentCheckpointMissing": {  };
+  "error.core.sync.replica.publicationCommitOrderMissing": {  };
+  "error.core.sync.replica.eventCommitOrderMissing": {  };
+  "error.core.sync.replica.publicationObjectLocatorMissing": {  };
+  "error.core.sync.replica.operationCrossesBindings": {  };
+  "error.core.sync.replica.compoundOriginalApplicationRequired": {  };
+  "error.core.sync.replica.relocatedObjectBasisMissing": {  };
+  "error.core.sync.replica.relocatedCanonicalFileBasisMissing": {  };
+  "error.core.sync.replica.relocatedCanonicalRevisionMissing": {  };
+  "error.core.sync.replica.nodeCreationIdentityMissing": {  };
+  "error.core.sync.replica.objectFileOutsideOwner": {  };
+  "error.core.sync.replica.directoryIdentityMissing": {  };
+  "error.core.sync.replica.directoryIdentityAlreadyPresent": {  };
+  "error.core.sync.replica.nodeIdentityAlreadyPresent": {  };
+  "error.core.sync.replica.originalBlobMissing": {  };
+  "error.core.sync.revalidation.proposalSelectionInvalid": {  };
+  "error.core.sync.revalidation.unrelatedBlobs": {  };
+  "error.core.sync.revalidation.stateEvidenceInvalid": {  };
+  "error.core.sync.revalidation.queryRowNodeOwnerRequired": {  };
+  "error.core.sync.revalidation.adoptionInstalledOwnerRequired": {  };
+  "error.core.sync.revalidation.adoptionObservedAfterMissing": {  };
+  "error.core.sync.revalidationWriter.receivedCutSelectionInvalid": {  };
+  "error.core.sync.revalidationWriter.installationReplicaMismatch": {  };
+  "error.core.sync.revalidationWriter.reviewReplicaMismatch": {  };
+  "error.core.sync.revalidationWriter.decisionOriginalApplicationRequired": {  };
+  "error.core.sync.revalidationWriter.proposalAfterStatesMismatch": {  };
+  "error.core.sync.revalidationWriter.adoptionOriginalApplicationRequired": {  };
+  "error.core.sync.revalidationWriter.adoptionNoWriteTransactionRequired": {  };
+  "error.core.sync.revalidationWriter.adoptionOriginalRequestRequired": {  };
+  "error.core.sync.revalidationWriter.adoptionOriginalUpdateRequired": {  };
+  "error.core.sync.revalidationWriter.externalAdoptionCannotRewrite": {  };
+  "error.core.sync.revalidationWriter.adoptionOriginalPublicationRequired": {  };
+  "error.core.sync.revalidationWriter.adoptionPublicationMismatch": {  };
+  "error.core.sync.revalidationWriter.adoptionCannotCreateOwner": {  };
+  "error.core.sync.revalidationWriter.adoptionOriginalCutChanged": {  };
+  "error.core.sync.revalidationWriter.evidenceOriginalApplicationRequired": {  };
+  "error.core.sync.revalidationWriter.historicalBlobDigestChanged": {  };
+  "error.core.sync.revalidationWriter.evidenceOriginalRootMismatch": {  };
+  "error.core.sync.revalidationWriter.absentConfigurationUnsupported": {  };
+  "error.core.sync.store.storedRecordDigestMismatch": {  };
+  "error.core.sync.store.storedManifestNotCanonical": {  };
+  "error.core.sync.store.recordDigestMismatch": {  };
+  "error.core.sync.store.manifestRecordBudget": {  };
+  "error.core.sync.store.manifestNotCanonical": {  };
+  "error.core.sync.store.blobRecordBudget": {  };
+  "error.core.sync.store.transferRecordBudget": {  };
+  "error.core.sync.store.receivedRevisionAmbiguous": {  };
+  "error.core.sync.store.replicaFamilyMismatch": {  };
+  "error.core.sync.store.recordInventoryIncomplete": {  };
+  "error.core.sync.store.recordNameNotUtf8": {  };
+  "error.core.sync.store.recordUnexpected": {  };
+  "error.core.sync.store.recordByteBudget": {  };
+  "error.core.sync.store.immutableRecordDiffers": {  };
+  "error.core.sync.transport.pairedFamilyMismatch": {  };
+  "error.core.sync.transport.unrelatedEntries": {  };
+  "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection": { annotationId: string };
+  "error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable": {  };
+  "loss.core.hostedFeature.wordLayout": {  };
+  "loss.core.hostedFeature.wordListNumbering": {  };
+  "loss.core.hostedFeature.wordFormatRevision": {  };
+  "loss.core.hostedFeature.wordCommentTarget": {  };
+  "loss.core.hostedFeature.wordNestedRevision": {  };
+  "loss.core.hostedFeature.wordLink": {  };
+  "loss.core.hostedFeature.wordImageFormat": {  };
+  "loss.core.hostedFeature.wordImageLayout": {  };
+  "loss.core.hostedFeature.wordImageMissing": {  };
+  "loss.core.hostedFeature.wordField": {  };
+  "loss.core.hostedFeature.wordStructure": {  };
+  "loss.core.hostedFeature.wordTableLayout": {  };
+  "loss.core.hostedFeature.docxImport": {  };
+  "loss.core.hostedFeature.generatedBibliography": {  };
+  "loss.core.hostedFeature.resourceModuleContext": {  };
+  "loss.core.hostedFeature.settings": {  };
+  "loss.core.hostedFeature.unregisteredFiles": {  };
+  "loss.core.hostedFeature.contentImport": {  };
+  "loss.core.hostedFeature.structureCopy": {  };
+  "desktop.startupManaged": {  };
+  "desktop.preferenceUpdateFailed": {  };
+  "error.data.taskReminder.memberTextRequired": { member: string };
+  "error.data.taskReminder.directRecordRequired": {  };
+  "error.data.taskReminder.membersNotClosed": {  };
+  "error.data.taskReminder.requiredMemberMissing": {  };
+  "error.data.taskReminder.intentByteBudget": {  };
+  "error.data.taskReminder.identityInvalid": {  };
+  "error.data.taskReminder.instantDueRequired": {  };
+  "error.data.taskReminder.advanceOutOfRange": {  };
+  "error.data.taskReminder.advanceOverflow": {  };
+  "error.data.taskReminder.dueDayInputRequired": {  };
+  "error.data.taskReminder.civilDueUnavailable": {  };
+  "error.data.taskReminder.civilDueInvalid": {  };
+  "error.data.taskReminder.calendarProviderUnavailable": {  };
+  "error.data.taskReminder.clockMissing": {  };
+  "error.data.taskReminder.nativeTimeRequired": {  };
+  "error.data.taskReminder.clockInvalid": {  };
+  "error.data.taskReminder.clockNotCanonical": {  };
+  "error.data.taskReminder.clockLeapSecondUnsupported": {  };
+  "error.data.taskReminder.fractionOutOfRange": {  };
+  "error.data.taskReminder.zoneProviderUnavailable": {  };
+  "error.data.taskReminder.foldInvalid": {  };
+  "error.data.taskReminder.civilTimeInGap": {  };
+  "error.data.taskReminder.civilTimeAmbiguous": {  };
+  "error.data.taskReminder.kindUnknown": {  };
+  "error.data.taskReminder.minuteOverflow": {  };
+  "error.data.taskReminder.minuteCoverageUnavailable": {  };
+  "error.data.taskReminder.civilDayOutOfBounds": {  };
+  "error.data.taskReminder.completeCivilDueRequired": {  };
+  "error.data.taskReminder.selectorCardinality": {  };
+  "error.data.taskReminder.validationUnavailable": {  };
+  "error.data.taskReminder.resolutionInvalid": {  };
+  "desktop.sessionAlreadyAdopted": {  };
+  "desktop.sessionReleaseFailed": { sessionId: string };
+  "error.reminder.clockBeforeEpoch": {  };
+  "error.reminder.clockOverflow": {  };
+  "error.reminder.originalNotificationInvalid": {  };
+  "error.reminder.deliveryDescriptionBudget": {  };
+  "error.reminder.stateInvalid": {  };
+  "error.reminder.librarySelectionInvalid": {  };
+  "error.reminder.subscriptionInvalid": {  };
+  "error.reminder.originalEffectInvalid": {  };
+  "error.reminder.activationDuplicate": {  };
+  "error.reminder.originalSummaryMissing": {  };
+  "error.reminder.summaryRequiresPreCallFailure": {  };
+  "error.reminder.recordBudget": {  };
+  "error.reminder.summaryMembersInvalid": {  };
+  "error.reminder.summaryEffectMismatch": {  };
+  "error.reminder.summaryActivationDuplicate": {  };
+  "error.reminder.settingsMutationInvalid": {  };
+  "error.reminder.stateByteBudget": {  };
+  "error.reminder.librariesMissing": {  };
+  "error.reminder.libraryIdentityMissing": {  };
+  "error.reminder.libraryIdentityFieldsInvalid": {  };
+  "error.reminder.foreignDevice": {  };
+  "error.reminder.deviceMismatch": {  };
+  "error.reminder.revisionOverflow": {  };
+  "error.reminder.recordCursorInvalid": {  };
+  "error.reminder.originalRecordMissing": {  };
+  "error.reminder.originalLibraryMissing": {  };
+  "error.reminder.originalLibraryRootChanged": {  };
+  "error.reminder.openTargetIdentityChanged": {  };
+  "error.reminder.openLibraryChanged": {  };
+  "error.reminder.reminderIdMissing": {  };
+  "error.reminder.definitionMissing": {  };
+  "error.reminder.triggerMissing": {  };
+  "error.reminder.selectionChanged": {  };
+  "error.reminder.liveTaskUnavailable": {  };
+  "error.reminder.taskLocationUnavailable": {  };
+  "error.reminder.taskLocationChanged": {  };
+  "error.reminder.taskReferenceInvalid": {  };
+  "error.reminder.taskLibraryMismatch": {  };
+  "error.reminder.qualifiedTaskSourceMissing": {  };
+  "error.reminder.savedObjectNotTask": {  };
+  "error.reminder.savedTaskStatusInvalid": {  };
+  "error.reminder.savedTaskStatusUnavailable": {  };
+  "error.reminder.sessionUnavailable": {  };
+  "error.reminder.dependencyConflict": {  };
+  "error.reminder.inputGuardCountBudget": {  };
+  "error.reminder.dependencyOutsideLibrary": {  };
+  "error.reminder.inputParentChanged": {  };
+  "error.reminder.inputByteOverflow": {  };
+  "error.reminder.inputGuardByteBudget": {  };
+  "error.reminder.inputChangedBeforeDecision": {  };
+  "error.reminder.inputChangedDuringDecision": {  };
+  "error.reminder.selectedRootMismatch": {  };
+  "error.reminder.libraryChangedDuringSelection": {  };
+  "error.reminder.librarySelectionMissing": {  };
+  "error.reminder.subscriptionIdentityInvalid": {  };
+  "error.reminder.subscriptionMissing": {  };
+  "error.reminder.saveBeforeEnable": {  };
+  "error.reminder.selectLibraryFirst": {  };
+  "error.reminder.selectedLibraryDisabledOrChanged": {  };
+  "error.reminder.notDue": {  };
+  "error.reminder.requiresMissedSummary": {  };
+  "error.reminder.attemptCounterOverflow": {  };
+  "error.reminder.summaryMemberCountInvalid": {  };
+  "error.reminder.summaryMemberNotMissed": {  };
+  "error.reminder.summaryMemberDuplicate": {  };
+  "error.reminder.summaryMemberHandled": {  };
+  "error.reminder.summaryMemberEffectPossible": {  };
+  "error.reminder.summaryAttemptCounterOverflow": {  };
+  "error.reminder.permitAlreadyAdmitted": {  };
+  "error.reminder.permitChanged": {  };
+  "error.reminder.notificationMemberHandled": {  };
+  "error.reminder.originalSelectionMissing": {  };
+  "error.reminder.minuteEndedBeforeCall": {  };
+  "error.reminder.definitionChanged": {  };
+  "error.reminder.externalPermitAlreadyAdmitted": {  };
+  "error.reminder.deliveryResultMismatch": {  };
+  "error.reminder.unknownCannotBecomePreCallFailure": {  };
+  "error.reminder.notificationCursorInvalid": {  };
+  "error.reminder.originalMemberMissing": {  };
+  "error.reminder.originalMemberLibraryMissing": {  };
+  "error.reminder.osHistoryMismatch": {  };
+  "error.reminder.originalEffectMissing": {  };
+  "error.reminder.originalSummaryMemberMissing": {  };
+  "error.reminder.activationInvalid": {  };
+  "error.reminder.activationUnavailable": {  };
+  "error.reminder.defaultConfigurationOccupied": {  };
+  "error.reminder.minuteBoundaryMissing": {  };
+  "error.reminder.mutationIdInvalid": {  };
+  "error.reminder.mutationInputConflict": {  };
+  "error.reminder.settingsChanged": {  };
+  "error.reminder.settingsRevisionOverflow": {  };
+  "error.reminder.taskNotEligible": {  };
+  "error.reminder.readyDefinitionMissing": {  };
+  "error.reminder.candidateChanged": {  };
+  "error.reminder.libraryNotSelected": {  };
+  "error.reminder.notEnabled": {  };
+  "error.reminder.permitExpired": {  };
+  "error.reminder.osNotificationMissing": {  };
+  "error.reminder.temporalValueInvalid": {  };
+  "error.reminder.savedFieldUnavailable": { field: string };
+  "error.reminder.libraryIdentityChanged": {  };
+  "error.reminder.savedTriggerUnavailable": {  };
+  "error.reminder.scheduleTargetChanged": {  };
+  "status.reminder.externalSubmissionUnknown": {  };
+  "error.device.reminderRecordInvalid": {  };
+  "error.device.recordInterrupted": { point: string };
+  "error.reminder.stateVersionUnsupported": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -30371,14 +30857,10 @@ export const messageParamTypes = {
   "error.core.posix.traversalForbidden": {},
   "error.core.posix.administratorEnrollmentRequired": {},
   "error.core.posix.distinctOsIdentitiesRequired": {},
-  "error.core.posix.enrollmentUuidRequired": {},
   "error.core.posix.foreignMachine": {},
   "error.core.posix.deviceKeyProtectionRequired": {},
   "error.core.posix.deviceKeyOutsideProfileRequired": {},
   "error.core.posix.nonLoginServiceRequired": {},
-  "error.core.posix.absoluteRootRequired": {},
-  "error.core.posix.administratorRootParentRequired": {},
-  "error.core.posix.invalidRoot": {},
   "error.core.posix.physicalRootMismatch": {},
   "error.core.posix.rootRegistryUnavailable": {},
   "error.core.posix.overlappingWriter": {},
@@ -30420,7 +30902,264 @@ export const messageParamTypes = {
   "error.core.posix.targetParentMissing": {},
   "error.core.posix.directoryAlreadyRetained": {},
   "error.api.workerOutputBudget": {},
-  "error.api.workerDiagnosticBudget": {}
+  "error.api.workerDiagnosticBudget": {},
+  "error.core.posix.freshRootBirthRequired": {},
+  "error.core.posix.extendedKeyAclForbidden": {},
+  "error.core.posix.exactUtf8BasenameRequired": {},
+  "error.core.posix.workerAccountRequired": {},
+  "error.core.posix.exclusiveServiceGroupRequired": {},
+  "error.core.posix.rootPathRequired": {},
+  "error.core.posix.rootPermissionsRequired": {},
+  "error.core.posix.enrollmentChanged": {},
+  "error.core.backend.existingDeviceIdentityUnavailable": {},
+  "loss.core.nativeImport.generatedBibliographyRetained": {},
+  "loss.core.nativeImport.resourceModuleContextRetained": {},
+  "loss.core.nativeImport.settingsRetained": {},
+  "loss.core.nativeExport.unregisteredFileOmitted": {},
+  "error.core.sync.cloneLayout.trashPlacementRequired": {},
+  "error.core.sync.cloneLayout.placementGraphIncomplete": {},
+  "error.core.sync.cloneLayout.originalCreateTreeRequired": {},
+  "error.core.sync.cloneLayout.namespaceOverlap": {},
+  "error.core.sync.memberRetirement.exactFileRevisionsRequired": {},
+  "error.core.sync.memberRetirement.placementParentInvalid": {},
+  "error.core.sync.memberRetirement.historicalBlobMissing": {},
+  "error.core.sync.memberRetirement.fileNamesAliased": {},
+  "error.core.sync.replica.setupNodeDuplicate": {},
+  "error.core.sync.replica.directoryMarkerIdentityMissing": {},
+  "error.core.sync.replica.directoryMarkerNotAdmitted": {},
+  "error.core.sync.replica.capturedFileMissing": {},
+  "error.core.sync.replica.originalCutPhysicalEvidenceMissing": {},
+  "error.core.sync.replica.capturedFileChangedDuringBinding": {},
+  "error.core.sync.replica.capturedNodeCanonicalSourceMissing": {},
+  "error.core.sync.replica.capturedSourceIdentityChanged": {},
+  "error.core.sync.replica.initialParentCheckpointMissing": {},
+  "error.core.sync.replica.publicationCommitOrderMissing": {},
+  "error.core.sync.replica.eventCommitOrderMissing": {},
+  "error.core.sync.replica.publicationObjectLocatorMissing": {},
+  "error.core.sync.replica.operationCrossesBindings": {},
+  "error.core.sync.replica.compoundOriginalApplicationRequired": {},
+  "error.core.sync.replica.relocatedObjectBasisMissing": {},
+  "error.core.sync.replica.relocatedCanonicalFileBasisMissing": {},
+  "error.core.sync.replica.relocatedCanonicalRevisionMissing": {},
+  "error.core.sync.replica.nodeCreationIdentityMissing": {},
+  "error.core.sync.replica.objectFileOutsideOwner": {},
+  "error.core.sync.replica.directoryIdentityMissing": {},
+  "error.core.sync.replica.directoryIdentityAlreadyPresent": {},
+  "error.core.sync.replica.nodeIdentityAlreadyPresent": {},
+  "error.core.sync.replica.originalBlobMissing": {},
+  "error.core.sync.revalidation.proposalSelectionInvalid": {},
+  "error.core.sync.revalidation.unrelatedBlobs": {},
+  "error.core.sync.revalidation.stateEvidenceInvalid": {},
+  "error.core.sync.revalidation.queryRowNodeOwnerRequired": {},
+  "error.core.sync.revalidation.adoptionInstalledOwnerRequired": {},
+  "error.core.sync.revalidation.adoptionObservedAfterMissing": {},
+  "error.core.sync.revalidationWriter.receivedCutSelectionInvalid": {},
+  "error.core.sync.revalidationWriter.installationReplicaMismatch": {},
+  "error.core.sync.revalidationWriter.reviewReplicaMismatch": {},
+  "error.core.sync.revalidationWriter.decisionOriginalApplicationRequired": {},
+  "error.core.sync.revalidationWriter.proposalAfterStatesMismatch": {},
+  "error.core.sync.revalidationWriter.adoptionOriginalApplicationRequired": {},
+  "error.core.sync.revalidationWriter.adoptionNoWriteTransactionRequired": {},
+  "error.core.sync.revalidationWriter.adoptionOriginalRequestRequired": {},
+  "error.core.sync.revalidationWriter.adoptionOriginalUpdateRequired": {},
+  "error.core.sync.revalidationWriter.externalAdoptionCannotRewrite": {},
+  "error.core.sync.revalidationWriter.adoptionOriginalPublicationRequired": {},
+  "error.core.sync.revalidationWriter.adoptionPublicationMismatch": {},
+  "error.core.sync.revalidationWriter.adoptionCannotCreateOwner": {},
+  "error.core.sync.revalidationWriter.adoptionOriginalCutChanged": {},
+  "error.core.sync.revalidationWriter.evidenceOriginalApplicationRequired": {},
+  "error.core.sync.revalidationWriter.historicalBlobDigestChanged": {},
+  "error.core.sync.revalidationWriter.evidenceOriginalRootMismatch": {},
+  "error.core.sync.revalidationWriter.absentConfigurationUnsupported": {},
+  "error.core.sync.store.storedRecordDigestMismatch": {},
+  "error.core.sync.store.storedManifestNotCanonical": {},
+  "error.core.sync.store.recordDigestMismatch": {},
+  "error.core.sync.store.manifestRecordBudget": {},
+  "error.core.sync.store.manifestNotCanonical": {},
+  "error.core.sync.store.blobRecordBudget": {},
+  "error.core.sync.store.transferRecordBudget": {},
+  "error.core.sync.store.receivedRevisionAmbiguous": {},
+  "error.core.sync.store.replicaFamilyMismatch": {},
+  "error.core.sync.store.recordInventoryIncomplete": {},
+  "error.core.sync.store.recordNameNotUtf8": {},
+  "error.core.sync.store.recordUnexpected": {},
+  "error.core.sync.store.recordByteBudget": {},
+  "error.core.sync.store.immutableRecordDiffers": {},
+  "error.core.sync.transport.pairedFamilyMismatch": {},
+  "error.core.sync.transport.unrelatedEntries": {},
+  "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection": {
+    "annotationId": "text"
+  },
+  "error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable": {},
+  "loss.core.hostedFeature.wordLayout": {},
+  "loss.core.hostedFeature.wordListNumbering": {},
+  "loss.core.hostedFeature.wordFormatRevision": {},
+  "loss.core.hostedFeature.wordCommentTarget": {},
+  "loss.core.hostedFeature.wordNestedRevision": {},
+  "loss.core.hostedFeature.wordLink": {},
+  "loss.core.hostedFeature.wordImageFormat": {},
+  "loss.core.hostedFeature.wordImageLayout": {},
+  "loss.core.hostedFeature.wordImageMissing": {},
+  "loss.core.hostedFeature.wordField": {},
+  "loss.core.hostedFeature.wordStructure": {},
+  "loss.core.hostedFeature.wordTableLayout": {},
+  "loss.core.hostedFeature.docxImport": {},
+  "loss.core.hostedFeature.generatedBibliography": {},
+  "loss.core.hostedFeature.resourceModuleContext": {},
+  "loss.core.hostedFeature.settings": {},
+  "loss.core.hostedFeature.unregisteredFiles": {},
+  "loss.core.hostedFeature.contentImport": {},
+  "loss.core.hostedFeature.structureCopy": {},
+  "desktop.startupManaged": {},
+  "desktop.preferenceUpdateFailed": {},
+  "error.data.taskReminder.memberTextRequired": {
+    "member": "text"
+  },
+  "error.data.taskReminder.directRecordRequired": {},
+  "error.data.taskReminder.membersNotClosed": {},
+  "error.data.taskReminder.requiredMemberMissing": {},
+  "error.data.taskReminder.intentByteBudget": {},
+  "error.data.taskReminder.identityInvalid": {},
+  "error.data.taskReminder.instantDueRequired": {},
+  "error.data.taskReminder.advanceOutOfRange": {},
+  "error.data.taskReminder.advanceOverflow": {},
+  "error.data.taskReminder.dueDayInputRequired": {},
+  "error.data.taskReminder.civilDueUnavailable": {},
+  "error.data.taskReminder.civilDueInvalid": {},
+  "error.data.taskReminder.calendarProviderUnavailable": {},
+  "error.data.taskReminder.clockMissing": {},
+  "error.data.taskReminder.nativeTimeRequired": {},
+  "error.data.taskReminder.clockInvalid": {},
+  "error.data.taskReminder.clockNotCanonical": {},
+  "error.data.taskReminder.clockLeapSecondUnsupported": {},
+  "error.data.taskReminder.fractionOutOfRange": {},
+  "error.data.taskReminder.zoneProviderUnavailable": {},
+  "error.data.taskReminder.foldInvalid": {},
+  "error.data.taskReminder.civilTimeInGap": {},
+  "error.data.taskReminder.civilTimeAmbiguous": {},
+  "error.data.taskReminder.kindUnknown": {},
+  "error.data.taskReminder.minuteOverflow": {},
+  "error.data.taskReminder.minuteCoverageUnavailable": {},
+  "error.data.taskReminder.civilDayOutOfBounds": {},
+  "error.data.taskReminder.completeCivilDueRequired": {},
+  "error.data.taskReminder.selectorCardinality": {},
+  "error.data.taskReminder.validationUnavailable": {},
+  "error.data.taskReminder.resolutionInvalid": {},
+  "desktop.sessionAlreadyAdopted": {},
+  "desktop.sessionReleaseFailed": {
+    "sessionId": "text"
+  },
+  "error.reminder.clockBeforeEpoch": {},
+  "error.reminder.clockOverflow": {},
+  "error.reminder.originalNotificationInvalid": {},
+  "error.reminder.deliveryDescriptionBudget": {},
+  "error.reminder.stateInvalid": {},
+  "error.reminder.librarySelectionInvalid": {},
+  "error.reminder.subscriptionInvalid": {},
+  "error.reminder.originalEffectInvalid": {},
+  "error.reminder.activationDuplicate": {},
+  "error.reminder.originalSummaryMissing": {},
+  "error.reminder.summaryRequiresPreCallFailure": {},
+  "error.reminder.recordBudget": {},
+  "error.reminder.summaryMembersInvalid": {},
+  "error.reminder.summaryEffectMismatch": {},
+  "error.reminder.summaryActivationDuplicate": {},
+  "error.reminder.settingsMutationInvalid": {},
+  "error.reminder.stateByteBudget": {},
+  "error.reminder.librariesMissing": {},
+  "error.reminder.libraryIdentityMissing": {},
+  "error.reminder.libraryIdentityFieldsInvalid": {},
+  "error.reminder.foreignDevice": {},
+  "error.reminder.deviceMismatch": {},
+  "error.reminder.revisionOverflow": {},
+  "error.reminder.recordCursorInvalid": {},
+  "error.reminder.originalRecordMissing": {},
+  "error.reminder.originalLibraryMissing": {},
+  "error.reminder.originalLibraryRootChanged": {},
+  "error.reminder.openTargetIdentityChanged": {},
+  "error.reminder.openLibraryChanged": {},
+  "error.reminder.reminderIdMissing": {},
+  "error.reminder.definitionMissing": {},
+  "error.reminder.triggerMissing": {},
+  "error.reminder.selectionChanged": {},
+  "error.reminder.liveTaskUnavailable": {},
+  "error.reminder.taskLocationUnavailable": {},
+  "error.reminder.taskLocationChanged": {},
+  "error.reminder.taskReferenceInvalid": {},
+  "error.reminder.taskLibraryMismatch": {},
+  "error.reminder.qualifiedTaskSourceMissing": {},
+  "error.reminder.savedObjectNotTask": {},
+  "error.reminder.savedTaskStatusInvalid": {},
+  "error.reminder.savedTaskStatusUnavailable": {},
+  "error.reminder.sessionUnavailable": {},
+  "error.reminder.dependencyConflict": {},
+  "error.reminder.inputGuardCountBudget": {},
+  "error.reminder.dependencyOutsideLibrary": {},
+  "error.reminder.inputParentChanged": {},
+  "error.reminder.inputByteOverflow": {},
+  "error.reminder.inputGuardByteBudget": {},
+  "error.reminder.inputChangedBeforeDecision": {},
+  "error.reminder.inputChangedDuringDecision": {},
+  "error.reminder.selectedRootMismatch": {},
+  "error.reminder.libraryChangedDuringSelection": {},
+  "error.reminder.librarySelectionMissing": {},
+  "error.reminder.subscriptionIdentityInvalid": {},
+  "error.reminder.subscriptionMissing": {},
+  "error.reminder.saveBeforeEnable": {},
+  "error.reminder.selectLibraryFirst": {},
+  "error.reminder.selectedLibraryDisabledOrChanged": {},
+  "error.reminder.notDue": {},
+  "error.reminder.requiresMissedSummary": {},
+  "error.reminder.attemptCounterOverflow": {},
+  "error.reminder.summaryMemberCountInvalid": {},
+  "error.reminder.summaryMemberNotMissed": {},
+  "error.reminder.summaryMemberDuplicate": {},
+  "error.reminder.summaryMemberHandled": {},
+  "error.reminder.summaryMemberEffectPossible": {},
+  "error.reminder.summaryAttemptCounterOverflow": {},
+  "error.reminder.permitAlreadyAdmitted": {},
+  "error.reminder.permitChanged": {},
+  "error.reminder.notificationMemberHandled": {},
+  "error.reminder.originalSelectionMissing": {},
+  "error.reminder.minuteEndedBeforeCall": {},
+  "error.reminder.definitionChanged": {},
+  "error.reminder.externalPermitAlreadyAdmitted": {},
+  "error.reminder.deliveryResultMismatch": {},
+  "error.reminder.unknownCannotBecomePreCallFailure": {},
+  "error.reminder.notificationCursorInvalid": {},
+  "error.reminder.originalMemberMissing": {},
+  "error.reminder.originalMemberLibraryMissing": {},
+  "error.reminder.osHistoryMismatch": {},
+  "error.reminder.originalEffectMissing": {},
+  "error.reminder.originalSummaryMemberMissing": {},
+  "error.reminder.activationInvalid": {},
+  "error.reminder.activationUnavailable": {},
+  "error.reminder.defaultConfigurationOccupied": {},
+  "error.reminder.minuteBoundaryMissing": {},
+  "error.reminder.mutationIdInvalid": {},
+  "error.reminder.mutationInputConflict": {},
+  "error.reminder.settingsChanged": {},
+  "error.reminder.settingsRevisionOverflow": {},
+  "error.reminder.taskNotEligible": {},
+  "error.reminder.readyDefinitionMissing": {},
+  "error.reminder.candidateChanged": {},
+  "error.reminder.libraryNotSelected": {},
+  "error.reminder.notEnabled": {},
+  "error.reminder.permitExpired": {},
+  "error.reminder.osNotificationMissing": {},
+  "error.reminder.temporalValueInvalid": {},
+  "error.reminder.savedFieldUnavailable": {
+    "field": "text"
+  },
+  "error.reminder.libraryIdentityChanged": {},
+  "error.reminder.savedTriggerUnavailable": {},
+  "error.reminder.scheduleTargetChanged": {},
+  "status.reminder.externalSubmissionUnknown": {},
+  "error.device.reminderRecordInvalid": {},
+  "error.device.recordInterrupted": {
+    "point": "text"
+  },
+  "error.reminder.stateVersionUnsupported": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -30507,7 +31246,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "reminder.foldNone": "No repeated time choice",
   "reminder.foldEarlier": "Earlier instant",
   "reminder.foldLater": "Later instant",
-  "reminder.minuteHelper": "Enter minutes while preserving existing seconds and offset",
+  "reminder.minuteHelper": "Edit minutes; keep seconds and fractions",
   "reminder.saveFirst": "Save the exact reminder before enabling it",
   "reminder.libraryEnabled": "Enable this library on this device",
   "reminder.enable": "Enable",
@@ -39905,19 +40644,15 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.basenameRequired": "An exact filesystem basename is required",
   "error.core.posix.nativeFilesystemRequired": "The Linux profile requires native ext4 or XFS with opaque file handles",
   "error.core.posix.opaqueHandleSizeUnsupported": "The filesystem returned an unsupported opaque handle size",
-  "error.core.posix.serviceCredentialsRequired": "The service requires its enrolled non-root UID, empty supplementary groups and no capabilities",
+  "error.core.posix.serviceCredentialsRequired": "The service requires its enrolled non-root UID and primary GID, empty supplementary groups and no capabilities",
   "error.core.posix.absoluteEnrollmentRequired": "Enrollment must use an absolute administrator-owned path",
   "error.core.posix.traversalForbidden": "Enrollment path contains traversal",
   "error.core.posix.administratorEnrollmentRequired": "Enrollment and every ancestor must be administrator-owned and not writable by the service or other users",
   "error.core.posix.distinctOsIdentitiesRequired": "Service, client and worker require distinct non-root OS identities",
-  "error.core.posix.enrollmentUuidRequired": "Enrollment identity is not a canonical UUID",
   "error.core.posix.foreignMachine": "Enrollment belongs to a different OS machine identity",
   "error.core.posix.deviceKeyProtectionRequired": "Device key requires a 32-byte root-owned service-group-readable private record outside the profile",
   "error.core.posix.deviceKeyOutsideProfileRequired": "Device key cannot reside inside the controlled library or private profile tree",
   "error.core.posix.nonLoginServiceRequired": "The service account must be a dedicated non-login account",
-  "error.core.posix.absoluteRootRequired": "Controlled root must be absolute",
-  "error.core.posix.administratorRootParentRequired": "The controlled root needs an administrator-owned parent",
-  "error.core.posix.invalidRoot": "Invalid controlled root",
   "error.core.posix.physicalRootMismatch": "The enrollment names a different physical root",
   "error.core.posix.rootRegistryUnavailable": "Controlled root registry is unavailable",
   "error.core.posix.overlappingWriter": "This controlled root overlaps an existing writer authority",
@@ -39959,5 +40694,252 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.targetParentMissing": "Missing target parent",
   "error.core.posix.directoryAlreadyRetained": "Directory is already retained",
   "error.api.workerOutputBudget": "Compiler worker output exceeds the 24 MiB limit; the input is retained.",
-  "error.api.workerDiagnosticBudget": "Compiler worker diagnostics exceed the 256 KiB limit; the input is retained."
+  "error.api.workerDiagnosticBudget": "Compiler worker diagnostics exceed the 256 KiB limit; the input is retained.",
+  "error.core.posix.freshRootBirthRequired": "The controlled root requires current administrator evidence of fresh isolated creation",
+  "error.core.posix.extendedKeyAclForbidden": "Extended ACLs cannot qualify the private service authentication key",
+  "error.core.posix.exactUtf8BasenameRequired": "An exact UTF-8 filesystem basename is required",
+  "error.core.posix.workerAccountRequired": "The worker account must be a dedicated non-login account",
+  "error.core.posix.exclusiveServiceGroupRequired": "The service primary group must exclude every other account",
+  "error.core.posix.rootPathRequired": "The controlled root requires an absolute path with an administrator-owned parent",
+  "error.core.posix.rootPermissionsRequired": "The controlled root requires service ownership and private directory permissions",
+  "error.core.posix.enrollmentChanged": "The administrator enrollment changed after admission",
+  "error.core.backend.existingDeviceIdentityUnavailable": "Existing device identity is unavailable",
+  "loss.core.nativeImport.generatedBibliographyRetained": "The derived bibliography remains only in the retained original ZIP and is absent from the installed author tree. Regenerate it from the remapped, currently authorized Work data before compiling offline citations",
+  "loss.core.nativeImport.resourceModuleContextRetained": "The Typst resource module is retained byte-for-byte. Application identities and root-relative dependencies inside resource modules are not rewritten; review its relocated context before use",
+  "loss.core.nativeImport.settingsRetained": "Original settings and style selection remain in the preserved package; the destination library's settings remain authoritative. Imported style modules are owned resources, without automatic default-style activation",
+  "loss.core.nativeExport.unregisteredFileOmitted": "Unregistered/raw content or the named internal subtree is outside admitted native content; local history and unknown files require a complete backup",
+  "error.core.sync.cloneLayout.trashPlacementRequired": "Only a placed content object can occupy a Trash tree.",
+  "error.core.sync.cloneLayout.placementGraphIncomplete": "Selected placement graph is cyclic or lacks its parent.",
+  "error.core.sync.cloneLayout.originalCreateTreeRequired": "Clone must retain its original CreateTree.",
+  "error.core.sync.cloneLayout.namespaceOverlap": "Clone files and directories overlap in the actual namespace.",
+  "error.core.sync.memberRetirement.exactFileRevisionsRequired": "Member retirement requires bounded exact file revisions.",
+  "error.core.sync.memberRetirement.placementParentInvalid": "Member retirement has an invalid placement parent.",
+  "error.core.sync.memberRetirement.historicalBlobMissing": "Member retirement lacks an exact historical blob.",
+  "error.core.sync.memberRetirement.fileNamesAliased": "Member retirement has aliased file names.",
+  "error.core.sync.replica.setupNodeDuplicate": "Duplicate Node in replica setup.",
+  "error.core.sync.replica.directoryMarkerIdentityMissing": "Directory marker lacks an identity.",
+  "error.core.sync.replica.directoryMarkerNotAdmitted": "A directory marker is not currently admitted.",
+  "error.core.sync.replica.capturedFileMissing": "Captured replica file disappeared.",
+  "error.core.sync.replica.originalCutPhysicalEvidenceMissing": "Original replica cut has no physical file evidence.",
+  "error.core.sync.replica.capturedFileChangedDuringBinding": "Captured replica file changed during binding.",
+  "error.core.sync.replica.capturedNodeCanonicalSourceMissing": "Canonical source is absent from the captured node.",
+  "error.core.sync.replica.capturedSourceIdentityChanged": "Captured source changed identity.",
+  "error.core.sync.replica.initialParentCheckpointMissing": "Missing initial parent checkpoint.",
+  "error.core.sync.replica.publicationCommitOrderMissing": "Publication lacks its durable commit order.",
+  "error.core.sync.replica.eventCommitOrderMissing": "Replica event lacks commit order.",
+  "error.core.sync.replica.publicationObjectLocatorMissing": "Publication has no local object locator.",
+  "error.core.sync.replica.operationCrossesBindings": "Author operation crosses replica bindings.",
+  "error.core.sync.replica.compoundOriginalApplicationRequired": "Compound namespace decisions require their original SyncApplication.",
+  "error.core.sync.replica.relocatedObjectBasisMissing": "Relocated object has no replica basis.",
+  "error.core.sync.replica.relocatedCanonicalFileBasisMissing": "Relocated canonical file is missing from replica basis.",
+  "error.core.sync.replica.relocatedCanonicalRevisionMissing": "Relocated canonical revision is missing.",
+  "error.core.sync.replica.nodeCreationIdentityMissing": "Node creation lacks an identity.",
+  "error.core.sync.replica.objectFileOutsideOwner": "Object file is outside its owner.",
+  "error.core.sync.replica.directoryIdentityMissing": "Directory identity missing.",
+  "error.core.sync.replica.directoryIdentityAlreadyPresent": "Directory identity already exists in this replica.",
+  "error.core.sync.replica.nodeIdentityAlreadyPresent": "Node identity was already present in this replica.",
+  "error.core.sync.replica.originalBlobMissing": "Original replica blob is missing.",
+  "error.core.sync.revalidation.proposalSelectionInvalid": "Select one bounded exact revalidation proposal.",
+  "error.core.sync.revalidation.unrelatedBlobs": "Revalidation contains unrelated blobs.",
+  "error.core.sync.revalidation.stateEvidenceInvalid": "Revalidated state has missing bytes or invalid causal predecessors.",
+  "error.core.sync.revalidation.queryRowNodeOwnerRequired": "An actual Query row requires an exact Node owner.",
+  "error.core.sync.revalidation.adoptionInstalledOwnerRequired": "Adoption requires an originally installed owner.",
+  "error.core.sync.revalidation.adoptionObservedAfterMissing": "Adoption is missing its exact observed after state.",
+  "error.core.sync.revalidationWriter.receivedCutSelectionInvalid": "Select one bounded nonempty received cut.",
+  "error.core.sync.revalidationWriter.installationReplicaMismatch": "Semantic installation names another local replica.",
+  "error.core.sync.revalidationWriter.reviewReplicaMismatch": "The semantic review names another local replica.",
+  "error.core.sync.revalidationWriter.decisionOriginalApplicationRequired": "A semantic decision requires its original SyncApplication.",
+  "error.core.sync.revalidationWriter.proposalAfterStatesMismatch": "The original writer after states differ from the semantic proposal.",
+  "error.core.sync.revalidationWriter.adoptionOriginalApplicationRequired": "Adoption requires its original application.",
+  "error.core.sync.revalidationWriter.adoptionNoWriteTransactionRequired": "Adoption requires its original no-write transaction.",
+  "error.core.sync.revalidationWriter.adoptionOriginalRequestRequired": "Semantic adoption requires its exact original request.",
+  "error.core.sync.revalidationWriter.adoptionOriginalUpdateRequired": "Adoption must retain the original no-write Update.",
+  "error.core.sync.revalidationWriter.externalAdoptionCannotRewrite": "External adoption cannot rewrite the observed author bytes.",
+  "error.core.sync.revalidationWriter.adoptionOriginalPublicationRequired": "Adoption requires its original publication.",
+  "error.core.sync.revalidationWriter.adoptionPublicationMismatch": "Adoption publication differs from the original application.",
+  "error.core.sync.revalidationWriter.adoptionCannotCreateOwner": "Adoption cannot create a new owner.",
+  "error.core.sync.revalidationWriter.adoptionOriginalCutChanged": "Adoption changes the original owner, placement or publication cut.",
+  "error.core.sync.revalidationWriter.evidenceOriginalApplicationRequired": "Semantic evidence requires its original application.",
+  "error.core.sync.revalidationWriter.historicalBlobDigestChanged": "Historical semantic blob changes its accepted digest.",
+  "error.core.sync.revalidationWriter.evidenceOriginalRootMismatch": "Semantic evidence belongs to another original request root.",
+  "error.core.sync.revalidationWriter.absentConfigurationUnsupported": "Unsupported absent semantic configuration.",
+  "error.core.sync.store.storedRecordDigestMismatch": "Stored portable record digest mismatch.",
+  "error.core.sync.store.storedManifestNotCanonical": "Stored manifest is not canonical.",
+  "error.core.sync.store.recordDigestMismatch": "Portable record digest mismatch.",
+  "error.core.sync.store.manifestRecordBudget": "Manifest record exceeds budget.",
+  "error.core.sync.store.manifestNotCanonical": "Manifest is not canonical.",
+  "error.core.sync.store.blobRecordBudget": "Blob record exceeds budget.",
+  "error.core.sync.store.transferRecordBudget": "Transfer record budget exceeded.",
+  "error.core.sync.store.receivedRevisionAmbiguous": "Received object revision is ambiguous.",
+  "error.core.sync.store.replicaFamilyMismatch": "Local store belongs to a different replica family.",
+  "error.core.sync.store.recordInventoryIncomplete": "Replica record inventory is incomplete.",
+  "error.core.sync.store.recordNameNotUtf8": "Non-UTF8 replica record name.",
+  "error.core.sync.store.recordUnexpected": "Unexpected replica record.",
+  "error.core.sync.store.recordByteBudget": "Replica record exceeds its byte budget.",
+  "error.core.sync.store.immutableRecordDiffers": "Existing immutable record differs.",
+  "error.core.sync.transport.pairedFamilyMismatch": "Transport directory belongs to another paired family.",
+  "error.core.sync.transport.unrelatedEntries": "Transport directory contains unrelated entries.",
+  "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection": "Annotation {annotationId} is preserved unchanged; its target is unavailable and awaits explicit reconnection.",
+  "error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable": "The current evidence cannot establish the exact qualification of the original annotation target.",
+  "loss.core.hostedFeature.wordLayout": "The text is editable. Word headers, footers, pagination, fonts and complex layout remain in the original.",
+  "loss.core.hostedFeature.wordListNumbering": "List text is retained; numbering format, levels and starting values are not fully mapped.",
+  "loss.core.hostedFeature.wordFormatRevision": "Formatting revisions remain in the original and are not converted into executable text suggestions.",
+  "loss.core.hostedFeature.wordCommentTarget": "Comments are retained; some targets cannot be located precisely in the new text.",
+  "loss.core.hostedFeature.wordNestedRevision": "Nested revisions are retained and are not eligible for automatic application.",
+  "loss.core.hostedFeature.wordLink": "Some link targets cannot be mapped safely; visible text and the original are retained.",
+  "loss.core.hostedFeature.wordImageFormat": "Some image formats are unsupported; the original is retained.",
+  "loss.core.hostedFeature.wordImageLayout": "Images are retained; floating positions, cropping and dimensions are not fully mapped.",
+  "loss.core.hostedFeature.wordImageMissing": "Some image relationships cannot be read; the original is retained.",
+  "loss.core.hostedFeature.wordField": "Visible field results are retained; dynamic update semantics remain in the original.",
+  "loss.core.hostedFeature.wordStructure": "Some structures are not fully mapped; readable text and the original are retained.",
+  "loss.core.hostedFeature.wordTableLayout": "Table text and cell order are retained; complex table layout is not fully mapped.",
+  "loss.core.hostedFeature.docxImport": "Some content is not fully mapped; review the new text and the retained original.",
+  "loss.core.hostedFeature.generatedBibliography": "The generated bibliography remains in the original and is not installed in the author tree. Regenerate it from remapped, currently authorized bibliography data.",
+  "loss.core.hostedFeature.resourceModuleContext": "Typst resource modules retain their original bytes. Internal identities and root-relative dependencies are not remapped; review the relocated context before use.",
+  "loss.core.hostedFeature.settings": "Original library settings and style choices remain in the original. Destination settings remain effective; imported styles are not enabled automatically.",
+  "loss.core.hostedFeature.unregisteredFiles": "The native package omits some unregistered or internal library data. This import cannot restore omitted data; complete history and Drafts require a full recovery backup.",
+  "loss.core.hostedFeature.contentImport": "Some data cannot be fully mapped. Originals and original values are retained; explicitly accept the import limits in the original Plan.",
+  "loss.core.hostedFeature.structureCopy": "Some references or annotations cannot be fully migrated. Original values are retained; explicitly accept the copy limits in the original Plan.",
+  "desktop.startupManaged": "System policy controls sign-in startup; the app cannot change it",
+  "desktop.preferenceUpdateFailed": "Desktop preference saving is unconfirmed; reopen settings to inspect the current value. The request is not resent automatically",
+  "error.data.taskReminder.memberTextRequired": "Task reminder member {member} requires text.",
+  "error.data.taskReminder.directRecordRequired": "Task reminder requires a direct record.",
+  "error.data.taskReminder.membersNotClosed": "Task reminder has duplicate or unknown members.",
+  "error.data.taskReminder.requiredMemberMissing": "Task reminder is missing a required member.",
+  "error.data.taskReminder.intentByteBudget": "The task reminder exceeds the 16 KiB input limit.",
+  "error.data.taskReminder.identityInvalid": "The reminder ID must be a canonical lowercase UUIDv4.",
+  "error.data.taskReminder.instantDueRequired": "A relative reminder requires an exact instant due time.",
+  "error.data.taskReminder.advanceOutOfRange": "The reminder advance is outside the supported nonnegative range.",
+  "error.data.taskReminder.advanceOverflow": "The reminder advance overflows.",
+  "error.data.taskReminder.dueDayInputRequired": "A due-day reminder requires a complete civil due date.",
+  "error.data.taskReminder.civilDueUnavailable": "The civil due date is unavailable.",
+  "error.data.taskReminder.civilDueInvalid": "The civil due date is invalid.",
+  "error.data.taskReminder.calendarProviderUnavailable": "The exact calendar provider is unavailable.",
+  "error.data.taskReminder.clockMissing": "The reminder clock is missing.",
+  "error.data.taskReminder.nativeTimeRequired": "The reminder clock requires a native time value.",
+  "error.data.taskReminder.clockInvalid": "The reminder clock is invalid.",
+  "error.data.taskReminder.clockNotCanonical": "The reminder clock is not canonical.",
+  "error.data.taskReminder.clockLeapSecondUnsupported": "Leap seconds are unsupported in reminder clocks.",
+  "error.data.taskReminder.fractionOutOfRange": "The reminder fraction must be in [0,1).",
+  "error.data.taskReminder.zoneProviderUnavailable": "The exact reminder zone provider and version are unavailable.",
+  "error.data.taskReminder.foldInvalid": "The reminder fold selection is invalid.",
+  "error.data.taskReminder.civilTimeInGap": "The reminder civil time falls in a zone gap.",
+  "error.data.taskReminder.civilTimeAmbiguous": "The reminder civil time is ambiguous; explicitly choose the earlier or later instant.",
+  "error.data.taskReminder.kindUnknown": "The task reminder kind is unknown.",
+  "error.data.taskReminder.minuteOverflow": "The reminder minute boundary overflows.",
+  "error.data.taskReminder.minuteCoverageUnavailable": "Zone coverage is unavailable for the complete reminder minute.",
+  "error.data.taskReminder.civilDayOutOfBounds": "The reminder civil day is outside supported bounds.",
+  "error.data.taskReminder.completeCivilDueRequired": "A due-day reminder requires one complete civil due date.",
+  "error.data.taskReminder.selectorCardinality": "Each task reminder input must select at most one value.",
+  "error.data.taskReminder.validationUnavailable": "Task reminder validation is unavailable with the current frozen inputs.",
+  "error.data.taskReminder.resolutionInvalid": "The task reminder resolution has an invalid state or failure classification.",
+  "desktop.sessionAlreadyAdopted": "An adopted document session cannot be released as an unused result",
+  "desktop.sessionReleaseFailed": "Session release is unconfirmed ({sessionId}); personal recovery drafts and the original operation are retained",
+  "error.reminder.clockBeforeEpoch": "System clock is before the supported epoch",
+  "error.reminder.clockOverflow": "System clock overflow",
+  "error.reminder.originalNotificationInvalid": "Invalid original notification request",
+  "error.reminder.deliveryDescriptionBudget": "Notification diagnostic exceeds budget",
+  "error.reminder.stateInvalid": "Invalid or over-budget reminder state",
+  "error.reminder.librarySelectionInvalid": "Invalid selected reminder library",
+  "error.reminder.subscriptionInvalid": "Invalid reminder subscription",
+  "error.reminder.originalEffectInvalid": "Invalid original reminder effect",
+  "error.reminder.activationDuplicate": "Duplicate notification activation key",
+  "error.reminder.originalSummaryMissing": "Missing original reminder summary",
+  "error.reminder.summaryRequiresPreCallFailure": "Only a definite pre-call failure may join a later summary",
+  "error.reminder.recordBudget": "Reminder record exceeds budget",
+  "error.reminder.summaryMembersInvalid": "Invalid original summary membership",
+  "error.reminder.summaryEffectMismatch": "Summary member does not point to its original possible external effect",
+  "error.reminder.summaryActivationDuplicate": "Duplicate summary activation key",
+  "error.reminder.settingsMutationInvalid": "Invalid settings mutation",
+  "error.reminder.stateByteBudget": "Reminder state exceeds 16 MiB",
+  "error.reminder.librariesMissing": "Missing reminder libraries",
+  "error.reminder.libraryIdentityMissing": "Missing library identity",
+  "error.reminder.libraryIdentityFieldsInvalid": "Unknown library identity members",
+  "error.reminder.foreignDevice": "Reminder state belongs to another machine, user or profile; it is not adopted",
+  "error.reminder.deviceMismatch": "Reminder state has a different original device",
+  "error.reminder.revisionOverflow": "Reminder revision overflow",
+  "error.reminder.recordCursorInvalid": "Invalid original reminder record cursor",
+  "error.reminder.originalRecordMissing": "No original reminder record",
+  "error.reminder.originalLibraryMissing": "No original reminder library",
+  "error.reminder.originalLibraryRootChanged": "The original reminder library physical root changed",
+  "error.reminder.openTargetIdentityChanged": "The original reminder target changed identity before opening",
+  "error.reminder.openLibraryChanged": "The original reminder library changed while opening",
+  "error.reminder.reminderIdMissing": "Missing reminder id",
+  "error.reminder.definitionMissing": "Missing reminder definition",
+  "error.reminder.triggerMissing": "Missing reminder trigger",
+  "error.reminder.selectionChanged": "Reminder selection changed; restart the bounded scan",
+  "error.reminder.liveTaskUnavailable": "The original live task is unavailable",
+  "error.reminder.taskLocationUnavailable": "Task has no current admitted location",
+  "error.reminder.taskLocationChanged": "The original reminder location now belongs to another object",
+  "error.reminder.taskReferenceInvalid": "Invalid original task reference",
+  "error.reminder.taskLibraryMismatch": "Task belongs to another selected library",
+  "error.reminder.qualifiedTaskSourceMissing": "Missing qualified task source",
+  "error.reminder.savedObjectNotTask": "The saved object is not a qualified task",
+  "error.reminder.savedTaskStatusInvalid": "Saved task status is invalid",
+  "error.reminder.savedTaskStatusUnavailable": "Saved task status is unavailable",
+  "error.reminder.sessionUnavailable": "Open the original task again",
+  "error.reminder.dependencyConflict": "Competing original reminder dependencies",
+  "error.reminder.inputGuardCountBudget": "Reminder input guard count exceeded",
+  "error.reminder.dependencyOutsideLibrary": "Reminder dependency belongs outside the original library",
+  "error.reminder.inputParentChanged": "Original reminder input parent changed",
+  "error.reminder.inputByteOverflow": "Reminder input budget overflow",
+  "error.reminder.inputGuardByteBudget": "Reminder input guard budget exceeded",
+  "error.reminder.inputChangedBeforeDecision": "A reminder input changed before the durable decision",
+  "error.reminder.inputChangedDuringDecision": "A reminder input changed during the durable decision; retain original outcome",
+  "error.reminder.selectedRootMismatch": "This original library selection names a different physical root",
+  "error.reminder.libraryChangedDuringSelection": "Original library changed during the device selection",
+  "error.reminder.librarySelectionMissing": "No original reminder library selection",
+  "error.reminder.subscriptionIdentityInvalid": "Invalid task/reminder identity",
+  "error.reminder.subscriptionMissing": "No original reminder subscription",
+  "error.reminder.saveBeforeEnable": "Save the exact valid reminder before enabling it on this device",
+  "error.reminder.selectLibraryFirst": "Select this library on this device first",
+  "error.reminder.selectedLibraryDisabledOrChanged": "The original selected library is disabled or has changed identity",
+  "error.reminder.notDue": "The original reminder instant has not arrived",
+  "error.reminder.requiresMissedSummary": "This reminder belongs in the bounded missed summary",
+  "error.reminder.attemptCounterOverflow": "Reminder attempt counter overflow",
+  "error.reminder.summaryMemberCountInvalid": "Missed summary requires 1–64 original reminders",
+  "error.reminder.summaryMemberNotMissed": "A summary member is not past its normal delivery window",
+  "error.reminder.summaryMemberDuplicate": "Duplicate missed summary member",
+  "error.reminder.summaryMemberHandled": "An original summary member is handled or cancelled",
+  "error.reminder.summaryMemberEffectPossible": "An original summary member already has a possible external effect; retain its original outcome",
+  "error.reminder.summaryAttemptCounterOverflow": "Summary attempt counter overflow",
+  "error.reminder.permitAlreadyAdmitted": "The one-use external submission permit has already been admitted; retain/query its original result",
+  "error.reminder.permitChanged": "The original notification permit is no longer current",
+  "error.reminder.notificationMemberHandled": "A notification member is handled or invalidated",
+  "error.reminder.originalSelectionMissing": "Original library selection is missing",
+  "error.reminder.minuteEndedBeforeCall": "The target minute ended before the external call; no normal notification is authorized",
+  "error.reminder.definitionChanged": "The original reminder definition has changed",
+  "error.reminder.externalPermitAlreadyAdmitted": "The original external permit was already admitted",
+  "error.reminder.deliveryResultMismatch": "Notification result does not belong to the exact original permit/request",
+  "error.reminder.unknownCannotBecomePreCallFailure": "An unknown external result cannot become a pre-call failure",
+  "error.reminder.notificationCursorInvalid": "Invalid original-notification cursor",
+  "error.reminder.originalMemberMissing": "Missing original reminder member",
+  "error.reminder.originalMemberLibraryMissing": "Original reminder has no library selection",
+  "error.reminder.osHistoryMismatch": "OS history does not match the complete original notification request",
+  "error.reminder.originalEffectMissing": "No original reminder effect",
+  "error.reminder.originalSummaryMemberMissing": "Missing original summary member",
+  "error.reminder.activationInvalid": "Invalid opaque reminder activation",
+  "error.reminder.activationUnavailable": "No original notification belongs to this profile/device",
+  "error.reminder.defaultConfigurationOccupied": "An original default-configuration slot is now occupied",
+  "error.reminder.minuteBoundaryMissing": "Ready reminder lacks a target minute boundary",
+  "error.reminder.mutationIdInvalid": "Settings mutation requires a canonical UUIDv4",
+  "error.reminder.mutationInputConflict": "Settings mutation id belongs to different input",
+  "error.reminder.settingsChanged": "Reminder settings changed; preserve the original pending request",
+  "error.reminder.settingsRevisionOverflow": "Settings revision overflow",
+  "error.reminder.taskNotEligible": "The original task/reminder is not eligible",
+  "error.reminder.readyDefinitionMissing": "Ready reminder lacks its original definition",
+  "error.reminder.candidateChanged": "The original reminder target or definition changed",
+  "error.reminder.libraryNotSelected": "This library is not selected on this device",
+  "error.reminder.notEnabled": "The original library/reminder is not enabled on this device",
+  "error.reminder.permitExpired": "The notification permit expired before external submission",
+  "error.reminder.osNotificationMissing": "No original OS notification at this execution key",
+  "error.reminder.temporalValueInvalid": "A reminder temporal value is invalid.",
+  "error.reminder.savedFieldUnavailable": "Saved {field} is invalid or unavailable.",
+  "error.reminder.libraryIdentityChanged": "Original library physical identity changed.",
+  "error.reminder.savedTriggerUnavailable": "Original saved reminder no longer resolves to an exact trigger.",
+  "error.reminder.scheduleTargetChanged": "The original physical library or saved reminder identity changed.",
+  "status.reminder.externalSubmissionUnknown": "External submission may be pending or have completed; query the original OS notification, never retry blindly.",
+  "error.device.reminderRecordInvalid": "The task reminder device record is invalid.",
+  "error.device.recordInterrupted": "The device record was interrupted at {point}.",
+  "error.reminder.stateVersionUnsupported": "The reminder device-record version is unsupported; this build reads version 2 only. Retain the original."
 };
