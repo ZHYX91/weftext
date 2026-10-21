@@ -43,6 +43,8 @@ TLS, password accounts, SSO, service installation and high availability are not 
 
 ## Writing, conflicts and disconnection
 
+At connection, panels initialize under their individual permissions. A temporarily failed catalog is reported unavailable while other authorized panels continue; unavailable library configuration does not suppress content import. “All documents” retries while preserving the source Draft and updates connection status on success. Identity or authorization changes retire the old connection; failure isolation never restores read authority.
+
 The WebUI provides source, styled source, on-demand syntax, visual writing and reading views, Typst preview within explicit authorized dependencies, title/source-text search within authorized configuration, exact historical source viewing, and saved-source download. Search explicitly covers configured readable sources, reporting incomplete results on budget exhaustion or read failure. This search entry is separate from the field-authorized CEL Query below. Ordinary files without admitted note history report it unavailable.
 
 Two users editing one document keep separate drafts. The first save commits; the other old-Base save is rejected, preserving the original proposal and current source. Reopen, inspect both, edit the merged proposal, confirm its new basis, then Save. Basis confirmation itself does not change the author file; Core retains the original conflicting draft. An unrelated document continues saving.

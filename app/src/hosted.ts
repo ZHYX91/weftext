@@ -1,5 +1,6 @@
 import "./hosted.css";
 import { HostedDraftCache } from "./hosted-draft-cache";
+import { connectHostedPanels } from "./hosted-panel-connection";
 import { EverydayNavigation, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
 import { HostedFields } from "./hosted-fields";
@@ -482,8 +483,25 @@ async function connect() {
 }
 async function connectPanels(selected: Me, epoch: number, credential: string): Promise<void> {
   const current = () => requestEpoch === epoch && token === credential && identity === selected;
-  const steps = [() => list(), () => fields.connect(selected.deployment, selected.actor, selected.generation), () => review.connect(selected.deployment, selected.actor, selected.generation), () => queries.connect(selected.deployment, selected.actor, selected.generation), () => office.connect(selected.deployment, selected.actor, selected.generation), () => history.connect(selected.deployment, selected.actor, selected.generation), () => library.connect(selected.deployment, selected.actor, selected.generation), () => media.connect(selected.deployment, selected.actor, selected.generation), () => structures.connect(selected.deployment, selected.actor, selected.generation), () => { structures.setDocuments(structureDocuments); knowledgeLinks.connect(); }, () => citations.connect(selected.deployment, selected.actor, selected.generation), () => navigationRegistry.connect(selected.deployment, selected.actor, selected.generation), () => contentImport.connect(selected.deployment, selected.actor, selected.generation), () => ownerBackup.connect(selected.deployment, selected.actor, selected.generation)];
-  for (const step of steps) { if (!current()) return; await step(); if (!current()) return; }
+  const failures = await connectHostedPanels(current, [
+    { label: "文档目录", connect: () => list() },
+    { label: "属性", connect: () => fields.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "批注", connect: () => review.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "查询", connect: () => queries.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "办公输出与导入", connect: () => office.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "时间线", connect: () => history.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "库配置", connect: () => library.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "媒体", connect: () => media.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "结构", connect: () => structures.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "知识链接", connect: () => { structures.setDocuments(structureDocuments); knowledgeLinks.connect(); } },
+    { label: "引用", connect: () => citations.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "标签", connect: () => navigationRegistry.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "资料导入", connect: () => contentImport.connect(selected.deployment, selected.actor, selected.generation) },
+    { label: "恢复资料", connect: () => ownerBackup.connect(selected.deployment, selected.actor, selected.generation) },
+  ]);
+  if (failures && current()) status(failures.length
+    ? `${failures.map(item => `${item.label}未就绪：${item.message}`).join("；")}。可点击“全部文档”重试；正文草稿保留。`
+    : `${selected.actor} · ${selected.version} · 已连接`);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;

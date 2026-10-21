@@ -15,6 +15,27 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex'), pause = m
 const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), cases: [], pageErrors: [], consoleErrors: [], completed: false };
 const token = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let local, server, browser, page, base, localToken, stderr = '';
+// Windows can briefly deny this observer's read because of sharing
+// contention. Keep the exact disk-byte assertions, bound only EBUSY observation,
+// and never retry a different error or read a path outside this owned fixture.
+async function readOtherFixture(file) {
+  assert.equal(path.resolve(file), path.join(out, 'library', 'Other', 'Other.typ'));
+  const started = performance.now(); let retries = 0;
+  for (;;) {
+    try {
+      const source = await readFile(file, 'utf8');
+      (result.diskReadObservations ??= []).push({ retries, elapsedMs: performance.now() - started, completed: true });
+      return source;
+    } catch (error) {
+      if (error.code !== 'EBUSY' || performance.now() - started >= 5000) {
+        (result.diskReadObservations ??= []).push({ retries, elapsedMs: performance.now() - started, completed: false, error: String(error) });
+        throw error;
+      }
+      retries++; await pause(25);
+    }
+  }
+}
+
 async function start(args, hosted = false) {
   const process = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
   process.stdout.on('data', bytes => stdout += bytes); process.stderr.on('data', bytes => stderr += bytes);
@@ -43,7 +64,7 @@ try {
   const definitionPlan = { where: 'status == "open"', select: [column()] };
   async function define(value, key) { const opened = await api('/api/open', { path: other.path, root }); return api('/api/query/definition/save', { sessionId: opened.sessionId, source: opened.source, sourceHash: sha(opened.source), serial: 1, baseId: opened.baseId, operationId: randomUUID(), label: 'weftext-query-state', ...(key ? { key } : {}), plan: value }); }
   const first = await define(definitionPlan), key = first.definition.key, oldRevision = first.definitionRevision; await define({ ...definitionPlan, where: 'status == "done"' }, key);
-  const originalOther = await readFile(path.join(root, 'Other/Other.typ'), 'utf8'); await stop(local); local = null;
+  const originalOther = await readOtherFixture(path.join(root, 'Other/Other.typ')); await stop(local); local = null;
   const queryRights = { definitions: true, definitionHistory: true, products: { title: true, body: true, headings: true, types: true, self: true }, relations: [relation] };
   const fields = { 'tasks/status': { read: true }, 'people/parents': { read: true } }, office = { export: true, download: true };
   const config = { deployment: 'query-browser', bind: '127.0.0.1:0', root, adminTokenSha256: sha(token.admin), files: { shared: { path: 'Shared/Shared.typ', title: '共同文档', editable: true }, other: { path: 'Other/Other.typ', title: '定义文档', editable: true } }, users: {
@@ -68,16 +89,16 @@ try {
   result.cases.push('real union preserves occurrences, distinct rows stay derived, semantic products retain exact column order and deep headings, and independently granted relation follows the actual ref');
   for (const name of ['self', 'types']) await page.getByLabel(`获权语义产品 ${name}`, { exact: true }).uncheck(); await page.getByLabel('获权字段 people/parents', { exact: true }).uncheck(); await page.getByLabel(`获权关系 ${relation}`, { exact: true }).uncheck();
   await page.locator('#query details').filter({ hasText: '保存定义 · current' }).locator('summary').click(); await page.getByLabel('保存查询定义对象', { exact: true }).selectOption('other'); await page.getByLabel('保存查询定义', { exact: true }).selectOption(key); await click('读取获权保存定义'); await page.locator('#query').getByText(/当前定义已读取/).waitFor(); await click('以此保存定义创建临时调用'); const current = await query(); assert.equal(current.result.rows[0].cells.status.value.value, 'done');
-  await page.getByLabel('保存定义读取方式', { exact: true }).selectOption('pinned'); await page.getByLabel('准确固定定义版本', { exact: true }).fill(oldRevision); await click('读取获权保存定义'); await page.locator('#query').getByText(new RegExp(`准确固定定义已读取.*${oldRevision}`)).waitFor(); await click('以此保存定义创建临时调用'); const pinned = await query(); assert.equal(pinned.result.rows[0].cells.status.value.value, 'open'); assert.equal(await readFile(path.join(root, 'Other/Other.typ'), 'utf8'), originalOther);
+  await page.getByLabel('保存定义读取方式', { exact: true }).selectOption('pinned'); await page.getByLabel('准确固定定义版本', { exact: true }).fill(oldRevision); await click('读取获权保存定义'); await page.locator('#query').getByText(new RegExp(`准确固定定义已读取.*${oldRevision}`)).waitFor(); await click('以此保存定义创建临时调用'); const pinned = await query(); assert.equal(pinned.result.rows[0].cells.status.value.value, 'open'); assert.equal(await readOtherFixture(path.join(root, 'Other/Other.typ')), originalOther);
   result.cases.push('saved current and exact pinned definitions construct the original advanced.call, show the actual selected revision and keep current author bytes untouched');
   await click('定义文档'); await page.locator('#source [data-query-label="weftext-query-state"]').waitFor(); const embedded = page.locator('#source [data-query-label="weftext-query-state"]').first(); await embedded.getByText('done', { exact: true }).waitFor();
   await click('V01 源码'); await click('查看正文查询预览'); await page.locator('#source .embedded-query').waitFor(); await click('V02 带样式源码'); assert.ok((await page.locator('#source .cm-content').innerText()).includes('weftext-query-state')); await click('V03 按需语法'); await click('展开查询源码'); await page.locator('#source .embedded-query-source-host .cm-content[contenteditable=true]').waitFor(); await click('V04 可视写作');
   const v4 = page.locator('#source [data-query-label="weftext-query-state"]').first(); await v4.getByRole('button', { name: '查询构建器', exact: true }).click(); await page.getByLabel('weftext-query-state 条件（CEL）', { exact: true }).fill('status == "open"');
   const editResponse = page.waitForResponse(response => response.url().endsWith('/api/hosted/query/embedded/edit')); await click('应用查询修改'); assert.equal((await editResponse).status(), 200);
-  await page.waitForFunction(() => Object.keys(sessionStorage).filter(key => key.startsWith('weftext-hosted-draft:')).some(key => /status ==.*open/.test(JSON.parse(sessionStorage[key]).source))); assert.equal(await readFile(path.join(root, 'Other/Other.typ'), 'utf8'), originalOther);
+  await page.waitForFunction(() => Object.keys(sessionStorage).filter(key => key.startsWith('weftext-hosted-draft:')).some(key => /status ==.*open/.test(JSON.parse(sessionStorage[key]).source))); assert.equal(await readOtherFixture(path.join(root, 'Other/Other.typ')), originalOther);
   await click('V01 源码'); assert.match(await page.locator('#source .cm-content').innerText(), /status ==.*open/); await page.locator('#source .cm-content').press('ControlOrMeta+z');
   await page.waitForFunction(() => Object.keys(sessionStorage).filter(key => key.startsWith('weftext-hosted-draft:')).some(key => /status ==.*done/.test(JSON.parse(sessionStorage[key]).source))); assert.match(await page.locator('#source .cm-content').innerText(), /status ==.*done/);
-  await click('V04 可视写作'); await page.locator('#source .embedded-query').getByRole('button', { name: '编辑源码', exact: true }).click(); await page.getByRole('dialog').getByRole('textbox').fill('尚未应用提案😀'); await click('取消并保留共享草稿'); await click('V05 阅读'); assert.equal(await page.locator('#source .embedded-query [data-query-edit]').count(), 0); assert.equal(await readFile(path.join(root, 'Other/Other.typ'), 'utf8'), originalOther);
+  await click('V04 可视写作'); await page.locator('#source .embedded-query').getByRole('button', { name: '编辑源码', exact: true }).click(); await page.getByRole('dialog').getByRole('textbox').fill('尚未应用提案😀'); await click('取消并保留共享草稿'); await click('V05 阅读'); assert.equal(await page.locator('#source .embedded-query [data-query-edit]').count(), 0); assert.equal(await readOtherFixture(path.join(root, 'Other/Other.typ')), originalOther);
   result.cases.push('embedded native definitions use all five views, builder edit joins the one source Undo, cancellation changes no source, and V05 exposes no definition writer');
   await context.setOffline(true); await page.getByLabel('托管完整查询计划（JSON）', { exact: true }).fill('{ invalid Chinese😀'); await page.getByLabel('托管查询参数（原生值 JSON）', { exact: true }).fill('{ incomplete'); await context.setOffline(false); await page.reload(); await page.getByLabel('Office 输出格式', { exact: true }).waitFor(); assert.equal(await page.getByLabel('托管完整查询计划（JSON）', { exact: true }).inputValue(), '{ invalid Chinese😀'); assert.equal(await page.getByLabel('托管查询参数（原生值 JSON）', { exact: true }).inputValue(), '{ incomplete');
   await plan(branch); let release, observed, rejectHeld; const held = new Promise((resolve, reject) => { observed = resolve; rejectHeld = reject; }), resume = new Promise(resolve => release = resolve); await page.route('**/api/hosted/query', async route => { try {

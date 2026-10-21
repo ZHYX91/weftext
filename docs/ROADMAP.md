@@ -20,6 +20,8 @@ Stabilization on 2026-10-21: the current candidate is `0.6.3-rc.2`, removing rep
 
 The subsequent stabilization candidate on 2026-10-21 is `0.6.3-rc.3`: incremental Unicode source counts, kerning disabled for very long source/preview text with wrapping retained, and a bounded 1000-event input measurement entry with three cold/warm rounds. The accepted rc.2 artifact and merge retain their scope. The new candidate and complete performance targets require separate qualification; targeted fixes do not establish whole-version completion.
 
+The subsequent 2026-10-21 candidate is `0.6.3-rc.4`: an independent hosted-panel initialization failure no longer suppresses later authorized panels, with failure-isolation and retired-identity regressions. Original rc.3 artifacts, failures and qualified scope remain. The new candidate requires matching source/executable qualification; real IME, the original K anomaly and full comparison/performance gates remain open.
+
 | Milestone | What users can accomplish | Main requirements and completion conditions |
 | --- | --- | --- |
 | v0.1 Local writing MVP | Create/open a Windows local library and `A/A.typ` notes; browse unmanaged entries; open ordinary `.typ` files outside libraries; source editing, native preview, basic five views, search, basic links, save and recovery. | Bounded slices of RQ01–03,12,22,24–26. Deliver a runnable artifact and test draft retention, refusal to overwrite external changes, Save As, empty documents and safe text editing. Full rich editing, sync and Office are outside this version. |
