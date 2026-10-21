@@ -1,5 +1,5 @@
 import { createTableGrid } from "./table-grid";
-import { retainProgrammaticControlInput } from "./personal-control-input";
+import { captureAuthorInput, type AuthorInputSession } from "./author-input";
 import { delimitedTable, parseHTMLTable, type ClipboardTable } from "./table-clipboard";
 import { rectangularTSV, textareaSourceDraft, type WritingController, type WritingRange, type WritingStructure, type WritingIntent, type WritingBlock, type WritingSnapshot } from "./writing";
 
@@ -19,7 +19,7 @@ function action(label: string, run: () => Promise<void> | void, options: Writing
   return button;
 }
 function field(label: string, input: HTMLElement): HTMLLabelElement { const wrapper = element("label", "writing-field"); wrapper.append(element("span", "", label), input); return wrapper; }
-function textInput(value = "", rows = 3): HTMLTextAreaElement { const input = element("textarea", "writing-input"); input.value = value; input.rows = rows; return input; }
+function textInput(value = "", rows = 3, inputs?: AuthorInputSession, slot = "text"): HTMLTextAreaElement { const input = element("textarea", "writing-input"); input.value = value; input.rows = rows; inputs?.bind(input, slot); return input; }
 function numberInput(value: number, min: number, max?: number): HTMLInputElement { const input = element("input", "writing-input"); input.type = "number"; input.min = String(min); if (max != null) input.max = String(max); input.value = String(value); input.step = "1"; return input; }
 function checkInput(label: string, value: boolean): { field: HTMLLabelElement; input: HTMLInputElement } { const input = element("input"); input.type = "checkbox"; input.checked = value; const wrapper = element("label", "writing-checkbox"); wrapper.append(input, document.createTextNode(label)); return { field: wrapper, input }; }
 function selectInput(choices: [string, string][], value: string): HTMLSelectElement { const select = element("select", "writing-input"); for (const [key, label] of choices) { const option = element("option", "", label); option.value = key; select.append(option); } select.value = value; return select; }
@@ -29,15 +29,16 @@ function guard(controller: WritingController, snapshot: WritingSnapshot, intent:
 }
 
 /** Accessible host dialog: source stays in the shared controller until apply. */
-async function dialog(title: string, help: string, build: (form: HTMLFormElement, done: () => void, error: HTMLElement) => void): Promise<void> {
+async function dialog(controller: WritingController, title: string, help: string, build: (form: HTMLFormElement, done: () => void, error: HTMLElement, inputs?: AuthorInputSession) => void): Promise<void> {
   const host = element("dialog", "writing-dialog"); const form = element("form", "writing-form"); const heading = element("h2", "", title);
   const id = `writing-dialog-${Date.now()}-${Math.random().toString(16).slice(2)}`; heading.id = id; host.setAttribute("aria-labelledby", id);
   form.append(heading, element("p", "writing-help", help)); const error = element("p", "writing-error"); error.setAttribute("role", "alert"); error.hidden = true;
+  const inputs = controller.authorInputs(), stopCloseGuard = controller.registerCloseGuard(() => host.open);
   await new Promise<void>(resolve => {
     let settled = false;
-    const done = () => { if (settled) return; settled = true; host.close(); host.remove(); resolve(); };
+    const done = () => { if (settled) return; settled = true; stopCloseGuard(); inputs?.retire(); host.close(); host.remove(); resolve(); };
     host.addEventListener("cancel", event => { event.preventDefault(); done(); });
-    build(form, done, error); form.append(error); host.append(form); document.body.append(host); host.showModal();
+    build(form, done, error, inputs); form.append(error); host.append(form); document.body.append(host); host.showModal();
   });
 }
 function actions(form: HTMLFormElement, done: () => void, label = "应用"): HTMLButtonElement {
@@ -57,19 +58,19 @@ export async function editDocumentRole(controller: WritingController, role: "tit
   const current = map[role];
   if (!["absent", "writable"].includes(current.status)) throw new Error(`${role === "title" ? "标题" : "副标题"}无法无损编辑：${current.status}`);
   if (role === "subtitle" && map.title.status !== "writable") throw new Error("请先创建唯一文档标题，再添加副标题。");
-  await dialog(role === "title" ? "文档标题" : "文档副标题", role === "title" ? "标题与章节标题分开。清空标题会一并移除与它关联的副标题。" : "副标题与文档标题关联，采用原生 block，不参与章节编号。", (form, done, error) => {
-    const input = textInput(current.text ?? "", 2); form.append(field(role === "title" ? "标题文字（留空表示无标题）" : "副标题文字（留空表示移除）", input));
+  await dialog(controller, role === "title" ? "文档标题" : "文档副标题", role === "title" ? "标题与章节标题分开。清空标题会一并移除与它关联的副标题。" : "副标题与文档标题关联，采用原生 block，不参与章节编号。", (form, done, error, inputs) => {
+    const input = textInput(current.text ?? "", 2, inputs, role); form.append(field(role === "title" ? "标题文字（留空表示无标题）" : "副标题文字（留空表示移除）", input));
     actions(form, done); submit(form, error, done, () => controller.execute(guard(controller, snapshot, { kind: role === "title" ? "setTitle" : "setSubtitle", text: input.value || null })));
   });
 }
 
 export async function insertWritingBlock(controller: WritingController, initial = "paragraph"): Promise<void> {
   await controller.prepareCommand(); const snapshot = controller.snapshot; const at = controller.insertionPoint();
-  await dialog("添加内容", "文字按原生 Typst 普通文字编码。公式使用原生数学表达；表格粘贴预览完整行列后一次应用。", (form, done, error) => {
+  await dialog(controller, "添加内容", "文字按原生 Typst 普通文字编码。公式使用原生数学表达；表格粘贴预览完整行列后一次应用。", (form, done, error, inputs) => {
     const kind = selectInput([["paragraph", "普通段落"], ["heading", "章节标题"], ["bulletList", "无序列表"], ["numberedList", "有序列表"], ["termList", "术语列表"], ["image", "图片"], ["math", "公式"], ["table", "普通表格"], ["raw", "代码块"]], initial);
-    const input = textInput("", 5); input.setAttribute("aria-label", "新内容");
-    const level = numberInput(1, 1, 1024), levelField = field("标题级别（常用 1–9，也可输入更深级别）", level);
-    const display = checkInput("独立公式", true); const language = element("input", "writing-input"); language.placeholder = "python / rust / 留空"; const languageField = field("代码语言", language);
+    const input = textInput("", 5, inputs, "block"); input.setAttribute("aria-label", "新内容");
+    const level = numberInput(1, 1, 1024); inputs?.bind(level, "heading-level"); const levelField = field("标题级别（常用 1–9，也可输入更深级别）", level);
+    const display = checkInput("独立公式", true); const language = element("input", "writing-input"); language.placeholder = "python / rust / 留空"; inputs?.bind(language, "language"); const languageField = field("代码语言", language);
     const preview = element("p", "writing-help"); preview.setAttribute("aria-live", "polite");
     const refresh = () => {
       levelField.hidden = kind.value !== "heading"; display.field.hidden = kind.value !== "math"; languageField.hidden = kind.value !== "raw";
@@ -99,8 +100,8 @@ export async function editHeading(controller: WritingController, heading?: Writi
   await controller.flush(); if (heading && !controller.isSnapshotCurrent(originSnapshot)) throw new Error("标题来源在输入回写后已变化，请重新选择当前标题。");
   const current = heading ?? controller.structure("heading"); if (!current) { await insertWritingBlock(controller, "heading"); return; }
   const snapshot = controller.snapshot;
-  await dialog("章节标题", "每个标题保留自己的真实级别。接正文只改变这个标题，编号、大纲与引用仍使用原生 heading。", (form, done, error) => {
-    const level = numberInput(current.level ?? 1, 1, 1024); const runIn = checkInput("标题与紧随的普通正文同段", current.runIn);
+  await dialog(controller, "章节标题", "每个标题保留自己的真实级别。接正文只改变这个标题，编号、大纲与引用仍使用原生 heading。", (form, done, error, inputs) => {
+    const level = numberInput(current.level ?? 1, 1, 1024); inputs?.bind(level, "heading-level"); const runIn = checkInput("标题与紧随的普通正文同段", current.runIn);
     const operation = selectInput([["level", "修改标题级别"], ["runIn", "修改同段设置"]], "level"); form.append(field("操作", operation), field("级别", level), runIn.field);
     const refresh = () => { level.disabled = operation.value !== "level"; runIn.input.disabled = operation.value !== "runIn"; }; operation.onchange = refresh; refresh();
     actions(form, done); submit(form, error, done, () => controller.execute(guard(controller, snapshot, operation.value === "runIn" ? { kind: "setRunIn", range: current.range, enabled: runIn.input.checked } : { kind: "setHeadingLevel", range: current.range, level: validInteger(level) })));
@@ -112,8 +113,8 @@ export async function editMath(controller: WritingController, math?: WritingStru
   await controller.flush(); if (math && !controller.isSnapshotCurrent(originSnapshot)) throw new Error("公式来源在输入回写后已变化，请重新选择当前公式。");
   const current = math ?? controller.structure("inlineMath") ?? controller.structure("displayMath"); if (!current) { await insertWritingBlock(controller, "math"); return; }
   const snapshot = controller.snapshot;
-  await dialog("编辑公式", "公式保留原生数学源；可视符号作为完整公式呈现，修改后由官方编译器预览。", (form, done, error) => {
-    const input = textInput(current.body?.raw ?? current.range.raw.replace(/^\$\s?|\s?\$$/g, ""), 4); input.classList.add("writing-math-source"); input.setAttribute("aria-label", "原生 Typst 数学表达");
+  await dialog(controller, "编辑公式", "公式保留原生数学源；可视符号作为完整公式呈现，修改后由官方编译器预览。", (form, done, error, inputs) => {
+    const input = textInput(current.body?.raw ?? current.range.raw.replace(/^\$\s?|\s?\$$/g, ""), 4, inputs, "math"); input.classList.add("writing-math-source"); input.setAttribute("aria-label", "原生 Typst 数学表达");
     const display = checkInput("独立公式", current.kind === "displayMath"); form.append(field("数学表达", input), display.field); actions(form, done);
     submit(form, error, done, () => controller.execute(guard(controller, snapshot, { kind: "replaceMath", range: current.range, text: input.value, display: display.input.checked })));
   });
@@ -126,9 +127,9 @@ export async function editRaw(controller: WritingController, raw?: WritingStruct
   if (!current) { await insertWritingBlock(controller, "raw"); return; }
   if (!current.body) throw new Error("这段代码没有可证明的原生内容范围，请使用源码入口。");
   const snapshot = controller.snapshot;
-  await dialog("编辑代码", "代码内容保留原字节和缩进。语言只选择原生代码高亮，中文注释和字符串无需额外标记。", (form, done, error) => {
-    const input = textInput(current.body!.raw, 8); input.classList.add("writing-math-source"); input.spellcheck = false;
-    const language = element("input", "writing-input"); language.value = current.language ?? ""; language.placeholder = "python / rust / 留空";
+  await dialog(controller, "编辑代码", "代码内容保留原字节和缩进。语言只选择原生代码高亮，中文注释和字符串无需额外标记。", (form, done, error, inputs) => {
+    const input = textInput(current.body!.raw, 8, inputs, "raw"); input.classList.add("writing-math-source"); input.spellcheck = false;
+    const language = element("input", "writing-input"); language.value = current.language ?? ""; language.placeholder = "python / rust / 留空"; inputs?.bind(language, "language");
     const block = checkInput("独立代码块", current.kind === "blockRaw"); form.append(field("代码内容", input), field("代码语言", language), block.field); actions(form, done);
     submit(form, error, done, () => controller.execute(guard(controller, snapshot, { kind: "replaceRaw", range: current.range, text: textareaSourceDraft(current.body!.raw, input.value), language: language.value || null, block: block.input.checked })));
   });
@@ -138,7 +139,7 @@ export async function editTable(controller: WritingController, structure?: Writi
   const originSnapshot = controller.snapshot;
   await controller.flush(); if (structure && !controller.isSnapshotCurrent(originSnapshot)) throw new Error("表格来源在输入回写后已变化，请重新选择当前表格。");
   const current = structure ?? controller.structure("table"); if (!current?.table) { await insertWritingBlock(controller, "table"); return; }
-  await dialog("表格", "所有输入进入同一草稿。Esc 从格内返回网格，关闭此窗口保留已输入文字；保存笔记仍使用原保存入口。", (form, done, error) => {
+  await dialog(controller, "表格", "所有输入进入同一草稿。Esc 从格内返回网格，关闭此窗口保留已输入文字；保存笔记仍使用原保存入口。", (form, done, error, inputs) => {
     form.closest("dialog")?.classList.add("writing-table-dialog");
     const surface = createTableGrid(controller, current, { onError: failure => { error.hidden = false; error.textContent = failure.message; } });
     const close = element("button", "writing-button", "完成表格编辑"); close.type = "button";
@@ -148,8 +149,8 @@ export async function editTable(controller: WritingController, structure?: Writi
 }
 export async function insertWritingLink(controller: WritingController): Promise<void> {
   await controller.flush(); const snapshot = controller.snapshot, at = controller.insertionPoint();
-  await dialog("添加链接", "链接作为原生 Typst 内容写入当前草稿，保存后才提交。", (form, done, error) => {
-    const target = element("input", "writing-input"), text = element("input", "writing-input"); target.required = true; text.required = true;
+  await dialog(controller, "添加链接", "链接作为原生 Typst 内容写入当前草稿，保存后才提交。", (form, done, error, inputs) => {
+    const target = element("input", "writing-input"), text = element("input", "writing-input"); target.required = true; text.required = true; inputs?.bind(target, "link-target"); inputs?.bind(text, "link-text");
     form.append(field("目标地址", target), field("显示文字", text)); actions(form, done, "添加");
     submit(form, error, done, () => controller.execute(guard(controller, snapshot, { kind: "insertBlock", at, block: { kind: "link", target: target.value, text: text.value } })));
   });
@@ -158,18 +159,20 @@ export async function insertWritingLink(controller: WritingController): Promise<
 /** Body insertion is distinct from text-in-cell and grid-range paste. */
 export async function insertClipboardTable(controller: WritingController): Promise<void> {
   await controller.flush(); const snapshot = controller.snapshot, at = controller.insertionPoint();
-  await dialog("插入剪贴板表格", "在正文插入一张原生表格。HTML 转换不执行脚本或加载外部资源；第一行不会自动成为表头。", (form, done, error) => {
-    const format = selectInput([["tsv", "TSV（制表符分隔）"], ["csv", "CSV（逗号分隔）"], ["html", "HTML 表格"]], "tsv"), input = textInput("", 7), preview = element("p", "writing-help"), acceptLoss = checkInput("接受以上明确列出的文字化损失", false);
+  await dialog(controller, "插入剪贴板表格", "在正文插入一张原生表格。HTML 转换不执行脚本或加载外部资源；第一行不会自动成为表头。", (form, done, error, inputs) => {
+    const format = selectInput([["tsv", "TSV（制表符分隔）"], ["csv", "CSV（逗号分隔）"], ["html", "HTML 表格"]], "tsv"), input = textInput("", 7, inputs, "clipboard-table"), preview = element("p", "writing-help"), acceptLoss = checkInput("接受以上明确列出的文字化损失", false);
     input.setAttribute("aria-label", "待插入的表格输入"); preview.setAttribute("aria-live", "polite"); let parsed: ClipboardTable | null = null;
     const refresh = () => { parsed = null; try { parsed = format.value === "html" ? parseHTMLTable(input.value) : delimitedTable(input.value, format.value === "csv" ? "," : "\t"); preview.textContent = `${parsed.rows} 行 × ${parsed.columns} 列，${parsed.cells.length} 个作者单元格；全部一次插入。\n${parsed.losses.join("\n")}`; acceptLoss.field.hidden = !parsed.losses.length; } catch (failure) { preview.textContent = failure instanceof Error ? failure.message : String(failure); acceptLoss.field.hidden = true; } acceptLoss.input.checked = false; };
     input.oninput = refresh; format.onchange = refresh;
-    input.onpaste = event => { const html = event.clipboardData?.getData("text/html"); if (html && /<table[\s>]/i.test(html)) { event.preventDefault(); retainProgrammaticControlInput(input, html); format.value = "html"; input.value = html; refresh(); } };
+    input.onpaste = event => { const html = event.clipboardData?.getData("text/html"); if (html && /<table[\s>]/i.test(html)) { event.preventDefault(); const lease = captureAuthorInput(input); if (lease ? lease.apply(html) : !inputs && input.isConnected && controller.isSnapshotCurrent(snapshot) && (input.value = html, true)) { format.value = "html"; refresh(); } } };
     const read = action("读取剪贴板表格", async () => {
+      const lease = captureAuthorInput(input), originalValue = input.value;
+      const deliver = (value: string, kind: string) => { if (lease ? lease.apply(value) : !inputs && input.isConnected && input.value === originalValue && controller.isSnapshotCurrent(snapshot) && (input.value = value, true)) { format.value = kind; refresh(); } else throw new Error("剪贴板读取期间输入或作者目标已变化，未交付旧内容。"); };
       if (navigator.clipboard?.read) {
         const items = await navigator.clipboard.read();
-        for (const item of items) if (item.types.includes("text/html")) { const value = await (await item.getType("text/html")).text(); retainProgrammaticControlInput(input, value); input.value = value; format.value = "html"; refresh(); return; }
+        for (const item of items) if (item.types.includes("text/html")) { const value = await (await item.getType("text/html")).text(); deliver(value, "html"); return; }
       }
-      if (!navigator.clipboard?.readText) throw new Error("当前环境不能读取剪贴板；请在输入框使用系统粘贴，原稿未变。"); const value = await navigator.clipboard.readText(); retainProgrammaticControlInput(input, value); input.value = value; format.value = "tsv"; refresh();
+      if (!navigator.clipboard?.readText) throw new Error("当前环境不能读取剪贴板；请在输入框使用系统粘贴，原稿未变。"); const value = await navigator.clipboard.readText(); deliver(value, "tsv");
     }, { onError: failure => { error.hidden = false; error.textContent = failure.message; } });
     form.append(field("输入格式", format), read, field("表格输入（也可直接系统粘贴）", input), preview, acceptLoss.field); refresh(); actions(form, done, "插入表格");
     submit(form, error, done, async () => { if (!parsed) throw new Error("请先修正表格输入，尚未插入任何内容。"); if (parsed.losses.length && !acceptLoss.input.checked) throw new Error("请明确接受预览中的格式损失，或取消并保留输入。"); await controller.execute(guard(controller, snapshot, { kind: "insertBlock", at, block: { kind: "clipboardTable", rows: parsed.rows, columns: parsed.columns, cells: parsed.cells } })); });

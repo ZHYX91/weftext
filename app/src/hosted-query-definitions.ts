@@ -1,3 +1,4 @@
+import type { AuthorInputFactory, AuthorInputSession } from "./author-input";
 import { action, ui } from "./data-panel";
 import { parseQueryPlan, type QueryPlan } from "./query-panel";
 import { hostedCachePrefix } from "./hosted-state";
@@ -7,6 +8,7 @@ import { retainDefinitionReceipt, sameDefinitionBasis, validateDefinitionPatches
 
 type Request = <T>(path: string, body: unknown) => Promise<T>;
 export interface HostedDefinitionHost {
+  authorInputs?: AuthorInputFactory;
   context(): DefinitionAuthorContext | null;
   prepareBasis(): Promise<EmbeddedQueryBasis>;
   apply(patches: SourcePatch[], basis: EmbeddedQueryBasis): Promise<void>;
@@ -25,6 +27,8 @@ export class HostedQueryDefinitions {
   private selected = "";
   private busy = false;
   private ownerSession = "";
+  private inputOwner = "";
+  private inputSession?: AuthorInputSession;
   private ownerGeneration = 0;
   private operationGeneration = new Map<string, number>();
   private message = ui("p", "hint");
@@ -32,7 +36,7 @@ export class HostedQueryDefinitions {
   private preview = ui("section");
   private unreadable?: string;
   constructor(private request: Request, private author: HostedDefinitionHost, private plan: () => string, private eligible: (resource: string) => boolean) { this.element.append(ui("h3", "", "新建保存定义 · 正文草稿提案"), this.message, this.controls, this.preview); }
-  clear() { this.epoch++; this.ownerGeneration++; this.operationGeneration.clear(); this.key = ""; this.records = []; this.selected = ""; this.ownerSession = ""; this.busy = false; this.unreadable = undefined; this.label = "weftext-query-new"; this.controls.replaceChildren(); this.preview.replaceChildren(); this.message.textContent = ""; }
+  clear() { this.inputSession?.retire(); this.inputSession = undefined; this.inputOwner = ""; this.epoch++; this.ownerGeneration++; this.operationGeneration.clear(); this.key = ""; this.records = []; this.selected = ""; this.ownerSession = ""; this.busy = false; this.unreadable = undefined; this.label = "weftext-query-new"; this.controls.replaceChildren(); this.preview.replaceChildren(); this.message.textContent = ""; }
   async connect(deployment: string, actor: string, generation: number) {
     this.clear(); this.key = hostedCachePrefix("query", deployment, actor, generation) + "definition-proposals";
     let raw: string | null = null;
@@ -77,13 +81,16 @@ export class HostedQueryDefinitions {
     const active = document.activeElement, focused = active instanceof HTMLInputElement && active.getAttribute("aria-label") === "新保存定义原生标签", selection = focused ? { from: active.selectionStart, to: active.selectionEnd } : null;
     this.controls.replaceChildren();
     if (this.unreadable !== undefined) { this.controls.append(ui("p", "hint", "原定义提案缓存无法解析，保留原记录；尚未分配新编号。"), ui("pre", "", this.unreadable)); return; }
-    const context = this.author.context(), label = ui("input", "data-input"); label.setAttribute("aria-label", "新保存定义原生标签"); label.value = this.label; label.oninput = () => { this.label = label.value; try { this.persist(); } catch (error) { this.message.textContent = String(error instanceof Error ? error.message : error); } };
+    const context = this.author.context(), label = ui("input", "data-input"); label.setAttribute("aria-label", "新保存定义原生标签"); label.value = this.label; const inputOwner = context ? JSON.stringify([context.resource, context.sessionId]) : "";
+    if (inputOwner !== this.inputOwner) { this.inputSession?.retire(); this.inputSession = undefined; this.inputOwner = inputOwner; }
+    if (context && !this.inputSession) { const epoch = this.epoch, selected = context; this.inputSession = this.author.authorInputs?.({ kind: "body", resource: context.resource }, () => this.epoch === epoch && this.author.context()?.sessionId === selected.sessionId && this.author.context()?.resource === selected.resource); }
+    this.inputSession?.bind(label, "definition-label"); label.oninput = () => { this.label = label.value; try { this.persist(); } catch (error) { this.message.textContent = String(error instanceof Error ? error.message : error); } };
     const create = action("将临时计划提为当前正文的新保存定义", () => this.prepare()); create.disabled = this.busy || !context?.writable || context.pending || context.compare || !this.eligible(context.resource) || this.unknown(context.resource) || (context.definitionReservations?.length ?? 0) >= 32;
     this.controls.append(ui("p", "hint", context ? `当前定义所有者：${context.resource}；提案只进入此正文的同一份草稿和 Undo。保存按钮才提交。` : "先打开可写正文才能新建定义。原提案可独立查询，无需先打开来源。"), label, create);
     if (context && this.unknown(context.resource)) this.controls.append(ui("p", "hint", "此正文有原提案尚待核对。请查询、按原请求重试或明确作废，不能分配替代编号。"));
     if (context) this.controls.append(ui("p", "hint", `下次保存关联 ${context.definitionReservations?.length ?? 0} 个已进入此草稿的预约，上限 32；服务端找回的未应用预约只列为恢复入口，不会全部加入保存。`));
     const select = ui("select", "data-input"); select.setAttribute("aria-label", "原保存定义提案"); select.append(Object.assign(ui("option", "", "选择原提案编号"), { value: "" }));
-    for (const record of this.records) select.append(Object.assign(ui("option", "", `${record.resource} · ${record.operationId}`), { value: record.operationId })); select.value = this.selected; select.onchange = () => { this.selected = select.value; this.render(); }; this.controls.append(select);
+    for (const record of this.records) select.append(Object.assign(ui("option", "", `${record.resource} · ${record.operationId}`), { value: record.operationId })); select.value = this.selected; select.onchange = () => { if (select.isConnected === false) return; this.selected = select.value; this.render(); }; this.controls.append(select);
     const record = this.records.find(item => item.operationId === this.selected), check = action("查询原定义提案", () => this.perform(() => this.lookup(record!))), retry = action("按原编号重试相同定义提案", () => this.perform(() => this.send(record!, false))), settle = action("明确作废原定义预约", () => this.perform(async () => { const epoch = this.epoch, generation = this.beginOperation(record!); const receipt = await this.request<DefinitionReceipt>("query/definition/settle", { resource: record!.resource, operationId: record!.operationId }); if (!this.currentOperation(record!, epoch, generation)) return; this.install(record!, receipt); this.message.textContent = statusText[receipt.status]; }));
     check.disabled = this.busy || !record; retry.disabled = this.busy || !record?.request || !!record.receipt && !["notRegistered", "reserved"].includes(record.receipt.status); settle.disabled = this.busy || !record || !!record.receipt && !["notRegistered", "reserved"].includes(record.receipt.status);
     this.controls.append(check, retry, settle, ui("p", "hint", "未知结果按原编号核对；Undo 或删除定义不会作废预约。明确作废后不能重用该编号或 key。"));

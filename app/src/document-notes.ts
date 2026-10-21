@@ -216,11 +216,13 @@ export function mountDocumentNotes(container: HTMLElement, host: DocumentNotesHo
 export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "footnote" | "endnote" | "caption" = "footnote", targetId?: string): Promise<void> {
   await host.controller.deferUntilCompositionEnds(async () => { await host.controller.flush(); });
   const basis = host.controller.snapshot, projection = requireDocumentNotesBasis(host, basis), model = buildDocumentNotesSnapshot(projection);
+  const authorInputs = host.controller.authorInputs(); let inputSlot = 0;
   if (!model.available) throw new Error(model.reason ?? "当前注释投影不可用。");
   const dialog = element("dialog", "document-notes-dialog"), form = element("form", "document-notes-panel"), title = element("h2", "", "脚注、尾注与题注"), status = element("p", "document-notes-status"), error = element("p", "document-notes-error"), list = element("section", "document-notes-list"), editor = element("section", "document-notes-editor");
   dialog.setAttribute("aria-label", "脚注、尾注与题注"); error.setAttribute("role", "alert"); error.hidden = true; status.setAttribute("aria-live", "polite"); form.onsubmit = event => event.preventDefault();
   const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let mode = initialMode, busy = false, disposed = false, localComposition = false, pendingValue = "", dirty = false, retainedInput = false, tracker = new DocumentNotesInputTracker("");
+  const stopCloseGuard = host.controller.registerCloseGuard(() => !disposed && (dirty || busy || localComposition));
   const navigation: { afterClose?: () => void } = {};
   const report = (value: unknown) => { const message = failure(value); error.textContent = message.message; error.hidden = false; host.onError?.(message); };
   const current = () => { requireDocumentNotesBasis(host, basis, model.sourceHash); return !disposed; };
@@ -251,7 +253,7 @@ export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "f
     dialog.close();
   };
   const editorText = (value: string, textMode: "literal" | "source") => {
-    const input = element("textarea", "document-notes-input document-notes-body"); input.rows = 7; input.value = value; input.setAttribute("aria-label", "注释或题注内容"); input.spellcheck = false; pendingValue = value; tracker = new DocumentNotesInputTracker(value); retainedInput = false;
+    const input = element("textarea", "document-notes-input document-notes-body"); input.rows = 7; input.value = value; input.setAttribute("aria-label", "注释或题注内容"); input.spellcheck = false; pendingValue = value; tracker = new DocumentNotesInputTracker(value); retainedInput = false; authorInputs?.bind(input, `notes:${++inputSlot}:body`);
     let edit: { from: number; to: number; inputType: string } | undefined;
     let composition: { tracker: DocumentNotesInputTracker; from: number; to: number } | undefined;
     input.addEventListener("beforeinput", event => { edit = { from: input.selectionStart, to: input.selectionEnd, inputType: (event as InputEvent).inputType }; });
@@ -263,7 +265,7 @@ export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "f
     return { input, body: (): NoteBodyInput => ({ mode: format.value as "literal" | "source", value: pendingValue }) };
   };
   const numberingControls = (preserve: boolean, initial: "none" | "pattern" = "pattern") => {
-    const option = select([...(preserve ? [["preserve", "保留当前编号规则"] as [string, string]] : []), ["none", "仅描述题注，不编号"], ["pattern", "按原生方案编号"]], preserve ? "preserve" : initial, "题注编号方式"), pattern = element("input", "document-notes-input"); pattern.value = "1"; pattern.setAttribute("aria-label", "原生编号方案"); pattern.maxLength = 256;
+    const option = select([...(preserve ? [["preserve", "保留当前编号规则"] as [string, string]] : []), ["none", "仅描述题注，不编号"], ["pattern", "按原生方案编号"]], preserve ? "preserve" : initial, "题注编号方式"), pattern = element("input", "document-notes-input"); pattern.value = "1"; pattern.setAttribute("aria-label", "原生编号方案"); pattern.maxLength = 256; authorInputs?.bind(pattern, `notes:${++inputSlot}:numbering`);
     option.onchange = () => { pattern.disabled = option.value !== "pattern"; dirty = true; }; pattern.oninput = () => { dirty = true; }; pattern.disabled = option.value !== "pattern";
     editor.append(label("编号", option), label("原生编号方案（如 1、(1)、一）", pattern));
     const read = (): NotesNumbering | null => option.value === "preserve" ? null : option.value === "none" ? { kind: "none" } : { kind: "pattern", pattern: pattern.value };
@@ -362,5 +364,5 @@ export async function openDocumentNotes(host: DocumentNotesHost, initialMode: "f
   const retire = () => { updateState(); dialog.close(); }, panels = openPanels.get(host.controller) ?? new Set<() => void>(); panels.add(retire); openPanels.set(host.controller, panels);
   dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
   try { render(); dialog.showModal(); tabs[["footnote", "endnote", "caption"].indexOf(mode)].focus(); await new Promise<void>(resolve => dialog.addEventListener("close", () => resolve(), { once: true })); }
-  finally { panels.delete(retire); stop(); dialog.remove(); if (navigation.afterClose) { try { navigation.afterClose(); } catch (value) { report(value); } } else if (previousFocus?.isConnected && host.projection()) previousFocus.focus({ preventScroll: true }); disposed = true; }
+  finally { stopCloseGuard(); authorInputs?.retire(); panels.delete(retire); stop(); dialog.remove(); if (navigation.afterClose) { try { navigation.afterClose(); } catch (value) { report(value); } } else if (previousFocus?.isConnected && host.projection()) previousFocus.focus({ preventScroll: true }); disposed = true; }
 }

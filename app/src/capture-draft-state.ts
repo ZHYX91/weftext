@@ -1,8 +1,9 @@
 import type { NativeValue } from "./data-panel";
+import type { ValuePath } from "./author-input";
 
 /** Raw JS code units, deliberately not Unicode scalars or a UTF-8 byte buffer. */
 export interface CaptureText { utf16: number[] }
-export type CaptureValuePath = { kind: "member"; key: string } | { kind: "index"; index: number };
+export type CaptureValuePath = ValuePath;
 export interface CaptureInput {
   name: CaptureText; title: CaptureText; body: CaptureText; bodyMode: "text" | "markup";
   parentInput: CaptureText; parametersText: CaptureText; templateId: string | null;

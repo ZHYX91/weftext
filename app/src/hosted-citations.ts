@@ -1,3 +1,4 @@
+import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, ui } from "./data-panel";
 import { hostedCachePrefix } from "./hosted-state";
 import { nodeSourceHash } from "./hosted-navigation-state";
@@ -9,6 +10,7 @@ import { citationInsertionByte, citationInputScope, newNativeCitationInputs, ren
 
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
 export interface HostedCitationHost {
+  authorInputs?: AuthorInputFactory;
   context(): HostedLinksContext | null;
   identity(): HostedLinksIdentity | null;
   basis(): Promise<EmbeddedQueryBasis>;
@@ -21,6 +23,8 @@ export interface HostedCitationHost {
 /** Publication choices are independent capabilities, never inferred from body read. */
 export class HostedCitations {
   private epoch = 0;
+  private inputScopes: AuthorInputScopes;
+  private inputOwner = "";
   private inputVersion = 0;
   private prefix = "";
   private drafts: Record<string, CitationDraft> = {};
@@ -34,10 +38,11 @@ export class HostedCitations {
   private proposeButton?: HTMLButtonElement;
   private message = ui("p", "hint");
   private editor = ui("section");
-  constructor(private host: HTMLElement, private request: Request, private owner: HostedCitationHost) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private owner: HostedCitationHost) { this.inputScopes = new AuthorInputScopes(owner.authorInputs); this.clear(false); }
   clear(removeCache = true): void {
-    // Pure author inputs stay in actor/owner scoped memory. They contain no
-    // catalog titles or authority; every protected projection is disposed.
+    this.inputScopes.clear(); this.inputOwner = "";
+    // UI proposal state may include protected prefill and search. Only registered
+    // fresh payloads enter the independent personal-input store.
     this.epoch++; this.inputVersion++; this.prefix = ""; this.drafts = {}; this.works = []; this.busy = false; this.unreadable = undefined; this.nativeProfile = undefined; this.nativeBasis = undefined; this.editor.replaceChildren(); this.message.textContent = ""; this.host.replaceChildren(); this.host.hidden = true;
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-citation:")) sessionStorage.removeItem(key);
   }
@@ -107,7 +112,9 @@ export class HostedCitations {
     this.editor.append(action("读取统一插入、引用控件与关系",()=>this.readEditor().catch(error=>{this.message.textContent=error instanceof Error?error.message:"引用读取未完成。";})));
     if(this.nativeProfile && this.nativeBasis && sameHostedLinksContext(this.nativeBasis,this.owner.context())) {
       const context=this.nativeBasis,key=citationInputScope(context,this.nativeProfile.ownerReference);let inputs=this.nativeInputs.get(key);if(!inputs){inputs=newNativeCitationInputs();this.nativeInputs.set(key,inputs);}
-      renderNativeCitations(this.editor,this.nativeProfile,inputs,{writable:context.writable&&!context.pending&&!context.compare&&!this.busy,at:()=>citationInsertionByte(context.source,this.owner.selection?.()?.from??context.source.length),perform:(title,intent)=>this.editNative(title,intent),select:range=>this.owner.select?.(range.utf16From,range.utf16To),navigate:reference=>{void this.owner.navigate?.(reference).catch(error=>{this.message.textContent=error instanceof Error?error.message:"导航未完成。";});},repaint:()=>this.paint()});return;
+      const ownerKey = JSON.stringify([context.resource, context.sessionId]); if (ownerKey !== this.inputOwner) { this.inputScopes.clear(); this.inputOwner = ownerKey; }
+      const epoch = this.epoch, selected = context, inputSession = this.inputScopes.get(inputs, { kind: "body", resource: context.resource, reference: this.nativeProfile?.ownerReference }, () => this.epoch === epoch && this.owner.context()?.sessionId === selected.sessionId && this.owner.context()?.resource === selected.resource, () => this.inputVersion);
+      renderNativeCitations(this.editor,this.nativeProfile,inputs,{inputs:inputSession,writable:context.writable&&!context.pending&&!context.compare&&!this.busy,at:()=>citationInsertionByte(context.source,this.owner.selection?.()?.from??context.source.length),perform:(title,intent)=>this.editNative(title,intent),select:range=>this.owner.select?.(range.utf16From,range.utf16To),navigate:reference=>{void this.owner.navigate?.(reference).catch(error=>{this.message.textContent=error instanceof Error?error.message:"导航未完成。";});},repaint:()=>this.paint()});return;
     }
     if (this.unreadable) { this.editor.append(ui("p", "hint", this.unreadable)); return; }
     const context = this.owner.context()!, draft = this.drafts[context.resource] ??= { key: "", work: "" };
@@ -116,9 +123,9 @@ export class HostedCitations {
     const choices = [["", "明确选择获权文献"], ...this.works.map(w => [w.resource, `${w.title}${w.status === "unavailable" ? "（当前不可用）" : ""}`])];
     if (draft.work && !choices.some(([id]) => id === draft.work)) choices.push([draft.work, "原 Work（当前不在获权目录）"]);
     for (const [value, label] of choices) { const option = ui("option", "", label); option.value = value; option.disabled = !!value && this.works.some(w => w.resource === value && w.status !== "ready"); work.append(option); } work.value = draft.work;
-    const key = ui("input", "data-input"); key.setAttribute("aria-label", "原生引用键"); key.value = draft.key;
+    const key = ui("input", "data-input"); key.setAttribute("aria-label", "原生引用键"); key.value = draft.key; const ownerKey = JSON.stringify([context.resource, context.sessionId]); if (ownerKey !== this.inputOwner) { this.inputScopes.clear(); this.inputOwner = ownerKey; } const epoch = this.epoch, inputSession = this.inputScopes.get(draft, { kind: "body", resource: context.resource }, () => this.epoch === epoch && this.owner.context()?.resource === context.resource && this.owner.context()?.sessionId === context.sessionId, () => this.inputVersion); inputSession?.bind(key, "citation-key");
     const keep = () => { this.inputVersion++; try { this.persist(); } catch (error) { this.message.textContent = (error as Error).message; } };
-    work.onchange = () => { draft.work = work.value; keep(); }; key.oninput = () => { draft.key = key.value; keep(); };
+    work.onchange = () => { inputSession?.invalidate("citation-key"); draft.work = work.value; keep(); this.paint(); }; key.oninput = () => { draft.key = key.value; keep(); };
     const propose = action("将文献引用提案加入当前草稿", () => { void this.propose().catch(e => { this.message.textContent = (e as Error).message; }); });
     this.proposeButton = propose; propose.disabled = this.busy || !context.writable || context.pending || context.compare; this.editor.append(work, key, propose);
   }

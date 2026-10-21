@@ -17,11 +17,11 @@ export class DiagramPanel {
     const item = this.create(basis); this.dialogs.set(key, item); document.body.append(item.dialog); item.dialog.showModal();
   }
   private create(basis: DocumentBasis): { dialog: HTMLDialogElement; clear(): void } {
-    let disposed = false;
+    let disposed = false; const authorInputs = this.host.authorInputs?.(basis);
     const dialog = ui("dialog", "modal diagram-panel"); const title = ui("h2", "", "Mermaid 图表"); title.id = `diagram-${crypto.randomUUID()}`; dialog.setAttribute("aria-labelledby", title.id);
     const close = action("关闭并保留输入", () => { controller.cancel(); draw(); dialog.close(); }, "data-button compact"); const header = ui("header", "diagram-header"); header.append(title, close);
-    const source = ui("textarea", "data-input diagram-source"); source.rows = 10; source.spellcheck = false; source.setAttribute("aria-label", "Mermaid 源码");
-    const width = ui("input", "data-input"); width.type = "number"; width.min = "320"; width.max = "2048"; width.step = "1"; width.value = "1200"; width.setAttribute("aria-label", "PNG 图片宽度（像素）");
+    let source = ui("textarea", "data-input diagram-source"); source.rows = 10; source.spellcheck = false; source.setAttribute("aria-label", "Mermaid 源码");
+    let width = ui("input", "data-input"); width.type = "number"; width.min = "320"; width.max = "2048"; width.step = "1"; width.value = "1200"; width.setAttribute("aria-label", "PNG 图片宽度（像素）");
     const choose = ui("select", "data-input"); choose.setAttribute("aria-label", "图表位置"); const occurrences = diagramOccurrences(basis.source);
     const fresh = ui("option", "", "新建图表（追加到正文末尾）"); fresh.value = "new"; choose.append(fresh);
     occurrences.forEach((item, index) => { const option = ui("option", "", `图表 ${index + 1} · ${item.source.split("\n")[0]}${item.stale ? " · 源已改变，需重生成" : ""}`); option.value = String(index); choose.append(option); });
@@ -49,11 +49,11 @@ export class DiagramPanel {
       if (controller.image) { imageUrl = URL.createObjectURL(new Blob([new Uint8Array(controller.image.png)], { type: "image/png" })); const image = ui("img"); image.src = imageUrl; image.alt = "当前 Mermaid 图源的 PNG 预览"; preview.append(image); }
     }
     const changed = (): void => { controller.edit(source.value, Number(width.value)); draw(); status.textContent = "图源或尺寸已改变，旧图已失效；请重新生成。"; };
-    source.oninput = changed; width.oninput = changed;
-    choose.onchange = () => { inputs.set(selectionKey,{source:source.value,width:width.value}); selectionKey=choose.value; selected = selectionKey === "new" ? undefined : occurrences[Number(selectionKey)]; const retained=inputs.get(selectionKey); source.value = retained?.source ?? selected?.source ?? "flowchart LR\n  A[开始] --> B[完成]"; width.value=retained?.width??"1200"; changed(); };
+    authorInputs?.bind(source, `diagram:${selectionKey}:source`); authorInputs?.bind(width, `diagram:${selectionKey}:width`); source.oninput = changed; width.oninput = changed;
+    choose.onchange = () => { inputs.set(selectionKey,{source:source.value,width:width.value}); authorInputs?.invalidate(`diagram:${selectionKey}:source`); authorInputs?.invalidate(`diagram:${selectionKey}:width`); const replacement = source.cloneNode(false) as HTMLTextAreaElement; source.replaceWith(replacement); source = replacement; source.oninput = changed; const newWidth = width.cloneNode(false) as HTMLInputElement; width.replaceWith(newWidth); width = newWidth; width.oninput = changed; selectionKey=choose.value; selected = selectionKey === "new" ? undefined : occurrences[Number(selectionKey)]; const retained=inputs.get(selectionKey); source.value = retained?.source ?? selected?.source ?? "flowchart LR\n  A[开始] --> B[完成]"; width.value=retained?.width??"1200"; authorInputs?.bind(source, `diagram:${selectionKey}:source`); authorInputs?.bind(width, `diagram:${selectionKey}:width`); changed(); };
     const controls = ui("div", "diagram-actions"); controls.append(generate, commit);
     dialog.append(header, ui("p", "data-help", "图源只有一份可编辑原文。PNG 在当前浏览器离线生成，确认后与原生源一同保存、同步和输出。直接修改源码中的 source 后须重新生成，旧图片不能输出。DOCX 再导入为普通图片。"), choose, source, ui("label", "data-label", "PNG 图片宽度（320–2048 像素）"), width, preview, status, controls);
     dialog.addEventListener("cancel", event => { event.preventDefault(); controller.cancel(); draw(); dialog.close(); });
-    return { dialog, clear: () => { disposed = true; controller.edit(""); controller.cancel(); source.value = ""; status.textContent = ""; preview.replaceChildren(); choose.replaceChildren(); occurrences.length = 0; inputs.clear(); selected = undefined; if (imageUrl) URL.revokeObjectURL(imageUrl); imageUrl = null; dialog.close(); dialog.remove(); } };
+    return { dialog, clear: () => { disposed = true; authorInputs?.retire(); controller.edit(""); controller.cancel(); source.value = ""; status.textContent = ""; preview.replaceChildren(); choose.replaceChildren(); occurrences.length = 0; inputs.clear(); selected = undefined; if (imageUrl) URL.revokeObjectURL(imageUrl); imageUrl = null; dialog.close(); dialog.remove(); } };
   }
 }

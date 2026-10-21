@@ -7,7 +7,7 @@ import type { SyntaxToken } from "./types";
 import { currentSourceStyleBasis, retireSourceStylesEffect, sourceStyleModeEffect, sourceStyles, sourceTokensEffect, type SourceStyleBasis } from "./source-style";
 import { sourceCompositionHistory, SourceHistoryRequests, type SourceHistoryCommand } from "./source-history";
 import { sourceCodePointCount, sourceLongLines } from "./source-statistics";
-import { inputOriginKind, personalInputId, personalTextEffect, restoreInputOrigin, sourceInputOrigin, sourceInputOrigins, type InputOrigin, type PersonalText } from "./source-input-origin";
+import { beginInputCheckpoint, initializeInputHash, inputCheckpoint, inputOriginKind, personalInputId, personalInputProjection, personalTextEffect, restoredInputOrigin, restoreInputOrigin, settleInputCheckpoint, sourceInputCheckpoints, sourceInputOrigin, sourceInputOrigins, type InputOrigin, type PersonalInputProjection, type PersonalText } from "./source-input-origin";
 
 const boundedSourceShaping = EditorView.contentAttributes.compute([sourceLongLines], state => ({ class: state.field(sourceLongLines).length ? "cm-long-line" : "" }));
 
@@ -105,12 +105,13 @@ export class SourceEditor {
   private pendingTokens?: { tokens: SyntaxToken[]; styled: boolean; basis: SourceStyleBasis };
   private styleNotice = document.createElement("span");
   private disposed = false;
+  private closeFrozen = false;
   private sourceSnapshot?: { doc: EditorState["doc"]; source: string };
   private compositionEpoch = 0;
   private activeCompositionEpoch: number | null = null;
   private historyRequests = new SourceHistoryRequests({
     composing: () => this.inputComposition || !!this.view?.compositionStarted || !!this.view?.composing,
-    execute: command => (command === "undo" ? undo : redo)(this.view),
+      execute: command => !this.closeFrozen && (command === "undo" ? undo : redo)(this.view),
     settled: () => {
       this.activeCompositionEpoch = null;
       // End the native unit before releasing mode/save or later ordinary
@@ -121,12 +122,11 @@ export class SourceEditor {
   });
   generation = 0;
   readonly inputId = personalInputId();
-  private inputBaseHash?: string;
 
   constructor(source: string, onChange: (source: string) => void, save: () => void, personalInputReady?: () => void) {
     this.view = new EditorView({
       state: createSourceState(source, [
-          history(), sourceInputOrigins, sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
+          history(), sourceInputOrigins, EditorState.transactionFilter.of(transaction => this.closeFrozen && transaction.docChanged ? [] : transaction), sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
           bracketMatching(), indentOnInput(), highlightSelectionMatches(), sourceStyles, sourceRevealExtensions,
           sourceCompositionHistory(() => this.activeCompositionEpoch, transaction => !!transaction.annotation(nativeEdit)),
           this.editable.of(EditorView.editable.of(true)),
@@ -203,15 +203,32 @@ export class SourceEditor {
     this.view.dom.append(this.styleNotice);
     // Only the hash survives authorization retirement; the original text is
     // never copied into the independent personal-input record.
+    const initialCheckpoint = this.view.state.field(sourceInputCheckpoints).confirmed.id;
     if (crypto.subtle) void crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)).then(bytes => {
-      this.inputBaseHash = [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-      if (!this.disposed) personalInputReady?.();
+      if (this.disposed) return;
+      const hash = [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+      this.view.dispatch(initializeInputHash(initialCheckpoint, hash)); personalInputReady?.();
     });
   }
-  personalInput(): { id: string; baseHash?: string; origin: InputOrigin } { return { id: this.inputId, baseHash: this.inputBaseHash, origin: this.view.state.field(sourceInputOrigin) }; }
+  personalInput(): PersonalInputProjection & { id: string } { return { id: this.inputId, ...personalInputProjection(this.view.state) }; }
+  /** Freeze the submitted CM state before hashing/network awaits; later typing
+   * projects against its immutable atoms rather than being reset on receipt. */
+  async beginPersonalSave(operationId: string, submitted: string): Promise<void> {
+    if (this.disposed || this.source !== submitted) throw new Error("保存提案的正文已变化，未冻结另一份恢复基线。");
+    const checkpoint = inputCheckpoint(this.view.state);
+    const hash = crypto.subtle ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(submitted)).then(bytes => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("")) : undefined;
+    if (this.disposed) throw new Error("原编辑器已退休，未安装迟到的保存基线。");
+    this.view.dispatch(beginInputCheckpoint(operationId, { ...checkpoint, baseHash: hash }));
+  }
+  settlePersonalSave(operationId: string, committed: boolean): boolean {
+    if (this.disposed || this.view.state.field(sourceInputCheckpoints).pending?.operationId !== operationId) return false;
+    this.view.dispatch(settleInputCheckpoint(operationId, committed)); return true;
+  }
   restorePersonalInput(source: string, origin: InputOrigin, baseHash: string): void {
-    if (this.inputBaseHash !== baseHash) throw new Error("当前编辑器的原基线不同，保留新输入，未自动恢复。");
-    this.view.dispatch({ changes: { from: 0, to: this.source.length, insert: source }, userEvent: "input.personal.recovery", annotations: [inputOriginKind.of("protected"), nativeEdit.of(true), isolateHistory.of("full")], effects: restoreInputOrigin.of(origin) });
+    if (this.closeFrozen) throw new Error("正在核对窗口关闭，未接受迟到的恢复修改。");
+    if (this.view.state.field(sourceInputCheckpoints).confirmed.baseHash !== baseHash) throw new Error("当前编辑器的原基线不同，保留新输入，未自动恢复。");
+    const restored = restoredInputOrigin(origin, this.view.state.field(sourceInputOrigin));
+    this.view.dispatch({ changes: { from: 0, to: this.source.length, insert: source }, userEvent: "input.personal.recovery", annotations: [inputOriginKind.of("protected"), nativeEdit.of(true), isolateHistory.of("full")], effects: restoreInputOrigin.of(restored) });
   }
   get source(): string {
     const doc = this.view.state.doc;
@@ -227,13 +244,14 @@ export class SourceEditor {
   undo(): void { this.requestHistory("undo"); }
   redo(): void { this.requestHistory("redo"); }
   private requestHistory(command: SourceHistoryCommand, sourceSurface = false, composingHint = false): boolean {
-    if (this.disposed || sourceSurface && (this.view.state.readOnly || !this.view.state.facet(EditorView.editable))) return false;
+    if (this.disposed || this.closeFrozen || sourceSurface && (this.view.state.readOnly || !this.view.state.facet(EditorView.editable))) return false;
     return this.historyRequests.request(command, composingHint);
   }
   apply(from: number, to: number, text: string): void {
     this.applyPatches(this.source, [{ from, to, expected: this.source.slice(from, to), insert: text }], { from: from + text.length, to: from + text.length });
   }
   applyPatches(expectedSource: string, patches: readonly SourcePatch[], selection?: SourceSelection, userEvent = "input.native", isolated = true, personalText?: PersonalText): void {
+    if (this.closeFrozen) throw new Error("正在核对窗口关闭，未接受迟到的正文修改。");
     if (this.source !== expectedSource) throw new Error("草稿已变化，未应用旧编辑提案。");
     const result = applySourcePatches(expectedSource, patches);
     const selected = selection ?? { from: patches[0]?.from ?? this.selection.from, to: patches[0]?.from ?? this.selection.to };
@@ -241,6 +259,7 @@ export class SourceEditor {
     this.view.dispatch({ changes: [...patches].sort((a, b) => a.from - b.from).map(patch => ({ from: patch.from, to: patch.to, insert: patch.insert })), selection: { anchor: selected.from, head: selected.to }, userEvent, effects: personalText ? personalTextEffect.of(personalText) : [], annotations: [nativeEdit.of(true), inputOriginKind.of("protected"), ...(isolated ? [isolateHistory.of("full")] : [])] });
   }
   insert(before: string, after = "", placeholder = ""): void {
+    if (this.closeFrozen) throw new Error("正在核对窗口关闭，未接受新的正文插入。");
     const selection = this.view.state.selection.main;
     const selected = this.view.state.sliceDoc(selection.from, selection.to);
     const body = selected || placeholder;
@@ -272,7 +291,9 @@ export class SourceEditor {
     if (pending && !this.composing && !this.disposed) this.tokens(pending.tokens, pending.styled, pending.basis);
   }
   destroy(): void { this.disposed = true; this.pendingTokens = undefined; this.historyRequests.dispose(); this.view.destroy(); }
-  readOnly(value: boolean): void { if (value && this.view.state.facet(EditorView.editable)) this.historyRequests.retire(); this.view.dispatch({ effects: this.editable.reconfigure(EditorView.editable.of(!value)) }); }
+  freezeForClose(): boolean { if (this.disposed || this.composing) return false; this.closeFrozen = true; this.readOnly(true); return true; }
+  thawAfterClose(readOnly: boolean): void { this.closeFrozen = false; this.readOnly(readOnly); }
+  readOnly(value: boolean): void { value ||= this.closeFrozen; if (value && this.view.state.facet(EditorView.editable)) this.historyRequests.retire(); this.view.dispatch({ effects: this.editable.reconfigure(EditorView.editable.of(!value)) }); }
   reveal(range: SourceReveal, expectedSource = this.source): boolean {
     if (this.composing || expectedSource !== this.source || !sourceBoundary(this.source, range.from) || !sourceBoundary(this.source, range.to) || range.from < 0 || range.to < range.from || range.to > this.source.length || this.source.slice(range.from, range.to) !== range.raw) return false;
     this.view.dispatch({ effects: [sourceRevealEffect.of(range), this.gutters.reconfigure([])], selection: { anchor: range.from, head: range.to } });

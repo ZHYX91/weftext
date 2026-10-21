@@ -1,3 +1,4 @@
+import type { ValueInputBinding } from "./author-input";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
 /** Schema forms operate on native value trees; only the source owner writes Typst. */
 import type { OpenedDocument } from "./types";
@@ -39,6 +40,7 @@ export function decodeSourcePatch(result: SourcePatch | { edit: SourcePatch } | 
   return { from, to, text };
 }
 export interface PanelHost {
+  authorInputs?(basis: DocumentBasis): import("./author-input").AuthorInputSession | undefined;
   canEdit?(): boolean;
   request<T>(path: string, body?: unknown): Promise<T>;
   requestBlob?(path: string, body: unknown): Promise<Blob>;
@@ -152,7 +154,7 @@ export function formatNativeValue(value: NativeValue | undefined): string {
 export function diagnosticText(value: unknown): string { return typeof value === "string" ? value : value && typeof value === "object" && "message" in value ? String(value.message) : JSON.stringify(value); }
 
 export function ui<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] { const element = document.createElement(tag); element.className = className; element.textContent = text; return element; }
-export function action(label: string, run: () => void | Promise<void>, className = "data-button"): HTMLButtonElement { const button = ui("button", className, label); button.type = "button"; button.onclick = () => { void run(); }; return button; }
+export function action(label: string, run: () => void | Promise<void>, className = "data-button"): HTMLButtonElement { const button = ui("button", className, label); button.type = "button"; button.onclick = () => { if (button.isConnected === false) return; void run(); }; return button; }
 let nextInputId = 0;
 function labelFor(label: string, input: HTMLElement): HTMLLabelElement { const result = ui("label", "data-label", label); input.id ||= `data-input-${++nextInputId}`; result.htmlFor = input.id; return result; }
 const cloneValue = (value: NativeValue): NativeValue => structuredClone(value);
@@ -177,18 +179,20 @@ async function loadFormReferences(host: PanelHost, root: string, references: For
 }
 
 /** Recursive form edits a local value. Unknown record members survive unchanged. */
-export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: string, depth = 0, references?: FormReferences): HTMLElement {
+export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: string, depth = 0, references?: FormReferences, binding?: ValueInputBinding): HTMLElement {
+  const retire = () => binding?.session.invalidate(binding.slot, binding.path);
+  const child = (part: import("./author-input").ValuePath) => binding ? { ...binding, path: [...binding.path, part] } : undefined;
   const host = ui("div", "native-value-editor"); let value = cloneValue(initial); let resolved: Shape;
   try { resolved = resolveShape(shape, schema); } catch (error) { host.append(ui("p", "data-warning", String(error))); return host; }
   if (depth > 18) { host.append(ui("p", "data-warning", "嵌套过深，请在源码中编辑。")); return host; }
-  if (value.kind === "none") { host.append(ui("span", "data-empty", "明确为空（none）"), action("填写值", () => { value = emptyNativeValue(resolved, schema); changed(value); host.replaceChildren(valueEditor(resolved, value, schema, changed, label, depth, references)); })); return host; }
+  if (value.kind === "none") { host.append(ui("span", "data-empty", "明确为空（none）"), action("填写值", () => { retire(); value = emptyNativeValue(resolved, schema); changed(value); host.replaceChildren(valueEditor(resolved, value, schema, changed, label, depth, references, binding)); })); return host; }
   if (resolved.kind === "union") {
     let branch = unionVariant(resolved, value, schema); const select = ui("select", "data-input");
     const absent = ui("option", "", "选择值的分支…"); absent.value = "-1"; select.append(absent);
     resolved.variants.forEach((variant, index) => { const candidate = resolveShape(variant, schema); const description = candidate.kind === "record" ? Object.keys(candidate.members).slice(0, 3).map(key => fieldNames[key] ?? key).join(" / ") : candidate.kind === "scalar" ? candidate.semantic : candidate.kind; const option = ui("option", "", `${index + 1}. ${description}`); option.value = String(index); select.append(option); }); select.value = String(branch); host.append(labelFor(`${label} · 值类型`, select), select);
     const body = ui("div", "native-union-body"); host.append(body);
-    const show = (): void => { body.replaceChildren(); if (branch >= 0) body.append(valueEditor(resolved.variants[branch], value, schema, next => { value = next; changed(next); }, label, depth + 1, references)); else body.append(ui("p", "data-warning", "当前值不能唯一确定分支，原值保留。")); };
-    select.onchange = () => { const next = Number(select.value); if (next < 0) return; try { value = switchUnionValue(resolved, value, next, schema); branch = next; changed(value); show(); } catch (error) { select.value = String(branch); body.append(ui("p", "data-warning", error instanceof Error ? error.message : String(error))); } }; show(); return host;
+    const show = (): void => { body.replaceChildren(); if (branch >= 0) body.append(valueEditor(resolved.variants[branch], value, schema, next => { value = next; changed(next); }, label, depth + 1, references, binding)); else body.append(ui("p", "data-warning", "当前值不能唯一确定分支，原值保留。")); };
+    select.onchange = () => { if (select.isConnected === false) return; const next = Number(select.value); if (next < 0) return; try { retire(); value = switchUnionValue(resolved, value, next, schema); branch = next; changed(value); show(); } catch (error) { select.value = String(branch); body.append(ui("p", "data-warning", error instanceof Error ? error.message : String(error))); } }; show(); return host;
   }
   if (resolved.kind === "record") {
     if (value.kind !== "record") { host.append(ui("p", "data-warning", "值的形状与 schema 不符，原值保留。")); return host; }
@@ -197,11 +201,11 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
       record.replaceChildren();
       for (const [key, member] of Object.entries(resolved.members)) {
         const present = nativeMember(value, key); const row = ui("div", "native-member"); const heading = ui("div", "native-member-heading"); heading.append(ui("span", "", `${fieldNames[key] ?? key}${member.required ? " *" : ""}`)); row.append(heading);
-        if (!present) { heading.append(ui("span", "data-empty", "未填写"), action("添加", () => { value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact")); }
+        if (!present) { heading.append(ui("span", "data-empty", "未填写"), action("添加", () => { retire(); value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact")); }
         else {
-          if (!member.required) heading.append(action("移除", () => { value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
-          if (member.nullable && present.kind !== "none") heading.append(action("设为 none", () => { value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
-          row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, `${label} · ${fieldNames[key] ?? key}`, depth + 1, references));
+          if (!member.required) heading.append(action("移除", () => { retire(); value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
+          if (member.nullable && present.kind !== "none") heading.append(action("设为 none", () => { retire(); value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
+          row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, `${label} · ${fieldNames[key] ?? key}`, depth + 1, references, child({ kind: "member", key })));
         }
         record.append(row);
       }
@@ -216,26 +220,27 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
       if (!value.value.length) items.append(ui("span", "data-empty", "空数组（0 项）"));
       value.value.forEach((item, index) => {
         const row = ui("fieldset", "native-list-item"); row.append(ui("legend", "", `第 ${index + 1} 项`)); const controls = ui("div", "native-list-controls");
-        const up = action("上移", () => { value = moveOrderedValue(value, index, index - 1); changed(value); render(); }, "data-button compact"); up.disabled = index === 0;
-        const down = action("下移", () => { value = moveOrderedValue(value, index, index + 1); changed(value); render(); }, "data-button compact"); down.disabled = value.kind !== "array" || index === value.value.length - 1;
-        const remove = action("移除", () => { if (value.kind !== "array") return; value = { kind: "array", value: value.value.filter((_, ordinal) => ordinal !== index) }; changed(value); render(); }, "data-button compact"); remove.disabled = value.kind !== "array" || value.value.length <= resolved.min;
-        controls.append(up, down, remove); row.append(controls, valueEditor(resolved.items, item, schema, next => { if (value.kind !== "array") return; const nextItems = [...value.value]; nextItems[index] = next; value = { kind: "array", value: nextItems }; changed(value); }, `${label} 第 ${index + 1} 项`, depth + 1, references)); items.append(row);
+        const up = action("上移", () => { retire(); value = moveOrderedValue(value, index, index - 1); changed(value); render(); }, "data-button compact"); up.disabled = index === 0;
+        const down = action("下移", () => { retire(); value = moveOrderedValue(value, index, index + 1); changed(value); render(); }, "data-button compact"); down.disabled = value.kind !== "array" || index === value.value.length - 1;
+        const remove = action("移除", () => { if (value.kind !== "array") return; retire(); value = { kind: "array", value: value.value.filter((_, ordinal) => ordinal !== index) }; changed(value); render(); }, "data-button compact"); remove.disabled = value.kind !== "array" || value.value.length <= resolved.min;
+        controls.append(up, down, remove); row.append(controls, valueEditor(resolved.items, item, schema, next => { if (value.kind !== "array") return; const nextItems = [...value.value]; nextItems[index] = next; value = { kind: "array", value: nextItems }; changed(value); }, `${label} 第 ${index + 1} 项`, depth + 1, references, child({ kind: "index", index }))); items.append(row);
       });
-      const add = action("添加一项", () => { if (value.kind !== "array") return; value = { kind: "array", value: [...value.value, emptyNativeValue(resolved.items, schema)] }; changed(value); render(); }); add.disabled = resolved.max != null && value.value.length >= resolved.max; items.append(add);
+      const add = action("添加一项", () => { if (value.kind !== "array") return; retire(); value = { kind: "array", value: [...value.value, emptyNativeValue(resolved.items, schema)] }; changed(value); render(); }); add.disabled = resolved.max != null && value.value.length >= resolved.max; items.append(add);
     }; render(); return host;
   }
   const scalar = resolved.kind === "scalar" ? resolved.semantic : "enum";
   if (scalar === "bool") {
-    const input = ui("input"); input.type = "checkbox"; input.checked = value.kind === "bool" && value.value; const control = labelFor(label, input); control.prepend(input); host.append(control); input.onchange = () => changed({ kind: "bool", value: input.checked }); return host;
+    const input = ui("input"); input.type = "checkbox"; input.checked = value.kind === "bool" && value.value; const control = labelFor(label, input); control.prepend(input); host.append(control); input.onchange = () => { if (input.isConnected === false) return; changed({ kind: "bool", value: input.checked }); }; return host;
   }
   if (resolved.kind === "enum" && !resolved.open) {
     const input = ui("select", "data-input"); resolved.values.forEach(optionValue => { const option = ui("option", "", ({ open: "未完成", done: "已完成", cancelled: "已取消" } as Record<string, string>)[optionValue] ?? optionValue); option.value = optionValue; input.append(option); });
     if (value.kind === "text" && !resolved.values.includes(value.value)) { const unknown = ui("option", "", `${value.value}（未登记）`); unknown.value = value.value; input.append(unknown); }
-    input.value = formatNativeValue(value); input.setAttribute("aria-label", label); host.append(input); input.onchange = () => changed({ kind: "text", value: input.value }); return host;
+    input.value = formatNativeValue(value); input.setAttribute("aria-label", label); host.append(input); input.onchange = () => { if (input.isConnected === false) return; changed({ kind: "text", value: input.value }); }; return host;
   }
   const input = scalar === "text" || scalar === "nonempty_text" ? ui("textarea", "data-input") : ui("input", "data-input"); if (input instanceof HTMLTextAreaElement) input.rows = 2;
   input.value = formatNativeValue(value); input.setAttribute("aria-label", label); if (input instanceof HTMLInputElement) input.type = "text";
   if (["int", "float", "decimal", "exact_decimal", "duration", "exact_seconds"].includes(scalar)) input.setAttribute("inputmode", "decimal");
+  binding?.session.bind(input, binding.slot, binding.path);
   input.placeholder = ({ date: "2026-10-13", time: "12:30:00", local_datetime: "2026-10-13T12:30:00", instant: "2026-10-13T12:30:00+08:00", node_ref: "weftext-node://资料库 ID/笔记 ID", phone: "+86 138…（原样保留）", exact_decimal: "0.30（精确小数）" } as Record<string, string>)[scalar] ?? "";
   input.oninput = () => { try { const next = scalarFromInput(resolved, schema, input.value); input.setCustomValidity(""); changed(next); } catch (error) { input.setCustomValidity(error instanceof Error ? error.message : String(error)); } };
   if (scalar === "tag_ref" && references) { const pickerHost = ui("div", "data-tag-reference-picker"); const renderPicker = () => { pickerHost.replaceChildren(); if (references.tagTree) pickerHost.append(tagPicker(references.tagTree, { label: `${label} · 选择直接标签`, value: input.value, changed: ref => { if (!ref) return; input.value = ref; input.dispatchEvent(new Event("input", { bubbles: true })); } })); else pickerHost.append(ui("p", "data-help", "完整标签结构不可用；已有准确引用保留，可直接输入地址。")); }; refreshTagPickers.set(pickerHost, renderPicker); renderPicker(); host.append(pickerHost); }
