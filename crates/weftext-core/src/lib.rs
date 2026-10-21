@@ -22,6 +22,8 @@ mod directory_identity;
 pub use device_state::DeviceIdentity;
 mod profile_identity;
 pub use profile_identity::{QualifiedProfile, qualify_profile};
+mod client_preferences;
+pub use client_preferences::{ClientPreferences, ClientPreferencesSnapshot};
 mod desktop_preferences;
 pub use desktop_preferences::{DesktopPreferences, DesktopPreferencesSnapshot};
 #[cfg(all(test, windows))]

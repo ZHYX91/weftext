@@ -71,6 +71,7 @@ mod recognition_api;
 mod remote_sync;
 mod sync_api;
 mod sync_wire;
+mod client_preferences_api;
 mod writing_api;
 
 static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");

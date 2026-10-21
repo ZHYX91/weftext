@@ -203,8 +203,7 @@ impl Core {
             DeviceRecordKind::Reminders => {
                 crate::reminder_device_state::validate_reminder_device_record(bytes)?
             }
-            // Client preferences remain owned by their separate typed consumer.
-            DeviceRecordKind::ClientPreferences => {}
+            DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes)?,
         }
         if let Some(expected) = expected_digest
             && (expected.len() != 64
@@ -338,9 +337,7 @@ pub(crate) fn validate_backup_record(kind: DeviceRecordKind, bytes: &[u8]) -> Re
                 ))
             })
         }
-        DeviceRecordKind::ClientPreferences => Err(evidence(
-            "This build has no strict validator for this device record type",
-        )),
+        DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes),
     }
 }
 

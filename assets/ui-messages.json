@@ -441,8 +441,8 @@
       "params": {}
     },
     "reminder.minuteHelper": {
-      "zh-CN": "按分钟填写，保留已有秒数和偏移",
-      "en-US": "Enter minutes while preserving existing seconds and offset",
+      "zh-CN": "按分钟填写，保留秒与小数",
+      "en-US": "Edit minutes; keep seconds and fractions",
       "params": {}
     },
     "reminder.saveFirst": {
@@ -49219,8 +49219,8 @@
       "params": {}
     },
     "error.core.posix.serviceCredentialsRequired": {
-      "zh-CN": "服务必须使用已登记的非 root UID、空附加组和无 capabilities",
-      "en-US": "The service requires its enrolled non-root UID, empty supplementary groups and no capabilities",
+      "zh-CN": "服务须使用登记的非 root UID 和主 GID、空补充组及零能力",
+      "en-US": "The service requires its enrolled non-root UID and primary GID, empty supplementary groups and no capabilities",
       "params": {}
     },
     "error.core.posix.absoluteEnrollmentRequired": {
@@ -49243,11 +49243,6 @@
       "en-US": "Service, client and worker require distinct non-root OS identities",
       "params": {}
     },
-    "error.core.posix.enrollmentUuidRequired": {
-      "zh-CN": "enrollment 需要规范的随机 UUID",
-      "en-US": "Enrollment identity is not a canonical UUID",
-      "params": {}
-    },
     "error.core.posix.foreignMachine": {
       "zh-CN": "enrollment 属于另一台 OS 机器",
       "en-US": "Enrollment belongs to a different OS machine identity",
@@ -49266,21 +49261,6 @@
     "error.core.posix.nonLoginServiceRequired": {
       "zh-CN": "服务必须使用专属非登录账号",
       "en-US": "The service account must be a dedicated non-login account",
-      "params": {}
-    },
-    "error.core.posix.absoluteRootRequired": {
-      "zh-CN": "受控根目录必须使用绝对路径",
-      "en-US": "Controlled root must be absolute",
-      "params": {}
-    },
-    "error.core.posix.administratorRootParentRequired": {
-      "zh-CN": "受控根目录需要管理员拥有的父目录",
-      "en-US": "The controlled root needs an administrator-owned parent",
-      "params": {}
-    },
-    "error.core.posix.invalidRoot": {
-      "zh-CN": "受控根目录路径无效",
-      "en-US": "Invalid controlled root",
       "params": {}
     },
     "error.core.posix.physicalRootMismatch": {
@@ -49491,6 +49471,1251 @@
     "error.api.workerDiagnosticBudget": {
       "zh-CN": "编译工作进程诊断超过 256 KiB 限制；输入保留。",
       "en-US": "Compiler worker diagnostics exceed the 256 KiB limit; the input is retained.",
+      "params": {}
+    },
+    "error.core.posix.freshRootBirthRequired": {
+      "zh-CN": "受控根目录需要管理员对全新隔离创建的现行证明",
+      "en-US": "The controlled root requires current administrator evidence of fresh isolated creation",
+      "params": {}
+    },
+    "error.core.posix.extendedKeyAclForbidden": {
+      "zh-CN": "服务认证密钥不接受扩展 ACL",
+      "en-US": "Extended ACLs cannot qualify the private service authentication key",
+      "params": {}
+    },
+    "error.core.posix.exactUtf8BasenameRequired": {
+      "zh-CN": "文件系统末级名称必须精确且为有效 UTF-8",
+      "en-US": "An exact UTF-8 filesystem basename is required",
+      "params": {}
+    },
+    "error.core.posix.workerAccountRequired": {
+      "zh-CN": "worker 账号须为专属非登录账号",
+      "en-US": "The worker account must be a dedicated non-login account",
+      "params": {}
+    },
+    "error.core.posix.exclusiveServiceGroupRequired": {
+      "zh-CN": "服务主组不能包含其他账号",
+      "en-US": "The service primary group must exclude every other account",
+      "params": {}
+    },
+    "error.core.posix.rootPathRequired": {
+      "zh-CN": "受控根目录须使用绝对路径且其父目录由管理员拥有",
+      "en-US": "The controlled root requires an absolute path with an administrator-owned parent",
+      "params": {}
+    },
+    "error.core.posix.rootPermissionsRequired": {
+      "zh-CN": "受控根目录须由服务拥有并使用私有目录权限",
+      "en-US": "The controlled root requires service ownership and private directory permissions",
+      "params": {}
+    },
+    "error.core.posix.enrollmentChanged": {
+      "zh-CN": "管理员登记配置在接纳后发生变化",
+      "en-US": "The administrator enrollment changed after admission",
+      "params": {}
+    },
+    "error.core.backend.existingDeviceIdentityUnavailable": {
+      "zh-CN": "原有设备身份不可用",
+      "en-US": "Existing device identity is unavailable",
+      "params": {}
+    },
+    "loss.core.nativeImport.generatedBibliographyRetained": {
+      "zh-CN": "派生的文献文件仅保留在原始 ZIP 中，未安装到作者目录树。离线编译引文前，请根据已重映射且当前获权的 Work 数据重新生成。",
+      "en-US": "The derived bibliography remains only in the retained original ZIP and is absent from the installed author tree. Regenerate it from the remapped, currently authorized Work data before compiling offline citations",
+      "params": {}
+    },
+    "loss.core.nativeImport.resourceModuleContextRetained": {
+      "zh-CN": "Typst 资源模块按原字节保留。模块中的应用身份和相对根目录依赖不会重写；使用前请核对迁移后的上下文。",
+      "en-US": "The Typst resource module is retained byte-for-byte. Application identities and root-relative dependencies inside resource modules are not rewritten; review its relocated context before use",
+      "params": {}
+    },
+    "loss.core.nativeImport.settingsRetained": {
+      "zh-CN": "原设置和样式选择保留在原包中；目标资料库继续以自己的设置为准。导入的样式模块是所拥有的资源，不会自动启用为默认样式。",
+      "en-US": "Original settings and style selection remain in the preserved package; the destination library's settings remain authoritative. Imported style modules are owned resources, without automatic default-style activation",
+      "params": {}
+    },
+    "loss.core.nativeExport.unregisteredFileOmitted": {
+      "zh-CN": "未登记的原始内容或指定内部子树不属于已接纳的原生内容；本机历史及未知文件需要通过完整备份保留。",
+      "en-US": "Unregistered/raw content or the named internal subtree is outside admitted native content; local history and unknown files require a complete backup",
+      "params": {}
+    },
+    "error.core.sync.cloneLayout.trashPlacementRequired": {
+      "zh-CN": "只有具有放置位置的内容对象才能进入回收站树",
+      "en-US": "Only a placed content object can occupy a Trash tree.",
+      "params": {}
+    },
+    "error.core.sync.cloneLayout.placementGraphIncomplete": {
+      "zh-CN": "所选放置图存在循环或缺少父对象",
+      "en-US": "Selected placement graph is cyclic or lacks its parent.",
+      "params": {}
+    },
+    "error.core.sync.cloneLayout.originalCreateTreeRequired": {
+      "zh-CN": "克隆必须保留原来的 CreateTree 操作",
+      "en-US": "Clone must retain its original CreateTree.",
+      "params": {}
+    },
+    "error.core.sync.cloneLayout.namespaceOverlap": {
+      "zh-CN": "克隆文件和目录在实际命名空间中重叠",
+      "en-US": "Clone files and directories overlap in the actual namespace.",
+      "params": {}
+    },
+    "error.core.sync.memberRetirement.exactFileRevisionsRequired": {
+      "zh-CN": "成员移除要求有界且准确的文件修订",
+      "en-US": "Member retirement requires bounded exact file revisions.",
+      "params": {}
+    },
+    "error.core.sync.memberRetirement.placementParentInvalid": {
+      "zh-CN": "成员移除的放置父对象无效",
+      "en-US": "Member retirement has an invalid placement parent.",
+      "params": {}
+    },
+    "error.core.sync.memberRetirement.historicalBlobMissing": {
+      "zh-CN": "成员移除缺少准确的历史字节对象",
+      "en-US": "Member retirement lacks an exact historical blob.",
+      "params": {}
+    },
+    "error.core.sync.memberRetirement.fileNamesAliased": {
+      "zh-CN": "成员移除的文件名存在别名冲突",
+      "en-US": "Member retirement has aliased file names.",
+      "params": {}
+    },
+    "error.core.sync.replica.setupNodeDuplicate": {
+      "zh-CN": "副本设置中出现重复 Node",
+      "en-US": "Duplicate Node in replica setup.",
+      "params": {}
+    },
+    "error.core.sync.replica.directoryMarkerIdentityMissing": {
+      "zh-CN": "目录标记缺少身份标识",
+      "en-US": "Directory marker lacks an identity.",
+      "params": {}
+    },
+    "error.core.sync.replica.directoryMarkerNotAdmitted": {
+      "zh-CN": "目录标记当前未获准入",
+      "en-US": "A directory marker is not currently admitted.",
+      "params": {}
+    },
+    "error.core.sync.replica.capturedFileMissing": {
+      "zh-CN": "已捕获的副本文件已消失",
+      "en-US": "Captured replica file disappeared.",
+      "params": {}
+    },
+    "error.core.sync.replica.originalCutPhysicalEvidenceMissing": {
+      "zh-CN": "原副本截面缺少物理文件证据",
+      "en-US": "Original replica cut has no physical file evidence.",
+      "params": {}
+    },
+    "error.core.sync.replica.capturedFileChangedDuringBinding": {
+      "zh-CN": "已捕获的副本文件在绑定期间发生变化",
+      "en-US": "Captured replica file changed during binding.",
+      "params": {}
+    },
+    "error.core.sync.replica.capturedNodeCanonicalSourceMissing": {
+      "zh-CN": "捕获的 Node 中缺少规范源码文件",
+      "en-US": "Canonical source is absent from the captured node.",
+      "params": {}
+    },
+    "error.core.sync.replica.capturedSourceIdentityChanged": {
+      "zh-CN": "捕获的源码身份发生变化",
+      "en-US": "Captured source changed identity.",
+      "params": {}
+    },
+    "error.core.sync.replica.initialParentCheckpointMissing": {
+      "zh-CN": "缺少初始父对象检查点",
+      "en-US": "Missing initial parent checkpoint.",
+      "params": {}
+    },
+    "error.core.sync.replica.publicationCommitOrderMissing": {
+      "zh-CN": "发布缺少持久化提交顺序",
+      "en-US": "Publication lacks its durable commit order.",
+      "params": {}
+    },
+    "error.core.sync.replica.eventCommitOrderMissing": {
+      "zh-CN": "副本事件缺少提交顺序",
+      "en-US": "Replica event lacks commit order.",
+      "params": {}
+    },
+    "error.core.sync.replica.publicationObjectLocatorMissing": {
+      "zh-CN": "发布缺少本地对象定位信息",
+      "en-US": "Publication has no local object locator.",
+      "params": {}
+    },
+    "error.core.sync.replica.operationCrossesBindings": {
+      "zh-CN": "作者操作跨越了副本绑定范围",
+      "en-US": "Author operation crosses replica bindings.",
+      "params": {}
+    },
+    "error.core.sync.replica.compoundOriginalApplicationRequired": {
+      "zh-CN": "复合命名空间决定需要其原始 SyncApplication",
+      "en-US": "Compound namespace decisions require their original SyncApplication.",
+      "params": {}
+    },
+    "error.core.sync.replica.relocatedObjectBasisMissing": {
+      "zh-CN": "已迁移对象缺少副本基准",
+      "en-US": "Relocated object has no replica basis.",
+      "params": {}
+    },
+    "error.core.sync.replica.relocatedCanonicalFileBasisMissing": {
+      "zh-CN": "副本基准中缺少已迁移的规范文件",
+      "en-US": "Relocated canonical file is missing from replica basis.",
+      "params": {}
+    },
+    "error.core.sync.replica.relocatedCanonicalRevisionMissing": {
+      "zh-CN": "缺少已迁移规范文件的修订",
+      "en-US": "Relocated canonical revision is missing.",
+      "params": {}
+    },
+    "error.core.sync.replica.nodeCreationIdentityMissing": {
+      "zh-CN": "创建 Node 缺少身份标识",
+      "en-US": "Node creation lacks an identity.",
+      "params": {}
+    },
+    "error.core.sync.replica.objectFileOutsideOwner": {
+      "zh-CN": "对象文件位于其所属对象范围之外",
+      "en-US": "Object file is outside its owner.",
+      "params": {}
+    },
+    "error.core.sync.replica.directoryIdentityMissing": {
+      "zh-CN": "缺少目录身份标识",
+      "en-US": "Directory identity missing.",
+      "params": {}
+    },
+    "error.core.sync.replica.directoryIdentityAlreadyPresent": {
+      "zh-CN": "目录身份已存在于该副本中",
+      "en-US": "Directory identity already exists in this replica.",
+      "params": {}
+    },
+    "error.core.sync.replica.nodeIdentityAlreadyPresent": {
+      "zh-CN": "Node 身份此前已存在于该副本中",
+      "en-US": "Node identity was already present in this replica.",
+      "params": {}
+    },
+    "error.core.sync.replica.originalBlobMissing": {
+      "zh-CN": "缺少原副本字节对象",
+      "en-US": "Original replica blob is missing.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.proposalSelectionInvalid": {
+      "zh-CN": "请选择一个有界且准确的重新验证提案",
+      "en-US": "Select one bounded exact revalidation proposal.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.unrelatedBlobs": {
+      "zh-CN": "重新验证包含无关的字节对象",
+      "en-US": "Revalidation contains unrelated blobs.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.stateEvidenceInvalid": {
+      "zh-CN": "重新验证后的状态缺少字节或具有无效的因果前驱",
+      "en-US": "Revalidated state has missing bytes or invalid causal predecessors.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.queryRowNodeOwnerRequired": {
+      "zh-CN": "实际 Query 行需要准确的 Node 所属对象",
+      "en-US": "An actual Query row requires an exact Node owner.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.adoptionInstalledOwnerRequired": {
+      "zh-CN": "接纳要求原来已安装的所属对象",
+      "en-US": "Adoption requires an originally installed owner.",
+      "params": {}
+    },
+    "error.core.sync.revalidation.adoptionObservedAfterMissing": {
+      "zh-CN": "接纳缺少准确观测的修改后状态",
+      "en-US": "Adoption is missing its exact observed after state.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.receivedCutSelectionInvalid": {
+      "zh-CN": "请选择一个有界且非空的已接收截面",
+      "en-US": "Select one bounded nonempty received cut.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.installationReplicaMismatch": {
+      "zh-CN": "语义安装指定了另一个本地副本",
+      "en-US": "Semantic installation names another local replica.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.reviewReplicaMismatch": {
+      "zh-CN": "语义评审指定了另一个本地副本",
+      "en-US": "The semantic review names another local replica.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.decisionOriginalApplicationRequired": {
+      "zh-CN": "语义决定需要其原始 SyncApplication",
+      "en-US": "A semantic decision requires its original SyncApplication.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.proposalAfterStatesMismatch": {
+      "zh-CN": "原写入者的修改后状态与语义提案不同",
+      "en-US": "The original writer after states differ from the semantic proposal.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionOriginalApplicationRequired": {
+      "zh-CN": "接纳需要其原始应用",
+      "en-US": "Adoption requires its original application.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionNoWriteTransactionRequired": {
+      "zh-CN": "接纳需要其原始无写入事务",
+      "en-US": "Adoption requires its original no-write transaction.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionOriginalRequestRequired": {
+      "zh-CN": "语义接纳需要其准确的原始请求",
+      "en-US": "Semantic adoption requires its exact original request.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionOriginalUpdateRequired": {
+      "zh-CN": "接纳必须保留原始无写入 Update 操作",
+      "en-US": "Adoption must retain the original no-write Update.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.externalAdoptionCannotRewrite": {
+      "zh-CN": "外部接纳不能重写已观测的作者字节",
+      "en-US": "External adoption cannot rewrite the observed author bytes.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionOriginalPublicationRequired": {
+      "zh-CN": "接纳需要其原始发布",
+      "en-US": "Adoption requires its original publication.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionPublicationMismatch": {
+      "zh-CN": "接纳发布与原始应用不同",
+      "en-US": "Adoption publication differs from the original application.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionCannotCreateOwner": {
+      "zh-CN": "接纳不能创建新的所属对象",
+      "en-US": "Adoption cannot create a new owner.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.adoptionOriginalCutChanged": {
+      "zh-CN": "接纳改变了原所属对象、放置位置或发布截面",
+      "en-US": "Adoption changes the original owner, placement or publication cut.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.evidenceOriginalApplicationRequired": {
+      "zh-CN": "语义证据需要其原始应用",
+      "en-US": "Semantic evidence requires its original application.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.historicalBlobDigestChanged": {
+      "zh-CN": "历史语义字节对象改变了其已接纳摘要",
+      "en-US": "Historical semantic blob changes its accepted digest.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.evidenceOriginalRootMismatch": {
+      "zh-CN": "语义证据属于另一个原始请求根",
+      "en-US": "Semantic evidence belongs to another original request root.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.absentConfigurationUnsupported": {
+      "zh-CN": "不支持该缺失语义配置",
+      "en-US": "Unsupported absent semantic configuration.",
+      "params": {}
+    },
+    "error.core.sync.store.storedRecordDigestMismatch": {
+      "zh-CN": "已存储的可移植记录摘要不一致",
+      "en-US": "Stored portable record digest mismatch.",
+      "params": {}
+    },
+    "error.core.sync.store.storedManifestNotCanonical": {
+      "zh-CN": "已存储的清单不符合规范格式",
+      "en-US": "Stored manifest is not canonical.",
+      "params": {}
+    },
+    "error.core.sync.store.recordDigestMismatch": {
+      "zh-CN": "可移植记录摘要不一致",
+      "en-US": "Portable record digest mismatch.",
+      "params": {}
+    },
+    "error.core.sync.store.manifestRecordBudget": {
+      "zh-CN": "清单记录超过预算",
+      "en-US": "Manifest record exceeds budget.",
+      "params": {}
+    },
+    "error.core.sync.store.manifestNotCanonical": {
+      "zh-CN": "清单不符合规范格式",
+      "en-US": "Manifest is not canonical.",
+      "params": {}
+    },
+    "error.core.sync.store.blobRecordBudget": {
+      "zh-CN": "字节对象记录超过预算",
+      "en-US": "Blob record exceeds budget.",
+      "params": {}
+    },
+    "error.core.sync.store.transferRecordBudget": {
+      "zh-CN": "传输记录超过预算",
+      "en-US": "Transfer record budget exceeded.",
+      "params": {}
+    },
+    "error.core.sync.store.receivedRevisionAmbiguous": {
+      "zh-CN": "已接收的对象修订存在歧义",
+      "en-US": "Received object revision is ambiguous.",
+      "params": {}
+    },
+    "error.core.sync.store.replicaFamilyMismatch": {
+      "zh-CN": "本地存储属于不同的副本族",
+      "en-US": "Local store belongs to a different replica family.",
+      "params": {}
+    },
+    "error.core.sync.store.recordInventoryIncomplete": {
+      "zh-CN": "副本记录清单不完整",
+      "en-US": "Replica record inventory is incomplete.",
+      "params": {}
+    },
+    "error.core.sync.store.recordNameNotUtf8": {
+      "zh-CN": "副本记录名不是 UTF-8",
+      "en-US": "Non-UTF8 replica record name.",
+      "params": {}
+    },
+    "error.core.sync.store.recordUnexpected": {
+      "zh-CN": "出现非预期的副本记录",
+      "en-US": "Unexpected replica record.",
+      "params": {}
+    },
+    "error.core.sync.store.recordByteBudget": {
+      "zh-CN": "副本记录超过其字节预算",
+      "en-US": "Replica record exceeds its byte budget.",
+      "params": {}
+    },
+    "error.core.sync.store.immutableRecordDiffers": {
+      "zh-CN": "现有不可变记录的内容不同",
+      "en-US": "Existing immutable record differs.",
+      "params": {}
+    },
+    "error.core.sync.transport.pairedFamilyMismatch": {
+      "zh-CN": "传输目录属于另一个配对副本族",
+      "en-US": "Transport directory belongs to another paired family.",
+      "params": {}
+    },
+    "error.core.sync.transport.unrelatedEntries": {
+      "zh-CN": "传输目录包含无关条目",
+      "en-US": "Transport directory contains unrelated entries.",
+      "params": {}
+    },
+    "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection": {
+      "zh-CN": "注释 {annotationId} 保持不变；目标不可用，等待显式重新关联",
+      "en-US": "Annotation {annotationId} is preserved unchanged; its target is unavailable and awaits explicit reconnection.",
+      "params": {
+        "annotationId": "text"
+      }
+    },
+    "error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable": {
+      "zh-CN": "本次证据不能确认原注释目标的准确资格",
+      "en-US": "The current evidence cannot establish the exact qualification of the original annotation target.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordLayout": {
+      "zh-CN": "正文可编辑；Word 页眉页脚、分页、字体和复杂版式保留在原件。",
+      "en-US": "The text is editable. Word headers, footers, pagination, fonts and complex layout remain in the original.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordListNumbering": {
+      "zh-CN": "列表文字已保留；编号格式、层级和起始值未完整映射。",
+      "en-US": "List text is retained; numbering format, levels and starting values are not fully mapped.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordFormatRevision": {
+      "zh-CN": "格式修订保留在原件，未转换为可执行文字建议。",
+      "en-US": "Formatting revisions remain in the original and are not converted into executable text suggestions.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordCommentTarget": {
+      "zh-CN": "批注意见已保留；部分目标无法准确定位到新正文。",
+      "en-US": "Comments are retained; some targets cannot be located precisely in the new text.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordNestedRevision": {
+      "zh-CN": "嵌套修订已保留，未获得自动应用资格。",
+      "en-US": "Nested revisions are retained and are not eligible for automatic application.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordLink": {
+      "zh-CN": "部分链接目标无法安全映射，可见文字与原件已保留。",
+      "en-US": "Some link targets cannot be mapped safely; visible text and the original are retained.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordImageFormat": {
+      "zh-CN": "部分图片格式尚不支持，原件已保留。",
+      "en-US": "Some image formats are unsupported; the original is retained.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordImageLayout": {
+      "zh-CN": "图片已保留；浮动位置、裁切和尺寸未完整映射。",
+      "en-US": "Images are retained; floating positions, cropping and dimensions are not fully mapped.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordImageMissing": {
+      "zh-CN": "部分图片关系无法读取，原件已保留。",
+      "en-US": "Some image relationships cannot be read; the original is retained.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordField": {
+      "zh-CN": "域的可见结果已保留；动态更新语义保留在原件。",
+      "en-US": "Visible field results are retained; dynamic update semantics remain in the original.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordStructure": {
+      "zh-CN": "部分结构未完整映射，可读取文字与原件已保留。",
+      "en-US": "Some structures are not fully mapped; readable text and the original are retained.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.wordTableLayout": {
+      "zh-CN": "表格文字和单元格顺序已保留；复杂表格版式未完整映射。",
+      "en-US": "Table text and cell order are retained; complex table layout is not fully mapped.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.docxImport": {
+      "zh-CN": "部分内容未完整映射；请核对新正文和保留的原件。",
+      "en-US": "Some content is not fully mapped; review the new text and the retained original.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.generatedBibliography": {
+      "zh-CN": "生成的文献库仅保留在原件中，不安装到作者资料树；请依据重新映射且当前获权的文献数据重新生成。",
+      "en-US": "The generated bibliography remains in the original and is not installed in the author tree. Regenerate it from remapped, currently authorized bibliography data.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.resourceModuleContext": {
+      "zh-CN": "Typst 资源模块保留原字节；模块内身份和根相对依赖未重新映射，使用前请检查迁移后的上下文。",
+      "en-US": "Typst resource modules retain their original bytes. Internal identities and root-relative dependencies are not remapped; review the relocated context before use.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.settings": {
+      "zh-CN": "原库设置和样式选择保留在原件中；目标库设置保持有效，不自动启用导入样式。",
+      "en-US": "Original library settings and style choices remain in the original. Destination settings remain effective; imported styles are not enabled automatically.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.unregisteredFiles": {
+      "zh-CN": "原生资料包省略了部分未登记或库内部资料；此导入不能恢复省略的资料，完整历史和草稿需完整恢复资料备份。",
+      "en-US": "The native package omits some unregistered or internal library data. This import cannot restore omitted data; complete history and Drafts require a full recovery backup.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.contentImport": {
+      "zh-CN": "部分资料不能完整映射；原件和原值已保留，请明确接受原计划中的导入限制。",
+      "en-US": "Some data cannot be fully mapped. Originals and original values are retained; explicitly accept the import limits in the original Plan.",
+      "params": {}
+    },
+    "loss.core.hostedFeature.structureCopy": {
+      "zh-CN": "部分引用或批注不能完整迁移；原值已保留，请明确接受原计划中的复制限制。",
+      "en-US": "Some references or annotations cannot be fully migrated. Original values are retained; explicitly accept the copy limits in the original Plan.",
+      "params": {}
+    },
+    "desktop.startupManaged": {
+      "zh-CN": "系统策略控制登录启动，应用不能切换",
+      "en-US": "System policy controls sign-in startup; the app cannot change it",
+      "params": {}
+    },
+    "desktop.preferenceUpdateFailed": {
+      "zh-CN": "客户端桌面偏好未确认保存；请重新打开设置查看原值，不自动重发",
+      "en-US": "Desktop preference saving is unconfirmed; reopen settings to inspect the current value. The request is not resent automatically",
+      "params": {}
+    },
+    "error.data.taskReminder.memberTextRequired": {
+      "zh-CN": "任务提醒成员 {member} 必须为文本",
+      "en-US": "Task reminder member {member} requires text.",
+      "params": {
+        "member": "text"
+      }
+    },
+    "error.data.taskReminder.directRecordRequired": {
+      "zh-CN": "任务提醒必须使用直接记录",
+      "en-US": "Task reminder requires a direct record.",
+      "params": {}
+    },
+    "error.data.taskReminder.membersNotClosed": {
+      "zh-CN": "任务提醒包含重复或未知成员",
+      "en-US": "Task reminder has duplicate or unknown members.",
+      "params": {}
+    },
+    "error.data.taskReminder.requiredMemberMissing": {
+      "zh-CN": "任务提醒缺少必需成员",
+      "en-US": "Task reminder is missing a required member.",
+      "params": {}
+    },
+    "error.data.taskReminder.intentByteBudget": {
+      "zh-CN": "任务提醒超过 16 KiB 输入上限",
+      "en-US": "The task reminder exceeds the 16 KiB input limit.",
+      "params": {}
+    },
+    "error.data.taskReminder.identityInvalid": {
+      "zh-CN": "提醒 ID 必须是规范的小写 UUIDv4",
+      "en-US": "The reminder ID must be a canonical lowercase UUIDv4.",
+      "params": {}
+    },
+    "error.data.taskReminder.instantDueRequired": {
+      "zh-CN": "相对提醒需要准确的瞬时到期时间",
+      "en-US": "A relative reminder requires an exact instant due time.",
+      "params": {}
+    },
+    "error.data.taskReminder.advanceOutOfRange": {
+      "zh-CN": "提醒提前量超出支持的非负范围",
+      "en-US": "The reminder advance is outside the supported nonnegative range.",
+      "params": {}
+    },
+    "error.data.taskReminder.advanceOverflow": {
+      "zh-CN": "提醒提前量溢出",
+      "en-US": "The reminder advance overflows.",
+      "params": {}
+    },
+    "error.data.taskReminder.dueDayInputRequired": {
+      "zh-CN": "到期日提醒需要完整的民用到期日期",
+      "en-US": "A due-day reminder requires a complete civil due date.",
+      "params": {}
+    },
+    "error.data.taskReminder.civilDueUnavailable": {
+      "zh-CN": "民用到期日期当前不可用",
+      "en-US": "The civil due date is unavailable.",
+      "params": {}
+    },
+    "error.data.taskReminder.civilDueInvalid": {
+      "zh-CN": "民用到期日期无效",
+      "en-US": "The civil due date is invalid.",
+      "params": {}
+    },
+    "error.data.taskReminder.calendarProviderUnavailable": {
+      "zh-CN": "准确版本的日历 Provider 不可用",
+      "en-US": "The exact calendar provider is unavailable.",
+      "params": {}
+    },
+    "error.data.taskReminder.clockMissing": {
+      "zh-CN": "缺少提醒时钟值",
+      "en-US": "The reminder clock is missing.",
+      "params": {}
+    },
+    "error.data.taskReminder.nativeTimeRequired": {
+      "zh-CN": "提醒时钟必须使用原生 time 值",
+      "en-US": "The reminder clock requires a native time value.",
+      "params": {}
+    },
+    "error.data.taskReminder.clockInvalid": {
+      "zh-CN": "提醒时钟无效",
+      "en-US": "The reminder clock is invalid.",
+      "params": {}
+    },
+    "error.data.taskReminder.clockNotCanonical": {
+      "zh-CN": "提醒时钟不符合规范格式",
+      "en-US": "The reminder clock is not canonical.",
+      "params": {}
+    },
+    "error.data.taskReminder.clockLeapSecondUnsupported": {
+      "zh-CN": "提醒时钟不支持闰秒",
+      "en-US": "Leap seconds are unsupported in reminder clocks.",
+      "params": {}
+    },
+    "error.data.taskReminder.fractionOutOfRange": {
+      "zh-CN": "提醒的小数秒必须位于 [0,1) 区间",
+      "en-US": "The reminder fraction must be in [0,1).",
+      "params": {}
+    },
+    "error.data.taskReminder.zoneProviderUnavailable": {
+      "zh-CN": "准确版本的提醒时区 Provider 不可用",
+      "en-US": "The exact reminder zone provider and version are unavailable.",
+      "params": {}
+    },
+    "error.data.taskReminder.foldInvalid": {
+      "zh-CN": "提醒的重叠时间选择无效",
+      "en-US": "The reminder fold selection is invalid.",
+      "params": {}
+    },
+    "error.data.taskReminder.civilTimeInGap": {
+      "zh-CN": "提醒的民用时间落在时区跳时空缺中",
+      "en-US": "The reminder civil time falls in a zone gap.",
+      "params": {}
+    },
+    "error.data.taskReminder.civilTimeAmbiguous": {
+      "zh-CN": "提醒的民用时间存在歧义，必须明确选择较早或较晚的瞬时",
+      "en-US": "The reminder civil time is ambiguous; explicitly choose the earlier or later instant.",
+      "params": {}
+    },
+    "error.data.taskReminder.kindUnknown": {
+      "zh-CN": "未知的任务提醒类型",
+      "en-US": "The task reminder kind is unknown.",
+      "params": {}
+    },
+    "error.data.taskReminder.minuteOverflow": {
+      "zh-CN": "提醒的分钟边界溢出",
+      "en-US": "The reminder minute boundary overflows.",
+      "params": {}
+    },
+    "error.data.taskReminder.minuteCoverageUnavailable": {
+      "zh-CN": "时区覆盖不足以证明提醒的完整分钟区间",
+      "en-US": "Zone coverage is unavailable for the complete reminder minute.",
+      "params": {}
+    },
+    "error.data.taskReminder.civilDayOutOfBounds": {
+      "zh-CN": "提醒的民用日期超出支持的范围",
+      "en-US": "The reminder civil day is outside supported bounds.",
+      "params": {}
+    },
+    "error.data.taskReminder.completeCivilDueRequired": {
+      "zh-CN": "到期日提醒需要单一、完整的民用到期日期",
+      "en-US": "A due-day reminder requires one complete civil due date.",
+      "params": {}
+    },
+    "error.data.taskReminder.selectorCardinality": {
+      "zh-CN": "任务提醒的各个输入选择器最多只能选择一个值",
+      "en-US": "Each task reminder input must select at most one value.",
+      "params": {}
+    },
+    "error.data.taskReminder.validationUnavailable": {
+      "zh-CN": "无法使用本次冻结输入完成任务提醒验证",
+      "en-US": "Task reminder validation is unavailable with the current frozen inputs.",
+      "params": {}
+    },
+    "error.data.taskReminder.resolutionInvalid": {
+      "zh-CN": "任务提醒计算结果的状态或错误类别无效",
+      "en-US": "The task reminder resolution has an invalid state or failure classification.",
+      "params": {}
+    },
+    "desktop.sessionAlreadyAdopted": {
+      "zh-CN": "已打开文档的会话不能作为未采用结果释放",
+      "en-US": "An adopted document session cannot be released as an unused result",
+      "params": {}
+    },
+    "desktop.sessionReleaseFailed": {
+      "zh-CN": "原会话释放未确认（{sessionId}）；本人恢复稿与原操作仍保留",
+      "en-US": "Session release is unconfirmed ({sessionId}); personal recovery drafts and the original operation are retained",
+      "params": {
+        "sessionId": "text"
+      }
+    },
+    "error.reminder.clockBeforeEpoch": {
+      "zh-CN": "系统时钟早于支持的纪元。",
+      "en-US": "System clock is before the supported epoch",
+      "params": {}
+    },
+    "error.reminder.clockOverflow": {
+      "zh-CN": "系统时钟超出支持范围。",
+      "en-US": "System clock overflow",
+      "params": {}
+    },
+    "error.reminder.originalNotificationInvalid": {
+      "zh-CN": "原始通知请求无效。",
+      "en-US": "Invalid original notification request",
+      "params": {}
+    },
+    "error.reminder.deliveryDescriptionBudget": {
+      "zh-CN": "通知诊断超过安全预算。",
+      "en-US": "Notification diagnostic exceeds budget",
+      "params": {}
+    },
+    "error.reminder.stateInvalid": {
+      "zh-CN": "提醒状态无效或超过安全预算。",
+      "en-US": "Invalid or over-budget reminder state",
+      "params": {}
+    },
+    "error.reminder.librarySelectionInvalid": {
+      "zh-CN": "所选提醒资料库无效。",
+      "en-US": "Invalid selected reminder library",
+      "params": {}
+    },
+    "error.reminder.subscriptionInvalid": {
+      "zh-CN": "提醒订阅无效。",
+      "en-US": "Invalid reminder subscription",
+      "params": {}
+    },
+    "error.reminder.originalEffectInvalid": {
+      "zh-CN": "原始提醒投递记录无效。",
+      "en-US": "Invalid original reminder effect",
+      "params": {}
+    },
+    "error.reminder.activationDuplicate": {
+      "zh-CN": "通知激活标识重复。",
+      "en-US": "Duplicate notification activation key",
+      "params": {}
+    },
+    "error.reminder.originalSummaryMissing": {
+      "zh-CN": "缺少原始提醒摘要。",
+      "en-US": "Missing original reminder summary",
+      "params": {}
+    },
+    "error.reminder.summaryRequiresPreCallFailure": {
+      "zh-CN": "只有明确在外部调用前失败的提醒才能加入后续摘要。",
+      "en-US": "Only a definite pre-call failure may join a later summary",
+      "params": {}
+    },
+    "error.reminder.recordBudget": {
+      "zh-CN": "提醒记录超过安全预算。",
+      "en-US": "Reminder record exceeds budget",
+      "params": {}
+    },
+    "error.reminder.summaryMembersInvalid": {
+      "zh-CN": "原始提醒摘要成员无效。",
+      "en-US": "Invalid original summary membership",
+      "params": {}
+    },
+    "error.reminder.summaryEffectMismatch": {
+      "zh-CN": "摘要成员未指向其原始且可能已发生的外部投递。",
+      "en-US": "Summary member does not point to its original possible external effect",
+      "params": {}
+    },
+    "error.reminder.summaryActivationDuplicate": {
+      "zh-CN": "摘要通知的激活标识重复。",
+      "en-US": "Duplicate summary activation key",
+      "params": {}
+    },
+    "error.reminder.settingsMutationInvalid": {
+      "zh-CN": "提醒设置变更记录无效。",
+      "en-US": "Invalid settings mutation",
+      "params": {}
+    },
+    "error.reminder.stateByteBudget": {
+      "zh-CN": "提醒状态超过 16 MiB。",
+      "en-US": "Reminder state exceeds 16 MiB",
+      "params": {}
+    },
+    "error.reminder.librariesMissing": {
+      "zh-CN": "缺少提醒资料库集合。",
+      "en-US": "Missing reminder libraries",
+      "params": {}
+    },
+    "error.reminder.libraryIdentityMissing": {
+      "zh-CN": "缺少资料库的物理身份。",
+      "en-US": "Missing library identity",
+      "params": {}
+    },
+    "error.reminder.libraryIdentityFieldsInvalid": {
+      "zh-CN": "资料库身份包含未知成员。",
+      "en-US": "Unknown library identity members",
+      "params": {}
+    },
+    "error.reminder.foreignDevice": {
+      "zh-CN": "提醒状态属于另一台机器、用户或配置目录，不能直接接纳。",
+      "en-US": "Reminder state belongs to another machine, user or profile; it is not adopted",
+      "params": {}
+    },
+    "error.reminder.deviceMismatch": {
+      "zh-CN": "提醒状态的原始设备不匹配。",
+      "en-US": "Reminder state has a different original device",
+      "params": {}
+    },
+    "error.reminder.revisionOverflow": {
+      "zh-CN": "提醒状态修订号超出范围。",
+      "en-US": "Reminder revision overflow",
+      "params": {}
+    },
+    "error.reminder.recordCursorInvalid": {
+      "zh-CN": "原始提醒记录的分页游标无效。",
+      "en-US": "Invalid original reminder record cursor",
+      "params": {}
+    },
+    "error.reminder.originalRecordMissing": {
+      "zh-CN": "找不到原始提醒记录。",
+      "en-US": "No original reminder record",
+      "params": {}
+    },
+    "error.reminder.originalLibraryMissing": {
+      "zh-CN": "找不到原始提醒资料库。",
+      "en-US": "No original reminder library",
+      "params": {}
+    },
+    "error.reminder.originalLibraryRootChanged": {
+      "zh-CN": "原始提醒资料库的物理根目录已变化。",
+      "en-US": "The original reminder library physical root changed",
+      "params": {}
+    },
+    "error.reminder.openTargetIdentityChanged": {
+      "zh-CN": "打开前，原始提醒目标的身份已变化。",
+      "en-US": "The original reminder target changed identity before opening",
+      "params": {}
+    },
+    "error.reminder.openLibraryChanged": {
+      "zh-CN": "打开期间，原始提醒资料库已变化。",
+      "en-US": "The original reminder library changed while opening",
+      "params": {}
+    },
+    "error.reminder.reminderIdMissing": {
+      "zh-CN": "缺少提醒标识。",
+      "en-US": "Missing reminder id",
+      "params": {}
+    },
+    "error.reminder.definitionMissing": {
+      "zh-CN": "缺少提醒定义。",
+      "en-US": "Missing reminder definition",
+      "params": {}
+    },
+    "error.reminder.triggerMissing": {
+      "zh-CN": "缺少提醒触发时刻。",
+      "en-US": "Missing reminder trigger",
+      "params": {}
+    },
+    "error.reminder.selectionChanged": {
+      "zh-CN": "提醒选择已变化，请重新开始有界扫描。",
+      "en-US": "Reminder selection changed; restart the bounded scan",
+      "params": {}
+    },
+    "error.reminder.liveTaskUnavailable": {
+      "zh-CN": "原始当前任务不可用。",
+      "en-US": "The original live task is unavailable",
+      "params": {}
+    },
+    "error.reminder.taskLocationUnavailable": {
+      "zh-CN": "任务没有当前已接纳的位置。",
+      "en-US": "Task has no current admitted location",
+      "params": {}
+    },
+    "error.reminder.taskLocationChanged": {
+      "zh-CN": "原始提醒位置现已属于另一对象。",
+      "en-US": "The original reminder location now belongs to another object",
+      "params": {}
+    },
+    "error.reminder.taskReferenceInvalid": {
+      "zh-CN": "原始任务引用无效。",
+      "en-US": "Invalid original task reference",
+      "params": {}
+    },
+    "error.reminder.taskLibraryMismatch": {
+      "zh-CN": "任务属于另一所选资料库。",
+      "en-US": "Task belongs to another selected library",
+      "params": {}
+    },
+    "error.reminder.qualifiedTaskSourceMissing": {
+      "zh-CN": "缺少已获资格的任务源。",
+      "en-US": "Missing qualified task source",
+      "params": {}
+    },
+    "error.reminder.savedObjectNotTask": {
+      "zh-CN": "已保存的对象不是合格任务。",
+      "en-US": "The saved object is not a qualified task",
+      "params": {}
+    },
+    "error.reminder.savedTaskStatusInvalid": {
+      "zh-CN": "已保存的任务状态无效。",
+      "en-US": "Saved task status is invalid",
+      "params": {}
+    },
+    "error.reminder.savedTaskStatusUnavailable": {
+      "zh-CN": "已保存的任务状态不可用。",
+      "en-US": "Saved task status is unavailable",
+      "params": {}
+    },
+    "error.reminder.sessionUnavailable": {
+      "zh-CN": "请重新打开原始任务。",
+      "en-US": "Open the original task again",
+      "params": {}
+    },
+    "error.reminder.dependencyConflict": {
+      "zh-CN": "原始提醒依赖相互冲突。",
+      "en-US": "Competing original reminder dependencies",
+      "params": {}
+    },
+    "error.reminder.inputGuardCountBudget": {
+      "zh-CN": "提醒输入见证数量超过安全预算。",
+      "en-US": "Reminder input guard count exceeded",
+      "params": {}
+    },
+    "error.reminder.dependencyOutsideLibrary": {
+      "zh-CN": "提醒依赖位于原始资料库之外。",
+      "en-US": "Reminder dependency belongs outside the original library",
+      "params": {}
+    },
+    "error.reminder.inputParentChanged": {
+      "zh-CN": "原始提醒输入的父目录已变化。",
+      "en-US": "Original reminder input parent changed",
+      "params": {}
+    },
+    "error.reminder.inputByteOverflow": {
+      "zh-CN": "提醒输入预算计算超出范围。",
+      "en-US": "Reminder input budget overflow",
+      "params": {}
+    },
+    "error.reminder.inputGuardByteBudget": {
+      "zh-CN": "提醒输入见证超过安全预算。",
+      "en-US": "Reminder input guard budget exceeded",
+      "params": {}
+    },
+    "error.reminder.inputChangedBeforeDecision": {
+      "zh-CN": "持久决定前，提醒输入已变化。",
+      "en-US": "A reminder input changed before the durable decision",
+      "params": {}
+    },
+    "error.reminder.inputChangedDuringDecision": {
+      "zh-CN": "持久决定期间，提醒输入已变化；请保留原始结果。",
+      "en-US": "A reminder input changed during the durable decision; retain original outcome",
+      "params": {}
+    },
+    "error.reminder.selectedRootMismatch": {
+      "zh-CN": "此原始资料库选择指向不同的物理根目录。",
+      "en-US": "This original library selection names a different physical root",
+      "params": {}
+    },
+    "error.reminder.libraryChangedDuringSelection": {
+      "zh-CN": "设备选择期间，原始资料库已变化。",
+      "en-US": "Original library changed during the device selection",
+      "params": {}
+    },
+    "error.reminder.librarySelectionMissing": {
+      "zh-CN": "缺少原始提醒资料库选择。",
+      "en-US": "No original reminder library selection",
+      "params": {}
+    },
+    "error.reminder.subscriptionIdentityInvalid": {
+      "zh-CN": "任务或提醒身份无效。",
+      "en-US": "Invalid task/reminder identity",
+      "params": {}
+    },
+    "error.reminder.subscriptionMissing": {
+      "zh-CN": "缺少原始提醒订阅。",
+      "en-US": "No original reminder subscription",
+      "params": {}
+    },
+    "error.reminder.saveBeforeEnable": {
+      "zh-CN": "在此设备启用前，请先保存准确且有效的提醒。",
+      "en-US": "Save the exact valid reminder before enabling it on this device",
+      "params": {}
+    },
+    "error.reminder.selectLibraryFirst": {
+      "zh-CN": "请先在此设备选择该资料库。",
+      "en-US": "Select this library on this device first",
+      "params": {}
+    },
+    "error.reminder.selectedLibraryDisabledOrChanged": {
+      "zh-CN": "原始所选资料库已停用或身份已变化。",
+      "en-US": "The original selected library is disabled or has changed identity",
+      "params": {}
+    },
+    "error.reminder.notDue": {
+      "zh-CN": "尚未到达原始提醒时刻。",
+      "en-US": "The original reminder instant has not arrived",
+      "params": {}
+    },
+    "error.reminder.requiresMissedSummary": {
+      "zh-CN": "此提醒应进入有界的错过提醒摘要。",
+      "en-US": "This reminder belongs in the bounded missed summary",
+      "params": {}
+    },
+    "error.reminder.attemptCounterOverflow": {
+      "zh-CN": "提醒尝试计数超出范围。",
+      "en-US": "Reminder attempt counter overflow",
+      "params": {}
+    },
+    "error.reminder.summaryMemberCountInvalid": {
+      "zh-CN": "错过提醒摘要必须包含 1–64 条原始提醒。",
+      "en-US": "Missed summary requires 1–64 original reminders",
+      "params": {}
+    },
+    "error.reminder.summaryMemberNotMissed": {
+      "zh-CN": "某个摘要成员尚未超过其正常投递时间窗。",
+      "en-US": "A summary member is not past its normal delivery window",
+      "params": {}
+    },
+    "error.reminder.summaryMemberDuplicate": {
+      "zh-CN": "错过提醒摘要包含重复成员。",
+      "en-US": "Duplicate missed summary member",
+      "params": {}
+    },
+    "error.reminder.summaryMemberHandled": {
+      "zh-CN": "某个原始摘要成员已处理或已取消。",
+      "en-US": "An original summary member is handled or cancelled",
+      "params": {}
+    },
+    "error.reminder.summaryMemberEffectPossible": {
+      "zh-CN": "某个原始摘要成员可能已发生外部投递，请保留其原始结果。",
+      "en-US": "An original summary member already has a possible external effect; retain its original outcome",
+      "params": {}
+    },
+    "error.reminder.summaryAttemptCounterOverflow": {
+      "zh-CN": "摘要尝试计数超出范围。",
+      "en-US": "Summary attempt counter overflow",
+      "params": {}
+    },
+    "error.reminder.permitAlreadyAdmitted": {
+      "zh-CN": "一次性外部投递许可已获准使用，请保留或查询原始结果。",
+      "en-US": "The one-use external submission permit has already been admitted; retain/query its original result",
+      "params": {}
+    },
+    "error.reminder.permitChanged": {
+      "zh-CN": "原始通知许可已不是当前许可。",
+      "en-US": "The original notification permit is no longer current",
+      "params": {}
+    },
+    "error.reminder.notificationMemberHandled": {
+      "zh-CN": "某个通知成员已处理或已失效。",
+      "en-US": "A notification member is handled or invalidated",
+      "params": {}
+    },
+    "error.reminder.originalSelectionMissing": {
+      "zh-CN": "缺少原始资料库选择。",
+      "en-US": "Original library selection is missing",
+      "params": {}
+    },
+    "error.reminder.minuteEndedBeforeCall": {
+      "zh-CN": "目标分钟在外部调用前已结束，本次普通通知不再获准投递。",
+      "en-US": "The target minute ended before the external call; no normal notification is authorized",
+      "params": {}
+    },
+    "error.reminder.definitionChanged": {
+      "zh-CN": "原始提醒定义已变化。",
+      "en-US": "The original reminder definition has changed",
+      "params": {}
+    },
+    "error.reminder.externalPermitAlreadyAdmitted": {
+      "zh-CN": "原始外部投递许可已获准使用。",
+      "en-US": "The original external permit was already admitted",
+      "params": {}
+    },
+    "error.reminder.deliveryResultMismatch": {
+      "zh-CN": "通知结果不属于准确的原始许可和请求。",
+      "en-US": "Notification result does not belong to the exact original permit/request",
+      "params": {}
+    },
+    "error.reminder.unknownCannotBecomePreCallFailure": {
+      "zh-CN": "结果未知的外部投递不能改判为调用前失败。",
+      "en-US": "An unknown external result cannot become a pre-call failure",
+      "params": {}
+    },
+    "error.reminder.notificationCursorInvalid": {
+      "zh-CN": "原始通知的分页游标无效。",
+      "en-US": "Invalid original-notification cursor",
+      "params": {}
+    },
+    "error.reminder.originalMemberMissing": {
+      "zh-CN": "缺少原始提醒成员。",
+      "en-US": "Missing original reminder member",
+      "params": {}
+    },
+    "error.reminder.originalMemberLibraryMissing": {
+      "zh-CN": "原始提醒缺少资料库选择。",
+      "en-US": "Original reminder has no library selection",
+      "params": {}
+    },
+    "error.reminder.osHistoryMismatch": {
+      "zh-CN": "系统历史与完整的原始通知请求不匹配。",
+      "en-US": "OS history does not match the complete original notification request",
+      "params": {}
+    },
+    "error.reminder.originalEffectMissing": {
+      "zh-CN": "找不到原始提醒投递记录。",
+      "en-US": "No original reminder effect",
+      "params": {}
+    },
+    "error.reminder.originalSummaryMemberMissing": {
+      "zh-CN": "缺少原始摘要成员。",
+      "en-US": "Missing original summary member",
+      "params": {}
+    },
+    "error.reminder.activationInvalid": {
+      "zh-CN": "提醒的私有激活标识无效。",
+      "en-US": "Invalid opaque reminder activation",
+      "params": {}
+    },
+    "error.reminder.activationUnavailable": {
+      "zh-CN": "找不到属于此配置目录和设备的原始通知。",
+      "en-US": "No original notification belongs to this profile/device",
+      "params": {}
+    },
+    "error.reminder.defaultConfigurationOccupied": {
+      "zh-CN": "原始默认配置位置现已被占用。",
+      "en-US": "An original default-configuration slot is now occupied",
+      "params": {}
+    },
+    "error.reminder.minuteBoundaryMissing": {
+      "zh-CN": "就绪提醒缺少目标分钟边界。",
+      "en-US": "Ready reminder lacks a target minute boundary",
+      "params": {}
+    },
+    "error.reminder.mutationIdInvalid": {
+      "zh-CN": "设置变更必须使用规范的 UUIDv4。",
+      "en-US": "Settings mutation requires a canonical UUIDv4",
+      "params": {}
+    },
+    "error.reminder.mutationInputConflict": {
+      "zh-CN": "设置变更标识已属于不同输入。",
+      "en-US": "Settings mutation id belongs to different input",
+      "params": {}
+    },
+    "error.reminder.settingsChanged": {
+      "zh-CN": "提醒设置已变化，请保留原始待定请求。",
+      "en-US": "Reminder settings changed; preserve the original pending request",
+      "params": {}
+    },
+    "error.reminder.settingsRevisionOverflow": {
+      "zh-CN": "提醒设置修订号超出范围。",
+      "en-US": "Settings revision overflow",
+      "params": {}
+    },
+    "error.reminder.taskNotEligible": {
+      "zh-CN": "原始任务或提醒不具备投递资格。",
+      "en-US": "The original task/reminder is not eligible",
+      "params": {}
+    },
+    "error.reminder.readyDefinitionMissing": {
+      "zh-CN": "就绪提醒缺少原始定义。",
+      "en-US": "Ready reminder lacks its original definition",
+      "params": {}
+    },
+    "error.reminder.candidateChanged": {
+      "zh-CN": "原始提醒目标或定义已变化。",
+      "en-US": "The original reminder target or definition changed",
+      "params": {}
+    },
+    "error.reminder.libraryNotSelected": {
+      "zh-CN": "此设备未选择该资料库。",
+      "en-US": "This library is not selected on this device",
+      "params": {}
+    },
+    "error.reminder.notEnabled": {
+      "zh-CN": "此设备未启用原始资料库或提醒。",
+      "en-US": "The original library/reminder is not enabled on this device",
+      "params": {}
+    },
+    "error.reminder.permitExpired": {
+      "zh-CN": "外部投递前，通知许可已过期。",
+      "en-US": "The notification permit expired before external submission",
+      "params": {}
+    },
+    "error.reminder.osNotificationMissing": {
+      "zh-CN": "此执行标识没有对应的原始系统通知。",
+      "en-US": "No original OS notification at this execution key",
+      "params": {}
+    },
+    "error.reminder.temporalValueInvalid": {
+      "zh-CN": "提醒中的时间值无效。",
+      "en-US": "A reminder temporal value is invalid.",
+      "params": {}
+    },
+    "error.reminder.savedFieldUnavailable": {
+      "zh-CN": "已保存的 {field} 无效或不可用。",
+      "en-US": "Saved {field} is invalid or unavailable.",
+      "params": {
+        "field": "text"
+      }
+    },
+    "error.reminder.libraryIdentityChanged": {
+      "zh-CN": "原始资料库的物理身份已变化。",
+      "en-US": "Original library physical identity changed.",
+      "params": {}
+    },
+    "error.reminder.savedTriggerUnavailable": {
+      "zh-CN": "原始已保存提醒不再解析为准确触发时刻。",
+      "en-US": "Original saved reminder no longer resolves to an exact trigger.",
+      "params": {}
+    },
+    "error.reminder.scheduleTargetChanged": {
+      "zh-CN": "原始物理资料库或已保存提醒的身份已变化。",
+      "en-US": "The original physical library or saved reminder identity changed.",
+      "params": {}
+    },
+    "status.reminder.externalSubmissionUnknown": {
+      "zh-CN": "外部投递可能仍在进行或已经完成。请查询原始系统通知，不要盲目重试。",
+      "en-US": "External submission may be pending or have completed; query the original OS notification, never retry blindly.",
+      "params": {}
+    },
+    "error.device.reminderRecordInvalid": {
+      "zh-CN": "任务提醒设备记录无效。",
+      "en-US": "The task reminder device record is invalid.",
+      "params": {}
+    },
+    "error.device.recordInterrupted": {
+      "zh-CN": "设备记录在 {point} 被中断。",
+      "en-US": "The device record was interrupted at {point}.",
+      "params": {
+        "point": "text"
+      }
+    },
+    "error.reminder.stateVersionUnsupported": {
+      "zh-CN": "提醒设备记录版本不受支持；此构建只读取版本 2。请保留原件。",
+      "en-US": "The reminder device-record version is unsupported; this build reads version 2 only. Retain the original.",
       "params": {}
     }
   }

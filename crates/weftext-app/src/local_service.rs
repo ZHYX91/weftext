@@ -129,6 +129,7 @@ impl LocalService {
 fn router(state: api::AppState) -> Router {
     Router::new()
         .merge(api::writing_api::router())
+        .merge(api::client_preferences_api::router())
         .merge(api::builtin_module_api::router())
         .merge(api::data_api::router())
         .merge(api::embedded_query_api::router())
