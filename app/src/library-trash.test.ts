@@ -9,6 +9,25 @@ const entry = { operationId: "trash-original", name: "A" };
 const plan = { operationId: "restore-once", planId: "frozen", kind: "restoreNode", status: "prepared", changes: [{ path: document.path, action: "create", bytes: 12 }] };
 function harness(request: LibraryTrashHost["request"], created: LibraryTrashHost["created"] = async () => {}): LibraryTrashHost { return { request, created, notify: () => {} }; }
 
+test("restore invalidates its frozen root on commit even without delivery information, and never on prepare or unrelated status", async () => {
+  const changed: string[] = []; let unrelated = true;
+  const host = harness(async <T>(route: string): Promise<T> => (route.endsWith("prepare") ? plan : { ...plan, operationId: unrelated ? "another-operation" : plan.operationId, status: "committed" }) as T);
+  const flow = new LibraryTrashRestoreFlow(host, () => "restore-once"); host.environmentChanged = root => { assert.equal(flow.pending?.state, "committed"); changed.push(root); };
+  await flow.prepare("D:/original-root", entry, "D:/original-root", "A"); assert.deepEqual(changed, []);
+  await assert.rejects(flow.reconcile(), /另一操作/); assert.deepEqual(changed, []); assert.equal(flow.pending?.state, "unknown");
+  unrelated = false; await flow.reconcile(); assert.deepEqual(changed, ["D:/original-root"]); assert.equal(flow.pending?.state, "committed"); assert.equal(flow.pending?.delivered, false);
+  await flow.reconcile(); assert.deepEqual(changed, ["D:/original-root"]); assert.equal(flow.pending?.receipt?.operationId, "restore-once");
+});
+
+test("restore records and announces a confirmed write before a failing open, retaining the original retry", async () => {
+  const order: string[] = [];
+  const host = harness(async <T>(route: string): Promise<T> => (route.endsWith("prepare") ? plan : { ...plan, status: "committed", document }) as T, async () => { order.push("open"); throw new Error("newer editor input"); });
+  const flow = new LibraryTrashRestoreFlow(host, () => "restore-once"); host.environmentChanged = root => { order.push(root); assert.equal(flow.pending?.receipt?.status, "committed"); assert.equal(flow.pending?.state, "committed"); };
+  await flow.prepare("D:/original-root", entry, "D:/original-root", "A"); await assert.rejects(flow.confirmAndCommit(), /newer editor input/);
+  assert.deepEqual(order, ["D:/original-root", "open"]); assert.equal(flow.pending?.state, "committed"); assert.equal(flow.pending?.delivered, false);
+  await assert.rejects(flow.deliverCommitted(), /newer editor input/); assert.deepEqual(order, ["D:/original-root", "open", "open"]);
+});
+
 test("preparation does not execute; confirmation commits only the exact frozen IDs", async () => {
   const calls: { route: string; body: unknown }[] = [];
   const host = harness(async <T>(route: string, body?: unknown): Promise<T> => { calls.push({ route, body }); return (route.endsWith("prepare") ? plan : { ...plan, status: "committed", document }) as T; });

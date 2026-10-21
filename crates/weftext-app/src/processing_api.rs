@@ -66,6 +66,10 @@ pub(crate) fn validate_settings(settings: &Value) -> Result<(), ApiError> {
     if !settings.is_object() || settings["version"] != 1 {
         return Err(ApiError::bad("库设置须为原生 version:1 JSON 对象"));
     }
+    weftext_core::validate_workspace_settings(
+        &serde_json::to_vec(settings).map_err(|_| ApiError::bad("库设置无法编码"))?,
+    )
+    .map_err(|error| ApiError::bad(error.message))?;
     if let Some(processing) = settings.get("processing") {
         let document: ProcessingDocument = serde_json::from_value(processing.clone())
             .map_err(|_| ApiError::bad("处理默认或词表格式无效；原输入保留"))?;

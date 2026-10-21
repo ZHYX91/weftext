@@ -185,9 +185,7 @@ export function createWritingToolbar(controller: WritingController, options: Wri
   return toolbar;
 }
 
-export function createStructureControls(controller: WritingController, range: WritingRange, options: WritingControlOptions = {}): HTMLElement | null {
-  const structure = controller.map?.structures.find(item => item.range.utf16From === range.utf16From && item.range.utf16To === range.utf16To && item.range.raw === range.raw);
-  if (!structure) return null;
+export function createStructureControls(controller: WritingController, structure: WritingStructure, options: WritingControlOptions = {}): HTMLElement | null {
   const snapshot = controller.snapshot;
   const checked = (run: () => Promise<void> | void) => async () => { if (!controller.isSnapshotCurrent(snapshot)) throw new Error("这个结构入口已过期，请等待当前预览后重试。"); await run(); };
   const controls = element("div", "writing-structure-controls"); controls.setAttribute("role", "group"); controls.setAttribute("aria-label", "当前结构操作");

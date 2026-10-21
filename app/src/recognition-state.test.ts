@@ -13,3 +13,38 @@ test("reload locator contains no private evidence and only queries original oper
 test("same stable root rebinds transient session for recovery while preserving exact original destination", async () => { const s = setup(); s.transport.target = () => ({ sessionId: "TEST-reopened-session", parent: "OTHER", name: "OTHER" }); s.controller.restore({ version: 1, identity: "TEST-alice-epoch1", target: { sessionId: "OLD", parent: "TEST-original-parent", name: "TEST-original-name" }, operationId: "TEST-2", planId: "TEST-plan" }); await s.controller.lookup(); assert.deepEqual((s.calls[0].body as { target: unknown }).target, { sessionId: "TEST-reopened-session", parent: "TEST-original-parent", name: "TEST-original-name" }); s.controller.hide(); assert.equal(s.controller.receipt, undefined); assert.equal(s.controller.locator?.operationId, "TEST-2"); await s.controller.lookup(); assert.equal(s.calls.length, 2); });
 test("notRegistered observation alone cannot release an unknown prepare for a new operation", async () => { const s = setup(); s.controller.restore({ version: 1, identity: "TEST-alice-epoch1", target, operationId: "TEST-2" }); s.transport.request = async () => ({ operationId: "TEST-2", status: "notRegistered", commitAllowed: false, preview: {}, nodeRefs: [] }) as never; await s.controller.lookup(); assert.throws(() => s.controller.finish()); assert.equal(s.controller.locator?.operationId, "TEST-2"); });
 test("interrupted checkpoints and expired confirmation cannot prepare a new durable operation", async () => { const review = { purpose: "note" as const, title: "TEST", blocks: [], fields: [], acceptPartial: true }; for (const value of [{ ...job, confirmationExpired: true }, { ...job, status: "interrupted" as const, result: { version: 1, status: "partial" as const, input: { sha256: job.inputSha256, bytes: 1, mediaType: "application/pdf" }, pages: [], workerFinalValidation: false } }]) { const s = setup(); s.controller.job = value; await assert.rejects(s.controller.prepare(target, review)); assert.equal(s.calls.length, 0); assert.equal(s.stored.length, 0); } });
+
+test("a committed recognition receipt retires its original environment after a root switch without restoring the old panel", async () => {
+  const s = setup(), changed: string[] = []; s.transport.committed = identity => { changed.push(identity); };
+  await s.controller.start(target, "pdf", "TEST", options);
+  await s.controller.prepare(target, { purpose: "note", title: "TEST", blocks: [], fields: [], acceptPartial: false });
+  assert.deepEqual(changed, [], "recognition and preparation do not write author files");
+  const original = structuredClone(s.controller.locator!); let release!: (value: RecognitionReceipt) => void;
+  s.transport.request = () => new Promise(resolve => { release = resolve as never; });
+  const commit = s.controller.commit(true); s.controller.detach(); s.identity("TEST-other-root");
+  release({ ...receipt, status: "committed", commitAllowed: false }); await commit;
+  assert.deepEqual(changed, [original.identity]); assert.equal(Boolean(s.controller.receipt), false); assert.equal(Boolean(s.controller.locator), false);
+  s.identity(original.identity); s.controller.restore(original);
+  s.transport.request = async () => ({ ...receipt, status: "committed", commitAllowed: false }) as never;
+  await s.controller.lookup(); assert.equal(s.controller.receipt?.status, "committed"); assert.equal(s.controller.uncertain, false);
+  assert.deepEqual(changed, [original.identity], "status recovery of the same commit does not invent another mutation");
+});
+
+test("only the original recognition operation and plan can notify a committed environment", async () => {
+  for (const changedReceipt of [{ ...receipt, operationId: "another-operation" }, { ...receipt, planId: "another-plan" }]) {
+    const s = setup(), changed: string[] = []; s.transport.committed = identity => { changed.push(identity); };
+    s.controller.restore({ version: 1, identity: "TEST-alice-epoch1", target, operationId: receipt.operationId, planId: receipt.planId });
+    s.transport.request = async () => ({ ...changedReceipt, status: "committed", commitAllowed: false }) as never;
+    await assert.rejects(s.controller.lookup(), /回执无法对应原导入计划/);
+    assert.deepEqual(changed, []); assert.equal(s.controller.uncertain, true); assert.equal(s.controller.locator?.planId, receipt.planId);
+  }
+});
+
+test("a rendering notification failure cannot make a confirmed recognition commit uncertain", async () => {
+  const s = setup(); s.controller.restore({ version: 1, identity: "TEST-alice-epoch1", target, operationId: receipt.operationId, planId: receipt.planId });
+  s.transport.request = async () => ({ ...receipt, status: "committed", commitAllowed: false }) as never;
+  s.transport.committed = () => { assert.equal(s.controller.receipt?.status, "committed"); assert.equal(s.controller.uncertain, false); assert.ok(s.stored.length); throw new Error("render failed"); };
+  await assert.rejects(s.controller.lookup(), /render failed/);
+  assert.equal(s.controller.receipt?.status, "committed"); assert.equal(s.controller.uncertain, false);
+  await s.controller.lookup(); assert.equal(s.controller.receipt?.status, "committed");
+});

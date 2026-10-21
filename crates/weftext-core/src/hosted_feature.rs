@@ -50,6 +50,7 @@ enum FeatureIntentKind {
     AdmitDirectory,
     CreateTag,
     RenameTag,
+    MoveTag,
 }
 impl FeatureIntentKind {
     fn from_intent(intent: &OperationIntent) -> Result<Self> {
@@ -95,6 +96,7 @@ impl FeatureIntentKind {
             Self::AdmitDirectory => "admitDirectory",
             Self::CreateTag => "createTag",
             Self::RenameTag => "renameTag",
+            Self::MoveTag => "moveTag",
         }
     }
     fn has_losses(self) -> bool {
@@ -265,6 +267,73 @@ pub(super) fn valid_fingerprint(fingerprint: &str) -> Result<()> {
 }
 
 impl Core {
+    /// Describe shared-role writes from the immutable original actor Plan.
+    /// Hosts must authorize these effects separately from destination slots.
+    pub fn actor_feature_shared_writes(
+        &self,
+        resource: &str,
+        operation: &str,
+    ) -> Result<Vec<String>> {
+        let record = self
+            .actor_feature_record(resource, operation)?
+            .ok_or_else(conflict)?;
+        let transaction = self
+            .operations
+            .get(&record.core_operation_id)
+            .and_then(|p| p.transaction.as_ref())
+            .ok_or_else(conflict)?;
+        let root = Path::new(&transaction.request.root);
+        let mut roles = std::collections::BTreeSet::new();
+        for change in self.prepared_operation_files(&record.core_operation_id)? {
+            if change.before.as_ref() == Some(&change.after) {
+                continue;
+            }
+            let path = Path::new(&change.path);
+            if path == root.join(".weftext-schema.json") {
+                roles.insert("schema.write".to_owned());
+            }
+            if path == root.join(".weftext-tags.json") {
+                let before = change
+                    .before
+                    .as_ref()
+                    .map(|b| crate::directory_identity::decode_historical_tag_document(b))
+                    .transpose()?;
+                let after =
+                    crate::directory_identity::decode_historical_tag_document(&change.after)?;
+                let old = before
+                    .iter()
+                    .flat_map(|d| &d.tags)
+                    .map(|t| (&t.tag_id, t))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                for tag in &after.tags {
+                    if let Some(previous) = old.get(&tag.tag_id) {
+                        if previous.display_name != tag.display_name {
+                            roles.insert("tags.rename".to_owned());
+                        }
+                        if previous.parent_tag_id != tag.parent_tag_id {
+                            roles.insert("tags.move".to_owned());
+                        }
+                    } else {
+                        roles.insert("tags.create".to_owned());
+                    }
+                }
+                let after_ids = after
+                    .tags
+                    .iter()
+                    .map(|t| &t.tag_id)
+                    .collect::<std::collections::BTreeSet<_>>();
+                if old.keys().any(|id| !after_ids.contains(id)) {
+                    return Err(CoreError::new(
+                        "unsupportedIntent",
+                        "Tag deletion is not supported",
+                    ));
+                }
+                roles.insert("tags.read".to_owned());
+            }
+        }
+        Ok(roles.into_iter().collect())
+    }
+
     fn actor_output_bytes(claim: &OutputClaim) -> Result<Vec<u8>> {
         let bytes = serde_json::to_vec(claim)?;
         if bytes.len() > 4096 {
@@ -384,6 +453,7 @@ impl Core {
                     FeatureIntentKind::AdmitDirectory
                         | FeatureIntentKind::CreateTag
                         | FeatureIntentKind::RenameTag
+                        | FeatureIntentKind::MoveTag
                 ) != f.navigation.is_some()
                     || f.navigation
                         .as_ref()

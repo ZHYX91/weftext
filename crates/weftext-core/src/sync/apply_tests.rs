@@ -680,6 +680,266 @@ fn received_registry_update_admits_new_tags_only_on_original_guarded_file() {
     );
 }
 
+fn synchronized_tags() -> (Pair, String, String) {
+    let mut p = pair(&["Note"]);
+    let mut references = Vec::new();
+    for name in ["same/name", "same/name"] {
+        let basis = p.a.read_tag_registry(&p.ar).unwrap();
+        let prepared =
+            p.a.prepare_create_tag(&p.ar, name, &basis.base_id, &fresh())
+                .unwrap();
+        p.a.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+            .unwrap();
+        references.push(prepared.target_ref);
+    }
+    p.keys = BTreeSet::from([ObjectKey::Tags]);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    (p, references.remove(0), references.remove(0))
+}
+
+#[test]
+fn concurrent_opposite_tag_moves_keep_exact_sides_and_base_and_refuse_cyclic_merge() {
+    let (mut p, a, b) = synchronized_tags();
+    let base =
+        p.a.read_sync_history(&p.identity)
+            .unwrap()
+            .objects()
+            .unwrap()[&ObjectKey::Tags]
+            .versions[0]
+            .clone();
+    let basis = p.a.read_tag_registry(&p.ar).unwrap();
+    let left =
+        p.a.prepare_move_tag(&p.ar, &a, Some(&b), &basis.base_id, &fresh())
+            .unwrap();
+    p.a.execute_operation(&left.preview.operation_id, &left.preview.plan_id)
+        .unwrap();
+    let basis = p.b.read_tag_registry(&p.br).unwrap();
+    let right =
+        p.b.prepare_move_tag(&p.br, &b, Some(&a), &basis.base_id, &fresh())
+            .unwrap();
+    p.b.execute_operation(&right.preview.operation_id, &right.preview.plan_id)
+        .unwrap();
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let request = apply(&p);
+    assert_eq!(
+        p.b.prepare_operation(request).unwrap_err().code,
+        "syncConflict"
+    );
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let view = &graph.objects().unwrap()[&ObjectKey::Tags];
+    assert_eq!(view.versions.len(), 2);
+    assert_eq!(view.common_bases[0].revision, base.revision);
+    let ai = a.rsplit('/').next().unwrap();
+    let bi = b.rsplit('/').next().unwrap();
+    let bytes = serde_json::to_vec(&serde_json::json!({"version":2,"tags":[
+        {"tagId":ai,"displayName":"same/name","parentTagId":bi},
+        {"tagId":bi,"displayName":"same/name","parentTagId":ai}
+    ]}))
+    .unwrap();
+    let mut invalid_state = view.versions[0].state.clone();
+    invalid_state
+        .files
+        .insert(".weftext-tags.json".into(), hash(&bytes));
+    invalid_state
+        .file_revisions
+        .insert(".weftext-tags.json".into(), fresh());
+    let before = fs::read(p.br.join(".weftext-tags.json")).unwrap();
+    let invalid = OperationRequest {
+        operation_id: fresh(),
+        root: display(&p.br),
+        intent: OperationIntent::MergeSync {
+            identity: p.identity.clone(),
+            resolutions: vec![SyncResolution {
+                object: ObjectKey::Tags,
+                revisions: revisions(view),
+                state: invalid_state,
+            }],
+            blobs: BTreeMap::from([(hash(&bytes), bytes)]),
+        },
+    };
+    assert!(p.b.prepare_operation(invalid).is_err());
+    assert_eq!(fs::read(p.br.join(".weftext-tags.json")).unwrap(), before);
+    let chosen = view
+        .versions
+        .iter()
+        .find(|v| {
+            let data: serde_json::Value =
+                serde_json::from_slice(graph.blob(&v.state.files[".weftext-tags.json"]).unwrap())
+                    .unwrap();
+            data["tags"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|t| t["tagId"] == ai && t["parentTagId"] == bi)
+        })
+        .unwrap();
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::MergeSync {
+            identity: p.identity.clone(),
+            resolutions: vec![SyncResolution {
+                object: ObjectKey::Tags,
+                revisions: revisions(view),
+                state: chosen.state.clone(),
+            }],
+            blobs: BTreeMap::new(),
+        },
+    );
+    let registry = p.b.read_tag_registry(&p.br).unwrap();
+    assert!(registry.complete);
+    assert_eq!(
+        registry
+            .tags
+            .iter()
+            .find(|t| t.tag_ref == a)
+            .unwrap()
+            .parent_tag_id
+            .as_deref(),
+        Some(bi)
+    );
+    for version in view.versions.iter().chain(&view.common_bases) {
+        let history =
+            p.b.read_received_sync_file(
+                &p.identity,
+                &ObjectKey::Tags,
+                &version.revision,
+                ".weftext-tags.json",
+            )
+            .unwrap();
+        assert_eq!(
+            history.bytes,
+            graph
+                .blob(&version.state.files[".weftext-tags.json"])
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn retained_legacy_tag_branch_is_readable_but_cannot_install_over_current_hierarchy() {
+    let (mut p, a, b) = synchronized_tags();
+    let basis = p.a.read_tag_registry(&p.ar).unwrap();
+    let moved =
+        p.a.prepare_move_tag(&p.ar, &a, Some(&b), &basis.base_id, &fresh())
+            .unwrap();
+    p.a.execute_operation(&moved.preview.operation_id, &moved.preview.plan_id)
+        .unwrap();
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let current = graph.objects().unwrap()[&ObjectKey::Tags].versions[0].clone();
+    let bytes = serde_json::to_vec(&serde_json::json!({"version":1,"tags":[
+        {"tagId":a.rsplit('/').next().unwrap(),"displayName":"legacy offline name"},
+        {"tagId":b.rsplit('/').next().unwrap(),"displayName":"same/name"}
+    ]}))
+    .unwrap();
+    let revision = fresh();
+    let mut state = current.state.clone();
+    state
+        .files
+        .insert(".weftext-tags.json".into(), hash(&bytes));
+    state
+        .file_revisions
+        .insert(".weftext-tags.json".into(), fresh());
+    let manifest = Manifest {
+        version: 1,
+        workspace_id: p.identity.workspace_id.clone(),
+        replica_id: fresh(),
+        operation_id: fresh(),
+        parents: graph.heads(),
+        changes: vec![Change {
+            object: ObjectKey::Tags,
+            before: BTreeSet::from([current.revision]),
+            revision: revision.clone(),
+            after: state,
+        }],
+        dependencies: vec![],
+    };
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
+            manifests: BTreeMap::from([(manifest.id().unwrap(), manifest.clone())]),
+            blobs: BTreeMap::new(),
+        },
+    )
+    .unwrap();
+    let before = fs::read(p.br.join(".weftext-tags.json")).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&before).unwrap()["version"],
+        2
+    );
+    assert!(p.b.read_tag_registry(&p.br).unwrap().complete);
+    assert_eq!(
+        p.b.read_received_sync_file(
+            &p.identity,
+            &ObjectKey::Tags,
+            &revision,
+            ".weftext-tags.json",
+        )
+        .unwrap_err()
+        .code,
+        "syncIncomplete",
+        "A readable current v2 tree cannot replace the missing exact v1 blob"
+    );
+    assert_eq!(fs::read(p.br.join(".weftext-tags.json")).unwrap(), before);
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
+            manifests: BTreeMap::from([(manifest.id().unwrap(), manifest)]),
+            blobs: BTreeMap::from([(hash(&bytes), bytes.clone())]),
+        },
+    )
+    .unwrap();
+    let retained =
+        p.b.read_received_sync_file(
+            &p.identity,
+            &ObjectKey::Tags,
+            &revision,
+            ".weftext-tags.json",
+        )
+        .unwrap();
+    assert_eq!(retained.bytes, bytes);
+    let historical =
+        crate::directory_identity::decode_historical_tag_document(&retained.bytes).unwrap();
+    assert!(
+        historical
+            .tags
+            .iter()
+            .all(|tag| tag.parent_tag_id.is_none())
+    );
+    let request = apply(&p);
+    assert!(p.b.prepare_operation(request).is_err());
+    assert_eq!(fs::read(p.br.join(".weftext-tags.json")).unwrap(), before);
+    let current = p.b.read_tag_registry(&p.br).unwrap();
+    assert!(current.complete);
+    assert_eq!(
+        current
+            .tags
+            .iter()
+            .find(|t| t.tag_ref == a)
+            .unwrap()
+            .parent_tag_id
+            .as_deref(),
+        b.rsplit('/').next()
+    );
+}
+
 #[test]
 fn partial_replica_hydrates_new_tree_and_compound_existing_update_in_one_decision() {
     let mut p = pair(&["Note"]);

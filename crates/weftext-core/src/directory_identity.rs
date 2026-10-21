@@ -25,12 +25,21 @@ pub struct NavigationPreparation {
     pub target_ref: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TagAssignment {
+    pub path: String,
+    pub base_id: String,
+    pub field_id: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagRecord {
     pub tag_ref: String,
     pub tag_id: String,
     pub display_name: String,
+    pub parent_tag_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -65,28 +74,27 @@ struct TagReservation {
     root: String,
     workspace_id: String,
     tag_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    additional_tag_ids: Vec<String>,
     registry_identity: Option<FileIdentity>,
     fingerprint: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct TagDocument {
-    version: u32,
-    tags: Vec<TagDefinition>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct TagDefinition {
-    tag_id: String,
-    display_name: String,
-}
+use weftext_data::{TagDefinition, TagDocument};
 
 struct TagWriteBasis {
     document: TagDocument,
     bytes: Option<Vec<u8>>,
     identity: Option<FileIdentity>,
+}
+
+fn tag_update_files(t: &operations::FrozenOperation) -> &[FileChange] {
+    match &t.mutation {
+        operations::Mutation::Update { files } => files,
+        operations::Mutation::CreateTree { updates, .. }
+        | operations::Mutation::Relocate { updates, .. }
+        | operations::Mutation::Compound { updates, .. } => updates,
+    }
 }
 
 pub(crate) fn validate_directory_marker(bytes: &[u8]) -> Result<()> {
@@ -97,33 +105,56 @@ pub(crate) fn validate_directory_marker(bytes: &[u8]) -> Result<()> {
 fn tag_document(bytes: Option<&[u8]>) -> Result<TagDocument> {
     let Some(bytes) = bytes else {
         return Ok(TagDocument {
-            version: 1,
+            version: 2,
             tags: vec![],
         });
     };
-    let doc: TagDocument = serde_json::from_slice(bytes)?;
-    if doc.version != 1 || doc.tags.len() > 5000 {
-        return Err(CoreError::new(
-            "tagRegistry",
-            "Unsupported or oversized tag registry",
-        ));
+    // Historical v1 blobs remain immutable. Only the explicit Core write path
+    // converts their in-memory all-root interpretation to current v2 bytes.
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct LegacyTag {
+        tag_id: String,
+        display_name: String,
     }
-    let mut ids = BTreeSet::new();
-    for tag in &doc.tags {
-        valid_operation_id(&tag.tag_id)?;
-        validate_tag_name(&tag.display_name)?;
-        if !ids.insert(&tag.tag_id) {
-            return Err(CoreError::new(
-                "duplicateTag",
-                "Duplicate TagId claims are ambiguous",
-            ));
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct LegacyDocument {
+        version: u32,
+        tags: Vec<LegacyTag>,
+    }
+    let value: serde_json::Value = serde_json::from_slice(bytes)?;
+    let doc = if value["version"] == 1 {
+        let old: LegacyDocument = serde_json::from_slice(bytes)?;
+        debug_assert_eq!(old.version, 1);
+        TagDocument {
+            version: 2,
+            tags: old
+                .tags
+                .into_iter()
+                .map(|tag| TagDefinition {
+                    tag_id: tag.tag_id,
+                    display_name: tag.display_name,
+                    parent_tag_id: None,
+                })
+                .collect(),
         }
-    }
+    } else {
+        serde_json::from_slice(bytes)?
+    };
+    doc.forest()
+        .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
     Ok(doc)
 }
 
 pub(crate) fn validate_sync_tags(bytes: &[u8]) -> Result<()> {
-    tag_document(Some(bytes)).map(|_| ())
+    let doc: TagDocument = serde_json::from_slice(bytes)?;
+    doc.forest()
+        .map(|_| ())
+        .map_err(|e| CoreError::new("tagRegistry", e.to_string()))
+}
+pub(crate) fn decode_historical_tag_document(bytes: &[u8]) -> Result<TagDocument> {
+    tag_document(Some(bytes))
 }
 
 fn validate_tag_name(name: &str) -> Result<()> {
@@ -589,6 +620,73 @@ impl Core {
         Ok(candidates)
     }
 
+    fn admitted_tag_ids(
+        &self,
+        root: &Path,
+        workspace: &str,
+        identity: &FileIdentity,
+    ) -> Result<BTreeSet<String>> {
+        let registry = display(&root.join(TAG_REGISTRY));
+        let mut ids = BTreeSet::new();
+        for plan in self.operations.values().filter(|p| {
+            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
+        }) {
+            let Some(transaction) = &plan.transaction else {
+                continue;
+            };
+            let originals = transaction
+                .created_files()
+                .iter()
+                .chain(tag_update_files(transaction))
+                .filter(|f| f.path == registry)
+                .collect::<Vec<_>>();
+            if originals.is_empty() {
+                continue;
+            }
+            let physical = transaction
+                .files
+                .iter()
+                .any(|f| f.path == registry && &f.stamp.identity == identity)
+                || self
+                    .materialized_identity(&plan.operation_id, Path::new(&registry))?
+                    .as_ref()
+                    == Some(identity);
+            if !physical {
+                continue;
+            }
+            if matches!(
+                transaction.request.intent,
+                OperationIntent::CloneSync { .. }
+                    | OperationIntent::ApplySync { .. }
+                    | OperationIntent::MergeSync { .. }
+                    | OperationIntent::RevalidateSync { .. }
+            ) {
+                // Sync admission is the complete accepted object, not per-edge
+                // identity. Decode its original accepted blob once.
+                for original in originals {
+                    ids.extend(
+                        tag_document(Some(&original.after))?
+                            .tags
+                            .into_iter()
+                            .map(|t| t.tag_id),
+                    );
+                }
+            } else if let Some(r) = self
+                .read_navigation_record::<TagReservation>(&plan.operation_id, "tag-reservation")?
+                && r.workspace_id == workspace
+                && r.root == display(root)
+                && r.fingerprint == plan.fingerprint
+                && r.registry_identity.as_ref().is_none_or(|fi| fi == identity)
+            {
+                // The committed allocation is the birth fact. Current planners
+                // require every reserved ID in the after image; reading every
+                // historical full registry again would be quadratic in births.
+                ids.extend(std::iter::once(r.tag_id).chain(r.additional_tag_ids));
+            }
+        }
+        Ok(ids)
+    }
+
     fn tag_admitted(
         &self,
         root: &Path,
@@ -596,97 +694,9 @@ impl Core {
         id: &str,
         identity: &FileIdentity,
     ) -> Result<bool> {
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
-            if plan.workspace_id.as_deref() == Some(workspace)
-                && let Some(transaction) = &plan.transaction
-                && matches!(
-                    transaction.request.intent,
-                    OperationIntent::CloneSync { .. }
-                        | OperationIntent::ApplySync { .. }
-                        | OperationIntent::MergeSync { .. }
-                        | OperationIntent::RevalidateSync { .. }
-                )
-                && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
-            {
-                let registry = root.join(TAG_REGISTRY);
-                if self
-                    .materialized_identity(&plan.operation_id, &registry)?
-                    .as_ref()
-                    == Some(identity)
-                    && files.iter().any(|f| {
-                        f.path == display(&registry)
-                            && tag_document(Some(&f.after))
-                                .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
-                    })
-                {
-                    return Ok(true);
-                }
-            }
-            if plan.workspace_id.as_deref() == Some(workspace)
-                && plan
-                    .sync_application
-                    .as_ref()
-                    .is_some_and(|a| a.root == display(root))
-                && let Some(transaction) = &plan.transaction
-            {
-                let updates = match &transaction.mutation {
-                    operations::Mutation::Update { files } => files,
-                    operations::Mutation::CreateTree { updates, .. }
-                    | operations::Mutation::Relocate { updates, .. }
-                    | operations::Mutation::Compound { updates, .. } => updates,
-                };
-                let registry = display(&root.join(TAG_REGISTRY));
-                if transaction
-                    .files
-                    .iter()
-                    .any(|f| f.path == registry && f.stamp.identity == *identity)
-                    && updates.iter().any(|f| {
-                        f.path == registry
-                            && tag_document(Some(&f.after))
-                                .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
-                    })
-                {
-                    return Ok(true);
-                }
-            }
-            let Some(reservation) = self
-                .read_navigation_record::<TagReservation>(&plan.operation_id, "tag-reservation")?
-            else {
-                continue;
-            };
-            if reservation.workspace_id != workspace
-                || reservation.tag_id != id
-                || reservation.root != display(root)
-                || reservation.fingerprint != plan.fingerprint
-            {
-                continue;
-            }
-            let registry = root.join(TAG_REGISTRY);
-            let born_identity = match reservation.registry_identity {
-                Some(identity) => Some(identity),
-                None => self.materialized_identity(&plan.operation_id, &registry)?,
-            };
-            if born_identity.as_ref() != Some(identity) {
-                continue;
-            }
-            let Some(transaction) = plan.transaction.as_ref() else {
-                continue;
-            };
-            if let OperationIntent::UpdateFiles { changes } = &transaction.request.intent
-                && changes.iter().any(|change| {
-                    change.path == display(&registry)
-                        && tag_document(Some(&change.after))
-                            .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
-                })
-            {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        Ok(self
+            .admitted_tag_ids(root, workspace, identity)?
+            .contains(id))
     }
 
     pub fn capture_navigation_target(
@@ -816,7 +826,8 @@ impl Core {
                 }
                 Err(error) => return Err(error),
             };
-            let identity = stamp(&file)?.identity;
+            let observed_stamp = stamp(&file)?;
+            let identity = observed_stamp.identity.clone();
             let bytes = operations::read_blob(&mut file)?;
             let doc = match tag_document(Some(&bytes)) {
                 Ok(doc) => doc,
@@ -830,6 +841,23 @@ impl Core {
                     ));
                 }
             };
+            let captured = operations::CapturedFile {
+                path: display(&registry),
+                stamp: observed_stamp,
+                bytes,
+            };
+            if self.accepted_revision(&captured).is_none()
+                || !self.tag_registry_identity_admitted(&root, &identity)
+                || !self.tag_admitted(&root, ref_workspace, id, &identity)?
+            {
+                return Ok(target(
+                    kind,
+                    "identityInvalid",
+                    Some(reference.into()),
+                    None,
+                    String::new(),
+                ));
+            }
             let Some(tag) = doc.tags.iter().find(|tag| tag.tag_id == id) else {
                 return Ok(target(
                     kind,
@@ -839,15 +867,6 @@ impl Core {
                     String::new(),
                 ));
             };
-            if !self.tag_admitted(&root, ref_workspace, id, &identity)? {
-                return Ok(target(
-                    kind,
-                    "identityInvalid",
-                    Some(reference.into()),
-                    None,
-                    tag.display_name.clone(),
-                ));
-            }
             let mut resolved = target(
                 kind,
                 "managed",
@@ -1013,7 +1032,7 @@ impl Core {
                     &reservation.tag_id,
                 ))
             }
-            Some("renameTag") => canonical["tagRef"]
+            Some("renameTag" | "moveTag") => canonical["tagRef"]
                 .as_str()
                 .map(str::to_owned)
                 .ok_or_else(|| {
@@ -1134,14 +1153,39 @@ impl Core {
             .map(|file| file.stamp.identity.clone());
         let mut tags = Vec::new();
         let mut warnings = Vec::new();
+        if snapshot.bytes.is_none() && self.tag_registry_was_born(&root) {
+            return Err(CoreError::new(
+                "identityConflict",
+                "The admitted registry is missing; recover the original object",
+            ));
+        }
+        if snapshot.bytes.is_some()
+            && (snapshot.revision.is_none()
+                || identity
+                    .as_ref()
+                    .is_none_or(|fi| !self.tag_registry_identity_admitted(&root, fi)))
+        {
+            return Ok(TagRegistrySnapshot {
+                tags,
+                base_id: snapshot.base_id,
+                complete: false,
+                warnings: vec![
+                    "Registry is external_pending or its physical identity is unadmitted".into(),
+                ],
+            });
+        }
+        let admitted = identity
+            .as_ref()
+            .map(|fi| self.admitted_tag_ids(&root, &workspace.workspace_id, fi))
+            .transpose()?
+            .unwrap_or_default();
         for tag in doc.tags {
-            if let Some(identity) = &identity
-                && self.tag_admitted(&root, &workspace.workspace_id, &tag.tag_id, identity)?
-            {
+            if admitted.contains(&tag.tag_id) {
                 tags.push(TagRecord {
                     tag_ref: entity_ref("tag", &workspace.workspace_id, &tag.tag_id),
                     tag_id: tag.tag_id,
                     display_name: tag.display_name,
+                    parent_tag_id: tag.parent_tag_id,
                 });
             } else {
                 warnings.push(format!(
@@ -1174,16 +1218,30 @@ impl Core {
             .captured
             .as_ref()
             .map(|file| file.stamp.identity.clone());
+        if before.is_none() && self.tag_registry_was_born(root) {
+            return Err(CoreError::new(
+                "identityConflict",
+                "An admitted registry is missing; recover its original object",
+            ));
+        }
+        if let Some(file) = &basis.captured
+            && (self.accepted_revision(file).is_none()
+                || !self.tag_registry_identity_admitted(root, &file.stamp.identity))
+        {
+            return Err(CoreError::new(
+                "externalPending",
+                "The registry requires its original accepted physical binding",
+            ));
+        }
         let doc = tag_document(before.as_deref())?;
         let workspace = self.require_workspace(root)?;
+        let admitted = identity
+            .as_ref()
+            .map(|fi| self.admitted_tag_ids(root, &workspace.workspace_id, fi))
+            .transpose()?
+            .unwrap_or_default();
         for tag in &doc.tags {
-            let admitted = match &identity {
-                Some(identity) => {
-                    self.tag_admitted(root, &workspace.workspace_id, &tag.tag_id, identity)?
-                }
-                None => false,
-            };
-            if !admitted {
+            if !admitted.contains(&tag.tag_id) {
                 return Err(CoreError::new(
                     "identityConflict",
                     "Registry contains an unadmitted TagId or replaced registry object",
@@ -1197,6 +1255,381 @@ impl Core {
         })
     }
 
+    fn tag_registry_was_born(&self, root: &Path) -> bool {
+        let path = display(&root.join(TAG_REGISTRY));
+        self.operations.values().any(|p| {
+            self.committed(&p.operation_id)
+                && p.transaction.as_ref().is_some_and(|t| {
+                    t.created_files().iter().any(|f| f.path == path)
+                        || t.files.iter().any(|f| f.path == path)
+                        || tag_update_files(t).iter().any(|f| f.path == path)
+                })
+        })
+    }
+
+    fn tag_registry_identity_admitted(&self, root: &Path, identity: &FileIdentity) -> bool {
+        let path = display(&root.join(TAG_REGISTRY));
+        self.operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+            .any(|p| {
+                p.transaction.as_ref().is_some_and(|t| {
+                    t.files
+                        .iter()
+                        .any(|f| f.path == path && &f.stamp.identity == identity)
+                        || t.created_files().iter().any(|f| {
+                            f.path == path
+                                && self
+                                    .materialized_identity(&p.operation_id, Path::new(&path))
+                                    .is_ok_and(|fi| fi.as_ref() == Some(identity))
+                        })
+                        || (tag_update_files(t)
+                            .iter()
+                            .any(|f| f.path == path && f.before.is_none())
+                            && self
+                                .materialized_identity(&p.operation_id, Path::new(&path))
+                                .is_ok_and(|fi| fi.as_ref() == Some(identity)))
+                })
+            })
+    }
+
+    /// Qualify only the exact bytes already captured with the caller's other
+    /// inputs. This does not open or refresh the registry after the barrier.
+    pub fn qualified_tag_document_from_snapshot(
+        &self,
+        root: impl AsRef<Path>,
+        file: &SnapshotFile,
+    ) -> Result<TagDocument> {
+        let root = absolute_path(root.as_ref())?;
+        if Path::new(&file.path) != root.join(TAG_REGISTRY) {
+            return Err(CoreError::new("outsideRoot", "Not the selected Tags role"));
+        }
+        let basis = self.tag_write_basis(&root, &file.base_id)?;
+        if basis.bytes != file.bytes {
+            return Err(CoreError::new(
+                "conflict",
+                "Frozen tag bytes differ from the original capture",
+            ));
+        }
+        Ok(basis.document)
+    }
+
+    pub(crate) fn validate_tag_registry_absence(&self, root: &Path) -> Result<()> {
+        if self.tag_registry_was_born(root) {
+            Err(CoreError::new(
+                "identityConflict",
+                "The original Tags object is missing",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn qualified_tag_document_from_captured(
+        &self,
+        root: &Path,
+        file: &operations::CapturedFile,
+    ) -> Result<TagDocument> {
+        if Path::new(&file.path) != root.join(TAG_REGISTRY)
+            || !self.tag_registry_identity_admitted(root, &file.stamp.identity)
+            || self.accepted_revision(file).is_none()
+        {
+            return Err(CoreError::new(
+                "identityConflict",
+                "Captured Tags are not the original accepted registry",
+            ));
+        }
+        let doc = tag_document(Some(&file.bytes))?;
+        let ws = self.require_workspace(root)?;
+        let admitted = self.admitted_tag_ids(root, &ws.workspace_id, &file.stamp.identity)?;
+        for tag in &doc.tags {
+            if !admitted.contains(&tag.tag_id) {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "Captured tag is not admitted",
+                ));
+            }
+        }
+        Ok(doc)
+    }
+
+    /// Native import owns this one original allocation; complete source refs
+    /// map to fresh target identities, with all ancestors in the same Plan.
+    pub(crate) fn prepare_import_tag_changes(
+        &mut self,
+        root: &Path,
+        source_workspace: &str,
+        source_doc: &TagDocument,
+        operation_id: &str,
+        fingerprint: &str,
+    ) -> Result<(FileChange, std::collections::BTreeMap<String, String>)> {
+        source_doc
+            .forest()
+            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+        valid_operation_id(source_workspace)?;
+        valid_operation_id(operation_id)?;
+        let registry = self.read_tag_registry(root)?;
+        if !registry.complete {
+            return Err(CoreError::new(
+                "identityConflict",
+                "Import needs the complete qualified target Tags object",
+            ));
+        }
+        let TagWriteBasis {
+            document: mut doc,
+            bytes: before,
+            identity,
+        } = self.tag_write_basis(root, &registry.base_id)?;
+        if doc.tags.len() + source_doc.tags.len() > 5000 {
+            return Err(CoreError::new(
+                "budget",
+                "Imported forest exceeds 5000 tags",
+            ));
+        }
+        let workspace = self.require_workspace(root)?.workspace_id;
+        let reservation = if let Some(old) =
+            self.read_navigation_record::<TagReservation>(operation_id, "tag-reservation")?
+        {
+            if old.root != display(root)
+                || old.workspace_id != workspace
+                || old.registry_identity != identity
+                || old.fingerprint != fingerprint
+                || old.additional_tag_ids.len() + 1 != source_doc.tags.len().max(1)
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "Original tag import allocation differs",
+                ));
+            }
+            old
+        } else {
+            let new = TagReservation {
+                root: display(root),
+                workspace_id: workspace.clone(),
+                tag_id: fresh(),
+                additional_tag_ids: (1..source_doc.tags.len()).map(|_| fresh()).collect(),
+                registry_identity: identity,
+                fingerprint: fingerprint.into(),
+            };
+            journal::private_create(
+                &self.journal_path(operation_id, "tag-reservation"),
+                &serde_json::to_vec(&new)?,
+            )?;
+            new
+        };
+        let map_ids = source_doc
+            .tags
+            .iter()
+            .zip(std::iter::once(&reservation.tag_id).chain(&reservation.additional_tag_ids))
+            .map(|(t, id)| (t.tag_id.clone(), id.clone()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        for tag in &source_doc.tags {
+            doc.tags.push(TagDefinition {
+                tag_id: map_ids[&tag.tag_id].clone(),
+                display_name: tag.display_name.clone(),
+                parent_tag_id: tag.parent_tag_id.as_ref().map(|p| map_ids[p].clone()),
+            });
+        }
+        doc.forest()
+            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+        let mappings = map_ids
+            .into_iter()
+            .map(|(old, new)| {
+                (
+                    entity_ref("tag", source_workspace, &old),
+                    entity_ref("tag", &workspace, &new),
+                )
+            })
+            .collect();
+        Ok((
+            FileChange {
+                path: display(&root.join(TAG_REGISTRY)),
+                base_id: Some(registry.base_id),
+                before,
+                after: serde_json::to_vec_pretty(&doc)?,
+            },
+            mappings,
+        ))
+    }
+
+    /// The common UpdateFiles planner and executor both call this. A generic
+    /// writer cannot allocate identities, erase tags, or install a v1 successor.
+    pub(crate) fn validate_tag_update(
+        &self,
+        root: &Path,
+        operation: &str,
+        change: &FileChange,
+    ) -> Result<()> {
+        if Path::new(&change.path) != root.join(TAG_REGISTRY) {
+            return Ok(());
+        }
+        validate_sync_tags(&change.after)?;
+        let base = change.base_id.as_deref().ok_or_else(|| {
+            CoreError::new("basisRequired", "Tag changes require their original basis")
+        })?;
+        let old = if self.snapshots.contains_key(base) {
+            self.tag_write_basis(root, base)?
+        } else {
+            // A recovered operation uses its persisted original before image
+            // and physical stamp, never an invented replacement snapshot.
+            let t = self
+                .operations
+                .get(operation)
+                .and_then(|p| p.transaction.as_ref())
+                .ok_or_else(|| CoreError::new("staleBase", "Original tag Plan is unavailable"))?;
+            let original = t.files.iter().find(|f| f.path == change.path);
+            if change.before.is_none() {
+                self.validate_tag_registry_absence(root)?;
+            }
+            if original.map(|f| &f.bytes) != change.before.as_ref() {
+                return Err(CoreError::new(
+                    "conflict",
+                    "Original tag before image differs",
+                ));
+            }
+            let document = tag_document(change.before.as_deref())?;
+            let identity = original.map(|f| f.stamp.identity.clone());
+            let workspace = self.require_workspace(root)?;
+            let admitted = identity
+                .as_ref()
+                .map(|fi| self.admitted_tag_ids(root, &workspace.workspace_id, fi))
+                .transpose()?
+                .unwrap_or_default();
+            if document
+                .tags
+                .iter()
+                .any(|tag| !admitted.contains(&tag.tag_id))
+            {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "Recovered tags lack their original binding",
+                ));
+            }
+            TagWriteBasis {
+                document,
+                bytes: change.before.clone(),
+                identity,
+            }
+        };
+        if old.bytes != change.before {
+            return Err(CoreError::new("conflict", "Tag before bytes differ"));
+        }
+        let doc = tag_document(Some(&change.after))?;
+        let before_ids = old
+            .document
+            .tags
+            .iter()
+            .map(|t| &t.tag_id)
+            .collect::<BTreeSet<_>>();
+        let after_ids = doc.tags.iter().map(|t| &t.tag_id).collect::<BTreeSet<_>>();
+        if !before_ids.is_subset(&after_ids) {
+            return Err(CoreError::new(
+                "unsupportedIntent",
+                "Tag deletion is not supported",
+            ));
+        }
+        let added = doc
+            .tags
+            .iter()
+            .filter(|t| !before_ids.contains(&t.tag_id))
+            .collect::<Vec<_>>();
+        let reservation =
+            self.read_navigation_record::<TagReservation>(operation, "tag-reservation")?;
+        if !added.is_empty() || reservation.is_some() {
+            let reservation = reservation.ok_or_else(|| {
+                CoreError::new(
+                    "identityRequired",
+                    "Tag creation needs its original Core allocation",
+                )
+            })?;
+            let expected = std::iter::once(&reservation.tag_id)
+                .chain(&reservation.additional_tag_ids)
+                .collect::<BTreeSet<_>>();
+            if added.iter().map(|t| &t.tag_id).collect::<BTreeSet<_>>() != expected
+                || reservation.root != display(root)
+                || reservation.registry_identity != old.identity
+            {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "New tags differ from the original allocation",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Every local mutation shares this check, including root-role updates
+    /// attached to a native CreateTree. A formerly empty physical slot cannot
+    /// become a new registry after another committed registry went missing.
+    pub(crate) fn validate_tag_mutation_changes(
+        &self,
+        root: &Path,
+        operation: &str,
+        fingerprint: &str,
+        mutation: &operations::Mutation,
+        synchronized: bool,
+    ) -> Result<()> {
+        let (created, updates): (&[FileChange], &[FileChange]) = match mutation {
+            operations::Mutation::Update { files } => (&[], files),
+            operations::Mutation::CreateTree { files, updates, .. } => (files, updates),
+            operations::Mutation::Relocate { updates, .. } => (&[], updates),
+            operations::Mutation::Compound {
+                created_files,
+                updates,
+                ..
+            } => (created_files, updates),
+        };
+        let mut seen = false;
+        for change in created
+            .iter()
+            .chain(updates)
+            .filter(|change| Path::new(&change.path) == root.join(TAG_REGISTRY))
+        {
+            if seen {
+                return Err(CoreError::new(
+                    "duplicatePath",
+                    "One Plan cannot install the Tags role twice",
+                ));
+            }
+            seen = true;
+            // Received complete objects use their original replica evidence,
+            // but no old v1 state can become a current successor implicitly.
+            if synchronized {
+                validate_sync_tags(&change.after)?;
+                continue;
+            }
+            self.validate_tag_update(root, operation, change)?;
+            if let Some(reservation) =
+                self.read_navigation_record::<TagReservation>(operation, "tag-reservation")?
+                && reservation.fingerprint != fingerprint
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "Tag allocation belongs to another original author intent",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_tag_plan_changes(&self, plan: &journal::Plan) -> Result<()> {
+        // A retained terminal receipt cannot acquire another filesystem effect.
+        // Historical v1 receipts remain readable rather than being rewritten.
+        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+            return Ok(());
+        }
+        let transaction = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new("invalidState", "The original Tag Plan is unavailable")
+        })?;
+        self.validate_tag_mutation_changes(
+            Path::new(&transaction.request.root),
+            &plan.operation_id,
+            &plan.fingerprint,
+            &transaction.mutation,
+            plan.sync_application.is_some() || plan.sync_setup.is_some(),
+        )
+    }
+
     pub fn prepare_create_tag(
         &mut self,
         root: impl AsRef<Path>,
@@ -1204,10 +1637,91 @@ impl Core {
         base_id: &str,
         operation_id: &str,
     ) -> Result<NavigationPreparation> {
+        self.prepare_create_tag_under(root, display_name, None, base_id, operation_id)
+    }
+
+    pub fn prepare_create_tag_under(
+        &mut self,
+        root: impl AsRef<Path>,
+        display_name: &str,
+        parent_ref: Option<&str>,
+        base_id: &str,
+        operation_id: &str,
+    ) -> Result<NavigationPreparation> {
+        self.prepare_create_tag_with_assignment(
+            root,
+            display_name,
+            parent_ref,
+            base_id,
+            None,
+            operation_id,
+        )
+    }
+
+    /// Local editing supplies a session basis; narrow hosted fields supply an
+    /// internal snapshot basis. Both must qualify the original saved bytes,
+    /// never silently substitute the latest contents at the remembered path.
+    fn tag_assignment_snapshot(
+        &mut self,
+        root: &Path,
+        assignment: &TagAssignment,
+    ) -> Result<(String, operations::CapturedFile)> {
+        if let Some(file) = self
+            .snapshots
+            .get(&assignment.base_id)
+            .filter(|b| b.path == assignment.path)
+            .and_then(|b| b.captured.clone())
+        {
+            return Ok((assignment.base_id.clone(), file));
+        }
+        let (session_id, original) = self
+            .sessions
+            .iter()
+            .find(|(_, s)| {
+                s.actor == self.actor
+                    && s.root == root
+                    && display(&s.path) == assignment.path
+                    && s.base_id == assignment.base_id
+            })
+            .map(|(id, s)| (id.clone(), s.clone()))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "staleBase",
+                    "First assignment needs the exact saved note basis",
+                )
+            })?;
+        self.check_session_base(&session_id, &assignment.base_id)?;
+        let snapshot = self
+            .read_snapshot(root, std::slice::from_ref(&assignment.path))?
+            .files
+            .remove(0);
+        let file = self
+            .snapshots
+            .get(&snapshot.base_id)
+            .and_then(|b| b.captured.clone())
+            .filter(|f| f.stamp == original.stamp && f.bytes == original.bytes)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "staleBase",
+                    "The original saved note changed during assignment preparation",
+                )
+            })?;
+        Ok((snapshot.base_id, file))
+    }
+
+    pub fn prepare_create_tag_with_assignment(
+        &mut self,
+        root: impl AsRef<Path>,
+        display_name: &str,
+        parent_ref: Option<&str>,
+        base_id: &str,
+        assignment: Option<TagAssignment>,
+        operation_id: &str,
+    ) -> Result<NavigationPreparation> {
         valid_operation_id(operation_id)?;
         validate_tag_name(display_name)?;
         let root = absolute_path(root.as_ref())?;
-        let canonical = serde_json::json!({"kind":"createTag","root":display(&root),"displayName":display_name,"baseId":base_id});
+        let canonical = serde_json::json!({"kind":"createTag","root":display(&root),"displayName":display_name,"parentRef":parent_ref,"baseId":base_id,"assignment":assignment});
         if let Some(preview) = self.feature_operation_status(operation_id, &canonical)? {
             let reservation: TagReservation = self
                 .read_navigation_record(operation_id, "tag-reservation")?
@@ -1225,6 +1739,7 @@ impl Core {
             bytes: before,
             identity: registry_identity,
         } = self.tag_write_basis(&root, base_id)?;
+        let parent_tag_id = self.tag_parent_id(&workspace.workspace_id, &doc, parent_ref)?;
         if doc.tags.len() >= 5000 {
             return Err(CoreError::new(
                 "budget",
@@ -1247,6 +1762,7 @@ impl Core {
                 root: display(&root),
                 workspace_id: workspace.workspace_id,
                 tag_id: fresh(),
+                additional_tag_ids: vec![],
                 registry_identity,
                 fingerprint,
             };
@@ -1259,21 +1775,104 @@ impl Core {
         doc.tags.push(TagDefinition {
             tag_id: reservation.tag_id.clone(),
             display_name: display_name.into(),
+            parent_tag_id,
         });
-        let preview = self.prepare_feature_operation(
+        let mut changes = vec![FileChange {
+            path: display(&root.join(TAG_REGISTRY)),
+            base_id: Some(base_id.into()),
+            before,
+            after: serde_json::to_vec_pretty(&doc)?,
+        }];
+        let mut dependencies = vec![];
+        if let Some(assignment) = &assignment {
+            let (source_base, file) = self.tag_assignment_snapshot(&root, assignment)?;
+            let path = Path::new(&assignment.path);
+            let current = self.managed_node(
+                &root,
+                path.parent()
+                    .ok_or_else(|| CoreError::new("invalidPath", "Assignment needs a note"))?,
+                false,
+            )?;
+            if !same_path(&current.path, Path::new(&file.path))
+                || current.stamp.identity != file.stamp.identity
+            {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "Assignment must target the original admitted note",
+                ));
+            }
+            let config = self.read_config(&root, ConfigRole::Schema)?;
+            let schema = weftext_data::Schema::from_author_json(
+                config
+                    .bytes
+                    .as_ref()
+                    .map(|b| std::str::from_utf8(b))
+                    .transpose()
+                    .map_err(|_| CoreError::new("invalidSchema", "Schema is not UTF-8"))?
+                    .unwrap_or(include_str!(
+                        "../../../docs/design/examples/schema.authoring.json"
+                    )),
+            )
+            .map_err(|e| CoreError::new("invalidSchema", e.to_string()))?;
+            let source = decode(&file.bytes)?;
+            let projection = weftext_data::project(&source, &schema);
+            let field = projection
+                .fields
+                .iter()
+                .find(|f| f.field_id == assignment.field_id && f.key == "tags" && f.writable)
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidField",
+                        "First assignment requires the installed writable tags field",
+                    )
+                })?;
+            let mut values = match &field.cell {
+                weftext_data::Cell::Absent | weftext_data::Cell::Null => vec![],
+                weftext_data::Cell::Value {
+                    value: weftext_data::NativeValue::Array(values),
+                } => values.clone(),
+                _ => {
+                    return Err(CoreError::new(
+                        "invalidField",
+                        "Existing tag input is invalid or unavailable; preserve it before assigning",
+                    ));
+                }
+            };
+            values.push(weftext_data::NativeValue::Record(vec![
+                weftext_data::NativeMember {
+                    key: "ref".into(),
+                    value: weftext_data::NativeValue::Text(entity_ref(
+                        "tag",
+                        &reservation.workspace_id,
+                        &reservation.tag_id,
+                    )),
+                },
+            ]));
+            let patch = weftext_data::patch_field(
+                &source,
+                &schema,
+                &assignment.field_id,
+                &[],
+                &weftext_data::NativeValue::Array(values),
+            )
+            .map_err(|e| CoreError::new("invalidField", e.to_string()))?;
+            changes.push(FileChange {
+                path: file.path,
+                base_id: Some(source_base),
+                before: Some(file.bytes),
+                after: patch.source.into_bytes(),
+            });
+            // Pin the exact schema in the same Plan, including its absence.
+            dependencies.push(config.base_id);
+        }
+        let preview = self.prepare_dependent_feature_operation(
             OperationRequest {
                 operation_id: operation_id.into(),
                 root: display(&root),
-                intent: OperationIntent::UpdateFiles {
-                    changes: vec![FileChange {
-                        path: display(&root.join(TAG_REGISTRY)),
-                        base_id: Some(base_id.into()),
-                        before,
-                        after: serde_json::to_vec_pretty(&doc)?,
-                    }],
-                },
+                intent: OperationIntent::UpdateFiles { changes },
             },
             &canonical,
+            &dependencies,
         )?;
         Ok(NavigationPreparation {
             preview,
@@ -1342,6 +1941,151 @@ impl Core {
             preview,
             target_ref: reference.into(),
         })
+    }
+
+    fn tag_parent_id(
+        &self,
+        workspace: &str,
+        doc: &TagDocument,
+        parent: Option<&str>,
+    ) -> Result<Option<String>> {
+        parent
+            .map(|reference| {
+                let (kind, ws, id) = parse_ref(reference)?;
+                if kind != "tag" || ws != workspace || !doc.tags.iter().any(|t| t.tag_id == id) {
+                    return Err(CoreError::new(
+                        "invalidReference",
+                        "Parent requires an admitted TagRef in this exact registry",
+                    ));
+                }
+                Ok(id.to_owned())
+            })
+            .transpose()
+    }
+
+    pub fn prepare_move_tag(
+        &mut self,
+        root: impl AsRef<Path>,
+        reference: &str,
+        parent_ref: Option<&str>,
+        base_id: &str,
+        operation_id: &str,
+    ) -> Result<NavigationPreparation> {
+        valid_operation_id(operation_id)?;
+        let root = absolute_path(root.as_ref())?;
+        let canonical = serde_json::json!({"kind":"moveTag","root":display(&root),"tagRef":reference,"parentRef":parent_ref,"baseId":base_id});
+        if let Some(preview) = self.feature_operation_status(operation_id, &canonical)? {
+            return Ok(NavigationPreparation {
+                preview,
+                target_ref: reference.into(),
+            });
+        }
+        let workspace = self.require_workspace(&root)?;
+        let (kind, ws, id) = parse_ref(reference)?;
+        if kind != "tag" || ws != workspace.workspace_id {
+            return Err(CoreError::new(
+                "invalidReference",
+                "Move requires a TagRef in this workspace",
+            ));
+        }
+        let TagWriteBasis {
+            document: mut doc,
+            bytes: before,
+            ..
+        } = self.tag_write_basis(&root, base_id)?;
+        let parent = self.tag_parent_id(ws, &doc, parent_ref)?;
+        doc.tags
+            .iter_mut()
+            .find(|t| t.tag_id == id)
+            .ok_or_else(|| CoreError::new("missingTag", "The exact tag is unavailable"))?
+            .parent_tag_id = parent;
+        doc.forest()
+            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+        let preview = self.prepare_feature_operation(
+            OperationRequest {
+                operation_id: operation_id.into(),
+                root: display(&root),
+                intent: OperationIntent::UpdateFiles {
+                    changes: vec![FileChange {
+                        path: display(&root.join(TAG_REGISTRY)),
+                        base_id: Some(base_id.into()),
+                        before,
+                        after: serde_json::to_vec_pretty(&doc)?,
+                    }],
+                },
+            },
+            &canonical,
+        )?;
+        Ok(NavigationPreparation {
+            preview,
+            target_ref: reference.into(),
+        })
+    }
+
+    pub fn cancel_navigation_preparation(
+        &mut self,
+        root: impl AsRef<Path>,
+        operation_id: &str,
+        plan_id: &str,
+    ) -> Result<OperationPreview> {
+        let root = absolute_path(root.as_ref())?;
+        let preview = self.operation_details(operation_id)?;
+        let original = self
+            .operations
+            .get(operation_id)
+            .and_then(|p| p.transaction.as_ref())
+            .ok_or_else(|| {
+                CoreError::new("invalidState", "Original navigation Plan is unavailable")
+            })?;
+        if preview.plan_id != plan_id
+            || original.request.root != display(&root)
+            || !matches!(&original.request.intent, OperationIntent::UpdateFiles { changes } if changes.iter().any(|c| Path::new(&c.path) == root.join(TAG_REGISTRY) || Path::new(&c.path).file_name().is_some_and(|n| n == DIRECTORY_MARKER)))
+        {
+            return Err(CoreError::new(
+                "operationConflict",
+                "Cancellation requires the exact navigation Plan",
+            ));
+        }
+        if matches!(preview.status.as_str(), "committed" | "resolved") {
+            return Ok(preview);
+        }
+        if self.journal_path(operation_id, "install").exists() {
+            return Err(CoreError::new(
+                "recoveryPending",
+                "Inspect the original operation; installation may have effects",
+            ));
+        }
+        self.resolve_record(operation_id, "cancelPrepared")?;
+        self.operation_details(operation_id)
+    }
+
+    /// A lost or rejected preparation need not be recreated merely to cancel
+    /// it. The existing resolution journal fences the original id durably.
+    pub fn cancel_navigation_attempt(
+        &mut self,
+        root: impl AsRef<Path>,
+        operation_id: &str,
+        plan_id: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        valid_operation_id(operation_id)?;
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        if self.operations.contains_key(operation_id) {
+            let actual = self.operation_details(operation_id)?;
+            let expected = plan_id.unwrap_or(&actual.plan_id);
+            let preview = self.cancel_navigation_preparation(&root, operation_id, expected)?;
+            return Ok(
+                serde_json::json!({"operationId":operation_id,"planId":preview.plan_id,"status":preview.status}),
+            );
+        }
+        if plan_id.is_some() || self.journal_path(operation_id, "install").exists() {
+            return Err(CoreError::new(
+                "recoveryPending",
+                "The original navigation Plan cannot be qualified",
+            ));
+        }
+        self.resolve_record(operation_id, "cancelPrepared")?;
+        Ok(serde_json::json!({"operationId":operation_id,"planId":null,"status":"resolved"}))
     }
 }
 
@@ -1718,9 +2462,10 @@ mod tests {
         fs::write(
             &registry,
             serde_json::to_vec(&TagDocument {
-                version: 1,
+                version: 2,
                 tags: vec![TagDefinition {
                     tag_id: fabricated.clone(),
+                    parent_tag_id: None,
                     display_name: "Research".into(),
                 }],
             })
@@ -1740,7 +2485,398 @@ mod tests {
             core.resolve_navigation_target(&root, &prepared.target_ref)
                 .unwrap()
                 .status,
-            "missing"
+            "identityInvalid"
         );
+    }
+
+    fn tag(core: &mut Core, root: &Path, label: &str, parent: Option<&str>) -> String {
+        let basis = core.read_tag_registry(root).unwrap();
+        let prepared = core
+            .prepare_create_tag_under(root, label, parent, &basis.base_id, &fresh())
+            .unwrap();
+        commit(core, &prepared);
+        prepared.target_ref
+    }
+
+    #[test]
+    fn hierarchy_move_preserves_direct_references_and_refuses_cycles_and_foreign_parents() {
+        let (_temp, mut core, root, state) = fixture();
+        let a = tag(&mut core, &root, "同名/name", None);
+        let b = tag(&mut core, &root, "同名/name", Some(&a));
+        let c = tag(&mut core, &root, "leaf", Some(&b));
+        let before = fs::read(root.join(TAG_REGISTRY)).unwrap();
+        let basis = core.read_tag_registry(&root).unwrap();
+        assert!(
+            core.prepare_move_tag(&root, &a, Some(&c), &basis.base_id, &fresh())
+                .is_err()
+        );
+        assert!(
+            core.prepare_move_tag(&root, &a, Some(&a), &basis.base_id, &fresh())
+                .is_err()
+        );
+        let foreign = entity_ref("tag", &fresh(), &fresh());
+        assert!(
+            core.prepare_create_tag_under(
+                &root,
+                "foreign",
+                Some(&foreign),
+                &basis.base_id,
+                &fresh()
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(root.join(TAG_REGISTRY)).unwrap(), before);
+        let moved = core
+            .prepare_move_tag(&root, &b, None, &basis.base_id, &fresh())
+            .unwrap();
+        commit(&mut core, &moved);
+        drop(core);
+        let mut core = Core::new(state).unwrap();
+        let actual = core.read_tag_registry(&root).unwrap();
+        assert!(actual.complete);
+        assert!(
+            actual
+                .tags
+                .iter()
+                .find(|t| t.tag_ref == b)
+                .unwrap()
+                .parent_tag_id
+                .is_none()
+        );
+        assert_eq!(
+            actual
+                .tags
+                .iter()
+                .find(|t| t.tag_ref == c)
+                .unwrap()
+                .parent_tag_id
+                .as_deref(),
+            Some(parse_ref(&b).unwrap().2)
+        );
+        assert_eq!(
+            actual
+                .tags
+                .iter()
+                .find(|t| t.tag_ref == a)
+                .unwrap()
+                .display_name,
+            "同名/name"
+        );
+    }
+
+    #[test]
+    fn competing_reparents_use_whole_object_cas_and_revalidate_the_forest() {
+        let (_temp, mut core, root, _) = fixture();
+        let a = tag(&mut core, &root, "A", None);
+        let b = tag(&mut core, &root, "B", None);
+        let basis = core.read_tag_registry(&root).unwrap();
+        let first = core
+            .prepare_move_tag(&root, &a, Some(&b), &basis.base_id, &fresh())
+            .unwrap();
+        let second = core
+            .prepare_move_tag(&root, &b, Some(&a), &basis.base_id, &fresh())
+            .unwrap();
+        commit(&mut core, &first);
+        assert!(
+            core.execute_operation(&second.preview.operation_id, &second.preview.plan_id)
+                .is_err()
+        );
+        let basis = core.read_tag_registry(&root).unwrap();
+        assert!(
+            core.prepare_move_tag(&root, &b, Some(&a), &basis.base_id, &fresh())
+                .is_err()
+        );
+        assert_eq!(
+            core.operation_details(&second.preview.operation_id)
+                .unwrap()
+                .plan_id,
+            second.preview.plan_id
+        );
+    }
+
+    #[test]
+    fn generic_tag_writes_cannot_allocate_or_downgrade_and_missing_registry_cannot_rebirth() {
+        let (temp, mut core, root, _) = fixture();
+        let a = tag(&mut core, &root, "A", None);
+        let basis = core.read_tag_registry(&root).unwrap();
+        let before = fs::read(root.join(TAG_REGISTRY)).unwrap();
+        let old = serde_json::json!({"version":1,"tags":[{"tagId":parse_ref(&a).unwrap().2,"displayName":"A"}]});
+        let forged = serde_json::json!({"version":2,"tags":[{"tagId":parse_ref(&a).unwrap().2,"displayName":"A","parentTagId":null},{"tagId":fresh(),"displayName":"forged","parentTagId":null}]});
+        for after in [old, forged] {
+            assert!(
+                core.prepare_operation(OperationRequest {
+                    operation_id: fresh(),
+                    root: display(&root),
+                    intent: OperationIntent::UpdateFiles {
+                        changes: vec![FileChange {
+                            path: display(&root.join(TAG_REGISTRY)),
+                            base_id: Some(basis.base_id.clone()),
+                            before: Some(before.clone()),
+                            after: serde_json::to_vec(&after).unwrap()
+                        }]
+                    }
+                })
+                .is_err()
+            );
+        }
+        fs::rename(
+            root.join(TAG_REGISTRY),
+            temp.path().join("retained-original-tags"),
+        )
+        .unwrap();
+        assert!(core.read_tag_registry(&root).is_err());
+        let basis = core
+            .read_snapshot(&root, &[display(&root.join(TAG_REGISTRY))])
+            .unwrap()
+            .files
+            .remove(0);
+        assert!(
+            core.prepare_create_tag(&root, "replacement", &basis.base_id, &fresh())
+                .is_err()
+        );
+        assert!(!root.join(TAG_REGISTRY).exists());
+    }
+
+    #[test]
+    fn cancelled_tag_plan_stays_cancelled_across_restart_and_late_commit() {
+        let (_temp, mut core, root, state) = fixture();
+        let basis = core.read_tag_registry(&root).unwrap();
+        let prepared = core
+            .prepare_create_tag(&root, "cancelled", &basis.base_id, &fresh())
+            .unwrap();
+        core.cancel_navigation_preparation(
+            &root,
+            &prepared.preview.operation_id,
+            &prepared.preview.plan_id,
+        )
+        .unwrap();
+        drop(core);
+        let mut core = Core::new(state).unwrap();
+        assert!(
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .is_err()
+        );
+        assert!(core.read_tag_registry(&root).unwrap().tags.is_empty());
+        assert!(!root.join(TAG_REGISTRY).exists());
+    }
+
+    #[test]
+    fn rejected_or_lost_navigation_preparation_can_be_fenced_without_repreparing() {
+        let (_temp, mut core, root, state) = fixture();
+        let op = fresh();
+        let tags = core.read_tag_registry(&root).unwrap();
+        let invalid = core.prepare_create_tag_with_assignment(
+            &root,
+            "retained input",
+            None,
+            &tags.base_id,
+            Some(TagAssignment {
+                path: display(&root.join("missing.typ")),
+                base_id: fresh(),
+                field_id: "core/tags".into(),
+            }),
+            &op,
+        );
+        assert_eq!(invalid.unwrap_err().code, "staleBase");
+        let cancelled = core.cancel_navigation_attempt(&root, &op, None).unwrap();
+        assert_eq!(cancelled["status"], "resolved");
+        assert!(cancelled["planId"].is_null());
+        drop(core);
+        let mut core = Core::new(state).unwrap();
+        let tags = core.read_tag_registry(&root).unwrap();
+        assert_eq!(
+            core.prepare_create_tag(&root, "late", &tags.base_id, &op)
+                .unwrap_err()
+                .code,
+            "operationCancelled"
+        );
+        assert!(!root.join(TAG_REGISTRY).exists());
+        assert_eq!(
+            core.cancel_navigation_attempt(&root, &op, None).unwrap(),
+            cancelled
+        );
+        let note = core
+            .create_note(&root, &root, "CannotReuseCancelledId")
+            .unwrap();
+        assert_eq!(
+            core.save(SaveRequest {
+                session_id: note.session_id,
+                base_id: note.base_id,
+                source: format!("{}\nlate different intent\n", note.source),
+                operation_id: op
+            })
+            .unwrap_err()
+            .code,
+            "operationCancelled"
+        );
+        assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
+        let prepared = core
+            .prepare_create_tag(&root, "lost response", &tags.base_id, &fresh())
+            .unwrap();
+        let reply = core
+            .cancel_navigation_attempt(&root, &prepared.preview.operation_id, None)
+            .unwrap();
+        assert_eq!(reply["planId"], prepared.preview.plan_id);
+        assert_eq!(reply["status"], "resolved");
+        assert!(
+            core.execute_operation(&prepared.preview.operation_id, &prepared.preview.plan_id)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn tag_creation_and_first_assignment_share_original_plan_and_recover_after_restart() {
+        let (_temp, mut core, root, state) = fixture();
+        let note = core.create_note(&root, &root, "Note").unwrap();
+        core.save(SaveRequest {
+            session_id: note.session_id.clone(),
+            base_id: note.base_id.clone(),
+            source: note
+                .source
+                .replace("types: ()", "types: (\"task\",), status: \"open\""),
+            operation_id: fresh(),
+        })
+        .unwrap();
+        let source = core
+            .read_snapshot(&root, std::slice::from_ref(&note.path))
+            .unwrap()
+            .files
+            .remove(0);
+        let schema = weftext_data::Schema::bundled().unwrap();
+        let field = schema
+            .fields
+            .iter()
+            .find(|f| f.key == "tags")
+            .unwrap()
+            .id
+            .clone();
+        let basis = core.read_tag_registry(&root).unwrap();
+        let op = fresh();
+        let prepared = core
+            .prepare_create_tag_with_assignment(
+                &root,
+                "created and assigned",
+                None,
+                &basis.base_id,
+                Some(TagAssignment {
+                    path: note.path.clone(),
+                    base_id: source.base_id,
+                    field_id: field,
+                }),
+                &op,
+            )
+            .unwrap();
+        assert_eq!(fs::read(&note.path).unwrap(), source.bytes.unwrap());
+        assert!(!root.join(TAG_REGISTRY).exists());
+        drop(core);
+        let mut core = Core::new(state).unwrap();
+        commit(&mut core, &prepared);
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .contains(&prepared.target_ref)
+        );
+        assert_eq!(
+            core.read_tag_registry(&root).unwrap().tags[0].tag_ref,
+            prepared.target_ref
+        );
+        assert!(!root.join(".weftext-schema.json").exists());
+        assert_eq!(core.operation_details(&op).unwrap().status, "committed");
+    }
+
+    #[test]
+    fn first_assignment_qualifies_the_original_local_session_and_rejects_changed_bytes() {
+        let (_temp, mut core, root, _state) = fixture();
+        let note = core.create_note(&root, &root, "SessionNote").unwrap();
+        let source = note
+            .source
+            .replace("types: ()", "types: (\"task\",), status: \"open\"");
+        let saved = core
+            .save(SaveRequest {
+                session_id: note.session_id.clone(),
+                base_id: note.base_id,
+                source: source.clone(),
+                operation_id: fresh(),
+            })
+            .unwrap();
+        let assignment = TagAssignment {
+            path: note.path.clone(),
+            base_id: saved.base_id,
+            field_id: "core/tags".into(),
+        };
+        let tags = core.read_tag_registry(&root).unwrap();
+        // A different actor cannot borrow the local session's original basis.
+        core.with_actor_for_root("another-actor", &root, |core| {
+            assert_eq!(
+                core.prepare_create_tag_with_assignment(
+                    &root,
+                    "no",
+                    None,
+                    &tags.base_id,
+                    Some(assignment.clone()),
+                    &fresh()
+                )
+                .unwrap_err()
+                .code,
+                "staleBase"
+            );
+            Ok(())
+        })
+        .unwrap();
+        let prepared = core
+            .prepare_create_tag_with_assignment(
+                &root,
+                "from session",
+                None,
+                &tags.base_id,
+                Some(assignment),
+                &fresh(),
+            )
+            .unwrap();
+        commit(&mut core, &prepared);
+        assert!(
+            fs::read_to_string(&note.path)
+                .unwrap()
+                .contains(&prepared.target_ref)
+        );
+        let other = core.create_note(&root, &root, "ChangedNote").unwrap();
+        let tags = core.read_tag_registry(&root).unwrap();
+        let registry = fs::read(root.join(TAG_REGISTRY)).unwrap();
+        fs::write(&other.path, format!("{}\nexternal change\n", other.source)).unwrap();
+        assert_eq!(
+            core.prepare_create_tag_with_assignment(
+                &root,
+                "no",
+                None,
+                &tags.base_id,
+                Some(TagAssignment {
+                    path: other.path,
+                    base_id: other.base_id,
+                    field_id: "core/tags".into(),
+                }),
+                &fresh()
+            )
+            .unwrap_err()
+            .code,
+            "staleBase"
+        );
+        assert_eq!(fs::read(root.join(TAG_REGISTRY)).unwrap(), registry);
+    }
+
+    #[test]
+    fn historical_v1_decode_preserves_roots_but_current_successor_requires_explicit_parents() {
+        let raw = serde_json::to_vec(
+            &serde_json::json!({"version":1,"tags":[{"tagId":fresh(),"displayName":"old"}]}),
+        )
+        .unwrap();
+        let doc = decode_historical_tag_document(&raw).unwrap();
+        assert_eq!(doc.version, 2);
+        assert!(doc.tags[0].parent_tag_id.is_none());
+        assert!(validate_sync_tags(&raw).is_err());
+        let missing = serde_json::to_vec(
+            &serde_json::json!({"version":2,"tags":[{"tagId":fresh(),"displayName":"bad"}]}),
+        )
+        .unwrap();
+        assert!(decode_historical_tag_document(&missing).is_err());
     }
 }

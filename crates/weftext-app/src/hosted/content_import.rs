@@ -383,6 +383,74 @@ fn operation_access(inner: &HostedInner, actor: &str, slot: &str) -> Result<(), 
     }
     Ok(())
 }
+
+fn shared_write_access(
+    inner: &mut HostedInner,
+    actor: &str,
+    slot: &str,
+    operation: &str,
+) -> Result<Vec<String>, ApiError> {
+    let root = inner.config.root.clone();
+    let actor_scope = scope(inner, actor);
+    let effects = inner
+        .core
+        .with_actor_for_root(&actor_scope, &root, |c| {
+            c.actor_feature_shared_writes(slot, operation)
+        })
+        .map_err(core_error)?;
+    for effect in &effects {
+        if effect == "schema.write" {
+            library::access(inner, actor, "schema", true)?;
+        } else {
+            navigation_registry::authorize_tag_effect(inner, actor, effect)?;
+        }
+    }
+    Ok(effects)
+}
+
+fn upload_shared_access(
+    inner: &mut HostedInner,
+    actor: &str,
+    format: &str,
+    bytes: &[u8],
+) -> Result<(), ApiError> {
+    if format != "native" {
+        return Ok(());
+    }
+    let package = weftext_export::exchange::read_native_package(bytes)
+        .map_err(|_| ApiError::bad("原生包无效或超过预算；原件未改动"))?;
+    if let Some(raw) = package.files.get(".weftext-tags.json") {
+        let tags: weftext_data::TagDocument = serde_json::from_slice(raw).map_err(|_| changed())?;
+        if !tags.tags.is_empty() {
+            navigation_registry::authorize_tag_effect(inner, actor, "tags.create")?;
+        }
+    }
+    let has_definitions = package
+        .manifest
+        .entries
+        .iter()
+        .filter(|(_, e)| e.role == weftext_export::exchange::NativeFileRole::Source)
+        .any(|(path, _)| {
+            package
+                .files
+                .get(path)
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .and_then(|s| weftext_data::saved_queries(s).ok())
+                .is_some_and(|q| !q.is_empty())
+        });
+    if has_definitions {
+        let config = inner
+            .core
+            .read_config(&inner.config.root, ConfigRole::Schema)
+            .map_err(core_error)?;
+        let initializes = config.bytes.is_none();
+        let _ = inner.core.take_snapshot_witness(&config.base_id);
+        if initializes {
+            library::access(inner, actor, "schema", true)?;
+        }
+    }
+    Ok(())
+}
 fn upload(value: &str) -> Result<Vec<u8>, ApiError> {
     if value.len() > MAX_UPLOAD.div_ceil(3) * 4 {
         return Err(ApiError::bad("导入原件上限为 16 MiB"));
@@ -404,7 +472,7 @@ fn config_hash(inner: &HostedInner, id: &str) -> Result<String, ApiError> {
     Ok(digest(&serde_json::to_vec(&json!({"root":inner.config.root,"slot":s,"parent":inner.config.directories.get(&s.parent)})).map_err(|_|changed())?))
 }
 fn safe_status(
-    inner: &HostedInner,
+    inner: &mut HostedInner,
     actor: &str,
     slot: &str,
     status: ActorFeatureStatus,
@@ -415,6 +483,8 @@ fn safe_status(
             && config_hash(inner, slot).is_ok_and(|h| h == d.config_hash)
             && import_access(inner, actor, slot, &d.format).is_ok()
     });
+    let effects = shared_write_access(inner, actor, slot, &status.operation_id);
+    let same = same && effects.is_ok();
     let allowed =
         same && status.status == "prepared" && d.as_ref().is_some_and(|d| d.expires > now_ms());
     let mut preview = json!({});
@@ -424,6 +494,7 @@ fn safe_status(
                 preview[k] = v.clone();
             }
         }
+        preview["sharedWrites"] = json!(effects.unwrap_or_default());
     }
     Ok(
         json!({"slot":slot,"operationId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|allowed),"preview":preview,"nodeRefs":if same{status.node_refs}else{vec![]},"commitAllowed":allowed}),
@@ -506,7 +577,9 @@ async fn inspect(
             let actor = inner.actor(&auth)?;
             import_access(inner, &actor, &req.slot, &req.format)?;
             library::access(inner, &actor, "schema", false)?;
-            inspect_upload(inner, &req.format, &upload(&req.bytes_base64)?)
+            let bytes = upload(&req.bytes_base64)?;
+            upload_shared_access(inner, &actor, &req.format, &bytes)?;
+            inspect_upload(inner, &req.format, &bytes)
         })
         .await?,
     ))
@@ -520,6 +593,7 @@ async fn prepare(
     let actor=inner.actor(&auth)?;import_access(inner,&actor,&req.slot,&req.format)?;let bytes=upload(&req.bytes_base64)?;let upload_digest=digest(&bytes);let fp=digest(&serde_json::to_vec(&json!({"slot":req.slot,"format":req.format,"uploadDigest":upload_digest})).map_err(|_|changed())?);let scope=scope(inner,&actor);let root=inner.config.root.clone();
     if let Some(old)=inner.core.with_actor_for_root(&scope,&root,|c|c.actor_feature_retry(&req.slot,&req.operation_id,&fp)).map_err(core_error)?{return safe_status(inner,&actor,&req.slot,old);}
     library::access(inner,&actor,"schema",false)?;
+    upload_shared_access(inner,&actor,&req.format,&bytes)?;
     let inspected=inspect_upload(inner,&req.format,&bytes)?;if inspected["canPrepare"]!=true{return Err(ApiError::new(StatusCode::CONFLICT,"contentImportUnavailable","本次上传有冲突、typed 引用缺少映射或不符合目的 Schema；原件保留，未创建或更新笔记。"));}
     let s=inner.config.content_import_slots[&req.slot].clone();let p=inner.config.directories[&s.parent].clone();let parent=root.join(&p.path);let q=inner.core.qualified_query_scope_at(&root,&parent,&p.reference,"live").map_err(core_error)?;let mut witnesses:Vec<SnapshotWitness>=vec![];weftext_core::Core::merge_query_scope_witness(&mut witnesses,&q.witness).map_err(core_error)?;
     let d=Decision{epoch:inner.actor_generation(&actor),config_hash:config_hash(inner,&req.slot)?,expires:now_ms().saturating_add(TTL_MS),format:req.format.clone(),upload_digest};let preview=json!({"summary":"在固定空槽中创建独立管理笔记，保留上传原件与已支持的资源；原计划损失须明确接受。","recordCount":inspected.get("recordCount").cloned().unwrap_or_else(||json!(inspected["records"].as_array().map_or(0,Vec::len))),"_contentImport":d});

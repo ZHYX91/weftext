@@ -370,6 +370,96 @@ class HostedQuery(HostedFields):
         self.assertEqual({item['queryId'] for item in self.call('office', actor='fields')['queries']},
                          {item['queryId'] for item in active})
 
+    def test_query_tag_structure_static_zero_scope_stale_frozen_output_and_revocation(self):
+        self.prepare_query()
+        self.policy(lambda users: users['fields'].update(navigation={'tags': {
+            'read': True, 'create': True, 'rename': True, 'move': True}}))
+
+        def tag_action(kind, **arguments):
+            basis = self.call('navigation/registry', actor='fields')['tags']['basis']
+            prepared = self.call('navigation/registry/prepare', {'operationId': uid(),
+                'intent': {'kind': kind, 'basis': basis, **arguments}}, 'fields')
+            committed = self.call('navigation/registry/commit', {key: prepared[key]
+                for key in ['operationId', 'planId']}, 'fields')
+            return committed['navigationRef']
+
+        root = tag_action('createTag', displayName='same/path', parentRef=None)
+        leaf = tag_action('createTag', displayName='same/path', parentRef=root)
+        predicate = f'tagInSubtree(tagRef("{leaf}"), tagRef("{root}"))'
+        structural = {'where': predicate, 'select': [self.column()]}
+        exact = {'where': f'tagRef("{leaf}") == tagRef("{root}")', 'select': [self.column()]}
+        self.query(structural, actor='fieldreader', status=404, resources=[])
+        self.assertEqual(self.query(exact, actor='fieldreader')['result']['rows'], [])
+        zero = self.query(structural, resources=[])['result']
+        self.assertEqual(zero['rows'], [])
+        self.assertEqual(zero['coverage'], 'complete')
+        missing = f'weftext-tag://{root.split("/")[-2]}/{uid()}'
+        self.query({'where': f'true || !tagInSubtree(tagRef("{leaf}"), tagRef("{missing}"))',
+                    'select': [self.column()]}, resources=[], status=400)
+        displayed = self.query(structural, resources=['Shared'])
+        self.assertEqual(len(displayed['result']['rows']), 1)
+        self.assertEqual(displayed['result']['freshness'], 'current')
+        tag_action('moveTag', reference=leaf, parentRef=None)
+        self.assertEqual(self.query(structural, resources=['Shared'])['result']['rows'], [])
+        stale = next(row for row in self.call('office', actor='fields')['queries']
+                     if row['queryId'] == displayed['queryId'])
+        self.assertEqual(stale['freshness'], 'stale')
+        self.assertEqual(stale['rowCount'], 1)
+        self.policy(lambda users: [grant.update(office={'export': True, 'download': True})
+                                  for grant in users['fields']['grants'].values()])
+        # Policy generation changes invalidate old handles; repeat under the
+        # current epoch, then verify a new tree change keeps the displayed cut.
+        tag_action('moveTag', reference=leaf, parentRef=root)
+        displayed = self.query(structural, resources=['Shared'])
+        tag_action('moveTag', reference=leaf, parentRef=None)
+        request = {'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
+                   'includeResolved': False, 'stylePolicy': 'template', 'bindings': {},
+                   'queryId': displayed['queryId']}
+        output, _ = HostedOffice.output(self, request, 'fields')
+        self.assertEqual(output['preview']['query']['freshness'], 'stale')
+        self.assertEqual(output['preview']['query']['rowCount'], 1)
+        self.policy(lambda users: users['fields']['navigation']['tags'].update(
+            read=False, create=False, rename=False, move=False))
+        self.query(structural, status=404, resources=[])
+        self.assertEqual(self.query(exact)['result']['rows'], [])
+        self.call('office/export/chunk', {'requestId': request['requestId'], 'offset': 0}, 'fields', 409)
+
+    def test_query_definition_static_tag_roots_validate_even_with_deferred_parameters(self):
+        self.prepare_query()
+        self.grant_query('alice', definitions=True, history=True)
+        self.policy(lambda users: users['alice'].update(navigation={'tags': {
+            'read': True, 'create': True}}))
+        basis = self.call('navigation/registry')['tags']['basis']
+        tag = self.call('navigation/registry/prepare', {'operationId': uid(), 'intent': {
+            'kind': 'createTag', 'parentRef': None, 'basis': basis, 'displayName': 'Root'}})
+        self.call('navigation/registry/commit', {key: tag[key] for key in ['operationId', 'planId']})
+        root = tag['navigationRef']
+        missing = f'weftext-tag://{root.split("/")[-2]}/{uid()}'
+        doc = self.open()
+        original = (self.root / 'Shared/Shared.typ').read_bytes()
+        plan = {'where': f'false && tagInSubtree(tagRef("{root}"), tagRef("{missing}"))',
+                'select': [self.column('true', 'value')], 'advanced': {'parameters': [
+                    {'name': 'root', 'shape': {'kind': 'scalar', 'semantic': 'tag_ref'}}]}}
+        request = dict(resource='Shared', sessionId=doc['sessionId'], baseId=doc['baseId'],
+                       source=doc['source'], sourceHash=digest(doc['source']), serial=1,
+                       operationId=uid(), label='weftext-query-tree', plan=plan)
+        self.call('editor/map', {key: request[key] for key in ['sessionId', 'source', 'sourceHash', 'serial']})
+        self.call('query/definition/prepare', request, status=404)
+        self.assertEqual((self.root / 'Shared/Shared.typ').read_bytes(), original)
+        self.assertEqual(self.call('query/definitions', {'resource': 'Shared'})['definitions'], [])
+        deferred = copy.deepcopy(request)
+        deferred['operationId'] = uid()
+        deferred['plan']['where'] = f'false && tagInSubtree(tagRef("{root}"), root)'
+        proposal = self.call('query/definition/prepare', deferred)
+        self.assertTrue(proposal['draftOnly'])
+        self.assertEqual((self.root / 'Shared/Shared.typ').read_bytes(), original)
+        self.policy(lambda users: users['alice']['navigation']['tags'].update(read=False, create=False))
+        fresh = self.open()
+        deferred.update(operationId=uid(), sessionId=fresh['sessionId'], baseId=fresh['baseId'],
+                        source=fresh['source'], sourceHash=digest(fresh['source']))
+        self.call('editor/map', {key: deferred[key] for key in ['sessionId', 'source', 'sourceHash', 'serial']})
+        self.call('query/definition/prepare', deferred, status=404)
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite(HostedQuery(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedQuery)

@@ -668,6 +668,10 @@ impl Capture<'_, '_> {
             return Ok(Some(EvidenceGap::OriginalQualification));
         };
         let file = snapshot.binding.captured.as_ref().unwrap();
+        if matches!(object, ObjectKey::Tags) {
+            self.core
+                .qualified_tag_document_from_captured(self.cut.root, file)?;
+        }
         if let ObjectKey::Node(id) = object {
             let birth = self
                 .core

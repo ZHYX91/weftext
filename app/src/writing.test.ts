@@ -4,9 +4,10 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { history, isolateHistory, undo, redo, undoDepth } from "@codemirror/commands";
 import { applySourcePatches, createSourceState, sourceRevealEffect, sourceRevealExtensions, type SourceEditorEvent, type SourcePatch, type SourceSelection } from "./editor";
-import { encodeWritingLiteral, encodeWritingTableLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult, type WritingTransition } from "./writing";
+import { encodeWritingLiteral, encodeWritingTableLiteral, exactWritingRange, groupWritingEmptySlots, groupWritingRenderNodes, writingStructureIndex, literalRecoveryRaw, literalSourceOffset, rectangularTSV, textareaSourceDraft, utf8Offset, validateWritingResult, writingRange, WritingController, type WritingBuffer, type WritingHost, type WritingMap, type WritingRequest, type WritingResult, type WritingTransition } from "./writing";
 import type { RenderNode } from "./types";
 import { DocumentSession, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
+import { DeferredPaint } from "./deferred-paint";
 import type { OpenedDocument } from "./types";
 
 function map(source: string, from = 0, to = source.length, text = source.slice(from, to)): WritingMap {
@@ -115,16 +116,44 @@ function textareaFixture() {
   };
 }
 
+test("a current projection installs after grid Undo and Redo without requiring its idle grid or toolbar to blur", async () => {
+  const fixture = textareaFixture(), h = harness("原文"), grid = {}, button = {}, deferred = new DeferredPaint();
+  class Surface extends EventTarget { isConnected = true; contains(element: unknown) { return element === grid || element === button; } }
+  const dispose = h.controller.observeSurface(new Surface() as unknown as HTMLElement, () => undefined);
+  let paints = 0;
+  const presentation = () => [h.controller.snapshot.sessionId, h.editor.source, h.serial(), h.controller.map];
+  try {
+    fixture.documentState.activeElement = grid;
+    h.controller.stageLiteral(writingRange("原文", 0, 2), "原文", "原文新字"); await h.controller.flush();
+    for (const action of [() => h.controller.undo(), () => h.controller.redo()]) {
+      await action(); h.controller.installMap(map(h.editor.source), h.editor.source, h.serial());
+      deferred.defer(presentation());
+      const before = paints;
+      deferred.flush(presentation, () => h.controller.retainInput, () => paints++);
+      await Promise.resolve();
+      assert.equal(paints, before + 1, "An exact new map/projection must reconcile without an incidental focusout");
+      assert.equal(fixture.documentState.activeElement, grid, "The test never blurs the grid to release a paint");
+    }
+    fixture.documentState.activeElement = button;
+    assert.equal(h.controller.retainInput, false, "An idle toolbar button has no presentation lease");
+    assert.equal(h.editor.source, "原文新字");
+  } finally { dispose(); h.controller.dispose(); fixture.restore(); }
+});
+
 test("a table proposal owns its mounted surface through modal focus, while an external Draft change retires retention", () => {
   const fixture = textareaFixture(), h = harness("甲");
   class Surface extends EventTarget { isConnected = true; contains() { return false; } }
-  const surface = new Surface() as unknown as HTMLElement; let proposalOpen = true;
-  const dispose = h.controller.observeSurface(surface, () => undefined, () => proposalOpen);
+  const surface = new Surface() as unknown as HTMLElement, snapshot = h.controller.snapshot; let proposalOpen = true;
+  const dispose = h.controller.observeSurface(surface, () => undefined, { basis: () => snapshot, active: () => proposalOpen });
   try {
     assert.equal(h.controller.retainInput, true, "focus in a body-owned confirmation must not unmount its source grid");
     proposalOpen = false; assert.equal(h.controller.retainInput, false);
     proposalOpen = true; h.editor.applyPatches("甲", [{ from: 0, to: 1, expected: "甲", insert: "外部" }]);
     assert.equal(h.controller.retainInput, false, "a proposal lease never grants an old map write authority");
+    h.controller.installMap(map(h.editor.source), h.editor.source, h.serial());
+    assert.equal(h.controller.retainInput, false, "a new unrelated map never revives an old source's pending proposal");
+    h.editor.undo(); h.controller.installMap(map(h.editor.source), h.editor.source, h.serial());
+    assert.equal(h.controller.retainInput, false, "equal source bytes at a later generation do not restore the old lease");
   } finally { dispose(); h.controller.dispose(); fixture.restore(); }
 });
 
@@ -132,13 +161,34 @@ test("all mounted tables receive one proved native transition before installing 
   const fixture = textareaFixture(), h = harness("甲\n乙");
   class Surface extends EventTarget { isConnected = true; contains() { return false; } }
   const transitions: WritingTransition[] = [], surface = new Surface() as unknown as HTMLElement;
-  const dispose = h.controller.observeSurface(surface, transition => { if (transition) { transitions.push(transition); assert.equal(h.controller.map, null, "observers receive the mapping before new capabilities are installed"); } });
+  let snapshot = h.controller.snapshot;
+  const dispose = h.controller.observeSurface(surface, transition => { if (transition) { transitions.push(transition); assert.equal(h.controller.map, null, "observers receive the mapping before new capabilities are installed"); snapshot = transition.after; } }, { basis: () => snapshot, active: () => true });
   try {
     h.controller.stageLiteral(writingRange(h.editor.source, 0, 3), "甲\n乙", "中文😀\n乙"); await h.controller.flush();
     assert.equal(transitions.length, 1); const transition = transitions[0];
     assert.equal(transition.before.source, "甲\n乙"); assert.equal(transition.after.source, h.editor.source);
     assert.equal(transition.after.generation, h.editor.generation); assert.deepEqual(applySourcePatches(transition.before.source, transition.patches), transition.after.source);
+    assert.equal(h.controller.retainInput, true, "the same in-flight command retains its qualified continuation after a certified native transition");
     h.editor.undo(); assert.equal(transitions.length, 1, "Undo/source changes never impersonate a certified native adapter transition");
+    h.controller.installMap(map(h.editor.source), h.editor.source, h.serial());
+    assert.equal(h.controller.retainInput, false, "the old command's snapshot stays retired after the unrelated map arrives");
+  } finally { dispose(); h.controller.dispose(); fixture.restore(); }
+});
+
+test("a qualified table command defers the latest projection only until settlement while idle focus stays put", async () => {
+  const fixture = textareaFixture(), h = harness("甲"), grid = {}, deferred = new DeferredPaint();
+  class Surface extends EventTarget { isConnected = true; contains(element: unknown) { return element === grid; } }
+  let snapshot = h.controller.snapshot, busy = true, paints = 0;
+  const dispose = h.controller.observeSurface(new Surface() as unknown as HTMLElement, transition => { if (transition) snapshot = transition.after; }, { basis: () => snapshot, active: () => busy });
+  const presentation = () => [h.controller.snapshot.sessionId, h.editor.source, h.serial(), h.controller.map];
+  const flush = () => deferred.flush(presentation, () => h.controller.retainInput, () => paints++);
+  try {
+    fixture.documentState.activeElement = grid;
+    h.controller.stageLiteral(writingRange("甲", 0, 1), "甲", "甲新"); await h.controller.flush();
+    deferred.defer(presentation()); flush(); await Promise.resolve(); assert.equal(paints, 0);
+    busy = false; h.controller.surfaceStateChanged(); flush(); await Promise.resolve();
+    assert.equal(paints, 1); assert.equal(fixture.documentState.activeElement, grid);
+    h.controller.surfaceStateChanged(); flush(); await Promise.resolve(); assert.equal(paints, 1, "settlement without new presentation debt never remounts a copy notice");
   } finally { dispose(); h.controller.dispose(); fixture.restore(); }
 });
 
@@ -271,6 +321,21 @@ test("render grouping uses exact native provenance and rejects duplicate occurre
   assert.deepEqual(groupWritingRenderNodes(tree(nodes), sourceMap, source)[0].memberKeys, ["a", "b", "c"]);
   assert.equal(groupWritingRenderNodes(tree([...nodes, ...nodes]), sourceMap, source).length, 0);
   assert.equal(groupWritingRenderNodes(tree([leaf("wrong", 0, 4, "别的")]), sourceMap, source).length, 0);
+});
+
+test("indexed native grouping distinguishes equal text, preserves render order and rejects corrupt byte addresses", () => {
+  const source = "同😀\n同😀", nativeMap = map(source), first = writingRange(source, 0, 3), second = writingRange(source, 4, 7);
+  nativeMap.literalRegions = [first, second].map(range => ({ range, text: "同😀", role: "body" }));
+  const leaf = (key: string, range: typeof first): RenderNode => ({ key, kind: "text", tag: null, text: "同😀", children: [], attrs: {}, writable: true, origin: { path: "a.typ", ...range, isMain: true, syntaxKind: "Text" } });
+  const tree: RenderNode = { key: "root", kind: "element", tag: "p", text: null, children: [leaf("second", second), leaf("first", first)], attrs: {}, origin: null, writable: false };
+  assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["first"], ["second"]]);
+  nativeMap.literalRegions[0].range = { ...first, to: first.to - 1 };
+  assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["second"]]);
+  nativeMap.literalRegions = [{ range: writingRange(source, 0, 7), text: "同😀同😀", role: "body" }];
+  assert.equal(groupWritingRenderNodes(tree, nativeMap, source).length, 0, "sorting for lookup must never certify reordered output");
+  const original = { kind: "heading", range: first, runIn: false }, other = { kind: "table", range: first, runIn: false };
+  nativeMap.structures = [original, other];
+  assert.equal(writingStructureIndex(nativeMap).get("0:3"), original, "the first native structure remains the owner at a shared range");
 });
 
 test("rectangular TSV validation preserves repeated and empty cell values and refuses partial ragged paste", () => {

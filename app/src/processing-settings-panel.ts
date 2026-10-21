@@ -12,6 +12,7 @@ export interface ProcessingSettingsHost {
   status(request: ProcessingRequest): Promise<ProcessingOperation>;
   settle(request: ProcessingRequest): Promise<ProcessingOperation>;
   apply(request: { request: ProcessingRequest; planId: string }): Promise<ProcessingOperation>;
+  committed?(): void;
   onApplied?(): void | Promise<void>;
 }
 export const defaultProcessingDocument = (): ProcessingDocument => ({ schemaVersion: 1, defaults: defaultProcessingSettings(), rules: [], scopedAllowlist: [] });
@@ -84,7 +85,9 @@ export class ProcessingSettingsController {
   }
   private accept(operation: ProcessingOperation): void {
     if (!this.pending || operation.operationId !== this.pending.request.operationId || !["prepared", "committed", "recoveryPending", "notRegistered", "notCommitted", "cancelled", "resolved"].includes(operation.status) || ["prepared", "committed", "recoveryPending"].includes(operation.status) && !operation.planId || this.pending.operation?.planId && operation.planId !== this.pending.operation.planId || this.pending.operation?.status === "committed" && operation.status !== "committed") throw new Error("回执与原处理设置操作不符，请继续查询原编号。");
-    this.pending.operation = structuredClone(operation); this.retain();
+    const committed = operation.status === "committed" && this.pending.operation?.status !== "committed";
+    this.pending.operation = structuredClone(operation);
+    try { this.retain(); } finally { if (committed) this.host.committed?.(); }
   }
   private async finishTerminal(): Promise<void> {
     const status = this.pending?.operation?.status;

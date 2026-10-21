@@ -156,6 +156,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_v061_authoring.py', exe)
         run(sys.executable, 'scripts/test_everyday.py', exe)
         run(sys.executable, 'scripts/test_query_organization.py', exe)
+        run(sys.executable, 'scripts/test_hierarchical_tags.py', exe)
         run(sys.executable, 'scripts/test_link_diagnostics.py', exe)
         run(sys.executable, 'scripts/test_v061_processing.py', exe)
         run(sys.executable, 'scripts/test_v061_processing_integration.py', exe)

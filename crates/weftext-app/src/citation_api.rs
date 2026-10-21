@@ -644,6 +644,7 @@ mod tests {
                         currentness: "frozen".into(),
                         revision: None,
                     }),
+                    tags: None,
                     complete: true,
                     warnings: vec![],
                     raw_complete: true,

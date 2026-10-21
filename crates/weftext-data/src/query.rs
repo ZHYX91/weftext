@@ -209,6 +209,65 @@ pub struct FrozenQueryInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advanced: Option<FrozenAdvancedInput>,
 }
+
+/// Immutable input established by Core, never a registry fetched by CEL.
+#[derive(Debug, Clone)]
+pub struct FrozenTagStructure {
+    pub workspace_id: String,
+    pub document: Arc<TagDocument>,
+    pub forest: Arc<TagForest>,
+}
+impl FrozenTagStructure {
+    pub fn retained_bytes(&self) -> usize {
+        self.document
+            .tags
+            .iter()
+            .fold(self.workspace_id.len(), |bytes, tag| {
+                bytes
+                    .saturating_add(256)
+                    .saturating_add(tag.tag_id.len().saturating_mul(2))
+                    .saturating_add(tag.display_name.len())
+                    .saturating_add(tag.parent_tag_id.as_ref().map_or(0, String::len))
+            })
+    }
+    pub fn new(workspace_id: String, document: TagDocument) -> Result<Self> {
+        uuid::Uuid::parse_str(&workspace_id)
+            .map_err(|_| DataError("Invalid tag structure workspace".into()))?;
+        let forest = document.forest()?;
+        Ok(Self {
+            workspace_id,
+            document: Arc::new(document),
+            forest: Arc::new(forest),
+        })
+    }
+    fn parts(reference: &str) -> Result<(&str, &str)> {
+        let (workspace, id) = reference
+            .strip_prefix("weftext-tag://")
+            .and_then(|s| s.split_once('/'))
+            .ok_or_else(|| DataError("A typed TagRef is required".into()))?;
+        if uuid::Uuid::parse_str(workspace).is_err() || uuid::Uuid::parse_str(id).is_err() {
+            return Err(DataError("Invalid TagRef identity".into()));
+        }
+        Ok((workspace, id))
+    }
+    pub(crate) fn validate_root<'a>(&self, reference: &'a str) -> Result<&'a str> {
+        let (workspace, id) = Self::parts(reference)?;
+        if workspace != self.workspace_id || !self.forest.contains(id) {
+            return Err(DataError(
+                "Tag root unavailable in the frozen qualified tree".into(),
+            ));
+        }
+        Ok(id)
+    }
+    fn in_subtree(&self, candidate: &str, root: &str) -> Result<bool> {
+        let root = self.validate_root(root)?;
+        let (workspace, candidate) = Self::parts(candidate)?;
+        if workspace != self.workspace_id {
+            return Ok(false);
+        }
+        self.forest.in_subtree(candidate, root)
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRow {
@@ -500,6 +559,36 @@ fn typecheck(
             }
             args.extend(c.args.iter().map(child).collect::<Result<Vec<_>>>()?);
             match c.func_name.as_str() {
+                "tagInSubtree" => {
+                    fn tag_ref(t: &QType) -> bool {
+                        match t {
+                            QType::Scalar(s) => s == "tag_ref",
+                            QType::Union(v) => !v.is_empty() && v.iter().all(tag_ref),
+                            _ => false,
+                        }
+                    }
+                    if c.target.is_some() || args.len() != 2 || args.iter().any(|t| !tag_ref(t)) {
+                        return Err(DataError(
+                            "tagInSubtree requires two typed tag_ref inputs".into(),
+                        ));
+                    }
+                    let root = &c.args[1].expr;
+                    if matches!(root, Expr::Ident(name) if name.starts_with("@weftext_local_") || schema.field(name).is_some())
+                    {
+                        return Err(DataError(
+                            "tagInSubtree root cannot depend on a row or lexical local".into(),
+                        ));
+                    }
+                    if !matches!(root, Expr::Ident(_))
+                        && !matches!(root, Expr::Call(c) if c.func_name == "tagRef")
+                    {
+                        return Err(DataError(
+                            "tagInSubtree root requires a literal TagRef or frozen parameter"
+                                .into(),
+                        ));
+                    }
+                    scalar("bool")
+                }
                 "_&&_" | "_||_" => {
                     if args.len() != 2 || args.iter().any(|v| !compatible(v, &scalar("bool"))) {
                         return Err(DataError("Logical operands must be bool".into()));
@@ -1349,6 +1438,15 @@ pub(crate) fn evaluate(
     }
     let mut context = Context::with_env(env.env.clone());
     context
+        .add_function::<TagSubtreeFunction, _>(
+            "tagInSubtree",
+            TagSubtreeFunction {
+                structure: env.tag_structure.clone(),
+                partial: env.tag_partial.clone(),
+            },
+        )
+        .map_err(|e| DataError(e.to_string()))?;
+    context
         .add_function::<OrderedRecordConstructor, _>(
             "@weftext_ordered_record",
             OrderedRecordConstructor {
@@ -1456,6 +1554,8 @@ fn recurrence_result_type() -> QType {
     ]))
 }
 pub(crate) struct QueryRuntime {
+    pub(crate) tag_structure: Option<FrozenTagStructure>,
+    pub(crate) tag_partial: Arc<AtomicBool>,
     env: Arc<cel::Env>,
     schema: Arc<Schema>,
     pub(crate) parameter_shapes: BTreeMap<String, Shape>,
@@ -1469,6 +1569,8 @@ pub(crate) fn query_env_traced(
     trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<QueryRuntime> {
     Ok(QueryRuntime {
+        tag_structure: None,
+        tag_partial: Arc::new(AtomicBool::new(false)),
         env: Arc::new(cel::Env::stdlib()),
         schema: Arc::new(schema.clone()),
         parameter_shapes: BTreeMap::new(),
@@ -1755,6 +1857,46 @@ fn preflight_expression(
         env,
         providers_only,
     )
+}
+struct TagSubtreeFunction {
+    structure: Option<FrozenTagStructure>,
+    partial: Arc<AtomicBool>,
+}
+impl cel::extractors::IntoFunction<TagSubtreeFunction> for TagSubtreeFunction {
+    fn into_function(
+        self,
+    ) -> Box<
+        dyn for<'c, 'v> Fn(
+                &mut cel::FunctionContext<'c, 'v>,
+            ) -> std::result::Result<CowVal<'c, 'v>, ExecutionError>
+            + Send
+            + Sync,
+    > {
+        Box::new(move |context| {
+            let result = (|| {
+                if context.args.len() != 2 {
+                    return Err(DataError("tagInSubtree arity".into()));
+                }
+                let candidate = from_cel(context.args[0].as_ref())?;
+                let root = from_cel(context.args[1].as_ref())?;
+                let (NativeValue::Text(candidate), NativeValue::Text(root)) = (candidate, root)
+                else {
+                    return Err(DataError("tagInSubtree requires typed TagRefs".into()));
+                };
+                self.structure
+                    .as_ref()
+                    .ok_or_else(|| DataError("Frozen tag structure unavailable".into()))?
+                    .in_subtree(&candidate, &root)
+            })();
+            match result {
+                Ok(value) => Ok(CowVal::Owned(Box::new(CelBool::from(value)))),
+                Err(error) => {
+                    self.partial.store(true, AtomicOrdering::Relaxed);
+                    Err(context.error(error.0))
+                }
+            }
+        })
+    }
 }
 struct ProviderFunction {
     name: &'static str,
@@ -2057,6 +2199,10 @@ pub(crate) fn execute_query_leaf_traced(
     let mut diagnostics = vec![];
     let mut partial = input.coverage == "partial";
     let mut env = query_env_traced(schema, trace)?;
+    env.tag_structure = input
+        .advanced
+        .as_ref()
+        .and_then(|a| a.tag_structure.clone());
     env.parameter_shapes = parameter_shapes.clone();
     if trace.is_some() {
         for expression in unnest
@@ -2384,6 +2530,10 @@ pub(crate) fn execute_query_leaf_traced(
             a.key.cmp(&b.key)
         });
         rows = data_rows.into_iter().map(|(r, _, _, _)| r).collect();
+    }
+    if env.tag_partial.load(AtomicOrdering::Relaxed) {
+        partial = true;
+        diagnostics.push("tag structure input unavailable".into());
     }
     if env.provider_partial.load(AtomicOrdering::Relaxed) {
         partial = true;

@@ -211,10 +211,7 @@ impl Core {
 
     pub(crate) fn release_sync_query_lifecycles(&mut self, snapshots: &[AdmittedSnapshot]) {
         for query in snapshots {
-            for file in query.files.iter().chain(query.schema.iter()) {
-                self.snapshots.remove(&file.base_id);
-            }
-            self.admitted_cuts.remove(&query.cut_id);
+            self.release_admitted_cut(&query.cut_id);
         }
     }
 

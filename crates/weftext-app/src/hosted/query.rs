@@ -1,6 +1,7 @@
 //! Query over explicit hosted resources, independently granted native products
 //! and exact saved-definition revisions. No local inventory routes are reused.
 use super::*;
+use std::path::Path;
 use weftext_core::{ConfigRole, SnapshotFile, SnapshotWitness};
 use weftext_data::{DefinitionSelection, NativeValue, QueryPlan, SavedQueryBinding, Schema};
 
@@ -92,6 +93,13 @@ fn frozen_input_bytes(
 ) -> Result<usize, ApiError> {
     let mut used = 0;
     charge_serialized(&mut used, &(input, schema, plan))?;
+    if let Some(tags) = input
+        .advanced
+        .as_ref()
+        .and_then(|a| a.tag_structure.as_ref())
+    {
+        charge_bytes(&mut used, tags.retained_bytes())?;
+    }
     for note in &input.notes {
         // The trusted field capability is deliberately skipped by wire serde.
         // It still owns memory and must participate in the execution budget.
@@ -134,6 +142,8 @@ pub(super) struct QueryRights {
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Authority {
+    #[serde(default)]
+    pub(super) tag_structure: bool,
     pub(super) execution: library::ExecutionAuthority,
     pub(super) scopes: query_scopes::Authority,
     pub(super) providers: query_providers::Selection,
@@ -149,6 +159,9 @@ pub(super) fn authorize_authority(
     actor: &str,
     authority: &Authority,
 ) -> Result<(), ApiError> {
+    if authority.tag_structure {
+        navigation_registry::authorize_tag_read(inner, actor)?;
+    }
     library::authorize_execution(inner, actor, &authority.execution)?;
     query_providers::authorize(inner, actor, &authority.providers)?;
     query_scopes::authorize(inner, actor, &authority.scopes)?;
@@ -1117,6 +1130,7 @@ pub(super) fn validate_definition(
         .to_owned();
     let owner_path = inner.config.root.join(&inner.file(resource)?.path);
     let mut owners = BTreeMap::new();
+    let mut tag_needed = false;
     for _ in 0..64 {
         let resources = owners
             .values()
@@ -1127,6 +1141,17 @@ pub(super) fn validate_definition(
             return Err(invalid());
         }
         let mut paths = vec![config.path.clone()];
+        if tag_needed {
+            navigation_registry::authorize_tag_read(inner, &actor)?;
+            paths.push(
+                inner
+                    .config
+                    .root
+                    .join(".weftext-tags.json")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
         for r in &resources {
             paths.push(
                 inner
@@ -1142,7 +1167,22 @@ pub(super) fn validate_definition(
             .read_snapshot(&inner.config.root, &paths)
             .map_err(|_| changed())?
             .files;
+        let tags = if tag_needed {
+            let document = inner
+                .core
+                .qualified_tag_document_from_snapshot(&inner.config.root, &files[1])
+                .map_err(|_| changed())?;
+            Some(
+                weftext_data::FrozenTagStructure::new(workspace.clone(), document)
+                    .map_err(|_| changed())?,
+            )
+        } else {
+            None
+        };
         let witnesses = take_witnesses(inner, &files)?;
+        if tag_needed {
+            files.remove(1);
+        }
         let schema_file = files.remove(0);
         // Persisted definitions always have an admitted, exact config revision;
         // the bundled default is only an execution/read fallback.
@@ -1222,6 +1262,12 @@ pub(super) fn validate_definition(
         authority.scopes = scopes.authority.clone();
         let demands = weftext_data::query_read_requirements(plan, &baseline, &context)
             .map_err(|_| unavailable())?;
+        if demands.tag_structure != tag_needed {
+            tag_needed = demands.tag_structure;
+            continue;
+        }
+        context.tag_structure = tags;
+        authority.tag_structure = demands.tag_structure;
         let configured = inner
             .files_view(&actor)?
             .iter()
@@ -1354,6 +1400,9 @@ pub(super) fn validate_definition(
             charge_bytes(&mut validation_bytes, witness.retained_bytes())?;
         }
         charge_serialized(&mut validation_bytes, &(&context, &schema, &plan))?;
+        if let Some(tags) = &context.tag_structure {
+            charge_bytes(&mut validation_bytes, tags.retained_bytes())?;
+        }
         return Ok(DefinitionValidation {
             binding,
             schema,
@@ -1463,6 +1512,7 @@ fn capture(
         .to_owned();
     let mut owners = BTreeMap::new();
     let mut inputs = BTreeSet::new();
+    let mut tag_needed = false;
     for _ in 0..64 {
         let mut authority = Authority::default();
         for r in &resources {
@@ -1486,6 +1536,17 @@ fn capture(
             file_resources.insert(d.resource.clone());
         }
         let mut paths = vec![config.path.clone()];
+        if tag_needed {
+            navigation_registry::authorize_tag_read(inner, &actor)?;
+            paths.push(
+                inner
+                    .config
+                    .root
+                    .join(".weftext-tags.json")
+                    .to_string_lossy()
+                    .into_owned(),
+            );
+        }
         paths.extend(
             file_resources
                 .iter()
@@ -1507,7 +1568,22 @@ fn capture(
             .read_snapshot(&inner.config.root, &paths)
             .map_err(|_| changed())?
             .files;
+        let tags = if tag_needed {
+            let document = inner
+                .core
+                .qualified_tag_document_from_snapshot(&inner.config.root, &cut[1])
+                .map_err(|_| changed())?;
+            Some(
+                weftext_data::FrozenTagStructure::new(workspace.clone(), document)
+                    .map_err(|_| changed())?,
+            )
+        } else {
+            None
+        };
         let witnesses = take_witnesses(inner, &cut)?;
+        if tag_needed {
+            cut.remove(1);
+        }
         let schema_file = cut.remove(0);
         let full_schema = schema_from(&schema_file)?;
         let snapshots = file_resources
@@ -1622,6 +1698,12 @@ fn capture(
                     invalid()
                 }
             })?;
+        if demands.tag_structure != tag_needed {
+            tag_needed = demands.tag_structure;
+            continue;
+        }
+        context.tag_structure = tags;
+        authority.tag_structure = demands.tag_structure;
         if draft.is_some() {
             req.fields = demands.fields.clone();
             req.products = demands.products.clone();
@@ -1784,6 +1866,10 @@ fn capture(
                 }
             },
         )?;
+        if !validate_only {
+            weftext_data::prepare_tag_structure(&req.plan, &schema, &context)
+                .map_err(|_| invalid())?;
+        }
         let cut_id = uuid::Uuid::new_v4().to_string();
         let mut notes = vec![];
         let mut metadata = BTreeMap::new();
@@ -2092,7 +2178,8 @@ async fn execute_captured(
         result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
         for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.file(&resource)?.lifecycle=="live"&&inner.file(&resource)?.editable&&inner.rights(&actor,&resource).is_ok());}}
-        let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority)?;
+        let tag_witness = if captured.authority.tag_structure {Some(captured.witnesses.iter().find(|(path, _)| Path::new(path) == inner.config.root.join(".weftext-tags.json")).ok_or_else(changed)?.clone())} else {None};
+        let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority,tag_witness)?;
         Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
     }).await
 }

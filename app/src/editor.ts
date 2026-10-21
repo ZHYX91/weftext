@@ -102,6 +102,7 @@ export class SourceEditor {
   private pendingTokens?: { tokens: SyntaxToken[]; styled: boolean; basis: SourceStyleBasis };
   private styleNotice = document.createElement("span");
   private disposed = false;
+  private sourceSnapshot?: { doc: EditorState["doc"]; source: string };
   private compositionEpoch = 0;
   private activeCompositionEpoch: number | null = null;
   private historyRequests = new SourceHistoryRequests({
@@ -195,7 +196,11 @@ export class SourceEditor {
     this.styleNotice.hidden = true;
     this.view.dom.append(this.styleNotice);
   }
-  get source(): string { return this.view.state.doc.toString(); }
+  get source(): string {
+    const doc = this.view.state.doc;
+    if (this.sourceSnapshot?.doc !== doc) this.sourceSnapshot = { doc, source: doc.toString() };
+    return this.sourceSnapshot.source;
+  }
   get selection(): SourceSelection { const main = this.view.state.selection.main; return { from: main.from, to: main.to }; }
   get composing(): boolean { return this.inputComposition || this.view.compositionStarted || this.view.composing || this.historyRequests.composing; }
   get revealed(): SourceReveal | null { return this.view.state.field(revealField); }

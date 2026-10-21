@@ -325,6 +325,27 @@ impl Core {
                 message: format!("Original replica cut no longer qualifies: {}", error.code),
             });
         }
+        if let Err(error) = self.validate_tag_plan_changes(plan) {
+            capture.members.push(RecoveryMember {
+                kind: "tagRegistry".into(),
+                role: "readDependency".into(),
+                path: Path::new(&t.request.root)
+                    .join(".weftext-tags.json")
+                    .to_string_lossy()
+                    .into_owned(),
+                target_path: None,
+                before: RecoveryBlob::from_bytes(None),
+                after: RecoveryBlob::from_bytes(None),
+                current: RecoveryBlob::from_bytes(None),
+                state: "thirdState".into(),
+                matches_before: false,
+                matches_after: false,
+                identity_binding: "mismatch".into(),
+                expected_identity: None,
+                current_identity: None,
+                message: format!("Original Tags role no longer qualifies: {}", error.code),
+            });
+        }
         if let Err(error) = self.validate_recovery_scope(t) {
             let third = matches!(
                 error.code.as_str(),
@@ -563,8 +584,17 @@ impl Core {
                     let identity = guard.directory_identity()?;
                     let (entries, complete) = guard.directory_entries(5000)?;
                     let names = operations::sorted_entries(entries, Path::new(&directory.path));
-                    let same =
-                        complete && identity == directory.identity && names == directory.entries;
+                    let same = complete
+                        && identity == directory.identity
+                        && crate::author_order::navigation_order_directory_entries(
+                            t,
+                            Path::new(&directory.path),
+                            names,
+                        ) == crate::author_order::navigation_order_directory_entries(
+                            t,
+                            Path::new(&directory.path),
+                            directory.entries.clone(),
+                        );
                     member.current = directory_blob(Some(&identity));
                     member.current_identity = Some((&identity).into());
                     member.matches_before = same;

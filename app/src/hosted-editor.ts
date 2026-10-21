@@ -4,13 +4,15 @@ import type { EverydayCommand } from "./everyday-navigation";
 import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from "./embedded-query";
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, type WritingMap, type WritingRange } from "./writing";
+import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
 import { createWritingToolbar, createStructureControls, insertWritingLink } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, retireDocumentNotes, type DocumentNotesMount } from "./document-notes";
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
+import { headingMatchesDisplay, type StructureHeading } from "./heading-structure-state";
+import { DeferredPaint } from "./deferred-paint";
 import "./document-notes.css";
 import { nativeElement } from "./native-node";
 import { OfflineFontLoader } from "./font-readiness";
@@ -28,6 +30,7 @@ export interface HostedEditorQueryHost {
   openOwner(origin: Origin): Promise<void>;
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   modeChanged?(): void;
+  showHeadingStructure?(): void | Promise<void>;
   navigateReference?(reference: string): Promise<void>;
   navigateResource?(reference: string): Promise<void>;
   dependencies?(): HostedQueryDependencies;
@@ -47,6 +50,7 @@ export class HostedEditor {
   private paused = false;
   private mode: ViewMode = "styled";
   private projection?: Projection;
+  private deferredPaint = new DeferredPaint();
   private generation = 0;
   private timer?: ReturnType<typeof setTimeout>;
   private toolbar = node("div");
@@ -82,6 +86,14 @@ export class HostedEditor {
   get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
   get pausedSession(): boolean { return this.paused; }
   get composing(): boolean { return !!this.editor?.composing || !!this.writing?.state.composing; }
+  revealRendered(key: string, expected?: StructureHeading): boolean {
+    if (this.paused || !this.current() || !this.flow.isConnected || !this.flow.getClientRects().length) return false;
+    if (expected && !headingMatchesDisplay(this.projection?.tree, expected)) return false;
+    const target = Array.from(this.flow.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(node => node.dataset.documentNodeKey === key);
+    if (!target) return false;
+    if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }); target.focus({ preventScroll: true }); return true;
+  }
   checkNavigationCapacity(resource:string): void { if(this.resource!==resource&&!this.retained.has(resource)&&this.retained.size>=15)throw new Error("本页已保留 16 个正文编辑会话及其 Undo。请先保存所需正文，再刷新页面释放会话；个人恢复稿仍由原缓存保留。"); }
   commands(insertQuery?: () => Promise<void>): EverydayCommand[] { return everydayWritingCommands(this.writing, !this.blocked && !this.paused && this.mode !== "read" && !this.composing, insertQuery); }
   pauseSession(): void { clearTimeout(this.timer); this.generation++; this.paused = true; this.sessionId = ""; this.projection = undefined; this.authoringAssets.invalidate(); if (this.writing) retireDocumentNotes(this.writing); this.queries?.invalidate(); this.mode = "source"; this.editor?.clearTokens(); this.editor?.readOnly(this.blocked); this.paint(true); this.message.textContent = "原对象的结构会话已暂停；当前草稿与 Undo 保留，请明确打开新位置核对后继续。"; }
@@ -96,7 +108,7 @@ export class HostedEditor {
     // Selecting the actual native author range changes neither source nor Undo.
     this.mode = "source"; this.editor.clearReveal(); this.editor.readOnly(this.blocked); this.paint(true); this.editor.select(origin.utf16From, origin.utf16To); this.queryHost?.modeChanged?.();
   }
-  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read" || this.paused && this.mode !== "source"); if (this.blocked === value) return; if (value) this.editor?.clearTokens(); this.blocked = value; this.paint(); }
+  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read" || this.paused && this.mode !== "source"); if (this.blocked === value) return; if (value) this.editor?.clearTokens(); this.blocked = value; this.paint(true); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
   async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {
     if (settle) await this.flush();
@@ -142,7 +154,6 @@ export class HostedEditor {
       if (saved) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); }
       this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save);
       const editor = this.editor;
-      let retained = false;
       this.writing = new WritingController({ editor,
         refreshMap: basis => this.request("editor/map",basis),
         basis: () => ({ sessionId: this.sessionId, source: editor.source, serial: editor.generation }),
@@ -150,9 +161,7 @@ export class HostedEditor {
         request: request => this.requestEdit(request), onError: this.error,
         onPendingSource: () => { this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
         onState: () => {
-          const next = this.writing?.retainInput ?? false;
-          if (retained && !next && this.mode === "write") queueMicrotask(() => { if (this.editor === editor) this.paint(); });
-          retained = next;
+          this.deferredPaint.flush(() => this.editor === editor ? this.paintBasis() : undefined, () => !!this.writing?.retainInput || !!this.editor?.composing, () => this.paint());
         },
       });
       if (this.queryHost) this.queries = new EmbeddedQueryController({
@@ -188,6 +197,7 @@ export class HostedEditor {
     return editor?.source === source ? editor.generation : 0;
   }
   clear(clearRetained = true): void {
+    this.deferredPaint.clear();
     if (clearRetained) { for (const saved of this.retained.values()) { saved.queries?.dispose(); saved.writing.dispose(); saved.editor.destroy(); } this.retained.clear(); }
     this.restoredView=undefined; this.authoringAssets.invalidate(); this.notesMount?.dispose(); this.notesMount = undefined; this.personalKeys = undefined; this.personalAudience = "";
     this.sessionId = ""; this.projection = undefined; if (this.writing) retireDocumentNotes(this.writing);
@@ -293,9 +303,11 @@ export class HostedEditor {
     this.paint(true); this.editor.select(origin.utf16From, origin.utf16To);
   }
   private current(): boolean { return !!this.editor && this.projection?.source === this.editor.source && this.projection?.serial === this.editor.generation; }
+  private paintBasis(): readonly unknown[] { return [this.editor, this.sessionId, this.resource, this.editor?.source, this.editor?.generation, this.projection, this.writing?.map, this.mode, this.blocked, this.paused, this.queryPreview, this.flow]; }
   private paint(force = false): void {
     const editor = this.editor, writing = this.writing; if (!editor || !writing) return;
-    if (!force && (writing.retainInput || editor.composing)) return;
+    if (!force && (writing.retainInput || editor.composing)) { this.deferredPaint.defer(this.paintBasis()); return; }
+    this.deferredPaint.clear();
     const nav = node("div", "", "hosted-modes"); nav.setAttribute("role", "group"); nav.setAttribute("aria-label", "文档视图");
     for (const [mode, label] of modes) { const b = this.button(label, () => this.changeMode(mode)); b.setAttribute("aria-pressed", String(this.mode === mode)); nav.append(b); }
     if (this.mode === "source" && this.queries?.hasQueries) nav.append(this.button(this.queryPreview ? "收起正文查询预览" : "查看正文查询预览", () => { this.queryPreview = !this.queryPreview; this.paint(true); }));
@@ -305,7 +317,7 @@ export class HostedEditor {
     if (!this.sourceHost.hidden && editor.view.dom.parentElement !== this.sourceHost) editor.mount(this.sourceHost);
     const options = { onError: this.error, revealSource: (range: WritingRange) => this.reveal(range), insertLink: () => insertWritingLink(writing) };
     this.toolbar.replaceChildren();
-    this.notesMount?.dispose(); const notes = node("div", "", "document-notes-summary"); this.toolbar.append(this.button("编号控制", () => this.openNumbering()), notes); this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
+    this.notesMount?.dispose(); const notes = node("div", "", "document-notes-summary"); this.toolbar.append(this.button("编号控制", () => this.openNumbering()), this.button("大纲／标题结构", () => this.queryHost?.showHeadingStructure?.()), notes); this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
     if (!this.blocked && this.mode !== "read" && (!this.paused || this.mode === "source")) {
       if (this.mode === "write") this.toolbar.append(createWritingToolbar(writing, options));
       else this.toolbar.append(this.button("撤销", () => writing.undo()), this.button("重做", () => writing.redo()));
@@ -327,9 +339,11 @@ export class HostedEditor {
       return;
     }
     if (!current) this.flow.append(node("p", "显示上次预览；旧范围不能用于可视编辑。", "hint"));
-    const groups = current && writing.map ? groupWritingRenderNodes(projection.tree, writing.map, editor.source) : [];
+    const writingMap = writable ? writing.map : null;
+    const structures = writingStructureIndex(writingMap);
+    const groups = writingMap ? groupWritingRenderNodes(projection.tree, writingMap, editor.source) : [];
     const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key,group] as const)));
-    const empty = new Map((current && writing.map ? groupWritingEmptySlots(projection.tree, writing.map, editor.source) : []).map(slot => [slot.nodeKey,slot.region]));
+    const empty = new Map((writingMap ? groupWritingEmptySlots(projection.tree, writingMap, editor.source) : []).map(slot => [slot.nodeKey,slot.region]));
     const input = (label: string, region: Parameters<WritingController["bindLiteral"]>[1]) => { const el = node("textarea", "", "literal-input"); el.rows = 1; el.spellcheck = false; el.setAttribute("aria-label", label); writing.bindLiteral(el, region); return el; };
     let personalHeadingOrdinal = 0;
     const draw = (item: RenderNode): Node => {
@@ -373,8 +387,8 @@ export class HostedEditor {
       if (current && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) el.append(this.button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(this.authoringEnvironment()), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId)));
       const slot = empty.get(item.key); if (writable && slot) el.append(input("编辑空内容", slot));
       if (writable && item.origin?.isMain) {
-        const range = writing.map?.structures.find(s => s.range.utf16From === item.origin!.utf16From && s.range.utf16To === item.origin!.utf16To)?.range;
-        const controls = range && createStructureControls(writing, range, { ...options, renderedTable: el });
+        const structure = structures.get(`${item.origin.utf16From}:${item.origin.utf16To}`);
+        const controls = structure && createStructureControls(writing, structure, { ...options, renderedTable: el });
         if (controls) { const wrapper = node("div"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(el, controls); if (openReference) wrapper.append(openReference); return wrapper; }
       }
       if (openReference) { const wrapper = node("div"); wrapper.append(el, openReference); return wrapper; }

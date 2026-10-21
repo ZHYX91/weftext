@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeSet;
 
 struct Fixture {
     _temp: tempfile::TempDir,
@@ -42,6 +43,106 @@ impl Fixture {
         self.core
             .take_compile_dependency_witness(&self.root, cut, &deps)
     }
+}
+
+#[test]
+fn releasing_compile_cuts_reclaims_optional_tags_without_losing_retained_witnesses() {
+    for installed in [false, true] {
+        for consume in ["release", "success", "failure"] {
+            let mut f = Fixture::new();
+            if installed {
+                let basis = f.core.read_tag_registry(&f.root).unwrap();
+                let tag = f
+                    .core
+                    .prepare_create_tag(&f.root, "Root", &basis.base_id, &fresh())
+                    .unwrap();
+                f.core
+                    .execute_operation(&tag.preview.operation_id, &tag.preview.plan_id)
+                    .unwrap();
+            }
+            let original_bases = f.core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
+            let original_cuts = f.core.admitted_cuts.len();
+            let original_compile_cuts = f.core.compile_dependency_cuts.len();
+            let captured = f.core.admitted_compile_snapshot(&f.root, "live").unwrap();
+            let cut = &captured.snapshot.cut_id;
+            let tags = captured.snapshot.tags.as_ref().unwrap();
+            assert_eq!(tags.bytes.is_some(), installed);
+            assert!(!f.core.admitted_cuts[cut].bases.contains(&tags.base_id));
+            // Absence remains optional. A real structural consumer explicitly
+            // binds the same captured tree and retains its own read witness.
+            let tag_witness = installed.then(|| {
+                f.core
+                    .bind_admitted_tag_structure(&f.root, cut, tags)
+                    .unwrap();
+                f.core.snapshot_witness(&tags.base_id).unwrap()
+            });
+            let native_witness = match consume {
+                "release" => {
+                    f.core.release_compile_dependency_cut(cut);
+                    None
+                }
+                "success" => Some(
+                    f.witness(cut, &[("Note/helper.typ", "source", "loaded")])
+                        .unwrap(),
+                ),
+                "failure" => {
+                    assert!(
+                        f.witness(cut, &[("missing.typ", "source", "loaded")])
+                            .is_err()
+                    );
+                    None
+                }
+                _ => unreachable!(),
+            };
+            f.core.release_compile_dependency_cut(cut);
+            assert_eq!(
+                f.core.snapshots.keys().cloned().collect::<BTreeSet<_>>(),
+                original_bases
+            );
+            assert_eq!(f.core.admitted_cuts.len(), original_cuts);
+            assert_eq!(f.core.compile_dependency_cuts.len(), original_compile_cuts);
+            if let Some(witness) = native_witness {
+                f.core
+                    .validate_compile_dependency_witness(&witness)
+                    .unwrap();
+            }
+            if let Some(witness) = tag_witness {
+                f.core
+                    .validate_snapshot_witness(&f.root, &tags.path, &witness)
+                    .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn rejected_compile_capture_releases_only_its_own_admitted_cut() {
+    let mut f = Fixture::new();
+    let original = f.core.admitted_snapshot(&f.root).unwrap();
+    let original_bases = f.core.snapshots.keys().cloned().collect::<BTreeSet<_>>();
+    let original_cuts = f.core.admitted_cuts.len();
+    fs::write(
+        f.root.join(".weftext-settings.json"),
+        br#"{"version":1,"defaultStyle":{"enabled":true}}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        f.core
+            .admitted_compile_snapshot(&f.root, "live")
+            .unwrap_err()
+            .code,
+        "styleSelection"
+    );
+    assert_eq!(
+        f.core.snapshots.keys().cloned().collect::<BTreeSet<_>>(),
+        original_bases
+    );
+    assert_eq!(f.core.admitted_cuts.len(), original_cuts);
+    assert!(f.core.compile_dependency_cuts.is_empty());
+    let source = &original.files[0];
+    f.core
+        .validate_snapshot(&f.root, &source.path, &source.base_id)
+        .unwrap();
 }
 
 #[test]

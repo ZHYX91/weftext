@@ -65,6 +65,8 @@ const everydayBar = document.createElement("nav"); everydayBar.className = "ever
 function everydayEntries() { return structureDocuments.map(item => ({ key:item.resource,title:item.title,detail:item.resource,open:() => run(() => open(item.resource)) })); }
 function everydayCommands(): EverydayCommand[] { return [
   {id:"quick-open",label:"快捷打开",run:() => openEverydayPicker("快捷打开",everydayEntries(),status)},
+  {id:"relationship-graph",label:"打开二维关系图谱",run:() => knowledgeLinks.showStructure("graph")},
+  {id:"heading-structure",label:"打开只读标题结构／大纲",run:() => knowledgeLinks.showStructure("headings")},
   {id:"recent",label:"最近访问",run:showRecent},
   {id:"save",label:"保存当前笔记",unavailable:!authoringEditable()?"当前正文不可保存，请检查写入权限和待核对状态。":undefined,run:() => run(save)},
   ...source.commands(async () => { el("query").hidden = false; el("query").scrollIntoView(); el("query").querySelector<HTMLInputElement>('input[aria-label="新保存定义原生标签"]')?.focus(); status("在下方高级查询选择条件并使用“将临时计划提为当前正文的新保存定义”；预约后进入同一草稿，保存才提交。"); }),
@@ -81,13 +83,14 @@ function renderEverydayBar() {
 }
 const noteInputRecovery = new NoteInputRecovery({ getItem: key => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value) });
 function noteInputAudience(): string | null { return identity ? JSON.stringify([identity.deployment, identity.actor]) : null; }
-const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata));
+const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged("标签或获权字段已修改；原结果保留为旧依据，请明确重跑查询。"));
 const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
   canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
   openRow: row => { const target = row as HostedQueryRow; if (target.canOpen !== true || !target.resource) return Promise.reject(new Error("此查询行没有独立正文读取资格。")); return openQueryResource(target.resource); },
   openOwner: async () => { throw new Error("此查询来源没有独立获权导航对象，未按路径猜打开。"); },
   output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
   modeChanged: () => { queries.authorChanged(); knowledgeAuthorChanged(); },
+  showHeadingStructure: () => knowledgeLinks.showStructure("headings"),
   navigateReference,
   navigateResource,
   dependencies: () => queries.dependencies(),
@@ -186,6 +189,7 @@ const knowledgeLinks = new HostedKnowledgeLinks(el("knowledge-links"), (path, bo
   apply: async (patches, basis, event) => { retain(); await source.applyQueryPatches(patches, basis, event); },
   navigate: reference => reference.startsWith("weftext-resource://") ? navigateResource(reference) : navigateReference(reference),
   select: (from, to) => source.selectSourceRange(from, to),
+  revealRendered: heading => source.revealRendered(heading.key, heading),
   authorizationChanged: (message, current) => { clearDisplay(message); identity = { ...identity!, ...current }; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(identity)); },
 });
 function hostedIdentity() { return identity ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, authorization: authorizationEpoch } : null; }
@@ -206,7 +210,7 @@ const citations = new HostedCitations(el("citations"), request, {
   selection: () => source.selection, select: (from, to) => source.selectSourceRange(from, to), navigate: navigateReference, authorizationChanged: authorizationsChanged,
 });
 function knowledgeAuthorChanged() { knowledgeLinks.documentChanged(); citations.documentChanged(); }
-const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged });
+const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged, registryChanged: () => queries.environmentChanged("标签结构已修改；原冻结结果保留为旧依据，请明确重跑查询。") });
 const contentImport = new HostedContentImport(el("content-import"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged, open: openQueryResource });
 const recognitionPanel = new RecognitionPanel({
   request: (path, body) => request(`recognition${path}`, body),

@@ -343,7 +343,7 @@ pub fn validate_library_rules(bytes: &[u8]) -> Result<()> {
 fn excluded(path: &Path, set: &HashSet<PathBuf>) -> bool {
     set.iter().any(|p| path.starts_with(p))
 }
-fn internal(path: &Path) -> bool {
+pub(crate) fn internal(path: &Path) -> bool {
     path.components()
         .next()
         .is_some_and(|c| c.as_os_str().to_string_lossy().starts_with(".weftext-"))

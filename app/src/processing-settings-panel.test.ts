@@ -30,3 +30,27 @@ test("mismatched receipt keeps original request; a committed query refreshes set
   const reopened = new ProcessingSettingsController(host({ status: async request => ({ operationId: request.operationId, planId: "plan", status: "committed" }), read: async () => ({ ...state(), baseId: "new", processing: defaultProcessingDocument() }) }), retained);
   await reopened.status(); assert.equal(reopened.state?.baseId, "new"); assert.equal(reopened.pending, undefined);
 });
+
+test("confirmed settings mutations invalidate before a failing fresh read across commit and original-operation recovery", async () => {
+  for (const method of ["apply", "status", "retryPrepare", "settle"] as const) {
+    const retained = storage(); let changed = 0, applied = 0;
+    const target = host({ committed: () => { changed++; assert.equal(controller.pending?.operation?.status, "committed"); }, onApplied: () => { applied++; } });
+    const controller = new ProcessingSettingsController(target, retained); await controller.load();
+    controller.edit(JSON.stringify(defaultProcessingDocument())); await controller.prepare();
+    assert.equal(changed, 0, "Draft and preview do not change the shared author environment");
+    const committed = async (request: ProcessingRequest) => ({ operationId: request.operationId, planId: "plan", status: "committed" });
+    target.read = async () => { throw new Error("fresh read unavailable"); };
+    target.status = committed; target.prepare = committed; target.settle = committed;
+    await assert.rejects(controller[method](), /fresh read unavailable/);
+    assert.equal(changed, 1); assert.equal(applied, 0); assert.equal(controller.pending?.operation?.status, "committed");
+    assert.match(retained.getItem(target.persistenceKey)!, /"status":"committed"/);
+    target.read = async () => ({ ...state(), baseId: "fresh" }); await controller.status();
+    assert.equal(changed, 1); assert.equal(applied, 1); assert.equal(controller.pending, undefined); assert.equal(controller.state?.baseId, "fresh");
+  }
+});
+
+test("an unrelated settings receipt cannot notify a successful mutation", async () => {
+  let changed = 0; const target = host({ committed: () => { changed++; }, status: async () => ({ operationId: "unrelated", planId: "plan", status: "committed" }) });
+  const controller = new ProcessingSettingsController(target, storage()); await controller.load(); await controller.prepare();
+  await assert.rejects(controller.status(), /不符/); assert.equal(changed, 0); assert.equal(controller.pending?.operation?.status, "prepared");
+});

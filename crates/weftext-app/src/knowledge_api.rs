@@ -489,6 +489,7 @@ struct Bundle {
     style_generation: String,
     citation_rename_available: bool,
     settings: SnapshotFile,
+    tag_tree: Option<Vec<knowledge::GraphTag>>,
 }
 
 async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError> {
@@ -497,7 +498,7 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     let annotation_path = annotations_path(&loc.path)?;
     let root = loc.root.clone();
     let annotation_for_cut = annotation_path.clone();
-    let (cut, annotations_file, settings, resources, resource_warnings, trash) =
+    let (cut, annotations_file, settings, resources, resource_warnings, trash, tag_document) =
         core_call(state, move |core| {
             let cut = core.admitted_snapshot(&root)?;
             let annotations = core
@@ -536,8 +537,20 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
                     Err(error) => warnings.push(format!("{}: {}", file.path, error.message)),
                 }
             }
-            let trash = core.trash_entries(root)?;
-            Ok((cut, annotations, settings, resources, warnings, trash))
+            let trash = core.trash_entries(&root)?;
+            let tag_document = cut.tags.as_ref().and_then(|snapshot| {
+                core.qualified_tag_document_from_snapshot(&root, snapshot)
+                    .ok()
+            });
+            Ok((
+                cut,
+                annotations,
+                settings,
+                resources,
+                warnings,
+                trash,
+                tag_document,
+            ))
         })
         .await?;
     let inventory = cut.inventory;
@@ -649,6 +662,9 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     if let Some(schema) = cut.schema {
         files.push(schema);
     }
+    if let Some(tags) = cut.tags {
+        files.push(tags);
+    }
     let mut resource_index = Vec::new();
     for resource in resources
         .into_iter()
@@ -681,7 +697,10 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         }
     }
     let resources = resource_index;
-    let facts = serde_json::to_string(&json!({"nodes":nodes,"resources":resources,"selectedDraft":selected.source,"style":style.key,"schema":schema_generation})).map_err(|_| ApiError::internal("无法编码索引事实"))?;
+    let facts = serde_json::to_string(&json!({"nodes":nodes,"resources":resources,"selectedDraft":selected.source,"style":style.key,"schema":schema_generation,"tags":tag_document})).map_err(|_| ApiError::internal("无法编码索引事实"))?;
+    let tag_tree = tag_document
+        .as_ref()
+        .map(|document| knowledge::graph_tag_tree(&workspace_id, document));
     let inventory = knowledge::InventorySnapshot {
         generation: weftext_engine::source_hash(&facts),
         coverage,
@@ -704,6 +723,7 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         style_generation: style.key,
         citation_rename_available,
         settings,
+        tag_tree,
     })
 }
 
@@ -1138,6 +1158,30 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
     {
         *node = bundle.selected.clone();
     }
+    let graph_relations = diagnostic_inventory
+        .nodes
+        .iter()
+        .flat_map(|node| knowledge::graph_relations(node, &bundle.schema, None, None))
+        .collect::<Vec<_>>();
+    let mut graph = knowledge::relationship_graph(
+        &diagnostic_inventory,
+        &property_inputs,
+        &graph_relations,
+        property_complete,
+        5_000,
+        20_000,
+    );
+    graph.root = Some(knowledge::graph_key(&bundle.selected.owner));
+    graph.tag_tree = bundle.tag_tree.clone();
+    for node in &mut graph.nodes {
+        node.tags_known = diagnostic_inventory
+            .nodes
+            .iter()
+            .find(|source| knowledge::graph_key(&source.owner) == node.key)
+            .is_some_and(|source| {
+                knowledge::graph_tag_membership_known(&source.source, &bundle.schema)
+            });
+    }
     let mut link_diagnostics = value(knowledge::link_diagnostics(
         &diagnostic_inventory,
         &property_inputs,
@@ -1185,6 +1229,11 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         .unwrap_or_default();
     let (citation_tree, citation_labels) =
         citation_products(&state, &request.context, &bundle).await?;
+    let heading_structure = knowledge::heading_structure(
+        tree.as_ref().or(citation_tree.as_ref()),
+        &request.context.source,
+        5_000,
+    );
     let mut citations = citation_catalog(&bundle, citation_tree.as_ref());
     crate::citation_api::classify_reference_controls(
         &mut citations["editor"],
@@ -1219,13 +1268,31 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         });
     }
     let loc = location(&state, &request.context.session_id)?;
-    if crate::data_api::knowledge_schema(&state, loc.root).await?.1 != bundle.schema_generation {
+    if crate::data_api::knowledge_schema(&state, loc.root.clone())
+        .await?
+        .1
+        != bundle.schema_generation
+    {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "stale_schema",
             "字段定义已变化，请重新读取；当前草稿保留",
         ));
     }
+    // The graph and its tag forest are one read. A concurrent reparent must
+    // invalidate this receipt rather than install old membership with new names.
+    let bases = bundle
+        .files
+        .iter()
+        .map(|file| (file.path.clone(), file.base_id.clone()))
+        .collect::<Vec<_>>();
+    core_call(&state, move |core| {
+        for (path, base) in bases {
+            core.validate_snapshot(&loc.root, path, &base)?;
+        }
+        Ok(())
+    })
+    .await?;
     exact(&state, &request.context)?;
     let templates = match template_catalog(&bundle) {
         Ok(catalog) => catalog,
@@ -1235,7 +1302,7 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         }
     };
     Ok(Json(
-        json!({"links":links,"diagnostics":link_diagnostics,"renderedLinks":rendered_links,"propertyReferences":property_references,"citations":citations,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings}),
+        json!({"graph":graph,"headingStructure":heading_structure,"links":links,"diagnostics":link_diagnostics,"renderedLinks":rendered_links,"propertyReferences":property_references,"citations":citations,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings}),
     ))
 }
 fn unsigned(value: &Value, key: &str) -> Result<u64, ApiError> {

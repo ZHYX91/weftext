@@ -83,6 +83,45 @@ class HostedLibrary(HostedQuery):
         self.call('open', {'resource': 'Shared'}, 'bob', 404)
         self.assertFalse(self.call('library', actor='bob')['styleUse'])
 
+    def test_library_author_order_requires_exact_parent_read_and_independent_write(self):
+        refs={}
+        def provision(api):
+            refs['parent']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared')})['targetRef']
+            refs['secret']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Secret')})['targetRef']
+            for name in ['First','Second']:
+                api('/api/note/create',{'root':str(self.root),'parent':str(self.root/'Shared'),'name':name,'operationId':uid()})
+                refs[name]=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared'/name)})['targetRef']
+            self.config['directories']={'order-parent':{'path':'Shared','title':'Visible parent','reference':refs['parent']},'secret-parent':{'path':'Secret','title':'Private parent','reference':refs['secret']}}
+        self.local(provision)
+        original=(self.root/'Shared/Shared.typ').read_bytes()
+        self.grant_library(roles=('settings',),style_use=False)
+        self.call('library/order/read',{'parentRef':refs['parent']},status=404)
+        source=json.dumps({'version':1,'navigationOrders':{refs['parent']:[refs['Second'],refs['First']]}})
+        before=self.library_read('settings')
+        request={'role':'settings','basis':before['basis'],'operationId':uid(),'source':source}
+        self.call('library/prepare',request,status=404)
+        self.policy(lambda users:users['alice']['library'].update(reorderNodes=True))
+        self.call('library/order/read',{'parentRef':refs['parent']},status=404)
+        self.policy(lambda users:users['alice'].update(navigation={'directories':['order-parent']}))
+        catalog=self.call('library');self.assertEqual([parent['reference'] for parent in catalog['orderParents']],[refs['parent']])
+        order=self.call('library/order/read',{'parentRef':refs['parent']})
+        self.assertTrue(order['complete']);self.assertEqual([member['name'] for member in order['members']],['First','Second'])
+        self.assertNotIn(str(self.root),json.dumps(order));self.assertNotIn('Shared.typ',json.dumps(order));self.assertNotIn('source',order)
+        denied=self.call('library/order/read',{'parentRef':refs['secret']},status=404)
+        unknown=self.call('library/order/read',{'parentRef':f'weftext-node://{uid()}/{uid()}'},status=404);self.assertEqual(denied,unknown)
+        first,_=self.library_prepare('settings',source)
+        self.assertTrue(first['commitAllowed'])
+        self.policy(lambda users:users['alice'].update(navigation={'directories':[]}))
+        original_plan=self.call('library/operation',{'role':'settings','operationId':first['operationId']})
+        self.assertFalse(original_plan['commitAllowed']);self.assertEqual(original_plan['preview'],{})
+        self.library_commit(first,status=409);self.assertFalse((self.root/'.weftext-settings.json').exists())
+        self.policy(lambda users:users['alice'].update(navigation={'directories':['order-parent']}))
+        self.assertFalse(self.call('library/operation',{'role':'settings','operationId':first['operationId']})['commitAllowed'])
+        current,_=self.library_prepare('settings',source)
+        self.assertEqual(self.library_commit(current)['status'],'committed')
+        self.assertEqual(json.loads((self.root/'.weftext-settings.json').read_text('utf-8'))['navigationOrders'][refs['parent']],[refs['Second'],refs['First']])
+        self.assertEqual((self.root/'Shared/Shared.typ').read_bytes(),original)
+
     def test_library_exact_original_settings_plan_restart_and_actor_isolation(self):
         self.grant_library()
         before = {name: (self.root/name/(name+'.typ')).read_bytes() for name in self.docs}

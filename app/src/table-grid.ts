@@ -77,9 +77,12 @@ export function createTableGrid(controller: WritingController, initial: WritingS
   };
   const refreshCurrent = () => {
     if (!controller.map) return false;
+    // Only the certified transition below advances this surface's source basis.
+    // An unrelated map after Undo/source replacement cannot renew old controls.
+    if (!controller.isSnapshotCurrent(snapshot)) { stale = true; return false; }
     const matches = controller.map.structures.filter(item => item.kind === "table" && item.range.utf16From === current.range.utf16From);
     if (matches.length !== 1 || !matches[0].table) { stale = true; return false; }
-    current = matches[0]; snapshot = controller.snapshot;
+    current = matches[0];
     head = { row: Math.min(head.row, table().rows - 1), column: Math.min(head.column, table().columns - 1) };
     anchor = { row: Math.min(anchor.row, table().rows - 1), column: Math.min(anchor.column, table().columns - 1) }; return true;
   };
@@ -99,7 +102,11 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     controller.selectRange(cell.body); paintSelection(); if (focus) grid.focus({ preventScroll: true });
     grid.querySelector<HTMLElement>(`[data-cell-row="${head.row}"][data-cell-column="${head.column}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
-  const updateButtons = () => { for (const button of Array.from(tools.querySelectorAll<HTMLButtonElement>("button"))) button.disabled = localBusy || controller.state.composing || stale || !controller.map; };
+  const updateButtons = () => {
+    tools.setAttribute("aria-busy", String(localBusy));
+    const unavailable = controller.state.composing || stale || !controller.map;
+    for (const button of Array.from(tools.querySelectorAll<HTMLButtonElement>("button"))) { button.disabled = unavailable; button.setAttribute("aria-disabled", String(unavailable || localBusy)); }
+  };
   const run = (operation: () => Promise<void> | void) => { if (localBusy) return; localBusy = true; updateButtons(); error.hidden = true; notice.textContent = ""; Promise.resolve().then(operation).catch(report).finally(() => { localBusy = false; updateButtons(); controller.surfaceStateChanged(); }); };
   const settle = async () => { requireCurrent(); if (controller.state.composing) throw new Error("请先完成输入法组合；当前文字和位置已保留。"); await controller.flush(); if (!refreshCurrent()) throw new Error("当前表格映射不可用，文字已保留。"); };
   const confirmCurrent = async (title: string, message: string, label: string): Promise<boolean> => {
@@ -281,8 +288,8 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     }
     updateButtons(); if (scheduled) return; scheduled = true;
     queueMicrotask(() => { scheduled = false; if (!surface.isConnected || controller.state.busy || controller.state.composing || controller.state.pending) return; if (!controller.map) { stale = true; updateButtons(); return; } if (refreshCurrent()) render(); });
-  }, () => localBusy || pointerEngaged);
-  render(); return surface;
+  }, { basis: () => snapshot, active: () => !stale && (localBusy || pointerEngaged) });
+  render(); updateButtons(); return surface;
 }
 
 async function confirmProposal(title: string, message: string, label: string, preview?: ClipboardTable): Promise<boolean> {

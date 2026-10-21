@@ -28,6 +28,8 @@ export interface HostedLinksHit {
   lane?: number | null; component: number; targets: HostedLinksNode[];
 }
 export interface HostedLinksProfile {
+  graph?: import("./relationship-graph-state").GraphSnapshot;
+  headingStructure?: import("./heading-structure-state").HeadingSnapshot;
   diagnostics?: { coverage: "complete" | "partial"; scannedNodes: number; issues: HostedLinksEdge[]; propertyIssues?: { source: HostedLinksNode; fieldId: string; itemPath: string[]; address: string; resolution: HostedLinksEdge["resolution"] }[]; nodes: { node: HostedLinksNode; incoming: number; outgoing: number; invalidOutgoing: number; state: string }[] };
   basis: HostedLinksBasis; scope: "configuredAuthorizedManagedSources"; writable: boolean; fileConversion: false;
   links: { coverage: "complete" | "partial"; outgoing: HostedLinksEdge[]; incomingId: HostedLinksEdge[]; incomingPath: HostedLinksEdge[] };

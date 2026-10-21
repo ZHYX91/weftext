@@ -345,6 +345,7 @@ class OutputDialog {
     catch (error) { this.report(error, this.importStatus); } finally { this.drawState(); }
   }
   private async deliverReceipt(receipt: ExchangeReceipt): Promise<boolean> {
+    this.host.environmentChanged?.(receipt.root ?? this.exchange.input?.root ?? this.output.basis.root);
     const candidate = receipt.document ?? receipt;
     if (candidate && typeof candidate === "object" && "sessionId" in candidate && "source" in candidate && typeof candidate.sessionId === "string" && typeof candidate.source === "string") {
       if (this.host.created) await this.host.created(candidate as OpenedDocument); else if (this.host.openResolved) await this.host.openResolved(candidate as OpenedDocument); else throw new Error("导入已提交，但当前环境缺少打开真实新副本的入口；保留实际回执。");

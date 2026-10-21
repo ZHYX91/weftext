@@ -10,6 +10,7 @@ pub(super) struct Store {
 }
 #[derive(Clone)]
 pub(super) struct FrozenQuery {
+    pub(super) tag_witness: Option<(String, weftext_core::SnapshotWitness)>,
     pub(super) actor: String,
     pub(super) epoch: u64,
     pub(super) resources: BTreeSet<String>,
@@ -56,10 +57,23 @@ pub(super) fn frozen_query(
     if office::binding_hash(inner, &query.resources)? != query.config_hash {
         return Err(conflict());
     }
-    Ok(query.clone())
+    let mut query = query.clone();
+    if let Some((path, witness)) = &query.tag_witness
+        && inner
+            .core
+            .validate_snapshot_witness(&inner.config.root, path, witness)
+            .is_err()
+    {
+        query.result.freshness = "stale".into();
+        query
+            .result
+            .diagnostics
+            .push("标签结构已变化；此结果仍保留原冻结树，请明确重新执行查询。".into());
+    }
+    Ok(query)
 }
 pub(super) fn query_catalog(inner: &HostedInner, actor: &str) -> Vec<Value> {
-    inner.fields.queries.iter().filter_map(|(id,q)|frozen_query(inner,actor,id).ok().map(|_|json!({"queryId":id,"columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage}))).collect()
+    inner.fields.queries.keys().filter_map(|id|frozen_query(inner,actor,id).ok().map(|q|json!({"queryId":id,"columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage,"freshness":q.result.freshness}))).collect()
 }
 
 pub(super) fn bind_embedded_query(
@@ -105,6 +119,7 @@ pub(super) fn retain_query(
     columns: Vec<String>,
     schema: Schema,
     authority: query::Authority,
+    tag_witness: Option<(String, weftext_core::SnapshotWitness)>,
 ) -> Result<String, ApiError> {
     query::authorize_authority(inner, actor, &authority)?;
     expire_revoked(inner);
@@ -119,8 +134,11 @@ pub(super) fn retain_query(
         authorities.entry(resource.clone()).or_default();
     }
     let resources = authorities.keys().cloned().collect();
-    let size_bytes = query::serialized_query_bytes(&(&result, &schema, &columns, &authority))?;
+    let size_bytes = query::serialized_query_bytes(&(&result, &schema, &columns, &authority))?
+        .checked_add(tag_witness.as_ref().map_or(0, |(_, w)| w.retained_bytes()))
+        .ok_or_else(conflict)?;
     let retained = FrozenQuery {
+        tag_witness,
         actor: actor.into(),
         epoch: inner.actor_generation(actor),
         config_hash: office::binding_hash(inner, &resources)?,
@@ -192,6 +210,106 @@ struct Basis {
     witness: String,
     versions: BTreeSet<String>,
     expires: Instant,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct TagAssignmentTarget {
+    pub(super) resource: String,
+    pub(super) field_id: String,
+    basis: String,
+}
+
+pub(super) fn authorize_tag_assignment(
+    inner: &HostedInner,
+    actor: &str,
+    target: &TagAssignmentTarget,
+) -> Result<(), ApiError> {
+    rights(inner, actor, &target.resource, &target.field_id, true)?;
+    structure::guard_slot(inner, &target.resource)?;
+    if !inner.file(&target.resource)?.editable {
+        return Err(unavailable());
+    }
+    Ok(())
+}
+
+/// The caller's opaque field basis proves only granted fields. The trusted
+/// source and exact Core snapshot remain inside the server boundary.
+pub(super) fn prepare_tag_assignment(
+    inner: &mut HostedInner,
+    actor: &str,
+    target: &TagAssignmentTarget,
+    operation: &str,
+) -> Result<weftext_core::TagAssignment, ApiError> {
+    authorize_tag_assignment(inner, actor, target)?;
+    expire_revoked(inner);
+    let basis = inner
+        .fields
+        .bases
+        .get(&target.basis)
+        .filter(|b| {
+            b.actor == actor
+                && b.epoch == inner.actor_generation(actor)
+                && b.resource == target.resource
+                && b.field == target.field_id
+                && b.expires > Instant::now()
+        })
+        .cloned()
+        .ok_or_else(conflict)?;
+    for field in &basis.fields {
+        rights(inner, actor, &target.resource, field, false)?;
+    }
+    let root = inner.config.root.clone();
+    let path = inner.config.root.join(&inner.file(&target.resource)?.path);
+    with_source(
+        inner,
+        actor,
+        &target.resource,
+        Some(operation),
+        |core, doc, schema, history, _| {
+            let current =
+                narrow_profile(&doc.source, schema, &basis.fields, Some(&target.field_id))
+                    .map_err(|_| conflict())?;
+            if current.node_id != history.node_id || current.witness != basis.witness {
+                return Err(conflict());
+            }
+            let versions = history
+                .versions
+                .iter()
+                .map(|v| v.version_id.clone())
+                .collect::<BTreeSet<_>>();
+            if !basis.versions.is_subset(&versions) {
+                return Err(conflict());
+            }
+            for version in &history.versions {
+                if !basis.versions.contains(&version.version_id) {
+                    let old = core
+                        .read_history(&doc.session_id, &version.version_id)
+                        .map_err(|_| conflict())?;
+                    if narrow_profile(&old.source, schema, &basis.fields, Some(&target.field_id))
+                        .map_err(|_| conflict())?
+                        .witness
+                        != basis.witness
+                    {
+                        return Err(conflict());
+                    }
+                }
+            }
+            let file = core
+                .read_snapshot(&root, &[path.to_string_lossy().into_owned()])
+                .map_err(|_| conflict())?
+                .files
+                .remove(0);
+            if file.bytes.as_deref() != Some(doc.source.as_bytes()) {
+                return Err(conflict());
+            }
+            Ok(weftext_core::TagAssignment {
+                path: file.path,
+                base_id: file.base_id,
+                field_id: target.field_id.clone(),
+            })
+        },
+    )
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -419,6 +537,24 @@ async fn read(
     }).await?))
 }
 
+#[cfg(all(test, windows))]
+pub(super) async fn test_read_assignment_field(
+    state: HostedState,
+    auth: Auth,
+    resource: &str,
+    field_id: &str,
+) -> ApiResult {
+    read(
+        State(state),
+        Extension(auth),
+        Json(Select {
+            resource: resource.into(),
+            field_id: field_id.into(),
+        }),
+    )
+    .await
+}
+
 async fn write(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
@@ -610,6 +746,7 @@ mod cache_tests {
         let schema = Schema::bundled().unwrap();
         let size_bytes = query::serialized_query_bytes(&(&result, &schema)).unwrap();
         FrozenQuery {
+            tag_witness: None,
             actor: actor.into(),
             epoch: 1,
             resources: BTreeSet::new(),

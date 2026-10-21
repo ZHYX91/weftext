@@ -3,12 +3,15 @@
 Own fixtures are retained; no foreground input, real libraries or cleanup.
 """
 import json
+import base64
+import hashlib
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 import uuid
 from test_hosted import Server
+from test_local_features import tiny_png
 
 def uid(): return str(uuid.uuid4())
 
@@ -96,5 +99,38 @@ class Everyday(unittest.TestCase):
         unparsed=foreign.replace('"expr": "title"','"expr": 42')
         unresolved=self.call('/api/query/definition/pending',self.basis(unparsed))
         self.assertIsNone(unresolved['operationId']);self.assertEqual(unresolved['queryState'],'unparsed')
+
+    def test_node_thumbnail_uses_original_source_and_exact_resource_without_editor_open(self):
+        source = self.doc['source']; original = Path(self.doc['path']).read_bytes()
+        owner = f"weftext-node://{self.doc['workspaceId']}/{self.doc['nodeId']}"
+        request = {'root':str(self.root),'entityKey':owner,'sourceHash':hashlib.sha256(source.encode()).hexdigest()}
+        absent = self.call('/api/navigation/preview',request)
+        self.assertEqual(absent['state'],'absent');self.assertEqual(absent['sourceBasisKind'],'observed')
+        self.call('/api/navigation/preview',{**request,'sourceHash':'0'*64},409)
+        for name, payload in [('unsupported.bin',b'NO_PIXEL_DATA'),('picture.png',tiny_png())]:
+            plan=self.call('/api/resources/prepare-import',{'sessionId':self.doc['sessionId'],'name':name,'bytes':base64.b64encode(payload).decode(),'operationId':uid()})
+            self.call('/api/operations/commit',{'operationId':plan['operationId'],'planId':plan['planId']})
+            preview=self.call('/api/navigation/preview',request)
+            self.assertEqual(preview['state'],'unsupported' if name.endswith('.bin') else 'ready')
+        descriptor=preview['descriptor'];self.assertEqual(descriptor['metadata']['kind'],'image')
+        pixels={'root':str(self.root),'entityKey':owner,'revision':'observed-source:'+preview['sourceBaseId'],'resource':descriptor['resource'],'resourceRevision':descriptor['revision']}
+        self.assertEqual(self.call('/api/query/preview-resource',pixels),tiny_png())
+        self.assertEqual(Path(self.doc['path']).read_bytes(),original)
+        self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':source+'\nChanged source','operationId':uid()})
+        self.call('/api/query/preview-resource',pixels,409)
+        self.call('/api/navigation/preview',request,409)
+
+    def test_pdf_node_thumbnail_retains_exact_page_descriptor(self):
+        paged=self.call('/api/paged',{'sessionId':self.doc['sessionId'],'source':'Owned first page\n#pagebreak()\nOwned second page','serial':1})
+        self.assertTrue(paged['ok'],paged)
+        payload=base64.b64decode(paged['pdfBase64'])
+        plan=self.call('/api/resources/prepare-import',{'sessionId':self.doc['sessionId'],'name':'pages.pdf','bytes':base64.b64encode(payload).decode(),'operationId':uid()})
+        self.call('/api/operations/commit',{'operationId':plan['operationId'],'planId':plan['planId']})
+        owner=f"weftext-node://{self.doc['workspaceId']}/{self.doc['nodeId']}"
+        preview=self.call('/api/navigation/preview',{'root':str(self.root),'entityKey':owner,'sourceHash':hashlib.sha256(self.doc['source'].encode()).hexdigest()})
+        self.assertEqual(preview['state'],'ready');descriptor=preview['descriptor']
+        self.assertEqual(descriptor['metadata']['kind'],'pdf');self.assertEqual(len(descriptor['metadata']['pages']),2)
+        pixels=self.call('/api/query/preview-resource',{'root':str(self.root),'entityKey':owner,'revision':'observed-source:'+preview['sourceBaseId'],'resource':descriptor['resource'],'resourceRevision':descriptor['revision']})
+        self.assertEqual(pixels,payload)
 
 if __name__=='__main__': unittest.main(argv=[sys.argv[0],*sys.argv[2:]])

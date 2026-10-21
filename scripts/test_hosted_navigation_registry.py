@@ -149,14 +149,14 @@ class HostedNavigationRegistry(HostedHistory):
         basis = self.registry()['tags']['basis']
         self.assertTrue(basis)
         self.assertIsNone(self.registry('bob')['tags']['basis'])
-        intent = {'kind': 'createTag', 'basis': basis, 'displayName': 'Same name'}
+        intent = {'kind': 'createTag', 'parentRef': None, 'basis': basis, 'displayName': 'Same name'}
         self.prepare_navigation(intent, 'bob', status=404)
         prepared, request = self.prepare_navigation(intent)
         self.assertTrue(prepared['navigationRef'].startswith('weftext-tag://'))
         self.assertEqual(self.call('navigation/registry/prepare', request), prepared)
         committed = self.commit_navigation(prepared)
         self.assertEqual(committed['result']['title'], 'Same name')
-        self.prepare_navigation({'kind': 'createTag', 'basis': basis, 'displayName': 'Stale basis'}, status=409)
+        self.prepare_navigation({'kind': 'createTag', 'parentRef': None, 'basis': basis, 'displayName': 'Stale basis'}, status=409)
         current = self.registry()['tags']
         reference = current['items'][0]['reference']
         rename, rename_request = self.prepare_navigation({'kind': 'renameTag', 'basis': current['basis'],
@@ -172,13 +172,13 @@ class HostedNavigationRegistry(HostedHistory):
     def test_registry_stolen_tag_basis_unknown_fence_and_copied_tag_registry_do_not_create_bindings(self):
         self.policy(lambda users: users['bob']['navigation']['tags'].update(create=True))
         basis = self.registry()['tags']['basis']
-        self.prepare_navigation({'kind': 'createTag', 'basis': basis, 'displayName': 'Foreign basis'}, 'bob', status=409)
+        self.prepare_navigation({'kind': 'createTag', 'parentRef': None, 'basis': basis, 'displayName': 'Foreign basis'}, 'bob', status=409)
         operation = uid()
         self.call('navigation/registry/settle', {'operationId': operation})
-        fenced, _ = self.prepare_navigation({'kind': 'createTag', 'basis': basis, 'displayName': 'Fenced'}, operation=operation)
+        fenced, _ = self.prepare_navigation({'kind': 'createTag', 'parentRef': None, 'basis': basis, 'displayName': 'Fenced'}, operation=operation)
         self.assertEqual(fenced['status'], 'cancelled')
         self.assertEqual(self.registry()['tags']['items'], [])
-        prepared, _ = self.prepare_navigation({'kind': 'createTag', 'basis': self.registry()['tags']['basis'], 'displayName': 'Original tag'})
+        prepared, _ = self.prepare_navigation({'kind': 'createTag', 'parentRef': None, 'basis': self.registry()['tags']['basis'], 'displayName': 'Original tag'})
         committed = self.commit_navigation(prepared)
         self.server.close()
         original = self.root/'.weftext-tags.json'
@@ -215,6 +215,72 @@ class HostedNavigationRegistry(HostedHistory):
         self.call('open', {'resource': 'Shared'}, 'navOnly', 404)
         self.call('navigation/registry/resolve', {'kind': 'directory', 'directory': 'RootDirectory'}, 'reader', 404)
         self.assertNotIn('RootDirectory', self.config['users']['navOnly'].get('queryScopes', {}).get('directories', []))
+
+    def test_registry_hierarchy_move_is_separate_from_rename_and_revoked_original_cannot_commit(self):
+        def create(label, parent=None):
+            prepared, _ = self.prepare_navigation({'kind':'createTag','displayName':label,
+                'parentRef':parent,'basis':self.registry()['tags']['basis']})
+            return self.commit_navigation(prepared)['navigationRef']
+        parent = create('Parent')
+        child = create('Same/name', parent)
+        tags = self.registry()['tags']
+        item = next(t for t in tags['items'] if t['reference'] == child)
+        self.assertEqual(item['parentTagId'], parent.rsplit('/', 1)[1])
+        self.prepare_navigation({'kind':'moveTag','reference':child,'parentRef':None,'basis':tags['basis']}, status=404)
+        self.call('navigation/registry/prepare', {'operationId':uid(), 'intent':
+            {'kind':'renameTag','reference':child,'displayName':'renamed',
+             'parentRef':None,'basis':tags['basis']}}, status=422)
+        self.policy(lambda users: users['alice']['navigation']['tags'].update(move=True))
+        tags = self.registry()['tags']
+        self.prepare_navigation({'kind':'moveTag','reference':parent,'parentRef':child,'basis':tags['basis']}, status=409)
+        prepared, request = self.prepare_navigation({'kind':'moveTag','reference':child,'parentRef':None,'basis':tags['basis']})
+        before = (self.root/'.weftext-tags.json').read_bytes()
+        self.policy(lambda users: users['alice']['navigation']['tags'].update(move=False))
+        old = self.call('navigation/registry/operation', {'operationId':request['operationId']})
+        self.assertFalse(old['commitAllowed'])
+        self.assertIsNone(old['planId'])
+        self.commit_navigation(prepared, status=409)
+        self.assertEqual((self.root/'.weftext-tags.json').read_bytes(), before)
+        self.assertEqual(self.call('navigation/registry/settle', {'operationId':request['operationId']})['status'], 'cancelled')
+        self.policy(lambda users: users['alice']['navigation']['tags'].update(move=True))
+        prepared, request = self.prepare_navigation({'kind':'moveTag','reference':child,'parentRef':None,'basis':self.registry()['tags']['basis']})
+        committed = self.commit_navigation(prepared)
+        self.assertIsNone(next(t for t in self.registry()['tags']['items'] if t['reference'] == child)['parentTagId'])
+        self.server.close()
+        self.start()
+        self.assertEqual(self.call('navigation/registry/prepare', request), committed)
+
+    def test_registry_create_and_assign_requires_field_grant_and_one_original_plan(self):
+        # Install the explicit schema before granting the narrow field writer.
+        def provision(api):
+            schema = api('/api/data/schema', {'root':str(self.root)})
+            op = uid()
+            plan = api('/api/data/schema/prepare', {'root':str(self.root), 'source':schema['source'],
+                'beforeSource':schema['source'],'beforeRevision':schema['revision'],'operationId':op})
+            api('/api/data/schema/install', {'operationId':op,'planId':plan['planId']})
+        self.local(provision)
+        doc = self.open('Shared')
+        source = doc['source'].replace('types: ()', 'types: ("task",), status: "open"')
+        self.save(doc, source)
+        self.policy(lambda users: users['alice']['grants']['Shared'].update(fields={'core/tags':{'read':True,'write':True}}))
+        field = self.call('fields/read', {'resource':'Shared','fieldId':'core/tags'})
+        self.assertTrue(field['basis'])
+        target = {'resource':'Shared','fieldId':'core/tags','basis':field['basis']}
+        request = {'kind':'createTag','displayName':'first assignment','parentRef':None,
+            'basis':self.registry()['tags']['basis'],'assignTo':target}
+        prepared, original = self.prepare_navigation(request)
+        self.assertEqual((self.root/'Shared/Shared.typ').read_text('utf-8'), source)
+        self.assertFalse((self.root/'.weftext-tags.json').exists())
+        self.server.close()
+        self.start()
+        committed = self.commit_navigation(prepared)
+        self.assertEqual(self.call('navigation/registry/prepare', original), committed)
+        self.assertIn(committed['navigationRef'], (self.root/'Shared/Shared.typ').read_text('utf-8'))
+        self.assertEqual(len(self.registry()['tags']['items']), 1)
+        # Rename/create cannot borrow a revoked independent field write grant.
+        self.policy(lambda users: users['alice']['grants']['Shared']['fields']['core/tags'].update(write=False))
+        denied = dict(request, basis=self.registry()['tags']['basis'])
+        self.prepare_navigation(denied, status=404)
 
 
 if __name__ == '__main__':

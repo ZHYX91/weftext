@@ -31,6 +31,7 @@ export interface EndnoteModuleHost {
   /** Storage is scoped by state.request.identity, never by a later active tab. */
   load(identity: EndnoteModuleIdentity): unknown;
   persist(state: EndnoteModuleState): void;
+  committed?(identity: EndnoteModuleIdentity): void;
   newOperationId?(): string;
 }
 const statuses = new Set(["notRegistered", "notCommitted", "prepared", "committed", "recoveryPending", "resolved", "cancelled"]);
@@ -100,10 +101,14 @@ export class EndnoteModuleInstaller {
     return { resourceRef: resource.resourceRef, modulePath: resource.modulePath, sha256: module.sha256, version: module.version, reused };
   }
   private receive(state: EndnoteModuleState, value: EndnoteModuleReceipt): EndnoteModuleReceipt {
-    const receipt = endnoteModuleReceipt(state.request, value, state.receipt); state.receipt = receipt;
+    const receipt = endnoteModuleReceipt(state.request, value, state.receipt);
+    const committed = receipt.status === "committed" && state.receipt?.status !== "committed";
+    state.receipt = receipt;
     if (["prepared", "committed", "cancelled", "resolved"].includes(receipt.status)) state.phase = receipt.status as EndnoteModuleState["phase"];
     else state.phase = "checking";
-    this.save(state); return receipt;
+    try { this.save(state); }
+    finally { if (committed) this.host.committed?.(structuredClone(state.request.identity)); }
+    return receipt;
   }
   private async status(state: EndnoteModuleState, epoch: number): Promise<EndnoteModuleReceipt> {
     this.check(state.request.identity, epoch); state.phase = "checking"; this.save(state);

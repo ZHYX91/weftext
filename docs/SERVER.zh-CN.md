@@ -171,21 +171,23 @@ Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inp
 
 ## 目录接纳与标签注册表
 
-`users.<id>.navigation` 默认拒绝，分别配置 `directories: [已配置目录 ID]`、`admitDirectories: [接纳槽 ID]`、`tags: {read, create, rename}`。目录读取独立于 queryScopes.directories，不授予子笔记正文、字段或 Query 范围；标签 create／rename 各自独立，且必须同时具备注册表 read。`Config.navigation.directoryAdmissions.<slot> = {path, title}` 固定服务端目标；空 path 明确表示库根，非空路径须为库内普通相对路径，title 必有。客户端只选择 slot，不接受 root 或 path。目录及接纳授权各最多 64 项。
+`users.<id>.navigation` 默认拒绝，分别配置 `directories: [已配置目录 ID]`、`admitDirectories: [接纳槽 ID]`、`tags: {read, create, rename, move}`。目录读取独立于 queryScopes.directories，不授予子笔记正文、字段或 Query 范围；标签 create／rename／move 各自独立，且必须同时具备注册表 read。`Config.navigation.directoryAdmissions.<slot> = {path, title}` 固定服务端目标；空 path 明确表示库根，非空路径须为库内普通相对路径，title 必有。客户端只选择 slot，不接受 root 或 path。目录及接纳授权各最多 64 项。
 
 `GET /api/hosted/navigation/registry` 只投影获权配置目录和接纳槽；标签注册表只在 tags.read 时读取。目录用原 `qualified_query_scope_at` 和 witness 验准确稳定身份，不使用全库发现。目录返回 complete／partial，标签返回 complete／partial／unavailable；标签不完整时不提供写 basis。公开对象只带选择器、标题、稳定 reference、可用状态及原获权条目，不交付宿主路径、未获权目录或隐藏计数。标签写 basis 为 actor／epoch／准确注册表绑定的私有有界缓存：单份最多 4 MiB、共 32 MiB、服务最多 128 份、单用户 16 份、15 分钟到期。
 
-`navigation/registry/prepare|commit|operation|settle` 复用 Core 原 `HostedNavigationIntent`、DirectoryId／TagId 分配和 actor feature 日志。prepare 接受原 operationId 及 admitDirectory／createTag／renameTag 意图；Tag 意图还消费原 basis，rename 固定原 tag reference。安全预览剔除物理路径。提交仅消费原 planId、actor、授权代次、配置绑定及未过期决议；重试、重启和丢响应不再分配身份，未知请求可结束以阻止迟到执行。复制目录标记或用同字节替换注册表不能获得原身份。
+`navigation/registry/prepare|commit|operation|settle` 复用 Core 原 `HostedNavigationIntent`、DirectoryId／TagId 分配和 actor feature 日志。prepare 接受原 operationId 及 admitDirectory／createTag／renameTag／moveTag 意图；Tag 意图还消费原 basis，rename／move 固定原 tag reference。安全预览剔除物理路径。提交仅消费原 planId、actor、授权代次、配置绑定及未过期决议；重试、重启和丢响应不再分配身份，未知请求可结束以阻止迟到执行。复制目录标记或用同字节替换注册表不能获得原身份。
 
 `navigation/registry/resolve` 区分已配置目录、标签和刚接纳目录。一般读者须明确获权配置的 directory reference；刚接纳目录仅原用户凭原 committed operationId、原 slot 和准确 navigationRef 继续解析，仍核当前权限、代次、配置及实际对象。不会从已占用路径建新 owner ledger 或补授权给其他用户。`scripts/test_hosted_navigation_registry.py` 提供目录／Query 分权、库根接纳、跨用户回执、原操作重启、撤权、未知 fence 和同名／复制身份反例；真实 HTTP／浏览器通过范围仍随候选记录。
 
-### 多级标签授权增补（目标合同，尚未实现）
+### 多级标签授权
 
-上文是 alpha.3 的现有接口。v0.6.3 层级切片统一重构原导航操作及冻结查询通路，不另设一组树写接口。`navigation.tags` 新增默认拒绝的 `move`；既有 create／rename 含义不扩大。创建时选择初始父级需要 read+create 和完整合格树的原 basis；改变既有父级需要 read+move，改名只需 read+rename。新逻辑意图的 `createTag.parentRef` 和 `moveTag.parentRef` 均必有、值为完整 TagRef 或 null，move 还绑定原标签；只接受获权工作区的稳定选择，不接受宿主路径、客户端树或整表 after。服务端依据原 basis 生成改动；所有注册表写路径按真实变更检查操作权，包括通用写入／恢复入口，不能以 rename 顺便修改 parent。
+该通路已接入 0.6.3-rc.1 工作树，整版验收中。层级统一重构原导航操作及冻结查询通路，不另设一组树写接口。`navigation.tags` 使用默认拒绝的独立 `move`；既有 create／rename 含义不扩大。创建时选择初始父级需要 read+create 和完整合格树的原 basis；改变既有父级需要 read+move，改名只需 read+rename。逻辑意图的 `createTag.parentRef` 和 `moveTag.parentRef` 均明确提供、值为完整 TagRef 或 null，move 还绑定原标签；只接受获权工作区的稳定选择，不接受宿主路径、客户端树或整表 after。服务端依据原 basis 生成改动；所有注册表写路径按真实变更检查操作权，包括通用写入／恢复入口，不能以 rename 顺便修改 parent。
 
 登记投影在 tags.read 下增加准确父级和树完整性信息，仍不披露宿主路径或隐藏笔记数量。只有完整有效且已登记的森林才提供写 basis；所用注册表版本、原文件身份、actor／epoch、TTL／预算与现有 prepare/commit/operation/settle 统一。撤权、配置变化、旧 basis 和未知操作沿原 fence／恢复；重试不重新分配 ID。move 预览和提交重新检查本人权限，无子树权限继承。
 
-Query 静态读取分析识别 FEATURES §5.6 的结构谓词及完整 callee 闭包，再要求 tags.read 和原笔记／字段／Query 范围权；Core 同次 cut 提供可信树，零候选也校验根和表依赖。精确 TagRef 比较不新增 tags.read；名称／路径显示另行获权，不因此阻止纯精确结果。完整树不补完整笔记范围，缓存／分页及迟到响应仍重验当前 audience，撤权不通过旧树继续交付。第一阶段不新增 delete／hide 权限或假装这些操作可用；新增合同完成后才更新实际支持表和配置样例。
+创建时可用 `assignTo` 将首次直接赋值纳入同一 Core Plan；它绑定准确获权资源、字段及原读取 basis，并独立核字段读写权、类型、源和当前资格。标签 create 不授字段 writer，字段可写也不授注册表 create／move；已有未保存输入或变化依据不能由注册表操作隐式覆盖。准备／提交／恢复保持同一原身份与完整前后像。
+
+Query 静态读取分析识别 FEATURES §5.6 的结构谓词及完整 callee 闭包，再要求 tags.read 和原笔记／字段／Query 范围权；Core 同次 cut 提供可信树，零候选也校验根和表依赖。精确 TagRef 比较不新增 tags.read；名称／路径显示另行获权，不因此阻止纯精确结果。完整树不补完整笔记范围，缓存／分页及迟到响应仍重验当前 audience，撤权不通过旧树继续交付。本范围不新增 delete／hide 权限或假装这些操作可用；原 alpha.3 的扁平通过记录不自动覆盖新层级的整版验收。
 
 ## 高级 Query、定义与正文内嵌
 
@@ -212,6 +214,8 @@ Query 静态读取分析识别 FEATURES §5.6 的结构谓词及完整 callee �
 每个用户的 `library` 分别配置 `schema`、`settings`、`rules`、`style` 的 `{read, write}`，以及独立 `styleUse`，省略均拒绝。各角色 write 要求同角色 read；配置权限不授予笔记正文、字段或资源权限。`GET /api/hosted/library` 只列获权角色；`library/read` 返回角色、准确源码和不透明 basis，客户端不能选择路径。Schema 未安装时可读取内置默认值并明确安装；规则使用现有 `.weftext-rules` 格式，缺失的旧库规则须显式安装，已提交配置丢失不会静默修复。
 
 `library/prepare|commit|operation|settle` 沿用原 Core 操作编号与计划。配置和样式草稿独立于正文 Draft；准备先保留完整原请求，展示 before/after，再明确提交。未知结果查询或重试同一原编号，服务重启后恢复原计划；结束未安装请求阻止迟到提交。期间输入变化使旧提案只能核对，不能覆盖新输入。配置 JSON 保留未知成员；原生样式使用与本地相同的控件和源码入口，复杂源码仍可完整编辑。style.write 允许修改该样式的启用状态和原设置选择器；仅 settings.write 不能借默认样式设置绕过样式权限。
+
+作者同级导航顺序保存在同一设置的 `navigationOrders`（CORE §2.4），以稳定父及直接子级引用表达，不改变目录结构。独立 `library.reorderNodes: true` 要求同有 settings.read/write；省略拒绝。`library/order/read` 另需准确父引用对应的 `navigation.directories`，只交付该父当前直接子级名称／引用和完整性，不暴露本机路径或正文。友好控件只改变当前设置草稿，再走同一原准备／确认。通用 settings 源码准备按实际前后差异逐父核重排及目录披露权，普通 settings.write 不能借完整 JSON 绕过。Core 对所有写口核完整当前成员和整设置 CAS；原计划提交、状态及结束操作重验当前资格，成员权撤销也清除原预览，旧计划不复活权限。配置读取只授予该角色源码，不授予所引用笔记的正文／字段或媒体读取权。
 
 预览、富编辑呈现、实际语义 Query、校对与 Office 编译共用一次捕获的样式环境。启用库样式时须有 styleUse；静态字段查询不执行或读取样式。配置 `styleInputs` 为管理员明确指定的文件或资源 ID，每个输入另须 read。文件输入用于 Office 还须 export / download；资源输入另须自己的资源 download。编译只使用冻结输入，交付前重验原样式、设置、身份、依赖和当前授权。styleUse 不授予样式源码读取；内部编译入口与未授权的真实模块路径隔离，路径和源码诊断不向客户端交付。
 
@@ -266,6 +270,8 @@ create 可带 `capture = {title?, body?, bodyMode?, types?, fields?}`。默认 t
 `contentImportSlots.<id> = {parent, name, title, inputs}` 固定已配置、已接纳的 live 目录下尚不存在的目的位置。用户的 `contentImports.<id>` 分别授予 `imports: {native, bibliography}`、沿用文档权限的 `members` 和沿用集合权限的 `resources`，缺项均拒绝。准备导入还要求 `library.schema.read`。导入权本身不开放结果正文或资源，producer 不修改策略。最多 64 个槽；客户端只提交槽 ID、格式和本次原件，不传目的路径或身份。
 
 `GET /api/hosted/import` 列出获权槽；`inspect`、`prepare`、`commit`、`operation`、`settle`、`members` 的 POST 路由沿用原操作生命周期。Prepare 接收 `{slot, operationId, format, bytesBase64}`。Native ZIP、BibTeX、CSL JSON、RIS 复用已有 Core 导入 producer，保留上传原件及原生 transfer map；需要时由 commit 明确接受已报告损失。当前文献 writer 创建无冲突的新 Work，不刷新既有 Work、不解决上传内部的出版字段冲突，也不臆造 typed 出版引用的映射。检查会报告这些限制；未解决的输入不能静默部分导入。引用键编辑增强仍单列。
+
+Native 的闭合 Tags 角色、全源 TagRef 映射和 Query 准确 Schema 重绑遵守 CORE §2。包含新标签创建的上传／计划另需 navigation.tags.read+create，实际初始化 Schema 另需 library.schema.write；没有这些副作用的普通导入不额外索取相应写权。检查上传、准备、原操作状态、提交及恢复均核真实共享副作用，不由导入槽、正文或资源权继承。缺包内准确 Query Schema 历史以 schemaMappingRequired 拒绝，不能用 latest 换基线；旧未决计划也不借新调用绕过当前写权。
 
 已知原生导入损失使用固定说明，例如生成文献库只保留在原件中、不安装到作者资料树；不会用原始内部路径作为说明。保留的出版字段即使尚不足以生成完整引用，也须核对能够准确比较的标准字段；无法可靠比较的复杂字段明确拒绝，不能跳过检查后覆盖外部改动。
 

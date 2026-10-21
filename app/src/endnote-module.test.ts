@@ -99,3 +99,34 @@ test("malformed caches and wrong-plan receipts retain original responsibility", 
   assert.throws(() => endnoteModuleReceipt(request, { operationId: "other", status: "prepared", planId: "p", commitAllowed: true }), /不对应原操作/);
   assert.throws(() => endnoteModuleReceipt(request, { operationId: "one", status: "prepared", planId: "new", commitAllowed: true }, { operationId: "one", status: "prepared", planId: "old", commitAllowed: true }), /原计划或提交事实/);
 });
+
+test("a late module commit notifies the original owner after retirement and preserves its confirmed recovery record", async () => {
+  const f = fixture(), originalIdentity = structuredClone(f.identity()), changed: EndnoteModuleIdentity[] = [];
+  let release!: (value: EndnoteModuleReceipt) => void, started!: () => void;
+  const sent = new Promise<void>(resolve => { started = resolve; });
+  f.host.committed = identity => { assert.equal(f.stored().receipt?.status, "committed"); changed.push(identity); };
+  f.commit(async () => { started(); return new Promise(resolve => { release = resolve; }); });
+  const installer = new EndnoteModuleInstaller(f.host), pending = installer.install(); await sent;
+  f.setIdentity({ ...originalIdentity, scope: "another-root", owner: "another-owner" }); installer.invalidate();
+  release({ operationId: "operation-original", planId: "plan-original", status: "committed", commitAllowed: false });
+  await assert.rejects(pending, /归属、授权/); assert.deepEqual(changed, [originalIdentity]);
+  assert.equal(f.stored().phase, "committed"); assert.deepEqual(f.stored().request.identity, originalIdentity);
+});
+
+test("reused module reads and invalid preparation receipts cannot announce an author mutation", async () => {
+  const reused = fixture(), changed: EndnoteModuleIdentity[] = [];
+  reused.host.committed = identity => { changed.push(identity); };
+  reused.setResource({ resourceRef: "existing", owner: reused.identity().owner, modulePath: reused.identity().modulePath });
+  await new EndnoteModuleInstaller(reused.host).install(); assert.equal(changed.length, 0);
+  const invalid = fixture(); invalid.host.committed = identity => { changed.push(identity); };
+  invalid.prepare(async () => ({ operationId: "unrelated", status: "committed", commitAllowed: false }));
+  await assert.rejects(new EndnoteModuleInstaller(invalid.host).install(), /不对应原操作/);
+  assert.deepEqual(changed, []); assert.equal(invalid.calls.includes("commit"), false); assert.equal(invalid.stored().request.operationId, "operation-original");
+});
+
+test("a failed notification cannot discard the module's already persisted commit", async () => {
+  const f = fixture(); f.host.committed = () => { assert.equal(f.stored().phase, "committed"); throw new Error("render failed"); };
+  const installer = new EndnoteModuleInstaller(f.host); await assert.rejects(installer.install(), /render failed/);
+  assert.equal(f.stored().receipt?.status, "committed"); assert.equal((await installer.recover())?.status, "committed");
+  assert.equal(f.calls.filter(call => call === "commit").length, 1);
+});

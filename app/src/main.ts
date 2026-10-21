@@ -1,7 +1,9 @@
 import "./style.css";
 import { RecognitionPanel } from "./recognition-panel";
-import { api, ApiError, operationId } from "./api";
+import { api, apiBlob, ApiError, operationId } from "./api";
+import { mountNodeContents } from "./node-contents";
 import { SourceEditor, applySourcePatches } from "./editor";
+import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
 import { everydayWritingCommands } from "./everyday-writing";
@@ -10,7 +12,7 @@ import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import { DocumentSession, encodeLiteral, canRebindSaveAs, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
+import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
 import { ensureOfflineFonts } from "./font-readiness";
@@ -23,6 +25,7 @@ import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
+import { headingMatchesDisplay } from "./heading-structure-state";
 import { NoteInputRecovery } from "./note-input-recovery";
 import { openLibraryCreation, type LibraryCreationReceipt } from "./library-creation";
 import "./document-notes.css";
@@ -94,7 +97,7 @@ interface LiveDocument {
   scroll: Partial<Record<ViewMode, number>>;
   sourceScroll?: number;
   layout: "continuous" | "paged";
-  richRetained: boolean;
+  deferredProjection: DeferredPaint;
   sourceTrashed?: boolean;
   sourceRefreshing?: boolean;
   notesMount?: DocumentNotesMount;
@@ -122,13 +125,13 @@ let renderedMode: ViewMode | null = null;
 const everydayNavigation = new EverydayNavigation();
 let navigatingHistory = false;
 let navigationGeneration = 0;
-const navigationContexts = new Map<LiveDocument, { inventory: Inventory | null; query: string; folder: string | null; collapsed: string[]; scroll: number; contentScroll:number; selection:string[]; sort:"name"|"path" }>();
+const navigationContexts = new Map<LiveDocument, { inventory: Inventory | null; query: string; folder: string | null; collapsed: string[]; scroll: number; contentScroll:number; selection:string[] }>();
 const everydayBar = el("nav", "everyday-bar"); everydayBar.setAttribute("aria-label", "日常导航与命令"); workspace.insertBefore(everydayBar, tabs);
 let query = "";
 let selectedFolder: string | null = null;
 let sidebarComposing = false;
 const contentSelections = new Set<string>();
-let contentSort: "name" | "path" = "name";
+let nodeContents: { dispose(): void } | undefined;
 const folderViews = new Map<string, { query: string; scroll: number }>();
 const collapsed = new Set<string>();
 let previewVisible = localStorage.getItem("weftext-preview") !== "false";
@@ -142,13 +145,13 @@ let pendingCreation: { route: string; payload: Record<string, unknown> } | null 
 let pagedPreview: PagedPreview | null = null;
 function captureNavigation(): void {
   if (!current) return;
-  navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll:sidebar.querySelector(".node-contents")?.scrollTop??0, selection:[...contentSelections], sort:contentSort });
+  navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll:sidebar.querySelector(".node-contents")?.scrollTop??0, selection:[...contentSelections] });
 }
 function restoreNavigation(doc: LiveDocument): void {
   const saved = navigationContexts.get(doc); if (!saved) return;
   inventory = saved.inventory; query = saved.query; selectedFolder = saved.folder;
   collapsed.clear(); saved.collapsed.forEach(path => collapsed.add(path));
-  contentSelections.clear();saved.selection.forEach(path=>contentSelections.add(path));contentSort=saved.sort;
+  contentSelections.clear();saved.selection.forEach(path=>contentSelections.add(path));
 }
 function everydayEntries(): EverydayEntry[] {
   const entries = new Map<string, EverydayEntry>();
@@ -178,6 +181,8 @@ function everydayCommands(): EverydayCommand[] {
     { id: "open-file", label: "打开库外 Typst 文件", run: openOutsideFile },
     { id: "save", label: "保存当前笔记", unavailable: !doc ? "请先打开笔记。" : undefined, run: () => saveDocument(doc!) },
     { id: "resources", label: "导入或浏览图片与资源", run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); } },
+    { id: "relationship-graph", label: "打开二维关系图谱", unavailable: !doc ? "请先打开笔记。" : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); } },
+    { id: "heading-structure", label: "打开只读标题结构／大纲", unavailable: !doc ? "请先打开笔记。" : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); } },
     ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
   ];
 }
@@ -241,6 +246,7 @@ let readingSelection: { sessionId: string; serial: number; selection: NonNullabl
 const recognitionPanel = new RecognitionPanel({
   request: (path, body) => api(`/api/recognition${path}`, body),
   identity: () => current ? current.session.opened.root : null,
+  committed: root => workspaceTools.invalidateQueryEnvironment(root),
   target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
   notify: toast,
   created: async receipt => { const root = current?.session.opened.root, ref = receipt.nodeRefs[0]; if (!root || !ref) throw new Error("原导入的新笔记当前不可定位，请核对原操作。"); await prepareSwitch(); const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }); await acceptResolvedDocument(opened); await refreshInventory(); },
@@ -248,6 +254,7 @@ const recognitionPanel = new RecognitionPanel({
 let recognitionSession = "";
 
 const workspaceTools = new WorkspaceTools({
+  revealHeading: heading => { const doc = current; if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !renderHost || !renderHost.isConnected || !renderHost.getClientRects().length || !headingMatchesDisplay(doc.session.projection?.tree, heading)) return false; const target = Array.from(renderHost.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(node => node.dataset.documentNodeKey === heading.key); if (!target) return false; if (!target.hasAttribute("tabindex")) target.tabIndex = -1; target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }); target.focus({ preventScroll: true }); return true; },
   embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
   getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
   selection: () => {
@@ -259,6 +266,7 @@ const workspaceTools = new WorkspaceTools({
   beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument,
   refreshLibrary: async root => { if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory(); },
   syncApplied: async root => {
+    workspaceTools.invalidateQueryEnvironment(root);
     if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory();
     for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
       const originalSession = doc.session.opened.sessionId;
@@ -304,6 +312,7 @@ const workspaceTools = new WorkspaceTools({
     const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
     const opened = receipt.document;
     if (!opened || typeof opened.sessionId !== "string" || typeof opened.source !== "string") throw new Error("Query 保存缺少实际文件回执，请检查原操作。");
+    workspaceTools.invalidateQueryEnvironment(basis.root);
     const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
     if (!doc) throw new Error("Query 已保存，请重新打开笔记确认。");
     if (receipt.documentSourceMatchesCommit !== true || receipt.committedSource !== opened.source) {
@@ -340,6 +349,7 @@ const workspaceTools = new WorkspaceTools({
   },
   applyReceipt: async (receipt, context) => {
     if (!["committed", "saved", "complete", "success"].includes(receipt.status)) return;
+    workspaceTools.invalidateQueryEnvironment(context.root);
     const opened = receipt.document as OpenedDocument | undefined;
     const doc = documents.find(item => item.session.opened.sessionId === context.sessionId);
     if (doc) await doc.writing.settleForSessionChange();
@@ -414,6 +424,7 @@ const historyPanel = new HistoryPanel({
     if (doc) { doc.session.savePending = pending; if (doc === current) refreshChrome(); }
   },
   restored: async (result, basis) => {
+    if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
     const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
     if (!doc) throw new Error("旧版已保存，请重新打开原笔记确认；受保护草稿仍由 Core 保留。");
     await doc.writing.settleForSessionChange();
@@ -438,6 +449,7 @@ async function refreshInventory(): Promise<void> {
 }
 
 async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
+  workspaceTools.invalidateQueryEnvironment(opened.root);
   await prepareSwitch();
   const restored = documents.find(item => item.sourceTrashed && (normalize(item.session.path) === normalize(opened.path) || Boolean(opened.nodeId && item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId)));
   if (restored && opened.source === restored.session.baseSource) {
@@ -513,6 +525,7 @@ async function pathDialog(kind: "openLibrary" | "createLibrary" | "file" | "save
 
 function renderSidebar(): void {
   if (sidebarComposing) return;
+  nodeContents?.dispose(); nodeContents = undefined;
   navigationLayout.captureSidebarState();
   navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId, scope: selectedFolder ? { kind: "directory", key: `path:${normalize(selectedFolder)}` } : undefined } : null);
   workspaceTools.setLibrary(inventory, selectedFolder);
@@ -596,19 +609,13 @@ function nodeMenu(entries: InventoryEntry[], folder?: string): void {
 }
 async function previewNodes(entries:InventoryEntry[]):Promise<void>{await modal("项目预览","只读显示当前目录扫描中的摘要；不保存正文。",(form,close)=>{for(const entry of entries)form.append(el("strong","",entry.title||entry.name),el("pre","",`${entry.relativePath}\n${labelStatus[entry.identityStatus]??entry.identityStatus}\n${entry.excerpt??"当前扫描没有摘要，可明确打开正文查看。"}`));form.append(button("关闭",()=>close(null)));});}
 function renderNodeContents(host: HTMLElement, folder: string): void {
-  if(!inventory)return;const panel=el("section","node-contents");panel.setAttribute("aria-label","节点内容");
-  const header=el("header");header.append(button(basename(inventory.root),()=>browseFolder(null)));
-  const relative=folder.slice(inventory.root.length).replaceAll("\\","/").split("/").filter(Boolean);let parent=inventory.root;
-  for(const name of relative){parent+="/"+name;const target=parent;header.append(el("span","","›"),button(name,()=>browseFolder(target)));}
-  const sorting=el("select");sorting.setAttribute("aria-label","节点内容个人排序");for(const[value,label]of[["name","名称"],["path","路径"]]){const option=el("option","",label);option.value=value;sorting.append(option);}sorting.value=contentSort;sorting.onchange=()=>{contentSort=sorting.value as typeof contentSort;renderSidebar();};header.append(sorting);panel.append(header,el("p","","个人列表排序；作者结构顺序不受影响。"));
-  const entries=inventory.entries.filter(entry=>normalize(entry.parentPath)===normalize(folder)&&normalize(entry.path)!==normalize(folder)).filter(entry=>!query||`${entry.title??""} ${entry.name} ${entry.relativePath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b)=>(contentSort==="name"?(a.title||a.name):(a.relativePath)).localeCompare(contentSort==="name"?(b.title||b.name):b.relativePath,"zh-CN"));
-  const more=button("所选项目操作",()=>nodeMenu(entries.filter(entry=>contentSelections.has(entry.path))));more.disabled=!entries.some(entry=>contentSelections.has(entry.path));panel.append(more);
-  const updateSelection=()=>{panel.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row=>{const selected=contentSelections.has(row.dataset.entryPath!);row.setAttribute("aria-selected",String(selected));row.querySelector<HTMLInputElement>("input")!.checked=selected;});more.disabled=!entries.some(entry=>contentSelections.has(entry.path));};
-  for(const entry of entries){const row=el("div","node-content-row");row.tabIndex=0;row.dataset.entryPath=entry.path;row.setAttribute("aria-selected",String(contentSelections.has(entry.path)));const check=el("input");check.type="checkbox";check.checked=contentSelections.has(entry.path);check.setAttribute("aria-label",`选择 ${entry.name}`);check.onchange=()=>{check.checked?contentSelections.add(entry.path):contentSelections.delete(entry.path);updateSelection();};
-    const open=()=>entry.kind==="directory"?browseFolder(entry.path):openInventoryEntry(entry,inventory!.root,inventory!.workspaceId);const title=button(`${entry.title||entry.name} · ${labelStatus[entry.identityStatus]??entry.identityStatus}`,()=>{contentSelections.clear();contentSelections.add(entry.path);updateSelection();});title.ondblclick=()=>{void Promise.resolve(open()).catch(showError);};
-    const menu=()=>{if(!contentSelections.has(entry.path)){contentSelections.clear();contentSelections.add(entry.path);}nodeMenu(entries.filter(item=>contentSelections.has(item.path)),entry.kind==="directory"?entry.path:undefined);};row.oncontextmenu=event=>{event.preventDefault();menu();};row.onkeydown=event=>{if(event.isComposing)return;if(event.key==="Enter"&&event.target===row){event.preventDefault();void Promise.resolve(open()).catch(showError);}if(event.key==="ContextMenu"||event.shiftKey&&event.key==="F10"){event.preventDefault();menu();}};
-    row.append(check,title,button("打开",open),button("预览",()=>previewNodes([entry])));panel.append(row);}
-  if(!entries.length)panel.append(el("p","",query?"当前筛选没有匹配项目。":"此节点暂无内容。"));host.append(panel);
+  if (!inventory) return;
+  const selected = inventory, panel = el("section", "node-contents"); panel.setAttribute("aria-label", "节点内容"); host.append(panel);
+  nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
+    request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
+    open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
+    changed: async () => { workspaceTools.invalidateQueryEnvironment(selected.root); if (inventory === selected) { inventory = await api<Inventory>("/api/library/open", { path: selected.root }); renderSidebar(); } },
+  });
 }
 
 function renderTopbar(): void {
@@ -767,7 +774,7 @@ function renderDocument(): void {
   if (doc.session.recovered) caption.append(button("已恢复上次草稿 · 查看", showDraftComparison, "recovery-caption"));
   if (noteInputRecovery.count(localPersonalAudience())) caption.append(button("取回未应用的注释输入", showRecovery, "recovery-caption"));
   content.append(caption);
-  doc.notesMount?.dispose(); const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary"); authoring.append(button("编号控制", () => openLocalNumbering(doc), "text-button"), notes); content.append(authoring); doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
+  doc.notesMount?.dispose(); const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary"); authoring.append(button("编号控制", () => openLocalNumbering(doc), "text-button"), button("大纲／标题结构", async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }, "text-button"), notes); content.append(authoring); doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
   if (doc.session.opened.recoveredDraftConflict) {
     const conflict = el("div", "document-error document-conflict"); conflict.append(icon("alert"), el("span", "", "恢复草稿与当前磁盘内容不同。请比较并明确合并后再保存。"), button("比较并合并", showDraftComparison, "button-secondary compact")); content.append(conflict);
   }
@@ -821,7 +828,7 @@ function renderContent(): void {
   renderedMode = current?.mode ?? null;
   flowHasProjection=false;
   pagedPreview?.dispose(); pagedPreview = null; workspaceTools.attachSurface(null); projectionMappings = [];
-  for (const doc of documents) doc.queries.detach();
+  for (const doc of documents) { doc.queries.detach(); doc.deferredProjection.clear(); }
   renderHost = null; flowScroll = null; content.replaceChildren(); current ? renderDocument() : renderWelcome(); renderTopbar(); renderTabs(); renderStatus(); renderEverydayBar();
 }
 function refreshChrome(): void {
@@ -864,9 +871,11 @@ function refreshProjectionNotice(doc: LiveDocument): void {
     if (doc.session.error ? notice.querySelector(".projection-message")?.textContent !== doc.session.error : !notice.querySelector(".loading-ring")) fillProjectionEmpty(notice, doc);
   }
 }
+function projectionPresentation(doc: LiveDocument): readonly unknown[] { return [doc, doc.session.opened.sessionId, doc.session.source, doc.session.serial, doc.session.projection, doc.writing.map, doc.mode, doc.layout, renderHost, sourceConsumersAvailable(doc), readOnlySource(doc)]; }
 function renderProjection(doc: LiveDocument): void {
   if (doc !== current || !renderHost) return;
-  if (doc.writing.retainInput || doc.editor.composing) { renderStatus(); return; }
+  if (doc.writing.retainInput || doc.editor.composing) { doc.deferredProjection.defer(projectionPresentation(doc)); renderStatus(); return; }
+  doc.deferredProjection.clear();
   const restoreQuerySourceFocus = doc.mode === "focus" && !!doc.editor.revealed && doc.editor.view.hasFocus && !!doc.editor.view.dom.closest(".embedded-query-source-host");
   const preservedScroll=flowHasProjection?flowScroll?.scrollTop:doc.scroll[doc.mode];
   const host = renderHost; host.replaceChildren();flowHasProjection=false;
@@ -875,16 +884,19 @@ function renderProjection(doc: LiveDocument): void {
   }
   const projection = doc.session.projection;
   if (!projection) { const waiting = el("div", "projection-empty"); fillProjectionEmpty(waiting, doc); host.append(waiting); return; }
-  if (!doc.session.projectionCurrent) { const stale = el("div", "preview-stale", projectionStaleMessage(doc)); host.append(stale); }
+  const projectionCurrent = doc.session.projectionCurrent;
+  if (!projectionCurrent) { const stale = el("div", "preview-stale", projectionStaleMessage(doc)); host.append(stale); }
   if (!projection.ok || !projection.tree) {
     const failed = el("div", "projection-empty"); failed.append(icon("alert"), el("h3", "", "草稿暂时无法预览"), el("p", "", "完整输入保留在当前窗口；恢复草稿和保存状态以单独提示为准。可使用源码入口继续编辑。"), button("查看源码", () => changeMode("source"), "button-secondary", "code")); host.append(failed); return;
   }
   let writableCount = 0, personalHeadingOrdinal = 0;
   const renderedTree = projection.tree, renderedSource = projection.source;
   projectionMappings = [];
-  const groups = doc.session.projectionCurrent && doc.writing.map ? groupWritingRenderNodes(projection.tree, doc.writing.map, doc.session.source) : [];
+  const writingMap = doc.mode === "write" && !readOnlySource(doc) && projectionCurrent ? doc.writing.map : null;
+  const structures = writingStructureIndex(writingMap);
+  const groups = writingMap ? groupWritingRenderNodes(projection.tree, writingMap, doc.session.source) : [];
   const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key, group] as const)));
-  const emptySlots = new Map((doc.session.projectionCurrent && doc.writing.map ? groupWritingEmptySlots(projection.tree, doc.writing.map, doc.session.source) : []).map(slot => [slot.nodeKey, slot.region]));
+  const emptySlots = new Map((writingMap ? groupWritingEmptySlots(projection.tree, writingMap, doc.session.source) : []).map(slot => [slot.nodeKey, slot.region]));
   doc.queries.beginProjection(projection.tree, { sessionId: doc.session.opened.sessionId, source: projection.source, serial: projection.serial });
   function draw(node: RenderNode): Node {
     const query = doc.queries.forNode(node); if (query) return query;
@@ -912,7 +924,7 @@ function renderProjection(doc: LiveDocument): void {
     element.setAttribute("data-document-node-key", node.key);
     const semanticRole = node.attrs["data-weftext-role"], noteId = node.attrs["data-weftext-note-id"], targetId = node.attrs["data-weftext-target-id"];
     if (semanticRole === "heading") markPersonalHeading(element, ++personalHeadingOrdinal);
-    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-reference", "endnote-reference"].includes(String(semanticRole))) {
+    if (projectionCurrent && typeof noteId === "string" && ["footnote-reference", "endnote-reference"].includes(String(semanticRole))) {
       element.setAttribute("role", "button"); element.setAttribute("tabindex", "0"); element.setAttribute("aria-label", `查看${semanticRole === "endnote-reference" ? "尾注" : "脚注"}正文与全部标记`);
       const open = () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-reference" ? "endnote" : "footnote", noteId);
       element.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); void open().catch(showError); }, true);
@@ -923,18 +935,18 @@ function renderProjection(doc: LiveDocument): void {
 
     for (const child of node.children ?? []) element.append(draw(child));
     if (node.text) element.append(document.createTextNode(node.text));
-    if (doc.session.projectionCurrent && typeof targetId === "string" && ["figure", "equation"].includes(String(semanticRole))) { const actions = el("span", "document-notes-object-actions"); actions.append(button(semanticRole === "equation" ? "公式编号与题注" : "此对象题注与编号", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), "caption", targetId), "text-button")); element.append(actions); }
-    if (doc.session.projectionCurrent && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) element.append(button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId), "text-button"));
+    if (projectionCurrent && typeof targetId === "string" && ["figure", "equation"].includes(String(semanticRole))) { const actions = el("span", "document-notes-object-actions"); actions.append(button(semanticRole === "equation" ? "公式编号与题注" : "此对象题注与编号", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), "caption", targetId), "text-button")); element.append(actions); }
+    if (projectionCurrent && typeof noteId === "string" && ["footnote-body", "endnote-body"].includes(String(semanticRole))) element.append(button("查看正文标记与注释", () => openDocumentNotes(documentNotesHost(localAuthoringEnvironment(doc)), semanticRole === "endnote-body" ? "endnote" : "footnote", noteId), "text-button"));
     const empty = emptySlots.get(node.key);
     if (doc.mode === "write" && !readOnlySource(doc) && empty) { const input = el("textarea", "literal-input empty-slot-input"); input.rows = 1; input.setAttribute("aria-label", "编辑空内容"); doc.writing.bindLiteral(input, empty); element.append(input); writableCount++; }
-    if (doc.mode === "write" && !readOnlySource(doc) && doc.session.projectionCurrent && node.origin?.isMain) {
-      const range = doc.writing.map?.structures.find(item => item.range.utf16From === node.origin!.utf16From && item.range.utf16To === node.origin!.utf16To)?.range;
-      if (range) { const controls = createStructureControls(doc.writing, range, { onError: showError, revealSource: slot => revealWritingSource(doc, slot), renderedTable: element }); if (controls) { const wrapper = el("div", "writing-structure"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(element, controls); return wrapper; } }
+    if (writingMap && node.origin?.isMain) {
+      const structure = structures.get(`${node.origin.utf16From}:${node.origin.utf16To}`);
+      if (structure) { const controls = createStructureControls(doc.writing, structure, { onError: showError, revealSource: slot => revealWritingSource(doc, slot), renderedTable: element }); if (controls) { const wrapper = el("div", "writing-structure"); if (controls.classList.contains("writing-table-surface")) wrapper.append(controls); else wrapper.append(element, controls); return wrapper; } }
     }
     if (doc.mode === "write" && node.origin?.isMain && !node.writable && ["pre", "table", "figure"].includes(tag)) {
       const wrapper = el("div", "readonly-construct"); wrapper.append(element, button("此部分只读 · 查看源码", () => revealSource(node.origin!), "source-entry", "code")); return wrapper;
     }
-    if (tag === "math" && doc.session.projectionCurrent) {
+    if (tag === "math" && projectionCurrent) {
       const wrapper = el("div", "math-discussion-target");
       const isCurrent = (): boolean => doc === current && doc.session.projection === projection && doc.session.projectionCurrent && sourceConsumersAvailable(doc);
       wrapper.append(element, createMathSelectionControls({ math: node, tree: renderedTree, source: renderedSource,
@@ -1081,6 +1093,7 @@ async function createLibrary(): Promise<void> {
     ? await creation<LibraryCreationReceipt>("/api/library/create", pendingCreation.payload)
     : await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
   if (!receipt) return;
+  workspaceTools.invalidateQueryEnvironment(receipt.root);
   inventory = await api<Inventory>("/api/library/open", { path: receipt.root }); query = ""; selectedFolder = null; renderSidebar(); renderContent(); toast("资料库已创建，可以新建笔记了；文档排版默认可在库样式中查看。");
   if (receipt.rootNotePath) await openDocument(receipt.rootNotePath, receipt.root);
 }
@@ -1094,6 +1107,7 @@ async function createNote(): Promise<void> {
   });
   if (!name) return; await prepareSwitch();
   const opened = await creation<OpenedDocument>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
+  workspaceTools.invalidateQueryEnvironment(opened.root);
   addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
 }
 async function prepareSwitch(): Promise<void> { captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
@@ -1125,9 +1139,7 @@ function addDocument(opened: OpenedDocument): void {
     editable: () => !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget) && doc.mode !== "read" && !readOnlySource(doc), request: request => api("/api/edit", request),
     onState: () => {
       if (!doc) return;
-      const retained = doc.writing.retainInput;
-      if (doc.richRetained && !retained && current === doc) queueMicrotask(() => { if (current === doc && !doc.writing.retainInput) renderProjection(doc); });
-      doc.richRetained = retained;
+      doc.deferredProjection.flush(() => current === doc && renderHost ? projectionPresentation(doc) : undefined, () => doc.writing.retainInput || doc.editor.composing, () => renderProjection(doc));
       if (current === doc) refreshChrome();
     }, onError: showError,
     onPendingSource: source => { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc, source).catch(showError); }, 220); },
@@ -1164,8 +1176,8 @@ function addDocument(opened: OpenedDocument): void {
       else throw new Error("回收站结果缺少稳定身份，不能按路径打开。");
     },
   });
-  const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience() } : null, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
-  doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", richRetained: false }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
+  const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => { if (context.root) workspaceTools.invalidateQueryEnvironment(context.root); }, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
+  doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", deferredProjection: new DeferredPaint() }; documents.push(doc); current = doc; activeSourceOrigin = null; renderSidebar(); renderContent(); scheduleRender(doc, 0);
   if (session.recovered) toast("已恢复上次未保存的草稿。磁盘文件保持原样。");
 }
 async function activateDocument(doc: LiveDocument): Promise<void> {
@@ -1221,6 +1233,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
       : { sessionId: doc.session.opened.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId });
     if (!["saved", "committed", "complete", "after", "success"].includes(receipt.status)) throw new ApiError(receipt.status, receipt.message || "保存尚未确认，草稿已保留。");
     receiptReceived = true;
+    workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
     if (request.path) {
       // Save As creates a new ordinary file. Its path, dependency root, and
       // subsequent writes belong to a newly opened Core session.
@@ -1348,7 +1361,7 @@ async function inspectRecovery(id: string): Promise<void> {
     for (const action of allowed) if (labels[action]) actions.append(button(labels[action], () => close(action), "button-primary"));
     form.append(actions);
   });
-  if (decision) { await api("/api/recovery/resolve", { operationId: id, action: decision }); toast("恢复处理已确认。请重新打开文件；原操作和各版本仍保留在恢复历史中。"); await refreshInventory(); }
+  if (decision) { await api("/api/recovery/resolve", { operationId: id, action: decision }); workspaceTools.invalidateQueryEnvironment(); toast("恢复处理已确认。请重新打开文件；原操作和各版本仍保留在恢复历史中。"); await refreshInventory(); }
 }
 
 async function insertLink(): Promise<void> {

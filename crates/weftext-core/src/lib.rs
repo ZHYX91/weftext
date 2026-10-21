@@ -1,5 +1,10 @@
 //! Local MVP persistence; this is deliberately not the full Core sync/schema protocol.
+pub(crate) mod author_order;
 mod backend;
+pub use author_order::{
+    NavigationOrderMember, NavigationOrderSnapshot, navigation_orders_changed,
+    validate_workspace_settings,
+};
 mod compile_dependencies;
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
@@ -11,6 +16,8 @@ mod export_read;
 mod history;
 mod hosted;
 mod recognition;
+#[cfg(all(test, windows))]
+mod tag_write_guard_tests;
 pub use hosted::{
     ActorContentImportReceipt, ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus,
     ActorFieldStatus, ActorHistoryRestoreStatus, ActorOwnerBackupStatus, ActorSaveStatus,
@@ -47,7 +54,7 @@ pub use query_scope::{
 pub mod sync;
 mod transaction_recovery;
 pub use directory_identity::{
-    NavigationPreparation, NavigationTarget, TagRecord, TagRegistrySnapshot,
+    NavigationPreparation, NavigationTarget, TagAssignment, TagRecord, TagRegistrySnapshot,
 };
 pub use draft_recovery::DraftAlternative;
 pub use exchange::{NativeExport, NativeExportWitness};

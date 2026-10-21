@@ -2,6 +2,7 @@ import { applySourcePatches, sourceBoundary, type SourceEditorEvent, type Source
 import { encodeLiteral } from "./session";
 import type { RenderNode } from "./types";
 import { ChangeSet } from "@codemirror/state";
+import { sourceByteOffsets } from "./source-offsets";
 
 /** Addresses are native-parser products scoped to one source, never saved IDs. */
 export interface WritingRange { from: number; to: number; utf16From: number; utf16To: number; raw: string; writable: boolean }
@@ -56,6 +57,7 @@ export type WritingIntent =
   | { kind: "listEdit"; range: WritingRange; action: { kind: "split"; at: number } | { kind: "indent" | "outdent" } };
 export interface WritingBasis { sessionId: string; source: string; serial: number }
 export interface WritingSnapshot extends WritingBasis { generation: number }
+export interface WritingSurfaceLease { basis(): WritingSnapshot; active(): boolean }
 export interface WritingRequest extends WritingBasis { sourceHash: string; intent: WritingIntent }
 export interface NativeWritingPatch { from: number; to: number; utf16From: number; utf16To: number; expected: string; insert: string }
 export interface WritingResult { source: string; sourceHash: string; patches: NativeWritingPatch[]; selection: SourceSelection; map: WritingMap }
@@ -161,25 +163,34 @@ export function textareaSourceDraft(source: string, text: string): string {
   return source.slice(0, originalAt(from)) + text.slice(from, newTo).replace(/\n/g, eol) + source.slice(originalAt(oldTo));
 }
 export function exactWritingRange(source: string, range: WritingRange): boolean {
-  return Number.isSafeInteger(range.utf16From) && Number.isSafeInteger(range.utf16To) && range.utf16From >= 0 && range.utf16To >= range.utf16From && range.utf16To <= source.length && sourceBoundary(source, range.utf16From) && sourceBoundary(source, range.utf16To) && source.slice(range.utf16From, range.utf16To) === range.raw && utf8Offset(source, range.utf16From) === range.from && utf8Offset(source, range.utf16To) === range.to;
+  return matchingWritingRange(source, range, offset => utf8Offset(source, offset));
+}
+function matchingWritingRange(source: string, range: WritingRange, byteOffset: (offset: number) => number): boolean {
+  return Number.isSafeInteger(range.utf16From) && Number.isSafeInteger(range.utf16To) && range.utf16From >= 0 && range.utf16To >= range.utf16From && range.utf16To <= source.length && sourceBoundary(source, range.utf16From) && sourceBoundary(source, range.utf16To) && source.slice(range.utf16From, range.utf16To) === range.raw && byteOffset(range.utf16From) === range.from && byteOffset(range.utf16To) === range.to;
+}
+function writingRangeValidator(source: string): (range: WritingRange) => boolean {
+  const offsets = sourceByteOffsets(source);
+  return range => matchingWritingRange(source, range, offset => offsets[offset]);
 }
 export function writingRange(source: string, from: number, to: number): WritingRange { return { from: utf8Offset(source, from), to: utf8Offset(source, to), utf16From: from, utf16To: to, raw: source.slice(from, to), writable: true }; }
 
 /** HTTP/worker output is checked atomically before it can enter DraftUndo. */
 export function validateWritingResult(source: string, result: WritingResult): SourcePatch[] {
   if (!result || !result.map || result.sourceHash !== result.map.sourceHash || typeof result.source !== "string") throw new Error("原生编辑结果缺少一致的当前编辑地图。");
+  const offsets = sourceByteOffsets(source);
   const patches = result.patches.map(patch => {
-    if (utf8Offset(source, patch.utf16From) !== patch.from || utf8Offset(source, patch.utf16To) !== patch.to) throw new Error("原生编辑的字节与 UTF-16 范围不一致。");
+    if (offsets[patch.utf16From] !== patch.from || offsets[patch.utf16To] !== patch.to) throw new Error("原生编辑的字节与 UTF-16 范围不一致。");
     return { from: patch.utf16From, to: patch.utf16To, expected: patch.expected, insert: patch.insert };
   });
   if (applySourcePatches(source, patches) !== result.source) throw new Error("原生编辑提案与完整草稿不一致，未应用修改。");
   const { from, to } = result.selection;
   if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to > result.source.length || !sourceBoundary(result.source, from) || !sourceBoundary(result.source, to)) throw new Error("原生编辑未返回有效选区。");
+  const validRange = writingRangeValidator(result.source);
   for (const region of result.map.literalRegions) {
-    if (!exactWritingRange(result.source, region.range)) throw new Error("原生编辑返回了不匹配的文字范围。");
-    for (const separator of region.paragraphBreaks ?? []) if (!exactWritingRange(result.source, separator) || separator.utf16From < region.range.utf16From || separator.utf16To > region.range.utf16To) throw new Error("原生编辑返回了不匹配的段落边界。");
+    if (!validRange(region.range)) throw new Error("原生编辑返回了不匹配的文字范围。");
+    for (const separator of region.paragraphBreaks ?? []) if (!validRange(separator) || separator.utf16From < region.range.utf16From || separator.utf16To > region.range.utf16To) throw new Error("原生编辑返回了不匹配的段落边界。");
   }
-  for (const structure of result.map.structures) if (!exactWritingRange(result.source, structure.range)) throw new Error("原生编辑返回了不匹配的结构范围。");
+  for (const structure of result.map.structures) if (!validRange(structure.range)) throw new Error("原生编辑返回了不匹配的结构范围。");
   return patches;
 }
 
@@ -194,15 +205,28 @@ export function rectangularTSV(text: string): string[][] {
 
 export interface WritingRenderGroup { region: WritingLiteral; firstKey: string; memberKeys: string[] }
 export interface WritingEmptySlot { nodeKey: string; region: WritingLiteral }
+/** First native structure at an exact range, matching the parser's original order. */
+export function writingStructureIndex(map: WritingMap | null): Map<string, WritingStructure> {
+  const index = new Map<string, WritingStructure>();
+  for (const structure of map?.structures ?? []) { const key = `${structure.range.utf16From}:${structure.range.utf16To}`; if (!index.has(key)) index.set(key, structure); }
+  return index;
+}
 /** Join only actual native leaves with unique source coverage and equal semantics. */
 export function groupWritingRenderNodes(tree: RenderNode, map: WritingMap, source: string): WritingRenderGroup[] {
   const leaves: RenderNode[] = []; const paragraphs = new Map<string, string>();
   const visit = (node: RenderNode, paragraph = "") => { if (node.kind === "element" && node.tag === "p") paragraph = node.key; if (node.kind === "text") { leaves.push(node); paragraphs.set(node.key, paragraph); } for (const child of node.children) visit(child, paragraph); };
   visit(tree);
+  const validRange = writingRangeValidator(source);
+  // Source order narrows candidates; restore actual render order before proving
+  // coverage, so reordered or duplicate occurrences still cannot gain a writer.
+  const bySource = leaves.map((node, order) => ({ node, order })).filter(item => item.node.origin?.isMain && Number.isSafeInteger(item.node.origin.utf16From) && Number.isSafeInteger(item.node.origin.utf16To)).sort((a, b) => a.node.origin!.utf16From - b.node.origin!.utf16From || a.order - b.order);
+  const lowerBound = (from: number) => { let left = 0, right = bySource.length; while (left < right) { const mid = (left + right) >>> 1; if (bySource[mid].node.origin!.utf16From < from) left = mid + 1; else right = mid; } return left; };
   const groups: WritingRenderGroup[] = [];
   for (const region of map.literalRegions) {
-    if (!region.range.writable || !exactWritingRange(source, region.range)) continue;
-    const selected = leaves.filter(node => node.origin?.isMain && node.origin.utf16From >= region.range.utf16From && node.origin.utf16To <= region.range.utf16To);
+    if (!region.range.writable || !validRange(region.range)) continue;
+    const candidates: typeof bySource = [];
+    for (let i = lowerBound(region.range.utf16From); i < bySource.length && bySource[i].node.origin!.utf16From <= region.range.utf16To; i++) if (bySource[i].node.origin!.utf16To <= region.range.utf16To) candidates.push(bySource[i]);
+    const selected = candidates.sort((a, b) => a.order - b.order).map(item => item.node);
     if (!selected.length || selected.some(node => !node.writable || !node.origin || source.slice(node.origin.utf16From, node.origin.utf16To) !== node.origin.raw)) continue;
     let position = region.range.utf16From;
     let complete = true, text = ""; let previous: RenderNode | null = null;
@@ -213,7 +237,7 @@ export function groupWritingRenderNodes(tree: RenderNode, map: WritingMap, sourc
       if (origin.utf16From !== position) {
         const certified = region.paragraphBreaks?.filter(range => range.utf16From >= position && range.utf16To <= origin.utf16From).sort((a, b) => a.utf16From - b.utf16From) ?? [];
         let gapEnd = position;
-        for (const range of certified) { if (range.utf16From !== gapEnd || !exactWritingRange(source, range)) { complete = false; break; } gapEnd = range.utf16To; }
+        for (const range of certified) { if (range.utf16From !== gapEnd || !validRange(range)) { complete = false; break; } gapEnd = range.utf16To; }
         if (!complete || gapEnd !== origin.utf16From || !previous || !paragraphs.get(previous.key) || !paragraphs.get(node.key) || paragraphs.get(previous.key) === paragraphs.get(node.key)) { complete = false; break; }
         text += certified.map(() => "\n\n").join("");
       }
@@ -230,13 +254,14 @@ export function groupWritingEmptySlots(tree: RenderNode, map: WritingMap, source
   const nodes: RenderNode[] = [];
   const visit = (node: RenderNode) => { if (node.kind === "element") nodes.push(node); for (const child of node.children) visit(child); };
   visit(tree);
+  const validRange = writingRangeValidator(source);
   const slots: WritingEmptySlot[] = [];
   for (const region of map.literalRegions) {
     const range = region.range;
-    if (!range.writable || range.utf16From !== range.utf16To || region.text !== "" || !exactWritingRange(source, range)) continue;
+    if (!range.writable || range.utf16From !== range.utf16To || region.text !== "" || !validRange(range)) continue;
     const owner = map.structures.filter(structure => structure.body && structure.body.utf16From <= range.utf16From && structure.body.utf16To >= range.utf16To && ["heading", "bulletListItem", "numberedListItem", "termListItem"].includes(structure.kind)).sort((a, b) => a.range.utf16To - a.range.utf16From - (b.range.utf16To - b.range.utf16From))[0];
     let matches: RenderNode[] = [];
-    if (owner && exactWritingRange(source, owner.range)) matches = nodes.filter(node => {
+    if (owner && validRange(owner.range)) matches = nodes.filter(node => {
       const origin = node.origin, tag = node.tag?.toLowerCase();
       const semanticTag = owner.kind === "heading" ? /^h[1-6]$/.test(tag ?? "") || node.attrs.role === "heading" : owner.kind === "termListItem" ? tag === "dd" : tag === "li";
       return semanticTag && origin?.isMain && origin.utf16From === owner.range.utf16From && origin.utf16To === owner.range.utf16To && origin.raw === owner.range.raw;
@@ -269,7 +294,7 @@ export class WritingController {
   private failure: Error | null = null;
   private bindings = new Set<InputBinding>();
   private focusSelection = false;
-  private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; retain?(): boolean; connected: boolean }>();
+  private surfaces = new Set<{ element: HTMLElement; update(transition?: WritingTransition): void; lease?: WritingSurfaceLease; connected: boolean }>();
 
   constructor(private host: WritingHost) {
     this.stopObserve = host.editor.observe(event => {
@@ -308,11 +333,16 @@ export class WritingController {
   }
   get snapshot(): WritingSnapshot { return { ...this.host.basis(), generation: this.host.editor.generation }; }
   isSnapshotCurrent(snapshot: WritingSnapshot): boolean { const now = this.snapshot; return now.sessionId === snapshot.sessionId && now.source === snapshot.source && now.serial === snapshot.serial && now.generation === snapshot.generation; }
-  /** Focused inputs stay mounted until settled; compiling may update other UI. */
-  get retainInput(): boolean { return typeof document !== "undefined" && ([...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input) || !!this.currentMap() && [...this.surfaces].some(surface => surface.element.isConnected && (surface.element.contains(document.activeElement) || surface.retain?.()))) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing); }
-  /** A native table surface remains mounted while its grid or text has focus. */
-  observeSurface(element: HTMLElement, update: (transition?: WritingTransition) => void, retain?: () => boolean): () => void {
-    const surface = { element, update, retain, connected: false }; this.surfaces.add(surface);
+  /** Valid literal input and qualified commands retain presentation; idle grid focus does not. */
+  get retainInput(): boolean {
+    return typeof document !== "undefined" && (
+      [...this.bindings].some(binding => binding.valid && binding.input.isConnected && document.activeElement === binding.input)
+      || !!this.currentMap() && [...this.surfaces].some(surface => surface.element.isConnected && surface.lease && this.isSnapshotCurrent(surface.lease.basis()) && surface.lease.active())
+    ) || !!this.active?.input && (this.state.pending || this.state.busy || this.state.composing);
+  }
+  /** A surface's explicit command/gesture lease uses its existing qualified native snapshot. */
+  observeSurface(element: HTMLElement, update: (transition?: WritingTransition) => void, lease?: WritingSurfaceLease): () => void {
+    const surface = { element, update, lease, connected: false }; this.surfaces.add(surface);
     const blur = () => queueMicrotask(() => this.notify()); element.addEventListener("focusout", blur);
     return () => { this.surfaces.delete(surface); element.removeEventListener("focusout", blur); };
   }

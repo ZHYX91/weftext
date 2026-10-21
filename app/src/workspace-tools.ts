@@ -18,6 +18,7 @@ import { DiagramPanel } from "./diagram-ui";
 import { openProcessingSettingsPanel, type ProcessingRead } from "./processing-settings-panel";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
+import type { StructureHeading } from "./heading-structure-state";
 
 export interface WorkspaceToolsHost {
   embeddedQueries?(): EmbeddedQuerySelection[];
@@ -31,6 +32,7 @@ export interface WorkspaceToolsHost {
   savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
   navigate(target: string | KnowledgeNodeRef): Promise<void>;
   selectSource(from: number, to: number): void;
+  revealHeading?(heading: StructureHeading): boolean;
   beforeAction(): Promise<void>;
   canEditSource(): boolean;
   notify(message: string, error?: boolean): void;
@@ -38,6 +40,7 @@ export interface WorkspaceToolsHost {
   refreshLibrary?(root: string): Promise<void>;
   syncApplied(root: string): Promise<void>;
 }
+type WorkspacePanelKind = "data" | "knowledge" | "query";
 
 /** UI composition only: every action uses the document's existing Draft or Core. */
 export class WorkspaceTools {
@@ -52,13 +55,13 @@ export class WorkspaceTools {
   private readonly header = document.createElement("header");
   private readonly panelBody = document.createElement("div");
   private library: { root: string; workspaceId?: string } | null = null;
-  private active: "data" | "knowledge" | "query" | null = null;
+  private active: WorkspacePanelKind | null = null;
   private readonly styles = new Map<string, NativeStyleController>();
   private refreshTimer?: ReturnType<typeof setTimeout>;
   private pendingImport: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
 
   constructor(private readonly host: WorkspaceToolsHost) {
-    this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify });
+    this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
     this.bar.className = "workspace-tools"; this.bar.setAttribute("aria-label", "笔记工具");
     this.inspector.className = "workspace-inspector"; this.inspector.hidden = true;
     this.header.className = "inspector-header"; this.panelBody.className = "inspector-body";
@@ -67,11 +70,12 @@ export class WorkspaceTools {
       canEdit: host.canEditSource,
       request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
       openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
+      environmentChanged: root => this.invalidateQueryEnvironment(root),
       savedDefinition: host.savedDefinition,
+      applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),
       prepareAction: host.beforeAction,
       openTemplates: async () => {
-        if (this.active !== "knowledge") await this.show("knowledge");
-        else await this.host.beforeAction();
+        await this.show("knowledge");
         this.knowledgePanel.selectTab("templates");
       },
       created: async result => {
@@ -101,6 +105,7 @@ export class WorkspaceTools {
       navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
       inspectOperation: async (id, context) => { const receipt = await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }); await host.applyReceipt(receipt, context); return receipt; },
       selectSource: host.selectSource,
+      revealHeading: host.revealHeading,
       previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
       linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
       mountMedia: (container, selected, initial) => mountMediaViewer(container, {
@@ -109,7 +114,7 @@ export class WorkspaceTools {
         importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
       }, selected, initial),
     });
-    this.bar.append(this.button("属性", () => this.show("data")), this.button("链接与批注", () => this.show("knowledge")), this.button("查询与视图", () => this.show("query")), this.button("输出与导入", () => this.outputPanel.open()), this.button("库样式", () => this.showStyles()), this.button("回收站", async () => { if (!this.library?.workspaceId) throw new Error("请先打开笔记库。"); await this.host.beforeAction(); await this.libraryTrash.open(this.library.root); }));
+    this.bar.append(this.button("属性", () => this.toggle("data")), this.button("链接与批注", () => this.toggle("knowledge")), this.button("查询与视图", () => this.toggle("query")), this.button("输出与导入", () => this.outputPanel.open()), this.button("库样式", () => this.showStyles()), this.button("回收站", async () => { if (!this.library?.workspaceId) throw new Error("请先打开笔记库。"); await this.host.beforeAction(); await this.libraryTrash.open(this.library.root); }));
     this.bar.append(this.button("同步", async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }));
     this.bar.append(this.button("LaTeX 公式", () => latex.open()), this.button("Mermaid 图表", () => diagrams.open()), this.button("处理默认与词表", () => this.showProcessingSettings()));
   }
@@ -123,6 +128,7 @@ export class WorkspaceTools {
       status: request => api("/api/processing/status", { root, ...request }),
       settle: request => api("/api/processing/settle", { root, ...request }),
       apply: request => api("/api/processing/apply", { request: { root, ...request.request }, planId: request.planId }),
+      committed: () => this.invalidateQueryEnvironment(root),
       onApplied: () => { this.host.notify("共享处理默认已提交；各次导入与校对仍须明确采用建议。"); },
     });
   }
@@ -134,9 +140,10 @@ export class WorkspaceTools {
   setLibrary(library: { root: string; workspaceId?: string } | null, scope: string | null = null): void {
     this.library = library; this.queryPanel.setLibrary(library); this.queryPanel.setScope(scope);
   }
+  invalidateQueryEnvironment(root = this.library?.root): void { if (root) this.queryPanel.environmentChanged(root); }
   async search(text: string, includeBody: boolean): Promise<void> {
     this.queryPanel.setSearch(text, includeBody);
-    if (this.active !== "query") await this.show("query");
+    await this.show("query");
   }
   openQueryOutput(query: FrozenQuery): void { this.outputPanel.open(query); }
   openResource(documentBasis: OpenedDocument, target: ResourceOpenTarget): void {
@@ -156,9 +163,19 @@ export class WorkspaceTools {
     dialog.oncancel = event => { event.preventDefault(); close(); };
     document.body.append(dialog); dialog.showModal();
   }
-  async show(kind: "data" | "knowledge" | "query"): Promise<void> {
+  /** Opening is idempotent; a retained active panel must never turn this into
+   * closing after navigation or a repeated command. */
+  async show(kind: WorkspacePanelKind): Promise<void> {
+    await this.host.beforeAction();
+    await this.showPanel(kind);
+  }
+  /** Only toolbar switches use toggle; explicit open actions always use show. */
+  private async toggle(kind: WorkspacePanelKind): Promise<void> {
     await this.host.beforeAction();
     if (this.active === kind) { this.active = null; this.inspector.hidden = true; return; }
+    await this.showPanel(kind);
+  }
+  private async showPanel(kind: WorkspacePanelKind): Promise<void> {
     this.active = kind; this.inspector.hidden = false; this.inspector.classList.toggle("wide", kind === "query");
     const title = document.createElement("strong"); title.textContent = { data: "笔记属性", knowledge: "链接与批注", query: "查询与视图" }[kind];
     this.header.replaceChildren(title, this.button("关闭", () => { this.active = null; this.inspector.hidden = true; }));
@@ -254,6 +271,7 @@ export class WorkspaceTools {
       read: () => api("/api/styles/read", { root }),
       prepare: request => api("/api/styles/prepare", { root, ...request }),
       apply: request => api("/api/styles/apply", { root, ...request }),
+      committed: () => this.invalidateQueryEnvironment(root),
       openSource: path => this.host.openDocument(path, root),
       onApplied: () => this.host.stylesChanged(root), operationId,
     }, this.styles.get(root));

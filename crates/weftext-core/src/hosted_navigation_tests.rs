@@ -109,6 +109,8 @@ fn navigation_tag_same_names_and_actor_ids_remain_independent_and_rename_is_orig
         ALICE,
         &op,
         HostedNavigationIntent::CreateTag {
+            parent_ref: None,
+            assignment: None,
             display_name: "同名标签".into(),
             base_id: basis.base_id,
         },
@@ -119,6 +121,8 @@ fn navigation_tag_same_names_and_actor_ids_remain_independent_and_rename_is_orig
         BOB,
         &op,
         HostedNavigationIntent::CreateTag {
+            parent_ref: None,
+            assignment: None,
             display_name: "同名标签".into(),
             base_id: basis.base_id,
         },
@@ -186,6 +190,8 @@ fn navigation_unknown_settlement_fences_late_prepare_and_different_intent_confli
                 FP,
                 &f.root,
                 HostedNavigationIntent::CreateTag {
+                    parent_ref: None,
+                    assignment: None,
                     display_name: "different".into(),
                     base_id: fresh(),
                 },
@@ -224,6 +230,8 @@ fn navigation_failed_prepare_keeps_original_actor_decision_without_retry_allocat
     let mut f = Fixture::new();
     let op = fresh();
     let intent = HostedNavigationIntent::CreateTag {
+        parent_ref: None,
+        assignment: None,
         display_name: String::new(),
         base_id: fresh(),
     };
@@ -286,4 +294,26 @@ fn navigation_replaced_directory_cannot_inherit_original_reservation() {
         .unwrap()
         .unwrap();
     assert_eq!(status.navigation_ref, prepared.navigation_ref);
+}
+
+#[test]
+fn retained_pre_hierarchy_navigation_records_keep_the_original_author_fingerprint() {
+    let root = "D:/owned/library";
+    let base = fresh();
+    let old = serde_json::json!({"root":root,"intent":{"kind":"createTag","displayName":"original","baseId":base}});
+    let legacy: NavigationFeature = serde_json::from_value(old).unwrap();
+    assert_eq!(
+        legacy.canonical(),
+        serde_json::json!({"kind":"createTag","root":root,"displayName":"original","baseId":base})
+    );
+    let mut current = legacy.clone();
+    current.original_author_intent = Some(current.current_canonical());
+    assert_ne!(current.canonical(), legacy.canonical());
+    let serialized = serde_json::to_vec(&current).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<NavigationFeature>(&serialized)
+            .unwrap()
+            .canonical(),
+        current.canonical()
+    );
 }

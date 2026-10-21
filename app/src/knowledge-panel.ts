@@ -8,6 +8,10 @@ import { trashRestoreDraft, type LibraryTrashEntry } from "./library-trash";
 import { citationInsertionByte, newNativeCitationInputs, renderNativeCitations, type NativeCitationSnapshot } from "./native-citations";
 import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationDiagnostics, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
 import { nodeSourceHash } from "./hosted-navigation-state";
+import { RelationshipGraphView } from "./relationship-graph-view";
+import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-state";
+import { HeadingStructureView } from "./heading-structure-view";
+import type { HeadingSnapshot, StructureHeading } from "./heading-structure-state";
 
 export interface KnowledgeContext extends KnowledgeBasis {
   root: string;
@@ -54,6 +58,8 @@ export interface KnowledgeTemplate {
 }
 export type KnowledgeTemplateValue = string | boolean | null;
 export interface KnowledgeSnapshot {
+  graph?: GraphSnapshot;
+  headingStructure?: HeadingSnapshot;
   diagnostics?: { coverage: "complete" | "partial"; scannedNodes: number; issues: KnowledgeLink[]; propertyIssues?: { source: KnowledgeNodeRef; fieldId: string; itemPath: string[]; address: string; resolution: KnowledgeLink["resolution"] }[]; nodes: { node: KnowledgeNodeRef; incoming: number; outgoing: number; invalidOutgoing: number; state: string }[] };
   links?: { generation: string | number; coverage: "complete" | "partial"; outgoing: KnowledgeLink[]; incomingId: KnowledgeLink[]; incomingPath: KnowledgeLink[]; warnings?: string[] };
   renderedLinks?: { compileIdentity: string; target: string; projectionGeneration: string; occurrenceOrdinal: number; fragments: string[]; destination: string; origin: string }[];
@@ -95,11 +101,12 @@ export interface KnowledgeHost {
   linkCopy?(link: KnowledgeLink, form: string, context: KnowledgeContext): Promise<{ address: string; fullLink: string }>;
   mountMedia?(container: HTMLElement, selected: (target: MediaRegionInput | null) => void, initial?: MediaRegionInput): { dispose(): void };
   selectSource?(from: number, to: number): void;
+  revealHeading?(heading: StructureHeading): boolean;
   copy?(text: string): Promise<void>;
   beforeAction?(): Promise<void>;
   canEditSource?(): boolean;
 }
-export type KnowledgePanelTab = "links" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
+export type KnowledgePanelTab = "links" | "graph" | "headings" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
   backgroundEnabled(): boolean;
   refresh(): Promise<void>;
@@ -137,6 +144,8 @@ function nativeTree(node: RenderNode): Node {
 export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost): KnowledgePanel {
   container.classList.add("knowledge-panel"); container.setAttribute("aria-label", "知识与批注");
   const gate = new KnowledgeReadGate();
+  const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
+  let graphSession = "";
   const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new Error("校对接口不可用")), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
   let snapshot: KnowledgeSnapshot | null = null;
   let snapshotBasis: KnowledgeContext | null = null;
@@ -683,6 +692,19 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
       actions.append(inspect, create); card.append(actions, preview); body.append(card);
     }
   }
+  async function openGraphSource(edge: GraphEdge, node: GraphNode): Promise<void> {
+    if (!sameKnowledgeBasis(snapshotBasis, host.context())) throw new Error("图谱依据已变化，请刷新后定位原来源。");
+    await host.navigate(node.reference);
+    const current = host.context();
+    if (!current || `${current.workspaceId}/${current.nodeId}` !== edge.authorSource || await nodeSourceHash(current.source) !== edge.sourceHash) { host.notify("已打开作者来源；正文已变化，没有采用旧精确位置。", true); return; }
+    if (edge.range) host.selectSource?.(edge.range.utf16From, edge.range.utf16To);
+    else host.notify(`已打开作者来源，请在属性面板编辑原字段 ${edge.fieldId ?? ""}。`);
+  }
+  function openHeading(heading: StructureHeading): void {
+    if (!sameKnowledgeBasis(snapshotBasis, host.context())) { host.notify("标题依据已变化，请刷新后定位。", true); return; }
+    if (heading.range) { host.selectSource?.(heading.range.utf16From, heading.range.utf16To); return; }
+    if (!host.revealHeading?.(heading)) host.notify("此生成标题没有唯一源码地址；当前原生显示位置未匹配，请更新阅读预览后刷新。", true);
+  }
   function render(): void {
     if (disposed) return;
     deferredRender = false;
@@ -694,14 +716,14 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     const heading = element("div", "knowledge-heading"); heading.append(element("strong", "", "知识与批注"), action("刷新", refresh, "knowledge-refresh"));
     if (loading) heading.append(action("停止等待", () => { gate.invalidate(); loading = false; clearOverlay(); status.textContent = "已停止等待本次只读扫描；未取消服务端计算，正文保留。"; render(); })); container.append(heading);
     const tabs = element("div", "knowledge-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "知识面板");
-    for (const [id, label] of [["links", "链接"], ["citations", "插入引用"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "citations", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
+    for (const [id, label] of [["links", "关系"], ["graph", "二维图谱"], ["headings", "标题结构"], ["citations", "插入引用"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
     container.append(tabs, status);
     if (pendingPlan) { const pending = element("div", "knowledge-warning", `原操作 ${pendingPlan.plan.operationId} 结果待确认。`); if (host.inspectOperation) pending.append(action("检查原操作", inspectPending)); container.append(pending); }
     const body = element("div", "knowledge-body"); body.setAttribute("role", "tabpanel"); container.append(body);
     if (!host.context()) { body.append(element("p", "knowledge-empty", "打开笔记后查看链接、批注和文件操作。")); return; }
     body.append(element("p", "knowledge-help knowledge-current", host.context()!.path));
     for (const message of snapshot?.warnings ?? []) body.append(element("p", "knowledge-warning", message));
-    if (tab === "links") renderLinks(body); else if (tab === "citations") {
+    if (tab === "links") { body.append(action("打开当前笔记局部图", () => { tab = "graph"; render(); })); renderLinks(body); } else if (tab === "graph") graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => host.navigate(node.reference), source: openGraphSource, error: report }); else if (tab === "headings") headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading); else if (tab === "citations") {
       const context = host.context()!;
       let state = citationInputs.get(context.sessionId); if (!state) { state = newNativeCitationInputs(); citationInputs.set(context.sessionId, state); }
       renderNativeCitations(body, sameKnowledgeBasis(snapshotBasis, context) ? snapshot?.citations : undefined, state, { writable: host.canEditSource?.() !== false, at: () => { const current = host.context(); if (!current || !sameKnowledgeBasis(snapshotBasis, current)) throw new Error("引用依据已变化，请刷新后重试。"); return citationInsertionByte(current.source, current.selection?.from ?? current.source.length); }, perform: (title, intent) => perform(title, intent as KnowledgeIntent), select: range => host.selectSource?.(range.utf16From, range.utf16To), navigate, repaint: render });
@@ -711,6 +733,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
   }
   async function refresh(): Promise<void> {
     const context = host.context(); const generation = gate.begin();
+    if ((context?.sessionId ?? "") !== graphSession) { graphSession = context?.sessionId ?? ""; graph.clear(); headings.clear(); }
     if (!context) { snapshot = null; snapshotBasis = null; clearOverlay(); render(); return; }
     if (!sameKnowledgeBasis(snapshotBasis, context)) { rules.closePreviews(); snapshot = null; snapshotBasis = null; clearOverlay(); render(); }
     status.textContent = "正在读取当前获权知识信息…";
@@ -728,6 +751,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     refresh,
     selectTab(next) { tab = next; render(); },
     attachSurface(next, nextMappings = []) { clearOverlay(); surface = next; mappings = nextMappings; if (surface) surface.classList.add("knowledge-surface"); drawOverlay(); },
-    dispose() { disposed = true; gate.invalidate(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.replaceChildren(); },
+    dispose() { disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.replaceChildren(); },
   };
 }
