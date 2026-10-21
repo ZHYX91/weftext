@@ -135,21 +135,44 @@ class OwnedServe:
     directory. A failed/unknown shutdown is cached and is never retried or
     replaced with TerminateProcess. Such failures explicitly retain the PID.
     """
-    def __init__(self, executable, arguments, *, hosted=False, log_prefix=None):
+    def __init__(self, executable, arguments, *, hosted=False, log_prefix=None,
+                 expected_default_data_dir=None, evidence_parent=None):
         self.command = serve_command(executable, arguments)
-        self.data_dir = Path(_option(self.command[2:], '--data-dir'))
+        has_explicit = any(value == '--data-dir' or value.startswith('--data-dir=') for value in self.command[2:])
+        if expected_default_data_dir is not None and has_explicit:
+            raise ValueError('Default-resolver evidence cannot also pass an explicit --data-dir')
+        if expected_default_data_dir is not None:
+            # A default-resolver fixture supplies its independently known TEST
+            # root for owner-status/stop qualification, never a child argument.
+            self.data_dir = Path(expected_default_data_dir)
+        else:
+            self.data_dir = Path(_option(self.command[2:], '--data-dir'))
         if not self.data_dir.is_absolute():
             raise ValueError('The owned TEST data directory must be absolute')
-        self.directory = self.data_dir.parent / f'server-control-{uuid.uuid4()}'
+        if expected_default_data_dir is not None:
+            if evidence_parent is None:
+                raise ValueError('Default-resolver evidence requires its explicit owned TEST parent')
+            parent = Path(evidence_parent)
+            if (not parent.is_absolute() or '..' in parent.parts or '..' in self.data_dir.parts or self.data_dir == parent
+                    or not self.data_dir.is_relative_to(parent) or not parent.is_dir()):
+                raise ValueError('Expected default data must be inside its existing owned TEST parent')
+        else:
+            if evidence_parent is not None:
+                raise ValueError('Explicit serve data uses its own evidence parent')
+            parent = self.data_dir.parent
+        self.directory = parent / f'server-control-{uuid.uuid4()}'
         self.directory.mkdir(exist_ok=False)
         self.log_prefix = None if log_prefix is None else Path(log_prefix)
         self.hosted, self.ready, self._owner_identity = hosted, None, None
         self._lines, self._streams = queue.Queue(), {'stdout': bytearray(), 'stderr': bytearray()}
         self._stream_errors, self._stop_attempted, self._stop_error = [], False, None
         self._startup_cleanup_attempted = False
+        self._status_attempted, self._status_identity = False, None
         self._threads, self._ready_bytes, self._logs_written = [], 0, False
         self._first_stdout, self._extra_stdout = True, False
         self.record = {'command': self.command, 'hosted': hosted, 'ready': False, 'shutdownAttempted': False}
+        if expected_default_data_dir is not None:
+            self.record['expectedDefaultDataDir'] = str(self.data_dir)
         self._save()
         self.process = subprocess.Popen(self.command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -207,6 +230,12 @@ class OwnedServe:
             if self.created is not None and self.ready['ownerIdentity']['created'] != self.created:
                 raise ValueError('Ready creation FILETIME differs from the original owned OS handle')
             self._owner_identity = self.ready['ownerIdentity']
+            if 'expectedDefaultDataDir' in self.record:
+                # Without --data-dir, Ready's PID is insufficient to prove the
+                # real default resolver chose this TEST profile. Ask the exact
+                # expected profile's existing-only broker before any HTTP use.
+                if self._existing_identity(timeout) != self._owner_identity:
+                    raise ValueError('Default resolver Ready differs from the expected TEST profile owner')
             self._ready_bytes = len(line)
             self.record['ready'] = True
             self.record['ownerIdentity'] = self.ready['ownerIdentity']
@@ -250,7 +279,12 @@ class OwnedServe:
             raise ValueError(f'{name} output exceeds its bounded message size')
         return record['exitCode'], path.read_bytes()
 
-    def _cleanup_unready(self, timeout):
+    def _existing_identity(self, timeout):
+        if self._status_attempted:
+            if self._status_identity is None:
+                raise RuntimeError('Existing-only owner-status failed; no retry')
+            return self._status_identity
+        self._status_attempted = True
         # N1's existing-only status qualifies this exact data-dir/profile. The
         # returned identity must also match the original owned OS handle before
         # one typed stop is permitted. Never turn a missing broker into a start.
@@ -264,6 +298,11 @@ class OwnedServe:
         identity = _identity(status['ownerIdentity'], pid=self.process.pid, hosted=self.hosted)
         if identity['created'] != self.created:
             raise ValueError('Existing owner differs from the original held process handle')
+        self._status_identity = identity
+        return identity
+
+    def _cleanup_unready(self, timeout):
+        identity = self._existing_identity(timeout)
         self._owner_identity = identity
         self.record['startupCleanupIdentity'] = identity
         self.stop(control_timeout=timeout)
@@ -331,5 +370,8 @@ class OwnedServe:
             self._write_logs()
 
 
-def launch_serve(executable, arguments, *, hosted=False, log_prefix=None, ready_timeout=45):
-    return OwnedServe(executable, arguments, hosted=hosted, log_prefix=log_prefix).wait_ready(ready_timeout)
+def launch_serve(executable, arguments, *, hosted=False, log_prefix=None, ready_timeout=45,
+                 expected_default_data_dir=None, evidence_parent=None):
+    return OwnedServe(executable, arguments, hosted=hosted, log_prefix=log_prefix,
+                      expected_default_data_dir=expected_default_data_dir,
+                      evidence_parent=evidence_parent).wait_ready(ready_timeout)

@@ -24,7 +24,7 @@ python scripts/mvp.py package --release --windows-sdk "C:\Program Files (x86)\Wi
 
 ## 共同合同与材料
 
-[`host-contract.json`](../packaging/windows/host-contract.json) 是原生宿主和清单的单一身份／路径／激活配置：Win11 x64、最低 build22000；本地包身份 `Weftext.Desktop`、Publisher `CN=Weftext`、AppId `Weftext`。Publisher 是本地签名 Subject 的要求，不是已取得证书或系统信任的声明。默认持久根保持 `%LOCALAPPDATA%/Weftext-MVP`，cache／WebView UDF 位于另一个 `Weftext/Cache` 根。清单只对准确持久子目录关闭写虚拟化，拒绝任意 KnownFolder、上层目录或路径穿越；不会整体关闭 AppData／注册表虚拟化。
+[`host-contract.json`](../packaging/windows/host-contract.json) 是原生宿主和清单的单一身份／路径／激活配置：Win11 x64、最低 build22000；本地包身份 `Weftext.Desktop`、Publisher `CN=Weftext`、AppId `Weftext`。Publisher 是本地签名 Subject 的要求，不是已取得证书或系统信任的声明。`persistentRelativeRoot` 为 `%LOCALAPPDATA%/Weftext-MVP` 保全范围，`coreRelativePath=core` 指向默认 Core，`hostStateRelativePath=host-state` 指向此 OS 用户的私有宿主元数据。两个目录必须独立，显式 Core 也不得等于、包含或被 host-state 包含；通知路由目录不成为第二个 Core。旧顶层 Core 原件不自动采用，需保留并显式导入／一次性转换，不保留双路径兼容。cache／WebView UDF 仍位于范围外的 `Weftext/Cache`。清单排除整个准确 Weftext-MVP 保全范围，覆盖这两个子目录；拒绝任意 KnownFolder、上层目录或路径穿越，不会整体关闭 AppData／注册表虚拟化。
 
 StartupTask 默认关闭，登录入口只传 `--login-startup`；通知 COM 使用固定 CLSID 和 `--toast-server`，激活只转发 opaque 原任务键并重新授权。CLI 的包内执行别名明确选择 console 子系统。清单资源包含同源图标和中英文 PRI；本机界面语言偏好不由包资源代替。
 

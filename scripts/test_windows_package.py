@@ -90,6 +90,26 @@ class VersionAndPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_contract(json.dumps(changed))
 
+    def test_core_and_private_host_state_are_required_disjoint_contract_children(self):
+        self.assertEqual(CONTRACT['paths']['coreRelativePath'], 'core')
+        self.assertEqual(CONTRACT['paths']['hostStateRelativePath'], 'host-state')
+        for key in ('coreRelativePath', 'hostStateRelativePath'):
+            changed = copy.deepcopy(CONTRACT)
+            del changed['paths'][key]
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
+            for value in ('', '.', '..', '../core', '/core', 'core', 'core/child', 'host-state', 'host-state/child'):
+                if value == CONTRACT['paths'][key]:
+                    continue
+                changed = copy.deepcopy(CONTRACT)
+                changed['paths'][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    load_contract(json.dumps(changed))
+        changed = copy.deepcopy(CONTRACT)
+        changed['paths']['coreRelativePath'] = changed['paths']['hostStateRelativePath']
+        with self.assertRaises(ValueError):
+            load_contract(json.dumps(changed))
+
     def test_real_manifest_has_correct_activation_and_no_global_unvirtualization(self):
         tree = ET.fromstring(manifest(CONTRACT, '0.7.0.1'))
         ns = {key or 'f': value for key, value in NS.items()}

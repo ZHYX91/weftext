@@ -80,8 +80,10 @@ def load_contract(data):
         raise ValueError('This package requires the Win11 x64 precise-virtualization contract')
     # MakeAppx accepts some invalid KnownFolder values. Keep this security/data
     # boundary closed rather than accepting arbitrary paths from a caller.
-    if value['paths'] != {'persistentKnownFolder': 'LocalAppData', 'persistentRelativeRoot': 'Weftext-MVP', 'cacheKnownFolder': 'LocalAppData', 'cacheRelativeRoot': 'Weftext/Cache'}:
-        raise ValueError('Persistent/cache roots differ from the supported data-preservation contract')
+    if value['paths'] != {'persistentKnownFolder': 'LocalAppData', 'persistentRelativeRoot': 'Weftext-MVP',
+                          'coreRelativePath': 'core', 'hostStateRelativePath': 'host-state',
+                          'cacheKnownFolder': 'LocalAppData', 'cacheRelativeRoot': 'Weftext/Cache'}:
+        raise ValueError('Persistent envelope, disjoint Core/host-state or cache paths differ from the supported contract')
     activation = value['activation']
     closed(activation, ('portableAumid', 'startupTaskId', 'startupArgument', 'toastClsid', 'toastArgument'), 'Activation')
     if activation['startupArgument'] != '--login-startup' or activation['toastArgument'] != '--toast-server':
@@ -240,7 +242,8 @@ def manifest(contract, version):
     for key, text in (('DisplayName', 'ms-resource:DisplayName'), ('PublisherDisplayName', 'Weftext'), ('Description', 'ms-resource:Description'), ('Logo', 'Assets/StoreLogo.png')):
         add(properties, key, text=text)
     excluded = add(add(properties, 'virtualization:FileSystemWriteVirtualization'), 'virtualization:ExcludedDirectories')
-    add(excluded, 'virtualization:ExcludedDirectory', text='$(KnownFolder:LocalAppData)\\Weftext-MVP')
+    paths = contract['paths']
+    add(excluded, 'virtualization:ExcludedDirectory', text=f"$(KnownFolder:{paths['persistentKnownFolder']})\\{paths['persistentRelativeRoot']}")
     add(add(package, 'Dependencies'), 'TargetDeviceFamily', {'Name': 'Windows.Desktop', 'MinVersion': platform['minVersion'], 'MaxVersionTested': platform['maxVersionTested']})
     resources = add(package, 'Resources')
     for language in ('zh-CN', 'en-US'):

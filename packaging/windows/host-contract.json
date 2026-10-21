@@ -17,6 +17,8 @@
   "paths": {
     "persistentKnownFolder": "LocalAppData",
     "persistentRelativeRoot": "Weftext-MVP",
+    "coreRelativePath": "core",
+    "hostStateRelativePath": "host-state",
     "cacheKnownFolder": "LocalAppData",
     "cacheRelativeRoot": "Weftext/Cache"
   },

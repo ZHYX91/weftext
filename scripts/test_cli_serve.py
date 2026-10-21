@@ -100,9 +100,11 @@ class Fixture:
             return ControlFixture(result)
         raise AssertionError('No other process command is allowed')
 
-    def launch(self, root):
+    def launch(self, root, *, expected_default_data_dir=None):
         with patch('_cli_serve.subprocess.Popen', side_effect=self.popen), patch('_cli_serve._creation_time', return_value=CREATED):
-            self.owner = OwnedServe(root / 'weftext-cli.exe', ['--data-dir', str(root / 'state')])
+            arguments = [] if expected_default_data_dir is not None else ['--data-dir', str(root / 'state')]
+            self.owner = OwnedServe(root / 'weftext-cli.exe', arguments, expected_default_data_dir=expected_default_data_dir,
+                                    evidence_parent=root if expected_default_data_dir is not None else None)
         return self.owner
 
     def close_fixture(self):
@@ -165,6 +167,59 @@ class ReadyAndReceipt(unittest.TestCase):
 
 
 class Controller(unittest.TestCase):
+    def test_default_resolver_stays_in_child_and_control_uses_exact_expected_test_root(self):
+        fixture = Fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                root = Path(directory)
+                data = root / 'Weftext-MVP/core'
+                owner = fixture.launch(root, expected_default_data_dir=data)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    owner.wait_ready(.5)
+                self.assertNotIn('--data-dir', fixture.calls[0])
+                self.assertEqual(owner.data_dir, data)
+                self.assertEqual(owner.directory.parent, root)
+                self.assertFalse(data.parent.exists(), 'Evidence capture must not create the product default root')
+                self.assertEqual(owner.record['expectedDefaultDataDir'], str(data))
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    self.assertEqual(owner.stop(), ('', ''))
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-status', 'owner-stop'])
+                status, stop = fixture.calls[1:]
+                self.assertEqual(status[status.index('--data-dir') + 1], str(data))
+                self.assertEqual(stop[stop.index('--data-dir') + 1], str(data))
+            finally:
+                fixture.close_fixture()
+
+    def test_default_resolver_qualification_rejects_ambiguous_or_relative_roots_before_spawn(self):
+        with tempfile.TemporaryDirectory() as directory, patch('_cli_serve.subprocess.Popen') as popen:
+            root = Path(directory)
+            cases = (([], None, None), ([], Path('relative/core'), root),
+                     ([], root / 'default/core', None), ([], root, root),
+                     ([], root / '../outside', root), ([], root.parent / 'outside', root),
+                     ([], root / 'missing/core', root / 'missing'),
+                     (['--data-dir', str(root / 'explicit')], root / 'default/core', root))
+            for arguments, expected, parent in cases:
+                with self.subTest(arguments=arguments, expected=expected), self.assertRaises(ValueError):
+                    OwnedServe(root / 'weftext-cli.exe', arguments, expected_default_data_dir=expected, evidence_parent=parent)
+            popen.assert_not_called()
+
+    def test_default_resolver_wrong_profile_fails_before_http_and_uses_one_qualified_cleanup(self):
+        fixture = Fixture(status_identity={**IDENTITY, 'profileIdentity': 'another-qualified-profile'})
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                root = Path(directory)
+                owner = fixture.launch(root, expected_default_data_dir=root / 'Weftext-MVP/core')
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    with self.assertRaisesRegex(RuntimeError, 'Serve Ready failed'):
+                        owner.wait_ready(.5)
+                self.assertFalse(owner.record['ready'])
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-status', 'owner-stop'])
+                # The mismatching receipt also refuses success; no second
+                # status, stop, HTTP request or process-kill fallback occurs.
+                self.assertIn('startupError', owner.record)
+            finally:
+                fixture.close_fixture()
+
     def test_single_typed_stop_preserves_raw_and_exact_identity(self):
         fixture = Fixture()
         with tempfile.TemporaryDirectory() as directory:

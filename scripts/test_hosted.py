@@ -20,8 +20,9 @@ def uid(): return str(uuid.uuid4())
 def digest(text): return hashlib.sha256(text.encode()).hexdigest()
 
 class Server:
-    def __init__(self, args, hosted=False):
-        self.owner = launch_serve(EXE, args, hosted=hosted)
+    def __init__(self, args, hosted=False, *, expected_default_data_dir=None, evidence_parent=None):
+        self.owner = launch_serve(EXE, args, hosted=hosted, expected_default_data_dir=expected_default_data_dir,
+                                  evidence_parent=evidence_parent)
         self.process = self.owner.process
         self.url, self.token = self.owner.ready['base'], self.owner.ready['token']
         self.hosted = hosted
