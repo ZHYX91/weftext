@@ -147,6 +147,18 @@ impl ValidatedEnrollment {
         if supplementary < 0 {
             return Err(os_error());
         }
+        let bounding_empty = status
+            .lines()
+            .find_map(|line| line.strip_prefix("CapBnd:"))
+            .and_then(|value| u64::from_str_radix(value.trim(), 16).ok())
+            == Some(0);
+        let no_privilege_gain = status
+            .lines()
+            .find_map(|line| line.strip_prefix("NoNewPrivs:"))
+            .is_some_and(|value| value.trim() == "1");
+        if !bounding_empty || !no_privilege_gain {
+            return Err(rejected(Reject::PrivilegeGainAllowed));
+        }
         if actual != [self.service_uid(); 3]
             || groups != [self.service_gid; 3]
             || !caps_clear
