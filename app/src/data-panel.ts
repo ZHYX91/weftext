@@ -408,11 +408,12 @@ export class QuickCapture {
         const submitted = this.pending; let receiptReceived = false;
         try {
           const result = await submitOriginal<OriginalFact & { document?: OpenedDocument; documentError?: { message?: string } }>(this.host.request, "/api/data/capture", this.pending, "capture", retry);
-          if (result.status && !["saved", "created", "committed", "complete", "success"].includes(result.status)) throw new Error(`创建尚未确认：${result.status}`);
+          if (result.status !== "committed") throw new Error(`创建尚未确认：${result.status}`);
           receiptReceived = true;
           const document = result.document;
           if (!document) throw new Error(`记录已提交；打开尚未完成：${result.documentError?.message ?? "请确认原操作"}`);
-          if (this.host.created) await this.host.created(document); else await this.host.openDocument(document.path, document.root ?? this.context.root);
+          if (!this.host.created) throw new Error("原记录已提交，当前界面缺少准确文档交付入口；原号继续保留。");
+          await this.host.created(document);
           const unchanged = name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
           this.operationId = null; this.pending = null; if (unchanged) { name.value = ""; title.value = ""; body.value = ""; values.clear(); type.value = ""; fields.replaceChildren(); } feedback.className = "data-help"; feedback.textContent = unchanged ? "已创建并打开。可继续记录下一条。" : "提交的记录已创建并打开。等待期间的新输入仍保留，可核对名称后继续记录。"; this.updateContext(); void loadFormReferences(this.host, this.context.root, this.references, this.element);
         } catch (error) {

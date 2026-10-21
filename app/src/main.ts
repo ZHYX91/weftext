@@ -1,5 +1,6 @@
 import "./style.css";
-import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
+import { originalCommitted, submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
+import { fileSaveReceipt } from "./file-save-result";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
@@ -29,7 +30,7 @@ import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumber
 import { openNumberingPanel } from "./numbering-panel";
 import { headingMatchesDisplay } from "./heading-structure-state";
 import { NoteInputRecovery } from "./note-input-recovery";
-import { openLibraryCreation, type LibraryCreationReceipt } from "./library-creation";
+import { openLibraryCreation } from "./library-creation";
 import "./document-notes.css";
 import { WorkspaceTools } from "./workspace-tools";
 import type { KnowledgeTextMapping, KnowledgeContext } from "./knowledge-panel";
@@ -91,7 +92,7 @@ interface LiveDocument {
   draftFailure: string | null;
   rendering: number;
   renderGeneration: number;
-  lastSave?: { source: string; baseId: string; operationId: string; sessionId: string; path?: string };
+  lastSave?: { source: string; sourcePath: string; baseId: string; operationId: string; sessionId: string; path?: string; receipt?: Receipt & OriginalFact; deliverySessionId?: string; deliveryEnded?: boolean };
   externalSource?: string;
   comparisonTarget?: OpenedDocument;
   saveAsChangedTarget?: string;
@@ -143,7 +144,7 @@ let recoveries: RecoveryInfo[] = [];
 let renderHost: HTMLElement | null = null;
 let flowScroll: HTMLElement | null = null;
 let flowHasProjection = false;
-let pendingCreation: { route: string; payload: Record<string, unknown> } | null = null;
+let pendingCreation: { route: string; payload: Record<string, unknown>; receipt?: OriginalFact } | null = null;
 let pagedPreview: PagedPreview | null = null;
 function captureNavigation(): void {
   if (!current) return;
@@ -251,7 +252,7 @@ const recognitionPanel = new RecognitionPanel({
   committed: root => workspaceTools.invalidateQueryEnvironment(root),
   target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
   notify: toast,
-  created: async receipt => { const root = current?.session.opened.root, ref = receipt.nodeRefs[0]; if (!root || !ref) throw new Error("原导入的新笔记当前不可定位，请核对原操作。"); await prepareSwitch(); const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }); await acceptResolvedDocument(opened); await refreshInventory(); },
+  created: async (receipt, target) => { const node = receipt.nodeRefs[0]; if (!node) throw new Error("原导入的新笔记当前不可定位，请核对原操作。"); await prepareSwitch(); const opened = await api<OpenedDocument>("/api/recognition/open", { operationId: receipt.operationId, target, node }); await acceptCreatedDocument(opened); },
 });
 let recognitionSession = "";
 
@@ -350,10 +351,11 @@ const workspaceTools = new WorkspaceTools({
     }
   },
   applyReceipt: async (receipt, context) => {
-    if (!["committed", "saved", "complete", "success"].includes(receipt.status)) return;
+    if (!originalCommitted(receipt)) throw new Error("原操作尚无已提交回执，原请求与输入保留。");
     workspaceTools.invalidateQueryEnvironment(context.root);
     const opened = receipt.document as OpenedDocument | undefined;
-    const doc = documents.find(item => item.session.opened.sessionId === context.sessionId);
+    const doc = documents.find(item => item.session.opened.sessionId === context.sessionId || Boolean(context.nodeId && context.workspaceId && item.session.opened.nodeId === context.nodeId && item.session.opened.workspaceId === context.workspaceId));
+    let deliveryPending = receipt.documentError?.message ?? (receipt.documentSourceMatchesCommit === false ? "原操作已提交，当前正文已变化。" : "");
     if (doc) await doc.writing.settleForSessionChange();
     if (doc && (receipt.documentSourceMatchesCommit === false || receipt.documentError)) {
       doc.session.error = "操作已提交，但重新读取的文件不是本次计划确认的内容。草稿和撤销记录保留，请比较磁盘内容。";
@@ -363,8 +365,9 @@ const workspaceTools = new WorkspaceTools({
       doc.session.error = "笔记已移入回收站。这里保留当前草稿，可另存为，也可从上方回收站恢复。";
       await persistDraft(doc); if (current === doc) renderContent();
     } else if (opened && receipt.documentDisposition === "created") {
-      if (current === doc && doc?.session.source === context.source && doc.session.serial === context.serial) await acceptCreatedDocument(opened);
-      else toast(`已创建 ${basename(opened.path)}，可从文件列表打开。`);
+      const receiving = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
+      if (current === doc || receiving === current) await acceptCreatedDocument(opened);
+      else deliveryPending = `已创建 ${basename(opened.path)}；请返回原笔记查询并交付原结果。`;
     } else if (opened && doc && opened.source === doc.session.baseSource) {
       // Namespace changes keep the same saved bytes. Preserve newer local input,
       // the shared editor and Undo while rebinding the real Core save session.
@@ -378,7 +381,9 @@ const workspaceTools = new WorkspaceTools({
       doc.lastSave = undefined; doc.session.projection = null; await persistDraft(doc); scheduleRender(doc, 0); if (current === doc) renderContent();
     } else if (opened && doc) {
       doc.session.error = "文件操作已完成，期间的新输入仍保留。请比较当前磁盘版本后继续保存。"; refreshChrome();
+      doc.comparisonTarget = opened; deliveryPending = doc.session.error;
     }
+    if (receipt.documentDisposition === "created" && !opened) deliveryPending ||= "原节点已创建，但准确文档尚未交付。";
     const affected = receipt.affectedDocuments as { priorSessionId: string; document?: OpenedDocument; documentDisposition: string; documentError?: { message?: string } }[] | undefined;
     for (const effect of affected ?? []) {
       const related = documents.find(item => item.session.opened.sessionId === effect.priorSessionId);
@@ -394,10 +399,12 @@ const workspaceTools = new WorkspaceTools({
       } else {
         related.session.error = `文件夹操作已完成，草稿保留；${effect.documentError?.message ?? "该子笔记内容发生变化，请重新打开目标并比较。"}`;
         if (effect.document) related.saveAsChangedTarget = effect.document.path;
+        deliveryPending ||= related.session.error;
       }
       if (related === current) renderContent();
     }
     await refreshInventory();
+    if (deliveryPending) throw new Error(deliveryPending);
   },
   stylesChanged: async root => {
     pagedPreview?.invalidate("库样式已变化，正在重新编译。");
@@ -413,37 +420,55 @@ function historyContext(doc: LiveDocument | null): HistoryContext | null {
   if (!doc) return null;
   const { session } = doc;
   const source = doc.writing.recoverySource() ?? session.source;
-  return { sessionId: session.opened.sessionId, source, serial: session.serial,
+  return { ownerKey: doc.navigationKey, sessionId: session.opened.sessionId, source, serial: session.serial,
     baseId: session.baseId, baseSource: session.baseSource, path: session.path,
     root: session.opened.root, nodeId: session.opened.nodeId, workspaceId: session.opened.workspaceId,
     dirty: source !== session.baseSource, readOnly: doc.mode === "read" || readOnlySource(doc) || doc.sourceTrashed,
-    savePending: session.savePending, unresolvedSave: !!doc.lastSave || !!session.opened.recoveredDraftConflict };
+    savePending: session.savePending, unresolvedSave: !!pendingSave(doc) || !!session.opened.recoveredDraftConflict };
 }
 const historyPanel = new HistoryPanel({
   getDocument: () => historyContext(current), request: api, prepareRestore: prepareSwitch, notify: toast,
-  restorePending: (basis, pending) => {
-    const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
-    if (doc) { doc.session.savePending = pending; if (doc === current) refreshChrome(); }
-  },
+  restorePending: () => { refreshChrome(); },
   restored: async (result, basis) => {
     if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
-    const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
+    const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
     if (!doc) throw new Error("旧版已保存，请重新打开原笔记确认；受保护草稿仍由 Core 保留。");
     await doc.writing.settleForSessionChange();
+    const prior = doc.session.opened;
+    const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
+    const opened = fact.document;
+    if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
+      if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+      throw new Error("原恢复已提交，当前准确文件或会话已变化；原回执、输入与撤销记录保留，请比较当前磁盘版本或继续查询原交付。");
+    }
+    const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
+    if (opened.recoveredDraftConflict) await api("/api/draft/resolve", { sessionId: opened.sessionId, action: "mergeRecovered", source: doc.session.source });
+    await doc.writing.settleForSessionChange();
+    if (doc.session.opened !== prior) throw new Error("交付期间笔记会话又变化，原回执和全部输入保留，请继续核对。");
     const disposition = restoreBufferDisposition(basis, historyContext(doc));
-    if (disposition === "unrelated" || result.receipt.status !== "saved" || !result.receipt.baseId) throw new Error("恢复回执与原笔记不符，当前草稿保持原样。");
-    const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
-    doc.session.opened.recoveredDraftVariants = variants.filter((value, index) => variants.findIndex(other => other.path === value.path && other.baseSource === value.baseSource && other.source === value.source && other.baseKnown === value.baseKnown) === index);
+    if (disposition === "unrelated" || result.receipt.status !== "saved") throw new Error("恢复回执与原笔记不符，当前草稿保持原样。");
+    opened.recoveredDraftVariants = variants.filter((value, index) => variants.findIndex(other => other.path === value.path && other.baseSource === value.baseSource && other.source === value.source && other.baseKnown === value.baseKnown) === index);
     // Keep the shared editor and Undo. Only a still-clean, unchanged buffer adopts
     // the restored text; any original or late input remains a Draft over the new Base.
     if (disposition === "replaceClean" && doc.editor.source !== result.source) doc.editor.apply(0, doc.editor.source.length, result.source);
-    doc.session.opened.source = result.source; doc.session.opened.baseId = result.receipt.baseId;
-    doc.session.opened.path = result.receipt.path; doc.session.opened.recoveredDraftConflict = false;
-    doc.session.acknowledgeSave(result.source, result.receipt.baseId, result.receipt.path);
+    doc.session.opened = opened; opened.recoveredDraftConflict = false;
+    doc.session.acknowledgeSave(result.source, opened.baseId, opened.path);
     doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
     await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
   },
+  finishDelivery: async (operationId, basis) => {
+    const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
+    if (!doc) throw new Error("请返回原缓冲区和原笔记后比较，原恢复事实继续保留。");
+    const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
+    if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new Error("原保存事实已保留，但准确当前对象尚不可读，不能结束这份交付。");
+    doc.comparisonTarget = fact.document; doc.externalSource = fact.document.source;
+    const prior = doc.session.opened;
+    await showDraftComparison(doc);
+    return doc.session.opened !== prior && !doc.comparisonTarget;
+  },
 });
+function saveBusy(doc: LiveDocument): boolean { return doc.session.savePending || historyPanel.hasPending(historyContext(doc)); }
+function pendingSave(doc: LiveDocument): LiveDocument["lastSave"] { return doc.lastSave?.deliveryEnded ? undefined : doc.lastSave; }
 
 async function refreshInventory(): Promise<void> {
   if (inventory) inventory = await api<Inventory>("/api/library/open", { path: inventory.root });
@@ -451,10 +476,15 @@ async function refreshInventory(): Promise<void> {
 }
 
 async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
+  if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new Error("原创建结果缺少已证明的实际节点身份，原操作继续保留。");
   workspaceTools.invalidateQueryEnvironment(opened.root);
   await prepareSwitch();
-  const restored = documents.find(item => item.sourceTrashed && (normalize(item.session.path) === normalize(opened.path) || Boolean(opened.nodeId && item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId)));
-  if (restored && opened.source === restored.session.baseSource) {
+  const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
+  if (restored && (pendingSave(restored) || opened.source !== restored.session.baseSource)) {
+    restored.comparisonTarget = opened; restored.externalSource = opened.source;
+    throw new Error("原节点已经打开，但保存或当前磁盘版本仍待核对；输入和撤销记录保留，原创建继续等待交付。");
+  }
+  if (restored) {
     await restored.writing.settleForSessionChange();
     restored.session.opened = opened; restored.editor.clearTokens(); restored.sourceTrashed = false;
     restored.session.acknowledgeSave(opened.source, opened.baseId, opened.path); restored.lastSave = undefined; restored.session.projection = null;
@@ -633,8 +663,8 @@ function renderTopbar(): void {
       const state = topbar.querySelector<HTMLElement>(".save-state")!;
       state.className = `save-state ${current.session.dirty ? "dirty" : ""}`; state.textContent = saveState(current);
       const save = topbar.querySelector<HTMLButtonElement>('[data-command="save"]')!;
-      save.disabled = current.session.savePending;
-      save.lastChild!.textContent = current.session.savePending ? "保存中…" : "保存";
+      save.disabled = saveBusy(current);
+      save.lastChild!.textContent = saveBusy(current) ? "保存待确认…" : "保存";
     }
     return;
   }
@@ -656,11 +686,11 @@ function renderTopbar(): void {
     const timeline = button("时间线", () => historyPanel.open(), "button-secondary compact");
     timeline.disabled = !current.session.opened.nodeId || !current.session.opened.workspaceId;
     actions.append(timeline);
-    const saveButton = button(current.session.savePending ? "保存中…" : "保存", () => saveDocument(current!), "button-primary compact", "save"); saveButton.dataset.command = "save"; saveButton.disabled = current.session.savePending; actions.append(saveButton);
+    const saveButton = button(saveBusy(current) ? "保存待确认…" : "保存", () => saveDocument(current!), "button-primary compact", "save"); saveButton.dataset.command = "save"; saveButton.disabled = saveBusy(current); actions.append(saveButton);
   } else actions.append(el("span", "top-note", "本地文件 · 原生 Typst"));
   topbar.append(actions);
 }
-function saveState(doc: LiveDocument): string { return doc.writing.state.pending ? "文字待确认" : doc.session.opened.recoveredDraftConflict ? "恢复草稿与磁盘冲突" : doc.session.savePending ? "保存中" : doc.lastSave ? "保存结果待确认" : doc.draftFailure ? "草稿恢复写入失败" : doc.session.recovered ? "已恢复草稿" : doc.session.dirty ? "未保存" : "已保存"; }
+function saveState(doc: LiveDocument): string { return doc.writing.state.pending ? "文字待确认" : doc.session.opened.recoveredDraftConflict ? "恢复草稿与磁盘冲突" : historyPanel.hasPending(historyContext(doc)) ? "原历史恢复待核对" : doc.session.savePending ? "保存中" : pendingSave(doc) ? "保存结果待确认" : doc.draftFailure ? "草稿恢复写入失败" : doc.session.recovered ? "已恢复草稿" : doc.session.dirty ? "未保存" : "已保存"; }
 function renderTabs(): void {
   const ids = JSON.stringify(documents.map(doc => doc.session.opened.sessionId));
   if (tabs.dataset.ids === ids) {
@@ -736,7 +766,7 @@ function localPersonalNumbering(doc: LiveDocument) {
 function localAuthoringEnvironment(doc: LiveDocument): AuthoringPanelsEnvironment {
   const readable = () => current === doc && sourceConsumersAvailable(doc) && !doc.sourceTrashed;
   return {
-    controller: doc.writing, readable, editable: () => readable() && !readOnlySource(doc) && doc.mode !== "read" && !doc.session.savePending && !doc.lastSave,
+    controller: doc.writing, readable, editable: () => readable() && !readOnlySource(doc) && doc.mode !== "read" && !saveBusy(doc) && !pendingSave(doc),
     projection: () => readable() && doc.session.projectionCurrent ? doc.session.projection : null,
     selection: () => doc.editor.selection, requestEdit: request => api("/api/edit", request), previewProposal: request => api("/api/editor/preview", request),
     revealSource: range => revealWritingSource(doc, range), revealRendered: key => {
@@ -781,6 +811,13 @@ function renderDocument(): void {
     const conflict = el("div", "document-error document-conflict"); conflict.append(icon("alert"), el("span", "", "恢复草稿与当前磁盘内容不同。请比较并明确合并后再保存。"), button("比较并合并", showDraftComparison, "button-secondary compact")); content.append(conflict);
   }
   if (doc.session.error) { const error = el("div", "document-error"); error.append(icon("alert"), el("span", "", doc.session.error), doc.saveAsChangedTarget ? button("打开另存为目标", () => openDocument(doc.saveAsChangedTarget!), "text-button") : button("比较磁盘内容", showDraftComparison, "text-button")); content.append(error); }
+  if (doc.lastSave?.path && doc.lastSave.receipt) {
+    const record = doc.lastSave;
+    const delivery = el("div", "document-error save-as-delivery");
+    delivery.append(el("span", "", `另存为原提交 ${record.operationId}；${record.deliveryEnded ? "本次界面交付等待已结束，当前稿继续使用当前文件会话。" : "原效果已提交，准确结果尚待交付。"}`), button("查询这次另存为原结果", () => inspectSaveAsDelivery(record.operationId), "text-button"));
+    if (!record.deliveryEnded && !doc.session.savePending) delivery.append(button("结束这次交付等待，继续当前稿", () => endSaveAsDelivery(doc, record), "text-button"));
+    content.append(delivery);
+  }
   const body = el("div", `document-body mode-${doc.mode} ${previewVisible ? "with-preview" : ""}`); content.append(body);
   if (doc.layout === "paged") {
     if (["source", "styled"].includes(doc.mode)) { const sourcePane = el("section", "source-pane"); sourcePane.append(sourceToolbar(doc)); const host = el("div", "source-host"); sourcePane.append(host); doc.editor.mount(host); body.append(sourcePane); }
@@ -1082,23 +1119,24 @@ async function compile(doc: LiveDocument): Promise<void> {
 async function flushLiteral(): Promise<void> { if (current) await current.writing.flush(); }
 
 async function chooseLibrary(): Promise<void> { const path = await pathDialog("openLibrary"); if (!path) return; await flushLiteral(); inventory = await api<Inventory>("/api/library/open", { path }); selectedFolder = null; collapsed.clear(); query = ""; renderSidebar(); renderContent(); }
-async function creation<T extends OriginalFact>(route: string, payload: Record<string, unknown>): Promise<T> {
+async function creation<T extends OriginalFact>(route: string, payload: Record<string, unknown>, deliver: (receipt: T) => Promise<void>): Promise<T> {
   if (pendingCreation && pendingCreation.route !== route) throw new Error("上一次创建结果仍待确认，请先重试该创建操作。");
   const retry = pendingCreation !== null;
-  const request = pendingCreation ?? { route, payload: { ...payload, operationId: operationId() } };
+  const request = pendingCreation ?? { route, payload: { ...payload, operationId: operationId() }, receipt: undefined as OriginalFact | undefined };
   pendingCreation = request;
-  try { const result = await submitOriginal<T>(api, request.route, request.payload, route === "/api/note/create" ? "newNode" : "createLibrary", retry); pendingCreation = null; return result; }
-  catch (error) { if (error instanceof TerminatedAttempt) pendingCreation = null; else toast("创建结果待确认，再次点击创建会确认同一操作。", true); throw error; }
+  try { const result = await submitOriginal<T>(api, request.route, request.payload, "newNode", retry); request.receipt = result; await deliver(result); pendingCreation = null; return result; }
+  catch (error) { if (error instanceof TerminatedAttempt && !request.receipt) pendingCreation = null; else toast("创建结果待确认，再次点击创建会确认同一操作。", true); throw error; }
 }
 async function createLibrary(): Promise<void> {
-  if (pendingCreation && pendingCreation.route !== "/api/library/create") throw new Error("上一次创建结果仍待确认，请先重试原创建操作。");
-  const receipt = pendingCreation
-    ? await creation<LibraryCreationReceipt>("/api/library/create", pendingCreation.payload)
-    : await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
-  if (!receipt) return;
-  workspaceTools.invalidateQueryEnvironment(receipt.root);
-  inventory = await api<Inventory>("/api/library/open", { path: receipt.root }); query = ""; selectedFolder = null; renderSidebar(); renderContent(); toast("资料库已创建，可以新建笔记了；文档排版默认可在库样式中查看。");
-  if (receipt.rootNotePath) await openDocument(receipt.rootNotePath, receipt.root);
+  if (pendingCreation) throw new Error("上一次笔记创建结果仍待确认，请先重试原创建操作。");
+  await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), delivery: operationId => api("/api/operations/status", { operationId }), deliver: async receipt => {
+    if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new Error("资料库已提交，原库或根笔记的准确交付尚未完成；原请求与回执保留。");
+    workspaceTools.invalidateQueryEnvironment(receipt.root);
+    inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
+    if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument);
+    else await refreshInventory();
+    toast("资料库已创建，可以新建笔记了；文档排版默认可在库样式中查看。");
+  }, inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
 }
 async function openOutsideFile(): Promise<void> { const path = await pathDialog("file"); if (path) await openDocument(path); }
 async function createNote(): Promise<void> {
@@ -1109,11 +1147,10 @@ async function createNote(): Promise<void> {
     form.append(el("p", "field-help", "名称用于文件夹与主文件。正文可以不设标题。")); const actions = el("div", "modal-actions"); actions.append(button("取消", () => close(null), "button-secondary")); const submit = el("button", "button-primary", "创建并打开"); submit.type = "submit"; actions.append(submit); form.append(actions); form.onsubmit = event => { event.preventDefault(); if (input.value.trim()) close(input.value.trim()); };
   });
   if (!name) return; await prepareSwitch();
-  const receipt = await creation<OriginalFact & { document?: OpenedDocument; documentError?: { message?: string } }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name });
-  const opened = receipt.document;
-  if (!opened) { await refreshInventory(); throw new Error(`笔记已创建；打开尚未完成：${receipt.documentError?.message ?? "请从文件列表打开原笔记。"}`); }
-  workspaceTools.invalidateQueryEnvironment(opened.root);
-  addDocument(opened); inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar();
+  await creation<OriginalFact & { document?: OpenedDocument }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name }, async receipt => {
+    if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new Error(`笔记原结果尚未完成准确交付：${receipt.documentError?.message ?? "请查询原操作。"}`);
+    await acceptCreatedDocument(receipt.document);
+  });
 }
 async function prepareSwitch(): Promise<void> { captureNavigation(); if (current) await current.writing.settleForSessionChange(); if (current) await persistDraft(current); }
 async function openDocument(path: string, root?: string): Promise<void> {
@@ -1195,7 +1232,12 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
   }
   if (current === doc) return; await prepareSwitch(); if(generation!==navigationGeneration)return;
   const prior=doc.session.opened;
-  const fresh=prior.nodeId&&prior.workspaceId&&!readOnlySource(doc)?await api<OpenedDocument>("/api/data/open",{root:prior.root,entityKey:`weftext-node://${prior.workspaceId}/${prior.nodeId}`}):await api<OpenedDocument>("/api/open",{path:doc.session.path,root:prior.root});
+  let fresh: OpenedDocument | null = null;
+  try {
+    fresh=prior.nodeId&&prior.workspaceId&&!readOnlySource(doc)?await api<OpenedDocument>("/api/data/open",{root:prior.root,entityKey:`weftext-node://${prior.workspaceId}/${prior.nodeId}`}):await api<OpenedDocument>("/api/open",{sessionId:prior.sessionId});
+  } catch (error) {
+    doc.session.error = `原文件会话当前不能重新资格化。原稿、文件会话和撤销记录保留，可另存当前稿。${error instanceof Error ? error.message : String(error)}`;
+  }
   if(generation!==navigationGeneration)return;
   const saved=navigationContexts.get(doc);
   if(saved?.inventory){
@@ -1205,8 +1247,8 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
     if(saved.folder){const next=relocate(saved.folder);if(next)saved.folder=next;else if(!latest.entries.some(item=>item.kind==="directory"&&normalize(item.path)===normalize(saved.folder!))){saved.folder=null;toast("原目录范围当前不可用，已返回当前资料库；未按同名目标恢复选择。");}}
     saved.inventory=latest;
   }
-  if(fresh.source===doc.session.baseSource){doc.session.opened=fresh;doc.session.acknowledgeSave(fresh.source,fresh.baseId,fresh.path);doc.sourceTrashed=false;doc.editor.clearTokens();doc.queries.invalidate();doc.session.projection=null;await persistDraft(doc);}
-  else{doc.externalSource=fresh.source;doc.comparisonTarget=fresh;doc.session.error="返回目标的磁盘内容已变化。原草稿、选区和撤销记录保留，请比较后继续。";}
+  if(fresh?.source===doc.session.baseSource){doc.session.opened=fresh;doc.session.acknowledgeSave(fresh.source,fresh.baseId,fresh.path);doc.sourceTrashed=false;doc.editor.clearTokens();doc.queries.invalidate();doc.session.projection=null;await persistDraft(doc);}
+  else if(fresh){doc.externalSource=fresh.source;doc.comparisonTarget=fresh;doc.session.error="返回目标的磁盘内容已变化。原草稿、选区和撤销记录保留，请比较后继续。";}
   if(generation!==navigationGeneration)return;if (flowScroll && flowHasProjection && current) current.scroll[current.mode] = flowScroll.scrollTop; current = doc; restoreNavigation(doc); if(doc.mode==="write")doc.writing.restoreNavigationFocus(); activeSourceOrigin = null; renderSidebar(); renderContent();
   if(saved){const tree=sidebar.querySelector(".file-tree");if(tree)tree.scrollTop=saved.scroll;const contents=sidebar.querySelector(".node-contents");if(contents)contents.scrollTop=saved.contentScroll;}
   if (["source", "styled"].includes(doc.mode)) doc.editor.view.focus();
@@ -1214,66 +1256,74 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
 }
 
 async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
+  if (historyPanel.hasPending(historyContext(doc))) { toast("请先查询或交付这份笔记的原历史恢复，原编号与输入继续保留。", true); return; }
   if (doc.session.savePending) return;
   if ((doc.sourceTrashed || readOnlySource(doc)) && !path) { toast("笔记已移入回收站，请先恢复或将草稿另存为。", true); return; }
   if (doc.writing.state.composing) { await doc.writing.deferUntilCompositionEnds(() => saveDocument(doc, path)); return; }
   doc.session.savePending = true; refreshChrome();
-  try { if (!doc.lastSave) { await flushLiteral(); await persistDraft(doc); } }
+  try { if (!pendingSave(doc)) { await flushLiteral(); await persistDraft(doc); } }
   catch (error) { doc.session.savePending = false; refreshChrome(); throw error; }
   if (doc.session.opened.recoveredDraftConflict && !path) { doc.session.savePending = false; refreshChrome(); await showDraftComparison(doc); return; }
   let reservedOperation: string | null = null;
   let querySaveNotice=false;
-  if (!doc.lastSave && !path && doc.session.opened.nodeId && doc.session.source.includes('"weftext.query"')) {
+  if (!pendingSave(doc) && !path && doc.session.opened.nodeId && doc.session.source.includes('"weftext.query"')) {
     const source = doc.session.source, serial = doc.session.serial;
     try { const pending=await api<{operationId:string|null;queryState?:string}>("/api/query/definition/pending", {sessionId:doc.session.opened.sessionId,source,serial});reservedOperation=pending.operationId;querySaveNotice=["unparsed","unadmitted","multiplePending"].includes(pending.queryState??""); }
     catch(error) { doc.session.savePending = false; refreshChrome(); throw error; }
     if (doc.session.source !== source || doc.session.serial !== serial) { doc.session.savePending = false; throw new Error("保存前查询预约核对期间出现新输入，请重新保存；输入已保留。"); }
   }
-  const retry = doc.lastSave !== undefined;
-  const request = doc.lastSave ?? { source: doc.session.source, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
+  const retry = pendingSave(doc) !== undefined;
+  const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
   doc.lastSave = request; doc.session.savePending = true; refreshChrome();
   let receiptReceived = false;
   try {
     const payload = request.path
       ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId }
       : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId };
-    const receipt = await submitOriginal<Receipt & OriginalFact & { document?: OpenedDocument; documentError?: { message?: string }; documentSourceMatchesCommit?: boolean }>(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry);
-    if (!["saved", "committed", "complete", "after", "success"].includes(receipt.status)) throw new ApiError(receipt.status, receipt.message || "保存尚未确认，草稿已保留。");
+    const receipt = fileSaveReceipt(await submitOriginal(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry), request);
+    if (!originalCommitted(receipt)) throw new ApiError(receipt.status, receipt.message || "保存尚未确认，草稿已保留。");
     receiptReceived = true;
-    if (doc.lastSave !== request || doc.session.opened.sessionId !== request.sessionId) {
+    request.receipt = receipt;
+    if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
       doc.lastSave = request;
       throw new ApiError("committedDeliveryPending", "原内容已提交；等待期间文件会话已改变，原操作和输入保留，请核对原结果。");
     }
     if (receipt.recoveryIssue) toast("文件已保存；恢复草稿更新暂不可用，当前输入保留。", true);
     workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
     if (request.path) {
-      // Save As creates a new ordinary file. Its path, dependency root, and
-      // subsequent writes belong to a newly opened Core session.
-      await flushLiteral();
-      const opened = await api<OpenedDocument>("/api/open", { path: receipt.path });
-      if (!canRebindSaveAs(request.source, opened)) {
-        doc.lastSave = undefined;
-        doc.saveAsChangedTarget = receipt.path;
-        throw new ApiError("saveAsTargetChanged", "另存为目标已创建，但重新打开时发现内容或恢复状态已变化。当前草稿保留在原文件会话中；请明确打开目标并比较。");
+      // Core delivers a fresh Session for the original physical creation.
+      // Bytes and a reused path alone cannot qualify a Save As result.
+      const opened = receipt.document;
+      if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
+        if (opened) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+        throw new ApiError("committedDeliveryPending", "另存为已提交，但原物理文件的准确交付尚未完成；原操作、原文件会话、后续输入和撤销记录保留。");
       }
       await doc.writing.settleForSessionChange();
+      if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new ApiError("committedDeliveryPending", "另存为交付期间原会话变化，原操作与输入保留，请继续核对。");
       doc.session.opened = opened;
+      request.deliverySessionId = opened.sessionId;
       doc.editor.clearTokens();
       doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
       doc.session.projection = null;
       scheduleRender(doc, 0);
-    } else if (receipt.document || receipt.documentError) {
-      if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, request, receipt.document)) {
+    } else {
+      if (receipt.document) await doc.writing.settleForSessionChange();
+      if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, receipt.document)) {
         if (receipt.document) { doc.externalSource = receipt.document.source; doc.comparisonTarget = receipt.document; }
         throw new ApiError("committedDeliveryPending", "原内容已保存；当前文件或会话依据已变化，原操作、输入和撤销记录保留，请核对当前磁盘内容。");
       }
+      request.deliverySessionId = receipt.document.sessionId;
       doc.editor.clearTokens(); doc.session.projection = null; scheduleRender(doc, 0);
-    } else doc.session.acknowledgeSave(request.source, receipt.baseId, receipt.path);
-    doc.saveAsChangedTarget = undefined;
-    doc.lastSave = undefined;
-    await persistDraft(doc); if (doc === current) { renderSidebar(); refreshChrome(); } toast(doc.session.dirty ? "提交内容已保存，后续输入仍在草稿中。" : "已保存。", false);
-    if(querySaveNotice)toast("正文已按原文保存；部分查询定义尚不可运行，请核对其配置或预约。",true);
+    }
+    await persistDraft(doc);
     if (inventory) { inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar(); }
+    if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
+      doc.lastSave = request;
+      throw new ApiError("committedDeliveryPending", "后续交付期间会话变化，原操作与当前输入保留，请继续核对。");
+    }
+    doc.saveAsChangedTarget = undefined; doc.lastSave = undefined;
+    if (doc === current) { renderSidebar(); refreshChrome(); } toast(doc.session.dirty ? "提交内容已保存，后续输入仍在草稿中。" : "已保存。", false);
+    if(querySaveNotice)toast("正文已按原文保存；部分查询定义尚不可运行，请核对其配置或预约。",true);
   } catch (error) {
     if (!receiptReceived && error instanceof TerminatedAttempt) doc.lastSave = undefined;
     doc.session.error = error instanceof Error ? error.message : String(error);
@@ -1282,9 +1332,24 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     else if (receiptReceived) doc.session.error = doc.lastSave ? "原内容已提交，结果交付尚未完成。原操作与输入保留；再次保存先核对原结果。" : `文件已保存；后续恢复信息更新失败：${error instanceof Error ? error.message : String(error)}`;
     else if (!(error instanceof ApiError)) doc.session.error = "保存结果未知。草稿已保留；再次保存将确认同一操作。";
     if (doc === current) renderContent(); throw error;
-  } finally { doc.session.savePending = false; if (doc === current) refreshChrome(); }
+  } finally { doc.session.savePending = false; if (doc === current) { if (request.path || retry) renderContent(); else refreshChrome(); } }
 }
 async function saveAs(): Promise<void> { if (!current) return; const path = await pathDialog("saveAs"); if (path) await saveDocument(current, path); }
+async function inspectSaveAsDelivery(operationId: string): Promise<void> {
+  const fact = await api<Receipt & OriginalFact>("/api/operations/status", { operationId });
+  if (fact.operationId !== operationId || fact.status !== "committed") throw new Error("原提交的读取暂不可用；已确认事实和编号保留。");
+  await modal<void>("另存为原提交事实", "原文件提交事实及当前交付状态。", (form, close) => {
+    form.append(el("pre", "", JSON.stringify({ operationId: fact.operationId, status: fact.status, path: fact.path, baseId: fact.baseId, documentError: fact.documentError }, null, 2)), button("关闭", () => close(), "button-primary"));
+  });
+}
+async function endSaveAsDelivery(doc: LiveDocument, request: NonNullable<LiveDocument["lastSave"]>): Promise<void> {
+  if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new Error("只有已确认提交的原另存为操作可以结束界面交付等待。");
+  await doc.writing.settleForSessionChange(); await persistDraft(doc);
+  if (doc.lastSave !== request || doc.session.savePending) throw new Error("保存状态已变化，原请求和输入保留。");
+  request.deliveryEnded = true; doc.session.error = null; doc.comparisonTarget = undefined; doc.externalSource = undefined;
+  if (doc === current) renderContent();
+  toast("这次另存为的界面交付等待已结束；原提交和编号继续保留，当前稿与撤销记录保持原样。");
+}
 
 async function showDraftComparison(doc = current): Promise<void> {
   if (!doc) return;
@@ -1427,7 +1492,7 @@ async function bootstrap(): Promise<void> {
   renderSidebar(); renderContent();
   if (!startupError) void ensureOfflineFonts().catch(error => toast(`离线字体未能完整加载：${error instanceof Error ? error.message : String(error)}。源码已保留，当前显示可能使用替代字体。`, true));
 }
-window.addEventListener("beforeunload", event => { if (documents.some(doc => doc.session.dirty || doc.lastSave || doc.draftFailure || doc.writing.state.pending)) { event.preventDefault(); event.returnValue = ""; } });
+window.addEventListener("beforeunload", event => { if (documents.some(doc => doc.session.dirty || pendingSave(doc) || doc.draftFailure || doc.writing.state.pending)) { event.preventDefault(); event.returnValue = ""; } });
 content.addEventListener("contextmenu",event=>{if(!(event.target instanceof Element)||!event.target.closest(".flow-document")||event.target.closest("input,textarea,a,button,[contenteditable=true]"))return;event.preventDefault();openEverydayMenu("当前正文操作",everydayWritingCommands(current?.writing,!!current&&sourceConsumersAvailable(current)&&current.mode!=="read"&&!readOnlySource(current)&&!current.editor.composing,insertEverydayQuery),toast,false);});
 document.addEventListener("keydown", event => {
   if (event.isComposing || event.keyCode === 229 || current?.editor.composing || current?.writing.state.composing) return;

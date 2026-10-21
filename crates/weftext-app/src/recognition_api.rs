@@ -996,6 +996,7 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/recognition/prepare", post(local_prepare))
         .route("/api/recognition/commit", post(local_commit))
         .route("/api/recognition/operation", post(local_operation))
+        .route("/api/recognition/open", post(local_open_result))
         .route("/api/recognition/settle", post(local_settle))
         .route("/api/recognition/cancel-import", post(local_settle))
         .layer(DefaultBodyLimit::max(24 * 1024 * 1024))
@@ -1144,6 +1145,29 @@ async fn local_prepare(State(state): State<AppState>, Json(req): Json<Prepare>) 
 }
 async fn local_operation(State(state): State<AppState>, Json(req): Json<Operation>) -> ApiResult {
     local_action(state, req, None, false).await
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenResult {
+    target: Target,
+    operation_id: String,
+    node: weftext_knowledge::NodeRef,
+}
+async fn local_open_result(
+    State(state): State<AppState>,
+    Json(req): Json<OpenResult>,
+) -> ApiResult {
+    uuid(&req.operation_id)?;
+    let context = local_context(&state, &req.target)?;
+    let document = core_call(&state, move |core| {
+        core.with_actor_for_root(&context.scope, &context.root, |core| {
+            core.actor_feature_open_original_node(&context.resource, &req.operation_id, &req.node)
+        })
+    })
+    .await?;
+    let document = value(document)?;
+    remember(&state, &document)?;
+    Ok(Json(document))
 }
 async fn local_settle(State(state): State<AppState>, Json(req): Json<Operation>) -> ApiResult {
     local_action(state, req, None, true).await

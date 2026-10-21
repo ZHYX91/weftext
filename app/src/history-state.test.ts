@@ -34,6 +34,33 @@ function fixture(context: HistoryContext = structuredClone(original)) {
 }
 const coded = (code: string): Error => Object.assign(new Error(code), { code });
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
+test("one buffer keeps its original restore through Session rebinding; delayed reads still require the captured Session", async () => {
+  const f = fixture({ ...structuredClone(original), ownerKey: "live-buffer" });
+  const read = deferred<HistorySource>(); f.host.read = () => read.promise;
+  const delayed = f.controller.select("save1");
+  f.setCurrent({ ...f.current(), sessionId: "fresh-session", baseId: "fresh-base" });
+  read.resolve(old); assert.equal(await delayed, false); assert.equal(f.controller.selected, null);
+  f.host.read = async () => old; f.host.compare = async () => comparison(f.current());
+  await f.controller.select("save1"); await f.controller.prepareRestore();
+  f.host.restore = async request => { f.requests.push(structuredClone(request)); throw new Error("author reply unavailable"); };
+  await assert.rejects(f.controller.restore("retain"));
+  const frozen = structuredClone(f.requests[0]);
+  f.setCurrent({ ...f.current(), sessionId: "another-fresh-session", baseId: "another-fresh-base", source: "Y😀", serial: 1, dirty: true });
+  f.host.status = async request => committed(saved({ ...frozen, operationId: request.operationId }));
+  const result = await f.controller.inspectOriginal();
+  assert.equal(result?.source, old.source); assert.deepEqual(f.requests, [frozen]);
+  assert.equal(f.current().source, "Y😀"); assert.equal(f.controller.operationId, null);
+  assert.equal(restoreBufferDisposition({ ...f.current(), ...original, ownerKey: "live-buffer", selectedVersionId: "save1", selectedSource: old.source }, f.current()), "retainDraft");
+});
+test("a committed unavailable restore can end this page's delivery only explicitly and retains its original fact", async () => {
+  const f = fixture(); await f.controller.select("save1"); await f.controller.prepareRestore();
+  f.host.restore = async request => { f.requests.push(request); return { operationId: request.operationId, status: "committed", receipt: saved(request).receipt }; };
+  await assert.rejects(f.controller.restore("retain"));
+  const receipt = structuredClone(f.controller.originalReceipt);
+  assert.ok(f.controller.operationId); f.controller.finishCommittedDelivery();
+  assert.equal(f.controller.operationId, null); assert.equal(f.controller.operationState, "committed");
+  assert.deepEqual(f.controller.originalReceipt, receipt); assert.equal(f.requests.length, 1);
+});
 
 test("unknown times never borrow filesystem time, and the UI preserves Core-provided ordering", async () => {
   const f = fixture();

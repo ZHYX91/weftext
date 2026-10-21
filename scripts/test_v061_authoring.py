@@ -10,7 +10,7 @@ Run: python scripts/test_v061_authoring.py CANDIDATE.exe --evidence-dir DIRECTOR
      python scripts/test_v061_authoring.py --list
 Optional positional test names select exact cases; unknown selections fail.
 """
-from _creation_result import created_document
+from _creation_result import created_document, library_fact
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import copy
@@ -413,7 +413,7 @@ class RetainedHTTP(unittest.TestCase):
         creation = {'path': str(root), 'operationId': uid(),
                     'options': {'initialStyle': {'source': INITIAL_STYLE, 'enabled': True}}}
         receipt = self.call(a, '/api/library/create', creation)
-        self.assertEqual(self.call(a, '/api/library/create', creation), receipt)
+        self.assertEqual(library_fact(self.call(a, '/api/library/create', creation)), library_fact(receipt))
         changed = copy.deepcopy(creation)
         changed['options']['initialStyle']['enabled'] = False
         self.assertEqual(self.call(a, '/api/library/create', changed, 409)['error']['code'], 'operationConflict')
@@ -467,7 +467,7 @@ class RetainedHTTP(unittest.TestCase):
         # A restart queries the original creation, never installs fresh IDs.
         self.close_server(a)
         a = self.server('initial-style-source-restart', self.folder / 'state-a')
-        self.assertEqual(self.call(a, '/api/library/create', creation), receipt)
+        self.assertEqual(library_fact(self.call(a, '/api/library/create', creation)), library_fact(receipt))
         cancelled = {'path': str(self.folder / 'cancelled-library'), 'operationId': uid(),
                      'options': copy.deepcopy(creation['options'])}
         self.assertEqual(self.call(a, '/api/library/create-cancel', cancelled)['status'], 'resolved')

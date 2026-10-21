@@ -1,4 +1,5 @@
 import "./knowledge-view.css";
+import { committedDeliveryComplete, originalCommitted } from "./original-operation";
 import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
 import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput } from "./knowledge-state";
@@ -83,7 +84,7 @@ export interface KnowledgePlan {
   losses?: (string | KnowledgeLoss)[];
   [key: string]: unknown;
 }
-export interface KnowledgeReceipt { status: string; message?: string; operationId?: string; path?: string; [key: string]: unknown }
+export interface KnowledgeReceipt { status: string; message?: string; operationId?: string; path?: string; deliveryError?: { message: string }; documentError?: { message?: string }; [key: string]: unknown }
 export interface KnowledgeIntent { kind: string; [key: string]: unknown }
 export interface KnowledgeTextMapping { nodeKey: string; node: Text | HTMLElement; text: string; origin?: Origin | null }
 export interface KnowledgeHost {
@@ -175,7 +176,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
   let overlay: HTMLElement | null = null;
   let popover: HTMLElement | null = null;
   let popoverAnchor: HTMLElement | null = null;
-  let pendingPlan: { plan: KnowledgePlan; context: KnowledgeContext } | null = null;
+  let pendingPlan: { plan: KnowledgePlan; context: KnowledgeContext; receipt?: KnowledgeReceipt } | null = null;
   let disposed = false, busy = false, loading = false;
   let annotationBody = "", suggestionReplacement = "", annotationKind = "comment", annotationTarget = "whole_document";
   let annotationSelection: KnowledgeContext["selection"];
@@ -343,23 +344,31 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
       if (!sameKnowledgeBasis(context, host.context())) throw new Error("确认时草稿已变化，本次准备结果未应用。请重新准备。");
       pendingPlan = { plan, context };
       const receipt = await host.commit(plan, context);
+      pendingPlan.receipt = receipt;
       if (uncertainKnowledgeOperation(receipt.status)) { status.textContent = "操作结果尚未确认，保留原操作以供检查。"; render(); return false; }
-      pendingPlan = null;
-      if (!["committed", "saved", "complete", "success"].includes(receipt.status)) throw new Error(receipt.message || `操作未完成：${receipt.status}`);
-      status.textContent = receipt.message || "操作已完成。"; host.notify(status.textContent); await refresh(); return true;
+      if (!originalCommitted(receipt)) throw new Error(receipt.message || `操作未完成：${receipt.status}`);
+      if (!committedDeliveryComplete(receipt)) throw new Error(`原操作已提交，交付仍待完成：${receipt.deliveryError?.message ?? receipt.documentError?.message ?? "请查询原操作。"}`);
+      await refresh(true); pendingPlan = null;
+      status.textContent = receipt.message || "操作已完成。"; host.notify(status.textContent); return true;
     } catch (error) {
       if (pendingPlan && !retainPendingKnowledgePlan(pendingPlan.plan.draftOnly === true, error)) pendingPlan = null;
       report(error); render(); return false;
     } finally { busy = false; }
   }
   async function inspectPending(): Promise<void> {
-    if (!pendingPlan || !host.inspectOperation) return;
+    if (busy || !pendingPlan || !host.inspectOperation) return;
+    const pending = pendingPlan; busy = true;
     try {
-      const receipt = await host.inspectOperation(pendingPlan.plan.operationId, pendingPlan.context);
-      if (["committed", "saved", "complete", "success", "conflict", "failed", "rejected"].includes(receipt.status)) { pendingPlan = null; await refresh(); }
+      const receipt = await host.inspectOperation(pending.plan.operationId, pending.context);
+      if (pendingPlan !== pending) return;
+      if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt)) throw new Error("原操作已确认提交，后续状态不一致；原回执与编号保留。");
+      pending.receipt = receipt;
+      if (committedDeliveryComplete(receipt)) { await refresh(true); pendingPlan = null; }
+      else if (receipt.status === "resolved") pendingPlan = null;
+      else if (receipt.deliveryError || receipt.documentError) throw new Error(`原操作已提交，交付仍待完成：${receipt.deliveryError?.message ?? receipt.documentError?.message}`);
       status.textContent = receipt.message || `原操作状态：${receipt.status}`;
     } catch (error) { report(error); }
-    render();
+    finally { busy = false; render(); }
   }
 
   function chooser(fragmentId: string, hit: KnowledgeMention, text: string): HTMLElement {
@@ -731,7 +740,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     body.scrollTop = scroll;
     if (focusKey) container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
   }
-  async function refresh(): Promise<void> {
+  async function refresh(strict = false): Promise<void> {
     const context = host.context(); const generation = gate.begin();
     if ((context?.sessionId ?? "") !== graphSession) { graphSession = context?.sessionId ?? ""; graph.clear(); headings.clear(); }
     if (!context) { snapshot = null; snapshotBasis = null; clearOverlay(); render(); return; }
@@ -743,7 +752,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
       snapshot = next; snapshotBasis = context; loading = false; status.textContent = "";
       if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render();
       drawOverlay();
-    } catch (error) { if (gate.accepts(generation, context, host.context())) { loading = false; snapshotBasis = null; clearOverlay(); report(error); status.textContent = `扫描失败，最近结果已过期。${status.textContent} 搜索与个人规则保留，请刷新重试。`; if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render(); } }
+    } catch (error) { if (gate.accepts(generation, context, host.context())) { loading = false; snapshotBasis = null; clearOverlay(); report(error); status.textContent = `扫描失败，最近结果已过期。${status.textContent} 搜索与个人规则保留，请刷新重试。`; if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render(); } if (strict) throw error; }
   }
   render();
   return {

@@ -27,7 +27,7 @@ import type { PanelHost } from "./data-panel";
 import { decodeProcessingDocument } from "./processing-settings-panel";
 import type { StructureReceipt, StructureRequest } from "./hosted-structure-state";
 import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
-import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
+import { currentHostedHistoryResult, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
 import { RecognitionPanel } from "./recognition-panel";
@@ -361,11 +361,11 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
   try {
     const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
     if (epoch !== requestEpoch || doc !== selected || !draft) throw new Error("核对期间对象或用户已变化，未应用旧回执。");
-    record.status = hostedHistoryStatus(record, confirmed);
-    if (!confirmed.result) throw new Error("原恢复事实仍保留，当前资格不允许交付原结果；未采用旧缓存。");
-    const installed = currentHostedHistoryResult(record, fresh.source, confirmed), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
+    const accepted = history.installStatus(record, confirmed);
+    if (!accepted.result) throw new Error("原恢复事实仍保留，当前资格不允许交付原结果；未采用旧缓存。");
+    const installed = currentHostedHistoryResult(record, fresh.source, accepted), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
     const current: HistoryContext = { ...buffer, path: `resource:${selected.resource}`, root: "", baseId: selected.baseId, baseSource: selected.source, dirty: buffer.source !== selected.source, nodeId: record.basis.nodeId, workspaceId: record.basis.workspaceId };
-    if (installed && restoreBufferDisposition(record.basis, current) === "replaceClean") source.applyHistorySource(confirmed.result.source, buffer);
+    if (installed && restoreBufferDisposition(record.basis, current) === "replaceClean") source.applyHistorySource(accepted.result.source, buffer);
     const retainedSource = source.value, originalDraftBase = draft.baseSource;
     doc = fresh; source.open(fresh.sessionId, fresh.resource, retainedSource); source.disabled = !fresh.rights.write;
     draft = { ...draft, source: retainedSource, baseSource: installed ? fresh.source : originalDraftBase };
@@ -386,7 +386,7 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
   try {
     const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
     if (epoch !== requestEpoch || doc !== selected || !draft) throw new Error("重新读取期间对象或用户已变化，未采用旧回执。");
-    record.status = hostedHistoryStatus(record, confirmed); if (!unavailableCommittedHistory(record)) throw new Error("原结果交付状态已变化，请重新查询并核对原结果。");
+    history.installStatus(record, confirmed); if (!unavailableCommittedHistory(record)) throw new Error("原结果交付状态已变化，请重新查询并核对原结果。");
     const retainedSource = source.value; doc = fresh; draft = { ...draft, source: retainedSource }; source.open(fresh.sessionId, fresh.resource, retainedSource); source.disabled = !fresh.rights.write;
     compareRequired = true; el("comparison").hidden = false; el("current").textContent = fresh.source; el("title").textContent = fresh.title; adopted = true; retain(); history.documentChanged(); knowledgeAuthorChanged(); controls(); void readReference(fresh, epoch);
     try { await request("close", { sessionId: selected.sessionId }); } catch (error) { if (!(error instanceof HostedError) || error.http !== 410) throw error; }

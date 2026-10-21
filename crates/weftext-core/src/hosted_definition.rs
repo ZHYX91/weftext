@@ -70,6 +70,12 @@ pub(super) struct DefinitionOperation {
     proposal: Option<DefinitionProposalRecord>,
 }
 
+impl DefinitionOperation {
+    pub(super) fn input_owner(&self) -> Option<&NodeRef> {
+        self.proposal.as_ref().map(|proposal| &proposal.owner)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DefinitionProposalRecord {
@@ -206,6 +212,7 @@ impl Core {
             return Ok(None);
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
@@ -343,6 +350,9 @@ impl Core {
             "intent":request.intent_fingerprint,"binding":request.binding,
         }))?);
         let record = ActorOperation {
+            scope: ActorInputScope::Qualified {
+                scope: self.draft_session_scope(&request.session_id)?,
+            },
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -368,7 +378,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        let bytes = Self::actor_operation_bytes(&record)?;
+        let bytes = self.actor_operation_bytes(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
@@ -483,6 +493,7 @@ impl Core {
         let mut record = match self.definition_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -502,9 +513,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -545,6 +556,7 @@ impl Core {
                 ));
             }
             let record: ActorOperation = serde_json::from_slice(&bytes)?;
+            self.validate_actor_input_record(&record)?;
             self.check_actor_library(&record.library)?;
             if self.actor.as_ref() != Some(&record.actor) {
                 return Err(conflict());
@@ -709,10 +721,16 @@ impl Core {
                 return Err(conflict());
             }
         }
-        let fingerprint = hash(&serde_json::to_vec(&serde_json::json!({
-            "kind":"save","session":request.session_id,"base":request.base_id,
-            "path":display(&session.path),"source":request.source,
-        }))?);
+        let ActorInputScope::Qualified { scope } = &record.scope else {
+            return Err(conflict());
+        };
+        let data = file_save_scope::FileSaveData::new(
+            request.session_id.clone(),
+            Some(request.base_id.clone()),
+            scope.clone(),
+        );
+        let fingerprint =
+            file_save_scope::fingerprint("save", &session.path, &request.source, &data, None)?;
         let admissions = DefinitionSaveRecord {
             core_operation_id: record.core_operation_id.clone(),
             save_operation_id: request.operation_id.clone(),
@@ -743,6 +761,7 @@ impl Core {
         else {
             return Ok(None);
         };
+        self.validate_file_save_plan(plan)?;
         let record: DefinitionSaveRecord = serde_json::from_slice(&bytes)?;
         if record.core_operation_id != plan.operation_id
             || record.path != plan.path

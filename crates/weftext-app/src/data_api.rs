@@ -2531,11 +2531,9 @@ async fn save_definition(
     State(state): State<AppState>,
     Json(req): Json<DefinitionSaveRequest>,
 ) -> ApiResult {
-    let loc = location(&state, &req.session_id)?;
-    let replay_location = loc.clone();
     let replay_request = req.clone();
     let replay = core_call(&state, move |core| {
-        replay_saved_definition(core, &replay_location, &replay_request)
+        replay_saved_definition(core, &replay_request)
     })
     .await;
     match replay {
@@ -2559,6 +2557,7 @@ async fn save_definition(
             return Err(error);
         }
     }
+    let loc = location(&state, &req.session_id)?;
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -2622,7 +2621,6 @@ type DefinitionWrite = (
 
 fn replay_saved_definition(
     core: &mut Core,
-    location: &Location,
     req: &DefinitionSaveRequest,
 ) -> Result<Option<DefinitionWrite>, CoreError> {
     let Some(original) = core.saved_operation_source(&req.operation_id)? else {
@@ -2639,6 +2637,21 @@ fn replay_saved_definition(
             "The original source basis does not match this retry",
         ));
     }
+    // Original author identity is checked before any optional schema/result
+    // delivery. The journal already retains the exact submitted save bytes.
+    let outcome = core
+        .saved_outcome_for_request(&SaveRequest {
+            session_id: req.session_id.clone(),
+            base_id: req.base_id.clone(),
+            source: original.source.clone(),
+            operation_id: req.operation_id.clone(),
+        })?
+        .ok_or_else(|| {
+            CoreError::new(
+                "recoveryPending",
+                "The original definition source save is not committed",
+            )
+        })?;
     let key = req
         .key
         .as_ref()
@@ -2660,7 +2673,12 @@ fn replay_saved_definition(
             )
         })?;
     let bytes = core.read_config_revision(
-        &location.root,
+        original.root.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "committedResultUnavailable",
+                "Original definition library admission is unavailable",
+            )
+        })?,
         ConfigRole::Schema,
         &definition.binding.revision,
     )?;
@@ -2688,47 +2706,9 @@ fn replay_saved_definition(
             "This retry does not reconstruct the exact original committed source",
         ));
     }
-    let outcome = weftext_core::SaveOutcome {
-        receipt: original.receipt.ok_or_else(|| {
-            CoreError::new(
-                "recoveryPending",
-                "The original definition source save is not committed",
-            )
-        })?,
-        recovery_issue: None,
-    };
-    let document = (|| {
-        let inventory = core.inventory(&location.root)?;
-        let owner_id = weftext_engine::inspect_metadata(&req.source)
-            .id
-            .ok_or_else(|| {
-                CoreError::new(
-                    "operationConflict",
-                    "The original draft has no owner identity",
-                )
-            })?;
-        let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
-            CoreError::new(
-                "committedResultUnavailable",
-                "The original save committed, but the library is unavailable",
-            )
-        })?;
-        let entity = format!("weftext-node://{workspace}/{owner_id}");
-        let entry = resolve_entity(&inventory, &entity).map_err(|_| {
-            CoreError::new(
-                "committedResultUnavailable",
-                "The original definition was saved; its live owner is now unavailable",
-            )
-        })?;
-        let document = core.open(entry.path, Some(location.root.clone()))?;
-        if document.node_id.as_deref() != Some(&owner_id) || document.kind != "managed" {
-            return Err(CoreError::new(
-                "committedResultUnavailable",
-                "The original effect is retained, but its current source changed identity",
-            ));
-        }
-        Ok(document)
-    })();
+    let document = core
+        .reopen_local_save(&req.operation_id)
+        .map(|(_, document)| document);
     Ok(Some((document, definition, outcome, patch)))
 }
 
@@ -4774,5 +4754,60 @@ mod tests {
         .await
         .map_err(|e| e.message)
         .unwrap();
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn definition_replay_qualifies_the_complete_original_save_without_old_sessions() {
+        let (directory, state, root) = fixture();
+        install_bundled_schema(&state, &root).await;
+        let Json(created) = ok(capture(
+            State(state.clone()),
+            Json(task_capture(
+                &root,
+                "DefinitionReplay",
+                &uuid::Uuid::new_v4().to_string(),
+            )),
+        )
+        .await);
+        let document = &created["document"];
+        let request = definition_request(
+            document,
+            document["source"].as_str().unwrap().into(),
+            None,
+            "open",
+        );
+        let Json(first) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        let plan_path = directory
+            .path()
+            .join("state/journal")
+            .join(format!("{}.plan.json", request.operation_id));
+        let committed_plan = std::fs::read(&plan_path).unwrap();
+        let path = PathBuf::from(first["document"]["path"].as_str().unwrap());
+        let committed_source = std::fs::read(&path).unwrap();
+        let session = request.session_id.clone();
+        core_call(&state, move |core| core.close_session(&session))
+            .await
+            .map_err(|error| error.message)
+            .unwrap();
+        state.locations.lock().unwrap().clear();
+        let Json(replayed) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        assert_eq!(replayed["baseId"], first["baseId"]);
+        assert_eq!(replayed["committedSource"], first["committedSource"]);
+        assert_ne!(replayed["document"]["sessionId"], request.session_id);
+        for field in ["session", "base", "source"] {
+            let mut changed = request.clone();
+            match field {
+                "session" => changed.session_id = uuid::Uuid::new_v4().to_string(),
+                "base" => changed.base_id = uuid::Uuid::new_v4().to_string(),
+                _ => changed.source.push('Y'),
+            }
+            let error = save_definition(State(state.clone()), Json(changed))
+                .await
+                .err()
+                .unwrap();
+            assert_eq!(error.code, "operationConflict");
+        }
+        assert_eq!(std::fs::read(&plan_path).unwrap(), committed_plan);
+        assert_eq!(std::fs::read(&path).unwrap(), committed_source);
     }
 }

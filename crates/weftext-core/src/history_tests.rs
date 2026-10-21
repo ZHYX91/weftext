@@ -1,6 +1,68 @@
 use super::*;
 use std::os::windows::fs::OpenOptionsExt;
 
+#[test]
+fn protected_history_draft_routing_validates_original_tuple_before_ignoring_foreign_body() {
+    let mut f = HistoryFixture::new();
+    let foreign = f._temp.path().join("foreign");
+    f.core.create_library(&foreign).unwrap();
+    let mut scope = f
+        .core
+        .capture_file_save_scope(&foreign.join("prospective.typ"))
+        .unwrap();
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", fresh()));
+    let encoded = |scope: &QualifiedInputScope| {
+        let mut bytes = b"{\"scope\":".to_vec();
+        bytes.extend(serde_json::to_vec(scope).unwrap());
+        bytes.extend_from_slice(b",\"source\":BROKEN_FOREIGN_BODY");
+        bytes
+    };
+    let valid_foreign = encoded(&scope);
+    fs::write(&path, &valid_foreign).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    let QualifiedInputScope::Library { binding } = &mut scope else {
+        panic!("library scope")
+    };
+    binding.root = display(&f._temp.path().join("contradictory-locator"));
+    let damaged = encoded(&scope);
+    fs::write(&path, &damaged).unwrap();
+    assert_eq!(
+        f.core.list_history(&f.doc.session_id).unwrap_err().code,
+        "privateEvidence"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged);
+    fs::write(&path, &valid_foreign).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    assert_eq!(fs::read(path).unwrap(), valid_foreign);
+}
+
+#[test]
+fn protected_history_draft_budget_counts_original_records_even_when_alternatives_deduplicate() {
+    let mut f = HistoryFixture::new();
+    f.core
+        .persist_draft(&f.doc.session_id, "one original private alternative")
+        .unwrap();
+    let primary = f.core.draft_path(Path::new(&f.doc.path));
+    let original = fs::read(&primary).unwrap();
+    for index in 0..129 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{index}.json")),
+            &original,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core.list_history(&f.doc.session_id).unwrap_err().code,
+        "budget"
+    );
+    assert_eq!(fs::read(primary).unwrap(), original);
+}
+
 struct HistoryFixture {
     core: Core,
     _temp: tempfile::TempDir,
@@ -824,7 +886,7 @@ fn history_external_rollback_to_former_committed_path_does_not_replace_hidden_dr
 }
 
 #[test]
-fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
+fn history_external_rename_keeps_original_actor_input_scope_across_authority_context() {
     let mut f = HistoryFixture::new();
     let actor = "deployment:external-draft";
     let proposal = format!("{}\noriginal unbound private proposal", f.doc.source);
@@ -836,7 +898,7 @@ fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
             let path = core.draft_path(Path::new(&f.doc.path));
             let bytes = fs::read(&path)?;
             let draft: Draft = serde_json::from_slice(&bytes)?;
-            assert!(draft.library.is_none());
+            assert!(matches!(draft.scope, QualifiedInputScope::Library { .. }));
             Ok((path, bytes))
         })
         .unwrap();
@@ -893,7 +955,10 @@ fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
             assert_eq!(opened.recovered_draft.as_deref(), Some(proposal.as_str()));
             assert_eq!(fs::read(&draft_path)?, draft_bytes);
             let draft: Draft = serde_json::from_slice(&fs::read(&draft_path)?)?;
-            assert!(draft.library.is_none(), "an old scope is never backfilled");
+            assert!(
+                matches!(draft.scope, QualifiedInputScope::Library { .. }),
+                "authority changes do not retag original input"
+            );
             assert_eq!(core.list_history(&opened.session_id)?.versions.len(), 1);
             Ok(())
         })
@@ -939,22 +1004,18 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
     f.save("v2");
-    let original_request = f.restore_request(&initial, "none", None);
-    f.core.restore_history(original_request).unwrap();
     let request = f.restore_request(&initial, "none", None);
-    let mut pending = f
-        .core
-        .operations
-        .values()
-        .find(|p| p.history_restore.is_some())
-        .unwrap()
-        .clone();
-    pending.operation_id = request.operation_id.clone();
-    pending.fingerprint = fresh();
-    pending.history_restore.as_mut().unwrap().fingerprint =
-        hash(&serde_json::to_vec(&request).unwrap());
-    f.core.stage(pending).unwrap();
     let original = fs::read(&f.doc.path).unwrap();
+    crate::hosted::set_test_failpoint("saveStaged");
+    assert_eq!(
+        f.core.restore_history(request.clone()).unwrap_err().code,
+        "injectedFailure"
+    );
+    let pending = &f.core.operations[&request.operation_id];
+    f.core.validate_file_save_plan(pending).unwrap();
+    let plan_bytes = fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap();
+    assert!(!f.core.original_commit_fact(&request.operation_id).unwrap());
+    let operation_count = f.core.operations.len();
     assert_eq!(
         f.core
             .history_restore_status(&request.operation_id)
@@ -963,7 +1024,7 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
         "recoveryPending"
     );
     assert_eq!(
-        f.core.restore_history(request).unwrap_err().code,
+        f.core.restore_history(request.clone()).unwrap_err().code,
         "recoveryPending"
     );
     assert_eq!(
@@ -971,6 +1032,11 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
         "recoveryPending"
     );
     assert_eq!(fs::read(&f.doc.path).unwrap(), original);
+    assert_eq!(f.core.operations.len(), operation_count);
+    assert_eq!(
+        fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap(),
+        plan_bytes
+    );
 }
 
 #[test]

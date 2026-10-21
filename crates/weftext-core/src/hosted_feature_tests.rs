@@ -689,6 +689,94 @@ fn prepare_import(f: &mut Fixture, op: &str) -> ActorFeatureStatus {
 }
 
 #[test]
+fn original_feature_member_delivery_retains_actor_scope_and_physical_birth_after_move() {
+    let mut f = Fixture::new();
+    let op = fresh();
+    let prepared = prepare_import(&mut f, &op);
+    let committed = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_commit_with_losses(
+                "Imported",
+                &op,
+                prepared.plan_id.as_ref().unwrap(),
+                true,
+            )
+        })
+        .unwrap();
+    let owner = committed.node_refs.first().unwrap().clone();
+    let opened = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_open_original_node("Imported", &op, &owner)
+        })
+        .unwrap();
+    let identity = f.core.sessions[&opened.session_id].stamp.identity.clone();
+    let parent = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "DeliveryParent")
+        .unwrap();
+    let preview = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.root),
+            intent: OperationIntent::MoveNode {
+                source: display(Path::new(&opened.path).parent().unwrap()),
+                parent: display(Path::new(&parent.path).parent().unwrap()),
+            },
+        })
+        .unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    let old_directory = Path::new(&opened.path).parent().unwrap();
+    let substitute = f
+        .core
+        .create_note_fixture(
+            &f.root,
+            old_directory.parent().unwrap(),
+            old_directory.file_name().unwrap().to_str().unwrap(),
+        )
+        .unwrap();
+    let delivered = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_open_original_node("Imported", &op, &owner)
+        })
+        .unwrap();
+    assert_eq!(delivered.node_id.as_ref(), Some(&owner.node_id));
+    assert_ne!(delivered.node_id, substitute.node_id);
+    assert_eq!(
+        f.core.sessions[&delivered.session_id].stamp.identity,
+        identity
+    );
+    for (actor, resource) in [("deployment:other", "Imported"), (IMPORT_ACTOR, "Other")] {
+        assert!(
+            f.core
+                .with_actor(actor, |core| core
+                    .actor_feature_open_original_node(resource, &op, &owner))
+                .is_err()
+        );
+    }
+    let foreign = weftext_knowledge::NodeRef {
+        workspace_id: owner.workspace_id.clone(),
+        node_id: substitute.node_id.unwrap(),
+    };
+    assert!(
+        f.core
+            .with_actor(IMPORT_ACTOR, |core| core
+                .actor_feature_open_original_node("Imported", &op, &foreign))
+            .is_err()
+    );
+    assert!(
+        f.core
+            .actor_feature_open_original_node("Imported", &op, &owner)
+            .is_err()
+    );
+}
+
+#[test]
 fn hosted_feature_docx_import_retains_frozen_safe_losses_and_plan_across_restart() {
     let mut f = Fixture::new();
     let opened = f

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { currentHostedHistoryResult, hostedHistoryPending, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
+import { currentHostedHistoryResult, hostedHistoryPending, hostedHistoryStatus, resumeHostedHistoryRecord, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, historySourceDiff } from "./history-state";
 import { createSourceState } from "./editor";
 import { history, isolateHistory, undo, undoDepth } from "@codemirror/commands";
@@ -16,7 +16,36 @@ test("a restore receipt proves the original revision as well as bytes; supersede
   assert.equal(currentHostedHistoryResult(record, "F\r\n", committed), false);
   for (const changed of [{ currentRevision: "later-equal-byte-revision" }, { resultBasis: "superseded" }, { resultBasis: "external", currentRevision: null }]) assert.equal(currentHostedHistoryResult(record, "A\r\n", { ...committed, ...changed } as HostedHistoryStatus), false);
   assert.throws(() => hostedHistoryStatus(record, { ...committed, operationId: "other" }));
-  assert.throws(() => hostedHistoryStatus(record, { ...committed, result: { ...committed.result!, receipt: { ...committed.result!.receipt, path: "D:/private/server/owner.typ" } } }));
+  const bad = hostedHistoryStatus(record, { ...committed, result: { ...committed.result!, receipt: { ...committed.result!.receipt, path: "D:/private/server/owner.typ" } } });
+  assert.equal(bad.status, "committed"); assert.equal(bad.result, undefined); assert.ok(bad.resultError);
+});
+test("hosted committed facts survive malformed results, downgrade packets and reconnect without reviving cached delivery rights", () => {
+  const active = structuredClone(record);
+  for (const change of [{ operationId: "other" }, { baseId: "" }, { baseId: 42 }, { path: "D:/private/secret.typ" }, { status: "resolved" }, { message: null }, { revisionId: undefined }, { revisionId: "" }, { revisionId: 42 }]) {
+    const incoming = structuredClone(committed); Object.assign(incoming.result!.receipt, change);
+    active.status = hostedHistoryStatus(active, incoming);
+    assert.equal(active.status.status, "committed"); assert.equal(active.status.receipt, undefined);
+    assert.equal(active.status.result, undefined); assert.ok(active.status.resultError); assert.equal(hostedHistoryPending(active), true);
+    const recovered = hostedHistoryStatus(active, committed);
+    assert.equal(recovered.resultStatus, "available"); assert.equal(recovered.receipt?.revisionId, "original-revision");
+  }
+  active.status = hostedHistoryStatus(active, committed);
+  const original = structuredClone(active.status.receipt);
+  for (const status of ["notRegistered", "notCommitted", "recoveryPending", "resolved", "cancelled"] as const) {
+    active.status = hostedHistoryStatus(active, { operationId: "restore", resource: "owner", status, resultStatus: "unavailable" });
+    assert.equal(active.status.status, "committed"); assert.deepEqual(active.status.receipt, original);
+    assert.equal(active.status.result, undefined); assert.equal(active.status.resultBasis, undefined);
+    assert.equal(active.status.currentRevision, undefined); assert.equal(hostedHistoryPending(active), true);
+  }
+  active.status = hostedHistoryStatus(active, committed);
+  const resumed = resumeHostedHistoryRecord(active);
+  assert.equal(resumed.status?.status, "committed"); assert.deepEqual(resumed.status?.receipt, original);
+  assert.equal(resumed.status?.result, undefined); assert.equal(resumed.status?.resultBasis, undefined);
+  resumed.status = hostedHistoryStatus(resumed, { ...committed, resource: "other" });
+  assert.equal(hostedHistoryPending(resumed), true); assert.equal(resumed.status.result, undefined);
+  resumed.status = hostedHistoryStatus(resumed, committed);
+  assert.equal(currentHostedHistoryResult(resumed, "A\r\n", resumed.status), true);
+  assert.deepEqual(resumed.request, record.request); assert.deepEqual(resumed.basis, record.basis);
 });
 test("committed unavailable drops earlier source and has an explicit comparison-only exit; unknown operations cannot use it", () => {
   const unavailable = hostedHistoryStatus({ ...record, status: committed }, { resource: "owner", operationId: "restore", status: "committed", resultStatus: "unavailable" });

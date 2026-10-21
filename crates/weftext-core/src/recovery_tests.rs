@@ -360,95 +360,33 @@ fn replacement_at_old_draft_path_never_inherits_original_object_draft() {
     assert_eq!(fs::read(original_draft_path).unwrap(), original_draft_bytes);
 }
 #[test]
-fn relocated_competing_drafts_preserve_both_and_require_explicit_resolution() {
+fn old_unqualified_primary_is_retained_and_never_upgraded_or_overwritten() {
     let temp = tempfile::tempdir().unwrap();
-    let data = temp.path().join("private");
     let root = temp.path().join("library");
-    let mut core = Core::new(&data).unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
-    core.persist_draft(&note.session_id, "first unsaved proposal")
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    core.persist_draft(&note.session_id, "original private proposal")
         .unwrap();
-    // Reproduce an original pathname record. The new primary must consume this
-    // exact legacy proposal without replacing or deleting its original bytes.
-    fs::rename(
-        core.draft_path(Path::new(&note.path)),
-        core.legacy_draft_path(Path::new(&note.path)),
-    )
-    .unwrap();
-    let destination = root.join("Moved/Moved.typ");
-    let mut second = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
-    second.path = display(&destination);
-    second.source = "second unsaved proposal".into();
-    private_replace(
-        &core.draft_path(&destination),
-        &serde_json::to_vec(&second).unwrap(),
-    )
-    .unwrap();
-    operate(
-        &mut core,
-        &root,
-        OperationIntent::RenameNode {
-            source: display(&root.join("Original")),
-            name: "Moved".into(),
-        },
-    );
-    drop(core);
-    let mut restarted = Core::new(&data).unwrap();
-    let opened = restarted.open(&destination, Some(root.clone())).unwrap();
-    assert!(opened.recovered_draft_conflict);
+    let path = core.draft_path(Path::new(&note.path));
+    let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    old.as_object_mut().unwrap().remove("scope");
+    let bytes = serde_json::to_vec(&old).unwrap();
+    fs::write(&path, &bytes).unwrap();
     assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("second unsaved proposal")
-    );
-    assert!(
-        opened
-            .recovered_draft_variants
-            .iter()
-            .any(|v| v.source == "first unsaved proposal" && v.base_source == note.source)
+        core.open(&note.path, Some(root.clone())).unwrap_err().code,
+        "unsupportedInputScope"
     );
     assert_eq!(
-        opened.recovered_draft_base_source.as_deref(),
-        Some(note.source.as_str())
+        core.persist_draft(&note.session_id, "new Y retained in editor")
+            .unwrap_err()
+            .code,
+        "unsupportedInputScope"
     );
-    restarted
-        .persist_draft(&opened.session_id, "first unsaved proposal")
-        .unwrap();
-    drop(restarted);
-    let mut restarted = Core::new(&data).unwrap();
-    let opened = restarted.open(&destination, Some(root.clone())).unwrap();
-    assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("first unsaved proposal")
-    );
-    assert!(opened.recovered_draft_conflict);
-    assert!(
-        opened
-            .recovered_draft_variants
-            .iter()
-            .any(|v| v.source == "second unsaved proposal" && v.base_source == note.source)
-    );
-    restarted
-        .resolve_draft(
-            &opened.session_id,
-            "mergeRecovered",
-            Some("explicit merged proposal"),
-        )
-        .unwrap();
-    drop(restarted);
-    let mut after_resolution = Core::new(&data).unwrap();
-    let opened = after_resolution.open(&destination, Some(root)).unwrap();
-    assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("explicit merged proposal")
-    );
-    assert!(opened.recovered_draft_variants.is_empty());
-    assert!(!opened.recovered_draft_conflict);
-    assert!(
-        after_resolution.draft_path(Path::new(&note.path)).exists(),
-        "original draft retained independently of migration"
-    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
 }
+
 #[test]
 fn after_image_adoption_uses_original_create_only_objects_and_original_births() {
     let temp = tempfile::tempdir().unwrap();
@@ -962,11 +900,12 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
     // Exact old-format input: the original FI is known, but no library binding
     // was retained. It must not gain a binding by colliding with this primary.
     let mut legacy = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
-    legacy.library = None;
     legacy.path = display(&destination);
     legacy.source = "unbound retained competitor".into();
     let legacy_path = core.legacy_draft_path(&destination);
-    let legacy_bytes = serde_json::to_vec(&legacy).unwrap();
+    let mut legacy_value = serde_json::to_value(&legacy).unwrap();
+    legacy_value.as_object_mut().unwrap().remove("scope");
+    let legacy_bytes = serde_json::to_vec(&legacy_value).unwrap();
     private_replace(&legacy_path, &legacy_bytes).unwrap();
     operate(
         &mut core,
@@ -988,7 +927,7 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
         );
         assert!(opened.recovered_draft_variants.is_empty());
         let draft = core.read_draft(&destination).unwrap().unwrap();
-        assert!(draft.library.is_some());
+        assert!(matches!(draft.scope, QualifiedInputScope::Library { .. }));
         assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
     }
     let opened = core.open(&destination, Some(root.clone())).unwrap();

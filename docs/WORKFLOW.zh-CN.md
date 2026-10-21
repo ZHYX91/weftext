@@ -73,3 +73,5 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 仓库保存可独立执行的产品构建/检查/打包入口。个人工作区只负责路径与本地环境，不建立另一套发布平台。发布产物校验与关键交接使用哈希，不对每轮讨论重复计算全库哈希。只有正式交付需要标签和发布记录；当前不创建空发布。
 
 历史交付修订另核真实 Core 结果首次读取失败后恢复可读、持续不可读时仍保 committed/receipt，以及 missing→期间提交→通用终结→typed 历史结果读取。适配器单元测试用自有目录确定移动和复位控制两次读取边界，不制造定时竞态；真实 HTTP 用例复用 test_commit_delivery.py，既有本地历史消费者由 test_v05_completion.py 核验。
+
+同一交付入口再核原 X 正常移动后旧槽创建 Y、同 NodeID 物理替身、库根替身、另存为同字节替身、完整 Definition SaveRequest 重放及重启无旧 Session、enableSync 原 journal 状态。`scripts/test_creation_delivery_browser.mjs EXE NEW_EVIDENCE_DIRECTORY [CASE]` 覆盖真实接纳后刷新失败、原号补交的标签幂等与 Y／选区／Undo、另存为接纳及不可交付处置后沿正确 Session 继续保存、普通旧标签遇同字节物理替身、首次及查询文件保存坏回包后原号恢复、本地历史换 Session 后原号查询／终结、S 补交、后来 T 的比较门，以及真实冲突草稿处理响应等待期间输入 Y。浏览器 abort／500／延迟响应和坏包替换是明确的受控传输或交付故障，不称后端自然产生坏 DTO 或内部 Core 读盘失败。托管历史另跑实际授权矩阵，Core 内部故障点核首次 committed 与瞬时 Draft 警告，纯 TS 负例核坏 DTO／矛盾状态与重连。v0.6.1 初始化同族严格核原取消 resolution、无伪作者 Plan、准确原请求指纹与原字节、重启和迟到请求拒绝；各自证据边界分开记录。
