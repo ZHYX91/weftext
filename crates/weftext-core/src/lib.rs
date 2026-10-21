@@ -32,6 +32,7 @@ mod export_read;
 mod history;
 mod hosted;
 mod recognition;
+pub mod reminder_device_state;
 #[cfg(all(test, windows))]
 mod tag_write_guard_tests;
 pub use hosted::{

@@ -3219,6 +3219,168 @@
       },
       "unknown": "preserve",
       "constraints": []
+    },
+    "ReminderClock": {
+      "kind": "record",
+      "members": {
+        "time": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "time"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "fraction": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "exact_decimal"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "TaskReminder": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "absolute"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "at": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "instant"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "due_before"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "before": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "exact_seconds"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "due_day"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "clock": {
+              "shape": {
+                "kind": "use",
+                "name": "ReminderClock"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "zone": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "zone_version": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "fold": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "earlier",
+                  "later"
+                ],
+                "open": false
+              },
+              "required": false,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "tag",
+        "key": "kind"
+      }
     }
   },
   "fields": [
@@ -4112,6 +4274,18 @@
       "default": {
         "kind": "absent"
       }
+    },
+    {
+      "id": "tasks/reminder",
+      "key": "reminder",
+      "shape": {
+        "kind": "use",
+        "name": "TaskReminder"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
     }
   ],
   "types": [
@@ -4388,11 +4562,32 @@
         {
           "id": "tasks/project",
           "required": false
+        },
+        {
+          "id": "tasks/reminder",
+          "required": false
         }
       ],
       "requires": [],
       "conflicts": [],
-      "constraints": []
+      "constraints": [
+        {
+          "validator": "temporal/task-reminder",
+          "inputs": {
+            "reminder": {
+              "kind": "field",
+              "id": "tasks/reminder",
+              "path": []
+            },
+            "due": {
+              "kind": "field",
+              "id": "tasks/due",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
     },
     {
       "id": "library/work",
@@ -5551,6 +5746,11 @@
       "id": "units/measurement",
       "provider": "units/rules",
       "operation": "measurement"
+    },
+    {
+      "id": "temporal/task-reminder",
+      "provider": "temporal/rules",
+      "operation": "task-reminder"
     }
   ],
   "providers": [

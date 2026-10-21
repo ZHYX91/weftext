@@ -216,6 +216,17 @@
           "result": "exact-duration-cell",
           "effect": "pure",
           "query_name": "duringDuration"
+        },
+        {
+          "name": "task-reminder",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
         }
       ]
     },
@@ -617,6 +628,21 @@
       "operation": "measurement",
       "inputs": {
         "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/task-reminder": {
+      "provider": "temporal/rules",
+      "operation": "task-reminder",
+      "inputs": {
+        "reminder": "record-or-absent",
+        "due": "temporal-endpoint-or-absent"
       },
       "parameters": {
         "kind": "record",

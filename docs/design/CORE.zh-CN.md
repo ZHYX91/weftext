@@ -386,6 +386,20 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 托管入口使用既有 `contentImportSlots` 的独立 `recognition {run,read,import,download}` 权限，默认均拒绝；这些权限不隐含未来正文、字段、历史、搜索、资源或输出权。映射字段还须目标成员的准确 FieldId 读写权，schema 读取另外获权。生成成员仍由原 slot producer 的出生事实证明，新增目录资格和每个后续消费者沿既有 Core 规则；同步保原件、来源、字段及真实身份，不传执行资格或私人作业目录。
 
+### 9.4 本设备任务提醒决定
+
+`tasks/reminder` 是唯一作者意图。Core 从准入且当前可读的已保存 Task 重建候选，不从 Draft、通知参数或第二任务缓存取事实。共同 `device-state/reminders.json` 仅保存库选择、逐提醒 opt-in、个人处理和投递责任；复用 device-state 身份，不用 sync replica_id。复制任务不复制启用资格。固定叶 typed 完整格式拒未知／重复成员，限 16 MiB、128 库及 32768 记录，经原字节摘要和共同 device guard/CAS/flush/回读持久。库固定 WorkspaceId 与物理根身份，路径仅定位；外国设备／profile 不自动采纳。scope-first backup 仅在完整验证已知叶后排除该设备全局数据，未知文件仍拒绝。
+
+执行键为 `weftext.reminder-effect.v1` 与 device、NodeRef、reminderId、实际语义摘要和精确 trigger 的 canonical SHA256。先持久原键的 submitting、完整 OS request 和 attempt，才返回不可反序列化／克隆的 permit。每次系统调用前必须 `check_reminder_permit`：重验当前源、库、设备、任务和授权，复核共同源／配置正负见证闭包及全部后置检查，并最终核对目标分钟、单调 5 秒时限和墙钟未回拨；全部通过后才准入一次并消费许可。普通投递不能因资格核查耗时越过目标分钟。Native 在 Core 锁外调用 OS，再以原 permit 写回结果；最后检查不声称与之后的作者编辑或 OS 调用全局原子。Server 没有 toast producer 或投递 HTTP 接口。
+
+submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；重启后的 submitting 对外也是 unknown，成功不是已读。只有完整原 app/tag/group/activation/request 在系统历史出现才能确认 unknown；缺席、用户清除或系统限制不解锁重试。明确取消原因（库／提醒关闭、Task 关闭、定义变更）与个人 handled、外部结果正交；处理不写 Task.status。撤回使用原地址，opaque activation key 回跳逐成员重新授权，不能恢复旧读取权。
+
+宿主可按真实单条／汇总投递键有界读取完整原通知，核对激活目录保存的 opaque key。此读取仅验证当前设备账本，不要求作者库在线，也不改投递结果；汇总内的任务成员键不是独立 OS 通知地址。后续打开仍通过实际 Core 回跳重新授权，原记录存在不授予当前作者读取权。
+
+订阅按每页 32 个重读，受限 scope 明示而非空集合。每次恢复最多一个汇总、64 个成员；先在同一账本固定排序成员和 summary key。可能已有外部效果者不得重组或重播；确证未调用的失败可重验后重组，保原失败事实。完成、失效和已处理项排除。
+
+最终决定前后保持正向输入共享只读 guard、核对原 parent／准确字节／身份／Pending；缺失配置保原见证并前后复验，使用唯一 bundled schema，无用户安装前置。缺失槽是观察而非未来创建锁；后验变化不给 permit，已持久 submitting／unknown 不抹去。最后检查与 OS 效果不声称对之后任意作者编辑全局原子。已有无效配置不回退。单独数据／账本测试不等于真实桌面 DSK03–08 验收。
+
 ## 10. 最小消费接口
 
 本机设备身份、三项桌面设置及其私有记录/CAS/库备份边界见[本机设备状态](DEVICE-STATE.zh-CN.md)。这层基础不代表原生 UI、提醒或安装已经通过验收。

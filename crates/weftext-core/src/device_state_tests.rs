@@ -199,7 +199,7 @@ fn device_strict_schema_and_byte_bounds_preserve_invalid_originals() {
 }
 
 #[test]
-fn device_known_unlinked_consumer_is_not_a_blanket_backup_exclusion() {
+fn device_malformed_reminder_is_not_a_blanket_backup_exclusion() {
     let temp = tempfile::tempdir().unwrap();
     let data = temp.path().join("state");
     let mut core = Core::new(&data).unwrap();
@@ -236,6 +236,8 @@ fn device_validated_global_records_are_qualified_but_not_copied_to_library_backu
                 ..Default::default()
             },
         )
+        .unwrap();
+    core.set_reminder_library(&root, false, 0, &fresh())
         .unwrap();
     let preview = core
         .prepare_operation(OperationRequest {
