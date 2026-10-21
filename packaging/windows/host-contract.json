@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "name": "Weftext.Desktop",
+    "publisher": "CN=Weftext",
+    "applicationId": "Weftext"
+  },
+  "platform": {
+    "architecture": "x64",
+    "minVersion": "10.0.22000.0",
+    "maxVersionTested": "10.0.26100.0"
+  },
+  "roles": {
+    "desktop": { "cargoBin": "weftext", "filename": "weftext.exe", "peSubsystem": 2 },
+    "cli": { "cargoBin": "weftext-cli", "filename": "weftext-cli.exe", "peSubsystem": 3 }
+  },
+  "paths": {
+    "persistentKnownFolder": "LocalAppData",
+    "persistentRelativeRoot": "Weftext-MVP",
+    "cacheKnownFolder": "LocalAppData",
+    "cacheRelativeRoot": "Weftext/Cache"
+  },
+  "activation": {
+    "portableAumid": "Weftext.Desktop",
+    "startupTaskId": "WeftextStartup",
+    "startupArgument": "--login-startup",
+    "toastClsid": "5473b8c3-1d2b-4aa8-bfbb-e0e02ef77324",
+    "toastArgument": "--toast-server"
+  },
+  "webview2": {
+    "minimumVersion": "145.0.3800.47"
+  }
+}
