@@ -258,8 +258,24 @@ impl HtmlElement {
 
 /// Bounded semantic facts emitted by the native HTML producers in this pinned
 /// adapter. These facts describe the displayed result, not a source write grant.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum WeftextFlowWarningKind {
+    NonSolidTextPaint,
+    TableStrokeUnsupported,
+    NonSolidTableFill,
+    DynamicListMarker,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct WeftextFlowWarning {
+    pub kind: WeftextFlowWarningKind,
+    pub span: Span,
+}
+
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct WeftextHtmlSemantics {
+    /// Native producer facts; these are never parsed from author attributes.
+    pub warnings: Vec<WeftextFlowWarning>,
     pub role: Option<&'static str>,
     pub level: Option<usize>,
     /// The resolved repetition request of the actual native table header.

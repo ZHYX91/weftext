@@ -98,7 +98,7 @@ async fn atomic_tag_assignment_uses_real_narrow_basis_and_portable_configured_pa
     let prepared = prepare(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(request.clone()),
+        crate::RequestJson(request.clone()),
     )
     .await
     .unwrap()
@@ -127,7 +127,7 @@ async fn atomic_tag_assignment_uses_real_narrow_basis_and_portable_configured_pa
     let committed = commit(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Commit {
+        crate::RequestJson(Commit {
             operation_id: request.operation_id.clone(),
             plan_id: prepared["planId"].as_str().unwrap().into(),
         }),
@@ -136,10 +136,14 @@ async fn atomic_tag_assignment_uses_real_narrow_basis_and_portable_configured_pa
     .unwrap()
     .0;
     assert_eq!(committed["status"], "committed", "{committed:?}");
-    let retried = prepare(State(state.clone()), Extension(auth.clone()), Json(request))
-        .await
-        .unwrap()
-        .0;
+    let retried = prepare(
+        State(state.clone()),
+        Extension(auth.clone()),
+        crate::RequestJson(request),
+    )
+    .await
+    .unwrap()
+    .0;
     assert_eq!(retried, committed);
     let mut inner = state.inner.lock().unwrap();
     let source = std::fs::read_to_string(inner.config.root.join("Shared/Shared.typ")).unwrap();

@@ -3,6 +3,7 @@
 use super::*;
 use operations::{FileChange, FrozenOperation, Mutation, NewBirth, read_blob, write_blob};
 use std::collections::BTreeMap;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -36,7 +37,7 @@ fn validate_root(root: &InitialRootNote) -> Result<()> {
     if root.title.len() > 4096 || root.queries.len() > 3 {
         return Err(CoreError::new(
             "invalidPreset",
-            "Root preset exceeds its input budget",
+            UiMessage::error_core_library_creation_root_preset_exceeds_input_budget(),
         ));
     }
     let catalog = root_query_presets();
@@ -51,7 +52,7 @@ fn validate_root(root: &InitialRootNote) -> Result<()> {
         {
             return Err(CoreError::new(
                 "invalidPreset",
-                "Unknown or repeated root Query selection",
+                UiMessage::error_core_library_creation_unknown_or_repeated_root_query_selection(),
             ));
         }
     }
@@ -142,31 +143,32 @@ impl Core {
             }) {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This cancelled attempt belongs to different input",
+                    UiMessage::error_core_library_creation_cancelled_attempt_belongs_to_different_input(),
                 ));
             }
             return Err(CoreError::new(
                 "operationCanceled",
-                "The original creation attempt is durably cancelled",
+                UiMessage::error_core_library_creation_original_creation_attempt_durably_cancelled(
+                ),
             ));
         }
         if let Some(plan) = self.operations.get(operation_id) {
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already belongs to different input",
+                    UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
             if !self.committed(operation_id) && self.resolved(operation_id)? {
                 return Err(CoreError::new(
                     "operationCanceled",
-                    "The original creation was durably canceled or retained without activation",
+                    UiMessage::error_core_library_creation_original_creation_was_durably_canceled_or_retained_without_activation(),
                 ));
             }
             if !self.committed(operation_id) {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "Inspect and resolve the original creation plan; no second plan was created",
+                    UiMessage::error_core_library_creation_inspect_and_resolve_original_creation_plan_no_second_plan_was_created(),
                 ));
             }
             return Ok(library_info(plan));
@@ -176,7 +178,7 @@ impl Core {
         if root.try_exists()? {
             return Err(CoreError::new(
                 "exists",
-                "Library creation requires an absent directory",
+                UiMessage::error_core_library_creation_library_creation_requires_absent_directory(),
             ));
         }
         let plan = self.plan_library_creation(
@@ -205,7 +207,7 @@ impl Core {
         let invalid = || {
             CoreError::new(
                 "committedResultUnavailable",
-                "The original physical library result is unavailable",
+                UiMessage::error_core_original_scope_creation_physical_result_unavailable(),
             )
         };
         let plan = self
@@ -243,7 +245,7 @@ impl Core {
         let plan = self.operations.get(operation_id).ok_or_else(|| {
             CoreError::new(
                 "operationMissing",
-                "No original library creation is retained",
+                UiMessage::error_core_original_scope_creation_original_not_retained(),
             )
         })?;
         if plan.kind != "createLibrary"
@@ -252,7 +254,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "This original operation is not a committed library creation",
+                UiMessage::error_core_original_scope_creation_original_not_committed_creation(),
             ));
         }
         Ok(library_info(plan))
@@ -273,7 +275,7 @@ impl Core {
         if display(root).len() > 32_768 {
             return Err(CoreError::new(
                 "tooLarge",
-                "Creation request path exceeds its retained input budget",
+                UiMessage::error_core_library_creation_creation_request_path_exceeds_retained_input_budget(),
             ));
         }
         if let Some(style) = &options.initial_style {
@@ -287,7 +289,7 @@ impl Core {
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already belongs to different input",
+                    UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
             let current = self.inspect_recovery(operation_id)?;
@@ -303,7 +305,8 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "This cancelled attempt belongs to different input",
+                UiMessage::error_core_library_creation_cancelled_attempt_belongs_to_different_input(
+                ),
             ));
         }
         self.settle_local_attempt(operation_id, "createLibrary", &fingerprint)?;
@@ -351,7 +354,10 @@ impl Core {
         if let Some(initial) = &options.initial_root {
             validate_root(initial)?;
             let name = root.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
-                CoreError::new("invalidPath", "Root needs a canonical note filename")
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_library_creation_root_needs_canonical_note_filename(),
+                )
             })?;
             valid_name(name)?;
             let relative = format!("{name}.typ");
@@ -359,7 +365,7 @@ impl Core {
             let node_id = fresh();
             let title = weftext_data::NativeValue::Text(initial.title.clone())
                 .to_typst()
-                .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?;
+                .map_err(|e| CoreError::from_data("invalidPreset", e))?;
             let mut source = format!(
                 "#metadata((id: \"{node_id}\", types: ())) <weftext>\n\n#set document(title: {title})\n#title()\n\n"
             );
@@ -374,7 +380,7 @@ impl Core {
                     ROOT_PRESET_SCHEMA.as_bytes().to_vec(),
                 ));
                 let schema = weftext_data::Schema::from_author_json(ROOT_PRESET_SCHEMA)
-                    .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?;
+                    .map_err(|e| CoreError::from_data("invalidPreset", e))?;
                 let binding = weftext_data::SavedQueryBinding {
                     schema: format!("weftext-config://{workspace_id}/schema"),
                     revision: schema_revision,
@@ -402,7 +408,7 @@ impl Core {
                         &plan,
                         &schema,
                     )
-                    .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?
+                    .map_err(|e| CoreError::from_data("invalidPreset", e))?
                     .source;
                 }
             }
@@ -424,7 +430,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "invalidStyle",
-                    "Initial native style needs valid syntax and one unambiguous library-style entry",
+                    UiMessage::error_core_library_creation_initial_native_style_needs_valid_syntax_and_one_unambiguous_library_style_entry(),
                 ));
             }
             let node_id = fresh();
@@ -511,7 +517,6 @@ impl Core {
                 status: "committed".into(),
                 path: display(root),
                 node_ids: births.iter().map(|b| b.node_id.clone()).collect(),
-                message: "Created the library and its initial native style in one decision".into(),
             },
             mutation: Mutation::CreateTree {
                 target: display(root),
@@ -573,10 +578,12 @@ impl Core {
         if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
             return self.inspect_library_creation_recovery(plan);
         }
-        let t = plan
-            .transaction
-            .as_ref()
-            .ok_or_else(|| CoreError::new("invalidPlan", "Creation transaction is missing"))?;
+        let t = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_library_creation_creation_transaction_missing(),
+            )
+        })?;
         let Mutation::CreateTree {
             target,
             existing_target: false,
@@ -588,7 +595,8 @@ impl Core {
         else {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Creation requires its original create-only tree",
+                UiMessage::error_core_library_creation_creation_requires_original_create_only_tree(
+                ),
             ));
         };
         if !matches!(t.request.intent, OperationIntent::CreateLibrary { .. })
@@ -598,7 +606,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Creation plan binding differs",
+                UiMessage::error_core_library_creation_creation_plan_binding_differs(),
             ));
         }
         let mut capture =
@@ -623,7 +631,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Original creation members are unavailable or changed; no participant was written",
+                    UiMessage::error_core_library_creation_original_creation_members_unavailable_or_changed_no_participant_was_written(),
                 ));
             }
             if action == "resumeOriginalPlan" {
@@ -643,7 +651,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A created directory lacks its original member",
+                                UiMessage::error_core_library_creation_created_directory_lacks_original_member(),
                             )
                         })?;
                     if member.matches_after {
@@ -663,7 +671,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A created file lacks its original member",
+                                UiMessage::error_core_library_creation_created_file_lacks_original_member(),
                             )
                         })?;
                     if capture.members[index].matches_after {
@@ -691,14 +699,16 @@ impl Core {
             let mut materialized = Vec::new();
             for (index, file) in &mut capture.files {
                 let path = &capture.members[*index].path;
-                let change = files
-                    .iter()
-                    .find(|f| &f.path == path)
-                    .ok_or_else(|| CoreError::new("invalidPlan", "Unexpected creation output"))?;
+                let change = files.iter().find(|f| &f.path == path).ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_library_creation_unexpected_creation_output(),
+                    )
+                })?;
                 if read_blob(file)? != change.after {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "Creation afterimage changed before decision",
+                        UiMessage::error_core_library_creation_creation_afterimage_changed_before_decision(),
                     ));
                 }
                 materialized.push((path.clone(), stamp(file)?));

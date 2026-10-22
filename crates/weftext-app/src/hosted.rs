@@ -262,14 +262,14 @@ fn unavailable() -> ApiError {
     ApiError::new(
         StatusCode::NOT_FOUND,
         "unavailable",
-        "内容不可用或当前无权访问，请重新连接",
+        UiMessage::error_api_hosted_content_unavailable(),
     )
 }
 fn expired() -> ApiError {
     ApiError::new(
         StatusCode::UNAUTHORIZED,
         "authentication",
-        "访问凭据已失效，请重新连接",
+        UiMessage::error_api_hosted_authentication_expired(),
     )
 }
 fn digest(bytes: &[u8]) -> String {
@@ -291,56 +291,74 @@ fn valid_id(value: &str) -> bool {
 fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(), ApiError> {
     let mut tokens = BTreeSet::from([config.admin_token_sha256.clone()]);
     if users.len() > 128 {
-        return Err(ApiError::bad("用户上限为 128"));
+        return Err(ApiError::bad(UiMessage::error_api_hosted_user_budget()));
     }
     for (id, user) in users {
         if !content_import::valid_rights(config, &user.content_imports)
             || !owner_backup::valid_rights(&user.owner_backup)
         {
-            return Err(ApiError::bad("资料导入与完整恢复资料备份须独立明确授权"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_import_backup_needs_separate_permission(),
+            ));
         }
         if !navigation_registry::valid_rights(config, &user.navigation) {
-            return Err(ApiError::bad("导航授权须引用明确配置的目录或接纳槽"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_navigation_target_permission(),
+            ));
         }
         if !office::valid_native_rights(&user.native_whole_library) {
-            return Err(ApiError::bad("全库输出须明确授予读取、导出与下载权限"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_whole_library_output_permission(),
+            ));
         }
         if !structure::valid_rights(config, &user.structure) {
-            return Err(ApiError::bad("结构授权须引用明确配置的源对象与固定目标槽"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_target_permission(),
+            ));
         }
         if !resource_collections::valid_rights(config, &user.resource_collections) {
             return Err(ApiError::bad(
-                "资源集合须明确配置；下载须具备读取权，Trash 集合不可导入",
+                UiMessage::error_api_hosted_resource_collection_permission(),
             ));
         }
         if !media::valid_rights(config, &user.resources) {
             return Err(ApiError::bad(
-                "资源授权须引用明确配置的 asset；下载须同时具备读取权",
+                UiMessage::error_api_hosted_resource_permission(),
             ));
         }
         if !library::valid_rights(&user.library) {
-            return Err(ApiError::bad("库配置写入须具备同角色读取权"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_configuration_write_needs_read(),
+            ));
         }
         if !query_scopes::validate_rights(config, &user.query_scopes) {
-            return Err(ApiError::bad("目录范围授权须引用有界的明确配置目录"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_directory_scope_permission(),
+            ));
         }
         if !query_providers::valid_rights(&user.query_providers) {
             return Err(ApiError::bad(
-                "Provider 与 SeriesPolicy 授权须使用有界的明确 ID",
+                UiMessage::error_api_hosted_provider_permission_ids(),
             ));
         }
         if user.sync_owner && config.sync_identity.is_none() {
-            return Err(ApiError::bad("完整同步授权须先在部署配置中明确配对身份"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_sync_pairing_required(),
+            ));
         }
         if !valid_id(id)
             || !valid_digest(&user.token_sha256)
             || !tokens.insert(user.token_sha256.clone())
         {
-            return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_invalid_user_or_token_digest(),
+            ));
         }
         for (resource, rights) in &user.grants {
             if !office::valid_legacy_rights(&rights.office) {
-                return Err(ApiError::bad("DOC/WPS 下载须具备同格式的明确导出权限"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_legacy_download_needs_export(),
+                ));
             }
             if config
                 .files
@@ -356,12 +374,12 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                     || rights.office.wps.r#import)
             {
                 return Err(ApiError::bad(
-                    "Trash 对象只读，不能配置正文、字段、批注、校对或导入写入权限",
+                    UiMessage::error_api_hosted_trash_read_only_permissions(),
                 ));
             }
             if !query::valid_rights(&rights.query) {
                 return Err(ApiError::bad(
-                    "查询定义历史须具备定义读取权；语义产品及关系须明确授权",
+                    UiMessage::error_api_hosted_definition_history_needs_read(),
                 ));
             }
             if (rights.office.r#import || rights.office.doc.r#import || rights.office.wps.r#import)
@@ -373,7 +391,7 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                         .is_some_and(|f| f.importable && f.editable))
             {
                 return Err(ApiError::bad(
-                    "Office 导入须具备配置空目标的正文读写和明确导入权限",
+                    UiMessage::error_api_hosted_office_import_permission(),
                 ));
             }
             if (rights.annotations.write && !rights.annotations.read)
@@ -384,7 +402,7 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                     && !config.files.get(resource).is_some_and(|f| f.editable))
             {
                 return Err(ApiError::bad(
-                    "批注写入须具备批注读取权；校对和应用建议须具备各自正文与目标权限",
+                    UiMessage::error_api_hosted_review_write_permission(),
                 ));
             }
             if rights.fields.len() > 64
@@ -396,7 +414,7 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                 })
             {
                 return Err(ApiError::bad(
-                    "字段授权须使用明确 FieldId；写入须同时授予该字段读取权",
+                    UiMessage::error_api_hosted_field_permission_ids(),
                 ));
             }
             if !config.files.contains_key(resource)
@@ -404,7 +422,7 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
                 || (rights.write && !config.files[resource].editable)
             {
                 return Err(ApiError::bad(
-                    "授权须引用已配置对象，写入、历史、下载还须具备读取权",
+                    UiMessage::error_api_hosted_resource_grant_permission(),
                 ));
             }
         }
@@ -531,7 +549,7 @@ impl HostedInner {
                 ApiError::new(
                     StatusCode::GONE,
                     "sessionExpired",
-                    "会话已失效，请重新读取并核对草稿",
+                    UiMessage::error_api_hosted_session_expired_with_draft(),
                 )
             })?;
         let rights = self.rights(&actor, &session.resource)?;
@@ -539,12 +557,12 @@ impl HostedInner {
         let mut expires = session
             .expires
             .lock()
-            .map_err(|_| ApiError::internal("会话不可用"))?;
+            .map_err(|_| ApiError::internal(UiMessage::error_api_hosted_session_unavailable()))?;
         if *expires <= now {
             return Err(ApiError::new(
                 StatusCode::GONE,
                 "sessionExpired",
-                "会话已失效，请重新读取并核对草稿",
+                UiMessage::error_api_hosted_session_expired_with_draft(),
             ));
         }
         *expires = now + SESSION_IDLE_TIMEOUT;
@@ -576,7 +594,9 @@ impl HostedInner {
             .filter_map(|(id, session)| match session.expires.lock() {
                 Ok(expires) if *expires <= now => Some(Ok(id.clone())),
                 Ok(_) => None,
-                Err(_) => Some(Err(ApiError::internal("会话不可用"))),
+                Err(_) => Some(Err(ApiError::internal(
+                    UiMessage::error_api_hosted_session_unavailable(),
+                ))),
             })
             .collect::<Result<Vec<_>, _>>()?;
         for id in expired {
@@ -586,27 +606,21 @@ impl HostedInner {
     }
     fn core_error(error: CoreError) -> ApiError {
         // OS errors and recovery paths can contain absolute server locations.
-        let message = match error.code.as_str() {
+        let explanation = match error.code.as_str() {
             "conflict" | "staleBase" | "draftConflict" => {
-                "当前稿或原保存依据已变化。双方稿已保留，请重新打开并明确合并。"
+                UiMessage::error_api_hosted_current_basis_changed()
             }
-            "operationConflict" => "同一操作编号不能用于不同内容。",
-            "identityConflict" => "须保留笔记的稳定身份声明。",
-            "historyUnavailable" => "所选历史版本不可用，未替换为当前版本。",
-            "basisRequired" => {
-                "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者显式安装后重试。"
-            }
-            _ => "文件操作未完成，草稿仍可保留；请查看服务端恢复状态。",
+            "operationConflict" => UiMessage::error_api_hosted_operation_content_conflict(),
+            "identityConflict" => UiMessage::error_api_hosted_stable_identity_required(),
+            "historyUnavailable" => UiMessage::error_api_hosted_original_history_unavailable(),
+            "basisRequired" => UiMessage::error_api_hosted_installed_library_rule_required(),
+            _ => UiMessage::error_api_hosted_file_operation_incomplete(),
         };
-        ApiError {
-            status: StatusCode::CONFLICT,
-            code: error.code,
-            message: message.into(),
-            details: error
-                .current_source
-                .map(|s| Box::new(json!({"currentSource":s}))),
-            private_worker_failure: None,
-        }
+        let mut result = ApiError::new(StatusCode::CONFLICT, &error.code, explanation);
+        result.details = error
+            .current_source
+            .map(|current_source| Box::new(ApiErrorDetails::CurrentSource { current_source }));
+        result
     }
     fn actor_scope(&self, actor: &str) -> String {
         format!("{}:{actor}", self.config.deployment)
@@ -618,7 +632,9 @@ impl HostedInner {
         if self.sessions.len() >= 128
             || self.sessions.values().filter(|s| s.actor == actor).count() >= 32
         {
-            return Err(ApiError::bad("打开会话已达 32 个，请关闭不使用的文档"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_open_session_budget(),
+            ));
         }
         let path = self.config.root.join(&file.path);
         let root = self.config.root.clone();
@@ -657,11 +673,13 @@ async fn locked<T: Send + 'static>(
 ) -> Result<T, ApiError> {
     let inner = state.inner.clone();
     crate::work::spawn_blocking(move || {
-        let mut guard = inner.lock().map_err(|_| ApiError::internal("服务不可用"))?;
+        let mut guard = inner
+            .lock()
+            .map_err(|_| ApiError::internal(UiMessage::error_api_hosted_service_unavailable()))?;
         f(&mut guard)
     })
     .await
-    .map_err(|_| ApiError::internal("服务未完成"))?
+    .map_err(|_| ApiError::internal(UiMessage::error_api_hosted_service_incomplete()))?
 }
 async fn boundary(State(state): State<HostedState>, mut request: Request, next: Next) -> Response {
     let headers = request.headers();
@@ -671,7 +689,12 @@ async fn boundary(State(state): State<HostedState>, mut request: Request, next: 
             .is_some_and(|v| v.to_str().ok() != Some(&state.origin))
     {
         return protected_response(
-            ApiError::new(StatusCode::FORBIDDEN, "origin", "不允许的访问来源").into_response(),
+            ApiError::new(
+                StatusCode::FORBIDDEN,
+                "origin",
+                UiMessage::error_api_hosted_origin_denied(),
+            )
+            .into_response(),
         );
     }
     if request.uri().path().starts_with("/api/") {
@@ -748,7 +771,7 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
 async fn open(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Open>,
+    RequestJson(req): RequestJson<Open>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -761,7 +784,7 @@ async fn open(
 async fn close(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SessionRequest>,
+    RequestJson(req): RequestJson<SessionRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -772,7 +795,13 @@ async fn close(
                 .filter(|session| {
                     session.actor == actor && session.generation == inner.actor_generation(&actor)
                 })
-                .ok_or_else(|| ApiError::new(StatusCode::GONE, "sessionExpired", "会话已失效"))?;
+                .ok_or_else(|| {
+                    ApiError::new(
+                        StatusCode::GONE,
+                        "sessionExpired",
+                        UiMessage::error_api_hosted_session_expired(),
+                    )
+                })?;
             inner.release_session(&req.session_id)?;
             Ok(json!({"closed":true}))
         })
@@ -782,7 +811,7 @@ async fn close(
 async fn keepalive(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SessionRequest>,
+    RequestJson(req): RequestJson<SessionRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -795,7 +824,7 @@ async fn keepalive(
 async fn draft(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SourceRequest>,
+    RequestJson(req): RequestJson<SourceRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -839,7 +868,7 @@ async fn resume_draft(
 async fn save(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SourceSaveRequest>,
+    RequestJson(req): RequestJson<SourceSaveRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -862,7 +891,7 @@ async fn save(
 async fn resolve_draft(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SourceRequest>,
+    RequestJson(req): RequestJson<SourceRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -876,7 +905,7 @@ async fn resolve_draft(
                     c.resolve_draft(&req.session_id, "mergeRecovered", Some(&req.source))
                 })
                 .map_err(HostedInner::core_error)?;
-            Ok(json!({"status":"draftRebased","message":"原草稿已保留；尚未保存正文"}))
+            Ok(json!({"status":"draftRebased","explanation":UiMessage::error_api_hosted_draft_rebased(),"diagnostics":[],"causes":[]}))
         })
         .await?,
     ))
@@ -884,7 +913,7 @@ async fn resolve_draft(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<OperationStatus>,
+    RequestJson(req): RequestJson<OperationStatus>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -908,7 +937,7 @@ async fn status(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Settle>,
+    RequestJson(req): RequestJson<Settle>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -931,11 +960,11 @@ async fn settle(
 async fn search(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Search>,
+    RequestJson(req): RequestJson<Search>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
-        if req.text.is_empty() || req.text.len() > 256 { return Err(ApiError::bad("搜索词须为 1–256 字节")); }
+        if req.text.is_empty() || req.text.len() > 256 { return Err(ApiError::bad(UiMessage::error_api_hosted_search_term_budget())); }
         let mut rows = Vec::new(); let mut complete = true;
         let docs = inner.files_view(&actor)?.iter().filter(|(id, _)| inner.rights(&actor, id).is_ok() && author_file(inner,id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
         let mut total = 0;
@@ -956,10 +985,12 @@ async fn search(
 async fn preview(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<SourceRequest>,
+    RequestJson(req): RequestJson<SourceRequest>,
 ) -> ApiResult {
     if req.source.len() > weftext_core::MAX_SOURCE_BYTES {
-        return Err(ApiError::bad("预览上限为 2 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_preview_source_budget(),
+        ));
     }
     let sid = req.session_id.clone();
     let check = auth.clone();
@@ -981,7 +1012,7 @@ async fn preview(
         ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "busy",
-            "预览正在运行，请稍后再试",
+            UiMessage::error_api_hosted_preview_busy(),
         )
     })?;
     let output = render_worker(input).await;
@@ -990,28 +1021,28 @@ async fn preview(
         if inner.actor_generation(&actor) != generation { return Err(unavailable()); }
         editor::validate_inputs(inner, &actor, &session.resource, &dependencies)?;
         environment.recheck(inner, &actor)?;
-        let output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "previewUnavailable", "预览未完成，源码与草稿仍保留。"))?;
+        let output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "previewUnavailable", UiMessage::error_api_hosted_preview_incomplete()))?;
         // Return rendered content only. Compiler paths, origins and ambient
         // metadata are not part of this bounded hosted presentation API.
         Ok(Json(json!({"ok":output["ok"],"html":output["html"],
-            "message":if output["ok"] == true { "" } else { "无法在当前获权依赖内预览；源码和草稿仍保留。" }})))
+            "explanation":if output["ok"] == true { None } else { Some(UiMessage::error_api_hosted_authorized_preview_unavailable()) },"diagnostics":[],"causes":[]})))
     }).await
 }
 async fn prepare_download(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Open>,
+    RequestJson(req): RequestJson<Open>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
         if !inner.rights(&actor, &req.resource)?.download { return Err(unavailable()); }
         inner.downloads.retain(|_, d| d.expires > Instant::now());
-        if inner.downloads.len() >= 32 { return Err(ApiError::bad("暂存下载已达上限，请稍后重试")); }
+        if inner.downloads.len() >= 32 { return Err(ApiError::bad(UiMessage::error_api_hosted_download_count_budget())); }
         let files = inner.files(&actor, std::slice::from_ref(&req.resource))?;
         let bytes = files[&inner.file(&req.resource)?.path].clone();
         let ticket = uuid::Uuid::new_v4().to_string();
         let result = json!({"ticket":ticket,"length":bytes.len(),"sha256":digest(&bytes),"chunkSize":65536,"status":"frozen"});
-        if inner.downloads.values().map(|d| d.bytes.len()).sum::<usize>() + bytes.len() > 64*1024*1024 { return Err(ApiError::bad("下载暂存总量已达 64 MiB")); }
+        if inner.downloads.values().map(|d| d.bytes.len()).sum::<usize>() + bytes.len() > 64*1024*1024 { return Err(ApiError::bad(UiMessage::error_api_hosted_download_byte_budget())); }
         inner.downloads.insert(ticket, Download {generation:inner.actor_generation(&actor),actor,resource:req.resource,bytes,expires:Instant::now()+Duration::from_secs(900)});
         Ok(result)
     }).await?))
@@ -1019,7 +1050,7 @@ async fn prepare_download(
 async fn chunk(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Chunk>,
+    RequestJson(req): RequestJson<Chunk>,
 ) -> Result<Response, ApiError> {
     locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
@@ -1048,7 +1079,7 @@ async fn chunk(
 async fn update_policy(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<PolicyUpdate>,
+    RequestJson(req): RequestJson<PolicyUpdate>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1059,18 +1090,16 @@ async fn update_policy(
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "policyConflict",
-                    "授权策略已变化，请读取当前代次",
+                    UiMessage::error_api_hosted_policy_generation_conflict(),
                 ));
             }
             validate_users(&inner.config, &req.users)?;
             let mut next = Policy {
                 deployment: inner.policy.deployment.clone(),
                 sync_identity: inner.policy.sync_identity.clone(),
-                generation: inner
-                    .policy
-                    .generation
-                    .checked_add(1)
-                    .ok_or_else(|| ApiError::internal("授权代次耗尽"))?,
+                generation: inner.policy.generation.checked_add(1).ok_or_else(|| {
+                    ApiError::internal(UiMessage::error_api_hosted_policy_generation_exhausted())
+                })?,
                 users: req.users,
             };
             for (actor, user) in &mut next.users {
@@ -1098,9 +1127,9 @@ async fn update_policy(
             }
             inner
                 .core
-                .store_hosted_policy(
-                    &serde_json::to_vec(&next).map_err(|_| ApiError::internal("策略编码失败"))?,
-                )
+                .store_hosted_policy(&serde_json::to_vec(&next).map_err(|_| {
+                    ApiError::internal(UiMessage::error_api_hosted_policy_encoding_failed())
+                })?)
                 .map_err(HostedInner::core_error)?;
             inner.policy = next;
             let expired_sessions = inner

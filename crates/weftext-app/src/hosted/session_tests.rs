@@ -136,7 +136,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(opened) = open(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Open {
+            crate::RequestJson(Open {
                 resource: "Shared".into(),
             }),
         )
@@ -148,7 +148,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
             Extension(Auth {
                 digest: digest(b"bob"),
             }),
-            Json(SessionRequest {
+            crate::RequestJson(SessionRequest {
                 session_id: id.clone(),
             }),
         )
@@ -157,7 +157,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(renewed) = keepalive(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(SessionRequest {
+            crate::RequestJson(SessionRequest {
                 session_id: id.clone(),
             }),
         )
@@ -167,7 +167,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(closed) = close(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(SessionRequest { session_id: id }),
+            crate::RequestJson(SessionRequest { session_id: id }),
         )
         .await
         .unwrap();
@@ -270,7 +270,7 @@ async fn close_does_not_require_a_document_read_grant() {
     let Json(closed) = close(
         State(state.clone()),
         Extension(auth),
-        Json(SessionRequest {
+        crate::RequestJson(SessionRequest {
             session_id: id.clone(),
         }),
     )

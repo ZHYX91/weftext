@@ -212,7 +212,7 @@ impl Fixture {
                     &QueryPlan::default(),
                     &self.schema,
                 )
-                .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))
+                .map_err(|e| CoreError::from_data("invalidQueryDefinition", e))
             })
         })
     }
@@ -1234,7 +1234,7 @@ fn hosted_definition_creation_patch_is_exact_utf16_insertion_and_can_recover_ori
                     &QueryPlan::default(),
                     &f.schema,
                 )
-                .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?;
+                .map_err(|e| CoreError::from_data("invalidQueryDefinition", e))?;
                 match malformed {
                     "replace" => patch.to += 1,
                     "text" => patch.text.push_str("unmatched"),

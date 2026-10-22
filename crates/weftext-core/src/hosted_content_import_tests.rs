@@ -28,7 +28,11 @@ fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_origi
         .push(weftext_export::exchange::NativeLoss {
             path: "PRIVATE_SCHEMA_PATH".into(),
             code: "PRIVATE_UNKNOWN_CODE".into(),
-            detail: "PRIVATE_PRODUCER_DETAILS".into(),
+            description: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: "PRIVATE_PRODUCER_DETAILS".into(),
+            })
+            .into(),
+            product_diagnostics: Vec::new(),
         });
     let bytes = weftext_export::exchange::write_native_package(&package).unwrap();
     let original = bytes.clone();

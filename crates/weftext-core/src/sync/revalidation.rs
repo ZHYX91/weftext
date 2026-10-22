@@ -8,6 +8,7 @@ use weftext_data::{
     QueryPlan, ResourceMetadata, Schema, ValidationContext,
 };
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -71,14 +72,16 @@ pub struct SyncAnnotationTargetStatus {
     pub reason: String,
 }
 
-/// A request for trusted writer evidence, never a client-deserializable proof.
-#[derive(Debug, Clone, Serialize)]
+/// A diagnostic description of required writer evidence. Decoding this value
+/// never grants the opaque writer qualification that discharges the obligation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
-    rename_all_fields = "camelCase"
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
 )]
-pub(crate) enum RequiredSemanticEvidence {
+pub enum RequiredSemanticEvidence {
     Object {
         object: ObjectKey,
         installed_revision: Option<String>,
@@ -284,7 +287,7 @@ fn received_cut(graph: &ReplicaGraph, selection: &BTreeSet<ObjectKey>) -> Result
                 .ok_or_else(|| {
                     refuse(
                         "syncConflictChanged",
-                        "The explicitly reviewed received cut is unavailable",
+                        UiMessage::error_core_sync_explicitly_reviewed_received_cut_unavailable(),
                     )
                 })
         })
@@ -303,7 +306,7 @@ fn offer_proposed_blobs(
     {
         return Err(refuse(
             "budget",
-            "Revalidation blobs exceed 5000 files / 64 MiB",
+            UiMessage::error_core_sync_revalidation_blobs_exceed5000_files64_mi_b(),
         ));
     }
     for (digest, bytes) in supplied {
@@ -312,7 +315,7 @@ fn offer_proposed_blobs(
     Ok(())
 }
 
-fn refuse(code: &str, message: &str) -> CoreError {
+fn refuse(code: &str, message: UiMessage) -> CoreError {
     CoreError::new(code, message)
 }
 fn revisions(view: &ObjectView) -> BTreeSet<String> {
@@ -350,7 +353,9 @@ pub(crate) fn prepare_revalidation(
             .try_fold(0_usize, |n, b| n.checked_add(b.len()))
             .is_none_or(|n| n > MAX_BLOB_BYTES)
     {
-        return Err(invalid("Select one bounded exact revalidation proposal"));
+        return Err(invalid(
+            UiMessage::error_core_sync_revalidation_proposal_selection_invalid(),
+        ));
     }
     let expected = expected_installed
         .iter()
@@ -363,7 +368,8 @@ pub(crate) fn prepare_revalidation(
     if expected.len() != expected_installed.len() || expected != actual {
         return Err(refuse(
             "syncBasisChanged",
-            "The explicitly reviewed installed cut changed before preparation",
+            UiMessage::error_core_sync_explicitly_reviewed_installed_cut_changed_before_preparation(
+            ),
         ));
     }
     let reviewed_cut = reviewed_versions
@@ -377,7 +383,7 @@ pub(crate) fn prepare_revalidation(
     if reviewed_cut.len() != reviewed_versions.len() || reviewed_cut != received {
         return Err(refuse(
             "syncConflictChanged",
-            "The complete explicitly reviewed received transaction/read cut changed",
+            UiMessage::error_core_sync_complete_explicitly_reviewed_received_transaction_read_cut_changed(),
         ));
     }
     // This graph is an owned read from the original immutable store. A failed
@@ -417,12 +423,14 @@ pub(crate) fn prepare_revalidation(
         .keys()
         .any(|digest| !manifest.blobs().contains(digest))
     {
-        return Err(invalid("Revalidation contains unrelated blobs"));
+        return Err(invalid(
+            UiMessage::error_core_sync_revalidation_unrelated_blobs(),
+        ));
     }
     graph.offer_manifest(&id, manifest.clone())?;
     if graph.status(&id)? != Admission::Accepted {
         return Err(invalid(
-            "Revalidated state has missing bytes or invalid causal predecessors",
+            UiMessage::error_core_sync_revalidation_state_evidence_invalid(),
         ));
     }
     let mut states = chosen;
@@ -458,7 +466,9 @@ pub(crate) fn chosen_revalidation_states(
         || !requested.is_subset(selection)
         || selection.len() > MAX_CHANGES
     {
-        return Err(invalid("Select one bounded exact revalidation proposal"));
+        return Err(invalid(
+            UiMessage::error_core_sync_revalidation_proposal_selection_invalid(),
+        ));
     }
     let current = graph.objects()?;
     let mut chosen = BTreeMap::new();
@@ -466,7 +476,7 @@ pub(crate) fn chosen_revalidation_states(
         let view = current.get(object).ok_or_else(|| {
             refuse(
                 "syncIncomplete",
-                "A selected received object is unavailable",
+                UiMessage::error_core_sync_selected_received_object_unavailable(),
             )
         })?;
         let version = if let Some(item) = reviewed.iter().find(|r| &r.object == object) {
@@ -478,7 +488,8 @@ pub(crate) fn chosen_revalidation_states(
                 .ok_or_else(|| {
                     refuse(
                         "syncConflictChanged",
-                        "The explicitly chosen base is no longer a current branch",
+                        UiMessage::error_core_sync_explicitly_chosen_base_no_longer_current_branch(
+                        ),
                     )
                 })?;
             if matches!(item.decision, SyncRevalidationDecision::Preserve { .. })
@@ -486,7 +497,7 @@ pub(crate) fn chosen_revalidation_states(
             {
                 return Err(refuse(
                     "syncConflictChanged",
-                    "Preserve must retain the exact selected native state",
+                    UiMessage::error_core_sync_preserve_must_retain_exact_selected_native_state(),
                 ));
             }
             version.state = item.state.clone();
@@ -495,13 +506,14 @@ pub(crate) fn chosen_revalidation_states(
             let [version] = view.versions.as_slice() else {
                 return Err(refuse(
                     "syncConflict",
-                    "Every concurrent dependency needs an explicit decision",
+                    UiMessage::error_core_sync_every_concurrent_dependency_needs_explicit_decision(
+                    ),
                 ));
             };
             if !graph.unsettled_dependencies(&version.commit)?.is_empty() {
                 return Err(refuse(
                     "syncDependencyConflict",
-                    "A changed dependency needs its own semantic decision",
+                    UiMessage::error_core_sync_changed_dependency_needs_own_semantic_decision(),
                 ));
             }
             version.clone()
@@ -528,7 +540,7 @@ fn validate_proposed_file_revisions(
                     .is_some_and(|old| old != binding)
                 {
                     return Err(invalid(
-                        "A portable file revision was reused for other bytes or owner",
+                        UiMessage::error_core_sync_portable_file_revision_was_reused_for_other_bytes_or_owner(),
                     ));
                 }
             }
@@ -540,7 +552,7 @@ fn validate_proposed_file_revisions(
         file_count = file_count.saturating_add(state.files.len());
         if file_count > MAX_FILES || state.files.is_empty() {
             return Err(invalid(
-                "A content state must retain its exact bounded files",
+                UiMessage::error_core_sync_content_state_must_retain_exact_bounded_files(),
             ));
         }
         if !state.files.keys().eq(state.file_revisions.keys())
@@ -548,7 +560,7 @@ fn validate_proposed_file_revisions(
                 != state.file_revisions.len()
         {
             return Err(invalid(
-                "Every portable file requires its exact distinct content revision",
+                UiMessage::error_core_sync_every_portable_file_requires_exact_distinct_content_revision(),
             ));
         }
         for (path, revision) in &state.file_revisions {
@@ -559,7 +571,7 @@ fn validate_proposed_file_revisions(
                 .is_some_and(|old| old != binding)
             {
                 return Err(invalid(
-                    "A portable file revision was reused for other bytes or owner",
+                    UiMessage::error_core_sync_portable_file_revision_was_reused_for_other_bytes_or_owner(),
                 ));
             }
         }
@@ -575,7 +587,10 @@ pub(crate) fn revalidation_cut(
     selection: &BTreeSet<ObjectKey>,
 ) -> Result<SyncRevalidationCut> {
     if selection.is_empty() || selection.len() > MAX_CHANGES {
-        return Err(refuse("budget", "Select a bounded nonempty reviewed cut"));
+        return Err(refuse(
+            "budget",
+            UiMessage::error_core_sync_select_bounded_nonempty_reviewed_cut(),
+        ));
     }
     let current = graph.objects()?;
     let mut cut = SyncRevalidationCut {
@@ -592,9 +607,12 @@ pub(crate) fn revalidation_cut(
         cut.coverage = "partial".into();
     }
     for object in selection {
-        let view = current
-            .get(object)
-            .ok_or_else(|| refuse("syncIncomplete", "Selected received object is unavailable"))?;
+        let view = current.get(object).ok_or_else(|| {
+            refuse(
+                "syncIncomplete",
+                UiMessage::error_core_sync_selected_received_object_unavailable(),
+            )
+        })?;
         if let Some(installed) = local.get(object) {
             cut.expected_installed.push(Dependency {
                 object: object.clone(),
@@ -608,23 +626,31 @@ pub(crate) fn revalidation_cut(
         let mut originals = vec![];
         let mut unsettled = BTreeSet::new();
         for version in &view.versions {
-            let manifest = graph
-                .manifest(&version.commit)
-                .ok_or_else(|| refuse("syncIncomplete", "Original received manifest is missing"))?;
+            let manifest = graph.manifest(&version.commit).ok_or_else(|| {
+                refuse(
+                    "syncIncomplete",
+                    UiMessage::error_core_sync_original_received_manifest_missing(),
+                )
+            })?;
             originals.push((version.revision.clone(), manifest.dependencies.clone()));
             unsettled.extend(graph.unsettled_dependencies(&version.commit)?);
             for (path, digest) in &version.state.files {
                 if cut.files.len() == MAX_FILES {
                     return Err(refuse(
                         "budget",
-                        "Reviewed file metadata exceeds 5000 records",
+                        UiMessage::error_core_sync_reviewed_file_metadata_exceeds5000_records(),
                     ));
                 }
                 cut.files.push(HistoricalSemanticInput {
                     object: object.clone(),
                     object_revision: version.revision.clone(),
                     file_revision: version.state.file_revisions.get(path).cloned().ok_or_else(
-                        || refuse("syncIncomplete", "Received file revision is missing"),
+                        || {
+                            refuse(
+                                "syncIncomplete",
+                                UiMessage::error_core_sync_received_file_revision_missing(),
+                            )
+                        },
                     )?,
                     relative_path: path.clone(),
                     digest: digest.clone(),
@@ -639,7 +665,10 @@ pub(crate) fn revalidation_cut(
         });
     }
     if serde_json::to_vec(&cut)?.len() > 16 * 1024 * 1024 {
-        return Err(refuse("budget", "Reviewed cut JSON exceeds 16 MiB"));
+        return Err(refuse(
+            "budget",
+            UiMessage::error_core_sync_reviewed_cut_j_s_o_n_exceeds16_mi_b(),
+        ));
     }
     Ok(cut)
 }
@@ -655,7 +684,7 @@ fn inherited_retired(
         if seen.len() == MAX_FILES || !seen.insert(object.clone()) {
             return Err(refuse(
                 "syncIncomplete",
-                "Lifecycle parent closure is cyclic or exceeds its budget",
+                UiMessage::error_core_sync_lifecycle_parent_closure_cyclic_or_exceeds_budget(),
             ));
         }
         let (flag, parent) = read(&object)?;
@@ -673,7 +702,7 @@ pub(crate) fn effective_retired(
         let version = chosen.get(object).ok_or_else(|| {
             refuse(
                 "syncDependencyRequired",
-                "The exact lifecycle parent is outside the chosen cut",
+                UiMessage::error_core_sync_exact_lifecycle_parent_outside_chosen_cut(),
             )
         })?;
         Ok((version.state.retired, version.state.parent.clone()))
@@ -711,18 +740,25 @@ impl Validator<'_> {
     fn evidence(&mut self, value: RequiredSemanticEvidence) -> Result<()> {
         let key = serde_json::to_string(&value)?;
         if self.evidence.len() == MAX_FILES && !self.evidence.contains_key(&key) {
-            return Err(refuse("budget", "Semantic evidence exceeds 5000 records"));
+            return Err(refuse(
+                "budget",
+                UiMessage::error_core_sync_semantic_evidence_exceeds5000_records(),
+            ));
         }
         self.evidence.insert(key, value);
         Ok(())
     }
     fn retain_metadata(&mut self, value: &impl Serialize) -> Result<()> {
-        struct Counter(usize);
+        struct Counter {
+            bytes: usize,
+            exceeded: bool,
+        }
         impl std::io::Write for Counter {
             fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0 = self.0.saturating_add(bytes.len());
-                if self.0 > MAX_BLOB_BYTES {
-                    return Err(std::io::Error::other("semantic metadata budget"));
+                self.bytes = self.bytes.saturating_add(bytes.len());
+                if self.bytes > MAX_BLOB_BYTES {
+                    self.exceeded = true;
+                    return Err(std::io::ErrorKind::FileTooLarge.into());
                 }
                 Ok(bytes.len())
             }
@@ -730,12 +766,26 @@ impl Validator<'_> {
                 Ok(())
             }
         }
-        let mut counter = Counter(0);
-        serde_json::to_writer(&mut counter, value)
-            .map_err(|_| refuse("budget", "Semantic metadata exceeds 64 MiB"))?;
-        self.retained_metadata = self.retained_metadata.saturating_add(counter.0);
+        let mut counter = Counter {
+            bytes: 0,
+            exceeded: false,
+        };
+        serde_json::to_writer(&mut counter, value).map_err(|error| {
+            if counter.exceeded {
+                refuse(
+                    "budget",
+                    UiMessage::error_core_sync_semantic_metadata_exceeds64_mi_b(),
+                )
+            } else {
+                CoreError::from(error)
+            }
+        })?;
+        self.retained_metadata = self.retained_metadata.saturating_add(counter.bytes);
         if self.bytes.saturating_add(self.retained_metadata) > MAX_BLOB_BYTES {
-            return Err(refuse("budget", "Retained semantic closure exceeds 64 MiB"));
+            return Err(refuse(
+                "budget",
+                UiMessage::error_core_sync_retained_semantic_closure_exceeds64_mi_b(),
+            ));
         }
         Ok(())
     }
@@ -744,15 +794,16 @@ impl Validator<'_> {
             let view = self.current.get(object).ok_or_else(|| {
                 refuse(
                     "syncDependencyRequired",
-                    "An actual semantic target has no accepted received state",
+                    UiMessage::error_core_sync_actual_semantic_target_has_no_accepted_received_state(),
                 )
             })?;
             let [version] = view.versions.as_slice() else {
                 return Err(refuse(
                     "syncConflict",
-                    &format!(
-                        "Explicitly choose concurrent semantic dependency {}",
-                        serde_json::to_string(object)?
+                    UiMessage::error_core_concurrent_semantic_dependency(
+                        weftext_messages::params::ErrorCoreConcurrentSemanticDependency {
+                            object: serde_json::to_string(object)?,
+                        },
                     ),
                 ));
             };
@@ -763,9 +814,10 @@ impl Validator<'_> {
             {
                 return Err(refuse(
                     "syncDependencyConflict",
-                    &format!(
-                        "Explicitly revalidate changed semantic dependency {}",
-                        serde_json::to_string(object)?
+                    UiMessage::error_core_changed_semantic_dependency(
+                        weftext_messages::params::ErrorCoreChangedSemanticDependency {
+                            object: serde_json::to_string(object)?,
+                        },
                     ),
                 ));
             }
@@ -774,13 +826,13 @@ impl Validator<'_> {
         let version = self.chosen.get(object).cloned().ok_or_else(|| {
             refuse(
                 "syncDependencyRequired",
-                "Choose the exact semantic dependency state before revalidation",
+                UiMessage::error_core_sync_choose_exact_semantic_dependency_state_before_revalidation(),
             )
         })?;
         if !self.current.contains_key(object) {
             return Err(refuse(
                 "syncDependencyRequired",
-                "Semantic object has no accepted received version set",
+                UiMessage::error_core_sync_semantic_object_has_no_accepted_received_version_set(),
             ));
         }
         self.reads.insert(object.clone());
@@ -792,21 +844,25 @@ impl Validator<'_> {
         Ok(version)
     }
     fn blob(&mut self, digest: &str) -> Result<Vec<u8>> {
-        let bytes = self
-            .graph
-            .blob(digest)
-            .ok_or_else(|| refuse("syncIncomplete", "An exact semantic input blob is missing"))?;
+        let bytes = self.graph.blob(digest).ok_or_else(|| {
+            refuse(
+                "syncIncomplete",
+                UiMessage::error_core_sync_exact_semantic_input_blob_missing(),
+            )
+        })?;
         if self.used_blobs.insert(digest.into()) {
-            self.bytes = self
-                .bytes
-                .checked_add(bytes.len())
-                .ok_or_else(|| refuse("budget", "Semantic input budget overflow"))?;
+            self.bytes = self.bytes.checked_add(bytes.len()).ok_or_else(|| {
+                refuse(
+                    "budget",
+                    UiMessage::error_core_sync_semantic_input_budget_overflow(),
+                )
+            })?;
             if self.bytes.saturating_add(self.retained_metadata) > MAX_BLOB_BYTES
                 || self.used_blobs.len() > MAX_FILES
             {
                 return Err(refuse(
                     "budget",
-                    "Semantic inputs exceed 64 MiB / 5000 files",
+                    UiMessage::error_core_sync_semantic_inputs_exceed64_mi_b5000_files(),
                 ));
             }
         }
@@ -821,13 +877,13 @@ impl Validator<'_> {
         let digest = version.state.files.get(path).ok_or_else(|| {
             refuse(
                 "syncSemanticUnavailable",
-                "The chosen state has no exact required input",
+                UiMessage::error_core_sync_chosen_state_has_no_exact_required_input(),
             )
         })?;
         let revision = version.state.file_revisions.get(path).ok_or_else(|| {
             refuse(
                 "syncSemanticUnavailable",
-                "The chosen input lacks its portable file revision",
+                UiMessage::error_core_sync_chosen_input_lacks_portable_file_revision(),
             )
         })?;
         Ok((revision.clone(), self.blob(digest)?))
@@ -839,13 +895,13 @@ impl Validator<'_> {
         let ObjectKey::Node(id) = object else {
             return Err(refuse(
                 "syncSemanticUnavailable",
-                "An exact Node source is required",
+                UiMessage::error_core_sync_exact_node_source_required(),
             ));
         };
         if weftext_engine::inspect_metadata(&source).id.as_ref() != Some(id) {
             return Err(refuse(
                 "identityConflict",
-                "Chosen source changes its canonical Node identity",
+                UiMessage::error_core_sync_chosen_source_changes_canonical_node_identity(),
             ));
         }
         Ok((revision, source))
@@ -865,7 +921,7 @@ impl Validator<'_> {
                     _ => {
                         return Err(refuse(
                             "syncSemanticUnavailable",
-                            "Unsupported historical semantic role",
+                            UiMessage::error_core_sync_unsupported_historical_semantic_role(),
                         ));
                     }
                 };
@@ -884,7 +940,7 @@ impl Validator<'_> {
                     .ok_or_else(|| {
                         refuse(
                             "syncIncomplete",
-                            "Historical semantic blob descriptor is absent",
+                            UiMessage::error_core_sync_historical_semantic_blob_descriptor_absent(),
                         )
                     })?
                     .clone();
@@ -898,7 +954,7 @@ impl Validator<'_> {
                 if found.as_ref().is_some_and(|old| old.digest != item.digest) {
                     return Err(refuse(
                         "syncSemanticUnavailable",
-                        "A retained file revision has ambiguous semantic bytes",
+                        UiMessage::error_core_sync_retained_file_revision_has_ambiguous_semantic_bytes(),
                     ));
                 }
                 found.get_or_insert(item);
@@ -907,7 +963,7 @@ impl Validator<'_> {
         let found = found.ok_or_else(|| {
             refuse(
                 "syncSemanticUnavailable",
-                "The exact pinned semantic file revision is unavailable",
+                UiMessage::error_core_sync_exact_pinned_semantic_file_revision_unavailable(),
             )
         })?;
         let bytes = self.blob(&found.digest)?;
@@ -920,19 +976,28 @@ impl Validator<'_> {
             self.evidence(RequiredSemanticEvidence::AbsentConfiguration {
                 object: ObjectKey::Schema,
             })?;
-            return Schema::bundled()
-                .map_err(|_| refuse("schemaUnavailable", "Bundled Schema is unavailable"));
+            return Schema::bundled().map_err(|error| {
+                refuse(
+                    "schemaUnavailable",
+                    UiMessage::error_core_sync_bundled_schema_unavailable(),
+                )
+                .caused_by(CoreError::from_data("data", error))
+            });
         }
         let version = self.need(&ObjectKey::Schema)?;
         if version.state.retired {
-            return Err(refuse("schemaUnavailable", "Chosen Schema is retired"));
+            return Err(refuse(
+                "schemaUnavailable",
+                UiMessage::error_core_sync_chosen_schema_retired(),
+            ));
         }
         let (_, bytes) = self.file(&ObjectKey::Schema, &version, ".weftext-schema.json")?;
-        Schema::from_author_json(&crate::decode(&bytes)?).map_err(|_| {
+        Schema::from_author_json(&crate::decode(&bytes)?).map_err(|error| {
             refuse(
                 "schemaUnavailable",
-                "The explicitly chosen Schema is invalid",
+                UiMessage::error_core_sync_explicitly_chosen_schema_invalid(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })
     }
     fn rules(&mut self) -> Result<()> {
@@ -944,7 +1009,10 @@ impl Validator<'_> {
         }
         let version = self.need(&ObjectKey::Rules)?;
         if version.state.retired {
-            return Err(refuse("rulesUnavailable", "Chosen Rules are retired"));
+            return Err(refuse(
+                "rulesUnavailable",
+                UiMessage::error_core_sync_chosen_rules_retired(),
+            ));
         }
         let (_, bytes) = self.file(&ObjectKey::Rules, &version, ".weftext-rules")?;
         crate::validate_library_rules(&bytes)
@@ -960,7 +1028,7 @@ impl Validator<'_> {
         let id = reference.strip_prefix(&prefix).ok_or_else(|| {
             refuse(
                 "syncDependencyRequired",
-                "A typed target is outside the selected workspace",
+                UiMessage::error_core_sync_typed_target_outside_selected_workspace(),
             )
         })?;
         uuid(id)?;
@@ -1020,7 +1088,7 @@ impl Validator<'_> {
                 if !tags.tags.iter().any(|tag| tag.tag_id == id) {
                     return Err(refuse(
                         "syncSemanticUnavailable",
-                        "The chosen tag registry has no unique typed target",
+                        UiMessage::error_core_sync_chosen_tag_registry_has_no_unique_typed_target(),
                     ));
                 }
             }
@@ -1066,7 +1134,7 @@ impl Validator<'_> {
                 if found.len() != 1 {
                     return Err(refuse(
                         "syncDependencyRequired",
-                        "Choose the unique owner of the actual typed resource",
+                        UiMessage::error_core_sync_choose_unique_owner_of_actual_typed_resource(),
                     ));
                 }
                 let object = found.remove(0);
@@ -1076,7 +1144,7 @@ impl Validator<'_> {
             _ => {
                 return Err(refuse(
                     "syncSemanticUnavailable",
-                    "Typed target kind is unsupported",
+                    UiMessage::error_core_sync_typed_target_kind_unsupported(),
                 ));
             }
         }
@@ -1093,20 +1161,22 @@ impl Validator<'_> {
         if self.retired(&object)? {
             return Err(refuse(
                 "citationWorkUnavailable",
-                "Chosen citation Work is retired",
+                UiMessage::error_core_sync_chosen_citation_work_retired(),
             ));
         }
         let (revision, source) = self.source(&object, &version)?;
-        let (_, _, types) = weftext_data::narrow_query_metadata(&source, schema).map_err(|_| {
-            refuse(
-                "citationWorkUnavailable",
-                "Chosen Work control is unavailable",
-            )
-        })?;
+        let (_, _, types) =
+            weftext_data::narrow_query_metadata(&source, schema).map_err(|error| {
+                refuse(
+                    "citationWorkUnavailable",
+                    UiMessage::error_core_sync_chosen_work_control_unavailable(),
+                )
+                .caused_by(CoreError::from_data("data", error))
+            })?;
         if !types.iter().any(|t| t == "library/work") {
             return Err(refuse(
                 "citationWorkType",
-                "Chosen citation target is not a Work",
+                UiMessage::error_core_sync_chosen_citation_target_not_work(),
             ));
         }
         let profile = weftext_data::narrow_profile(
@@ -1115,11 +1185,12 @@ impl Validator<'_> {
             &BTreeSet::from(["library/publication".into()]),
             None,
         )
-        .map_err(|_| {
+        .map_err(|error| {
             refuse(
                 "citationPublicationUnavailable",
-                "Chosen Work publication is unavailable",
+                UiMessage::error_core_sync_chosen_work_publication_unavailable(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })?;
         let publication = profile
             .fields
@@ -1130,7 +1201,7 @@ impl Validator<'_> {
             .ok_or_else(|| {
                 refuse(
                     "citationPublicationUnavailable",
-                    "Chosen Work publication is absent or invalid",
+                    UiMessage::error_core_sync_chosen_work_publication_absent_or_invalid(),
                 )
             })?;
         Ok(weftext_export::bibliography::FrozenWork {
@@ -1150,25 +1221,28 @@ impl Validator<'_> {
             return Ok(());
         };
         let owner = self.node(id);
-        let mut definitions = weftext_data::saved_queries(source).map_err(|_| {
+        let mut definitions = weftext_data::saved_queries(source).map_err(|error| {
             refuse(
                 "definitionUnavailable",
-                "Chosen saved definitions are malformed",
+                UiMessage::error_core_sync_chosen_saved_definitions_malformed(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })?;
         weftext_knowledge::saved_query_reference_slots(source, current_schema, &owner).map_err(
-            |_| {
+            |error| {
                 refuse(
                     "definitionUnavailable",
-                    "Chosen Query references are not exact native controls",
+                    UiMessage::error_core_sync_chosen_query_references_not_exact_native_controls(),
                 )
+                .caused_by(CoreError::from_knowledge("knowledge", error))
             },
         )?;
-        weftext_knowledge::definition_slots(source, &owner).map_err(|_| {
+        weftext_knowledge::definition_slots(source, &owner).map_err(|error| {
             refuse(
                 "definitionUnavailable",
-                "Chosen definition keys are ambiguous or computed",
+                UiMessage::error_core_sync_chosen_definition_keys_ambiguous_or_computed(),
             )
+            .caused_by(CoreError::from_knowledge("knowledge", error))
         })?;
         for occurrence in weftext_data::embedded_queries(source) {
             let (Some(key), Some(plan), Some(binding)) =
@@ -1176,7 +1250,7 @@ impl Validator<'_> {
             else {
                 return Err(refuse(
                     "definitionUnavailable",
-                    "An embedded Query lacks an exact plan or binding",
+                    UiMessage::error_core_sync_embedded_query_lacks_exact_plan_or_binding(),
                 ));
             };
             if !definitions.iter().any(|definition| {
@@ -1206,7 +1280,7 @@ impl Validator<'_> {
             {
                 return Err(refuse(
                     "schemaUnavailable",
-                    "Chosen definition names another Schema authority or language",
+                    UiMessage::error_core_sync_chosen_definition_names_another_schema_authority_or_language(),
                 ));
             }
             let mut context = FrozenAdvancedInput {
@@ -1224,11 +1298,12 @@ impl Validator<'_> {
             for _ in 0..64 {
                 let deps =
                     weftext_data::definition_dependencies(&definition.plan, &context.definitions)
-                        .map_err(|_| {
+                        .map_err(|error| {
                         refuse(
                             "definitionUnavailable",
-                            "Query call closure is invalid or cyclic",
+                            UiMessage::error_core_sync_query_call_closure_invalid_or_cyclic(),
                         )
+                        .caused_by(CoreError::from_data("data", error))
                     })?;
                 let mut progress = false;
                 for dep in deps {
@@ -1271,7 +1346,7 @@ impl Validator<'_> {
                         {
                             return Err(refuse(
                                 "identityConflict",
-                                "Pinned callee source changes its logical owner identity",
+                                UiMessage::error_core_sync_pinned_callee_source_changes_logical_owner_identity(),
                             ));
                         }
                         progress = true;
@@ -1285,11 +1360,12 @@ impl Validator<'_> {
                         &dep.selection,
                         &context.definitions[index].history,
                     )
-                    .map_err(|_| {
+                    .map_err(|error| {
                         refuse(
                             "definitionUnavailable",
-                            "The exact current/pinned callee is missing",
+                            UiMessage::error_core_sync_exact_current_pinned_callee_missing(),
                         )
+                        .caused_by(CoreError::from_data("data", error))
                     })?;
                     self.evidence(RequiredSemanticEvidence::Definition {
                         owner: self.node(&id),
@@ -1313,7 +1389,10 @@ impl Validator<'_> {
                     break;
                 }
                 if context.definitions.len() > 64 {
-                    return Err(refuse("budget", "Query owner closure exceeds 64 records"));
+                    return Err(refuse(
+                        "budget",
+                        UiMessage::error_core_sync_query_owner_closure_exceeds64_records(),
+                    ));
                 }
             }
             let baseline = context
@@ -1326,21 +1405,27 @@ impl Validator<'_> {
                 .unwrap()
                 .projection
                 .clone();
-            if !weftext_data::baseline_contract_compatible(&baseline, current_schema)
-                .map_err(|_| refuse("schemaUnavailable", "Schema compatibility cannot be proved"))?
-            {
+            if !weftext_data::baseline_contract_compatible(&baseline, current_schema).map_err(
+                |error| {
+                    refuse(
+                        "schemaUnavailable",
+                        UiMessage::error_core_sync_schema_compatibility_cannot_proved(),
+                    )
+                    .caused_by(CoreError::from_data("data", error))
+                },
+            )? {
                 return Err(refuse(
                     "schemaBasisChanged",
-                    "Original Query baseline is incompatible with the chosen current Schema",
+                    UiMessage::error_core_sync_original_query_baseline_incompatible_with_chosen_current_schema(),
                 ));
             }
             let reads =
                 weftext_data::query_read_requirements(&definition.plan, &baseline, &context)
-                    .map_err(|_| {
+                    .map_err(|error| {
                         refuse(
-                            "invalidQuery",
-                            "The complete static Query read closure cannot be proved",
-                        )
+                    "invalidQuery",
+                    UiMessage::error_core_sync_complete_static_query_read_closure_cannot_proved(),
+                ).caused_by(CoreError::from_data("data", error))
                     })?;
             if reads.tag_structure {
                 // A pinned definition still reads the tree at this selected
@@ -1359,17 +1444,20 @@ impl Validator<'_> {
                         self.graph.workspace_id.clone(),
                         document,
                     )
-                    .map_err(|e| refuse("tagStructureUnavailable", &e.to_string()))?;
+                    .map_err(|e| CoreError::from_data("tagStructureUnavailable", e))?;
                     self.retained_metadata = self
                         .retained_metadata
                         .checked_add(structure.retained_bytes())
                         .ok_or_else(|| {
-                            refuse("budget", "Tag structure retained budget overflow")
+                            refuse(
+                                "budget",
+                                UiMessage::error_core_sync_tag_structure_retained_budget_overflow(),
+                            )
                         })?;
                     if self.bytes.saturating_add(self.retained_metadata) > MAX_BLOB_BYTES {
                         return Err(refuse(
                             "budget",
-                            "Retained semantic closure plus tag structure exceeds 64 MiB",
+                            UiMessage::error_core_sync_retained_semantic_closure_plus_tag_structure_exceeds64_mi_b(),
                         ));
                     }
                     self.tag_structure = Some((version.revision.clone(), structure));
@@ -1377,19 +1465,21 @@ impl Validator<'_> {
                 context.tag_structure = self.tag_structure.as_ref().map(|(_, tree)| tree.clone());
             }
             weftext_data::validate_query_plan_with_context(&definition.plan, &baseline, &context)
-                .map_err(|_| {
+                .map_err(|error| {
                 refuse(
                     "invalidQuery",
-                    "Query is not typed under its exact callee/baseline closure",
+                    UiMessage::error_core_sync_query_not_typed_under_exact_callee_baseline_closure(
+                    ),
                 )
+                .caused_by(CoreError::from_data("data", error))
             })?;
             let requirements =
                 weftext_data::query_provider_requirements(&definition.plan, &baseline, &context)
-                    .map_err(|_| {
+                    .map_err(|error| {
                         refuse(
                             "providerUnavailable",
-                            "Exact Provider/validator/series requirements cannot be proved",
-                        )
+                            UiMessage::error_core_sync_exact_provider_validator_series_requirements_cannot_proved(),
+                        ).caused_by(CoreError::from_data("data", error))
                     })?;
             let dynamic = requirements
                 .iter()
@@ -1397,7 +1487,13 @@ impl Validator<'_> {
                 .collect::<BTreeSet<_>>();
             let has_call =
                 !weftext_data::definition_dependencies(&definition.plan, &context.definitions)
-                    .map_err(|_| refuse("invalidQuery", "Actual call closure is invalid"))?
+                    .map_err(|error| {
+                        refuse(
+                            "invalidQuery",
+                            UiMessage::error_core_sync_actual_call_closure_invalid(),
+                        )
+                        .caused_by(CoreError::from_data("data", error))
+                    })?
                     .is_empty();
             let provider_call = requirements.iter().any(|r| !r.provider_calls.is_empty());
             // This is the original Data compiler/evaluator's definition-time
@@ -1409,11 +1505,13 @@ impl Validator<'_> {
                 &context,
                 &weftext_data::QueryBudget::default(),
             )
-            .map_err(|_| {
+            .map_err(|error| {
                 refuse(
                     "queryInvocationUnavailable",
-                    "Exact closed Query/callee/Provider preflight is invalid",
+                    UiMessage::error_core_sync_exact_closed_query_callee_provider_preflight_invalid(
+                    ),
                 )
+                .caused_by(CoreError::from_data("data", error))
             })?;
             let root_baseline = weftext_data::ProviderBaseline {
                 schema: definition.binding.schema.clone(),
@@ -1478,7 +1576,9 @@ impl Validator<'_> {
                 }
                 for member in self.query_members.clone() {
                     if !matches!(member, ObjectKey::Node(_)) {
-                        return Err(invalid("An actual Query row requires an exact Node owner"));
+                        return Err(invalid(
+                            UiMessage::error_core_sync_revalidation_query_row_node_owner_required(),
+                        ));
                     }
                     self.need(&member)?;
                 }
@@ -1507,7 +1607,7 @@ impl Validator<'_> {
         if binding.schema != role || binding.language != "weftext.query.cel.v1" {
             return Err(refuse(
                 "schemaUnavailable",
-                "Callee Schema role/language is invalid",
+                UiMessage::error_core_sync_callee_schema_role_language_invalid(),
             ));
         }
         if context
@@ -1526,16 +1626,17 @@ impl Validator<'_> {
         } else {
             self.historical(&ObjectKey::Schema, &binding.revision)?.1
         };
-        let projection = Schema::from_author_json(&crate::decode(&bytes)?).map_err(|_| {
+        let projection = Schema::from_author_json(&crate::decode(&bytes)?).map_err(|error| {
             refuse(
                 "schemaUnavailable",
-                "The exact retained Schema baseline is invalid",
+                UiMessage::error_core_sync_exact_retained_schema_baseline_invalid(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })?;
         if context.schemas.len() >= 64 {
             return Err(refuse(
                 "budget",
-                "Query baseline closure exceeds 64 records",
+                UiMessage::error_core_sync_query_baseline_closure_exceeds64_records(),
             ));
         }
         context.schemas.push(FrozenDefinitionSchema {
@@ -1547,11 +1648,12 @@ impl Validator<'_> {
     }
     fn scopes(&mut self, plan: &QueryPlan, context: &FrozenAdvancedInput) -> Result<()> {
         let scopes =
-            weftext_data::required_query_scopes(plan, &context.definitions).map_err(|_| {
+            weftext_data::required_query_scopes(plan, &context.definitions).map_err(|error| {
                 refuse(
                     "queryScopeUnavailable",
-                    "Nested Query scope cannot be proved",
+                    UiMessage::error_core_sync_nested_query_scope_cannot_proved(),
                 )
+                .caused_by(CoreError::from_data("data", error))
             })?;
         for scope in scopes {
             let target = if scope.starts_with("weftext-node://") {
@@ -1565,7 +1667,8 @@ impl Validator<'_> {
                     {
                         return Err(refuse(
                             "queryScopeUnavailable",
-                            "The exact directory identity has ambiguous roles",
+                            UiMessage::error_core_sync_exact_directory_identity_has_ambiguous_roles(
+                            ),
                         ));
                     }
                     ObjectKey::Directory(id)
@@ -1577,23 +1680,24 @@ impl Validator<'_> {
                 } else {
                     return Err(refuse(
                         "queryScopeUnavailable",
-                        "The exact directory scope is unavailable",
+                        UiMessage::error_core_sync_exact_directory_scope_unavailable(),
                     ));
                 }
             } else {
                 return Err(refuse(
                     "queryScopeUnavailable",
-                    "Semantic revalidation requires an exact stable Query scope",
+                    UiMessage::error_core_sync_semantic_revalidation_requires_exact_stable_query_scope(),
                 ));
             };
             let version = self.need(&target)?;
             super::apply::validate_state(self.graph, &target, &version.state)?;
         }
-        weftext_data::required_query_lifecycles(plan, &context.definitions).map_err(|_| {
+        weftext_data::required_query_lifecycles(plan, &context.definitions).map_err(|error| {
             refuse(
                 "queryScopeUnavailable",
-                "Query lifecycle closure is invalid",
+                UiMessage::error_core_sync_query_lifecycle_closure_invalid(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })?;
         Ok(())
     }
@@ -1603,33 +1707,41 @@ impl Validator<'_> {
         self.rules()?;
         let (source_revision, source) = self.source(object, version)?;
         let context = self.resource_context(object, version)?;
-        if !weftext_data::validate_note(&source, &schema, &context).is_valid() {
-            return Err(refuse(
+        let validation = weftext_data::validate_note(&source, &schema, &context);
+        if !validation.is_valid() {
+            return Err(CoreError::from_descriptions(
                 "invalidTypedSource",
-                "Chosen source violates known fields, required inputs or Type constraints",
+                UiMessage::error_core_sync_chosen_source_violates_known_fields_required_inputs_or_type_constraints(),
+                validation.diagnostics.into_iter().chain(validation.unavailable).map(crate::CoreDescription::from).collect(),
             ));
         }
-        let refs = weftext_data::declared_typed_ref_closure(&source, &schema).map_err(|_| {
+        let refs = weftext_data::declared_typed_ref_closure(&source, &schema).map_err(|error| {
             refuse(
                 "invalidTypedSource",
-                "Declared typed reference closure is unavailable",
+                UiMessage::error_core_sync_declared_typed_reference_closure_unavailable(),
             )
+            .caused_by(CoreError::from_data("data", error))
         })?;
         if !refs.complete {
-            return Err(refuse(
+            return Err(CoreError::from_descriptions(
                 "invalidTypedSource",
-                "A known field has invalid/computed reference controls",
+                UiMessage::error_core_sync_known_field_has_invalid_computed_reference_controls(),
+                refs.reasons
+                    .into_iter()
+                    .map(crate::CoreDescription::from)
+                    .collect(),
             ));
         }
         for slot in &refs.slots {
             self.typed_target(&slot.kind, &slot.target)?;
         }
         if let Some(declaration) =
-            weftext_engine::inspect_citation_declaration(&source).map_err(|_| {
+            weftext_engine::inspect_citation_declaration(&source).map_err(|error| {
                 refuse(
                     "citationDeclarationUnavailable",
-                    "Citation declaration is not exact native control",
+                    UiMessage::error_core_sync_citation_declaration_not_exact_native_control(),
                 )
+                .caused_by(CoreError::from_engine("engine", error))
             })?
         {
             let mut works = vec![];
@@ -1643,18 +1755,23 @@ impl Validator<'_> {
                 &works,
                 weftext_export::bibliography::BibliographyFormat::Bibtex,
             )
-            .map_err(|_| {
+            .map_err(|error| {
                 refuse(
                     "citationPublicationUnavailable",
-                    "Chosen publication values cannot produce an accurate bibliography",
-                )
+                    UiMessage::error_core_sync_chosen_publication_values_cannot_produce_accurate_bibliography(),
+                ).caused_by(CoreError::from_export("export", error))
             })?;
         }
         self.queries(object, &source_revision, &source, &schema)?;
         if let Some(digest) = version.state.files.get("weftext.annotations.json") {
             let bytes = self.blob(digest)?;
-            let annotations = weftext_knowledge::decode_annotations(&bytes)
-                .map_err(|_| refuse("annotationUnavailable", "Chosen annotations are malformed"))?;
+            let annotations = weftext_knowledge::decode_annotations(&bytes).map_err(|error| {
+                refuse(
+                    "annotationUnavailable",
+                    UiMessage::error_core_sync_chosen_annotations_malformed(),
+                )
+                .caused_by(CoreError::from_knowledge("knowledge", error))
+            })?;
             let ObjectKey::Node(id) = object else {
                 unreachable!()
             };
@@ -1755,12 +1872,16 @@ pub(crate) fn inspect_installed_adoption(
     let reviewed = changed
         .iter()
         .map(|object| {
-            let original = local
-                .get(object)
-                .ok_or_else(|| invalid("Adoption requires an originally installed owner"))?;
+            let original = local.get(object).ok_or_else(|| {
+                invalid(UiMessage::error_core_sync_revalidation_adoption_installed_owner_required())
+            })?;
             let state = chosen
                 .get(object)
-                .ok_or_else(|| invalid("Adoption is missing its exact observed after state"))?
+                .ok_or_else(|| {
+                    invalid(
+                        UiMessage::error_core_sync_revalidation_adoption_observed_after_missing(),
+                    )
+                })?
                 .state
                 .clone();
             Ok(SyncRevalidation {
@@ -1790,7 +1911,7 @@ fn check_revalidation_at_cut(
     if reviewed.is_empty() || reviewed.len() > MAX_CHANGES || chosen.len() > MAX_CHANGES {
         return Err(refuse(
             "budget",
-            "Revalidation needs one bounded explicit state cut",
+            UiMessage::error_core_sync_revalidation_needs_one_bounded_explicit_state_cut(),
         ));
     }
     validate_proposed_file_revisions(graph, chosen)?;
@@ -1825,7 +1946,7 @@ fn check_revalidation_at_cut(
     {
         return Err(refuse(
             "syncIncomplete",
-            "Hydrate the complete reviewed transaction before semantic revalidation",
+            UiMessage::error_core_sync_hydrate_complete_reviewed_transaction_before_semantic_revalidation(),
         ));
     }
     let mut seen = BTreeSet::new();
@@ -1838,7 +1959,7 @@ fn check_revalidation_at_cut(
         {
             return Err(refuse(
                 "syncConflictChanged",
-                "Review the complete received branch set exactly once",
+                UiMessage::error_core_sync_review_complete_received_branch_set_exactly_once(),
             ));
         }
         let base = current[&item.object]
@@ -1848,7 +1969,7 @@ fn check_revalidation_at_cut(
             .ok_or_else(|| {
                 refuse(
                     "syncConflictChanged",
-                    "Review the exact chosen current branch",
+                    UiMessage::error_core_sync_review_exact_chosen_current_branch(),
                 )
             })?;
         if matches!(item.decision, SyncRevalidationDecision::Preserve { .. })
@@ -1856,7 +1977,7 @@ fn check_revalidation_at_cut(
         {
             return Err(refuse(
                 "syncConflictChanged",
-                "Preserve cannot modify the selected native state",
+                UiMessage::error_core_sync_preserve_cannot_modify_selected_native_state(),
             ));
         }
         if chosen
@@ -1865,7 +1986,7 @@ fn check_revalidation_at_cut(
         {
             return Err(refuse(
                 "syncConflictChanged",
-                "Explicit after state differs from the reviewed proposal",
+                UiMessage::error_core_sync_explicit_after_state_differs_from_reviewed_proposal(),
             ));
         }
     }
@@ -1873,13 +1994,13 @@ fn check_revalidation_at_cut(
         let view = current.get(object).ok_or_else(|| {
             refuse(
                 "syncIncomplete",
-                "Chosen object is not in accepted received history",
+                UiMessage::error_core_sync_chosen_object_not_in_accepted_received_history(),
             )
         })?;
         if !seen.contains(object) && (view.versions.len() != 1 || view.versions[0] != *version) {
             return Err(refuse(
                 "syncConflict",
-                "Every concurrent or repaired dependency needs its own explicit resolution",
+                UiMessage::error_core_sync_every_concurrent_or_repaired_dependency_needs_own_explicit_resolution(),
             ));
         }
     }
@@ -1939,7 +2060,7 @@ fn check_revalidation_at_cut(
             {
                 return Err(refuse(
                     "syncConflictChanged",
-                    "Review exact complete dependency versions before revalidation",
+                    UiMessage::error_core_sync_review_exact_complete_dependency_versions_before_revalidation(),
                 ));
             }
         }
@@ -1969,7 +2090,7 @@ fn check_revalidation_at_cut(
         {
             return Err(refuse(
                 "syncDependencyRequired",
-                "The reviewed dependency cut differs from the actual semantic read closure",
+                UiMessage::error_core_sync_reviewed_dependency_cut_differs_from_actual_semantic_read_closure(),
             ));
         }
     }

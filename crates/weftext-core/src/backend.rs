@@ -4,6 +4,7 @@ use crate::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use weftext_messages::UiMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -152,10 +153,18 @@ mod platform {
     ) -> Result<std::cmp::Ordering> {
         let left = left.encode_wide().collect::<Vec<_>>();
         let right = right.encode_wide().collect::<Vec<_>>();
-        let left_length = i32::try_from(left.len())
-            .map_err(|_| CoreError::new("budget", "Namespace component is too long"))?;
-        let right_length = i32::try_from(right.len())
-            .map_err(|_| CoreError::new("budget", "Namespace component is too long"))?;
+        let left_length = i32::try_from(left.len()).map_err(|_| {
+            CoreError::new(
+                "budget",
+                UiMessage::error_core_backend_namespace_component_too_long(),
+            )
+        })?;
+        let right_length = i32::try_from(right.len()).map_err(|_| {
+            CoreError::new(
+                "budget",
+                UiMessage::error_core_backend_namespace_component_too_long(),
+            )
+        })?;
         // Windows ordinal comparison uses the OS uppercase table, without
         // language sorting, normalization or Rust Unicode case expansion.
         match unsafe {
@@ -167,7 +176,7 @@ mod platform {
             3 => Ok(std::cmp::Ordering::Greater),
             _ => Err(CoreError::new(
                 "io",
-                "Invalid Windows ordinal comparison result",
+                UiMessage::error_core_backend_invalid_windows_ordinal_comparison_result(),
             )),
         }
     }
@@ -180,13 +189,11 @@ mod platform {
             5 => "permissionDenied",
             _ => "io",
         };
-        CoreError::new(
-            kind,
-            format!(
-                "Windows file protection failed: {}",
-                std::io::Error::from_raw_os_error(code as i32)
-            ),
-        )
+        let mut error = CoreError::from(std::io::Error::from_raw_os_error(code as i32));
+        error.code = kind.into();
+        error.explanation =
+            weftext_messages::UiMessage::error_core_windows_file_protection_failed();
+        error
     }
     pub(crate) fn publish_private_create(from: &Path, to: &Path) -> Result<()> {
         publish_private(from, to, 8)
@@ -258,7 +265,10 @@ mod platform {
     ) -> Result<File> {
         let mut wide: Vec<u16> = name.encode_wide().collect();
         if wide.len() > 16000 {
-            return Err(CoreError::new("invalidPath", "Path is too long"));
+            return Err(CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_backend_path_too_long(),
+            ));
         }
         let mut unicode = UnicodeString {
             length: (wide.len() * 2) as u16,
@@ -327,19 +337,19 @@ mod platform {
         if i.attrs & BAD_ATTR != 0 {
             return Err(CoreError::new(
                 "unsupportedPath",
-                "Reparse, offline or cloud recall objects are not qualified for this backend",
+                UiMessage::error_core_backend_reparse_offline_or_cloud_recall_objects_not_qualified_for_backend(),
             ));
         }
         if (i.attrs & 0x10 != 0) != directory {
             return Err(CoreError::new(
                 "unsupportedPath",
-                "File object has the wrong type",
+                UiMessage::error_core_backend_file_object_has_wrong_type(),
             ));
         }
         if !directory && i.links != 1 {
             return Err(CoreError::new(
                 "hardLink",
-                "Files with hard-link aliases cannot be written by this backend",
+                UiMessage::error_core_backend_files_with_hard_link_aliases_cannot_written_by_backend(),
             ));
         }
         Ok(())
@@ -372,7 +382,7 @@ mod platform {
         if n == 0 || n as usize >= buffer.len() {
             return Err(CoreError::new(
                 "unsupportedVolume",
-                "Cannot obtain a stable volume GUID path",
+                UiMessage::error_core_backend_cannot_obtain_stable_volume_g_u_i_d_path(),
             ));
         }
         Ok(PathBuf::from(String::from_utf16_lossy(
@@ -418,7 +428,7 @@ mod platform {
             if io.information == 0 || io.information > buffer.len() * 8 {
                 return Err(CoreError::new(
                     "inventoryUnavailable",
-                    "Directory enumeration returned incomplete data",
+                    UiMessage::error_core_backend_directory_enumeration_returned_incomplete_data(),
                 ));
             }
             // SAFETY: the output bytes are initialized; lengths are checked below.
@@ -429,7 +439,7 @@ mod platform {
                 if offset + 64 > bytes.len() {
                     return Err(CoreError::new(
                         "inventoryUnavailable",
-                        "Truncated directory entry",
+                        UiMessage::error_core_backend_truncated_directory_entry(),
                     ));
                 }
                 let u32_at = |pos| u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap());
@@ -439,7 +449,7 @@ mod platform {
                 if !name_len.is_multiple_of(2) || offset + 64 + name_len > bytes.len() {
                     return Err(CoreError::new(
                         "inventoryUnavailable",
-                        "Invalid directory entry length",
+                        UiMessage::error_core_backend_invalid_directory_entry_length(),
                     ));
                 }
                 let wide = bytes[offset + 64..offset + 64 + name_len]
@@ -461,11 +471,14 @@ mod platform {
                 if next < 64 || !next.is_multiple_of(8) {
                     return Err(CoreError::new(
                         "inventoryUnavailable",
-                        "Invalid directory entry offset",
+                        UiMessage::error_core_backend_invalid_directory_entry_offset(),
                     ));
                 }
                 offset = offset.checked_add(next).ok_or_else(|| {
-                    CoreError::new("inventoryUnavailable", "Directory entry overflow")
+                    CoreError::new(
+                        "inventoryUnavailable",
+                        UiMessage::error_core_backend_directory_entry_overflow(),
+                    )
                 })?;
             }
         }
@@ -494,7 +507,7 @@ mod platform {
             if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
                 return Err(CoreError::new(
                     "unsupportedVolume",
-                    "Only explicit local drive paths are supported",
+                    UiMessage::error_core_backend_only_explicit_local_drive_paths_supported(),
                 ));
             }
             let drive = PathBuf::from(format!("{}\\", &text[..2]));
@@ -519,24 +532,32 @@ mod platform {
             {
                 return Err(CoreError::new(
                     "unsupportedVolume",
-                    "The selected local volume cannot be qualified",
+                    UiMessage::error_core_backend_selected_local_volume_cannot_qualified(),
                 ));
             }
             let end = fsname.iter().position(|x| *x == 0).unwrap_or(fsname.len());
             if String::from_utf16_lossy(&fsname[..end]) != "NTFS" {
                 return Err(CoreError::new(
                     "unsupportedVolume",
-                    "Writing is limited to local NTFS volumes",
+                    UiMessage::error_core_backend_writing_limited_to_local_n_t_f_s_volumes(),
                 ));
             }
             let mut dirs = vec![root];
             let relative = path.strip_prefix(&drive).map_err(|_| {
-                CoreError::new("invalidPath", "Path is outside its protected volume")
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_path_outside_protected_volume(),
+                )
             })?;
             let mut parts = relative.components().collect::<Vec<_>>();
             let name = parts
                 .pop()
-                .ok_or_else(|| CoreError::new("invalidPath", "A leaf path is required"))?
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_core_backend_leaf_path_required(),
+                    )
+                })?
                 .as_os_str()
                 .to_os_string();
             for part in parts {
@@ -544,7 +565,7 @@ mod platform {
                 if stamp(&child)?.identity.volume != stamp(&dirs[0])?.identity.volume {
                     return Err(CoreError::new(
                         "unsupportedVolume",
-                        "A directory crossed the protected volume",
+                        UiMessage::error_core_backend_directory_crossed_protected_volume(),
                     ));
                 }
                 dirs.push(child);
@@ -619,13 +640,14 @@ mod platform {
             if !source_text[..2].eq_ignore_ascii_case(&target_text[..2]) {
                 return Err(CoreError::new(
                     "crossVolume",
-                    "Same-object moves require one local NTFS volume",
+                    UiMessage::error_core_backend_same_object_moves_require_one_local_n_t_f_s_volume(),
                 ));
             }
             if super::namespace_relative_path(&target_parent, &source)?.is_some() {
                 return Err(CoreError::new(
                     "recursiveMove",
-                    "A directory cannot be moved into itself or a descendant",
+                    UiMessage::error_core_backend_directory_cannot_moved_into_itself_or_descendant(
+                    ),
                 ));
             }
             // Reuse the already qualified volume-root and ancestor opening logic.
@@ -641,7 +663,12 @@ mod platform {
                 let mut current = drive.clone();
                 for part in leaf
                     .strip_prefix(&drive)
-                    .map_err(|_| CoreError::new("invalidPath", "Invalid volume path"))?
+                    .map_err(|_| {
+                        CoreError::new(
+                            "invalidPath",
+                            UiMessage::error_core_backend_invalid_volume_path(),
+                        )
+                    })?
                     .components()
                 {
                     let next = current.join(part.as_os_str());
@@ -657,7 +684,7 @@ mod platform {
                         if stamp(&file)?.identity.volume != volume {
                             return Err(CoreError::new(
                                 "crossVolume",
-                                "Directory crossed the protected volume",
+                                UiMessage::error_core_backend_directory_crossed_protected_volume(),
                             ));
                         }
                         dirs.insert(next.clone(), file);
@@ -696,7 +723,7 @@ mod platform {
                 let std::path::Component::Normal(name) = part else {
                     return Err(CoreError::new(
                         "invalidPath",
-                        "Expected relative source descendant",
+                        UiMessage::error_core_backend_expected_relative_source_descendant(),
                     ));
                 };
                 let next = if self.canonical_keys {
@@ -725,9 +752,12 @@ mod platform {
             self.open_source_output(relative, false, false)
         }
         pub(crate) fn open_source_placement(&mut self, relative: &Path) -> Result<File> {
-            let name = relative
-                .file_name()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing placement filename"))?;
+            let name = relative.file_name().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_missing_placement_filename(),
+                )
+            })?;
             let directory = self.source_directory(relative.parent().unwrap())?;
             nt_open_mode(
                 Some(directory),
@@ -748,9 +778,12 @@ mod platform {
             write: bool,
             create: bool,
         ) -> Result<File> {
-            let name = relative
-                .file_name()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing descendant filename"))?;
+            let name = relative.file_name().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_missing_descendant_filename(),
+                )
+            })?;
             let directory = self.source_directory(relative.parent().unwrap())?;
             nt_open(Some(directory), name, false, write, create)
         }
@@ -759,9 +792,12 @@ mod platform {
             relative: &Path,
             delete: bool,
         ) -> Result<File> {
-            let name = relative
-                .file_name()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing retirement filename"))?;
+            let name = relative.file_name().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_missing_retirement_filename(),
+                )
+            })?;
             let directory = self.source_directory(relative.parent().unwrap())?;
             nt_open_access(Some(directory), name, false, false, false, delete)
         }
@@ -795,10 +831,12 @@ mod platform {
     fn namespace_key(path: &Path) -> Result<PathBuf> {
         let mut key = PathBuf::new();
         for component in path.components() {
-            let text = component
-                .as_os_str()
-                .to_str()
-                .ok_or_else(|| CoreError::new("invalidPath", "Non-UTF8 namespace component"))?;
+            let text = component.as_os_str().to_str().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_non_u_t_f8_namespace_component(),
+                )
+            })?;
             key.push(text.to_ascii_lowercase());
         }
         Ok(key)
@@ -849,7 +887,7 @@ mod platform {
             if (participants.is_empty() && ancestors.is_empty()) || participants.len() > 5000 {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Invalid namespace participant count",
+                    UiMessage::error_core_backend_invalid_namespace_participant_count(),
                 ));
             }
             let actual = participants
@@ -867,7 +905,10 @@ mod platform {
                 .map(|(_, parent)| namespace_key(parent))
                 .collect::<Result<Vec<_>>>()?;
             if planned.len() > 5000 || ancestors.len() > 5000 {
-                return Err(CoreError::new("budget", "Too many planned directories"));
+                return Err(CoreError::new(
+                    "budget",
+                    UiMessage::error_core_backend_too_many_planned_directories(),
+                ));
             }
             let planned = planned
                 .iter()
@@ -895,7 +936,7 @@ mod platform {
             if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
                 return Err(CoreError::new(
                     "unsupportedVolume",
-                    "Explicit local NTFS paths required",
+                    UiMessage::error_core_backend_explicit_local_n_t_f_s_paths_required(),
                 ));
             }
             for (index, (source, parent)) in actual.iter().enumerate() {
@@ -910,7 +951,7 @@ mod platform {
                 {
                     return Err(CoreError::new(
                         "crossVolume",
-                        "Compound placement requires one NTFS volume",
+                        UiMessage::error_core_backend_compound_placement_requires_one_n_t_f_s_volume(),
                     ));
                 }
                 for (other, root) in sources.iter().enumerate() {
@@ -920,7 +961,7 @@ mod platform {
                     {
                         return Err(CoreError::new(
                             "recursiveMove",
-                            "Compound roots and target parents must be independent",
+                            UiMessage::error_core_backend_compound_roots_and_target_parents_must_independent(),
                         ));
                     }
                 }
@@ -930,7 +971,10 @@ mod platform {
                 let mut anchor = parent.as_path();
                 while planned_keys.contains(&namespace_key(anchor)?) {
                     anchor = anchor.parent().ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Planned directory lacks an anchor")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_backend_planned_directory_lacks_anchor(),
+                        )
                     })?;
                 }
                 drop(ParentGuard::acquire(
@@ -973,7 +1017,7 @@ mod platform {
                         if stamp(&file)?.identity.volume != volume {
                             return Err(CoreError::new(
                                 "crossVolume",
-                                "Compound directory crossed the protected volume",
+                                UiMessage::error_core_backend_compound_directory_crossed_protected_volume(),
                             ));
                         }
                         dirs.insert(next.clone(), file);
@@ -1002,16 +1046,23 @@ mod platform {
             self.inner.source = self
                 .sources
                 .get(index)
-                .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace participant"))?
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_missing_namespace_participant(),
+                    )
+                })?
                 .clone();
             self.inner.target_parent = self.parents[index].clone();
             Ok(&mut self.inner)
         }
         pub(crate) fn release_source_descendants(&mut self, index: usize) -> Result<()> {
-            let source = self
-                .sources
-                .get(index)
-                .ok_or_else(|| CoreError::new("invalidPlan", "Missing source root"))?;
+            let source = self.sources.get(index).ok_or_else(|| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_backend_missing_source_root(),
+                )
+            })?;
             self.inner
                 .dirs
                 .retain(|path, _| self.sources.contains(path) || !path.starts_with(source));
@@ -1041,7 +1092,12 @@ mod platform {
             let source = self
                 .sources
                 .get(index)
-                .ok_or_else(|| CoreError::new("invalidPlan", "Missing final source root"))?
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_missing_final_source_root(),
+                    )
+                })?
                 .clone();
             if !self.parents.contains(&source) {
                 return Ok(());
@@ -1051,18 +1107,24 @@ mod platform {
                     || matches!(component, "." | "..")
                     || component.contains(['/', '\\', ':'])
                 {
-                    return Err(CoreError::new("invalidPath", "Final guard needs basenames"));
+                    return Err(CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_core_backend_final_guard_needs_basenames(),
+                    ));
                 }
             }
             let parent = self.parents[index].clone();
             if source == parent || !self.inner.dirs.contains_key(&parent) {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Final parent is not retained",
+                    UiMessage::error_core_backend_final_parent_not_retained(),
                 ));
             }
             let original = self.inner.dirs.get(&source).ok_or_else(|| {
-                CoreError::new("invalidPlan", "Original final source is not retained")
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_backend_original_final_source_not_retained(),
+                )
             })?;
             let identity = stamp(original)?.identity;
             let witness = nt_open(
@@ -1075,7 +1137,8 @@ mod platform {
             if &stamp(&witness)?.identity != canonical_identity {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Final source canonical witness is not its original file",
+                    UiMessage::error_core_backend_final_source_canonical_witness_not_original_file(
+                    ),
                 ));
             }
             // The ordinary READ/share0 child prevents NTFS from renaming its
@@ -1093,7 +1156,7 @@ mod platform {
             if stamp(&directory)?.identity != identity {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Final source directory changed during guard handoff",
+                    UiMessage::error_core_backend_final_source_directory_changed_during_guard_handoff(),
                 ));
             }
             // Preserve capture-time keys even though the directory has moved.
@@ -1107,20 +1170,29 @@ mod platform {
                 .get(index)
                 .and_then(|key| self.inner.dirs.get(key))
                 .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Original moving root is not retained")
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_original_moving_root_not_retained(),
+                    )
                 })?;
             self.move_file_to(source, target)
         }
         pub(crate) fn move_file_to(&self, file: &File, target: &Path) -> Result<()> {
-            let parent = target
-                .parent()
-                .ok_or_else(|| CoreError::new("invalidPlan", "Moving target has no parent"))?;
+            let parent = target.parent().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_backend_moving_target_has_no_parent(),
+                )
+            })?;
             let parent = self
                 .inner
                 .dirs
                 .get(&namespace_key(parent)?)
                 .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Moving target parent is not retained")
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_moving_target_parent_not_retained(),
+                    )
                 })?;
             rename_handle(
                 file,
@@ -1129,7 +1201,10 @@ mod platform {
                     .file_name()
                     .and_then(|name| name.to_str())
                     .ok_or_else(|| {
-                        CoreError::new("invalidPath", "Moving target has no UTF-8 name")
+                        CoreError::new(
+                            "invalidPath",
+                            UiMessage::error_core_backend_moving_target_has_no_u_t_f8_name(),
+                        )
                     })?,
             )
         }
@@ -1138,12 +1213,18 @@ mod platform {
                 .sources
                 .get(index)
                 .and_then(|source| source.parent())
-                .ok_or_else(|| CoreError::new("invalidPlan", "Missing source parent"))?;
-            Ok(stamp(
-                self.inner.dirs.get(parent).ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Source parent is not retained")
-                })?,
-            )?
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_missing_source_parent(),
+                    )
+                })?;
+            Ok(stamp(self.inner.dirs.get(parent).ok_or_else(|| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_backend_source_parent_not_retained(),
+                )
+            })?)?
             .identity)
         }
         pub(crate) fn directory_identity(&self, path: &Path) -> Result<Option<FileIdentity>> {
@@ -1155,7 +1236,10 @@ mod platform {
         }
         pub(crate) fn directory_file(&self, path: &Path) -> Result<&File> {
             self.inner.dirs.get(&namespace_key(path)?).ok_or_else(|| {
-                CoreError::new("missing", "Planned directory has not been materialized")
+                CoreError::new(
+                    "missing",
+                    UiMessage::error_core_backend_planned_directory_has_not_been_materialized(),
+                )
             })
         }
         pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&File> {
@@ -1164,7 +1248,10 @@ mod platform {
                 let parent_key = key
                     .parent()
                     .ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Retained directory lacks a parent")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_backend_retained_directory_lacks_parent(),
+                        )
                     })?
                     .to_path_buf();
                 self.retain_directory(&parent_key)?;
@@ -1172,7 +1259,10 @@ mod platform {
                     .parent()
                     .and_then(|parent| self.inner.dirs.get(parent))
                     .ok_or_else(|| {
-                        CoreError::new("missing", "Directory parent is not protected")
+                        CoreError::new(
+                            "missing",
+                            UiMessage::error_core_backend_directory_parent_not_protected(),
+                        )
                     })?;
                 let file = nt_open(Some(parent), path.file_name().unwrap(), true, false, false)?;
                 self.inner.dirs.insert(key.clone(), file);
@@ -1186,37 +1276,51 @@ mod platform {
             let parent = self
                 .parents
                 .get(index)
-                .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace parent"))?
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_missing_namespace_parent(),
+                    )
+                })?
                 .clone();
             self.retain_directory(&parent)?;
             Ok(())
         }
         pub(crate) fn target_parent_identity(&self, index: usize) -> Result<Option<FileIdentity>> {
-            self.directory_identity(
-                self.parents
-                    .get(index)
-                    .ok_or_else(|| CoreError::new("invalidPlan", "Missing namespace parent"))?,
-            )
+            self.directory_identity(self.parents.get(index).ok_or_else(|| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_backend_missing_namespace_parent(),
+                )
+            })?)
         }
         pub(crate) fn create_directory(&mut self, path: &Path) -> Result<&File> {
             let key = namespace_key(path)?;
             if self.inner.dirs.contains_key(&key) {
                 return Err(CoreError::new(
                     "exists",
-                    "Planned directory is already occupied",
+                    UiMessage::error_core_backend_planned_directory_already_occupied(),
                 ));
             }
             let parent = key
                 .parent()
                 .and_then(|parent| self.inner.dirs.get(parent))
                 .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Created directory parent is not protected")
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_backend_created_directory_parent_not_protected(),
+                    )
                 })?;
             let file = ParentGuard::child_directory(
                 parent,
                 path.file_name()
                     .and_then(|name| name.to_str())
-                    .ok_or_else(|| CoreError::new("invalidPath", "Invalid directory name"))?,
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "invalidPath",
+                            UiMessage::error_core_backend_invalid_directory_name(),
+                        )
+                    })?,
             )?;
             self.inner.dirs.insert(key.clone(), file);
             Ok(&self.inner.dirs[&key])
@@ -1226,7 +1330,12 @@ mod platform {
             let parent = key
                 .parent()
                 .and_then(|parent| self.inner.dirs.get(parent))
-                .ok_or_else(|| CoreError::new("missing", "Output parent is not protected"))?;
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "missing",
+                        UiMessage::error_core_backend_output_parent_not_protected(),
+                    )
+                })?;
             nt_open(
                 Some(parent),
                 path.file_name().unwrap(),
@@ -1447,67 +1556,67 @@ mod platform {
         ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn acquire(_: &Path) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "This MVP write backend requires Windows local NTFS",
+                UiMessage::error_core_backend_m_v_p_write_backend_requires_windows_local_n_t_f_s(),
             ))
         }
         pub fn open_file(&self, _: bool, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_retiring_file(&self, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_placement_file(&self) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_read_guard_file(&self) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn create_directory(&self) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn child_file(_: &File, _: &str) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn child_directory(_: &File, _: &str) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn directory_coordinates(&self) -> Result<PathBuf> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn directory_identity(&self) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
     }
@@ -1516,25 +1625,25 @@ mod platform {
         pub fn acquire(_: &Path, _: &Path) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn source_identity(&self) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn parent_identity(&self) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn open_source_file(&self, _: &str, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn source_directory_snapshot(
@@ -1544,56 +1653,56 @@ mod platform {
         ) -> Result<DirectorySnapshot> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn open_source_descendant(&mut self, _: &Path) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_source_placement(&mut self, _: &Path) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn source_parent_identity(&mut self, _: &Path) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn open_source_output(&mut self, _: &Path, _: bool, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_source_retiring(&mut self, _: &Path, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn release_source_descendants(&mut self) {}
         pub fn rename_leaf(&self, _: &File, _: &str) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn move_source(&self, _: &str) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn open_moved_file(&self, _: &str) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
     }
@@ -1602,13 +1711,13 @@ mod platform {
         pub(crate) fn acquire(_: &[(&Path, &Path)]) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn acquire_planned(_: &[(&Path, &Path)], _: &[PathBuf]) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn acquire_with_ancestors(
@@ -1618,7 +1727,7 @@ mod platform {
         ) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn acquire_forest_with_ancestors(
@@ -1628,25 +1737,25 @@ mod platform {
         ) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn acquire_anchors(_: &[PathBuf], _: &[PathBuf]) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn move_file_to(&self, _: &File, _: &Path) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn release_source_descendants(&mut self, _: usize) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn finish_source_move(
@@ -1658,104 +1767,104 @@ mod platform {
         ) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn move_source_to(&self, _: usize, _: &Path) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn directory_identity(&self, _: &Path) -> Result<Option<FileIdentity>> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn directory_file(&self, _: &Path) -> Result<&File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn retain_directory(&mut self, _: &Path) -> Result<&File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn retain_target_parent(&mut self, _: usize) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn create_directory(&mut self, _: &Path) -> Result<&File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn target_parent_identity(&self, _: usize) -> Result<Option<FileIdentity>> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn open_output(&self, _: &Path, _: bool, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn directory_snapshot(&self, _: &Path, _: usize) -> Result<DirectorySnapshot> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn select(&mut self, _: usize) -> Result<&mut NamespaceGuard> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn source_parent_identity(&self, _: usize) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
     }
     pub(crate) fn file_coordinates(_: &File) -> Result<PathBuf> {
         Err(CoreError::new(
             "unsupportedPlatform",
-            "Windows backend required",
+            UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
     pub(crate) fn stamp(_: &File) -> Result<FileStamp> {
         Err(CoreError::new(
             "unsupportedPlatform",
-            "Windows backend required",
+            UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
     pub(crate) fn attributes(_: &File) -> Result<u32> {
         Err(CoreError::new(
             "unsupportedPlatform",
-            "Windows backend required",
+            UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
     pub(crate) fn publish_private_create(_: &Path, _: &Path) -> Result<()> {
         Err(CoreError::new(
             "unsupportedPlatform",
-            "Windows backend required",
+            UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
     pub(crate) fn publish_private_replace(_: &Path, _: &Path) -> Result<()> {
         Err(CoreError::new(
             "unsupportedPlatform",
-            "Windows backend required",
+            UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
 }

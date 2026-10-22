@@ -9,6 +9,7 @@ use cel::{
     common::ast::{Expr, IdedExpr},
 };
 use std::collections::BTreeMap;
+use weftext_messages::{DiagnosticOrigin, UiMessage};
 
 pub fn remap_cel_tag_literals(
     source: &str,
@@ -16,9 +17,14 @@ pub fn remap_cel_tag_literals(
     source_workspace: &str,
 ) -> Result<String> {
     if source.len() > 16384 {
-        return Err(DataError("CEL source exceeds profile budget".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_tag_remap_cel_source_budget_exceeded(),
+        ));
     }
-    let program = Program::compile(source).map_err(|e| DataError(e.to_string()))?;
+    let program = Program::compile(source).map_err(|error| {
+        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+    })?;
     let mut patches = BTreeMap::new();
     fn visit(
         ast: &IdedExpr,
@@ -38,7 +44,7 @@ pub fn remap_cel_tag_literals(
                     .source_info()
                     .offset_for(call.args[0].id)
                     .ok_or_else(|| {
-                        DataError("Typed CEL TagRef has no exact source range".into())
+                        DataError::new(weftext_messages::UiMessage::error_data_tag_remap_cel_tag_ref_exact_source_range_missing())
                     })?;
                 let source = &program.source_info().source;
                 // Parser backends expose token positions. Verify the exact
@@ -66,8 +72,8 @@ pub fn remap_cel_tag_literals(
                     }
                 }
                 if ranges.len() != 1 {
-                    return Err(DataError(
-                        "Typed CEL literal range is unavailable or ambiguous".into(),
+                    return Err(DataError::unavailable(
+                        weftext_messages::UiMessage::error_data_tag_remap_cel_literal_range_unavailable_or_ambiguous(),
                     ));
                 }
                 patches.insert(*ranges.first().unwrap(), serde_json::to_string(target)?);
@@ -76,8 +82,8 @@ pub fn remap_cel_tag_literals(
                 .and_then(|r| r.split_once('/'))
                 .is_some_and(|(w, _)| w == workspace)
             {
-                return Err(DataError(
-                    "Source-workspace CEL TagRef has no complete import mapping".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_tag_remap_source_workspace_tag_ref_import_mapping_incomplete(),
                 ));
             }
         }
@@ -97,13 +103,38 @@ pub fn remap_cel_tag_literals(
     for ((from, to), replacement) in patches.into_iter().rev() {
         after.replace_range(from..to, &replacement);
     }
-    Program::compile(&after).map_err(|e| DataError(e.to_string()))?;
+    Program::compile(&after).map_err(|error| {
+        DataError::new(UiMessage::error_data_tag_remap_cel_readback_failed())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+    })?;
     Ok(after)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_cel_retains_the_actual_dependency_diagnostic() {
+        let source = "'作者😀' + (";
+        let Err(original) = Program::compile(source) else {
+            panic!("the author expression must be syntactically incomplete")
+        };
+        let error = remap_cel_tag_literals(source, &BTreeMap::new(), "unrelated").unwrap_err();
+        assert_eq!(error.kind(), crate::DataErrorKind::Invalid);
+        assert_eq!(
+            error.description().explanation,
+            UiMessage::error_data_query_cel_syntax_invalid()
+        );
+        assert_eq!(
+            error.description().diagnostics,
+            vec![crate::RawDiagnostic {
+                origin: DiagnosticOrigin::Dependency,
+                text: original.to_string(),
+            }]
+        );
+    }
+
     #[test]
     fn only_typed_literals_change_even_after_unicode_and_in_macros() {
         let old = "weftext-tag://00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002";

@@ -43,7 +43,7 @@ pub(super) fn router() -> Router<HostedState> {
 async fn preview_proposal(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<ProposalPreview>,
+    RequestJson(req): RequestJson<ProposalPreview>,
 ) -> ApiResult {
     writing_api::validate_source(&req.proposal_source, None)?;
     let original = Snapshot {
@@ -68,10 +68,13 @@ async fn preview_proposal(
         environment.recheck(inner, &actor)?;
         let mut output = output?;
         scrub_tree(&mut output["tree"], &session.resource, false);
+        let failure = (output["ok"] != true).then(|| {
+            ErrorDescription::new(UiMessage::error_api_hosted_editor_proposal_preview_failed())
+        });
         Ok(Json(
             json!({"ok":output["ok"],"tree":output["tree"],"source":compiled_source,
             "serial":original.serial,
-            "message":if output["ok"] == true { "" } else { "提案预览未成功；原草稿与输入保留" }}),
+            "failure":failure}),
         ))
     })
     .await
@@ -132,7 +135,7 @@ fn readonly(value: &mut Value) {
 async fn map(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Snapshot>,
+    RequestJson(req): RequestJson<Snapshot>,
 ) -> ApiResult {
     let captured = req.clone();
     let check = auth.clone();
@@ -143,7 +146,9 @@ async fn map(
     let source = req.source.clone();
     let result = crate::work::spawn_blocking(move || weftext_engine::inspect_editor(&source))
         .await
-        .map_err(|_| ApiError::internal("编辑映射未完成"))?;
+        .map_err(|_| {
+            ApiError::internal(UiMessage::error_api_hosted_editor_editor_mapping_incomplete())
+        })?;
     locked(&state, move |inner| {
         let (_, _, rights) = qualify(inner, &auth, &req, false, false)?;
         let mut result = value(result)?;
@@ -158,7 +163,7 @@ async fn map(
 async fn edit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Edit>,
+    RequestJson(req): RequestJson<Edit>,
 ) -> ApiResult {
     let basis = Snapshot {
         session_id: req.session_id,
@@ -196,7 +201,7 @@ async fn edit(
             ApiError::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 "busy",
-                "另一项预览正在运行，请稍后重试",
+                UiMessage::error_api_hosted_editor_preview_busy(),
             )
         })?;
         let output = super::super::notes_edit_from_worker(input, command).await?;
@@ -210,14 +215,16 @@ async fn edit(
     }
     let result = crate::work::spawn_blocking(move || weftext_engine::edit(&source, &command))
         .await
-        .map_err(|_| ApiError::internal("编辑提案未完成"))?;
+        .map_err(|_| {
+            ApiError::internal(UiMessage::error_api_hosted_editor_edit_proposal_incomplete())
+        })?;
     locked(&state, move |inner| {
         qualify(inner, &auth, &basis, false, true)?;
         let result = result.map_err(|_| {
             ApiError::new(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "unsupported_edit",
-                "当前原生构造不能安全执行此编辑；草稿保持原样，可使用源码入口",
+                UiMessage::error_api_hosted_editor_native_edit_unsupported(),
             )
         })?;
         Ok(Json(value(result)?))
@@ -279,7 +286,7 @@ fn scrub_tree(tree: &mut Value, resource: &str, writable: bool) {
 async fn render(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Snapshot>,
+    RequestJson(req): RequestJson<Snapshot>,
 ) -> ApiResult {
     let captured = req.clone();
     let check = auth.clone();
@@ -297,9 +304,10 @@ async fn render(
         scrub_tree(&mut output["tree"], &session.resource, rights.write);
         let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"],"notes":output["sourceInfo"]["notes"]});
         if !rights.write { readonly(&mut info); }
+        let failure = (output["ok"] != true).then(|| ErrorDescription::new(UiMessage::error_api_hosted_editor_authorized_compilation_failed()));
         Ok(Json(json!({"ok":output["ok"],"tree":output["tree"],"sourceInfo":info,
             "compilerVersion":output["compilerVersion"],"source":req.source,"serial":req.serial,
-            "message":if output["ok"] == true { "" } else { "无法在当前获权依赖内编译；草稿保留，可在源码入口修正" }})))
+            "failure":failure})))
     }).await
 }
 /// Internal compilation capability shared by authorized writing and review.
@@ -388,7 +396,7 @@ pub(super) fn validate_inputs(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "staleEnvironment",
-            "获权依赖已变化，请重新检查。",
+            UiMessage::error_api_hosted_editor_authorized_dependencies_changed(),
         ));
     }
     Ok(())
@@ -401,14 +409,14 @@ pub(super) async fn compile_frozen(
         ApiError::new(
             StatusCode::TOO_MANY_REQUESTS,
             "busy",
-            "预览正在运行，请稍后再试",
+            UiMessage::error_api_hosted_editor_preview_busy(),
         )
     })?;
     render_worker(input).await.map_err(|_| {
         ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "previewUnavailable",
-            "无法在获权依赖内完成预览",
+            UiMessage::error_api_hosted_editor_authorized_preview_unavailable(),
         )
     })
 }

@@ -9,6 +9,7 @@ use std::{
     io::{Cursor, Read, Write},
 };
 use weftext_data::{Cell, NativeValue, QueryResult};
+use weftext_messages::{DiagnosticOrigin, ErrorDescription, UiMessage};
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 const MAIN_NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -68,14 +69,27 @@ pub struct XlsxQuerySlot {
     pub sheet: usize,
 }
 
-fn refuse(message: impl Into<String>) -> ExportError {
-    ExportError(message.into())
+fn refuse(message: impl Into<weftext_messages::ErrorDescription>) -> ExportError {
+    ExportError::new(message)
 }
-fn loss(losses: &mut Vec<ExportLoss>, code: &str, message: &str, location: &str) {
+fn invalid_xml_utf8(error: std::str::Utf8Error) -> ExportError {
+    refuse(
+        ErrorDescription::new(UiMessage::error_export_xlsx_xml_invalid())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string()),
+    )
+}
+fn loss(
+    losses: &mut Vec<ExportLoss>,
+    code: &str,
+    message: impl Into<weftext_messages::ErrorDescription>,
+    location: &str,
+) {
     losses.push(ExportLoss {
         code: code.into(),
-        message: message.into(),
+        description: message.into(),
         location: Some(location.into()),
+
+        product_diagnostics: Vec::new(),
     });
 }
 
@@ -124,7 +138,9 @@ pub fn export_xlsx(request: &XlsxRequest) -> Result<ExportArtifact> {
             loss(
                 &mut losses,
                 "query_incomplete",
-                "Frozen Query coverage, limits and aggregate exactness are retained; the exported rows are not a complete exact total.",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_query_total_not_exact_complete(),
+                ),
                 &sheet.name,
             );
         }
@@ -132,7 +148,9 @@ pub fn export_xlsx(request: &XlsxRequest) -> Result<ExportArtifact> {
             loss(
                 &mut losses,
                 "query_freshness",
-                "Frozen Query freshness is retained in the structure worksheet.",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_query_freshness_retained(),
+                ),
                 &sheet.name,
             );
         }
@@ -140,7 +158,9 @@ pub fn export_xlsx(request: &XlsxRequest) -> Result<ExportArtifact> {
     loss(
         &mut losses,
         "xlsx_fonts",
-        "Workbook text uses the application's available fonts; fonts are not embedded. Chinese strings are preserved.",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_fonts_not_embedded(),
+        ),
         "workbook",
     );
     let structure_name = workbook.unique_name("Weftext structure");
@@ -175,41 +195,57 @@ pub fn export_xlsx(request: &XlsxRequest) -> Result<ExportArtifact> {
         content_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".into(),
         extension: "xlsx".into(),
         losses,
-        summary: format!(
-            "{} frozen Query sheet(s), {} ordered row(s); exact structure in ‘{}’. No spreadsheet application validation was performed.",
-            request.sheets.len(),
-            request
-                .sheets
-                .iter()
-                .map(|s| s.result.rows.len())
-                .sum::<usize>(),
-            structure_name
+        summary: weftext_messages::UiMessage::error_export_xlsx_summary(
+            weftext_messages::params::ErrorExportXlsxSummary {
+                sheets: weftext_messages::UiInteger::new(
+                    i64::try_from(request.sheets.len()).expect("bounded product count"),
+                )
+                .expect("bounded product count"),
+                rows: weftext_messages::UiInteger::new(
+                    i64::try_from(
+                        request
+                            .sheets
+                            .iter()
+                            .map(|s| s.result.rows.len())
+                            .sum::<usize>(),
+                    )
+                    .expect("bounded product count"),
+                )
+                .expect("bounded product count"),
+                structure: (structure_name).to_string(),
+            },
         ),
     })
 }
 
 fn validate_request(request: &XlsxRequest) -> Result<()> {
     if request.sheets.len() > 128 || request.sheets.is_empty() && request.template.is_none() {
-        return Err(refuse(
-            "XLSX requires 1–128 Query sheets or a template with field slots",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_sheet_or_field_template_required(),
+        )));
     }
     let mut names = BTreeSet::new();
     let mut cells = 0usize;
     for s in &request.sheets {
         check_sheet_name(&s.name)?;
         if !names.insert(s.name.to_lowercase()) {
-            return Err(refuse("Duplicate worksheet name"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheet_name_duplicate(),
+            )));
         }
         if s.columns.is_empty()
             || s.columns.len() > MAX_COLS as usize
             || s.result.rows.len() >= MAX_ROWS as usize
         {
-            return Err(refuse("Worksheet dimensions exceed Excel limits"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheet_dimensions_exceeded(),
+            )));
         }
         let columns: BTreeSet<_> = s.columns.iter().collect();
         if columns.len() != s.columns.len() || columns.iter().any(|c| c.is_empty()) {
-            return Err(refuse("Query columns must be nonempty and unique"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_query_columns_nonempty_unique_required(),
+            )));
         }
         if s.result
             .terminal_schema
@@ -220,13 +256,15 @@ fn validate_request(request: &XlsxRequest) -> Result<()> {
                 .iter()
                 .any(|r| r.cells.keys().any(|c| !columns.contains(c)))
         {
-            return Err(refuse(
-                "Column order omits frozen Query cells/schema; export refused instead of silently dropping them",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_column_order_incomplete(),
+            )));
         }
         cells = cells.saturating_add(s.columns.len().saturating_mul(s.result.rows.len() + 1));
         if cells > MAX_CELLS {
-            return Err(refuse("XLSX cell budget exceeded"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_cell_budget_exceeded(),
+            )));
         }
         for row in &s.result.rows {
             for cell in row.cells.values() {
@@ -242,7 +280,9 @@ fn validate_request(request: &XlsxRequest) -> Result<()> {
     // Serialization also proves that maliciously nested transport values do not
     // sneak past the bounded output. No decimal or integer parsing occurs here.
     if serde_json::to_vec(request)?.len() > MAX_BYTES {
-        return Err(refuse("XLSX input byte budget exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_input_bytes_exceeded(),
+        )));
     }
     Ok(())
 }
@@ -260,7 +300,9 @@ fn check_value_budget(cell: &Cell) -> Result<()> {
     while let Some((value, depth)) = pending.pop() {
         count += 1;
         if depth > 64 || count > MAX_CELLS {
-            return Err(refuse("Native value nesting/node budget exceeded"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_native_value_structure_exceeded(),
+            )));
         }
         match value {
             NativeValue::Array(values) => pending.extend(values.iter().map(|v| (v, depth + 1))),
@@ -280,9 +322,9 @@ fn check_sheet_name(name: &str) -> Result<()> {
         || name.ends_with('\'')
         || name.chars().any(|c| c.is_control())
     {
-        return Err(refuse(
-            "Invalid Excel worksheet name (1–31 UTF-16 units, no reserved characters)",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_sheet_name_invalid(),
+        )));
     }
     Ok(())
 }
@@ -304,7 +346,9 @@ fn append_json<T: Serialize>(rows: &mut Vec<Vec<Cell>>, item: &str, value: &T) -
         ]);
     }
     if rows.len() > MAX_CELLS / 4 {
-        return Err(refuse("Exact structure worksheet budget exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_structure_sheet_exceeded(),
+        )));
     }
     Ok(())
 }
@@ -405,7 +449,9 @@ fn cell_xml(
         loss(
             losses,
             "integer_as_exact_text",
-            "Integer uses exact text to avoid Excel precision loss or numeric reinterpretation.",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_integer_as_exact_text(),
+            ),
             location,
         );
     }
@@ -415,7 +461,9 @@ fn cell_xml(
                 NativeValue::Float(_) | NativeValue::Decimal(_) => loss(
                     losses,
                     "number_as_exact_text",
-                    "Exact decimal/binary-float source spelling uses a text cell; Excel arithmetic requires an explicit conversion.",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_exact_numeric_spelling_as_text(),
+                    ),
                     location,
                 ),
                 NativeValue::Date(_)
@@ -424,13 +472,17 @@ fn cell_xml(
                 | NativeValue::Duration(_) => loss(
                     losses,
                     "temporal_as_exact_text",
-                    "Temporal source values use exact text; no date serial, precision or host time zone was invented.",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_temporal_values_as_exact_text(),
+                    ),
                     location,
                 ),
                 NativeValue::Array(_) | NativeValue::Record(_) => loss(
                     losses,
                     "nested_structure",
-                    "Nested ordered values are readable JSON here and exact JSON in the structure worksheet.",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_nested_values_as_json(),
+                    ),
                     location,
                 ),
                 _ => {}
@@ -439,17 +491,10 @@ fn cell_xml(
         }
         Cell::Absent => "<absent>".into(),
         Cell::Null => "<null>".into(),
-        Cell::Invalid { diagnostics, value } => format!(
-            "<invalid: {}>{}",
-            diagnostics.join("; "),
-            value
-                .as_ref()
-                .map(readable)
-                .transpose()?
-                .map(|v| format!("\n{v}"))
-                .unwrap_or_default()
-        ),
-        Cell::Unavailable { reason } => format!("<unavailable: {reason}>"),
+        // Product diagnostic messages remain typed data in an exported cell.
+        // Rendering a UI locale here would make a language switch rewrite the
+        // frozen Query value and lose its independent diagnostic provenance.
+        Cell::Invalid { .. } | Cell::Unavailable { .. } => serde_json::to_string(cell)?,
     };
     if text.encode_utf16().count() > TEXT_LIMIT {
         text = chunks(&text, TEXT_LIMIT - 100).remove(0);
@@ -457,7 +502,9 @@ fn cell_xml(
         loss(
             losses,
             "cell_display_shortened",
-            "Readable cell exceeds Excel text limits; full frozen value is preserved in ordered structure chunks.",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_readable_text_limit_exceeded(),
+            ),
             location,
         );
     }
@@ -490,7 +537,9 @@ fn sheet_xml(rows: &[Vec<Cell>], name: &str, losses: &mut Vec<ExportLoss>) -> Re
         }
         out.push_str("</row>");
         if out.len() > MAX_BYTES {
-            return Err(refuse("Worksheet output budget exceeded"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheet_output_exceeded(),
+            )));
         }
     }
     out.push_str("</sheetData></worksheet>");
@@ -508,7 +557,9 @@ fn blank_package() -> Parts {
 }
 fn write_package(parts: Parts) -> Result<Vec<u8>> {
     if parts.len() > MAX_PARTS || parts.values().map(Vec::len).sum::<usize>() > MAX_BYTES {
-        return Err(refuse("Workbook package budget exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_package_budget_exceeded(),
+        )));
     }
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
     for (name, bytes) in parts {
@@ -553,8 +604,21 @@ impl Element {
     }
 }
 fn parse_xml(bytes: &[u8]) -> Result<Element> {
-    if bytes.len() > MAX_PART || !bytes.is_ascii() && std::str::from_utf8(bytes).is_err() {
-        return Err(refuse("Template XML must be bounded UTF-8"));
+    if bytes.len() > MAX_PART {
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_template_xml_bounded_utf_eight_required(
+            ),
+        )));
+    }
+    if !bytes.is_ascii()
+        && let Err(error) = std::str::from_utf8(bytes)
+    {
+        return Err(refuse(
+            ErrorDescription::new(
+                UiMessage::error_export_xlsx_template_xml_bounded_utf_eight_required(),
+            )
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string()),
+        ));
     }
     let mut reader = Reader::from_reader(bytes);
     reader.config_mut().check_end_names = true;
@@ -563,32 +627,74 @@ fn parse_xml(bytes: &[u8]) -> Result<Element> {
     let mut count = 0;
     loop {
         let start = reader.buffer_position() as usize;
-        let event = reader
-            .read_event()
-            .map_err(|e| refuse(format!("Invalid template XML: {e}")))?;
+        let event = reader.read_event().map_err(|e| {
+            refuse(
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_invalid_xml(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?;
         let end = reader.buffer_position() as usize;
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 let empty = bytes.get(end.saturating_sub(2)) == Some(&b'/');
                 count += 1;
                 if stack.len() > 64 || count > MAX_CELLS * 4 {
-                    return Err(refuse("Template XML nesting/node budget exceeded"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_template_xml_structure_exceeded(),
+                    )));
                 }
                 let name = std::str::from_utf8(e.name().as_ref())
-                    .map_err(|_| refuse("Invalid XML element name"))?
+                    .map_err(|error| {
+                        refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_xml_element_name_invalid(
+                            ),
+                        ).diagnostic(DiagnosticOrigin::Dependency, error.to_string()))
+                    })?
                     .to_string();
                 let mut attrs = BTreeMap::new();
                 for a in e.attributes() {
-                    let a = a.map_err(|e| refuse(e.to_string()))?;
+                    let a = a.map_err(|e| {
+                        refuse(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?;
                     let key = std::str::from_utf8(a.key.as_ref())
-                        .map_err(|_| refuse("Invalid XML attribute"))?
+                        .map_err(|error| {
+                            refuse(weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xlsx_xml_attribute_invalid(),
+                            ).diagnostic(DiagnosticOrigin::Dependency, error.to_string()))
+                        })?
                         .to_string();
                     let value = a
                         .decode_and_unescape_value(reader.decoder())
-                        .map_err(|e| refuse(e.to_string()))?
+                        .map_err(|e| {
+                            refuse(
+                                weftext_messages::ErrorDescription::new(
+                                    weftext_messages::UiMessage::error_export_xml(),
+                                )
+                                .diagnostic(
+                                    weftext_messages::DiagnosticOrigin::Dependency,
+                                    e.to_string(),
+                                ),
+                            )
+                        })?
                         .into_owned();
                     if attrs.insert(key, value).is_some() {
-                        return Err(refuse("Duplicate XML attribute"));
+                        return Err(refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_xml_attribute_duplicate(
+                            ),
+                        )));
                     }
                 }
                 let element = Element {
@@ -606,63 +712,142 @@ fn parse_xml(bytes: &[u8]) -> Result<Element> {
                     if let Some(parent) = stack.last_mut() {
                         parent.children.push(element);
                     } else if root.replace(element).is_some() {
-                        return Err(refuse("Multiple XML roots"));
+                        return Err(refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_xml_multiple_roots(),
+                        )));
                     }
                 } else {
                     stack.push(element);
                 }
             }
             Event::End(_) => {
-                let mut e = stack.pop().ok_or_else(|| refuse("Unexpected XML end"))?;
+                let mut e = stack.pop().ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_xml_end_unexpected(),
+                    ))
+                })?;
                 e.close_start = start;
                 e.end = end;
                 if let Some(parent) = stack.last_mut() {
                     parent.children.push(e);
                 } else if root.replace(e).is_some() {
-                    return Err(refuse("Multiple XML roots"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_xml_multiple_roots(),
+                    )));
                 }
             }
             Event::Text(t) => {
-                let text = t.xml_content().map_err(|e| refuse(e.to_string()))?;
-                let text = quick_xml::escape::unescape(&text).map_err(|e| refuse(e.to_string()))?;
+                let text = t.xml_content().map_err(|e| {
+                    refuse(
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xml(),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?;
+                let text = quick_xml::escape::unescape(&text).map_err(|e| {
+                    refuse(
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xml(),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?;
                 if let Some(parent) = stack.last_mut() {
                     parent.text.push_str(&text);
                 } else if !text.trim().is_empty() {
-                    return Err(refuse("Text outside XML root"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_xml_text_outside_root(),
+                    )));
                 }
             }
             Event::CData(t) => {
                 if let Some(parent) = stack.last_mut() {
-                    parent
-                        .text
-                        .push_str(&t.decode().map_err(|e| refuse(e.to_string()))?);
+                    parent.text.push_str(&t.decode().map_err(|e| {
+                        refuse(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?);
                 }
             }
             Event::DocType(_) => {
-                return Err(refuse(
-                    "DTD/entity declarations are not allowed in XLSX templates",
-                ));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_xml_declarations_forbidden(),
+                )));
             }
             Event::GeneralRef(r) => {
-                let name = r.decode().map_err(|e| refuse(e.to_string()))?;
+                let name = r.decode().map_err(|e| {
+                    refuse(
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xml(),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?;
                 let encoded = format!("&{name};");
-                let value = quick_xml::escape::unescape(&encoded).map_err(|_| {
-                    refuse("Unresolved XML entities are not allowed in XLSX templates")
+                let value = quick_xml::escape::unescape(&encoded).map_err(|error| {
+                    refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_xml_unresolved_entities_forbidden()).diagnostic(DiagnosticOrigin::Dependency, error.to_string()))
                 })?;
                 if let Some(parent) = stack.last_mut() {
                     parent.text.push_str(&value);
                 } else {
-                    return Err(refuse("Entity outside XML root"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_xml_entity_outside_root(),
+                    )));
                 }
             }
             Event::Decl(d) => {
-                if d.version().map_err(|e| refuse(e.to_string()))?.as_ref() != b"1.0" {
-                    return Err(refuse("Only XML 1.0 workbook parts are supported"));
+                if d.version()
+                    .map_err(|e| {
+                        refuse(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?
+                    .as_ref()
+                    != b"1.0"
+                {
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_xml_version_unsupported(),
+                    )));
                 }
                 if let Some(encoding) = d.encoding() {
-                    let encoding = encoding.map_err(|e| refuse(e.to_string()))?;
+                    let encoding = encoding.map_err(|e| {
+                        refuse(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?;
                     if !encoding.eq_ignore_ascii_case(b"UTF-8") {
-                        return Err(refuse("Only UTF-8 workbook XML parts are supported"));
+                        return Err(refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_xml_encoding_unsupported(
+                            ),
+                        )));
                     }
                 }
             }
@@ -671,23 +856,38 @@ fn parse_xml(bytes: &[u8]) -> Result<Element> {
         }
     }
     if !stack.is_empty() {
-        return Err(refuse("Unclosed XML element"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_xml_element_unclosed(),
+        )));
     }
-    root.ok_or_else(|| refuse("Missing XML root"))
+    root.ok_or_else(|| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_xml_root_missing(),
+        ))
+    })
 }
 fn part<'a>(parts: &'a Parts, name: &str) -> Result<&'a [u8]> {
-    parts
-        .get(name)
-        .map(Vec::as_slice)
-        .ok_or_else(|| refuse(format!("Required workbook part missing: {name}")))
+    parts.get(name).map(Vec::as_slice).ok_or_else(|| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_workbook_part_missing(
+                weftext_messages::params::ErrorExportXlsxWorkbookPartMissing {
+                    part: (name).to_string(),
+                },
+            ),
+        ))
+    })
 }
 fn read_template(bytes: &[u8]) -> Result<Parts> {
     if bytes.len() > MAX_BYTES {
-        return Err(refuse("Template upload byte budget exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_template_upload_exceeded(),
+        )));
     }
     let mut zip = ZipArchive::new(Cursor::new(bytes))?;
     if zip.len() > MAX_PARTS {
-        return Err(refuse("Template part count exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_template_part_count_exceeded(),
+        )));
     }
     let mut parts = Parts::new();
     let mut part_names = BTreeSet::new();
@@ -705,7 +905,9 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
                 .any(|s| s.is_empty() || s == "." || s == "..")
             || file.enclosed_name().is_none()
         {
-            return Err(refuse("Unsafe template ZIP part path"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_template_part_path_unsafe(),
+            )));
         }
         let lower = name.to_lowercase();
         if lower.contains("vbaproject")
@@ -718,24 +920,32 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
             || lower.contains("/querytables/")
             || lower.contains("/webextensions/")
         {
-            return Err(refuse(
-                "Macros, active/embedded objects, external links/data connections, web extensions and signed workbook templates are unsupported",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_active_workbook_unsupported(),
+            )));
         }
         if !part_names.insert(lower) {
-            return Err(refuse("Case-ambiguous duplicate template ZIP part"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_template_part_case_ambiguous(),
+            )));
         }
         if file.size() > MAX_PART as u64 {
-            return Err(refuse("Template part size budget exceeded"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_template_part_size_exceeded(),
+            )));
         }
         let mut data = vec![];
         file.take(MAX_PART as u64 + 1).read_to_end(&mut data)?;
         total = total.saturating_add(data.len());
         if data.len() > MAX_PART || total > MAX_BYTES {
-            return Err(refuse("Template decompression budget exceeded"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_template_decompression_exceeded(),
+            )));
         }
         if parts.insert(name, data).is_some() {
-            return Err(refuse("Duplicate template ZIP part"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_template_part_duplicate(),
+            )));
         }
     }
     for (name, data) in &parts {
@@ -744,24 +954,26 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
             let root = parse_xml(data)?;
             if lower.ends_with(".rels") {
                 if root.local() != "Relationships" || root.attr("xmlns") != Some(PKG_REL_NS) {
-                    return Err(refuse("Invalid package relationships namespace/root"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_relationship_namespace_or_root_invalid())));
                 }
                 for r in &root.children {
                     if r.local() != "Relationship" {
-                        return Err(refuse("Unsupported package relationship element"));
+                        return Err(refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_relationship_element_unsupported())));
                     }
                     if r.attr("TargetMode").is_some_and(|m| m != "Internal") {
                         return Err(refuse(
-                            "External template relationships are unsupported; no external content is fetched",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_external_relationship_unsupported()),
                         ));
                     }
                     let target = r
                         .attr("Target")
-                        .ok_or_else(|| refuse("Relationship target missing"))?;
+                        .ok_or_else(|| refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_relationship_target_missing())))?;
                     let owner = relationship_owner(name)?;
                     let resolved = resolve_target(&owner, target)?;
                     if !parts.contains_key(&resolved) {
-                        return Err(refuse("Template relationship references a missing part"));
+                        return Err(refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_relationship_part_missing(),
+                        )));
                     }
                 }
             }
@@ -781,7 +993,9 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
                     .iter()
                     .any(|s| upper.contains(s))
                 {
-                    return Err(refuse("External/active template formulas are unsupported"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_active_formula_unsupported(),
+                    )));
                 }
             }
             if name == "[Content_Types].xml"
@@ -790,9 +1004,9 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
                         .is_some_and(|t| t.to_lowercase().contains("macroenabled"))
                 })
             {
-                return Err(refuse(
-                    "Macro-enabled template content types are unsupported",
-                ));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_macro_content_type_unsupported(),
+                )));
             }
         }
     }
@@ -810,16 +1024,19 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
             .as_deref()
             != Some("xl/workbook.xml")
     {
-        return Err(refuse(
-            "Template must have one standard XLSX workbook package root",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_standard_package_root_required(),
+        )));
     }
     let content = parse_xml(part(&parts, "[Content_Types].xml")?)?;
     if content.local() != "Types"
         || content.attr("xmlns")
             != Some("http://schemas.openxmlformats.org/package/2006/content-types")
     {
-        return Err(refuse("Invalid package content types namespace/root"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_content_types_namespace_or_root_invalid(
+            ),
+        )));
     }
     let main: Vec<_> = content
         .children
@@ -830,9 +1047,10 @@ fn read_template(bytes: &[u8]) -> Result<Parts> {
         || main[0].attr("ContentType")
             != Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")
     {
-        return Err(refuse(
-            "Template workbook content type must be ordinary XLSX",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_ordinary_workbook_content_type_required(
+            ),
+        )));
     }
     Ok(parts)
 }
@@ -840,18 +1058,22 @@ fn relationship_owner(path: &str) -> Result<String> {
     if path == "_rels/.rels" {
         return Ok(String::new());
     }
-    let (directory, file) = path
-        .rsplit_once("/_rels/")
-        .ok_or_else(|| refuse("Unsupported relationship part location"))?;
+    let (directory, file) = path.rsplit_once("/_rels/").ok_or_else(|| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_relationship_location_unsupported(),
+        ))
+    })?;
     Ok(format!(
         "{directory}/{}",
         file.strip_suffix(".rels")
-            .ok_or_else(|| refuse("Invalid relationship part"))?
+            .ok_or_else(|| refuse(UiMessage::error_export_xlsx_relationship_part_name_invalid()))?
     ))
 }
 fn resolve_target(owner: &str, target: &str) -> Result<String> {
     if target.contains(['\\', ':', '?', '#', '\0', '%']) {
-        return Err(refuse("Unsupported relationship URI"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_relationship_uri_unsupported(),
+        )));
     }
     let mut pieces = if target.starts_with('/') {
         vec![]
@@ -866,14 +1088,19 @@ fn resolve_target(owner: &str, target: &str) -> Result<String> {
             "" | "." => {}
             ".." => {
                 if pieces.pop().is_none() {
-                    return Err(refuse("Relationship escapes package"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_relationship_escapes_package(
+                        ),
+                    )));
                 }
             }
             s => pieces.push(s.to_string()),
         }
     }
     if pieces.is_empty() {
-        return Err(refuse("Empty relationship target"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_relationship_target_empty(),
+        )));
     }
     Ok(pieces.join("/"))
 }
@@ -892,58 +1119,87 @@ impl Workbook {
         let rels = parse_xml(part(parts, "xl/_rels/workbook.xml.rels")?)?;
         let mut relationships = BTreeMap::new();
         for r in &rels.children {
-            let id = r
-                .attr("Id")
-                .ok_or_else(|| refuse("Workbook relationship id missing"))?;
+            let id = r.attr("Id").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_workbook_relationship_id_missing(
+                    ),
+                ))
+            })?;
             if relationships.insert(id.to_string(), r).is_some() {
-                return Err(refuse("Duplicate workbook relationship id"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_workbook_relationship_id_duplicate(),
+                )));
             }
         }
         let workbook = parse_xml(part(parts, "xl/workbook.xml")?)?;
         if workbook.local() != "workbook" || workbook.attr("xmlns") != Some(MAIN_NS) {
-            return Err(refuse(
-                "Only transitional SpreadsheetML workbook templates are supported",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_transitional_workbook_required(),
+            )));
         }
-        let sheets = workbook
-            .child("sheets")
-            .ok_or_else(|| refuse("Workbook sheets missing"))?;
+        let sheets = workbook.child("sheets").ok_or_else(|| {
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_workbook_sheets_missing(),
+            ))
+        })?;
         let mut out = vec![];
         let mut names = BTreeSet::new();
         let mut ids = BTreeSet::new();
         let mut paths = BTreeSet::new();
         for s in &sheets.children {
             if s.local() != "sheet" {
-                return Err(refuse("Unsupported workbook sheets content"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_workbook_sheets_content_unsupported(),
+                )));
             }
             let name = s
                 .attr("name")
-                .ok_or_else(|| refuse("Sheet name missing"))?
+                .ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_sheet_name_missing(),
+                    ))
+                })?
                 .to_string();
             check_sheet_name(&name)?;
             let id = s
                 .attr("sheetId")
                 .and_then(|s| s.parse::<u32>().ok())
                 .filter(|i| *i > 0)
-                .ok_or_else(|| refuse("Invalid sheet id"))?;
-            let rid = s
-                .attr("r:id")
-                .ok_or_else(|| refuse("Sheet relationship missing"))?;
-            let r = relationships
-                .get(rid)
-                .ok_or_else(|| refuse("Sheet relationship unavailable"))?;
+                .ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_sheet_id_invalid(),
+                    ))
+                })?;
+            let rid = s.attr("r:id").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_sheet_relationship_missing(),
+                ))
+            })?;
+            let r = relationships.get(rid).ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_sheet_relationship_unavailable(),
+                ))
+            })?;
             if r.attr("Type") != Some(&format!("{REL_NS}/worksheet")) {
-                return Err(refuse("Non-worksheet sheet templates are unsupported"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_non_worksheet_sheet_unsupported(
+                    ),
+                )));
             }
             let path = resolve_target(
                 "xl/workbook.xml",
-                r.attr("Target")
-                    .ok_or_else(|| refuse("Worksheet target missing"))?,
+                r.attr("Target").ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_worksheet_target_missing(),
+                    ))
+                })?,
             )?;
             part(parts, &path)?;
             if !names.insert(name.to_lowercase()) || !ids.insert(id) || !paths.insert(path.clone())
             {
-                return Err(refuse("Ambiguous workbook sheets"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_workbook_sheets_ambiguous(),
+                )));
             }
             out.push(Worksheet { name, path, id });
         }
@@ -969,7 +1225,9 @@ impl Workbook {
             .iter()
             .any(|s| s.name.eq_ignore_ascii_case(name))
         {
-            return Err(refuse("Worksheet name already exists"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheet_name_already_exists(),
+            )));
         }
         let mut number = 1;
         while parts.contains_key(&format!("xl/worksheets/weftext{number}.xml")) {
@@ -983,7 +1241,11 @@ impl Workbook {
             .max()
             .unwrap_or(0)
             .checked_add(1)
-            .ok_or_else(|| refuse("Sheet id overflow"))?;
+            .ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_sheet_id_overflow(),
+                ))
+            })?;
         let rel_xml = part(parts, "xl/_rels/workbook.xml.rels")?.to_vec();
         let rel_root = parse_xml(&rel_xml)?;
         let mut rid = format!("weftextSheet{number}");
@@ -992,7 +1254,11 @@ impl Workbook {
         }
         let wb_xml = part(parts, "xl/workbook.xml")?.to_vec();
         let wb = parse_xml(&wb_xml)?;
-        let sheets = wb.child("sheets").ok_or_else(|| refuse("Missing sheets"))?;
+        let sheets = wb.child("sheets").ok_or_else(|| {
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheets_missing(),
+            ))
+        })?;
         let entry = format!(
             "<sheet name=\"{}\" sheetId=\"{id}\" r:id=\"{rid}\" xmlns:r=\"{REL_NS}\"/>",
             xml_text(name)
@@ -1022,21 +1288,22 @@ impl Workbook {
 }
 fn append_child(bytes: &[u8], element: &Element, child: &str) -> Result<Vec<u8>> {
     if element.name.contains(':') {
-        return Err(refuse(
-            "Prefixed template container insertion is unsupported",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_prefixed_container_insertion_unsupported(
+            ),
+        )));
     }
     let replacement = if element.empty {
         let open = std::str::from_utf8(&bytes[element.start..element.end - 2])
-            .map_err(|_| refuse("Invalid XML"))?;
+            .map_err(invalid_xml_utf8)?;
         format!("{open}>{child}</{}>", element.name)
     } else {
         format!(
             "{}{child}{}",
             std::str::from_utf8(&bytes[element.start..element.close_start])
-                .map_err(|_| refuse("Invalid XML"))?,
+                .map_err(invalid_xml_utf8)?,
             std::str::from_utf8(&bytes[element.close_start..element.end])
-                .map_err(|_| refuse("Invalid XML"))?
+                .map_err(invalid_xml_utf8)?
         )
     };
     let mut out = bytes[..element.start].to_vec();
@@ -1060,7 +1327,7 @@ pub struct XlsxAnchorInfo {
     pub columns: u32,
     pub capacity: u32,
     pub supported: bool,
-    pub reason: Option<String>,
+    pub reason: Option<ExportError>,
 }
 #[derive(Debug, Clone, Copy)]
 struct Rect {
@@ -1113,24 +1380,33 @@ pub fn inspect_xlsx_template(bytes: &[u8]) -> Result<XlsxTemplateInspection> {
 fn parse_address(value: &str, absolute: bool) -> Result<(u32, u32)> {
     let mut s = value;
     if absolute {
-        s = s
-            .strip_prefix('$')
-            .ok_or_else(|| refuse("Defined names must use absolute cell references"))?;
+        s = s.strip_prefix('$').ok_or_else(|| {
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_defined_name_absolute_cell_required(
+                ),
+            ))
+        })?;
     } else {
         s = s.strip_prefix('$').unwrap_or(s);
     }
     let letters = s.bytes().take_while(u8::is_ascii_alphabetic).count();
     if letters == 0 || letters > 3 {
-        return Err(refuse("Invalid cell column"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_cell_column_invalid(),
+        )));
     }
     let (col_text, mut row_text) = s.split_at(letters);
     if !col_text.bytes().all(|c| c.is_ascii_uppercase()) {
-        return Err(refuse("Cell columns must use uppercase A1 addresses"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_uppercase_column_address_required(),
+        )));
     }
     if absolute {
-        row_text = row_text
-            .strip_prefix('$')
-            .ok_or_else(|| refuse("Defined names must use absolute row references"))?;
+        row_text = row_text.strip_prefix('$').ok_or_else(|| {
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_defined_name_absolute_row_required(),
+            ))
+        })?;
     } else {
         row_text = row_text.strip_prefix('$').unwrap_or(row_text);
     }
@@ -1138,14 +1414,22 @@ fn parse_address(value: &str, absolute: bool) -> Result<(u32, u32)> {
         || row_text.starts_with('0')
         || !row_text.bytes().all(|c| c.is_ascii_digit())
     {
-        return Err(refuse("Invalid cell row"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_cell_row_invalid(),
+        )));
     }
-    let row: u32 = row_text.parse().map_err(|_| refuse("Invalid cell row"))?;
+    let row: u32 = row_text.parse().map_err(|_| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_cell_row_invalid(),
+        ))
+    })?;
     let col = col_text
         .bytes()
         .fold(0u32, |n, c| n * 26 + u32::from(c - b'A' + 1));
     if row == 0 || row > MAX_ROWS || col == 0 || col > MAX_COLS {
-        return Err(refuse("Cell address exceeds Excel limits"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_cell_address_out_of_bounds(),
+        )));
     }
     Ok((row, col))
 }
@@ -1154,7 +1438,9 @@ fn parse_rect(value: &str, absolute: bool) -> Result<Rect> {
     let (fr, fc) = parse_address(first, absolute)?;
     let (lr, lc) = parse_address(last, absolute)?;
     if fr > lr || fc > lc {
-        return Err(refuse("Reversed cell range"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_cell_range_reversed(),
+        )));
     }
     Ok(Rect {
         first_row: fr,
@@ -1164,7 +1450,11 @@ fn parse_rect(value: &str, absolute: bool) -> Result<Rect> {
     })
 }
 fn defined_reference(value: &str) -> Result<(String, Rect)> {
-    let (name,range)=value.trim().rsplit_once('!').ok_or_else(||refuse("Defined name must refer to one worksheet cell/range; formula/dynamic/multi-area references are unsupported"))?;
+    let (name, range) = value.trim().rsplit_once('!').ok_or_else(|| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_defined_name_reference_unsupported(),
+        ))
+    })?;
     let name = if name.starts_with('\'') && name.ends_with('\'') {
         name[1..name.len() - 1].replace("''", "'")
     } else {
@@ -1172,7 +1462,10 @@ fn defined_reference(value: &str) -> Result<(String, Rect)> {
     };
     check_sheet_name(&name)?;
     if name.contains(['!', '[', ']']) {
-        return Err(refuse("External/multi-sheet defined names are unsupported"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_external_or_multi_sheet_name_unsupported(
+            ),
+        )));
     }
     Ok((name, parse_rect(range, true)?))
 }
@@ -1187,7 +1480,11 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
             }
             let name = n
                 .attr("name")
-                .ok_or_else(|| refuse("Defined name is missing its name"))?
+                .ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_defined_name_name_missing(),
+                    ))
+                })?
                 .to_string();
             let mut a = Anchor {
                 info: XlsxAnchorInfo {
@@ -1208,14 +1505,14 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
             let reference = defined_reference(&n.text).and_then(|(name, rect)| {
                 if n.attr("localSheetId").is_some() {
                     return Err(refuse(
-                        "Worksheet-scoped names require disambiguation and are unsupported",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_sheet_scoped_name_unsupported()),
                     ));
                 }
                 let sheet = workbook
                     .sheets
                     .iter()
                     .find(|s| s.name == name)
-                    .ok_or_else(|| refuse("Defined name worksheet is unavailable"))?;
+                    .ok_or_else(|| refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_defined_name_sheet_unavailable())))?;
                 Ok((sheet, rect))
             });
             match reference {
@@ -1228,7 +1525,7 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
                     a.rect = Some(r);
                     a.info.supported = true;
                 }
-                Err(e) => a.info.reason = Some(e.0),
+                Err(e) => a.info.reason = Some(e),
             }
             out.push(a);
         }
@@ -1239,35 +1536,46 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
             worksheet_roots.insert(sheet.path.clone(), xml);
             continue;
         };
-        let (directory, file) = sheet
-            .path
-            .rsplit_once('/')
-            .ok_or_else(|| refuse("Worksheet path unsupported"))?;
+        let (directory, file) = sheet.path.rsplit_once('/').ok_or_else(|| {
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_worksheet_path_unsupported(),
+            ))
+        })?;
         let rel_path = format!("{directory}/_rels/{file}.rels");
         let rels = parse_xml(part(parts, &rel_path)?)?;
         for t in &table_parts.children {
-            let rid = t
-                .attr("r:id")
-                .ok_or_else(|| refuse("Table relationship missing"))?;
+            let rid = t.attr("r:id").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_table_relationship_missing(),
+                ))
+            })?;
             let rels: Vec<_> = rels
                 .children
                 .iter()
                 .filter(|r| r.attr("Id") == Some(rid))
                 .collect();
             if rels.len() != 1 || rels[0].attr("Type") != Some(&format!("{REL_NS}/table")) {
-                return Err(refuse("Ambiguous/non-table table relationship"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_table_relationship_invalid(),
+                )));
             }
             let path = resolve_target(
                 &sheet.path,
-                rels[0]
-                    .attr("Target")
-                    .ok_or_else(|| refuse("Table target missing"))?,
+                rels[0].attr("Target").ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_table_target_missing(),
+                    ))
+                })?,
             )?;
             let table = parse_xml(part(parts, &path)?)?;
             let name = table
                 .attr("displayName")
                 .or_else(|| table.attr("name"))
-                .ok_or_else(|| refuse("Table name missing"))?
+                .ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_table_name_missing(),
+                    ))
+                })?
                 .to_string();
             let mut a = Anchor {
                 info: XlsxAnchorInfo {
@@ -1287,42 +1595,55 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
             };
             let shape = (|| -> Result<(Rect, Vec<String>, u32)> {
                 let rect = parse_rect(
-                    table
-                        .attr("ref")
-                        .ok_or_else(|| refuse("Table range missing"))?,
+                    table.attr("ref").ok_or_else(|| {
+                        refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_table_range_missing(),
+                        ))
+                    })?,
                     false,
                 )?;
                 if table.attr("headerRowCount").unwrap_or("1") != "1" {
-                    return Err(refuse(
-                        "Query table anchor requires one existing header row",
-                    ));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_query_table_header_required(
+                        ),
+                    )));
                 }
                 let totals = table
                     .attr("totalsRowCount")
                     .unwrap_or("0")
                     .parse::<u32>()
-                    .map_err(|_| refuse("Invalid table totals rows"))?;
+                    .map_err(|_| {
+                        refuse(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_xlsx_table_totals_rows_invalid(),
+                        ))
+                    })?;
                 if totals > 1 || rect.rows() < 1 + totals {
-                    return Err(refuse("Unsupported table totals row shape"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_table_totals_shape_unsupported(),
+                    )));
                 }
-                let cols = table
-                    .child("tableColumns")
-                    .ok_or_else(|| refuse("Table columns missing"))?;
+                let cols = table.child("tableColumns").ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_table_columns_missing(),
+                    ))
+                })?;
                 let mut names = vec![];
                 for col in &cols.children {
                     if col.child("calculatedColumnFormula").is_some() {
                         return Err(refuse(
-                            "Calculated table columns cannot be overwritten by Query rows",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_calculated_column_overwrite_forbidden()),
                         ));
                     }
                     names.push(
                         col.attr("name")
-                            .ok_or_else(|| refuse("Table column name missing"))?
+                            .ok_or_else(|| refuse(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_xlsx_table_column_name_missing())))?
                             .to_string(),
                     );
                 }
                 if names.len() != rect.columns() as usize {
-                    return Err(refuse("Table width does not match its column definitions"));
+                    return Err(refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_table_width_mismatch(),
+                    )));
                 }
                 Ok((rect, names, totals))
             })();
@@ -1336,14 +1657,16 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
                     a.totals = t;
                     a.info.supported = true;
                 }
-                Err(e) => a.info.reason = Some(e.0),
+                Err(e) => a.info.reason = Some(e),
             }
             out.push(a);
         }
         worksheet_roots.insert(sheet.path.clone(), xml);
     }
     if out.len() > 1024 {
-        return Err(refuse("Template exceeds the 1,024 standard-anchor budget"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_standard_anchor_count_exceeded(),
+        )));
     }
     let mut counts = BTreeMap::new();
     for a in &out {
@@ -1354,19 +1677,23 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
     for a in &mut out {
         if counts[&a.info.name.to_lowercase()] > 1 {
             a.info.supported = false;
-            a.info.reason = Some("Name is ambiguous between standard defined names/tables".into());
+            a.info.reason = Some(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_standard_name_ambiguous(),
+            )));
             continue;
         }
         if a.info.supported {
             let r = a.rect.unwrap();
             let check = if u64::from(r.rows()) * u64::from(r.columns()) > MAX_CELLS as u64 {
-                Err(refuse("Anchor exceeds the bounded cell budget"))
+                Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_anchor_cells_exceeded(),
+                )))
             } else {
                 check_target_rectangle(worksheet_roots.get(a.path.as_ref().unwrap()).unwrap(), r)
             };
             if let Err(e) = check {
                 a.info.supported = false;
-                a.info.reason = Some(e.0);
+                a.info.reason = Some(e);
             }
         }
     }
@@ -1375,23 +1702,30 @@ fn anchors(parts: &Parts, workbook: &Workbook) -> Result<Vec<Anchor>> {
 fn check_target_rectangle(root: &Element, rect: Rect) -> Result<()> {
     if root.local() != "worksheet" || root.attr("xmlns") != Some(MAIN_NS) || root.name.contains(':')
     {
-        return Err(refuse(
-            "Only ordinary transitional SpreadsheetML worksheets support template edits",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_editable_worksheet_kind_required(),
+        )));
     }
     if root.child("sheetProtection").is_some() {
-        return Err(refuse("Protected worksheet anchors are unsupported"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_protected_anchor_unsupported(),
+        )));
     }
     if let Some(merges) = root.child("mergeCells") {
         for m in &merges.children {
             if parse_rect(
-                m.attr("ref")
-                    .ok_or_else(|| refuse("Merge reference missing"))?,
+                m.attr("ref").ok_or_else(|| {
+                    refuse(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_xlsx_merge_reference_missing(),
+                    ))
+                })?,
                 false,
             )?
             .overlaps(rect)
             {
-                return Err(refuse("Anchor overlaps a merged cell range"));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_anchor_overlaps_merge(),
+                )));
             }
         }
     }
@@ -1399,8 +1733,11 @@ fn check_target_rectangle(root: &Element, rect: Rect) -> Result<()> {
     root.descendants("c", &mut cells);
     for c in cells {
         let (row, col) = parse_address(
-            c.attr("r")
-                .ok_or_else(|| refuse("Template cells require explicit addresses"))?,
+            c.attr("r").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_explicit_cell_address_required(),
+                ))
+            })?,
             false,
         )?;
         if rect.contains(row, col)
@@ -1410,15 +1747,17 @@ fn check_target_rectangle(root: &Element, rect: Rect) -> Result<()> {
                     .any(|k| !matches!(k.as_str(), "r" | "s" | "t"))
                 || c.children.iter().any(|c| !matches!(c.local(), "v" | "is")))
         {
-            return Err(refuse(
-                "Anchor contains formulas, metadata or unsupported cell content; explicit refusal preserves the template",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_anchor_content_unsupported(),
+            )));
         }
         if let Some(f) = c.child("f")
             && let Some(r) = f.attr("ref")
             && parse_rect(r, false)?.overlaps(rect)
         {
-            return Err(refuse("Anchor overlaps an array/shared formula range"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_anchor_overlaps_formula_range(),
+            )));
         }
     }
     Ok(())
@@ -1429,15 +1768,30 @@ fn find_anchor<'a>(anchors: &'a [Anchor], name: &str) -> Result<&'a Anchor> {
         .filter(|a| a.info.name.eq_ignore_ascii_case(name))
         .collect();
     if matches.len() != 1 {
-        return Err(refuse(format!(
-            "Template anchor ‘{name}’ is missing or ambiguous"
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_template_anchor_ambiguous(
+                weftext_messages::params::ErrorExportXlsxTemplateAnchorAmbiguous {
+                    name: (name).to_string(),
+                },
+            ),
         )));
     }
     if !matches[0].info.supported {
-        return Err(refuse(format!(
-            "Template anchor ‘{name}’: {}",
-            matches[0].info.reason.as_deref().unwrap_or("unsupported")
-        )));
+        return Err({
+            let explanation =
+                weftext_messages::UiMessage::error_export_xlsx_template_anchor_unsupported(
+                    weftext_messages::params::ErrorExportXlsxTemplateAnchorUnsupported {
+                        name: name.to_string(),
+                    },
+                );
+            match matches[0].info.reason.clone() {
+                Some(reason) => {
+                    let (description, details) = reason.into_parts();
+                    ExportError::with_cause(explanation, "templateAnchor", description, details)
+                }
+                None => ExportError::new(explanation),
+            }
+        });
     }
     Ok(matches[0])
 }
@@ -1450,9 +1804,9 @@ fn fill_template(
     losses: &mut Vec<ExportLoss>,
 ) -> Result<()> {
     if template.fields.is_empty() && template.queries.is_empty() {
-        return Err(refuse(
-            "Template export requires explicit standard field/Query anchor mappings",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_explicit_anchor_mapping_required(),
+        )));
     }
     let anchors = anchors(parts, workbook)?;
     let mut writes: BTreeMap<String, Writes> = BTreeMap::new();
@@ -1464,12 +1818,14 @@ fn fill_template(
         registered_cells = registered_cells
             .saturating_add((u64::from(region.rows()) * u64::from(region.columns())) as usize);
         if registered_cells > MAX_CELLS {
-            return Err(refuse(
-                "Combined template mappings exceed the cell budget before allocation",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_combined_mapping_preallocation_exceeded(),
+            )));
         }
         if regions.iter().any(|(p, r)| p == path && r.overlaps(region)) {
-            return Err(refuse("Template mappings overlap; no cells were modified"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_mappings_overlap(),
+            )));
         }
         for other in &anchors {
             if other.info.kind == "table"
@@ -1477,9 +1833,9 @@ fn fill_template(
                 && other.rect.is_some_and(|r| r.overlaps(region))
                 && !(anchor.info.kind == "table" && other.info.name == anchor.info.name)
             {
-                return Err(refuse(
-                    "Named field/range overlaps a table; map the actual table anchor instead",
-                ));
+                return Err(refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_named_range_overlaps_table(),
+                )));
             }
         }
         regions.push((path.clone(), region));
@@ -1489,9 +1845,9 @@ fn fill_template(
         let anchor = find_anchor(&anchors, &field.anchor)?;
         let r = anchor.rect.unwrap();
         if anchor.info.kind != "definedName" || r.rows() != 1 || r.columns() != 1 {
-            return Err(refuse(
-                "Typed field slots require a standard single-cell defined name",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_typed_field_single_cell_name_required(),
+            )));
         }
         register(anchor, r)?;
         writes
@@ -1501,23 +1857,25 @@ fn fill_template(
     }
     for query in &template.queries {
         let sheet = request.sheets.get(query.sheet).ok_or_else(|| {
-            refuse("Query template mapping refers to an unavailable frozen sheet")
+            refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_query_sheet_unavailable(),
+            ))
         })?;
         let anchor = find_anchor(&anchors, &query.anchor)?;
         let r = anchor.rect.unwrap();
         if r.columns() as usize != sheet.columns.len()
             || sheet.result.rows.len() > anchor.info.capacity as usize
         {
-            return Err(refuse(
-                "Query rows/columns exceed the anchor's fixed bounds; no truncation or row/reference rewriting was performed",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_query_anchor_bounds_exceeded(),
+            )));
         }
         if let Some(columns) = &anchor.table_columns
             && columns != &sheet.columns
         {
-            return Err(refuse(
-                "Query column order/names differ from the existing table definitions",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_query_columns_mismatch(),
+            )));
         }
         register(anchor, r)?;
         mapped.insert(query.sheet);
@@ -1542,12 +1900,14 @@ fn fill_template(
         }
     }
     if mapped.len() != request.sheets.len() {
-        return Err(refuse(
-            "Every frozen Query sheet must have an explicit template mapping",
-        ));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_query_sheet_mapping_required(),
+        )));
     }
     if writes.values().map(BTreeMap::len).sum::<usize>() > MAX_CELLS {
-        return Err(refuse("Combined template mappings exceed the cell budget"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_combined_mapping_cells_exceeded(),
+        )));
     }
     for (path, values) in writes {
         let bytes = rewrite_sheet(part(parts, &path)?, &values, &path, losses)?;
@@ -1610,14 +1970,18 @@ fn fill_template(
         loss(
             losses,
             "template_formula_recalculation",
-            "Existing formulas/references are preserved; stale cached values are removed and full recalculation is requested. Formula results require a spreadsheet application.",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_formula_recalculation_requested(),
+            ),
             "workbook",
         );
     }
     loss(
         losses,
         "template_fixed_bounds",
-        "Template slots use existing bounded cells. Extra capacity is cleared; rows, table bounds, other references and unsupported template parts are preserved.",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_bounded_slots_preserve_structure(),
+        ),
         "workbook",
     );
     Ok(())
@@ -1636,7 +2000,9 @@ fn apply_edits(bytes: &[u8], mut edits: Vec<(usize, usize, Vec<u8>)>) -> Result<
     let mut cursor = 0;
     for (start, end, replacement) in edits {
         if start < cursor || end < start || end > bytes.len() {
-            return Err(refuse("Overlapping or invalid XML replacements"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_xml_replacements_invalid_or_overlapping(),
+            )));
         }
         out.extend_from_slice(&bytes[cursor..start]);
         out.extend_from_slice(&replacement);
@@ -1644,7 +2010,9 @@ fn apply_edits(bytes: &[u8], mut edits: Vec<(usize, usize, Vec<u8>)>) -> Result<
     }
     out.extend_from_slice(&bytes[cursor..]);
     if out.len() > MAX_PART {
-        return Err(refuse("Modified worksheet size budget exceeded"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_modified_sheet_bytes_exceeded(),
+        )));
     }
     Ok(out)
 }
@@ -1678,17 +2046,22 @@ fn rewrite_row(
     let mut last = 0;
     for c in &row.children {
         if c.local() != "c" || c.name.contains(':') {
-            return Err(refuse("Unsupported row content in an edited template row"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_edited_row_content_unsupported(),
+            )));
         }
         let (r, col) = parse_address(
-            c.attr("r")
-                .ok_or_else(|| refuse("Template cell address missing"))?,
+            c.attr("r").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_template_cell_address_missing(),
+                ))
+            })?,
             false,
         )?;
         if r != row_number || col <= last {
-            return Err(refuse(
-                "Template row cells must have unique ordered addresses",
-            ));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_row_cell_address_order_invalid(),
+            )));
         }
         last = col;
         cells.insert(col, c);
@@ -1774,11 +2147,15 @@ fn rewrite_sheet(
     losses: &mut Vec<ExportLoss>,
 ) -> Result<Vec<u8>> {
     let root = parse_xml(bytes)?;
-    let data = root
-        .child("sheetData")
-        .ok_or_else(|| refuse("Template worksheet lacks sheetData"))?;
+    let data = root.child("sheetData").ok_or_else(|| {
+        refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_sheet_data_missing(),
+        ))
+    })?;
     if data.name.contains(':') {
-        return Err(refuse("Prefixed sheetData insertion is unsupported"));
+        return Err(refuse(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_xlsx_prefixed_sheet_data_insertion_unsupported(),
+        )));
     }
     let mut pending: BTreeMap<u32, BTreeMap<u32, Option<Cell>>> = BTreeMap::new();
     for ((r, c), cell) in writes {
@@ -1795,15 +2172,23 @@ fn rewrite_sheet(
     let mut last_row = 0;
     for row in &data.children {
         if row.local() != "row" || row.name.contains(':') {
-            return Err(refuse("Unsupported sheetData content"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_sheet_data_content_unsupported(),
+            )));
         }
         let r = row
             .attr("r")
             .and_then(|s| s.parse::<u32>().ok())
             .filter(|r| *r > 0 && *r <= MAX_ROWS)
-            .ok_or_else(|| refuse("Template row requires a bounded explicit address"))?;
+            .ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_row_explicit_address_required(),
+                ))
+            })?;
         if r <= last_row {
-            return Err(refuse("Template rows must be unique and ordered"));
+            return Err(refuse(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_xlsx_row_order_invalid(),
+            )));
         }
         last_row = r;
         if !data.empty {
@@ -1839,8 +2224,11 @@ fn rewrite_sheet(
     let mut edits = vec![(data.start, data.end, out)];
     if let Some(dim) = root.child("dimension") {
         let mut rect = parse_rect(
-            dim.attr("ref")
-                .ok_or_else(|| refuse("Worksheet dimension missing"))?,
+            dim.attr("ref").ok_or_else(|| {
+                refuse(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_xlsx_sheet_dimension_missing(),
+                ))
+            })?,
             false,
         )?;
         for (r, c) in writes.keys() {
@@ -1871,6 +2259,57 @@ fn rewrite_sheet(
 mod tests {
     use super::*;
     use weftext_data::{NativeMember, QueryRow, QueryValueType};
+
+    #[test]
+    fn original_utf8_parser_diagnostics_survive_admission_and_all_append_paths() {
+        for original in [b"<root/>".as_slice(), b"<root>author</root>".as_slice()] {
+            let element = parse_xml(original).unwrap();
+            let corrupt_at = if element.empty {
+                vec![1]
+            } else {
+                vec![element.open_end, element.close_start + 2]
+            };
+            for at in corrupt_at {
+                let mut bytes = original.to_vec();
+                bytes[at] = 0xff;
+                let slice = if element.empty {
+                    &bytes[element.start..element.end - 2]
+                } else if at < element.close_start {
+                    &bytes[element.start..element.close_start]
+                } else {
+                    &bytes[element.close_start..element.end]
+                };
+                let expected = std::str::from_utf8(slice).unwrap_err().to_string();
+                let error = append_child(&bytes, &element, "<new/>").unwrap_err();
+                assert_eq!(
+                    error.description.explanation,
+                    UiMessage::error_export_xlsx_xml_invalid()
+                );
+                assert_eq!(
+                    error.description.diagnostics,
+                    vec![weftext_messages::RawDiagnostic {
+                        origin: DiagnosticOrigin::Dependency,
+                        text: expected,
+                    }]
+                );
+                let admitted = parse_xml(&bytes).unwrap_err();
+                assert_eq!(
+                    admitted.description.explanation,
+                    UiMessage::error_export_xlsx_template_xml_bounded_utf_eight_required()
+                );
+                assert_eq!(
+                    admitted.description.diagnostics[0].text,
+                    std::str::from_utf8(&bytes).unwrap_err().to_string()
+                );
+            }
+        }
+        let invalid = relationship_owner("xl/_rels/workbook.xml.bad").unwrap_err();
+        assert_eq!(
+            invalid.description.explanation,
+            UiMessage::error_export_xlsx_relationship_part_name_invalid()
+        );
+        assert!(invalid.description.diagnostics.is_empty());
+    }
 
     fn input(cells: Vec<(&str, Cell)>) -> XlsxSheetInput {
         let columns = cells.iter().map(|(name, _)| name.to_string()).collect();
@@ -1987,14 +2426,16 @@ mod tests {
             (
                 "invalid",
                 Cell::Invalid {
-                    diagnostics: vec!["日期无效".into()],
+                    diagnostics: vec![weftext_messages::UiMessage::error_export_json().into()],
                     value: Some(NativeValue::Text("bad".into())),
                 },
             ),
             (
                 "unavailable",
                 Cell::Unavailable {
-                    reason: "缺少获权历法".into(),
+                    kind: weftext_data::DataErrorKind::Coverage,
+                    reason: weftext_messages::UiMessage::error_export_data_qualification().into(),
+                    diagnostics: vec![],
                 },
             ),
             (
@@ -2039,8 +2480,14 @@ mod tests {
         assert_eq!(cells["I2"].1, "<absent>");
         assert_eq!(cells["J2"].1, "<null>");
         assert_eq!(cells["K2"].1, "");
-        assert!(cells["L2"].1.starts_with("<invalid:"));
-        assert!(cells["M2"].1.starts_with("<unavailable:"));
+        assert_eq!(
+            serde_json::from_str::<Cell>(&cells["L2"].1).unwrap(),
+            s.result.rows[0].cells["invalid"]
+        );
+        assert_eq!(
+            serde_json::from_str::<Cell>(&cells["M2"].1).unwrap(),
+            s.result.rows[0].cells["unavailable"]
+        );
         let exact: serde_json::Value =
             serde_json::from_str(&exact_item(&parts, "sheet:0")).unwrap();
         assert_eq!(exact, serde_json::to_value(s).unwrap());
@@ -2183,19 +2630,30 @@ mod tests {
         assert!(
             export_xlsx(&request)
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("fixed bounds")
         );
         let mut request = template_request(standard_template());
         let duplicate = request.template.as_ref().unwrap().fields[0].clone();
         request.template.as_mut().unwrap().fields.push(duplicate);
-        assert!(export_xlsx(&request).unwrap_err().0.contains("overlap"));
+        assert!(
+            export_xlsx(&request)
+                .unwrap_err()
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
+                .contains("overlap")
+        );
         let mut request = template_request(standard_template());
         request.template.as_mut().unwrap().queries.clear();
         assert!(
             export_xlsx(&request)
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("Every frozen")
         );
     }
@@ -2245,7 +2703,14 @@ mod tests {
         assert_eq!(cells["B2"].1, "00123");
         let mut wrong = request;
         wrong.sheets[0].columns.reverse();
-        assert!(export_xlsx(&wrong).unwrap_err().0.contains("column order"));
+        assert!(
+            export_xlsx(&wrong)
+                .unwrap_err()
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
+                .contains("column order")
+        );
     }
     #[test]
     fn malicious_workbooks_cannot_fetch_external_parts_or_expand_entities() {
@@ -2254,7 +2719,9 @@ mod tests {
         assert!(
             inspect_xlsx_template(&write_package(parts).unwrap())
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("Macros")
         );
         let mut parts = standard_template();
@@ -2262,7 +2729,9 @@ mod tests {
         assert!(
             inspect_xlsx_template(&write_package(parts).unwrap())
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("External")
         );
         let mut parts = standard_template();
@@ -2270,7 +2739,9 @@ mod tests {
         assert!(
             inspect_xlsx_template(&write_package(parts).unwrap())
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("DTD")
         );
         let mut parts = standard_template();
@@ -2278,7 +2749,9 @@ mod tests {
         assert!(
             inspect_xlsx_template(&write_package(parts).unwrap())
                 .unwrap_err()
-                .0
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
                 .contains("Unsafe")
         );
     }
@@ -2292,7 +2765,9 @@ mod tests {
                 template: None
             })
             .unwrap_err()
-            .0
+            .description
+            .explanation
+            .render(weftext_messages::UiLocale::EnUs)
             .contains("omits")
         );
         let mut s = input(vec![("total", v(NativeValue::Int("10".into())))]);
@@ -2307,5 +2782,65 @@ mod tests {
         .unwrap();
         assert!(artifact.losses.iter().any(|l| l.code == "query_incomplete"));
         assert!(artifact.losses.iter().any(|l| l.code == "query_freshness"));
+    }
+
+    #[test]
+    fn error_cells_keep_all_parallel_diagnostics_and_exact_author_values_in_real_xlsx() {
+        let diagnostics: Vec<_> = (0..40)
+            .map(|index| {
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::common_operation(
+                        weftext_messages::params::CommonOperation {
+                            operation_id: format!("diagnostic-{index}"),
+                        },
+                    ),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    format!("original-{index} {{value}} 😀\r\n"),
+                )
+            })
+            .collect();
+        let invalid = Cell::Invalid {
+            diagnostics: diagnostics.clone(),
+            value: Some(NativeValue::Decimal(
+                "123456789012345678901234567890.000123000".into(),
+            )),
+        };
+        let unavailable = Cell::Unavailable {
+            kind: weftext_data::DataErrorKind::NativeBudget,
+            reason: weftext_messages::UiMessage::error_export_data_qualification().into(),
+            diagnostics,
+        };
+        let s = input(vec![
+            ("invalid", invalid.clone()),
+            ("unavailable", unavailable.clone()),
+        ]);
+        let artifact = export_xlsx(&XlsxRequest {
+            sheets: vec![s.clone()],
+            template: None,
+        })
+        .unwrap();
+        let parts = unpack(&artifact.bytes);
+        let cells = sheet_cells(&parts, 0);
+        assert_eq!(cells["A2"].0, "inlineStr");
+        assert_eq!(
+            serde_json::from_str::<Cell>(&cells["A2"].1).unwrap(),
+            invalid
+        );
+        assert_eq!(
+            serde_json::from_str::<Cell>(&cells["B2"].1).unwrap(),
+            unavailable
+        );
+        let exact: serde_json::Value =
+            serde_json::from_str(&exact_item(&parts, "sheet:0")).unwrap();
+        assert_eq!(exact, serde_json::to_value(&s).unwrap());
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&cells["A2"].1).unwrap()["diagnostics"]
+                .as_array()
+                .unwrap()
+                .len(),
+            40
+        );
     }
 }

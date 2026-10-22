@@ -626,7 +626,11 @@ fn compound_retirement_original_install_namespace_content_and_facts_checkpoints_
                 .unwrap_err();
         assert_eq!(error.code, "recoveryPending", "{point}: {error:?}");
         assert!(
-            error.message.contains("underlying testInterrupted:"),
+            error
+                .causes
+                .as_slice()
+                .iter()
+                .any(|cause| cause.code == "testInterrupted"),
             "{point}: {error:?}"
         );
         let install = f.b.journal_path(&preview.operation_id, "install");

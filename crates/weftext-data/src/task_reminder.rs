@@ -26,7 +26,9 @@ pub struct TaskReminderResolution {
     pub normal_delivery_until: Option<String>,
     pub definition_digest: Option<String>,
     pub providers: BTreeMap<String, String>,
-    pub diagnostics: Vec<String>,
+    #[serde(deserialize_with = "required_failure_kind")]
+    pub failure_kind: Option<DataErrorKind>,
+    pub diagnostics: Vec<ErrorDescription>,
 }
 impl TaskReminderResolution {
     fn empty(state: TaskReminderState) -> Self {
@@ -37,47 +39,102 @@ impl TaskReminderResolution {
             normal_delivery_until: None,
             definition_digest: None,
             providers: BTreeMap::new(),
+            failure_kind: None,
             diagnostics: vec![],
         }
     }
     pub fn validation(&self) -> Cell {
-        match self.state {
-            TaskReminderState::Ready | TaskReminderState::Absent => {
+        match (self.state, self.failure_kind) {
+            (TaskReminderState::Ready | TaskReminderState::Absent, None)
+                if self.diagnostics.is_empty() =>
+            {
                 Cell::value(NativeValue::Bool(true))
             }
-            TaskReminderState::Invalid => Cell::Invalid {
-                diagnostics: self.diagnostics.clone(),
-                value: None,
-            },
-            TaskReminderState::Unavailable => Cell::Unavailable {
-                reason: self.diagnostics.join("; "),
-            },
+            (TaskReminderState::Invalid, Some(DataErrorKind::Invalid))
+                if !self.diagnostics.is_empty() =>
+            {
+                Cell::Invalid {
+                    diagnostics: self.diagnostics.clone(),
+                    value: None,
+                }
+            }
+            (TaskReminderState::Unavailable, Some(kind))
+                if kind != DataErrorKind::Invalid && !self.diagnostics.is_empty() =>
+            {
+                Cell::unavailable_group(
+                    kind,
+                    UiMessage::error_data_task_reminder_validation_unavailable(),
+                    self.diagnostics.clone(),
+                )
+            }
+            _ => {
+                let mut diagnostics =
+                    vec![UiMessage::error_data_task_reminder_resolution_invalid().into()];
+                diagnostics.extend(self.diagnostics.iter().cloned());
+                Cell::Invalid {
+                    diagnostics,
+                    value: None,
+                }
+            }
         }
     }
 }
-fn bad(message: impl Into<String>) -> DataError {
-    DataError(message.into())
+// A present nullable classification is part of the sole result wire. Missing
+// legacy fields are rejected; validation separately rejects inconsistent states.
+fn required_failure_kind<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<DataErrorKind>, D::Error> {
+    Option::<DataErrorKind>::deserialize(deserializer)
+}
+fn bad(message: UiMessage) -> DataError {
+    DataError::new(message)
+}
+fn civil_day_error(cell: Cell) -> DataError {
+    match cell {
+        Cell::Unavailable {
+            kind,
+            reason,
+            diagnostics,
+        } => DataError::with_kind(
+            kind,
+            UiMessage::error_data_task_reminder_civil_due_unavailable(),
+        )
+        .with_diagnostics(std::iter::once(reason).chain(diagnostics).collect()),
+        Cell::Invalid { diagnostics, .. } => {
+            bad(UiMessage::error_data_task_reminder_civil_due_invalid())
+                .with_diagnostics(diagnostics)
+        }
+        _ => DataError::unavailable(UiMessage::error_data_task_reminder_civil_due_unavailable()),
+    }
 }
 fn text<'a>(value: &'a NativeValue, key: &str) -> Result<&'a str> {
     value
         .member(key)
         .and_then(NativeValue::text)
-        .ok_or_else(|| bad(format!("Task reminder {key} requires text")))
+        .ok_or_else(|| {
+            bad(UiMessage::error_data_task_reminder_member_text_required(
+                weftext_messages::params::ErrorDataTaskReminderMemberTextRequired {
+                    member: key.into(),
+                },
+            ))
+        })
 }
 fn closed(value: &NativeValue, required: &[&str], optional: &[&str]) -> Result<()> {
     let members = value
         .record()
-        .ok_or_else(|| bad("Task reminder requires a direct record"))?;
+        .ok_or_else(|| bad(UiMessage::error_data_task_reminder_direct_record_required()))?;
     let mut names = BTreeSet::new();
     for member in members {
         if !names.insert(member.key.as_str())
             || !required.contains(&member.key.as_str()) && !optional.contains(&member.key.as_str())
         {
-            return Err(bad("Task reminder has duplicate or unknown members"));
+            return Err(bad(UiMessage::error_data_task_reminder_members_not_closed()));
         }
     }
     if required.iter().any(|name| !names.contains(name)) {
-        return Err(bad("Task reminder is missing a required member"));
+        return Err(bad(
+            UiMessage::error_data_task_reminder_required_member_missing(),
+        ));
     }
     Ok(())
 }
@@ -106,11 +163,11 @@ pub fn resolve_task_reminder(
     let mut result = TaskReminderResolution::empty(TaskReminderState::Ready);
     let resolved = (|| -> Result<(String, String)> {
         if serde_json::to_vec(reminder)?.len() > 16 * 1024 {
-            return Err(bad("Task reminder byte budget exceeded"));
+            return Err(bad(UiMessage::error_data_task_reminder_intent_byte_budget()));
         }
         let id = text(reminder, "id")?;
         if !uuid_v4(id) {
-            return Err(bad("Reminder id must be a canonical lowercase UUIDv4"));
+            return Err(bad(UiMessage::error_data_task_reminder_identity_invalid()));
         }
         result.reminder_id = Some(id.into());
         let kind = text(reminder, "kind")?;
@@ -127,9 +184,9 @@ pub fn resolve_task_reminder(
             }
             "due_before" => {
                 closed(reminder, &["id", "kind", "before"], &[])?;
-                let due = due
-                    .and_then(NativeValue::text)
-                    .ok_or_else(|| bad("Relative reminder requires an exact instant due"))?;
+                let due = due.and_then(NativeValue::text).ok_or_else(|| {
+                    bad(UiMessage::error_data_task_reminder_instant_due_required())
+                })?;
                 let due = ExactInstant::parse(due)?;
                 let (before, canonical) = decimal(text(reminder, "before")?)?;
                 if before.compare(&ExactDecimal::parse("0")?).is_lt()
@@ -138,15 +195,16 @@ pub fn resolve_task_reminder(
                         .is_gt()
                 {
                     return Err(bad(
-                        "Reminder advance is outside the supported nonnegative range",
+                        UiMessage::error_data_task_reminder_advance_out_of_range(),
                     ));
                 }
                 let (whole, fraction) = canonical
                     .split_once('.')
                     .unwrap_or((canonical.as_str(), ""));
-                let whole = whole
-                    .parse::<i64>()
-                    .map_err(|_| bad("Reminder advance overflow"))?;
+                let whole = whole.parse::<i64>().map_err(|error| {
+                    bad(UiMessage::error_data_task_reminder_advance_overflow())
+                        .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+                })?;
                 let mut fraction = ExactDecimal::parse(&format!(
                     "0.{}",
                     if fraction.is_empty() { "0" } else { fraction }
@@ -169,13 +227,10 @@ pub fn resolve_task_reminder(
                     &["id", "kind", "clock", "zone", "zone_version"],
                     &["fold"],
                 )?;
-                let due =
-                    due.ok_or_else(|| bad("Due-day reminder requires a complete civil due date"))?;
-                let day = reminder_civil_day(due, schema).map_err(|cell| match cell {
-                    Cell::Unavailable { reason } => bad(reason),
-                    Cell::Invalid { diagnostics, .. } => bad(diagnostics.join("; ")),
-                    _ => bad("Civil due date unavailable"),
+                let due = due.ok_or_else(|| {
+                    bad(UiMessage::error_data_task_reminder_due_day_input_required())
                 })?;
+                let day = reminder_civil_day(due, schema).map_err(civil_day_error)?;
                 if let Some(calendar) = due.member("calendar").and_then(NativeValue::text) {
                     let version = text(due, "version")?;
                     let provider = schema
@@ -189,25 +244,37 @@ pub fn resolve_task_reminder(
                                     Some("gregorian" | "calendar-table")
                                 )
                         })
-                        .ok_or_else(|| bad("Exact calendar provider unavailable"))?;
+                        .ok_or_else(|| {
+                            DataError::unavailable(
+                                UiMessage::error_data_task_reminder_calendar_provider_unavailable(),
+                            )
+                        })?;
                     result
                         .providers
                         .insert(provider.id.clone(), provider_fingerprint(provider)?);
                 }
                 let clock = reminder
                     .member("clock")
-                    .ok_or_else(|| bad("Reminder clock missing"))?;
+                    .ok_or_else(|| bad(UiMessage::error_data_task_reminder_clock_missing()))?;
                 closed(clock, &["time"], &["fraction"])?;
                 let Some(NativeValue::Time(clock_text)) = clock.member("time") else {
-                    return Err(bad("Reminder clock needs native time"));
+                    return Err(bad(
+                        UiMessage::error_data_task_reminder_native_time_required(),
+                    ));
                 };
-                let time = NaiveTime::parse_from_str(clock_text, "%H:%M:%S")
-                    .map_err(|_| bad("Invalid reminder clock"))?;
+                let time = NaiveTime::parse_from_str(clock_text, "%H:%M:%S").map_err(|error| {
+                    bad(UiMessage::error_data_task_reminder_clock_invalid())
+                        .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+                })?;
                 if time.format("%H:%M:%S").to_string() != *clock_text {
-                    return Err(bad("Noncanonical reminder clock"));
+                    return Err(bad(
+                        UiMessage::error_data_task_reminder_clock_not_canonical(),
+                    ));
                 }
                 if time.nanosecond() != 0 || time.second() > 59 {
-                    return Err(bad("Leap seconds are unsupported in reminder clocks"));
+                    return Err(bad(
+                        UiMessage::error_data_task_reminder_clock_leap_second_unsupported(),
+                    ));
                 }
                 let (fraction, fraction_text) = decimal(
                     clock
@@ -219,7 +286,9 @@ pub fn resolve_task_reminder(
                 if fraction.compare(&ExactDecimal::parse("0")?).is_lt()
                     || !fraction.compare(&ExactDecimal::parse("1")?).is_lt()
                 {
-                    return Err(bad("Reminder fraction must be in [0,1)"));
+                    return Err(bad(
+                        UiMessage::error_data_task_reminder_fraction_out_of_range(),
+                    ));
                 }
                 let zone_key = text(reminder, "zone")?;
                 let zone_version = text(reminder, "zone_version")?;
@@ -231,7 +300,11 @@ pub fn resolve_task_reminder(
                             && p.data["key"].as_str() == Some(zone_key)
                             && p.data["version"].as_str() == Some(zone_version)
                     })
-                    .ok_or_else(|| bad("Exact reminder zone provider/version unavailable"))?;
+                    .ok_or_else(|| {
+                        DataError::unavailable(
+                            UiMessage::error_data_task_reminder_zone_provider_unavailable(),
+                        )
+                    })?;
                 result
                     .providers
                     .insert(provider.id.clone(), provider_fingerprint(provider)?);
@@ -242,16 +315,18 @@ pub fn resolve_task_reminder(
                     .map(|_| text(reminder, "fold"))
                     .transpose()?;
                 if fold.is_some_and(|f| !matches!(f, "earlier" | "later")) {
-                    return Err(bad("Invalid reminder fold"));
+                    return Err(bad(UiMessage::error_data_task_reminder_fold_invalid()));
                 }
                 let selected = match (candidates.len(), fold) {
-                    (0, _) => return Err(bad("Reminder civil time falls in a zone gap")),
+                    (0, _) => {
+                        return Err(bad(UiMessage::error_data_task_reminder_civil_time_in_gap()));
+                    }
                     (1, _) => &candidates[0],
                     (_, Some("earlier")) => &candidates[0],
                     (_, Some("later")) => candidates.last().unwrap(),
                     _ => {
                         return Err(bad(
-                            "Reminder civil time is ambiguous; explicitly choose earlier or later",
+                            UiMessage::error_data_task_reminder_civil_time_ambiguous(),
                         ));
                     }
                 };
@@ -268,7 +343,7 @@ pub fn resolve_task_reminder(
                     i64::from(time.second()),
                 )
             }
-            _ => return Err(bad("Unknown task reminder kind")),
+            _ => return Err(bad(UiMessage::error_data_task_reminder_kind_unknown())),
         };
         let trigger = ExactInstant::parse(&instant)?;
         if result.normal_delivery_until.is_none() {
@@ -277,7 +352,9 @@ pub fn resolve_task_reminder(
                     utc_seconds: trigger
                         .utc_seconds
                         .checked_add(60 - minute_second)
-                        .ok_or_else(|| bad("Reminder minute overflow"))?,
+                        .ok_or_else(
+                            || bad(UiMessage::error_data_task_reminder_minute_overflow()),
+                        )?,
                     fraction: ExactDecimal::parse("0")?,
                 }
                 .canonical()?,
@@ -295,12 +372,13 @@ pub fn resolve_task_reminder(
         }
         Err(error) => {
             result.normal_delivery_until = None;
-            result.state = if error.0.contains("unavailable") || error.0.contains("coverage") {
+            result.failure_kind = Some(error.kind());
+            result.state = if error.is_unavailable() {
                 TaskReminderState::Unavailable
             } else {
                 TaskReminderState::Invalid
             };
-            result.diagnostics.push(error.0);
+            result.diagnostics = error.into_diagnostics();
         }
     }
     result
@@ -663,6 +741,139 @@ mod tests {
                 .find(|f| f.field_id == "tasks/reminder")
                 .unwrap()
                 .cell
+        );
+    }
+
+    #[test]
+    fn reminder_failure_facts_and_parallel_diagnostics_do_not_depend_on_message_text_or_locale() {
+        let mut schema = Schema::bundled().unwrap();
+        let zone = schema
+            .providers
+            .iter_mut()
+            .find(|p| p.id == "zones/utc")
+            .unwrap();
+        zone.data["from"] = "2026-01-01T00:00:00Z".into();
+        zone.data["until"] = "2026-10-23T09:00:45Z".into();
+        let intent = day("09:00:30", "0", "UTC", "fixed-utc.v1", None);
+        let original = serde_json::to_value(&intent).unwrap();
+        let resolution = resolve_task_reminder(
+            Some(&intent),
+            Some(&NativeValue::Date("2026-10-23".into())),
+            &schema,
+        );
+        assert_eq!(resolution.state, TaskReminderState::Unavailable);
+        assert_eq!(resolution.failure_kind, Some(DataErrorKind::Coverage));
+        assert_eq!(
+            resolution.diagnostics[0].explanation,
+            UiMessage::error_data_task_reminder_minute_coverage_unavailable()
+        );
+        let Cell::Unavailable {
+            kind, diagnostics, ..
+        } = resolution.validation()
+        else {
+            panic!("incomplete minute coverage remains unavailable")
+        };
+        assert_eq!(kind, DataErrorKind::Coverage);
+        assert_eq!(diagnostics, resolution.diagnostics);
+        let wire = serde_json::to_value(&resolution).unwrap();
+        for diagnostic in &resolution.diagnostics {
+            let _ = diagnostic
+                .explanation
+                .render(weftext_messages::UiLocale::ZhCn);
+            let _ = diagnostic
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs);
+        }
+        assert_eq!(serde_json::to_value(&resolution).unwrap(), wire);
+        assert_eq!(serde_json::to_value(&intent).unwrap(), original);
+
+        let mut oversized = absolute("2026-10-23T09:00:00Z");
+        if let NativeValue::Record(members) = &mut oversized {
+            members.push(NativeMember {
+                key: "authorRaw".into(),
+                value: t(&"作者原值".repeat(6000)),
+            });
+        }
+        let original = serde_json::to_value(&oversized).unwrap();
+        let result = resolve_task_reminder(Some(&oversized), None, &schema);
+        assert_eq!(result.state, TaskReminderState::Invalid);
+        assert_eq!(result.failure_kind, Some(DataErrorKind::Invalid));
+        assert_eq!(
+            result.diagnostics[0].explanation,
+            UiMessage::error_data_task_reminder_intent_byte_budget()
+        );
+        assert_eq!(serde_json::to_value(&oversized).unwrap(), original);
+    }
+
+    #[test]
+    fn reminder_result_wire_is_typed_required_and_inconsistent_results_fail_closed() {
+        let schema = Schema::bundled().unwrap();
+        let resolution = resolve_task_reminder(
+            Some(&day("09:00:00", "0", "missing", "missing", None)),
+            Some(&NativeValue::Date("2026-10-23".into())),
+            &schema,
+        );
+        assert_eq!(resolution.failure_kind, Some(DataErrorKind::Unavailable));
+        let wire = serde_json::to_value(&resolution).unwrap();
+        let decoded: TaskReminderResolution = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), wire);
+        let mut missing = wire.clone();
+        missing.as_object_mut().unwrap().remove("failureKind");
+        assert!(serde_json::from_value::<TaskReminderResolution>(missing).is_err());
+        let mut legacy = wire.clone();
+        legacy["diagnostics"] = serde_json::json!(["legacy product text"]);
+        assert!(serde_json::from_value::<TaskReminderResolution>(legacy).is_err());
+        let mut inconsistent = wire;
+        inconsistent["failureKind"] = serde_json::Value::Null;
+        let inconsistent: TaskReminderResolution = serde_json::from_value(inconsistent).unwrap();
+        let Cell::Invalid { diagnostics, .. } = inconsistent.validation() else {
+            panic!("an inconsistent derived result must reject instead of guessing a category")
+        };
+        assert_eq!(
+            diagnostics[0].explanation,
+            UiMessage::error_data_task_reminder_resolution_invalid()
+        );
+    }
+
+    #[test]
+    fn reminder_original_clock_diagnostic_and_civil_day_parallel_failures_remain_structured() {
+        let schema = Schema::bundled().unwrap();
+        let original = NaiveTime::parse_from_str("not a clock", "%H:%M:%S")
+            .unwrap_err()
+            .to_string();
+        let resolution = resolve_task_reminder(
+            Some(&day("not a clock", "0", "UTC", "fixed-utc.v1", None)),
+            Some(&NativeValue::Date("2026-10-23".into())),
+            &schema,
+        );
+        assert_eq!(resolution.state, TaskReminderState::Invalid);
+        assert_eq!(
+            resolution.diagnostics[0].explanation,
+            UiMessage::error_data_task_reminder_clock_invalid()
+        );
+        assert_eq!(
+            resolution.diagnostics[0].diagnostics,
+            vec![RawDiagnostic {
+                origin: DiagnosticOrigin::Dependency,
+                text: original
+            }]
+        );
+        let parallel = vec![resolution.diagnostics[0].clone(); 96];
+        let error = civil_day_error(Cell::unavailable_group(
+            DataErrorKind::Coverage,
+            UiMessage::error_data_task_reminder_minute_coverage_unavailable(),
+            parallel.clone(),
+        ));
+        assert_eq!(error.kind(), DataErrorKind::Coverage);
+        let (_, _, Some(DataErrorDetails::Diagnostics { diagnostics })) = error.into_parts() else {
+            panic!("parallel source evidence must be retained")
+        };
+        assert_eq!(diagnostics.len(), 97);
+        assert_eq!(diagnostics[1..], parallel);
+        assert!(
+            diagnostics
+                .iter()
+                .all(|description| description.causes.as_slice().is_empty())
         );
     }
 }

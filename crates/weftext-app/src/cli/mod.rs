@@ -275,8 +275,8 @@ pub async fn run_from(arguments: impl IntoIterator<Item = OsString>) -> u8 {
         .and_then(|v| v.parse::<UiLocale>().ok())
         .unwrap_or_default();
     let mut command = localized_command(Args::command(), locale)
-        .about(UiMessage::CliDescription {}.render(locale))
-        .after_help(UiMessage::CliHelpCommands {}.render(locale));
+        .about(UiMessage::cli_description().render(locale))
+        .after_help(UiMessage::cli_help_commands().render(locale));
     let matches = match command.try_get_matches_from_mut(arguments) {
         Ok(matches) => matches,
         Err(error) => {
@@ -372,23 +372,23 @@ fn remote_setup_exit(code: &str) -> u8 {
 fn localized_command(command: clap::Command, locale: UiLocale) -> clap::Command {
     let mut template = format!(
         "{{before-help}}{{name}} {{version}}\n{{about-with-newline}}\n{}: {{usage}}\n\n",
-        UiMessage::CliUsageHeading {}.render(locale)
+        UiMessage::cli_usage_heading().render(locale)
     );
     if command.has_subcommands() {
         template.push_str(&format!(
             "{}:\n{{subcommands}}\n",
-            UiMessage::CliCommandsHeading {}.render(locale)
+            UiMessage::cli_commands_heading().render(locale)
         ));
     }
     if command.get_arguments().any(|arg| arg.is_positional()) {
         template.push_str(&format!(
             "{}:\n{{positionals}}\n",
-            UiMessage::CliArgumentsHeading {}.render(locale)
+            UiMessage::cli_arguments_heading().render(locale)
         ));
     }
     template.push_str(&format!(
         "{}:\n{{options}}{{after-help}}\n",
-        UiMessage::CliOptionsHeading {}.render(locale)
+        UiMessage::cli_options_heading().render(locale)
     ));
     let has_version = command.get_version().is_some();
     let command = command
@@ -401,7 +401,7 @@ fn localized_command(command: clap::Command, locale: UiLocale) -> clap::Command 
                 .long("help")
                 .short('h')
                 .action(clap::ArgAction::Help)
-                .help(UiMessage::CliHelpFlag {}.render(locale)),
+                .help(UiMessage::cli_help_flag().render(locale)),
         )
         .mut_subcommands(|sub| localized_command(sub, locale));
     if has_version {
@@ -410,7 +410,7 @@ fn localized_command(command: clap::Command, locale: UiLocale) -> clap::Command 
                 .long("version")
                 .short('V')
                 .action(clap::ArgAction::Version)
-                .help(UiMessage::CliVersionFlag {}.render(locale)),
+                .help(UiMessage::cli_version_flag().render(locale)),
         )
     } else {
         command
@@ -676,31 +676,33 @@ async fn execute(args: &Args, locale: UiLocale) -> Result<u8, Failure> {
     };
     let bytes = if args.format == OutputFormat::Human {
         let message = match outcome(kind, reply.status, &value, false) {
-            0 => UiMessage::CliComplete {}.render(locale),
-            PARTIAL => UiMessage::CliPartial {}.render(locale),
-            DELIVERY => UiMessage::CliDeliveryFailed {
-                operation_id: value["operationId"]
-                    .as_str()
-                    .or_else(|| value["requestId"].as_str())
-                    .unwrap_or("")
-                    .into(),
-                path: record
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default(),
+            0 => UiMessage::cli_complete().render(locale),
+            PARTIAL => UiMessage::cli_partial().render(locale),
+            DELIVERY => {
+                UiMessage::cli_delivery_failed(weftext_messages::params::CliDeliveryFailed {
+                    operation_id: value["operationId"]
+                        .as_str()
+                        .or_else(|| value["requestId"].as_str())
+                        .unwrap_or("")
+                        .into(),
+                    path: record
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                })
+                .render(locale)
             }
-            .render(locale),
-            UNKNOWN => UiMessage::CliUnknown {
+            UNKNOWN => UiMessage::cli_unknown(weftext_messages::params::CliUnknown {
                 operation_id: value["operationId"].as_str().unwrap_or("").into(),
                 path: record
                     .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_default(),
-            }
+            })
             .render(locale),
-            _ => UiMessage::CliError {
+            _ => UiMessage::cli_error(weftext_messages::params::CliError {
                 code: error_code(&value).into(),
-            }
+            })
             .render(locale),
         };
         let mut bytes = message.into_bytes();
@@ -1133,10 +1135,10 @@ fn retained_diagnostic(format: OutputFormat, locale: UiLocale, input: &FrozenReq
         }));
     } else {
         diagnostic(
-            UiMessage::CliRequestRetained {
+            UiMessage::cli_request_retained(weftext_messages::params::CliRequestRetained {
                 operation_id: operation_id.into(),
                 path: path.display().to_string(),
-            }
+            })
             .render(locale),
         );
     }
@@ -1157,21 +1159,21 @@ fn report_failure(failure: &Failure, locale: UiLocale, format: OutputFormat) {
         return;
     }
     let message = if failure.exit == UNKNOWN {
-        UiMessage::CliUnknown {
+        UiMessage::cli_unknown(weftext_messages::params::CliUnknown {
             operation_id: failure.original_id.clone().unwrap_or_default(),
             path: failure.request_path.clone().unwrap_or_default(),
-        }
+        })
     } else if failure.exit == DELIVERY {
-        UiMessage::CliDeliveryFailed {
+        UiMessage::cli_delivery_failed(weftext_messages::params::CliDeliveryFailed {
             operation_id: failure.original_id.clone().unwrap_or_default(),
             path: failure.request_path.clone().unwrap_or_default(),
-        }
+        })
     } else if failure.code == "invalidArguments" {
-        UiMessage::CliInvalidArguments {}
+        UiMessage::cli_invalid_arguments()
     } else {
-        UiMessage::CliError {
+        UiMessage::cli_error(weftext_messages::params::CliError {
             code: failure.code.clone(),
-        }
+        })
     };
     diagnostic(message.render(locale));
 }
@@ -1558,7 +1560,7 @@ mod tests {
             let mut command = localized_command(Args::command(), locale);
             command.clone().debug_assert();
             let help = command.render_long_help().to_string();
-            assert!(help.contains(&UiMessage::CliUsageHeading {}.render(locale)));
+            assert!(help.contains(&UiMessage::cli_usage_heading().render(locale)));
             assert!(help.contains("--endpoint"));
             assert!(help.contains("operation"));
         }

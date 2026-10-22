@@ -73,13 +73,15 @@ pub fn inspect_editor(source: &str) -> EditorMap {
         body_blocks: vec![],
     };
     if !valid {
-        map.unavailable_reason = Some("syntax-invalid".into());
+        map.unavailable_reason =
+            Some(weftext_messages::UiMessage::error_engine_reason_syntax_invalid().into());
         return map;
     }
     // Arbitrary show transformations make source-to-display inversion unknown.
     // Recognize only the exact native per-label recipe owned by this adapter.
     if has_unknown_show(&root, source) {
-        map.unavailable_reason = Some("unverified-show-rule".into());
+        map.unavailable_reason =
+            Some(weftext_messages::UiMessage::error_engine_reason_show_rule_unverified().into());
         return map;
     }
     let offsets = Utf16Offsets::new(source);
@@ -89,7 +91,9 @@ pub fn inspect_editor(source: &str) -> EditorMap {
     for structure in &mut map.structures {
         if structure.kind == "heading" {
             structure.level_writable = heading_levels;
-            structure.level_reason = (!heading_levels).then(|| "native-heading-level-rule".into());
+            structure.level_reason = (!heading_levels).then(|| {
+                weftext_messages::UiMessage::error_engine_reason_heading_level_rule().into()
+            });
         }
     }
     roles(&root, source, &parsed, &mut map);
@@ -129,7 +133,8 @@ pub fn inspect_editor_with_style(source: &str, style: &crate::StyleModule) -> Ed
     map.title.status = "unverified-library-style".into();
     map.subtitle = absent();
     map.subtitle.status = "unverified-library-style".into();
-    map.unavailable_reason = Some("unverified-library-style".into());
+    map.unavailable_reason =
+        Some(weftext_messages::UiMessage::error_engine_reason_library_style_unverified().into());
     map
 }
 
@@ -139,8 +144,8 @@ pub fn edit_with_style(
     style: &crate::StyleModule,
 ) -> Result<EditOutput, EngineError> {
     if !crate::style_allows_rich_editing(style) {
-        return Err(EngineError(
-            "rich-unavailable: unverified-library-style".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_rich_style_unverified(),
         ));
     }
     edit(source, request)
@@ -202,7 +207,9 @@ fn cell_literal_piece(node: &LinkedNode<'_>, source: &str) -> Option<String> {
 /// distinct. CRLF clipboard line endings normalize to one logical break.
 fn encode_cell_literal(text: &str) -> Result<String, EngineError> {
     if text.len() > 1_048_576 || text.contains('\0') {
-        return Err(EngineError("单元格文字过长或含 NUL".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_cell_text_invalid(),
+        ));
     }
     text.replace("\r\n", "\n")
         .replace('\r', "\n")
@@ -795,7 +802,9 @@ fn decode_literal(raw: &str) -> Option<String> {
 /// Quoted native string, re-read through the official native string AST.
 pub fn encode_string(text: &str) -> Result<String, EngineError> {
     if text.contains('\0') || text.len() > 1_048_576 {
-        return Err(EngineError("字符串超过预算或含 NUL".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_string_invalid(),
+        ));
     }
     let mut encoded = String::from("\"");
     for character in text.chars() {
@@ -818,21 +827,27 @@ pub fn encode_string(text: &str) -> Result<String, EngineError> {
             .find_map(|n| n.cast::<ast::Str>())
             .is_some_and(|s| s.get() == text)
     {
-        return Err(EngineError("native-string-readback-failed".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_native_string_readback_failed(),
+        ));
     }
     Ok(encoded)
 }
 
 pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineError> {
     if request.source_hash != source_hash(source) {
-        return Err(EngineError("stale-source: 源内容已变化".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_source_stale(),
+        ));
     }
     let map = inspect_editor(source);
     if !map.syntax_valid {
-        return Err(EngineError("syntax-invalid: 请在源码修复当前草稿".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_source_syntax_invalid(),
+        ));
     }
     if let Some(reason) = &map.unavailable_reason {
-        return Err(EngineError(format!("rich-unavailable: {reason}")));
+        return Err(EngineError::new(reason.clone()));
     }
     let mut patches = vec![];
     let mut selection_override = None;
@@ -850,17 +865,25 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
                 .literal_regions
                 .iter()
                 .find(|r| same_range(&r.range, range))
-                .ok_or_else(|| EngineError("不是当前唯一文字槽".into()))?;
+                .ok_or_else(|| {
+                    EngineError::new(
+                        weftext_messages::UiMessage::error_engine_editor_text_slot_unavailable(),
+                    )
+                })?;
             literal_patch(source, region, text, &mut patches)?;
         }
         EditIntent::InsertBlock { at, block } => {
             if matches!(block, BlockInsert::Image { .. })
                 && !standard_binding_available(source, "image")
             {
-                return Err(EngineError("图片原生绑定不能证明，未插入内容。".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_image_binding_unverified(),
+                ));
             }
             if !map.body_insertion.as_ref().is_some_and(|r| r.from == *at) {
-                return Err(EngineError("不是当前正文 sibling 插入点".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_body_insertion_unavailable(),
+                ));
             }
             let body = encode_block(block)?;
             let before = &source[..*at];
@@ -883,7 +906,9 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
             check_level(*level)?;
             let structure = find_structure(&map, range, "heading")?;
             if !structure.level_writable {
-                return Err(EngineError("标题实际级别受原生规则影响，请编辑源码".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_heading_level_unverified(),
+                ));
             }
             let marker = structure
                 .range
@@ -918,7 +943,9 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
                 same_range(&s.range, range)
                     && matches!(s.kind.as_str(), "inlineMath" | "displayMath")
             }) {
-                return Err(EngineError("不是当前原生公式".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_math_unavailable(),
+                ));
             }
             push_patch(
                 &mut patches,
@@ -936,7 +963,9 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
             if !map.structures.iter().any(|s| {
                 same_range(&s.range, range) && matches!(s.kind.as_str(), "inlineRaw" | "blockRaw")
             }) {
-                return Err(EngineError("不是当前原生 raw 构造".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_raw_unavailable(),
+                ));
             }
             push_patch(
                 &mut patches,
@@ -957,7 +986,9 @@ pub fn edit(source: &str, request: &EditRequest) -> Result<EditOutput, EngineErr
                 .flat_map(|t| &t.cells)
                 .any(|c| same_range(c, range))
             {
-                return Err(EngineError("不是当前唯一显式 cell 槽".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_cell_slot_unavailable(),
+                ));
             }
             push_patch(
                 &mut patches,
@@ -1096,7 +1127,11 @@ fn literal_patch(
             literal_piece(&node, raw)
         })
         .or_else(|| (node.kind() == SyntaxKind::Parbreak).then(|| "\n\n".into()))
-        .ok_or_else(|| EngineError("文字槽回读出现非文字节点".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_text_readback_nontext(),
+            )
+        })?;
         if node.kind() == SyntaxKind::Text {
             for (at, c) in piece.char_indices() {
                 boundaries.insert(displayed + at, node.range().start + at);
@@ -1117,12 +1152,16 @@ fn literal_patch(
     while !boundaries.contains_key(&(old.len() - suffix)) {
         suffix -= 1;
     }
-    let from = *boundaries
-        .get(&prefix)
-        .ok_or_else(|| EngineError("文字边界不能准确定位".into()))?;
-    let to = *boundaries
-        .get(&(old.len() - suffix))
-        .ok_or_else(|| EngineError("文字边界不能准确定位".into()))?;
+    let from = *boundaries.get(&prefix).ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_text_boundary_unavailable(),
+        )
+    })?;
+    let to = *boundaries.get(&(old.len() - suffix)).ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_text_boundary_unavailable(),
+        )
+    })?;
     push_patch(
         patches,
         source,
@@ -1144,7 +1183,9 @@ fn exact_range(source: &str, range: &SourceRange) -> Result<(), EngineError> {
         || utf16(source, range.to) != range.utf16_to
         || !range.writable
     {
-        return Err(EngineError("stale-or-invalid-range".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_range_stale_or_invalid(),
+        ));
     }
     Ok(())
 }
@@ -1156,7 +1197,11 @@ fn find_structure<'a>(
     map.structures
         .iter()
         .find(|s| s.kind == kind && same_range(&s.range, range))
-        .ok_or_else(|| EngineError("不是当前已认证构造".into()))
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_construct_uncertified(),
+            )
+        })
 }
 fn push_patch(out: &mut Vec<SourcePatch>, source: &str, range: Range<usize>, insert: String) {
     out.push(SourcePatch {
@@ -1177,7 +1222,9 @@ pub(crate) fn finish(
         .windows(2)
         .any(|p| p[0].to > p[1].from || p[0].from == p[1].from)
     {
-        return Err(EngineError("overlapping-patches".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_patches_overlap(),
+        ));
     }
     let mut result = source.to_owned();
     for patch in patches.iter().rev() {
@@ -1185,8 +1232,8 @@ pub(crate) fn finish(
     }
     let parsed = Source::detached(&result);
     if !parsed.root().errors_and_warnings().0.is_empty() {
-        return Err(EngineError(
-            "native-reparse-failed: 结构操作整次拒绝".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_native_reparse_failed(),
         ));
     }
     let end = patches
@@ -1216,8 +1263,8 @@ pub(crate) fn finish(
 
 fn check_level(level: usize) -> Result<(), EngineError> {
     if level == 0 || level > 1024 {
-        Err(EngineError(
-            "标题级别须为 1–1024；更深合法源保留源码入口".into(),
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_heading_level_bounds(),
         ))
     } else {
         Ok(())
@@ -1233,8 +1280,8 @@ fn content(text: &str) -> Result<String, EngineError> {
 }
 fn encode_math(text: &str, display: bool) -> Result<String, EngineError> {
     if text.len() > 1_048_576 || text.contains(['\0', '$', '#']) {
-        return Err(EngineError(
-            "公式不能包含定界符或代码插值；请使用源码入口".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_math_delimiters_unsupported(),
         ));
     }
     let raw = if display {
@@ -1252,7 +1299,9 @@ fn encode_math(text: &str, display: bool) -> Result<String, EngineError> {
         || nodes.len() != 1
         || nodes[0].cast::<ast::Equation>().is_none()
     {
-        return Err(EngineError("invalid-native-math".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_math_invalid(),
+        ));
     }
     Ok(raw)
 }
@@ -1260,7 +1309,9 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
     Ok(match block {
         BlockInsert::Image { path, alt } => {
             if path.is_empty() || path.len() > 4096 || path.contains(['\0', '\r', '\n']) {
-                return Err(EngineError("图片路径无效。".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_image_path_invalid(),
+                ));
             }
             format!(
                 "#image({}, alt: {})",
@@ -1275,7 +1326,9 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
         }
         BlockInsert::BulletList { items } | BlockInsert::NumberedList { items } => {
             if items.is_empty() || items.len() > 10000 {
-                return Err(EngineError("列表须有 1–10000 项".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_list_count_bounds(),
+                ));
             }
             let marker = if matches!(block, BlockInsert::BulletList { .. }) {
                 "-"
@@ -1323,7 +1376,9 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
         }
         BlockInsert::Link { target, text } => {
             if !crate::render::safe_url(target) {
-                return Err(EngineError("不支持的链接协议".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_link_scheme_unsupported(),
+                ));
             }
             format!(
                 "#link({})[{}]",
@@ -1337,14 +1392,18 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
             block,
         } => {
             if text.contains('\0') || text.len() > 1_048_576 {
-                return Err(EngineError("raw 超过预算".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_raw_budget(),
+                ));
             }
             let language = language.as_deref().unwrap_or("");
             if !language
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || "-_".contains(c))
             {
-                return Err(EngineError("代码语言标签无效".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_code_language_invalid(),
+                ));
             }
             let ticks = "`".repeat(
                 text.split(|c| c != '`')
@@ -1425,10 +1484,13 @@ fn edit_title(
         ),
         ("absent", None) => {}
         _ => {
-            return Err(EngineError(format!(
-                "标题不可无损编辑：{}",
-                map.title.status
-            )));
+            return Err(EngineError::new(
+                UiMessage::error_engine_editor_title_not_lossless(
+                    weftext_messages::params::ErrorEngineEditorTitleNotLossless {
+                        status: map.title.status.clone(),
+                    },
+                ),
+            ));
         }
     }
     Ok(())
@@ -1440,7 +1502,9 @@ fn edit_subtitle(
     patches: &mut Vec<SourcePatch>,
 ) -> Result<(), EngineError> {
     if map.title.status != "writable" {
-        return Err(EngineError("副标题需要唯一可认证文档标题".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_subtitle_title_required(),
+        ));
     }
     match (map.subtitle.status.as_str(), text) {
         ("writable", Some(text)) => {
@@ -1475,10 +1539,13 @@ fn edit_subtitle(
         }
         ("absent", None) => {}
         _ => {
-            return Err(EngineError(format!(
-                "副标题不可无损编辑：{}",
-                map.subtitle.status
-            )));
+            return Err(EngineError::new(
+                UiMessage::error_engine_editor_subtitle_not_lossless(
+                    weftext_messages::params::ErrorEngineEditorSubtitleNotLossless {
+                        status: map.subtitle.status.clone(),
+                    },
+                ),
+            ));
         }
     }
     Ok(())
@@ -1490,7 +1557,11 @@ fn title_set_deletion(source: &str, construct: &SourceRange) -> Result<Range<usi
     let node = root
         .children()
         .find(|n| n.range().start == construct.from + 1 && n.get().cast::<ast::SetRule>().is_some())
-        .ok_or_else(|| EngineError("标题 setter 不可定位".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_title_setter_unavailable(),
+            )
+        })?;
     let set = node.get().cast::<ast::SetRule>().unwrap();
     if set.args().items().count() == 1 {
         return Ok(construct.from..construct.to);
@@ -1501,8 +1572,8 @@ fn title_set_deletion(source: &str, construct: &SourceRange) -> Result<Range<usi
         .iter()
         .any(|n| matches!(n.kind(), SyntaxKind::LineComment | SyntaxKind::BlockComment))
     {
-        return Err(EngineError(
-            "标题参数注释归属不明确；请在源码删除标题参数".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_title_comment_ambiguous(),
         ));
     }
     let index = children
@@ -1512,7 +1583,11 @@ fn title_set_deletion(source: &str, construct: &SourceRange) -> Result<Range<usi
                 .cast::<ast::Named>()
                 .is_some_and(|n| n.name().get() == "title")
         })
-        .ok_or_else(|| EngineError("标题参数不可定位".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_title_argument_unavailable(),
+            )
+        })?;
     if let Some(comma) = children
         .iter()
         .skip(index + 1)
@@ -1526,7 +1601,9 @@ fn title_set_deletion(source: &str, construct: &SourceRange) -> Result<Range<usi
     {
         Ok(comma.range().start..children[index].range().end)
     } else {
-        Err(EngineError("标题参数分隔符不明确".into()))
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_title_separator_ambiguous(),
+        ))
     }
 }
 
@@ -1544,10 +1621,20 @@ fn edit_run_in(
     let index = siblings
         .iter()
         .position(|n| n.range() == (range.from..range.to))
-        .ok_or_else(|| EngineError("同行控件只编辑可认证的根 heading 作用域".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_run_in_root_scope_required(),
+            )
+        })?;
     for builtin in ["heading", "counter", "strong", "text"] {
         if !standard_binding_available(source, builtin) {
-            return Err(EngineError(format!("同行规则标准绑定不可认证：{builtin}")));
+            return Err(EngineError::new(
+                UiMessage::error_engine_editor_run_in_binding_unverified(
+                    weftext_messages::params::ErrorEngineEditorRunInBindingUnverified {
+                        binding: builtin.into(),
+                    },
+                ),
+            ));
         }
     }
     fn controlled_context(node: &SyntaxNode) -> bool {
@@ -1589,8 +1676,8 @@ fn edit_run_in(
         node.children().all(controlled_context)
     }
     if !controlled_context(root.get()) {
-        return Err(EngineError(
-            "自定义编号、counter 更新或计算 label 的同行作用域不可认证".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_run_in_scope_uncertified(),
         ));
     }
     let following_at = {
@@ -1632,7 +1719,9 @@ fn edit_run_in(
             })
     });
     if enabled && !body_qualified {
-        return Err(EngineError("同行标题后需要普通首段正文".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_run_in_paragraph_required(),
+        ));
     }
     let mut used = std::collections::HashMap::<String, usize>::new();
     fn labels(n: &LinkedNode<'_>, set: &mut std::collections::HashMap<String, usize>) {
@@ -1646,7 +1735,9 @@ fn edit_run_in(
     labels(&root, &mut used);
     let label = if let Some(l) = &heading.label {
         if used.get(l).copied().unwrap_or(0) > if heading.run_in { 2 } else { 1 } {
-            return Err(EngineError("标题 label 不唯一".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_heading_label_ambiguous(),
+            ));
         }
         l.clone()
     } else {
@@ -1706,7 +1797,9 @@ fn check_grid(columns: usize, cells: usize) -> Result<(), EngineError> {
         || cells > 100000
         || !cells.is_multiple_of(columns)
     {
-        Err(EngineError("普通表格需要有界矩形显式 cells".into()))
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_table_rectangle_required(),
+        ))
     } else {
         Ok(())
     }
@@ -1735,33 +1828,47 @@ fn edit_list(
             same_range(&s.range, range)
                 && matches!(s.kind.as_str(), "bulletListItem" | "numberedListItem")
         })
-        .ok_or_else(|| EngineError("不是当前普通列表项".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_list_item_unavailable(),
+            )
+        })?;
     let line_start = source[..range.from].rfind('\n').map_or(0, |n| n + 1);
     let indentation = &source[line_start..range.from];
     if !indentation.chars().all(|c| c == ' ') {
-        return Err(EngineError("列表缩进不明确".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_list_indent_ambiguous(),
+        ));
     }
     match action {
         ListAction::Indent => {
             if range.raw.contains(['\n', '\r']) || !preceding_list_sibling(source, range) {
-                return Err(EngineError(
-                    "缩进需要前一同层普通列表项；多行子树请编辑源码".into(),
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_list_indent_predecessor_required(),
                 ));
             }
             push_patch(patches, source, line_start..line_start, "  ".into());
         }
         ListAction::Outdent => {
             if indentation.len() < 2 || range.raw.contains(['\n', '\r']) {
-                return Err(EngineError("列表已经在最外层".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_list_already_outermost(),
+                ));
             }
             push_patch(patches, source, line_start..line_start + 2, String::new());
         }
         ListAction::Split { at } => {
             let body = structure.body.as_ref().unwrap();
-            let decoded = decode_list_body(source, &body.raw)
-                .ok_or_else(|| EngineError("含格式列表的拆项需要源码入口".into()))?;
-            let byte = utf16_byte(&decoded, *at)
-                .ok_or_else(|| EngineError("拆项点不是 Unicode 字符边界".into()))?;
+            let decoded = decode_list_body(source, &body.raw).ok_or_else(|| {
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_formatted_list_split_unsupported(),
+                )
+            })?;
+            let byte = utf16_byte(&decoded, *at).ok_or_else(|| {
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_list_split_boundary_invalid(),
+                )
+            })?;
             let marker = if structure.kind == "bulletListItem" {
                 "-"
             } else {
@@ -1863,7 +1970,9 @@ fn inline_edit(
         InlineFormat::Strike => "strike",
     };
     if !standard_binding_available(source, selected_kind) {
-        return Err(EngineError("格式构造的标准绑定不可认证".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_format_binding_unverified(),
+        ));
     }
     if range.from == range.to
         || !map
@@ -1875,7 +1984,9 @@ fn inline_edit(
             .iter()
             .any(|r| range.to > r.range.from && range.to <= r.range.to)
     {
-        return Err(EngineError("格式选区需要当前唯一文字端点".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_format_endpoints_unavailable(),
+        ));
     }
     let parsed = Source::detached(source);
     let root = LinkedNode::new(parsed.root());
@@ -1887,13 +1998,18 @@ fn inline_edit(
             .find_map(|c| containing(&c, range))
             .or_else(|| (node.kind() == SyntaxKind::Markup).then(|| node.clone()))
     }
-    let markup =
-        containing(&root, range).ok_or_else(|| EngineError("选区跨越不同原生内容槽".into()))?;
+    let markup = containing(&root, range).ok_or_else(|| {
+        EngineError::new(weftext_messages::UiMessage::error_engine_editor_format_crosses_slots())
+    })?;
     let children: Vec<_> = markup.children().collect();
     let first = children
         .iter()
         .position(|n| n.range().end > range.from)
-        .ok_or_else(|| EngineError("格式选区没有原生内容".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_editor_format_empty_selection(),
+            )
+        })?;
     let last = children
         .iter()
         .rposition(|n| n.range().start < range.to)
@@ -1934,7 +2050,9 @@ fn inline_edit(
                 && (range.from > address.start && range.from < address.end
                     || range.to > address.start && range.to < address.end)
             {
-                return Err(EngineError("格式选区拆分了原生 escape/shorthand".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_editor_format_splits_native_escape(),
+                ));
             }
             let start = range.from.clamp(address.start, address.end);
             let end = range.to.clamp(address.start, address.end);
@@ -1991,8 +2109,8 @@ fn inline_edit(
             parts.right = wrap(parts.right);
             return Ok(parts);
         }
-        Err(EngineError(
-            "格式选区跨越块、公式或未认证 inline 构造".into(),
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_editor_format_crosses_uncertified_content(),
         ))
     }
     let mut parts = Parts::default();

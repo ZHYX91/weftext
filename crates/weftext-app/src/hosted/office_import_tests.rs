@@ -62,7 +62,7 @@ async fn docx_inspect_and_options_require_current_target_and_do_not_grant_legacy
         inspect(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Inspect {
+            crate::RequestJson(Inspect {
                 resource: "Import".into(),
                 format: "docx".into(),
                 bytes_base64: base64::engine::general_purpose::STANDARD.encode(&bytes)
@@ -87,7 +87,7 @@ async fn docx_inspect_and_options_require_current_target_and_do_not_grant_legacy
     let Json(analysis) = inspect(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Inspect {
+        crate::RequestJson(Inspect {
             resource: "Import".into(),
             format: "docx".into(),
             bytes_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
@@ -108,7 +108,7 @@ async fn docx_inspect_and_options_require_current_target_and_do_not_grant_legacy
     let Json(plan) = prepare(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(valid.clone()),
+        crate::RequestJson(valid.clone()),
     )
     .await
     .unwrap();
@@ -132,7 +132,7 @@ async fn docx_inspect_and_options_require_current_target_and_do_not_grant_legacy
         settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Import".into(),
                 operation_id: valid.operation_id.clone(),
                 format: Some("docx".into()),
@@ -168,15 +168,19 @@ async fn docx_inspect_and_options_require_current_target_and_do_not_grant_legacy
     legacy.operation_id = uuid::Uuid::new_v4().to_string();
     legacy.format = "doc".into();
     assert!(
-        prepare(State(state.clone()), Extension(auth.clone()), Json(legacy))
-            .await
-            .is_err()
+        prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(legacy)
+        )
+        .await
+        .is_err()
     );
     let mut invalid = valid;
     invalid.operation_id = uuid::Uuid::new_v4().to_string();
     invalid.docx_options.as_mut().unwrap().content_hash = "stale".into();
     assert!(
-        prepare(State(state), Extension(auth), Json(invalid))
+        prepare(State(state), Extension(auth), crate::RequestJson(invalid))
             .await
             .is_err()
     );
@@ -256,7 +260,7 @@ async fn external_import_cancel_is_actor_scoped_and_revocation_stops_owned_run()
     let Json(pending) = operation(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Import".into(),
             operation_id: id.clone(),
             format: None,
@@ -269,7 +273,7 @@ async fn external_import_cancel_is_actor_scoped_and_revocation_stops_owned_run()
     let Json(cancelled) = cancel(
         State(state.clone()),
         Extension(auth),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Import".into(),
             operation_id: id.clone(),
             format: None,
@@ -432,9 +436,13 @@ async fn retained_import_claim_with_missing_wrapper_only_recovers_and_never_star
             office::ensure_owned(base, &location.root, true).unwrap();
             location
         };
-        let error = prepare(State(state.clone()), Extension(auth.clone()), Json(req))
-            .await
-            .unwrap_err();
+        let error = prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(req),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, "resultUnknown");
         assert!(!location.root.join(location.request_id).exists());
         assert!(state.inner.lock().unwrap().office.import_active.is_empty());
@@ -479,7 +487,7 @@ async fn import_claim_and_flat_execution_reject_ancestor_junctions_without_outsi
             prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(req.clone())
+                crate::RequestJson(req.clone())
             )
             .await
             .is_err()
@@ -496,7 +504,7 @@ async fn import_claim_and_flat_execution_reject_ancestor_junctions_without_outsi
         let error = settle(
             State(state.clone()),
             Extension(auth),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: req.resource.clone(),
                 operation_id: req.operation_id.clone(),
                 format: Some("doc".into()),
@@ -642,7 +650,7 @@ async fn legacy_claim_capacity_and_uuid_rejections_do_not_write_new_recovery_fil
         prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone())
+            crate::RequestJson(req.clone())
         )
         .await
         .is_err()
@@ -652,7 +660,7 @@ async fn legacy_claim_capacity_and_uuid_rejections_do_not_write_new_recovery_fil
     state.inner.lock().unwrap().office.import_active.clear();
     req.operation_id = uuid::Uuid::nil().to_string();
     assert!(
-        prepare(State(state), Extension(auth), Json(req))
+        prepare(State(state), Extension(auth), crate::RequestJson(req))
             .await
             .is_err()
     );
@@ -670,7 +678,7 @@ async fn damaged_unstarted_claim_can_be_fenced_but_external_evidence_stays_unkno
     let Json(ended) = settle(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Import".into(),
             operation_id: id.clone(),
             format: Some("doc".into()),
@@ -684,7 +692,7 @@ async fn damaged_unstarted_claim_can_be_fenced_but_external_evidence_stays_unkno
     let Json(recovered) = operation(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Import".into(),
             operation_id: id,
             format: None,
@@ -700,7 +708,7 @@ async fn damaged_unstarted_claim_can_be_fenced_but_external_evidence_stays_unkno
     let error = settle(
         State(state.clone()),
         Extension(auth),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Import".into(),
             operation_id: uncertain.clone(),
             format: Some("doc".into()),

@@ -59,13 +59,104 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/history/settle", post(settle))
 }
 fn history_error(error: CoreError) -> ApiError {
-    let message = match error.code.as_str() {
-        "draftProtectionRequired" => "存在未保存草稿，请明确选择保留草稿后再恢复。",
-        "recoveryPending" => "原恢复操作尚待核对；请查询原操作，不要重新执行或换编号。",
-        "operationConflict" => "原操作编号已绑定其他恢复输入或操作类别；请保留输入并核对原编号。",
-        _ => "当前对象、历史版本或原恢复依据不可用；原文和草稿已保留。",
-    };
-    ApiError::new(StatusCode::CONFLICT, &error.code, message)
+    // This boundary intentionally withholds Core paths and unqualified bodies.
+    ApiError::new(
+        StatusCode::CONFLICT,
+        &error.code,
+        UiMessage::error_api_hosted_history_api_restore_basis_unavailable(),
+    )
+}
+#[cfg(test)]
+mod typed_error_tests {
+    use super::*;
+
+    #[test]
+    fn committed_history_warning_keeps_original_fact_and_source_with_scoped_typed_delivery() {
+        let original = HistoryRestoreResult {
+            receipt: weftext_core::Receipt {
+                operation_id: "private-core-operation".into(),
+                status: "saved".into(),
+                path: "D:/private/original.typ".into(),
+                base_id: "exact-original-base".into(),
+                revision_id: Some("original-revision".into()),
+            },
+            source: "exact restored author source 😀\r\n".into(),
+            version_id: "selected-exact-version".into(),
+            protected_drafts: vec![],
+            recovery_issue: Some(
+                CoreError::new(
+                    "draftProtectionIncomplete",
+                    UiMessage::error_api_hosted_history_api_restore_basis_unavailable(),
+                )
+                .diagnostic(DiagnosticOrigin::Os, "D:/private/draft.json (os error 5)"),
+            ),
+        };
+        let cleaned = clean_result(original.clone(), "Shared", "public-original-operation");
+        assert_eq!(cleaned.receipt.operation_id, "public-original-operation");
+        assert_eq!(cleaned.receipt.status, original.receipt.status);
+        assert_eq!(cleaned.receipt.base_id, original.receipt.base_id);
+        assert_eq!(cleaned.receipt.revision_id, original.receipt.revision_id);
+        assert_eq!(cleaned.receipt.path, "resource:Shared");
+        assert_eq!(cleaned.source, original.source);
+        assert_eq!(cleaned.version_id, original.version_id);
+        let issue = cleaned.recovery_issue.as_ref().unwrap();
+        assert_eq!(issue.code, "draftProtectionIncomplete");
+        assert_eq!(
+            issue.explanation.key(),
+            "error.api.hostedHistoryApi.committedDraftProtectionWarning"
+        );
+        assert!(issue.diagnostics.is_empty());
+        assert!(issue.causes.as_slice().is_empty());
+        assert!(issue.details.is_none());
+        assert!(issue.current_source.is_none());
+        assert!(!serde_json::to_string(&cleaned).unwrap().contains("private"));
+        assert!(
+            serde_json::to_string(&original)
+                .unwrap()
+                .contains("private")
+        );
+    }
+
+    #[test]
+    fn hosted_history_error_keeps_machine_identity_without_disclosing_upstream_text() {
+        for code in [
+            "draftProtectionRequired",
+            "recoveryPending",
+            "operationConflict",
+            "io",
+        ] {
+            let mut upstream = CoreError::new(
+                code,
+                UiMessage::error_api_hosted_history_api_restore_basis_unavailable(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, "D:/private/original.typ (os error 5)");
+            upstream.current_source = Some("PRIVATE other draft source".into());
+            upstream.details = Some(weftext_core::CoreErrorDetails::Aggregate {
+                groups: vec![weftext_core::ErrorDetailGroup::Product {
+                    code: Some("privateCause".into()),
+                    diagnostics: vec![
+                        ErrorDescription::new(
+                            UiMessage::error_api_hosted_history_api_restore_basis_unavailable(),
+                        )
+                        .diagnostic(DiagnosticOrigin::Os, "D:/private/aggregate.json"),
+                    ],
+                }],
+            });
+            let error = history_error(upstream);
+            assert_eq!(error.status, StatusCode::CONFLICT);
+            assert_eq!(error.code, code);
+            assert_eq!(
+                error.explanation.key(),
+                "error.api.hostedHistoryApi.restoreBasisUnavailable"
+            );
+            assert!(error.diagnostics.is_empty());
+            assert!(error.causes.as_slice().is_empty());
+            let wire = serde_json::to_value(error).unwrap();
+            assert!(wire["message"].is_null());
+            assert!(!wire.to_string().contains("private"));
+            assert!(!wire.to_string().contains("PRIVATE"));
+        }
+    }
 }
 fn access(
     inner: &HostedInner,
@@ -121,16 +212,16 @@ fn resource_path(resource: &str) -> String {
     format!("resource:{resource}")
 }
 fn clean_version(version: &mut weftext_core::HistoryVersion) {
-    version.message = if version.status == "available" {
-        "准确的已保存源码可读。"
+    version.description = if version.status == "available" {
+        UiMessage::error_api_hosted_history_api_saved_source_readable()
     } else {
-        "此历史版本当前不可读，未替换为其他版本。"
+        UiMessage::error_api_hosted_history_api_saved_source_unreadable()
     }
     .into();
 }
 fn clean_read(mut read: HistoryRead) -> HistoryRead {
     clean_version(&mut read.version);
-    read.preview_message = "仅查看准确历史源码；不使用当前配置或依赖代替原语义预览。".into();
+    read.preview_description = UiMessage::error_api_hosted_history_api_source_only_preview().into();
     read
 }
 fn clean_timeline(mut timeline: HistoryTimeline, resource: &str) -> HistoryTimeline {
@@ -141,11 +232,12 @@ fn clean_timeline(mut timeline: HistoryTimeline, resource: &str) -> HistoryTimel
     for draft in &mut timeline.protected_drafts {
         draft.path = resource_path(resource);
     }
-    timeline.retention.message = "仅列出原 Core 仍保留的已提交源码记录；空列表不能证明从未保存，早期或其他设备历史不保证可用。".into();
+    timeline.retention.description =
+        UiMessage::error_api_hosted_history_api_retained_history_boundary().into();
     timeline.warnings = if timeline.warnings.is_empty() {
         vec![]
     } else {
-        vec!["当前稿为外部观察或准确保存依据不可用，未将其冒作已保存版本。".into()]
+        vec![UiMessage::error_api_hosted_history_api_external_basis_warning().into()]
     };
     timeline
 }
@@ -161,7 +253,14 @@ fn clean_result(
 ) -> HistoryRestoreResult {
     result.receipt.operation_id = id.into();
     result.receipt.path = resource_path(resource);
-    result.receipt.message = "原恢复操作已提交为一次普通保存；受保护草稿仍单独保留。".into();
+    // The warning is a computed delivery. Keep its machine identity and the
+    // committed result, but do not forward private draft paths or diagnostics.
+    result.recovery_issue = result.recovery_issue.map(|issue| {
+        CoreError::new(
+            &issue.code,
+            UiMessage::error_api_hosted_history_api_committed_draft_protection_warning(),
+        )
+    });
     for draft in &mut result.protected_drafts {
         draft.path = resource_path(resource);
     }
@@ -170,7 +269,7 @@ fn clean_result(
 async fn list(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Session>,
+    RequestJson(req): RequestJson<Session>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -192,7 +291,7 @@ async fn list(
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Version>,
+    RequestJson(req): RequestJson<Version>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -214,7 +313,7 @@ async fn read(
 async fn compare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Version>,
+    RequestJson(req): RequestJson<Version>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -236,7 +335,7 @@ async fn compare(
 async fn compare_draft(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<DraftComparison>,
+    RequestJson(req): RequestJson<DraftComparison>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         writing_api::validate_source(&req.source, req.source_hash.as_deref())?;
@@ -255,10 +354,12 @@ async fn compare_draft(
 fn restore_fingerprint(req: &Restore) -> Result<String, ApiError> {
     writing_api::validate_source(&req.source, req.source_hash.as_deref())?;
     if !matches!(req.draft_action.as_str(), "retain" | "none") {
-        return Err(ApiError::bad("请明确选择保留草稿或确认没有草稿"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_history_api_explicit_draft_choice_required(),
+        ));
     }
     Ok(digest(&serde_json::to_vec(&json!({"resource":req.resource,"sessionId":req.session_id,"baseId":req.base_id,
-        "versionId":req.version_id,"operationId":req.operation_id,"draftAction":req.draft_action,"source":req.source,"serial":req.serial})).map_err(|_| ApiError::internal("无法固定原恢复输入"))?))
+        "versionId":req.version_id,"operationId":req.operation_id,"draftAction":req.draft_action,"source":req.source,"serial":req.serial})).map_err(|_| ApiError::internal(UiMessage::error_api_hosted_history_api_restore_input_freeze_failed()))?))
 }
 fn core_restore_request(req: &Restore) -> HistoryRestoreRequest {
     HistoryRestoreRequest {
@@ -336,7 +437,13 @@ fn public_status(
                 output["result"] =
                     json!(clean_result(result, &status.resource, &status.operation_id));
             }
-            Err(_) => output["resultStatus"] = json!("unavailable"),
+            Err(error) => {
+                // A result-read failure does not downgrade the original commit.
+                // Recheck the current actor before disclosing even its scoped
+                // reason; private paths, drafts and diagnostics stay in Core.
+                access(inner, auth, &status.resource, false)?;
+                output["resultError"] = value(history_error(error))?;
+            }
         }
     }
     Ok(output)
@@ -344,7 +451,7 @@ fn public_status(
 async fn restore(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Restore>,
+    RequestJson(req): RequestJson<Restore>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -414,7 +521,7 @@ async fn restore(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = access(inner, &auth, &req.resource, false)?;
@@ -429,7 +536,7 @@ async fn status(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -682,7 +789,7 @@ mod tests {
         let Json(saved) = compare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Version {
+            crate::RequestJson(Version {
                 session_id: session.clone(),
                 version_id: version.clone(),
             }),
@@ -700,7 +807,7 @@ mod tests {
         let Json(compared) = compare_draft(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(DraftComparison {
+            crate::RequestJson(DraftComparison {
                 session_id: session.clone(),
                 version_id: version.clone(),
                 source: draft.clone(),
@@ -727,7 +834,7 @@ mod tests {
         let error = compare_draft(
             State(state),
             Extension(auth),
-            Json(DraftComparison {
+            crate::RequestJson(DraftComparison {
                 session_id: session,
                 version_id: version,
                 source: source.clone(),
@@ -771,7 +878,7 @@ mod tests {
         let Json(restored) = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();
@@ -814,7 +921,7 @@ mod tests {
         let Json(later) = status(
             State(state),
             Extension(auth),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Shared".into(),
                 operation_id: req.operation_id,
             }),
@@ -836,7 +943,7 @@ mod tests {
                 Extension(Auth {
                     digest: digest(actor.as_bytes()),
                 }),
-                Json(Session {
+                crate::RequestJson(Session {
                     session_id: doc["sessionId"].as_str().unwrap().into(),
                 }),
             )
@@ -856,7 +963,7 @@ mod tests {
         let _ = list(
             State(state.clone()),
             Extension(historian.clone()),
-            Json(Session {
+            crate::RequestJson(Session {
                 session_id: history_only["sessionId"].as_str().unwrap().into(),
             }),
         )
@@ -866,7 +973,7 @@ mod tests {
             restore(
                 State(state.clone()),
                 Extension(historian),
-                Json(restore_request(&history_only, &version))
+                crate::RequestJson(restore_request(&history_only, &version))
             )
             .await
             .unwrap_err()
@@ -887,7 +994,7 @@ mod tests {
         let error = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap_err();
@@ -895,7 +1002,7 @@ mod tests {
         let Json(result) = status(
             State(state),
             Extension(auth),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Shared".into(),
                 operation_id: req.operation_id,
             }),
@@ -908,13 +1015,93 @@ mod tests {
     }
     #[cfg(windows)]
     #[tokio::test]
+    async fn failed_committed_delivery_keeps_a_scoped_typed_error_and_fresh_success_clears_it() {
+        let (_temp, state, auth, doc, version, original) = test_fixture();
+        let request = restore_request(&doc, &version);
+        let Json(first) = restore(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(request.clone()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first["status"], "committed");
+        let mut inner = state.inner.lock().unwrap();
+        let scope = inner.actor_scope("alice");
+        let root = inner.config.root.clone();
+        let known = inner
+            .core
+            .with_actor_for_root(&scope, &root, |core| {
+                core.actor_history_restore_status("Shared", &request.operation_id)
+            })
+            .unwrap()
+            .unwrap();
+        inner.config.files.get_mut("Shared").unwrap().path = "Target/Target.typ".into();
+        let target = root.join("Target/Target.typ");
+        let expected = inner
+            .core
+            .with_actor_for_root(&scope, &root, |core| {
+                core.actor_history_restore_result_at(
+                    "Shared",
+                    &root,
+                    &target,
+                    &request.operation_id,
+                )
+            })
+            .unwrap_err();
+        let unavailable = public_status(&mut inner, &auth, known.clone()).unwrap();
+        assert_eq!(unavailable["operationId"], request.operation_id);
+        assert_eq!(unavailable["status"], "committed");
+        assert_eq!(unavailable["resultStatus"], "unavailable");
+        assert!(unavailable.get("result").is_none());
+        assert_eq!(unavailable["resultError"]["code"], expected.code);
+        let error:ErrorDescription=serde_json::from_value(json!({"explanation":unavailable["resultError"]["explanation"],"diagnostics":unavailable["resultError"]["diagnostics"],"causes":unavailable["resultError"]["causes"]})).unwrap();
+        assert_eq!(
+            error.explanation.key(),
+            "error.api.hostedHistoryApi.restoreBasisUnavailable"
+        );
+        assert!(error.diagnostics.is_empty());
+        assert!(error.causes.as_slice().is_empty());
+        assert!(unavailable["resultError"].get("currentSource").is_none());
+        assert!(unavailable["resultError"].get("details").is_none());
+        // This stale internal DTO tests the disclosure boundary only; it does
+        // not claim that contradictory production status records are emitted.
+        let mut prior = known.clone();
+        prior.result_error = Some(
+            CoreError::new(
+                "priorReadFailure",
+                UiMessage::error_api_hosted_history_api_restore_basis_unavailable(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, "PRIVATE old host diagnostic"),
+        );
+        inner.config.files.get_mut("Shared").unwrap().path = "Shared/Shared.typ".into();
+        let available = public_status(&mut inner, &auth, prior).unwrap();
+        assert_eq!(available["status"], "committed");
+        assert_eq!(available["resultStatus"], "available");
+        assert_eq!(available["result"]["source"], original);
+        assert!(available.get("resultError").is_none());
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .remove("Shared");
+        assert_eq!(
+            public_status(&mut inner, &auth, known).unwrap_err().status,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
     async fn restart_replays_original_and_remapping_only_keeps_committed_fact() {
         let (temp, state, auth, doc, version, original) = test_fixture();
         let req = restore_request(&doc, &version);
         let _ = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();
@@ -929,7 +1116,7 @@ mod tests {
         let Json(replay) = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();
@@ -937,10 +1124,14 @@ mod tests {
         let mut changed = req.clone();
         changed.source.push('!');
         assert_eq!(
-            restore(State(state.clone()), Extension(auth.clone()), Json(changed))
-                .await
-                .unwrap_err()
-                .code,
+            restore(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(changed)
+            )
+            .await
+            .unwrap_err()
+            .code,
             "operationConflict"
         );
         state
@@ -955,7 +1146,7 @@ mod tests {
         let Json(remapped) = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();
@@ -976,7 +1167,7 @@ mod tests {
             status(
                 State(state),
                 Extension(auth),
-                Json(Operation {
+                crate::RequestJson(Operation {
                     resource: "Shared".into(),
                     operation_id: req.operation_id
                 })
@@ -995,7 +1186,7 @@ mod tests {
         let Json(settled) = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Shared".into(),
                 operation_id: req.operation_id.clone(),
             }),
@@ -1004,7 +1195,7 @@ mod tests {
         .unwrap();
         assert_eq!(settled["status"], "cancelled");
         state.inner.lock().unwrap().sessions.clear();
-        let Json(late) = restore(State(state), Extension(auth), Json(req))
+        let Json(late) = restore(State(state), Extension(auth), crate::RequestJson(req))
             .await
             .unwrap();
         assert_eq!(late["status"], "cancelled");
@@ -1018,7 +1209,7 @@ mod tests {
         let Json(restored) = restore(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();
@@ -1044,7 +1235,7 @@ mod tests {
         let Json(noop) = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Shared".into(),
                 operation_id: req.operation_id.clone(),
             }),
@@ -1065,7 +1256,7 @@ mod tests {
         let Json(external) = status(
             State(state),
             Extension(auth),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 resource: "Shared".into(),
                 operation_id: req.operation_id,
             }),

@@ -2,6 +2,7 @@
 //! holds no Core lease and opens no journal or author payload.
 use crate::{CoreError, ParentGuard, Result, absolute_path, hash};
 use std::path::{Path, PathBuf};
+use weftext_messages::UiMessage;
 
 pub struct QualifiedProfile {
     path: PathBuf,
@@ -64,9 +65,12 @@ fn qualify_directory(path: &Path) -> Result<ParentGuard> {
     match ParentGuard::acquire(&prospective) {
         Ok(guard) => Ok(guard),
         Err(error) if error.code == "missing" => {
-            let parent = path
-                .parent()
-                .ok_or_else(|| CoreError::new("invalidPath", "Profile has no qualified parent"))?;
+            let parent = path.parent().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_profile_identity_profile_has_no_qualified_parent(),
+                )
+            })?;
             let _parent_guard = qualify_directory(parent)?;
             let leaf = ParentGuard::acquire(path)?;
             match leaf.create_directory() {

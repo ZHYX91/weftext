@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 
 const WS: &str = "58c47256-bfce-4d29-a037-b83a3a644fb0";
 const KEY: &str = "eb8ee74a-330c-45d2-bb8b-82a6d5210e43";
@@ -162,7 +164,15 @@ fn closed_call_argument_obeys_real_enum_shape_even_when_another_argument_is_unkn
         .unwrap()
         .arguments
         .insert("wanted".into(), "'closed'".into());
-    assert!(run(&caller, &context).unwrap_err().0.contains("wanted"));
+    assert_data_error(
+        &run(&caller, &context).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_parameter_shape_mismatch(
+            weftext_messages::params::ErrorDataQueryAdvancedParameterShapeMismatch {
+                parameter_name: "wanted".into(),
+            },
+        ),
+    );
     caller
         .advanced
         .as_mut()
@@ -471,7 +481,7 @@ fn terminal_provider(kind: &str) -> (QueryPlan, FrozenAdvancedInput) {
     let mut root = plan("nextCivilDay(value == 'done' ? date('9999-12-31') : date('2026-01-01'))");
     let mut context = FrozenAdvancedInput::default();
     if kind == "union" {
-        root.advanced.as_mut().unwrap().union_all = vec![producer];
+        root.advanced.as_mut().unwrap().union_all = Some(vec![producer]);
     } else {
         let (_, original) = callee();
         context = original;

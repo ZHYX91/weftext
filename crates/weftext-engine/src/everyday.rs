@@ -94,11 +94,15 @@ pub(super) fn convert(
         .iter()
         .find(|b| same_range(&b.range, range))
         .ok_or_else(|| {
-            EngineError("没有当前唯一普通根块；生成、标签和复杂内容请保留源码。".into())
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_everyday_root_block_unavailable(),
+            )
         })?;
     // Reusing a multiline body as a single list/heading would change semantics.
     if target != "paragraph" && block.body.raw.contains(['\r', '\n']) {
-        return Err(EngineError("多行块不能无损转换为一个标题或列表项。".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_everyday_multiline_conversion_unsupported(),
+        ));
     }
     let prefix = match target {
         "paragraph" => String::new(),
@@ -106,8 +110,8 @@ pub(super) fn convert(
             if !standard_binding_available(source, "heading")
                 || !heading_levels_unmodified(Source::detached(source).root())
             {
-                return Err(EngineError(
-                    "标题绑定或实际级别规则不能证明，原稿保留。".into(),
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_everyday_heading_conversion_unverified(),
                 ));
             }
             let level = level.unwrap_or(1);
@@ -116,17 +120,25 @@ pub(super) fn convert(
         }
         "bulletList" => {
             if !standard_binding_available(source, "list") {
-                return Err(EngineError("列表绑定不能证明。".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_everyday_list_binding_unverified(),
+                ));
             }
             "- ".into()
         }
         "numberedList" => {
             if !standard_binding_available(source, "enum") {
-                return Err(EngineError("列表绑定不能证明。".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_everyday_list_binding_unverified(),
+                ));
             }
             "+ ".into()
         }
-        _ => return Err(EngineError("不支持的普通块转换。".into())),
+        _ => {
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_everyday_block_conversion_unsupported(),
+            ));
+        }
     };
     // Removing markup must not turn author text into a different native node.
     let insert = format!("{prefix}{}", block.body.raw);
@@ -135,7 +147,9 @@ pub(super) fn convert(
         || blocks(&insert).len() != 1
         || blocks(&insert)[0].kind != target
     {
-        return Err(EngineError("转换会改变原生结构，原稿保留。".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_everyday_conversion_changes_structure(),
+        ));
     }
     push_patch(patches, source, range.from..range.to, insert);
     Ok(())
@@ -152,19 +166,31 @@ pub(super) fn move_block(
         .body_blocks
         .iter()
         .position(|b| same_range(&b.range, range))
-        .ok_or_else(|| EngineError("这不是当前唯一普通根块。".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_everyday_root_block_not_current(),
+            )
+        })?;
     let other = match direction {
         "up" => index.checked_sub(1),
         "down" => (index + 1 < map.body_blocks.len()).then_some(index + 1),
-        _ => return Err(EngineError("未知移动方向。".into())),
+        _ => {
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_everyday_move_direction_unknown(),
+            ));
+        }
     }
-    .ok_or_else(|| EngineError("当前方向没有相邻可移动块。".into()))?;
+    .ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_everyday_adjacent_block_unavailable(),
+        )
+    })?;
     let a = &map.body_blocks[index.min(other)].range;
     let b = &map.body_blocks[index.max(other)].range;
     let gap = &source[a.to..b.from];
     if !gap.chars().all(char::is_whitespace) || gap.matches('\n').count() < 2 {
-        return Err(EngineError(
-            "只能移动以空段分隔的相邻普通根块；规则、注释及嵌套结构保源。".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_everyday_block_movement_barrier(),
         ));
     }
     push_patch(

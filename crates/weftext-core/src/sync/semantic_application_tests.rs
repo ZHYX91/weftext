@@ -854,7 +854,7 @@ fn lifecycle_query_pair(mixed: bool, bad: bool) -> (Pair, OperationRequest, Obje
     let plan = if mixed {
         weftext_data::QueryPlan {
             advanced: Some(weftext_data::QueryAdvanced {
-                union_all: vec![leaf("live"), leaf("trash")],
+                union_all: Some(vec![leaf("live"), leaf("trash")]),
                 ..Default::default()
             }),
             ..Default::default()

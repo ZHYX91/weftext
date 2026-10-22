@@ -1,6 +1,7 @@
 //! Local timeline adapters; all authorization, exact-source reads and restore
 //! decisions stay inside the original Core.
 use super::{ApiResult, AppState, core_call, value};
+use crate::RequestJson;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 use weftext_core::{CoreError, HistoryRestoreRequest, HistoryRestoreResult, HistoryRestoreStatus};
@@ -29,12 +30,18 @@ struct VersionRequest {
 struct StatusRequest {
     operation_id: String,
 }
-async fn list(State(state): State<AppState>, Json(req): Json<SessionRequest>) -> ApiResult {
+async fn list(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<SessionRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.list_history(&req.session_id)).await?,
     )?))
 }
-async fn read(State(state): State<AppState>, Json(req): Json<VersionRequest>) -> ApiResult {
+async fn read(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<VersionRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.read_history(&req.session_id, &req.version_id)
@@ -42,7 +49,10 @@ async fn read(State(state): State<AppState>, Json(req): Json<VersionRequest>) ->
         .await?,
     )?))
 }
-async fn compare(State(state): State<AppState>, Json(req): Json<VersionRequest>) -> ApiResult {
+async fn compare(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<VersionRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.compare_history(&req.session_id, &req.version_id)
@@ -52,7 +62,7 @@ async fn compare(State(state): State<AppState>, Json(req): Json<VersionRequest>)
 }
 async fn restore(
     State(state): State<AppState>,
-    Json(req): Json<HistoryRestoreRequest>,
+    RequestJson(req): RequestJson<HistoryRestoreRequest>,
 ) -> ApiResult {
     let outcome = core_call(&state, move |core| {
         let original = req.clone();
@@ -88,7 +98,10 @@ fn restore_outcome(
         }
     }
 }
-async fn status(State(state): State<AppState>, Json(req): Json<StatusRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<StatusRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.history_restore_status(&req.operation_id)

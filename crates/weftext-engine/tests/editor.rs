@@ -806,8 +806,11 @@ fn source_heading_level_rule_disables_level_writer_without_losing_text_writer() 
     assert!(!heading.level_writable);
     assert_eq!(heading.level, Some(1));
     assert_eq!(
-        heading.level_reason.as_deref(),
-        Some("native-heading-level-rule")
+        heading
+            .level_reason
+            .as_ref()
+            .map(|reason| &reason.explanation),
+        Some(&UiMessage::error_engine_reason_heading_level_rule())
     );
     assert!(
         edit(

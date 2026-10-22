@@ -6,6 +6,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use weftext_messages::UiMessage;
 
 const MAX_RECORDS: usize = 20_000;
 
@@ -114,12 +115,16 @@ impl Core {
         ) {
             Ok(bytes) => {
                 if hash(&bytes) != id {
-                    return Err(invalid("Stored portable record digest mismatch"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_store_stored_record_digest_mismatch(),
+                    ));
                 }
                 if manifest {
                     let value: Manifest = serde_json::from_slice(&bytes)?;
                     if value.id()? != id {
-                        return Err(invalid("Stored manifest is not canonical"));
+                        return Err(invalid(
+                            UiMessage::error_core_sync_store_stored_manifest_not_canonical(),
+                        ));
                     }
                 }
                 Ok(Some(bytes))
@@ -141,21 +146,29 @@ impl Core {
         self.check_sync_owner(identity)?;
         digest(id)?;
         if hash(&bytes) != id {
-            return Err(invalid("Portable record digest mismatch"));
+            return Err(invalid(
+                UiMessage::error_core_sync_store_record_digest_mismatch(),
+            ));
         }
         let mut bundle = SyncBundle::default();
         if manifest {
             if bytes.len() > MAX_MANIFEST_BYTES {
-                return Err(invalid("Manifest record exceeds budget"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_store_manifest_record_budget(),
+                ));
             }
             let value: Manifest = serde_json::from_slice(&bytes)?;
             if value.id()? != id {
-                return Err(invalid("Manifest is not canonical"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_store_manifest_not_canonical(),
+                ));
             }
             bundle.manifests.insert(id.into(), value);
         } else {
             if bytes.len() > MAX_BLOB_BYTES {
-                return Err(invalid("Blob record exceeds budget"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_store_blob_record_budget(),
+                ));
             }
             bundle.blobs.insert(id.into(), bytes);
         }
@@ -174,7 +187,9 @@ impl Core {
     pub fn receive_sync(&self, identity: &SyncIdentity, bundle: SyncBundle) -> Result<SyncStatus> {
         self.check_sync_owner(identity)?;
         if bundle.manifests.len() > MAX_COMMITS || bundle.blobs.len() > MAX_RECORDS {
-            return Err(invalid("Transfer record budget exceeded"));
+            return Err(invalid(
+                UiMessage::error_core_sync_store_transfer_record_budget(),
+            ));
         }
         let (path, _guards) = self.sync_store(identity, true)?;
         let mut graph = load_graph(&path, identity)?;
@@ -228,30 +243,33 @@ impl Core {
                 if graph.status(id)? != Admission::Accepted {
                     return Err(CoreError::new(
                         "syncIncomplete",
-                        "The specified received object revision is not admitted",
+                        UiMessage::error_core_sync_specified_received_object_revision_not_admitted(
+                        ),
                     ));
                 }
                 if selected.replace(&change.after).is_some() {
-                    return Err(invalid("Received object revision is ambiguous"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_store_received_revision_ambiguous(),
+                    ));
                 }
             }
         }
         let state = selected.ok_or_else(|| {
             CoreError::new(
                 "syncHistoryMissing",
-                "The specified object revision is unavailable",
+                UiMessage::error_core_sync_specified_object_revision_unavailable(),
             )
         })?;
         let digest = state.files.get(relative_path).ok_or_else(|| {
             CoreError::new(
                 "syncHistoryMissing",
-                "The specified revision has no such file",
+                UiMessage::error_core_sync_specified_revision_has_no_such_file(),
             )
         })?;
         let bytes = graph.blob(digest).ok_or_else(|| {
             CoreError::new(
                 "syncIncomplete",
-                "The specified exact history blob is unavailable",
+                UiMessage::error_core_sync_specified_exact_history_blob_unavailable(),
             )
         })?;
         Ok(ReceivedSyncFile {
@@ -277,7 +295,7 @@ impl Core {
         if !(1..=100).contains(&limit) {
             return Err(CoreError::new(
                 "budget",
-                "History page size must be between 1 and 100",
+                UiMessage::error_core_sync_history_page_size_must_between1_and100(),
             ));
         }
         if let Some(cursor) = after_commit {
@@ -300,7 +318,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncHistoryMissing",
-                "Cursor does not belong to the specified object's received records",
+                UiMessage::error_core_sync_cursor_does_not_belong_to_specified_object_s_received_records(),
             ));
         }
         let complete = records
@@ -335,7 +353,7 @@ impl Core {
                 if page.versions.is_empty() {
                     return Err(CoreError::new(
                         "budget",
-                        "A received history record exceeds the page budget",
+                        UiMessage::error_core_sync_received_history_record_exceeds_page_budget(),
                     ));
                 }
                 page.next_commit = page.versions.last().map(|v| v.commit.clone());
@@ -362,7 +380,7 @@ impl Core {
         if self.actor.is_some() {
             return Err(CoreError::new(
                 "syncOwnerRequired",
-                "Managed sync is a local owner operation",
+                UiMessage::error_core_sync_managed_sync_local_owner_operation(),
             ));
         }
         uuid(&identity.workspace_id)?;
@@ -392,7 +410,9 @@ impl Core {
             Ok(bytes) => {
                 let stored: SyncIdentity = serde_json::from_slice(&bytes)?;
                 if &stored != identity {
-                    return Err(invalid("Local store belongs to a different replica family"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_store_replica_family_mismatch(),
+                    ));
                 }
             }
             Err(e) if e.code == "missing" && create => {}
@@ -412,17 +432,21 @@ pub(super) fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<Replica
         let guard = ParentGuard::acquire(&directory.join(".enumeration"))?;
         let (entries, complete) = guard.directory_entries(MAX_RECORDS)?;
         if !complete {
-            return Err(invalid("Replica record inventory is incomplete"));
+            return Err(invalid(
+                UiMessage::error_core_sync_store_record_inventory_incomplete(),
+            ));
         }
         for (name, _) in entries {
             let Some(name) = name.to_str() else {
-                return Err(invalid("Non-UTF8 replica record name"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_store_record_name_not_utf8(),
+                ));
             };
             if name.ends_with(".pending") {
                 continue;
             }
             let Some(id) = name.strip_suffix(extension) else {
-                return Err(invalid("Unexpected replica record"));
+                return Err(invalid(UiMessage::error_core_sync_store_record_unexpected()));
             };
             digest(id)?;
             let bytes = read_record(&directory.join(name), limit)?;
@@ -469,7 +493,9 @@ pub(super) fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
     if bytes.len() > limit {
-        return Err(invalid("Replica record exceeds its byte budget"));
+        return Err(invalid(
+            UiMessage::error_core_sync_store_record_byte_budget(),
+        ));
     }
     Ok(bytes)
 }
@@ -477,7 +503,9 @@ pub(super) fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
 pub(super) fn immutable(path: &Path, bytes: &[u8]) -> Result<()> {
     match read_record(path, bytes.len()) {
         Ok(existing) if existing == bytes => Ok(()),
-        Ok(_) => Err(invalid("Existing immutable record differs")),
+        Ok(_) => Err(invalid(
+            UiMessage::error_core_sync_store_immutable_record_differs(),
+        )),
         Err(e) if e.code == "missing" => private_create(path, bytes),
         Err(e) => Err(e),
     }

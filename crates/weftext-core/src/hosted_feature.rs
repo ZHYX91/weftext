@@ -2,6 +2,7 @@
 //! The host authorizes participants and filters this trusted result for delivery.
 use super::*;
 use std::collections::BTreeMap;
+use weftext_messages::UiMessage;
 #[path = "hosted_structure.rs"]
 mod structure;
 pub use structure::{ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness};
@@ -73,7 +74,7 @@ impl FeatureIntentKind {
             OperationIntent::RestoreNode { .. } => Ok(Self::RestoreNode),
             _ => Err(CoreError::new(
                 "unsupportedIntent",
-                "Hosted reviewed features require a supported author or structure intent",
+                UiMessage::error_core_hosted_feature_hosted_reviewed_features_require_supported_author_or_structure_intent(),
             )),
         }
     }
@@ -119,7 +120,7 @@ pub(super) struct FeatureOperation {
     #[serde(default)]
     docx_import: bool,
     #[serde(default)]
-    import_losses: Option<serde_json::Value>,
+    import_losses: Option<Vec<SafeFeatureLoss>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     intent_kind: Option<FeatureIntentKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -154,49 +155,163 @@ pub(super) struct OutputClaim {
     pub(super) fingerprint: String,
 }
 
-/// Loss details and paths may contain destination schema or server locations.
-/// Only producer-defined codes and fixed messages cross this trusted wrapper.
-fn import_losses(preview: &OperationPreview) -> serde_json::Value {
+/// Only finite, safe loss meanings are retained by the hosted review. Private
+/// paths, author values and source diagnostics remain in the original Core Plan.
+/// This is an authorization projection of producer facts, not a translation of
+/// error text. Presentation is always generated from the single message catalog.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+enum SafeFeatureLoss {
+    #[serde(rename = "word-layout")]
+    WordLayout,
+    #[serde(rename = "word-list-numbering")]
+    WordListNumbering,
+    #[serde(rename = "word-format-revision")]
+    WordFormatRevision,
+    #[serde(rename = "word-comment-range")]
+    WordCommentRange,
+    #[serde(rename = "word-comment-unlocated")]
+    WordCommentUnlocated,
+    #[serde(rename = "word-nested-revision")]
+    WordNestedRevision,
+    #[serde(rename = "word-link")]
+    WordLink,
+    #[serde(rename = "word-image-format")]
+    WordImageFormat,
+    #[serde(rename = "word-image-layout")]
+    WordImageLayout,
+    #[serde(rename = "word-image-missing")]
+    WordImageMissing,
+    #[serde(rename = "word-field")]
+    WordField,
+    #[serde(rename = "word-element")]
+    WordElement,
+    #[serde(rename = "word-block")]
+    WordBlock,
+    #[serde(rename = "word-table-layout")]
+    WordTableLayout,
+    #[serde(rename = "docx-import-loss")]
+    DocxImportLoss,
+    #[serde(rename = "generatedBibliographyNotInstalled")]
+    GeneratedBibliographyNotInstalled,
+    #[serde(rename = "resourceModuleContextPreserved")]
+    ResourceModuleContextPreserved,
+    #[serde(rename = "settingsNotApplied")]
+    SettingsNotApplied,
+    #[serde(rename = "unregisteredFileOmitted")]
+    UnregisteredFileOmitted,
+    #[serde(rename = "content-import-loss")]
+    ContentImportLoss,
+    #[serde(rename = "structure-copy-loss")]
+    StructureCopyLoss,
+}
+impl SafeFeatureLoss {
+    fn code(self) -> &'static str {
+        match self {
+            Self::WordLayout => "word-layout",
+            Self::WordListNumbering => "word-list-numbering",
+            Self::WordFormatRevision => "word-format-revision",
+            Self::WordCommentRange => "word-comment-range",
+            Self::WordCommentUnlocated => "word-comment-unlocated",
+            Self::WordNestedRevision => "word-nested-revision",
+            Self::WordLink => "word-link",
+            Self::WordImageFormat => "word-image-format",
+            Self::WordImageLayout => "word-image-layout",
+            Self::WordImageMissing => "word-image-missing",
+            Self::WordField => "word-field",
+            Self::WordElement => "word-element",
+            Self::WordBlock => "word-block",
+            Self::WordTableLayout => "word-table-layout",
+            Self::DocxImportLoss => "docx-import-loss",
+            Self::GeneratedBibliographyNotInstalled => "generatedBibliographyNotInstalled",
+            Self::ResourceModuleContextPreserved => "resourceModuleContextPreserved",
+            Self::SettingsNotApplied => "settingsNotApplied",
+            Self::UnregisteredFileOmitted => "unregisteredFileOmitted",
+            Self::ContentImportLoss => "content-import-loss",
+            Self::StructureCopyLoss => "structure-copy-loss",
+        }
+    }
+    fn explanation(self) -> UiMessage {
+        match self {
+            Self::WordLayout => UiMessage::loss_core_hosted_feature_word_layout(),
+            Self::WordListNumbering => UiMessage::loss_core_hosted_feature_word_list_numbering(),
+            Self::WordFormatRevision => UiMessage::loss_core_hosted_feature_word_format_revision(),
+            Self::WordCommentRange => UiMessage::loss_core_hosted_feature_word_comment_target(),
+            Self::WordCommentUnlocated => UiMessage::loss_core_hosted_feature_word_comment_target(),
+            Self::WordNestedRevision => UiMessage::loss_core_hosted_feature_word_nested_revision(),
+            Self::WordLink => UiMessage::loss_core_hosted_feature_word_link(),
+            Self::WordImageFormat => UiMessage::loss_core_hosted_feature_word_image_format(),
+            Self::WordImageLayout => UiMessage::loss_core_hosted_feature_word_image_layout(),
+            Self::WordImageMissing => UiMessage::loss_core_hosted_feature_word_image_missing(),
+            Self::WordField => UiMessage::loss_core_hosted_feature_word_field(),
+            Self::WordElement => UiMessage::loss_core_hosted_feature_word_structure(),
+            Self::WordBlock => UiMessage::loss_core_hosted_feature_word_structure(),
+            Self::WordTableLayout => UiMessage::loss_core_hosted_feature_word_table_layout(),
+            Self::DocxImportLoss => UiMessage::loss_core_hosted_feature_docx_import(),
+            Self::GeneratedBibliographyNotInstalled => {
+                UiMessage::loss_core_hosted_feature_generated_bibliography()
+            }
+            Self::ResourceModuleContextPreserved => {
+                UiMessage::loss_core_hosted_feature_resource_module_context()
+            }
+            Self::SettingsNotApplied => UiMessage::loss_core_hosted_feature_settings(),
+            Self::UnregisteredFileOmitted => {
+                UiMessage::loss_core_hosted_feature_unregistered_files()
+            }
+            Self::ContentImportLoss => UiMessage::loss_core_hosted_feature_content_import(),
+            Self::StructureCopyLoss => UiMessage::loss_core_hosted_feature_structure_copy(),
+        }
+    }
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicFeatureLoss {
+    code: SafeFeatureLoss,
+    #[serde(flatten)]
+    description: ErrorDescription,
+    product_diagnostics: Vec<ErrorDescription>,
+}
+fn public_feature_losses(losses: &[SafeFeatureLoss]) -> Result<serde_json::Value> {
+    Ok(serde_json::to_value(
+        losses
+            .iter()
+            .map(|loss| PublicFeatureLoss {
+                code: *loss,
+                description: loss.explanation().into(),
+                product_diagnostics: Vec::new(),
+            })
+            .collect::<Vec<_>>(),
+    )?)
+}
+fn import_losses(preview: &OperationPreview) -> Vec<SafeFeatureLoss> {
     let mut losses = BTreeMap::new();
     for loss in &preview.losses {
-        let message = match loss.code.as_str() {
-            "word-layout" => "正文可编辑；Word 页眉页脚、分页、字体和复杂版式保留在原件。",
-            "word-list-numbering" => "列表文字已保留；编号格式、层级和起始值未完整映射。",
-            "word-format-revision" => "格式修订保留在原件，未转换为可执行文字建议。",
-            "word-comment-range" | "word-comment-unlocated" => {
-                "批注意见已保留；部分目标无法准确定位到新正文。"
-            }
-            "word-nested-revision" => "嵌套修订已保留，未获得自动应用资格。",
-            "word-link" => "部分链接目标无法安全映射，可见文字与原件已保留。",
-            "word-image-format" => "部分图片格式尚不支持，原件已保留。",
-            "word-image-layout" => "图片已保留；浮动位置、裁切和尺寸未完整映射。",
-            "word-image-missing" => "部分图片关系无法读取，原件已保留。",
-            "word-field" => "域的可见结果已保留；动态更新语义保留在原件。",
-            "word-element" | "word-block" => "部分结构未完整映射，可读取文字与原件已保留。",
-            "word-table-layout" => "表格文字和单元格顺序已保留；复杂表格版式未完整映射。",
-            _ => {
-                losses.insert(
-                    "docx-import-loss",
-                    "部分内容未完整映射；请核对新正文和保留的原件。",
-                );
-                continue;
-            }
+        let safe = match loss.code.as_str() {
+            "word-layout" => SafeFeatureLoss::WordLayout,
+            "word-list-numbering" => SafeFeatureLoss::WordListNumbering,
+            "word-format-revision" => SafeFeatureLoss::WordFormatRevision,
+            "word-comment-range" => SafeFeatureLoss::WordCommentRange,
+            "word-comment-unlocated" => SafeFeatureLoss::WordCommentUnlocated,
+            "word-nested-revision" => SafeFeatureLoss::WordNestedRevision,
+            "word-link" => SafeFeatureLoss::WordLink,
+            "word-image-format" => SafeFeatureLoss::WordImageFormat,
+            "word-image-layout" => SafeFeatureLoss::WordImageLayout,
+            "word-image-missing" => SafeFeatureLoss::WordImageMissing,
+            "word-field" => SafeFeatureLoss::WordField,
+            "word-element" => SafeFeatureLoss::WordElement,
+            "word-block" => SafeFeatureLoss::WordBlock,
+            "word-table-layout" => SafeFeatureLoss::WordTableLayout,
+            _ => SafeFeatureLoss::DocxImportLoss,
         };
-        losses.insert(loss.code.as_str(), message);
+        losses.insert(safe.code(), safe);
     }
-    serde_json::Value::Array(
-        losses
-            .into_iter()
-            .map(|(code, message)| serde_json::json!({"code":code,"message":message}))
-            .collect(),
-    )
+    losses.into_values().collect()
 }
-fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> serde_json::Value {
+fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> Vec<SafeFeatureLoss> {
     if kind == FeatureIntentKind::ImportDocx {
         return import_losses(preview);
     }
     if preview.losses.is_empty() {
-        return serde_json::json!([]);
+        return Vec::new();
     }
     if matches!(
         kind,
@@ -204,49 +319,29 @@ fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> serde_
             | FeatureIntentKind::ImportBibliography
             | FeatureIntentKind::ImportRecognized
     ) {
-        // Only finite producer-defined meanings cross this trusted wrapper.
-        // Never deliver source paths, schema IDs or original loss details.
         let mut losses = BTreeMap::new();
         for loss in &preview.losses {
-            let (code, message) = match loss.code.as_str() {
-                "generatedBibliographyNotInstalled" => (
-                    "generatedBibliographyNotInstalled",
-                    "生成的文献库仅保留在原件中，不安装到作者资料树；请依据重新映射且当前获权的文献数据重新生成。",
-                ),
-                "resourceModuleContextPreserved" => (
-                    "resourceModuleContextPreserved",
-                    "Typst 资源模块保留原字节；模块内身份和根相对依赖未重新映射，使用前请检查迁移后的上下文。",
-                ),
-                "settingsNotApplied" => (
-                    "settingsNotApplied",
-                    "原库设置和样式选择保留在原件中；目标库设置保持有效，不自动启用导入样式。",
-                ),
-                "unregisteredFileOmitted" => (
-                    "unregisteredFileOmitted",
-                    "原生资料包省略了部分未登记或库内部资料；此导入不能恢复省略的资料，完整历史和草稿需完整恢复资料备份。",
-                ),
-                _ => (
-                    "content-import-loss",
-                    "部分资料不能完整映射；原件和原值已保留，请明确接受原计划中的导入限制。",
-                ),
+            let safe = match loss.code.as_str() {
+                "generatedBibliographyNotInstalled" => {
+                    SafeFeatureLoss::GeneratedBibliographyNotInstalled
+                }
+                "resourceModuleContextPreserved" => SafeFeatureLoss::ResourceModuleContextPreserved,
+                "settingsNotApplied" => SafeFeatureLoss::SettingsNotApplied,
+                "unregisteredFileOmitted" => SafeFeatureLoss::UnregisteredFileOmitted,
+                _ => SafeFeatureLoss::ContentImportLoss,
             };
-            losses.insert(code, message);
+            losses.insert(safe.code(), safe);
         }
-        serde_json::Value::Array(
-            losses
-                .into_iter()
-                .map(|(code, message)| serde_json::json!({"code":code,"message":message}))
-                .collect(),
-        )
+        losses.into_values().collect()
     } else {
-        serde_json::json!([{"code":"structure-copy-loss","message":"部分引用或批注不能完整迁移；原值已保留，请明确接受原计划中的复制限制。"}])
+        vec![SafeFeatureLoss::StructureCopyLoss]
     }
 }
 
 pub(super) fn conflict() -> CoreError {
     CoreError::new(
         "operationConflict",
-        "The original reviewed actor, resource or intent differs",
+        UiMessage::error_core_hosted_feature_original_reviewed_actor_resource_or_intent_differs(),
     )
 }
 
@@ -254,7 +349,7 @@ pub(crate) fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
-            "A bounded resource identity is required",
+            UiMessage::error_core_hosted_definition_bounded_resource_identity_required(),
         ));
     }
     Ok(())
@@ -268,7 +363,7 @@ pub(super) fn valid_fingerprint(fingerprint: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidIntent",
-            "A lowercase SHA-256 author intent fingerprint is required",
+            UiMessage::error_core_hosted_definition_lowercase_s_h_a256_author_intent_fingerprint_required(),
         ));
     }
     Ok(())
@@ -352,7 +447,7 @@ impl Core {
                 if old.keys().any(|id| !after_ids.contains(id)) {
                     return Err(CoreError::new(
                         "unsupportedIntent",
-                        "Tag deletion is not supported",
+                        UiMessage::error_core_directory_identity_tag_deletion_not_supported(),
                     ));
                 }
                 roles.insert("tags.read".to_owned());
@@ -366,7 +461,7 @@ impl Core {
         if bytes.len() > 4096 {
             return Err(CoreError::new(
                 "budget",
-                "Output claim exceeds its durable read budget",
+                UiMessage::error_core_hosted_feature_output_claim_exceeds_durable_read_budget(),
             ));
         }
         Ok(bytes)
@@ -378,7 +473,7 @@ impl Core {
         if Uuid::parse_str(operation).unwrap().to_string() != operation {
             return Err(CoreError::new(
                 "invalidOperationId",
-                "A canonical UUID is required",
+                UiMessage::error_core_hosted_feature_canonical_u_u_i_d_required(),
             ));
         }
         self.actor_record(operation)?;
@@ -401,7 +496,7 @@ impl Core {
         if bytes.len() > 4096 {
             return Err(CoreError::new(
                 "budget",
-                "Output request record exceeds its budget",
+                UiMessage::error_core_hosted_feature_output_request_record_exceeds_budget(),
             ));
         }
         let claim: OutputClaim = serde_json::from_slice(&bytes)?;
@@ -547,7 +642,7 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "invalidState",
-                    "Unknown original feature operation state",
+                    UiMessage::error_core_hosted_feature_unknown_original_feature_operation_state(),
                 ));
             }
         };
@@ -555,9 +650,9 @@ impl Core {
             && record.feature.as_ref().unwrap().import_losses.is_none()
             && let Some(detail) = &detail
         {
-            // Freeze the safe author-visible wording before its first delivery,
-            // including recovery of a crash between Core prepare and this write.
-            // Later binaries must retain the already-reviewed preview verbatim.
+            // Freeze the safe semantic facts before first delivery, including a
+            // crash between Core prepare and this write. A UI language change
+            // changes presentation, never the reviewed Plan or this record.
             let kind = record.feature.as_ref().unwrap().kind();
             record.feature.as_mut().unwrap().import_losses = Some(feature_losses(detail, kind));
             private_replace(
@@ -602,9 +697,7 @@ impl Core {
             let object = preview.as_object_mut().ok_or_else(conflict)?;
             object.insert(
                 "losses".into(),
-                feature
-                    .import_losses
-                    .unwrap_or_else(|| serde_json::json!([])),
+                public_feature_losses(&feature.import_losses.unwrap_or_default())?,
             );
         }
         let node_refs = detail
@@ -772,13 +865,14 @@ impl Core {
         ) {
             return Err(CoreError::new(
                 "unsupportedIntent",
-                "Only structural intents bind a destination slot",
+                UiMessage::error_core_hosted_feature_only_structural_intents_bind_destination_slot(
+                ),
             ));
         }
         if (kind == FeatureIntentKind::TrashNode) != destination_slot.is_none() {
             return Err(CoreError::new(
                 "invalidIntent",
-                "Live structural output requires its independently approved destination slot",
+                UiMessage::error_core_hosted_feature_live_structural_output_requires_independently_approved_destination_slot(),
             ));
         }
         if let Some(destination) = destination_slot {
@@ -837,7 +931,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "basisRequired",
-                "Hosted copy and template require an explicitly authorized complete tree witness",
+                UiMessage::error_core_hosted_feature_hosted_copy_and_template_require_explicitly_authorized_complete_tree_witness(),
             ));
         }
         if tree.is_some()
@@ -848,13 +942,14 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "A tree witness belongs only to copy or template",
+                UiMessage::error_core_hosted_feature_tree_witness_belongs_only_to_copy_or_template(
+                ),
             ));
         }
         if !transfer_witnesses.is_empty() && tree.is_none() {
             return Err(CoreError::new(
                 "operationConflict",
-                "Transfer source capabilities belong only to copy or template",
+                UiMessage::error_core_hosted_feature_transfer_source_capabilities_belong_only_to_copy_or_template(),
             ));
         }
         let docx_import = matches!(
@@ -880,7 +975,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "featureBudget",
-                    "Word options, originals and conversion losses exceed the bounded actor import budget",
+                    UiMessage::error_core_hosted_feature_word_options_originals_and_conversion_losses_exceed_bounded_actor_import_budget(),
                 ));
             }
         }
@@ -938,7 +1033,7 @@ impl Core {
                 if !preview.is_object() {
                     return Err(CoreError::new(
                         "invalidIntent",
-                        "Import preview must be an object",
+                        UiMessage::error_core_hosted_feature_import_preview_must_object(),
                     ));
                 }
                 parent.len() > 64 * 1024 || bytes.is_empty() || bytes.len() > 16 * 1024 * 1024
@@ -1017,7 +1112,7 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "unsupportedIntent",
-                    "Hosted reviewed features require one of the supported typed intents",
+                    UiMessage::error_core_hosted_feature_hosted_reviewed_features_require_one_of_supported_typed_intents(),
                 ));
             }
         };
@@ -1029,7 +1124,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Hosted review exceeds its explicit participant or byte budget",
+                UiMessage::error_core_hosted_feature_hosted_review_exceeds_explicit_participant_or_byte_budget(),
             ));
         }
         for dependency in dependencies {
@@ -1038,7 +1133,7 @@ impl Core {
         if intent_kind.has_losses() && !preview.is_object() {
             return Err(CoreError::new(
                 "invalidIntent",
-                "Loss-bearing preview must be an object",
+                UiMessage::error_core_hosted_feature_loss_bearing_preview_must_object(),
             ));
         }
         check_size(&serde_json::to_vec(&preview)?)?;
@@ -1094,7 +1189,12 @@ impl Core {
             )?;
         }
         self.actor_feature_status(resource, external_operation_id)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original feature operation"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_feature_missing_original_feature_operation(),
+                )
+            })
     }
 
     pub fn actor_feature_commit(
@@ -1121,14 +1221,15 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "Prepare the original reviewed operation first",
+                    UiMessage::error_core_hosted_feature_prepare_original_reviewed_operation_first(
+                    ),
                 )
             })?;
         let status = self.actor_feature_status(resource, operation)?.unwrap();
         if status.plan_id.as_deref() != Some(plan_id) {
             return Err(CoreError::new(
                 "planConflict",
-                "Commit the exact original reviewed plan",
+                UiMessage::error_core_hosted_feature_commit_exact_original_reviewed_plan(),
             ));
         }
         // Committed receipts are idempotent. Resolved, cancelled, and installed
@@ -1144,12 +1245,17 @@ impl Core {
         {
             return Err(CoreError::new(
                 "copyLoss",
-                "Explicitly accept the original import losses before commit",
+                UiMessage::error_core_hosted_feature_explicitly_accept_original_import_losses_before_commit(),
             ));
         }
         self.execute_operation(&record.core_operation_id, plan_id)?;
         self.actor_feature_status(resource, operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original feature operation"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_feature_missing_original_feature_operation(),
+                )
+            })
     }
 
     /// End an unknown or never-installed original proposal durably. Once the
@@ -1204,7 +1310,12 @@ impl Core {
             journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_feature_status(resource, operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing settled feature operation"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_feature_missing_settled_feature_operation(),
+                )
+            })
     }
 }
 

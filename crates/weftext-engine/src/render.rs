@@ -23,6 +23,24 @@ pub struct Engine {
     pub(crate) families: Vec<String>,
 }
 
+/// The edit boundary receives compiler failure evidence from its true producer,
+/// before successful-output product warnings can enter the public diagnostic list.
+pub(crate) enum RenderCompilation {
+    Compiled(RenderOutput),
+    Rejected {
+        output: RenderOutput,
+        diagnostics: Vec<RawDiagnostic>,
+        product_diagnostics: Vec<ErrorDescription>,
+    },
+}
+impl RenderCompilation {
+    pub(crate) fn into_output(self) -> RenderOutput {
+        match self {
+            Self::Compiled(output) | Self::Rejected { output, .. } => output,
+        }
+    }
+}
+
 impl Engine {
     pub fn new() -> Result<Self, EngineError> {
         Self::new_with_system_fonts(true)
@@ -78,6 +96,7 @@ impl Engine {
     ) -> Result<RenderOutput, EngineError> {
         let world = LocalWorld::new(&self.library, &self.fonts, source, path, root)?;
         self.render_world(source, world, crate::inspect_editor(source))
+            .map(RenderCompilation::into_output)
     }
 
     pub fn render_with_style(
@@ -93,6 +112,7 @@ impl Engine {
             world,
             crate::inspect_editor_with_style(source, style),
         )
+        .map(RenderCompilation::into_output)
     }
 
     pub(crate) fn render_world(
@@ -100,13 +120,14 @@ impl Engine {
         source: &str,
         world: LocalWorld<'_>,
         editor_map: crate::EditorMap,
-    ) -> Result<RenderOutput, EngineError> {
+    ) -> Result<RenderCompilation, EngineError> {
         let scope = format!("{:x}", Sha256::digest(source.as_bytes()));
         let mut source_info = inspect(source);
         source_info.body_insertion = editor_map.body_insertion.clone();
         if let Some(reason) = &editor_map.unavailable_reason {
             source_info.body_insertion = None;
-            source_info.writer_status = reason.clone();
+            source_info.writer_status = "unavailable".into();
+            source_info.writer_reason = Some(reason.clone());
         }
         let result = typst::compile::<HtmlDocument>(&world);
         // Existing Sources are immutable in this request after compilation.
@@ -127,6 +148,12 @@ impl Engine {
             .iter()
             .map(|d| diagnostic_with_offsets(d, &world, Some(&offsets)))
             .collect();
+        let mut raw_compiler_diagnostics = result
+            .warnings
+            .iter()
+            .map(raw_compiler_diagnostic)
+            .collect::<Vec<_>>();
+        let mut compilation_failure = None;
         let mut tree = None;
         let mut html = String::new();
         let mut labels = BTreeMap::<String, CompiledLabel>::new();
@@ -160,6 +187,7 @@ impl Engine {
                     offsets: &offsets,
                     definitions: HashSet::new(),
                     reference: None,
+                    product_warnings: &mut diagnostics,
                 };
                 let mut projected = project(
                     document.root_node(),
@@ -169,7 +197,8 @@ impl Engine {
                     0,
                     &scope,
                     &mut note_producers,
-                )?;
+                )
+                .map_err(|error| error.with_product_diagnostics(world.product_diagnostics()))?;
                 qualify_run_in_roles(&mut projected);
                 qualify_managed_numbering(&mut projected, source, &scope, &world);
                 qualify_subtitle_role(
@@ -249,6 +278,8 @@ impl Engine {
                 true
             }
             Err(errors) => {
+                raw_compiler_diagnostics.extend(errors.iter().map(raw_compiler_diagnostic));
+                compilation_failure = Some(raw_compiler_diagnostics);
                 diagnostics.extend(
                     errors
                         .iter()
@@ -257,7 +288,14 @@ impl Engine {
                 false
             }
         };
-        Ok(RenderOutput {
+        let product_diagnostics = world.product_diagnostics();
+        diagnostics.extend(product_diagnostics.iter().map(|description| Diagnostic {
+            severity: if ok { "warning" } else { "error" }.into(),
+            explanation: Some(description.explanation.clone()),
+            diagnostics: description.diagnostics.clone(),
+            origin: None,
+        }));
+        let output = RenderOutput {
             ok,
             html,
             tree,
@@ -268,6 +306,14 @@ impl Engine {
             compiler_version: "0.15.1".into(),
             labels: labels.into_values().collect(),
             products,
+        };
+        Ok(match compilation_failure {
+            Some(diagnostics) => RenderCompilation::Rejected {
+                output,
+                diagnostics,
+                product_diagnostics,
+            },
+            None => RenderCompilation::Compiled(output),
         })
     }
 
@@ -283,6 +329,12 @@ impl Engine {
 
 pub(crate) fn diagnostic(d: &SourceDiagnostic, world: &LocalWorld<'_>) -> Diagnostic {
     diagnostic_with_offsets(d, world, None)
+}
+fn raw_compiler_diagnostic(diagnostic: &SourceDiagnostic) -> RawDiagnostic {
+    RawDiagnostic {
+        origin: DiagnosticOrigin::Typst,
+        text: diagnostic.message.to_string(),
+    }
 }
 
 type OriginOffsets<'a> = HashMap<FileId, (&'a str, Utf16Offsets<'a>)>;
@@ -330,7 +382,11 @@ fn diagnostic_with_offsets(
             Severity::Warning => "warning",
         }
         .into(),
-        message: d.message.to_string(),
+        explanation: None,
+        diagnostics: vec![RawDiagnostic {
+            origin: DiagnosticOrigin::Typst,
+            text: d.message.to_string(),
+        }],
         origin,
     }
 }
@@ -379,7 +435,8 @@ fn endnote_producers(
         if crate::notes::endnotes_import(world.main_source.text()) {
             diagnostics.push(Diagnostic {
                 severity: "warning".into(),
-                message: "作者源使用尾注接口形式，但本次获权模块字节不等于产品随附版本；保留原源和显示，不认证尾注结构交换或安全回写".into(),
+                explanation: Some(UiMessage::error_engine_render_endnotes_module_uncertified()),
+                diagnostics: vec![],
                 origin: None,
             });
         }
@@ -406,7 +463,8 @@ fn endnote_producers(
     if ambiguous {
         diagnostics.push(Diagnostic {
             severity: "warning".into(),
-            message: "尾注仍保留原生显示与作者源；本次存在 show 规则或非随附模块的同名 metadata，无法认证有界尾注交换角色".into(),
+            explanation: Some(UiMessage::error_engine_render_endnotes_role_ambiguous()),
+            diagnostics: vec![],
             origin: None,
         });
         HashSet::new()
@@ -551,11 +609,12 @@ fn qualify_note_writers(
             if let Some(body) = &mut entry.body {
                 body.writable = false;
             }
+            entry.unavailable_kind = Some(crate::notes::NoteSourceUnavailableKind::Other);
             entry.unavailable_reason = Some(
                 if unknown_show {
-                    "unverified-environment-show"
+                    UiMessage::error_engine_reason_show_rule_unverified()
                 } else {
-                    "nonunique-or-undisplayed-native-origin"
+                    UiMessage::error_engine_reason_native_origin_nonunique_or_undisplayed()
                 }
                 .into(),
             );
@@ -606,8 +665,8 @@ fn qualify_endnote_origins(
             .filter(|(_, entry)| {
                 entry.kind == "endnote-definition"
                     && entry.target.as_deref() == Some(id.as_str())
-                    && entry.unavailable_reason.as_deref()
-                        == Some("requires-frozen-endnotes-module")
+                    && entry.unavailable_kind
+                        == Some(crate::NoteSourceUnavailableKind::FrozenModuleRequired)
                     && entry.body.as_ref().is_some_and(|slot| {
                         actual.from >= slot.from.saturating_sub(1) && actual.to <= slot.to + 1
                     })
@@ -619,6 +678,7 @@ fn qualify_endnote_origins(
             entry.writable = true;
             entry.construct.writable = true;
             entry.unavailable_reason = None;
+            entry.unavailable_kind = None;
             if let Some(body) = &mut entry.body {
                 body.writable = true;
             }
@@ -659,8 +719,8 @@ fn qualify_endnote_origins(
             && let Some(origin) = node.origin.clone().filter(|origin| origin.is_main)
             && let Some(entry) = notes.entries.iter_mut().find(|entry| {
                 entry.kind.starts_with("endnote-")
-                    && (entry.unavailable_reason.as_deref()
-                        == Some("requires-frozen-endnotes-module")
+                    && (entry.unavailable_kind
+                        == Some(crate::NoteSourceUnavailableKind::FrozenModuleRequired)
                         || entry.writable)
                     && entry.construct.raw.starts_with("#box[")
                     && entry.construct.from + 1 == origin.from
@@ -671,6 +731,7 @@ fn qualify_endnote_origins(
             entry.writable = true;
             entry.construct.writable = true;
             entry.unavailable_reason = None;
+            entry.unavailable_kind = None;
             if let Some(body) = &mut entry.body {
                 body.writable = true;
             }
@@ -726,6 +787,7 @@ struct NoteProducerState<'a> {
     offsets: &'a OriginOffsets<'a>,
     definitions: HashSet<String>,
     reference: Option<(String, bool)>,
+    product_warnings: &'a mut Vec<Diagnostic>,
 }
 
 fn project(
@@ -739,7 +801,9 @@ fn project(
 ) -> Result<RenderNode, EngineError> {
     *counter += 1;
     if *counter > 100_000 || depth > 256 {
-        return Err(EngineError("显示树超过安全预算；请使用源码入口".into()));
+        return Err(EngineError::DisplayTreeBudget {
+            product_diagnostics: vec![],
+        });
     }
     let mut out = RenderNode {
         key: format!("{scope}-n{counter}"),
@@ -758,6 +822,28 @@ fn project(
         }
         HtmlNode::Element(element) => {
             let tag = element.tag.resolve().as_str().to_owned();
+            for warning in &element.weftext.warnings {
+                let explanation = match warning.kind {
+                    typst_html::WeftextFlowWarningKind::NonSolidTextPaint => {
+                        UiMessage::error_engine_render_non_solid_text_paint()
+                    }
+                    typst_html::WeftextFlowWarningKind::TableStrokeUnsupported => {
+                        UiMessage::error_engine_render_table_stroke_unsupported()
+                    }
+                    typst_html::WeftextFlowWarningKind::NonSolidTableFill => {
+                        UiMessage::error_engine_render_non_solid_table_fill()
+                    }
+                    typst_html::WeftextFlowWarningKind::DynamicListMarker => {
+                        UiMessage::error_engine_render_dynamic_list_marker()
+                    }
+                };
+                note_producers.product_warnings.push(Diagnostic {
+                    severity: "warning".into(),
+                    explanation: Some(explanation),
+                    diagnostics: vec![],
+                    origin: origin_with_offsets(warning.span, world, Some(note_producers.offsets)),
+                });
+            }
             out.kind = "element".into();
             if matches!(tag.as_str(), "head" | "meta" | "title" | "link" | "base") {
                 // The compiler's document head is metadata, not a displayed
@@ -784,7 +870,16 @@ fn project(
                 out.tag = Some("span".into());
                 out.attrs
                     .insert("class".into(), "weftext-unsupported".into());
-                out.text = Some(format!("[不支持的 HTML 元素：{tag}]"));
+                note_producers.product_warnings.push(Diagnostic {
+                    severity: "warning".into(),
+                    explanation: Some(UiMessage::error_engine_render_html_element_unsupported(
+                        weftext_messages::params::ErrorEngineRenderHtmlElementUnsupported {
+                            tag: tag.clone(),
+                        },
+                    )),
+                    diagnostics: vec![],
+                    origin: out.origin.clone(),
+                });
                 return Ok(out);
             }
             out.tag = Some(if allowed_tag(&tag) {
@@ -1550,6 +1645,276 @@ fn safe_html(node: &RenderNode) -> String {
 mod origin_offset_tests {
     use super::*;
     use typst_syntax::{LinkedNode, RootedPath, Source, VirtualPath, VirtualRoot};
+
+    #[test]
+    fn actual_native_note_origins_keep_typed_writer_refusals_and_original_source_ranges() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let engine = Engine::new_with_system_fonts(false).unwrap();
+        let mut input = crate::FrozenRenderRequest {
+            source: "Author#footnote[原文😀]".into(),
+            path: dir.path().join("main.typ"),
+            root: dir.path().into(),
+            files: BTreeMap::new(),
+            style: None,
+        };
+        let output = engine.render_frozen(&input).unwrap();
+        assert!(output.ok, "{:?}", output.diagnostics);
+        let actual_tree = output.tree.unwrap();
+        let world = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        world.source(world.main()).unwrap();
+        for copies in [1, 0, 2] {
+            let mut notes = crate::notes::inspect_notes_source(&input.source);
+            let original_hash = notes.source_hash.clone();
+            let original = notes
+                .entries
+                .iter()
+                .find(|entry| entry.kind == "footnote-definition")
+                .unwrap()
+                .clone();
+            assert!(original.writable);
+            let tree = if copies == 1 {
+                actual_tree.clone()
+            } else {
+                let mut wrapper = actual_tree.clone();
+                wrapper.attrs.clear();
+                wrapper.origin = None;
+                wrapper.children = vec![actual_tree.clone(); copies];
+                wrapper
+            };
+            qualify_note_writers(&tree, &mut notes, &world);
+            let entry = notes
+                .entries
+                .iter()
+                .find(|entry| entry.kind == "footnote-definition")
+                .unwrap();
+            assert_eq!(entry.writable, copies == 1);
+            assert_eq!(entry.construct.raw, original.construct.raw);
+            assert_eq!(entry.construct.from, original.construct.from);
+            assert_eq!(entry.construct.to, original.construct.to);
+            assert_eq!(
+                entry.body.as_ref().map(|body| &body.raw),
+                original.body.as_ref().map(|body| &body.raw)
+            );
+            if copies == 1 {
+                assert!(entry.unavailable_kind.is_none());
+                assert!(entry.unavailable_reason.is_none());
+            } else {
+                assert_eq!(
+                    entry.unavailable_kind,
+                    Some(crate::notes::NoteSourceUnavailableKind::Other)
+                );
+                let reason = entry.unavailable_reason.as_ref().unwrap();
+                assert_eq!(
+                    reason.explanation,
+                    UiMessage::error_engine_reason_native_origin_nonunique_or_undisplayed()
+                );
+                assert!(reason.diagnostics.is_empty());
+                assert!(reason.causes.as_slice().is_empty());
+                let wire = serde_json::to_value(entry).unwrap();
+                let _ = reason.explanation.render(weftext_messages::UiLocale::ZhCn);
+                let _ = reason.explanation.render(weftext_messages::UiLocale::EnUs);
+                assert_eq!(serde_json::to_value(entry).unwrap(), wire);
+                assert_eq!(
+                    serde_json::to_value(
+                        serde_json::from_value::<crate::notes::NoteSourceEntry>(wire.clone())
+                            .unwrap()
+                    )
+                    .unwrap(),
+                    wire
+                );
+            }
+            assert_eq!(notes.source_hash, original_hash);
+        }
+
+        input.source = "#show text: it => it\nAuthor#footnote[原文😀]".into();
+        let world = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        world.source(world.main()).unwrap();
+        let mut notes = crate::notes::inspect_notes_source(&input.source);
+        qualify_note_writers(&actual_tree, &mut notes, &world);
+        let entry = notes
+            .entries
+            .iter()
+            .find(|entry| entry.kind == "footnote-definition")
+            .unwrap();
+        assert!(!entry.writable);
+        assert_eq!(
+            entry.unavailable_kind,
+            Some(crate::notes::NoteSourceUnavailableKind::Other)
+        );
+        assert_eq!(
+            entry.unavailable_reason.as_ref().unwrap().explanation,
+            UiMessage::error_engine_reason_show_rule_unverified()
+        );
+    }
+
+    #[test]
+    fn compiler_rejection_preserves_all_original_diagnostics_before_product_warning_projection() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let engine = Engine::new_with_system_fonts(false).unwrap();
+        let mut input = crate::FrozenRenderRequest {
+            source: "#missing_author_function(原名)".into(),
+            path: dir.path().join("main.typ"),
+            root: dir.path().into(),
+            files: BTreeMap::new(),
+            style: None,
+        };
+        let RenderCompilation::Rejected {
+            output,
+            diagnostics,
+            product_diagnostics,
+        } = engine.render_frozen_compilation(&input).unwrap()
+        else {
+            panic!("invalid native source must reject compilation")
+        };
+        assert!(!output.ok);
+        assert!(product_diagnostics.is_empty());
+        assert!(!diagnostics.is_empty());
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.explanation.is_none())
+        );
+        assert_eq!(
+            diagnostics,
+            output
+                .diagnostics
+                .iter()
+                .flat_map(|diagnostic| diagnostic.diagnostics.iter().cloned())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.origin == DiagnosticOrigin::Typst)
+        );
+
+        input.source = "#import \"weftext-endnotes.typ\": endnote, endnote-ref, endnotes\n#endnote[Author]\n#endnotes()".into();
+        input.files.insert(
+            "weftext-endnotes.typ".into(),
+            b"#let endnote(body) = body\n#let endnote-ref(id) = []\n#let endnotes() = []".to_vec(),
+        );
+        let RenderCompilation::Compiled(output) = engine.render_frozen_compilation(&input).unwrap()
+        else {
+            panic!("the custom module remains valid native source")
+        };
+        assert!(output.ok);
+        assert!(output.diagnostics.iter().any(|diagnostic| {
+            diagnostic.explanation.as_ref().is_some_and(|message| {
+                message.key() == "error.engine.render.endnotesModuleUncertified"
+            })
+        }));
+    }
+
+    #[test]
+    fn frozen_package_rejection_keeps_product_and_original_compiler_evidence_separate() {
+        let root = tempfile::TempDir::new().unwrap();
+        let engine = Engine::new_with_system_fonts(false).unwrap();
+        let input = crate::FrozenRenderRequest {
+            source: "#import \"@preview/author-package:0.1.0\": *".into(),
+            path: root.path().join("main.typ"),
+            root: root.path().into(),
+            files: BTreeMap::new(),
+            style: None,
+        };
+        let RenderCompilation::Rejected {
+            output,
+            diagnostics,
+            product_diagnostics,
+        } = engine.render_frozen_compilation(&input).unwrap()
+        else {
+            panic!("frozen input cannot download packages")
+        };
+        assert!(!output.ok);
+        assert!(!diagnostics.is_empty());
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.origin == DiagnosticOrigin::Typst)
+        );
+        assert_eq!(product_diagnostics.len(), 1);
+        assert_eq!(
+            product_diagnostics[0].explanation,
+            UiMessage::error_engine_world_frozen_packages_unavailable()
+        );
+        assert!(product_diagnostics[0].diagnostics.is_empty());
+        assert!(
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.explanation.as_ref()
+                    == Some(&UiMessage::error_engine_world_frozen_packages_unavailable()))
+        );
+        let error = EngineError::new(UiMessage::error_engine_notes_frozen_compilation_failed())
+            .with_product_diagnostics(product_diagnostics.clone());
+        let (_, retained) = error.into_parts();
+        assert_eq!(retained, product_diagnostics);
+    }
+
+    #[test]
+    fn actual_projection_budget_preserves_its_kind_and_parallel_world_admission_evidence() {
+        let root = tempfile::TempDir::new().unwrap();
+        let engine = Engine::new_with_system_fonts(false).unwrap();
+        let input = crate::FrozenRenderRequest {
+            source: "author source 原件😀".into(),
+            path: root.path().join("main.typ"),
+            root: root.path().into(),
+            files: (0..=512)
+                .map(|index| (format!("part{index}.typ"), b"part".to_vec()))
+                .collect(),
+            style: None,
+        };
+        let world = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        for index in 0..=512 {
+            let path = VirtualPath::new(format!("/part{index}.typ")).unwrap();
+            let file = FileId::new(RootedPath::new(VirtualRoot::Project, path));
+            assert_eq!(world.file(file).is_ok(), index < 512);
+        }
+        let root_node = typst_html::HtmlElement::new(typst_html::tag::div)
+            .with_children(
+                (0..100_001)
+                    .map(|_| HtmlNode::text("x", Span::detached()))
+                    .collect(),
+            )
+            .into();
+        let mut warnings = vec![];
+        let mut producers = NoteProducerState {
+            sources: &HashSet::new(),
+            offsets: &HashMap::new(),
+            definitions: HashSet::new(),
+            reference: None,
+            product_warnings: &mut warnings,
+        };
+        let error = project(
+            &root_node,
+            &world,
+            &mut 0,
+            &mut vec![],
+            0,
+            "scope",
+            &mut producers,
+        )
+        .unwrap_err()
+        .with_product_diagnostics(world.product_diagnostics());
+        let EngineError::DisplayTreeBudget {
+            product_diagnostics,
+        } = &error
+        else {
+            panic!("the projection budget is a machine fact independent of explanations")
+        };
+        assert_eq!(product_diagnostics.len(), 1);
+        assert_eq!(
+            product_diagnostics[0].explanation,
+            UiMessage::error_engine_world_dependency_count_budget()
+        );
+        let (description, diagnostics) = error.into_parts();
+        assert_eq!(
+            description.explanation,
+            UiMessage::engine_render_display_tree_budget()
+        );
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(world.main_source.text(), input.source);
+    }
 
     #[test]
     fn snapshots_cover_derived_sources_and_late_or_replaced_sources_fall_back() {

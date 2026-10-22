@@ -101,6 +101,17 @@ impl Fixture {
             }
         }
     }
+    fn summary(&mut self, at: &str) -> ReminderDeliveryPermit {
+        let at = instant(at);
+        match self
+            .core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(at.clone()))
+            .unwrap()
+        {
+            ReminderSummaryPreparation::Started { permit, .. } => *permit,
+            other => panic!("Expected complete missed summary, got {other:?}"),
+        }
+    }
     fn reopen(&mut self) {
         drop(self.core.take());
         self.core = Some(Core::new(&self.data).unwrap());
@@ -239,7 +250,7 @@ fn reminder_begin_is_durable_and_restart_never_allocates_another_effect() {
     assert_eq!(f.core().reminder_settings().unwrap().device_id, device);
     assert!(matches!(
         f.core().reminder_delivery_status(&key).unwrap().delivery,
-        ReminderDeliveryState::Unknown { .. }
+        ReminderRecordedDelivery::Unknown { .. }
     ));
     let candidate = f.candidate();
     assert!(matches!(
@@ -437,7 +448,7 @@ fn reminder_completion_and_personal_handling_are_orthogonal_to_external_result()
     assert!(handled.handled);
     assert!(matches!(
         handled.delivery,
-        ReminderDeliveryState::SubmittedToSystem { .. }
+        ReminderRecordedDelivery::SubmittedToSystem { .. }
     ));
     assert!(f.candidate().task_open);
 }
@@ -456,18 +467,12 @@ fn reminder_permit_is_single_use_and_normal_admission_cannot_cross_target_minute
     f.core()
         .finish_reminder_delivery(
             &permit,
-            ReminderSubmissionOutcome::FailedBeforeCall("Target minute ended before Show".into()),
+            ReminderSubmissionOutcome::FailedBeforeCall(
+                UiMessage::error_reminder_minute_ended_before_call().into(),
+            ),
         )
         .unwrap();
-    let candidate = f.candidate();
-    let summary = match f
-        .core()
-        .begin_reminder_summary_at(&[candidate], options(), &at)
-        .unwrap()
-    {
-        ReminderDeliveryStart::Started(permit) => permit,
-        _ => panic!("No missed summary permit"),
-    };
+    let summary = f.summary("2026-10-23T09:01:00Z");
     f.core()
         .check_reminder_permit_with_clock(&summary, || Ok(at.clone()))
         .unwrap();
@@ -502,83 +507,122 @@ fn reminder_final_input_proof_cannot_extend_a_normal_permit_past_its_civil_minut
             .reminder_delivery_status(permit.execution_key())
             .unwrap()
             .delivery,
-        ReminderDeliveryState::Unknown { .. }
+        ReminderRecordedDelivery::Unknown { .. }
     ));
 }
 
 #[test]
-fn reminder_unknown_summary_members_cannot_regroup_but_new_members_can_form_their_own_summary() {
+fn reminder_unknown_summary_never_regroups_and_only_new_keys_start_after_persisted_cooldown() {
     let mut f = Fixture::new("absolute");
-    let a = f.candidate();
-    let b = f.add_task("B");
-    let c = f.add_task("C");
-    let at = instant("2026-10-23T10:00:00Z");
-    let summary = match f
-        .core()
-        .begin_reminder_summary_at(&[a.clone(), b.clone()], options(), &at)
-        .unwrap()
-    {
-        ReminderDeliveryStart::Started(permit) => permit,
-        _ => panic!("No summary"),
-    };
-    assert_eq!(
-        f.core()
-            .begin_reminder_summary_at(&[a, b, c.clone()], options(), &at)
-            .unwrap_err()
-            .code,
-        "reminderRetained"
-    );
+    f.add_task("B");
+    let summary = f.summary("2026-10-23T10:00:00.123456789123Z");
+    f.reopen();
+    f.add_task("C");
     assert!(matches!(
         f.core()
-            .begin_reminder_summary_at(&[c], options(), &at)
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant(
+                "2026-10-23T10:15:00.123456789122Z"
+            )))
             .unwrap(),
-        ReminderDeliveryStart::Started(_)
+        ReminderSummaryPreparation::CoolingDown { .. }
     ));
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || {
+            Ok(instant("2026-10-23T10:15:00.123456789123Z"))
+        })
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started {
+            member_count,
+            overflow_count,
+            ..
+        } => {
+            assert_eq!(member_count, 1);
+            assert_eq!(overflow_count, 0);
+        }
+        other => panic!("New original key did not qualify: {other:?}"),
+    }
     assert!(matches!(
         f.core()
             .reminder_delivery_status(summary.execution_key())
             .unwrap()
             .delivery,
-        ReminderDeliveryState::Unknown { .. }
+        ReminderRecordedDelivery::Unknown { .. }
     ));
 }
 #[test]
-fn reminder_failed_summary_can_regroup_without_erasing_original_failure() {
+fn reminder_known_pre_call_summary_retry_keeps_original_members_request_cutoff_and_overflow() {
     let mut f = Fixture::new("absolute");
-    let a = f.candidate();
-    let b = f.add_task("B");
-    let at = instant("2026-10-23T10:00:00Z");
-    let original = match f
-        .core()
-        .begin_reminder_summary_at(std::slice::from_ref(&a), options(), &at)
-        .unwrap()
-    {
-        ReminderDeliveryStart::Started(permit) => permit,
-        _ => panic!("No summary"),
-    };
+    for index in 1..65 {
+        f.add_task(&format!("Task{index:03}"));
+    }
+    let original = f.summary("2026-10-23T10:00:00Z");
+    let (before, _) = f.core().read_reminders().unwrap();
+    let fixed = before.summaries[original.execution_key()].clone();
+    assert_eq!(fixed.members.len(), 64);
+    let overflow_before = before
+        .records
+        .iter()
+        .filter(|(_, record)| matches!(record.delivery, Delivery::SummaryOverflow { .. }))
+        .map(|(key, record)| (key.clone(), serde_json::to_value(record).unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(overflow_before.len(), 1);
     f.core()
         .finish_reminder_delivery(
             &original,
-            ReminderSubmissionOutcome::FailedBeforeCall(
-                "Notifications unavailable before Show".into(),
-            ),
+            ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
         )
         .unwrap();
+    f.reopen();
+    f.add_task("B");
+    let retry = match f
+        .core()
+        .retry_reminder_summary_with_clock(original.execution_key(), || {
+            Ok(instant("2026-10-23T10:00:10Z"))
+        })
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        other => panic!("Original pre-call failure was not retryable: {other:?}"),
+    };
+    assert_eq!(retry.execution_key(), original.execution_key());
+    assert_eq!(retry.request(), original.request());
+    let (after, _) = f.core().read_reminders().unwrap();
+    let retried = &after.summaries[original.execution_key()];
+    assert_eq!(retried.members, fixed.members);
+    assert_eq!(retried.cutoff, fixed.cutoff);
+    assert_eq!(retried.next_allowed_at, fixed.next_allowed_at);
+    assert_eq!(retried.attempt.attempt_count, 2);
+    let overflow_after = after
+        .records
+        .iter()
+        .filter(|(_, record)| matches!(record.delivery, Delivery::SummaryOverflow { .. }))
+        .map(|(key, record)| (key.clone(), serde_json::to_value(record).unwrap()))
+        .collect::<Vec<_>>();
+    assert_eq!(overflow_after, overflow_before);
     assert!(matches!(
         f.core()
-            .begin_reminder_summary_at(&[a, b], options(), &at)
-            .unwrap(),
-        ReminderDeliveryStart::Started(_)
-    ));
-    assert!(matches!(
-        f.core()
-            .reminder_delivery_status(original.execution_key())
+            .reminder_delivery_status(&overflow_after[0].0)
             .unwrap()
             .delivery,
-        ReminderDeliveryState::FailedBeforeCall { .. }
+        ReminderRecordedDelivery::InAppOnly { .. }
     ));
-    let (state, _) = f.core().read_reminders().unwrap();
-    state.validate().unwrap();
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:10Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::CoolingDown { .. }
+    ));
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:15:00Z")))
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started { member_count, .. } => assert_eq!(member_count, 1),
+        other => panic!("Only the new B key should join a later batch: {other:?}"),
+    }
+    after.validate().unwrap();
 }
 #[test]
 fn reminder_begin_publish_fault_never_returns_a_permit_and_retains_any_published_barrier() {
@@ -614,7 +658,7 @@ fn reminder_begin_publish_fault_never_returns_a_permit_and_retains_any_published
             assert_eq!(records.len(), 1);
             assert!(matches!(
                 records[0].status.delivery,
-                ReminderDeliveryState::Unknown { .. }
+                ReminderRecordedDelivery::Unknown { .. }
             ));
             assert!(matches!(retry, ReminderDeliveryStart::Retained(_)));
         }
@@ -641,12 +685,12 @@ fn reminder_finish_publish_faults_preserve_real_original_outcomes_across_restart
         if point == "beforePublish" {
             assert!(matches!(
                 status.delivery,
-                ReminderDeliveryState::Unknown { .. }
+                ReminderRecordedDelivery::Unknown { .. }
             ));
         } else {
             assert!(matches!(
                 status.delivery,
-                ReminderDeliveryState::SubmittedToSystem { .. }
+                ReminderRecordedDelivery::SubmittedToSystem { .. }
             ));
         }
         let candidate = f.candidate();
@@ -864,7 +908,9 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
     f.core()
         .finish_reminder_delivery(
             &permit,
-            ReminderSubmissionOutcome::Unknown("Show returned no definite result".into()),
+            ReminderSubmissionOutcome::Unknown(
+                UiMessage::status_reminder_external_submission_unknown().into(),
+            ),
         )
         .unwrap();
     let unknown = fs::read(&path).unwrap();
@@ -873,7 +919,7 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
             .finish_reminder_delivery(
                 &permit,
                 ReminderSubmissionOutcome::FailedBeforeCall(
-                    "Cannot prove no call after unknown".into()
+                    UiMessage::error_reminder_unknown_cannot_become_pre_call_failure().into()
                 )
             )
             .is_err()
@@ -885,16 +931,20 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
         .unwrap();
     assert!(matches!(
         status.delivery,
-        ReminderDeliveryState::SubmittedToSystem { .. }
+        ReminderRecordedDelivery::SubmittedToSystem { .. }
     ));
     for outcome in [
-        ReminderSubmissionOutcome::Unknown("Late adapter uncertainty".into()),
-        ReminderSubmissionOutcome::FailedBeforeCall("Late adapter error".into()),
+        ReminderSubmissionOutcome::Unknown(
+            UiMessage::status_reminder_external_submission_unknown().into(),
+        ),
+        ReminderSubmissionOutcome::FailedBeforeCall(
+            UiMessage::error_reminder_permit_changed().into(),
+        ),
     ] {
         let status = f.core().finish_reminder_delivery(&permit, outcome).unwrap();
         assert!(matches!(
             status.delivery,
-            ReminderDeliveryState::SubmittedToSystem { .. }
+            ReminderRecordedDelivery::SubmittedToSystem { .. }
         ));
     }
     f.reopen();
@@ -936,16 +986,9 @@ fn reminder_original_effect_lookup_is_read_only_without_author_scope_and_has_no_
 
     let mut f = Fixture::new("absolute");
     let a = f.candidate();
-    let b = f.add_task("B");
+    f.add_task("B");
     let member_key = f.core().reminder_eligibility(&a).unwrap().execution_key;
-    let summary = match f
-        .core()
-        .begin_reminder_summary_at(&[a, b], options(), &instant("2026-10-23T10:00:00Z"))
-        .unwrap()
-    {
-        ReminderDeliveryStart::Started(permit) => permit,
-        _ => panic!("No summary"),
-    };
+    let summary = f.summary("2026-10-23T10:00:00Z");
     let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
     let original = fs::read(&ledger).unwrap();
     let observed = f
@@ -999,7 +1042,8 @@ fn reminder_actor_cannot_read_decide_open_or_confirm_a_local_owner_effect() {
             denied(core.disable_reminder_library(&owner.workspace_id, 2, &fresh()));
             denied(core.set_reminder_subscription(&root, &owner, INTENT, false, 2, &fresh()));
             denied(core.begin_reminder_delivery(&candidate, options()));
-            denied(core.begin_reminder_summary(std::slice::from_ref(&candidate), options()));
+            denied(core.prepare_reminder_summary(options()));
+            denied(core.retry_reminder_summary(permit.execution_key()));
             denied(core.check_reminder_permit(&permit));
             denied(
                 core.finish_reminder_delivery(
@@ -1059,4 +1103,602 @@ fn reminder_actor_rejection_precedes_first_device_identity_allocation() {
     .unwrap();
     assert!(!identity.exists());
     assert!(!reminders.exists());
+}
+
+#[test]
+fn reminder_complete_65_set_is_atomic_overflow_and_restart_never_drains_another_summary() {
+    let mut f = Fixture::new("absolute");
+    for index in 1..65 {
+        f.add_task(&format!("Task{index:03}"));
+    }
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    crate::device_state::set_test_failpoint("beforePublish");
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+            .unwrap_err()
+            .code,
+        "injectedFailure"
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    crate::device_state::set_test_failpoint("afterPublish");
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+            .unwrap_err()
+            .code,
+        "injectedFailure"
+    );
+    f.reopen();
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert_eq!(state.summaries.len(), 1);
+    assert_eq!(state.records.len(), 65);
+    let (summary_key, summary) = state.summaries.first_key_value().unwrap();
+    assert_eq!(summary.members.len(), 64);
+    assert_eq!(summary.cutoff, "2026-10-23T10:00:00Z");
+    assert_eq!(summary.next_allowed_at, "2026-10-23T10:15:00Z");
+    let (overflow_key, _) = state
+        .records
+        .iter()
+        .find(|(_, record)| matches!(record.delivery, Delivery::SummaryOverflow { .. }))
+        .unwrap();
+    assert!(overflow_key > summary.members.last().unwrap());
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(overflow_key)
+            .unwrap()
+            .delivery,
+        ReminderRecordedDelivery::InAppOnly { .. }
+    ));
+    let raw =
+        serde_json::to_value(f.core().reminder_delivery_status(overflow_key).unwrap()).unwrap();
+    assert_eq!(raw["delivery"]["state"], "inAppOnly");
+    assert_eq!(raw["delivery"]["summaryKey"], summary_key.as_str());
+    assert!(raw["delivery"].get("summary_key").is_none());
+    assert!(
+        f.core()
+            .original_reminder_notification(overflow_key)
+            .is_err()
+    );
+    assert!(
+        f.core()
+            .refresh_reminder_notification(overflow_key)
+            .is_err()
+    );
+    assert!(
+        f.core()
+            .confirm_reminder_in_system_history(overflow_key, &summary.attempt.request)
+            .is_err()
+    );
+    assert!(
+        f.core()
+            .retry_reminder_summary_with_clock(overflow_key, || Ok(instant("2026-10-23T10:20:00Z")))
+            .is_err()
+    );
+    let mut forged = permit(summary_key, &summary.attempt);
+    forged.key = overflow_key.clone();
+    assert!(
+        f.core()
+            .check_reminder_permit_with_clock(&forged, || Ok(instant("2026-10-23T10:00:01Z")))
+            .is_err()
+    );
+    assert!(
+        f.core()
+            .finish_reminder_delivery(&forged, ReminderSubmissionOutcome::SubmittedToSystem)
+            .is_err()
+    );
+    assert!(f.core().resolve_reminder_activation(overflow_key).is_err());
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(summary_key)
+            .unwrap()
+            .delivery,
+        ReminderRecordedDelivery::Unknown { .. }
+    ));
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:10:00Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::CoolingDown { .. }
+    ));
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:15:00Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::NoNewMissed { .. }
+    ));
+    // Even personal handling of the true OS summary cannot silently handle overflow.
+    f.core().handle_reminder(summary_key).unwrap();
+    assert!(
+        !f.core()
+            .reminder_delivery_status(overflow_key)
+            .unwrap()
+            .handled
+    );
+    let activation = f
+        .core()
+        .resolve_reminder_activation(&summary.attempt.request.activation_key)
+        .unwrap();
+    assert!(activation.candidates.is_empty());
+    assert_eq!(
+        f.core()
+            .reminder_original_notifications(None)
+            .unwrap()
+            .len(),
+        1
+    );
+    state.validate().unwrap();
+}
+
+#[test]
+fn reminder_full_scan_guard_budget_never_publishes_its_first_64_prefix() {
+    let mut f = Fixture::new("absolute");
+    // Each real managed task contributes at least one distinct source input.
+    // The production limit is 1024, rather than an injected smaller budget.
+    for index in 1..=MAX_INPUT_PATHS {
+        f.add_task(&format!("Task{index:04}"));
+    }
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+            .unwrap_err()
+            .code,
+        "budget"
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    f.reopen();
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T11:00:00Z")))
+            .unwrap_err()
+            .code,
+        "budget"
+    );
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert!(state.records.is_empty());
+    assert!(state.summaries.is_empty());
+}
+
+#[test]
+fn reminder_prepare_uses_fresh_attempt_clock_after_a_long_scan_and_rejects_rollback() {
+    let mut f = Fixture::new("absolute");
+    let mut reads = 0;
+    let permit = match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || {
+            reads += 1;
+            Ok(instant(if reads == 1 {
+                "2026-10-23T10:00:00Z"
+            } else {
+                "2026-10-23T10:00:06.123456789123Z"
+            }))
+        })
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started { permit, .. } => permit,
+        other => panic!("Long scan did not produce a fresh permit: {other:?}"),
+    };
+    assert_eq!(permit.expires_at(), "2026-10-23T10:00:11.123456789123Z");
+    f.core()
+        .check_reminder_permit_with_clock(&permit, || {
+            Ok(instant("2026-10-23T10:00:06.123456789123Z"))
+        })
+        .unwrap();
+    f.reopen();
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant(
+                "2026-10-23T10:00:06.123456789122Z"
+            )))
+            .unwrap_err()
+            .code,
+        "reminderClockRollback"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+
+    let mut f = Fixture::new("absolute");
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    let mut reads = 0;
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || {
+                reads += 1;
+                Ok(instant(if reads == 1 {
+                    "2026-10-23T10:00:00Z"
+                } else {
+                    "2026-10-23T09:59:59Z"
+                }))
+            })
+            .unwrap_err()
+            .code,
+        "reminderClockRollback"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn reminder_summary_unknown_library_is_not_consumed_and_can_qualify_after_recovery() {
+    let mut f = Fixture::new("absolute");
+    let first_root = f.root.clone();
+    let first_owner = f.owner.clone();
+    let second_root = f._temp.path().join("second-library");
+    let library = f.core().create_library(&second_root).unwrap();
+    let settings = f.core().reminder_settings().unwrap();
+    f.core()
+        .set_reminder_library(&second_root, true, settings.settings_revision, &fresh())
+        .unwrap();
+    f.root = second_root.clone();
+    f.owner.workspace_id = library.workspace_id;
+    let second = f.add_task("Second");
+    f.root = first_root;
+    f.owner = first_owner;
+    let offline = f._temp.path().join("offline-second");
+    fs::rename(&second_root, &offline).unwrap();
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started {
+            member_count,
+            issue_count,
+            issues,
+            issues_complete,
+            ..
+        } => {
+            assert_eq!(member_count, 1);
+            assert_eq!(issue_count, 1);
+            assert!(issues_complete);
+            assert_eq!(issues[0].owner, second.owner);
+        }
+        other => panic!("Known scope was blocked or unknown scope was hidden: {other:?}"),
+    }
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert!(
+        state
+            .records
+            .values()
+            .all(|record| record.owner != second.owner)
+    );
+    f.reopen();
+    fs::rename(&offline, &second_root).unwrap();
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:15:00Z")))
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started {
+            member_count,
+            issue_count,
+            issues_complete,
+            ..
+        } => {
+            assert_eq!(member_count, 1);
+            assert_eq!(issue_count, 0);
+            assert!(issues_complete);
+        }
+        other => panic!("Recovered scope was silently consumed: {other:?}"),
+    }
+}
+
+#[test]
+fn reminder_summary_same_bytes_replacement_after_scan_cannot_publish_a_decision() {
+    let mut f = Fixture::new("absolute");
+    let path = f.path.clone();
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original_ledger = fs::read(&ledger).unwrap();
+    let original_source = fs::read(&path).unwrap();
+    let replaced = path.with_extension("retained-original");
+    let mut reads = 0;
+    assert!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || {
+                reads += 1;
+                if reads == 2 {
+                    fs::rename(&path, &replaced).unwrap();
+                    fs::write(&path, &original_source).unwrap();
+                }
+                Ok(instant("2026-10-23T10:00:00Z"))
+            })
+            .is_err()
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original_ledger);
+    assert_eq!(fs::read(&replaced).unwrap(), original_source);
+}
+
+#[test]
+fn reminder_normal_pre_call_failure_enters_missed_phase_once_across_restart_and_atomic_failure() {
+    let mut f = Fixture::new("absolute");
+    let normal = f.begin(AT);
+    f.core()
+        .finish_reminder_delivery(
+            &normal,
+            ReminderSubmissionOutcome::FailedBeforeCall(
+                UiMessage::error_reminder_minute_ended_before_call().into(),
+            ),
+        )
+        .unwrap();
+    f.reopen();
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    crate::device_state::set_test_failpoint("beforePublish");
+    assert!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+            .is_err()
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    let summary = f.summary("2026-10-23T10:00:00Z");
+    let (state, _) = f.core().read_reminders().unwrap();
+    let Delivery::SummaryMember {
+        prior_failed_attempt: Some(attempt),
+        summary_key,
+    } = &state.records[normal.execution_key()].delivery
+    else {
+        panic!("Missing original failed attempt");
+    };
+    assert_eq!(&attempt.request, normal.request());
+    assert!(matches!(
+        attempt.delivery,
+        ReminderDeliveryState::FailedBeforeCall { .. }
+    ));
+    assert_eq!(summary_key, summary.execution_key());
+    f.reopen();
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:15:00Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::NoNewMissed { .. }
+    ));
+}
+
+#[test]
+fn reminder_full_valid_ledger_byte_capacity_rejects_whole_batch_without_a_permit() {
+    let mut f = Fixture::new("absolute");
+    let candidate = f.candidate();
+    let (mut state, digest) = f.core().read_reminders().unwrap();
+    let at = instant("2026-10-22T00:00:00Z");
+    let description = CoreDescription::from(
+        CoreError::new(
+            "simulatedOriginalNativeResult",
+            UiMessage::error_core_io_failure(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, "x".repeat(7500)),
+    );
+    for _ in 0..1750 {
+        let owner = NodeRef {
+            workspace_id: candidate.owner.workspace_id.clone(),
+            node_id: fresh(),
+        };
+        let definition = "d".repeat(64);
+        let key = execution_key(
+            &state.device_id,
+            &owner,
+            INTENT,
+            &definition,
+            "2026-10-22T00:00:00Z",
+        )
+        .unwrap();
+        let mut attempt = make_attempt(&key, options(), &at, 1).unwrap();
+        attempt.delivery = ReminderDeliveryState::Unknown {
+            description: description.clone(),
+        };
+        state.records.insert(
+            key,
+            Record {
+                owner,
+                reminder_id: INTENT.into(),
+                definition_digest: definition,
+                trigger_instant: "2026-10-22T00:00:00Z".into(),
+                delivery: Delivery::Individual { attempt },
+                handled: false,
+                invalidated: None,
+            },
+        );
+    }
+    let identity = state.libraries[&candidate.owner.workspace_id]
+        .identity
+        .clone();
+    while serde_json::to_vec(&state).unwrap().len() < MAX_BYTES - 16 {
+        let id = fresh();
+        state.libraries.insert(
+            id.clone(),
+            LibrarySelection {
+                root: "D:/".into(),
+                identity: identity.clone(),
+                enabled: false,
+            },
+        );
+        let size = serde_json::to_vec(&state).unwrap().len();
+        if size > MAX_BYTES - 16 {
+            state.libraries.remove(&id);
+            break;
+        }
+        let padding = (MAX_BYTES - 16 - size).min(32_768 - 3);
+        state
+            .libraries
+            .get_mut(&id)
+            .unwrap()
+            .root
+            .push_str(&"x".repeat(padding));
+    }
+    state.validate().unwrap();
+    assert!(MAX_BYTES - serde_json::to_vec(&state).unwrap().len() < 300);
+    f.core().write_reminders(state, digest.as_deref()).unwrap();
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    validate_reminder_device_record(&original).unwrap();
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+            .unwrap_err()
+            .code,
+        "budget"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn reminder_summary_due_dependency_changes_get_a_new_key_but_body_edits_and_aba_do_not_replay() {
+    let mut f = Fixture::new("due_before");
+    let original = f.summary("2026-10-23T10:00:00Z");
+    let (state, _) = f.core().read_reminders().unwrap();
+    let original_member = state.summaries[original.execution_key()].members[0].clone();
+    f.append_body();
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:15:00Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::NoNewMissed { .. }
+    ));
+    f.edit(
+        "tasks/due",
+        NativeValue::Text("2026-10-23T09:31:00Z".into()),
+    );
+    let changed = f.summary("2026-10-23T10:15:00Z");
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert_ne!(
+        state.summaries[changed.execution_key()].members[0],
+        original_member
+    );
+    f.edit(
+        "tasks/due",
+        NativeValue::Text("2026-10-23T09:30:00Z".into()),
+    );
+    f.reopen();
+    assert!(matches!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:30:00Z")))
+            .unwrap(),
+        ReminderSummaryPreparation::NoNewMissed { .. }
+    ));
+    assert_eq!(f.core().read_reminders().unwrap().0.summaries.len(), 2);
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(&original_member)
+            .unwrap()
+            .delivery,
+        ReminderRecordedDelivery::Unknown { .. }
+    ));
+}
+
+#[test]
+fn reminder_original_summary_retry_also_uses_a_fresh_clock_after_member_capture() {
+    let mut f = Fixture::new("absolute");
+    let original = f.summary("2026-10-23T10:00:00Z");
+    f.core()
+        .finish_reminder_delivery(
+            &original,
+            ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
+        )
+        .unwrap();
+    let mut reads = 0;
+    let retry = match f
+        .core()
+        .retry_reminder_summary_with_clock(original.execution_key(), || {
+            reads += 1;
+            Ok(instant(if reads == 1 {
+                "2026-10-23T10:00:10Z"
+            } else {
+                "2026-10-23T10:00:16Z"
+            }))
+        })
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        other => panic!("Slow original retry did not get a fresh permit: {other:?}"),
+    };
+    assert_eq!(retry.expires_at(), "2026-10-23T10:00:21Z");
+    assert_eq!(retry.request(), original.request());
+    f.core()
+        .check_reminder_permit_with_clock(&retry, || Ok(instant("2026-10-23T10:00:16Z")))
+        .unwrap();
+    f.core()
+        .finish_reminder_delivery(
+            &retry,
+            ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
+        )
+        .unwrap();
+    f.reopen();
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original_bytes = fs::read(&ledger).unwrap();
+    // This is later than the immutable cutoff, but earlier than the last
+    // trusted retry attempt. A restart must retain that stricter clock fence.
+    assert_eq!(
+        f.core()
+            .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:15Z")))
+            .unwrap_err()
+            .code,
+        "reminderClockRollback"
+    );
+    assert_eq!(
+        f.core()
+            .retry_reminder_summary_with_clock(original.execution_key(), || Ok(instant(
+                "2026-10-23T10:00:15Z"
+            )))
+            .unwrap_err()
+            .code,
+        "reminderClockRollback"
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original_bytes);
+}
+
+#[test]
+fn reminder_summary_reports_a_sample_explicitly_without_consuming_unknown_scopes() {
+    let mut f = Fixture::new("absolute");
+    for index in 1..33 {
+        f.add_task(&format!("Unavailable{index:02}"));
+    }
+    let root = f.root.clone();
+    let offline = f._temp.path().join("offline-all");
+    fs::rename(&root, &offline).unwrap();
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+        .unwrap()
+    {
+        ReminderSummaryPreparation::NoNewMissed {
+            issues,
+            issue_count,
+            issues_complete,
+        } => {
+            assert_eq!(issue_count, 33);
+            assert_eq!(issues.len(), 32);
+            assert!(!issues_complete);
+            assert!(issues.iter().all(|issue| !issue.error.code.is_empty()));
+        }
+        other => panic!("Unavailable scopes were treated as completed: {other:?}"),
+    }
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert!(state.records.is_empty());
+    assert!(state.summaries.is_empty());
+    fs::rename(&offline, &root).unwrap();
+    match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || Ok(instant("2026-10-23T10:00:00Z")))
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started {
+            member_count,
+            overflow_count,
+            issue_count,
+            issues_complete,
+            ..
+        } => {
+            assert_eq!(member_count, 33);
+            assert_eq!(overflow_count, 0);
+            assert_eq!(issue_count, 0);
+            assert!(issues_complete);
+        }
+        other => panic!("Previously unknown scopes were silently consumed: {other:?}"),
+    }
 }

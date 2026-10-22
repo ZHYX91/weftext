@@ -249,10 +249,18 @@ pub fn scan_mentions_with_candidates(
     let automaton = if terms.is_empty() {
         None
     } else {
-        Some(
-            AhoCorasick::new(&terms)
-                .map_err(|e| KnowledgeError::new("matchBudget", e.to_string()))?,
-        )
+        Some(AhoCorasick::new(&terms).map_err(|e| {
+            KnowledgeError::new(
+                "matchBudget",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_matcher(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?)
     };
     let mut remaining = scalar_budget;
     let mut candidates_remaining = candidate_budget;
@@ -443,7 +451,9 @@ pub fn convert_mention_fragment(
     if !hit.targets.contains(selected) {
         return Err(KnowledgeError::new(
             "selection",
-            "Choose one of this range's explicit targets",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_mentions_explicit_target_required(),
+            ),
         ));
     }
     let target = inventory
@@ -451,7 +461,12 @@ pub fn convert_mention_fragment(
         .iter()
         .find(|node| &node.owner == selected)
         .ok_or_else(|| {
-            KnowledgeError::new("unavailable", "The selected target is no longer authorized")
+            KnowledgeError::new(
+                "unavailable",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_mentions_target_no_longer_authorized(),
+                ),
+            )
         })?;
     let range = hit
         .source_range
@@ -460,13 +475,15 @@ pub fn convert_mention_fragment(
         .ok_or_else(|| {
             KnowledgeError::new(
                 "unmapped",
-                "This discovery does not have a whole-grapheme unique source writer",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_mentions_source_writer_not_unique_whole_grapheme()),
             )
         })?;
     if !ordinary_text_range(&source.source, &range) {
         return Err(KnowledgeError::new(
             "unmapped",
-            "The current range is not one exact whole-grapheme ordinary native text leaf",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_mentions_ordinary_text_leaf_required(),
+            ),
         ));
     }
     let qualified = if let Some(fragment) = fragment {
@@ -492,20 +509,25 @@ pub fn convert_mention_fragment(
     if !qualified {
         return Err(KnowledgeError::new(
             "staleDictionary",
-            "The exact target term changed; scan again",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_mentions_target_term_changed(),
+            ),
         ));
     }
     if !weftext_engine::standard_binding_available(&source.source, "link") {
         return Err(KnowledgeError::new(
             "sourceEntry",
-            "The native link binding is not proven",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_mentions_native_link_binding_unproven(
+                ),
+            ),
         ));
     }
     let address = target_address(source, target, fragment, LinkForm::Id)?;
     let destination = weftext_engine::encode_string(&address)
-        .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_engine("encoding", e))?;
     let display = weftext_engine::encode_literal(&range.raw)
-        .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_engine("encoding", e))?;
     SourcePatch::new(
         &source.source,
         range,

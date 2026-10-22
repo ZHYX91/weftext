@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 const WS: &str = "58c47256-bfce-4d29-a037-b83a3a644fb0";
 const A: &str = "32eb9a12-e752-4bfa-8cdf-65e00f23ac26";
 const B: &str = "708365a4-0574-491e-9676-eb179f3a8098";
@@ -89,7 +91,7 @@ fn read_effects_bind_terminal_columns_and_lexical_locals_before_products_or_fiel
     let terminal = QueryPlan {
         r#where: Some("body > 0".into()),
         advanced: Some(QueryAdvanced {
-            union_all: vec![branch.clone(), branch],
+            union_all: Some(vec![branch.clone(), branch]),
             ..Default::default()
         }),
         ..Default::default()
@@ -105,7 +107,7 @@ fn read_effects_bind_terminal_columns_and_lexical_locals_before_products_or_fiel
     let terminal = QueryPlan {
         select: vec![column("renamed", "status")],
         advanced: Some(QueryAdvanced {
-            union_all: vec![branch],
+            union_all: Some(vec![branch]),
             ..Default::default()
         }),
         ..Default::default()
@@ -416,7 +418,7 @@ fn union_declared_order_duplicate_rows_and_actual_terminal_types() {
     )]);
     let plan = QueryPlan {
         advanced: Some(QueryAdvanced {
-            union_all: vec![project("priority"), project("priority")],
+            union_all: Some(vec![project("priority"), project("priority")]),
             ..Default::default()
         }),
         ..Default::default()
@@ -432,12 +434,17 @@ fn union_declared_order_duplicate_rows_and_actual_terminal_types() {
     assert_eq!(result.coverage, "complete");
     assert_eq!(result.freshness, "stale");
     let mut incompatible = plan;
-    incompatible.advanced.as_mut().unwrap().union_all[1] = project("1");
-    assert!(
-        execute_query(&input, &incompatible, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("identical declared")
+    incompatible
+        .advanced
+        .as_mut()
+        .unwrap()
+        .union_all
+        .as_mut()
+        .unwrap()[1] = project("1");
+    assert_data_error(
+        &execute_query(&input, &incompatible, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_union_all_terminal_types_or_columns_mismatch(),
     );
 }
 #[test]
@@ -654,11 +661,14 @@ fn saved_calls_actual_native_defaults_explicit_arguments_and_wrong_types() {
         .unwrap()
         .arguments
         .insert("threshold".into(), "3.0".into());
-    assert!(
-        execute_query(&input, &plan, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("declared shape")
+    assert_data_error(
+        &execute_query(&input, &plan, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_parameter_shape_mismatch(
+            weftext_messages::params::ErrorDataQueryAdvancedParameterShapeMismatch {
+                parameter_name: "threshold".into(),
+            },
+        ),
     );
     let invalid = saved_input(saved_source("\"wrong\"", ""));
     assert!(
@@ -695,18 +705,16 @@ fn pinned_calls_use_exact_history_and_current_cut_data_without_fallback() {
         key: KEY.into(),
         revision: "discarded".into(),
     });
-    assert!(
-        execute_query(&input, &absent, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("exact revision")
+    assert_data_error(
+        &execute_query(&input, &absent, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_advanced_definition_revision_missing_or_ambiguous(),
     );
     input.advanced.as_mut().unwrap().schemas.clear();
-    assert!(
-        execute_query(&input, &plan, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("exact schema baseline")
+    assert_data_error(
+        &execute_query(&input, &plan, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_advanced_definition_schema_baseline_missing_or_ambiguous(),
     );
 }
 #[test]
@@ -721,7 +729,11 @@ fn recursive_saved_calls_reject_before_any_row_execution() {
     let input = saved_input(source);
     let plan = call_plan(DefinitionSelection::Current { key: KEY.into() });
     let error = execute_query(&input, &plan, &Schema::bundled().unwrap()).unwrap_err();
-    assert!(error.0.contains("cycle"), "{}", error.0);
+    assert_data_error(
+        &error,
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_definition_call_cycle(),
+    );
 }
 #[test]
 fn native_writer_keeps_domain_defaults_without_transport_literal_records() {
@@ -824,10 +836,10 @@ fn union_terminal_group_uses_real_exact_aggregates_and_partial_state() {
             ],
         }),
         advanced: Some(QueryAdvanced {
-            union_all: vec![
+            union_all: Some(vec![
                 project("exactDecimal(\"0.1\")"),
                 project("exactDecimal(\"0.2\")"),
-            ],
+            ]),
             ..Default::default()
         }),
         ..Default::default()
@@ -847,7 +859,7 @@ fn union_terminal_group_uses_real_exact_aggregates_and_partial_state() {
     let result = execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap();
     assert!(!result.aggregate_exact);
     assert_eq!(result.coverage, "partial");
-    plan.advanced.as_mut().unwrap().union_all = vec![project("1"), project("2")];
+    plan.advanced.as_mut().unwrap().union_all = Some(vec![project("1"), project("2")]);
     plan.group.as_mut().unwrap().aggregates[0].expr = Some("value + 0.5".into());
     assert!(execute_query(&frozen, &plan, &Schema::bundled().unwrap()).is_err());
 }
@@ -863,7 +875,7 @@ fn terminal_union_distinct_order_take_and_host_budget_are_bounded() {
         }],
         take: Some(1),
         advanced: Some(QueryAdvanced {
-            union_all: vec![project("1"), project("2"), project("1")],
+            union_all: Some(vec![project("1"), project("2"), project("1")]),
             distinct: Some(vec![column("n", "value")]),
             ..Default::default()
         }),
@@ -888,17 +900,16 @@ fn terminal_union_distinct_order_take_and_host_budget_are_bounded() {
     for _ in 0..66 {
         nested = QueryPlan {
             advanced: Some(QueryAdvanced {
-                union_all: vec![nested],
+                union_all: Some(vec![nested]),
                 ..Default::default()
             }),
             ..Default::default()
         };
     }
-    assert!(
-        execute_query(&frozen, &nested, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("expansion budget")
+    assert_data_error(
+        &execute_query(&frozen, &nested, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Budget,
+        UiMessage::error_data_query_advanced_definition_call_expansion_budget_exhausted(),
     );
 }
 
@@ -938,11 +949,14 @@ fn parameters_missing_default_and_explicit_null_are_distinct_and_products_follow
     ));
     plan.advanced.as_mut().unwrap().parameters[0].default = None;
     frozen.advanced = None;
-    assert!(
-        execute_query(&frozen, &plan, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("Missing required")
+    assert_data_error(
+        &execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_required_parameter_missing(
+            weftext_messages::params::ErrorDataQueryAdvancedRequiredParameterMissing {
+                parameter_name: "p".into(),
+            },
+        ),
     );
     assert!(validate_query_plan(&plan, &Schema::bundled().unwrap()).is_ok());
     let frozen =
@@ -1006,11 +1020,10 @@ fn dependency_discovery_loads_new_pinned_revision_then_rejects_real_missing_hist
     });
     let deps = definition_dependencies(&plan, owners).unwrap();
     assert_eq!(deps.len(), 1);
-    assert!(
-        execute_query(&frozen, &plan, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("exact revision")
+    assert_data_error(
+        &execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_advanced_definition_revision_missing_or_ambiguous(),
     );
 }
 
@@ -1057,11 +1070,11 @@ fn exact_context_writer_validates_saved_call_terminal_types_and_arguments() {
         .unwrap()
         .arguments
         .insert("threshold".into(), "2.0".into());
-    assert!(
-        validate_query_plan_with_context(&plan, &Schema::bundled().unwrap(), &context)
-            .unwrap_err()
-            .0
-            .contains("argument type")
+    assert_data_error(
+        &validate_query_plan_with_context(&plan, &Schema::bundled().unwrap(), &context)
+            .unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_saved_call_argument_shape_mismatch(),
     );
     plan.advanced
         .as_mut()
@@ -1093,11 +1106,10 @@ fn typed_scope_refs_use_frozen_binding_in_nested_callees_and_lifecycles_are_expl
         required_query_lifecycles(&plan, owners).unwrap(),
         vec!["live"]
     );
-    assert!(
-        execute_query(&frozen, &plan, &Schema::bundled().unwrap())
-            .unwrap_err()
-            .0
-            .contains("scope_unavailable")
+    assert_data_error(
+        &execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_advanced_frozen_directory_binding_missing(),
     );
     frozen
         .advanced
@@ -1117,7 +1129,7 @@ fn typed_scope_refs_use_frozen_binding_in_nested_callees_and_lifecycles_are_expl
     trash.scope.lifecycle = "trash".into();
     let mixed = QueryPlan {
         advanced: Some(QueryAdvanced {
-            union_all: vec![live, trash],
+            union_all: Some(vec![live, trash]),
             ..Default::default()
         }),
         ..Default::default()
@@ -1156,9 +1168,42 @@ fn literal_controls_and_typed_constants_reject_without_reading_rows() {
         )
         .is_err()
     );
+    let omitted_union =
+        serde_json::from_value::<QueryPlan>(serde_json::json!({"advanced":{}})).unwrap();
+    assert!(omitted_union.advanced.as_ref().unwrap().union_all.is_none());
     assert!(
+        serde_json::to_value(&omitted_union).unwrap()["advanced"]
+            .get("unionAll")
+            .is_none()
+    );
+    assert!(validate_query_plan(&omitted_union, &Schema::bundled().unwrap()).is_ok());
+    let empty_union =
         serde_json::from_value::<QueryPlan>(serde_json::json!({"advanced":{"unionAll":[]}}))
-            .is_err()
+            .unwrap();
+    assert_eq!(
+        empty_union
+            .advanced
+            .as_ref()
+            .unwrap()
+            .union_all
+            .as_ref()
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        serde_json::to_value(&empty_union).unwrap()["advanced"]["unionAll"],
+        serde_json::json!([])
+    );
+    assert_data_error(
+        &validate_query_plan(&empty_union, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_union_requires_producer(),
+    );
+    assert_data_error(
+        &execute_query(&input(vec![]), &empty_union, &Schema::bundled().unwrap()).unwrap_err(),
+        DataErrorKind::Invalid,
+        UiMessage::error_data_query_advanced_union_requires_producer(),
     );
     let frozen = input(vec![note(A, "task", ", status: \"open\"")]);
     let plan = QueryPlan {
@@ -1198,10 +1243,10 @@ fn cel_literal_records_keep_member_types_authored_iteration_and_exact_nested_equ
     let schema = Schema::bundled().unwrap();
     let plan = QueryPlan {
         advanced: Some(QueryAdvanced {
-            union_all: vec![
+            union_all: Some(vec![
                 project(r#"{"d":exactDecimal("0.30"),"a":[1,1]}"#),
                 project(r#"{"a":[1,1],"d":exactDecimal("0.3")}"#),
-            ],
+            ]),
             distinct: Some(vec![column("r", "value")]),
             ..Default::default()
         }),
@@ -1290,12 +1335,8 @@ fn unproved_exact_union_branches_remain_partial_instead_of_raw_text_keys() {
     assert_eq!(result.coverage, "partial");
     assert!(!result.aggregate_exact);
     assert!(result.rows.is_empty());
-    assert!(
-        result
-            .diagnostics
-            .iter()
-            .any(|d| d.contains("selected schema branch"))
-    );
+    assert!(result.diagnostics.iter().any(|d| d.explanation
+        == UiMessage::error_data_query_union_equality_requires_selected_schema_branch()));
 }
 
 #[test]
@@ -1332,7 +1373,7 @@ fn group_sort_compiles_terminal_aliases_and_precedes_author_take() {
     let mut union = plan;
     union.group.as_mut().unwrap().keys = vec![column("p", "value")];
     union.advanced = Some(QueryAdvanced {
-        union_all: vec![project("priority"), project("priority")],
+        union_all: Some(vec![project("priority"), project("priority")]),
         ..Default::default()
     });
     let result = execute_query(&frozen, &union, &Schema::bundled().unwrap()).unwrap();
@@ -1360,8 +1401,15 @@ fn consumed_native_decode_budget_cannot_be_absorbed_and_unrelated_fields_stay_co
         &format!(", status: \"open\", priority: {expression}"),
     )]);
     let projection = weftext_data::project(&frozen.notes[0].source, &schema);
+    assert!(projection.budget_exhausted);
     assert!(
-        matches!(&projection.fields.iter().find(|f|f.key=="priority").unwrap().cell,Cell::Unavailable{reason}if reason.contains("native-decoder")&&reason.contains("budget"))
+        projection
+            .fields
+            .iter()
+            .find(|f| f.key == "priority")
+            .unwrap()
+            .cell
+            .is_native_budget()
     );
     for predicate in [
         "priority == 1 || true",
@@ -1377,12 +1425,8 @@ fn consumed_native_decode_budget_cannot_be_absorbed_and_unrelated_fields_stay_co
         assert_eq!(result.rows.len(), 1);
         assert_eq!(result.coverage, "partial");
         assert!(!result.aggregate_exact);
-        assert!(
-            result
-                .diagnostics
-                .iter()
-                .any(|d| d.contains("native-decoder"))
-        );
+        assert!(result.diagnostics.iter().any(|d| d.explanation
+            == UiMessage::error_data_query_advanced_consumed_field_decoder_budget_exhausted()));
     }
     let plan = QueryPlan {
         r#where: Some("status == \"open\"".into()),
@@ -1405,7 +1449,7 @@ fn row_lifecycle_follows_actual_leaf_lineage_and_disappears_for_distinct_groups(
     trash.scope.lifecycle = "trash".into();
     let mut plan = QueryPlan {
         advanced: Some(QueryAdvanced {
-            union_all: vec![live, trash],
+            union_all: Some(vec![live, trash]),
             ..Default::default()
         }),
         ..Default::default()

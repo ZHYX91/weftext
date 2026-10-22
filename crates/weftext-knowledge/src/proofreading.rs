@@ -67,17 +67,31 @@ pub struct ProofreadFinding {
     pub rule_id: String,
     pub rule_version: String,
     pub excerpt: String,
-    pub message: String,
+    #[serde(flatten)]
+    pub message: ProofreadMessage,
     pub replacement: Option<String>,
     pub source_range: Option<ExactRange>,
     pub executable: bool,
+}
+/// Product explanations can change display language; author rule text remains
+/// the exact configured content. A finding has one explicit source of text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "messageOrigin", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ProofreadMessage {
+    Product {
+        explanation: UiMessage,
+    },
+    Author {
+        #[serde(rename = "authorMessage")]
+        author_message: String,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProofreadResult {
     pub coverage: Coverage,
     pub findings: Vec<ProofreadFinding>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<UiMessage>,
     pub checked_characters: usize,
     pub processing: ProcessingSettings,
     pub processing_origin: Option<SharedProcessingOrigin>,
@@ -197,13 +211,15 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
     }) {
         return Err(KnowledgeError::new(
             "processingOrigin",
-            "共享处理词表需要准确原设置版本与来源",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_proofreading_shared_lexicon_provenance_required()),
         ));
     }
     if options.processing.scheme != "general" {
         return Err(KnowledgeError::new(
             "processingScheme",
-            "当前校对只支持通用方案；未运行其它专用方案",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_proofreading_scheme_unsupported(),
+            ),
         ));
     }
     if options.rules.len() > 2000
@@ -212,7 +228,9 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
     {
         return Err(KnowledgeError::new(
             "proofreadBudget",
-            "规则或白名单超过 2000 项",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_proofreading_rules_or_allowlist_exceeded(),
+            ),
         ));
     }
     let mut ids = BTreeSet::new();
@@ -235,7 +253,9 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
         {
             return Err(KnowledgeError::new(
                 "proofreadRule",
-                "规则需要唯一标识、版本、非空词条与有效类别；敏感词规则不提供自动替换",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_proofreading_rule_definition_invalid(),
+                ),
             ));
         }
     }
@@ -246,7 +266,9 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
     {
         return Err(KnowledgeError::new(
             "proofreadRule",
-            "白名单词条须非空且不超过 512 字节",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_proofreading_allowlist_term_invalid(),
+            ),
         ));
     }
     for entry in &options.scoped_allowlist {
@@ -254,7 +276,9 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
         if entry.text.is_empty() || entry.text.len() > 512 {
             return Err(KnowledgeError::new(
                 "proofreadRule",
-                "白名单词条须非空且不超过 512 字节",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_proofreading_allowlist_term_invalid(),
+                ),
             ));
         }
     }
@@ -263,7 +287,7 @@ pub(crate) fn validate(options: &ProofreadOptions, source: &str) -> Result<()> {
     {
         return Err(KnowledgeError::new(
             "proofreadRange",
-            "请提供准确非空源选区",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_proofreading_exact_nonempty_selection_required()),
         ));
     }
     Ok(())
@@ -301,17 +325,23 @@ pub fn proofread(
         .collect();
     if options.rules.iter().any(|r| r.scope.is_none()) || !options.allowlist.is_empty() {
         result.coverage = Coverage::Partial;
-        result.warnings.push("旧词典／白名单尚未声明语言适用范围，原词条已保留；请确认通用或限定范围后再运行，未静默扩展为全语言。".into());
+        result.warnings.push(weftext_messages::UiMessage::error_knowledge_proofreading_legacy_language_scope_unconfirmed());
     }
-    for (enabled, category, label) in [
-        (options.typos, "typo", "错别字"),
-        (options.sensitive, "sensitive", "敏感词"),
+    for (enabled, category, explanation) in [
+        (
+            options.typos,
+            "typo",
+            UiMessage::error_knowledge_proofreading_typo_dictionary_missing(),
+        ),
+        (
+            options.sensitive,
+            "sensitive",
+            UiMessage::error_knowledge_proofreading_sensitive_dictionary_missing(),
+        ),
     ] {
         if enabled && !options.rules.iter().any(|r| r.category == category) {
             result.coverage = Coverage::Partial;
-            result
-                .warnings
-                .push(format!("{label}词典未配置；本次不包含该类词典检查"));
+            result.warnings.push(explanation);
         }
     }
     let mut applicability_budget = 100_000usize;
@@ -339,9 +369,9 @@ pub fn proofread(
         }
         if result.fragments.len() >= 10_000 || rules.len() > applicability_budget {
             result.coverage = Coverage::Partial;
-            result
-                .warnings
-                .push("校对达到片段／规则适用预算；其余范围未检查，结果不代表全文".into());
+            result.warnings.push(
+                weftext_messages::UiMessage::error_knowledge_proofreading_segment_rule_budget_reached(),
+            );
             break;
         }
         applicability_budget -= rules.len();
@@ -422,8 +452,18 @@ pub fn proofread(
             None
         } else {
             Some(
-                aho_corasick::AhoCorasick::new(rules.iter().map(|r| &r.text))
-                    .map_err(|e| KnowledgeError::new("proofreadRule", e.to_string()))?,
+                aho_corasick::AhoCorasick::new(rules.iter().map(|r| &r.text)).map_err(|e| {
+                    KnowledgeError::new(
+                        "proofreadRule",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_matcher(),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?,
             )
         };
         let cjk = language.is_some_and(|l| {
@@ -476,9 +516,10 @@ pub fn proofread(
         let chars: Vec<_> = fragment.text.char_indices().collect();
         if result.checked_characters + chars.len() > 2_000_000 {
             result.coverage = Coverage::Partial;
-            result
-                .warnings
-                .push("校对达到字符预算；结果不代表全文".into());
+            result.warnings.push(
+                weftext_messages::UiMessage::error_knowledge_proofreading_character_budget_reached(
+                ),
+            );
             break;
         }
         result.checked_characters += chars.len();
@@ -488,7 +529,7 @@ pub fn proofread(
                        category: &str,
                        id: &str,
                        version: &str,
-                       message: String,
+                       message: ProofreadMessage,
                        replacement: Option<String>| {
             let start = chars.partition_point(|(b, _)| *b < from);
             let end = chars.partition_point(|(b, _)| *b < to);
@@ -540,7 +581,9 @@ pub fn proofread(
                     &rule.category,
                     &rule.id,
                     &rule.version,
-                    rule.message.clone(),
+                    ProofreadMessage::Author {
+                        author_message: rule.message.clone(),
+                    },
                     rule.replacement.clone(),
                 );
             }
@@ -557,7 +600,11 @@ pub fn proofread(
                         "character",
                         "builtin.suspicious-character",
                         "1",
-                        format!("可疑字符 U+{:04X}，请核对来源与上下文", *c as u32),
+                        ProofreadMessage::Product {
+                            explanation: UiMessage::error_knowledge_proofreading_suspicious_character(weftext_messages::params::ErrorKnowledgeProofreadingSuspiciousCharacter {
+                                codepoint: format!("U+{:04X}", *c as u32),
+                            }),
+                        },
                         None,
                     );
                 }
@@ -596,7 +643,7 @@ pub fn proofread(
                                 "pair",
                                 "builtin.crossed-pair",
                                 "1",
-                                "成对符号交叉嵌套，请核对上下文".into(),
+                                ProofreadMessage::Product { explanation: weftext_messages::UiMessage::error_knowledge_proofreading_paired_symbols_cross_nested() },
                                 None,
                             );
                         }
@@ -608,7 +655,7 @@ pub fn proofread(
                             "pair",
                             "builtin.unmatched-close",
                             "1",
-                            "未找到对应的起始符号，请核对上下文".into(),
+                            ProofreadMessage::Product { explanation: weftext_messages::UiMessage::error_knowledge_proofreading_opening_symbol_missing() },
                             None,
                         );
                     }
@@ -621,27 +668,27 @@ pub fn proofread(
                     "pair",
                     "builtin.unmatched-open",
                     "1",
-                    "未找到对应的结束符号，请核对上下文".into(),
+                    ProofreadMessage::Product { explanation: weftext_messages::UiMessage::error_knowledge_proofreading_closing_symbol_missing() },
                     None,
                 );
             }
         }
         if result.findings.len() >= 2000 {
             result.coverage = Coverage::Partial;
-            result
-                .warnings
-                .push("校对达到 2000 条结果预算；结果不代表全文".into());
+            result.warnings.push(
+                weftext_messages::UiMessage::error_knowledge_proofreading_result_budget_reached(),
+            );
             break;
         }
         if match_budget_exhausted {
             result.coverage = Coverage::Partial;
             result
                 .warnings
-                .push("词典匹配达到单段预算（含白名单与选区外命中）；结果不代表全文".into());
+                .push(weftext_messages::UiMessage::error_knowledge_proofreading_segment_dictionary_budget_reached());
         }
     }
     if result.fragments.iter().any(|f| !f.skipped_rules.is_empty()) {
-        result.warnings.push("部分词典规则不适用、语言／地区未知或依赖版本缺失，未检查范围见各片段规则明细；结果不代表全篇通过。".into());
+        result.warnings.push(weftext_messages::UiMessage::error_knowledge_proofreading_inapplicable_rules_or_dependencies());
     }
     Ok(result)
 }
@@ -684,7 +731,9 @@ mod tests {
                 .count(),
             1
         );
-        assert!(result.warnings.iter().any(|w| w.contains("敏感词")));
+        assert!(result.warnings.iter().any(|w| {
+            (w).eq(&UiMessage::error_knowledge_proofreading_sensitive_dictionary_missing())
+        }));
         options.scoped_allowlist.push(ScopedAllowlistEntry {
             text: "甲甲".into(),
             scope: ProcessingRuleScope {
@@ -831,7 +880,9 @@ mod tests {
         let options: ProofreadOptions = serde_json::from_value(serde_json::json!({"characters":true,"typos":true,"pairs":true,"sensitive":false,"rules":[{"id":"legacy","version":"1","category":"typo","text":"aa","message":"old","replacement":"a"}],"allowlist":["([)]"]})).unwrap();
         let result = proofread(&tree(source), source, &options).unwrap();
         assert_eq!(result.coverage, Coverage::Partial);
-        assert!(result.warnings.iter().any(|w| w.contains("确认")));
+        assert!(result.warnings.iter().any(|w| {
+            (w).eq(&UiMessage::error_knowledge_proofreading_legacy_language_scope_unconfirmed())
+        }));
         assert!(!result.findings.iter().any(|f| f.rule_id == "legacy"));
         assert!(
             result
@@ -883,5 +934,58 @@ mod tests {
                 .iter()
                 .any(|(id, _)| id == "builtin.mixed-language-pairs")
         }));
+    }
+
+    #[test]
+    fn finding_message_origin_is_exclusive_and_author_rule_text_is_never_translated() {
+        let source = "甲甲 ([)]";
+        let author_message = "作者 {count} 原文 😀\r\n";
+        let mut options = ProofreadOptions::default();
+        options.rules.push(ProofreadRule {
+            id: "exact-author-rule".into(),
+            version: "1".into(),
+            category: "typo".into(),
+            text: "甲甲".into(),
+            message: author_message.into(),
+            replacement: None,
+            scope: Some(ProcessingRuleScope {
+                universal: true,
+                ..Default::default()
+            }),
+        });
+        let result = proofread(&tree(source), source, &options).unwrap();
+        let author = result
+            .findings
+            .iter()
+            .find(|finding| finding.rule_id == "exact-author-rule")
+            .unwrap();
+        let wire = serde_json::to_value(author).unwrap();
+        assert_eq!(wire["messageOrigin"], "author");
+        assert_eq!(wire["authorMessage"], author_message);
+        assert!(wire.get("explanation").is_none());
+        let restored: ProofreadFinding = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(restored).unwrap(), wire);
+        let product = result
+            .findings
+            .iter()
+            .find_map(|finding| match &finding.message {
+                ProofreadMessage::Product { explanation } => Some(explanation),
+                _ => None,
+            })
+            .unwrap();
+        assert_ne!(
+            product.render(weftext_messages::UiLocale::ZhCn),
+            product.render(weftext_messages::UiLocale::EnUs)
+        );
+        let mut both = wire;
+        both["explanation"] = serde_json::to_value(product).unwrap();
+        assert!(serde_json::from_value::<ProofreadFinding>(both).is_err());
+        for invalid in [
+            serde_json::json!({"messageOrigin":"author","explanation":product}),
+            serde_json::json!({"messageOrigin":"product","explanation":product,"authorMessage":author_message}),
+            serde_json::json!({"message":"legacy"}),
+        ] {
+            assert!(serde_json::from_value::<ProofreadMessage>(invalid).is_err());
+        }
     }
 }

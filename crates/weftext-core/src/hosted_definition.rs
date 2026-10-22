@@ -4,6 +4,7 @@ use super::*;
 use std::collections::BTreeSet;
 use weftext_data::{FieldPatch, SavedQueryBinding};
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 const MAX_SAVE_RESERVATIONS: usize = 32;
 const MAX_PENDING_RESERVATIONS: usize = 128;
@@ -25,7 +26,11 @@ pub(crate) fn test_failpoint(point: &str) -> Result<()> {
             active.set(None);
             Err(CoreError::new(
                 "injectedFailure",
-                format!("Interrupted after {point}"),
+                UiMessage::error_core_test_interrupted(
+                    weftext_messages::params::ErrorCoreTestInterrupted {
+                        point: point.into(),
+                    },
+                ),
             ))
         } else {
             Ok(())
@@ -133,14 +138,14 @@ impl From<&DefinitionSaveRecord> for DefinitionSaveMetadata {
 fn conflict() -> CoreError {
     CoreError::new(
         "operationConflict",
-        "The original definition actor, owner or intent differs",
+        UiMessage::error_core_hosted_definition_original_definition_actor_owner_or_intent_differs(),
     )
 }
 fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
-            "A bounded resource identity is required",
+            UiMessage::error_core_hosted_definition_bounded_resource_identity_required(),
         ));
     }
     Ok(())
@@ -153,7 +158,7 @@ fn valid_fingerprint(fingerprint: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidIntent",
-            "A lowercase SHA-256 author intent fingerprint is required",
+            UiMessage::error_core_hosted_definition_lowercase_s_h_a256_author_intent_fingerprint_required(),
         ));
     }
     Ok(())
@@ -243,7 +248,7 @@ pub(super) fn canonical_proposal_ids(ids: &[String]) -> Result<Vec<String>> {
     if ids.len() > MAX_SAVE_RESERVATIONS {
         return Err(CoreError::new(
             "budget",
-            "At most 32 definition reservations per source save",
+            UiMessage::error_core_hosted_definition_at_most32_definition_reservations_per_source_save(),
         ));
     }
     for id in ids {
@@ -251,7 +256,7 @@ pub(super) fn canonical_proposal_ids(ids: &[String]) -> Result<Vec<String>> {
         if Uuid::parse_str(id).unwrap().to_string() != *id {
             return Err(CoreError::new(
                 "invalidOperationId",
-                "A canonical proposal UUID is required",
+                UiMessage::error_core_hosted_definition_canonical_proposal_u_u_i_d_required(),
             ));
         }
     }
@@ -308,7 +313,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "unsupportedRole",
-                "Definitions require an admitted canonical owner source",
+                UiMessage::error_core_hosted_definition_definitions_require_admitted_canonical_owner_source(),
             ));
         }
         let birth = self
@@ -360,7 +365,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "schemaBasisChanged",
-                "The initial definition schema role or language differs",
+                UiMessage::error_core_hosted_definition_initial_definition_schema_role_or_language_differs(),
             ));
         }
         // require an original admitted configuration, never a supplied UUID.
@@ -372,7 +377,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "At most 128 pending definition reservations per owner",
+                UiMessage::error_core_hosted_definition_at_most128_pending_definition_reservations_per_owner(),
             ));
         }
         let key = fresh();
@@ -396,7 +401,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "definitionQualification",
-                "The exact Draft patch lacks its qualified owner/key/binding",
+                UiMessage::error_core_hosted_definition_exact_draft_patch_lacks_qualified_owner_key_binding(),
             ));
         }
         let fingerprint = hash(&serde_json::to_vec(&serde_json::json!({
@@ -438,7 +443,8 @@ impl Core {
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
-                "Definition proposal exceeds its durable budget",
+                UiMessage::error_core_hosted_definition_definition_proposal_exceeds_durable_budget(
+                ),
             ));
         }
         journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
@@ -622,7 +628,7 @@ impl Core {
             if bytes_used > MAX_LIST_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Definition enumeration exceeds 64 MiB",
+                    UiMessage::error_core_hosted_definition_definition_enumeration_exceeds64_mi_b(),
                 ));
             }
             let Some(proposal) = record.definition.as_ref().and_then(|d| d.proposal.as_ref())
@@ -640,7 +646,7 @@ impl Core {
                 if result.len() > MAX_PENDING_RESERVATIONS {
                     return Err(CoreError::new(
                         "budget",
-                        "Pending definition enumeration exceeds 128 entries",
+                        UiMessage::error_core_hosted_definition_pending_definition_enumeration_exceeds128_entries(),
                     ));
                 }
             }
@@ -675,7 +681,7 @@ impl Core {
             let record = self.definition_record(resource, id)?.ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "The original definition reservation is unavailable",
+                    UiMessage::error_core_hosted_definition_original_definition_reservation_unavailable(),
                 )
             })?;
             let cancelled = record.cancelled;
@@ -698,13 +704,13 @@ impl Core {
             if cancelled {
                 return Err(CoreError::new(
                     "operationCancelled",
-                    "The definition reservation was durably cancelled",
+                    UiMessage::error_core_hosted_definition_definition_reservation_was_durably_cancelled(),
                 ));
             }
             if status.status == "recoveryPending" {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "The original definition save requires recovery",
+                    UiMessage::error_core_hosted_definition_original_definition_save_requires_recovery(),
                 ));
             }
             if weftext_engine::inspect_metadata(&request.source)
@@ -714,14 +720,14 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "The qualified afterimage must retain the reserved definition owner",
+                    UiMessage::error_core_hosted_definition_qualified_afterimage_must_retain_reserved_definition_owner(),
                 ));
             }
             let definition = weftext_data::saved_queries(&request.source)
                 .map_err(|_| {
                     CoreError::new(
                         "definitionQualification",
-                        "The reserved carrier is unavailable",
+                        UiMessage::error_core_hosted_definition_reserved_carrier_unavailable(),
                     )
                 })?
                 .into_iter()
@@ -732,7 +738,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "schemaBasisChanged",
-                    "First admission must preserve the original reserved schema binding",
+                    UiMessage::error_core_hosted_definition_first_admission_must_preserve_original_reserved_schema_binding(),
                 ));
             }
             // Undo may omit this key. Its identity remains reserved, and raw or
@@ -760,7 +766,7 @@ impl Core {
         let session = self.sessions.get(&request.session_id).ok_or_else(|| {
             CoreError::new(
                 "sessionMissing",
-                "Open the source again before an explicitly new save",
+                UiMessage::error_core_hosted_definition_open_source_again_before_explicitly_new_save(),
             )
         })?;
         for reservation in &record.save_definition_reservations {
@@ -770,7 +776,7 @@ impl Core {
             if original.cancelled {
                 return Err(CoreError::new(
                     "operationCancelled",
-                    "The original definition reservation was cancelled before saving",
+                    UiMessage::error_core_hosted_definition_original_definition_reservation_was_cancelled_before_saving(),
                 ));
             }
             let original = original.definition.unwrap().proposal.ok_or_else(conflict)?;
@@ -863,7 +869,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Definition admission differs from its original source save",
+                UiMessage::error_core_hosted_definition_definition_admission_differs_from_original_source_save(),
             ));
         }
         for reservation in &record.reservations {
@@ -877,7 +883,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original owner afterimage has no qualified reserved key",
+                    UiMessage::error_core_hosted_definition_original_owner_afterimage_has_no_qualified_reserved_key(),
                 ));
             }
         }

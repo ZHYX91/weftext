@@ -332,6 +332,78 @@ fn history_lists_real_commits_and_read_compare_preserve_saved_and_draft_bytes() 
 }
 
 #[test]
+fn history_descriptions_are_typed_without_rewriting_source_or_retained_plan() {
+    let mut f = HistoryFixture::new();
+    let (version, source) = f.save("作者原文 English 中文 {literal}");
+    let plan_path = f.core.journal_path(&version, "plan");
+    let original_plan = fs::read(&plan_path).unwrap();
+    let timeline = f.core.list_history(&f.doc.session_id).unwrap();
+    assert_eq!(
+        timeline.retention.description.explanation.key(),
+        "history.retentionLimited"
+    );
+    let wire = serde_json::to_value(&timeline).unwrap();
+    assert!(wire["retention"].get("message").is_none());
+    assert!(wire["retention"]["description"]["diagnostics"].is_array());
+    assert!(wire["versions"].as_array().unwrap().iter().all(|record| {
+        record.get("message").is_none() && record["description"]["explanation"].is_object()
+    }));
+    let read = f.core.read_history(&f.doc.session_id, &version).unwrap();
+    assert_eq!(read.source, source);
+    assert_eq!(
+        read.preview_description.explanation.key(),
+        "history.sourceOnlyPreview"
+    );
+    let read_wire = serde_json::to_value(&read).unwrap();
+    assert!(read_wire.get("previewMessage").is_none());
+    assert!(read_wire["previewDescription"]["explanation"].is_object());
+    assert_ne!(
+        read.preview_description
+            .explanation
+            .render(weftext_messages::UiLocale::ZhCn),
+        read.preview_description
+            .explanation
+            .render(weftext_messages::UiLocale::EnUs)
+    );
+    assert_eq!(fs::read(&plan_path).unwrap(), original_plan);
+    assert_eq!(fs::read_to_string(&f.doc.path).unwrap(), source);
+}
+
+#[test]
+fn unreadable_retained_history_keeps_the_original_diagnostic_in_its_description() {
+    let mut f = HistoryFixture::new();
+    let (version, _) = f.save("retained source");
+    let plan = f.core.journal_path(&version, "plan");
+    let preserved = f.data.join("original-plan-preserved.json");
+    let original = fs::read(&plan).unwrap();
+    fs::rename(&plan, &preserved).unwrap();
+    let timeline = f.core.list_history(&f.doc.session_id).unwrap();
+    let entry = timeline
+        .versions
+        .iter()
+        .find(|entry| entry.version_id == version)
+        .unwrap();
+    assert_ne!(entry.status, "available");
+    assert!(!entry.description.diagnostics.is_empty());
+    assert!(
+        entry
+            .description
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.origin == DiagnosticOrigin::Os)
+    );
+    assert!(entry.description.details.is_some());
+    let error = f
+        .core
+        .read_history(&f.doc.session_id, &version)
+        .unwrap_err();
+    assert_eq!(error.code, "historyUnavailable");
+    assert_eq!(error.diagnostics, entry.description.diagnostics);
+    assert_eq!(fs::read(&preserved).unwrap(), original);
+    assert!(!plan.exists());
+}
+
+#[test]
 fn retained_trash_root_reads_exact_history_and_resources_without_content_write_rights() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();

@@ -44,9 +44,16 @@ pub fn preflight_query_definition(
         .try_fold(serde_json::to_vec(plan)?.len(), |bytes, revision| {
             bytes.checked_add(revision.source.len())
         })
-        .ok_or_else(|| DataError("host-budget-exhausted".into()))?;
+        .ok_or_else(|| {
+            DataError::budget(
+                weftext_messages::UiMessage::error_data_definition_preflight_host_budget_exhausted(
+                ),
+            )
+        })?;
     if source_bytes > budget.max_source_bytes {
-        return Err(DataError("host-budget-exhausted".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_definition_preflight_host_budget_exhausted(),
+        ));
     }
     validate_query_plan_with_context(plan, schema, context)?;
     let (parameters, _) = parameter_bindings(plan, schema, &context.parameters, false)?;
@@ -77,7 +84,9 @@ pub fn preflight_query_definition(
     if preflight.closed_invocations.len() > MAX_PLAN_NODES
         || serde_json::to_vec(&preflight.closed_invocations)?.len() > budget.max_source_bytes
     {
-        return Err(DataError("host-budget-exhausted".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_definition_preflight_host_budget_exhausted(),
+        ));
     }
     Ok(QueryDefinitionPreflight {
         provider_dependencies: trace.finish()?,
@@ -113,7 +122,10 @@ impl Preflight<'_> {
         let invocation_start = self.closed_invocations.len();
         self.nodes += 1;
         if depth > MAX_CALL_DEPTH || self.nodes > MAX_PLAN_NODES || self.remaining == 0 {
-            return Err(DataError("host-budget-exhausted".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_definition_preflight_host_budget_exhausted(
+                ),
+            ));
         }
         self.remaining -= 1;
         let (mut parameters, shapes) = parameter_bindings(plan, schema, values, false)?;
@@ -127,7 +139,7 @@ impl Preflight<'_> {
                 .iter()
                 .any(|(name, value)| matches!(value, Cell::Absent) && !unknown.contains(name))
         {
-            return Err(DataError("Missing required nested Query parameter".into()));
+            return Err(DataError::new(weftext_messages::UiMessage::error_data_definition_preflight_required_nested_query_parameter_missing()));
         }
         let trace = self.trace.at(baseline.clone());
         let mut trace_plan = plan.clone();
@@ -140,6 +152,7 @@ impl Preflight<'_> {
         }
         trace_parameters(&trace_plan, schema, values, &trace, &mut self.remaining)?;
         let advanced = plan.advanced.clone().unwrap_or_default();
+        advanced.validate_union()?;
         let mut terminal_inputs = None;
         let mut producer_bound = true;
         let mut result = if let Some(call) = &advanced.call {
@@ -177,7 +190,7 @@ impl Preflight<'_> {
                     let parameter = target
                         .iter()
                         .find(|parameter| &parameter.name == name)
-                        .ok_or_else(|| DataError("Unknown callee parameter".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_definition_preflight_unknown_callee_parameter()))?;
                     validate_parameter(baseline_schema, parameter, &value)?;
                     args.insert(name.clone(), value);
                 } else {
@@ -204,9 +217,9 @@ impl Preflight<'_> {
             producer_bound = undecided.is_empty();
             terminal_inputs = Some(child.terminal_schema.clone());
             self.terminal(child, plan, schema, &parameters, &shapes, &trace)?
-        } else if !advanced.union_all.is_empty() {
+        } else if advanced.union_all.is_some() {
             let mut first = None;
-            for branch in &advanced.union_all {
+            for branch in advanced.union_branches() {
                 let (values, unknown) = inherited_parameters(branch, &parameters);
                 producer_bound &= unknown.is_empty();
                 let branch = self.visit(
@@ -544,7 +557,7 @@ impl Preflight<'_> {
                                 .advanced
                                 .as_ref()
                                 .map_or(vec![], |advanced| advanced.parameters.clone()),
-                            union_all: vec![projection.clone()],
+                            union_all: Some(vec![projection.clone()]),
                             ..Default::default()
                         }),
                         ..Default::default()

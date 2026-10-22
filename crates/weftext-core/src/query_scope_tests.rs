@@ -677,7 +677,7 @@ fn query_scope_definition_reserve_and_explicit_first_admission_share_original_sa
                             &plan,
                             &schema,
                         )
-                        .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))
+                        .map_err(|e| CoreError::from_data("invalidQueryDefinition", e))
                     })
                 },
             )

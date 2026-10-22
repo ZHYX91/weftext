@@ -659,7 +659,11 @@ fn compound_resource_retirement_original_moved_file_checkpoints_restart_and_fini
                 .expect_err(&format!("The original {stage}/{point} hook must interrupt"));
         assert_eq!(error.code, "recoveryPending", "{point}: {error:?}");
         assert!(
-            error.message.contains("underlying testInterrupted:"),
+            error
+                .causes
+                .as_slice()
+                .iter()
+                .any(|cause| cause.code == "testInterrupted"),
             "{point}: {error:?}"
         );
         let install = f.b.journal_path(&preview.operation_id, "install");
@@ -849,7 +853,13 @@ fn compound_resource_retirement_after_first_original_move_rejects_foreign_target
             f.b.execute_operation(&preview.operation_id, &preview.plan_id)
                 .unwrap_err();
         assert_eq!(error.code, "recoveryPending");
-        assert!(error.message.contains("underlying testInterrupted:"));
+        assert!(
+            error
+                .causes
+                .as_slice()
+                .iter()
+                .any(|cause| cause.code == "testInterrupted")
+        );
         let first = capture(Path::new(&retired[0].target));
         assert_eq!(first.stamp.identity, retired[0].identity);
         let transaction = f.b.operations[&preview.operation_id]

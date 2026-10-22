@@ -4406,6 +4406,7 @@ dependencies = [
  "image",
  "include_dir",
  "lopdf",
+ "mime",
  "mime_guess",
  "reqwest",
  "serde",
@@ -4462,6 +4463,7 @@ dependencies = [
  "typst-syntax",
  "uuid",
  "weftext-engine",
+ "weftext-messages",
 ]
 
 [[package]]
@@ -4480,6 +4482,7 @@ dependencies = [
  "typst-layout",
  "typst-pdf",
  "typst-syntax",
+ "weftext-messages",
 ]
 
 [[package]]
@@ -4510,6 +4513,7 @@ dependencies = [
  "uuid",
  "weftext-data",
  "weftext-engine",
+ "weftext-messages",
  "zip",
 ]
 
@@ -4526,6 +4530,7 @@ dependencies = [
  "uuid",
  "weftext-data",
  "weftext-engine",
+ "weftext-messages",
 ]
 
 [[package]]

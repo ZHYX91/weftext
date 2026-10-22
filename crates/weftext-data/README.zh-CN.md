@@ -14,6 +14,12 @@ Query 的输入、覆盖范围与新鲜度由 Core 捕获和发布。crate 不�
 
 高级 Query 支持同一 cut 下的保存定义调用、精确 current／pinned 定义、typed 参数、有序 union、distinct、unnest、related 遍历与 terminal 聚合。Temporal provider 根据已安装的 calendar／zone 版本执行 Gregorian 与有限表日历 Period、精确时区转换和有预算的 recurrence 展开。缺失历史、provider 覆盖、目标闭包或宿主预算仍是 partial／unavailable，不伪装成完整空结果。
 
+产品错误的解释使用唯一消息目录生成的 `UiMessage` 与具名参数，原始 JSON／CEL／编译器诊断另有来源标记；不根据错误文字或消息键推断 invalid、unavailable、coverage 或预算状态。`Cell::Unavailable` 分开携带机器事实 `kind`、类型化摘要 `reason` 和完整并列 `diagnostics`；并列诊断不挤入有界因果链。`TypedRefClosure.completeWithoutUnboundRootFields` 是生产者独立计算的准确证明，只排除根级未知字段，已知字段的无效、计算或未绑定成员仍使该证明失败。
+
+`expandRecurrence` 的自产 `diagnostics` 在返回的原生值／CEL ABI 中是规范结构记录，包含消息键、参数、原始诊断及因果链，不再是界面文字列表。界面语言仅用于呈现，不改变 CEL 结果、状态、发生坐标、预算或作者事件字段。每次 CEL 求值的宿主错误通道独立，保留真实类型和参数；超过 128 项或 8 MiB 诊断预算会明确拒绝该次派生结果，保留输入和已收集诊断，不能被 `|| true` 吸收。
+
+`parse_unique_json` 是 Schema／Export／Knowledge 共用的严格 JSON 入口：重复键使用产品类型化事实，真实 serde 语法诊断另存原文。调用方负责字节／成员预算和原始输入。Query 的 `unionAll` 区分未声明生产者与显式空列表，后者由类型化预检拒绝。
+
 相关规范：[SOURCE](../../docs/design/SOURCE.zh-CN.md)、[FEATURES](../../docs/design/FEATURES.zh-CN.md)。
 
 验证入口：

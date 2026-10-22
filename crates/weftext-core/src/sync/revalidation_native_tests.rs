@@ -767,7 +767,11 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
             .unwrap_err();
     assert_eq!(interrupted.code, "recoveryPending");
     assert!(
-        interrupted.message.contains("underlying testInterrupted:"),
+        interrupted
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{interrupted:?}"
     );
     assert!(moves[0].1.is_dir());

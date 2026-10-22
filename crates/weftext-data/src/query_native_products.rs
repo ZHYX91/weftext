@@ -9,17 +9,17 @@ pub fn native_query_products(
         ("value", Some(title)) => Cell::value(NativeValue::Text(title)),
         ("absent", None) => Cell::Absent,
         ("ambiguous", _) => Cell::Invalid {
-            diagnostics: vec!["The final native document title producers disagree".into()],
+            diagnostics: vec![weftext_messages::UiMessage::error_data_query_native_products_final_document_title_producers_disagree().into()],
             value: None,
         },
-        _ => Cell::Unavailable {
-            reason: "The final native document did not qualify a title producer".into(),
+        _ => Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+            reason: weftext_messages::UiMessage::error_data_query_native_products_final_document_title_producer_unqualified().into(),
         },
     };
     let body = match (products.body_status.as_str(), products.body) {
         ("complete", Some(body)) => Cell::value(NativeValue::Text(body)),
-        _ => Cell::Unavailable {
-            reason: "The final native HTML contains an unsupported body island".into(),
+        _ => Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+            reason: weftext_messages::UiMessage::error_data_query_native_products_final_html_body_island_unsupported().into(),
         },
     };
     let headings = NativeValue::Array(

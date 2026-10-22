@@ -2,7 +2,6 @@
 //! small pinned HTML adapter because the official API cannot observe them.
 use typst::{
     Library, World,
-    diag::warning,
     foundations::{Content, Depth, NativeElement, Target},
     layout::BlockElem,
     model::{EmphElem, ListElem, ListMarker, ParElem, ParbreakElem, StrongElem, TitleElem},
@@ -141,18 +140,12 @@ pub(crate) fn install(library: &mut Library) {
         });
     library
         .rules
-        .replace::<ListElem>(Target::Html, |elem, engine, styles| {
+        .replace::<ListElem>(Target::Html, |elem, _, styles| {
             let marker = match elem.marker.get_ref(styles) {
                 ListMarker::Content(markers) => markers
                     .get(styles.get(ListElem::depth).0 % markers.len().max(1))
                     .cloned(),
-                ListMarker::Func(_) => {
-                    engine.sink.warn(warning!(
-                        elem.span(),
-                        "dynamic list marker has no flow style adapter; use paged preview"
-                    ));
-                    None
-                }
+                ListMarker::Func(_) => None,
             };
             let css = if marker.is_some() {
                 css::Properties::new().with("list-style-type", "none")
@@ -178,6 +171,17 @@ pub(crate) fn install(library: &mut Library) {
             }));
             Ok(BlockElem::packed(
                 HtmlElem::new(tag::ul)
+                    .with_weftext(WeftextHtmlSemantics {
+                        warnings: if matches!(elem.marker.get_ref(styles), ListMarker::Func(_)) {
+                            vec![typst_html::WeftextFlowWarning {
+                                kind: typst_html::WeftextFlowWarningKind::DynamicListMarker,
+                                span: elem.span(),
+                            }]
+                        } else {
+                            vec![]
+                        },
+                        ..Default::default()
+                    })
                     .with_css(css)
                     .with_body(Some(body))
                     .pack()

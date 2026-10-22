@@ -1,4 +1,4 @@
-use crate::{DataError, Result};
+use crate::{DataError, DataErrorKind, ErrorDescription, Result, UiMessage};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,8 @@ pub(crate) struct NativeNode {
     pub value: Option<NativeValue>,
     pub range: ByteRange,
     pub children: Vec<(ValuePath, NativeNode)>,
-    pub reason: Option<String>,
+    pub reason: Option<ErrorDescription>,
+    pub reason_kind: Option<DataErrorKind>,
     pub commas: Vec<ByteRange>,
     pub frame: Option<Box<NativeNode>>,
     pub entries: Vec<(String, ByteRange)>,
@@ -106,7 +107,10 @@ impl NativeValue {
         check_native_budget(self)?;
         let text = self.to_typst_inner()?;
         if text.len() > NATIVE_MAX_BYTES {
-            return Err(DataError("Native writer output budget exceeded".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_native_native_writer_output_budget_exceeded(
+                ),
+            ));
         }
         Ok(text)
     }
@@ -116,9 +120,11 @@ impl NativeValue {
             Self::Text(s) => typst_string(s),
             Self::Bool(b) => b.to_string(),
             Self::Int(s) => {
-                let v: i64 = s
-                    .parse()
-                    .map_err(|_| DataError("Integer outside i64".into()))?;
+                let v: i64 = s.parse().map_err(|_| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_integer_outside_i64(),
+                    )
+                })?;
                 if v == i64::MIN {
                     format!("int({})", typst_string(s))
                 } else {
@@ -126,9 +132,13 @@ impl NativeValue {
                 }
             }
             Self::Float(s) => {
-                let v: f64 = s.parse().map_err(|_| DataError("Invalid float".into()))?;
+                let v: f64 = s.parse().map_err(|_| {
+                    DataError::new(weftext_messages::UiMessage::error_data_native_invalid_float())
+                })?;
                 if !v.is_finite() {
-                    return Err(DataError("Nonfinite float".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_native_nonfinite_float(),
+                    ));
                 }
                 let mut out = v.to_string();
                 if !out.contains(['.', 'e', 'E']) {
@@ -138,13 +148,19 @@ impl NativeValue {
             }
             Self::Decimal(s) => {
                 rust_decimal::Decimal::from_str(s).map_err(|_| {
-                    DataError("Decimal exceeds native range; use schema exact_decimal text".into())
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_decimal_outside_native_range(
+                        ),
+                    )
                 })?;
                 format!("decimal({})", typst_string(s))
             }
             Self::Date(s) => {
-                let d = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                    .map_err(|_| DataError("Invalid civil date".into()))?;
+                let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_invalid_civil_date(),
+                    )
+                })?;
                 use chrono::Datelike;
                 format!(
                     "datetime(year: {}, month: {}, day: {})",
@@ -154,8 +170,11 @@ impl NativeValue {
                 )
             }
             Self::Time(s) => {
-                let t = NaiveTime::parse_from_str(s, "%H:%M:%S")
-                    .map_err(|_| DataError("Invalid civil time".into()))?;
+                let t = NaiveTime::parse_from_str(s, "%H:%M:%S").map_err(|_| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_invalid_civil_time(),
+                    )
+                })?;
                 use chrono::Timelike;
                 format!(
                     "datetime(hour: {}, minute: {}, second: {})",
@@ -165,8 +184,11 @@ impl NativeValue {
                 )
             }
             Self::LocalDatetime(s) => {
-                let d = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
-                    .map_err(|_| DataError("Invalid local datetime".into()))?;
+                let d = NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").map_err(|_| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_invalid_local_datetime(),
+                    )
+                })?;
                 use chrono::{Datelike, Timelike};
                 format!(
                     "datetime(year: {}, month: {}, day: {}, hour: {}, minute: {}, second: {})",
@@ -179,9 +201,11 @@ impl NativeValue {
                 )
             }
             Self::Duration(s) => {
-                let v: i64 = s
-                    .parse()
-                    .map_err(|_| DataError("Invalid integer seconds".into()))?;
+                let v: i64 = s.parse().map_err(|_| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_native_invalid_integer_seconds(),
+                    )
+                })?;
                 format!("duration(seconds: {v})")
             }
             Self::Array(a) => {
@@ -203,7 +227,7 @@ impl NativeValue {
                     .iter()
                     .map(|v| {
                         if !seen.insert(&v.key) {
-                            return Err(DataError("Duplicate record member".into()));
+                            return Err(DataError::new(weftext_messages::UiMessage::error_data_native_duplicate_record_member()));
                         }
                         Ok(format!(
                             "{}: {}",
@@ -228,7 +252,9 @@ pub(crate) fn check_native_budget(value: &NativeValue) -> Result<()> {
     while let Some((value, depth)) = todo.pop() {
         nodes += 1;
         if nodes > NATIVE_MAX_NODES || depth > NATIVE_MAX_DEPTH {
-            return Err(DataError("Native value traversal budget exceeded".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_native_native_value_traversal_budget_exceeded(),
+            ));
         }
         match value {
             NativeValue::Array(values) => {
@@ -251,7 +277,9 @@ pub(crate) fn check_native_budget(value: &NativeValue) -> Result<()> {
             _ => {}
         }
         if bytes > NATIVE_MAX_BYTES || todo.len() > NATIVE_MAX_NODES {
-            return Err(DataError("Native value byte/node budget exceeded".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_native_native_value_byte_or_node_budget_exceeded(),
+            ));
         }
     }
     Ok(())
@@ -276,17 +304,25 @@ pub fn typst_string(s: &str) -> String {
 /// binding must be certified by the enclosing declaration before using this.
 pub fn decode_native_expression(expression: &str) -> Result<NativeValue> {
     if expression.len() > NATIVE_MAX_BYTES {
-        return Err(DataError("Native expression byte budget exceeded".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_native_native_expression_byte_budget_exceeded(),
+        ));
     }
     let source = Source::detached(format!("#metadata(({expression},))"));
     if !source.root().errors_and_warnings().0.is_empty() {
-        return Err(DataError("Invalid Typst syntax".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_native_invalid_typst_syntax(),
+        ));
     }
     let call = source
         .root()
         .children()
         .find_map(|n| n.cast::<ast::FuncCall>())
-        .ok_or_else(|| DataError("Missing expression".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_native_native_expression_missing(),
+            )
+        })?;
     let first = call
         .args()
         .items()
@@ -297,14 +333,17 @@ pub fn decode_native_expression(expression: &str) -> Result<NativeValue> {
         })
         .and_then(|a| a.items().next());
     let Some(ast::ArrayItem::Pos(e)) = first else {
-        return Err(DataError("Expression cannot be decoded".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_native_native_expression_undecodable(),
+        ));
     };
     let decoded = decode_node(e.to_untyped(), &source);
     decoded.value.ok_or_else(|| {
-        DataError(
+        DataError::with_kind(
+            decoded.reason_kind.unwrap_or(DataErrorKind::Unavailable),
             decoded
                 .reason
-                .unwrap_or_else(|| "Computed or unsupported native expression".into()),
+                .unwrap_or_else(|| UiMessage::error_data_native_expression_unsupported().into()),
         )
     })
 }
@@ -328,6 +367,7 @@ fn decode_node_at(
         },
         children: vec![],
         reason: None,
+        reason_kind: None,
         commas: node
             .children()
             .filter(|n| n.kind() == SyntaxKind::Comma)
@@ -349,7 +389,8 @@ fn decode_node_at(
             }),
     };
     if depth > NATIVE_MAX_DEPTH || *remaining == 0 {
-        out.reason = Some("native-decoder traversal budget exceeded".into());
+        out.reason = Some(UiMessage::error_data_native_decoder_traversal_budget().into());
+        out.reason_kind = Some(DataErrorKind::NativeBudget);
         return out;
     }
     *remaining -= 1;
@@ -375,6 +416,7 @@ fn decode_node_at(
                 );
                 if inner.value.is_none() {
                     out.reason = inner.reason.clone();
+                    out.reason_kind = inner.reason_kind;
                 }
                 out.children = inner.children.clone();
                 out.commas = inner.commas.clone();
@@ -389,6 +431,7 @@ fn decode_node_at(
                 let child = decode_node_at(u.expr().to_untyped(), source, depth + 1, remaining);
                 if child.value.is_none() {
                     out.reason = child.reason.clone();
+                    out.reason_kind = child.reason_kind;
                 }
                 let v = child.value?;
                 match (u.op(), v) {
@@ -412,6 +455,7 @@ fn decode_node_at(
                     let child = decode_node_at(e.to_untyped(), source, depth + 1, remaining);
                     if child.value.is_none() {
                         out.reason = child.reason.clone();
+                        out.reason_kind = child.reason_kind;
                     }
                     let v = child.value.clone();
                     out.children.push((ValuePath::Index { index: i }, child));
@@ -435,12 +479,15 @@ fn decode_node_at(
                         _ => return None,
                     };
                     if !seen.insert(key.clone()) {
-                        out.reason = Some("duplicate-record-key".into());
+                        out.reason =
+                            Some(UiMessage::error_data_native_record_key_duplicate().into());
+                        out.reason_kind = Some(DataErrorKind::Invalid);
                         return None;
                     }
                     let child = decode_node_at(e.to_untyped(), source, depth + 1, remaining);
                     if child.value.is_none() {
                         out.reason = child.reason.clone();
+                        out.reason_kind = child.reason_kind;
                     }
                     let range = source.find(entry.span())?.range();
                     out.entries.push((
@@ -465,7 +512,8 @@ fn decode_node_at(
     })();
     out.value = value;
     if out.value.is_none() && out.reason.is_none() {
-        out.reason = Some("computed-expression".into());
+        out.reason = Some(UiMessage::error_data_native_expression_computed().into());
+        out.reason_kind = Some(DataErrorKind::Unavailable);
     }
     out
 }
@@ -579,7 +627,9 @@ pub struct ExactDecimal {
 impl ExactDecimal {
     pub fn parse(s: &str) -> Result<Self> {
         if s.is_empty() || s.len() > 4096 {
-            return Err(DataError("Invalid exact decimal".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_native_invalid_exact_decimal(),
+            ));
         }
         let (negative, rest) = s.strip_prefix('-').map_or((false, s), |r| (true, r));
         let parts: Vec<_> = rest.split('.').collect();
@@ -589,11 +639,14 @@ impl ExactDecimal {
                 .iter()
                 .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
         {
-            return Err(DataError("Invalid exact decimal".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_native_invalid_exact_decimal(),
+            ));
         }
         let scale = parts.get(1).map_or(0, |p| p.len()) as u32;
-        let mut coefficient =
-            BigInt::from_str(&parts.concat()).map_err(|_| DataError("Invalid decimal".into()))?;
+        let mut coefficient = BigInt::from_str(&parts.concat()).map_err(|_| {
+            DataError::new(weftext_messages::UiMessage::error_data_native_invalid_decimal())
+        })?;
         if negative {
             coefficient = -coefficient;
         }

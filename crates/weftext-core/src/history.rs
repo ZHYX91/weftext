@@ -3,6 +3,7 @@
 use super::*;
 use operations::{CapturedFile, Mutation, RevisionFact};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,7 +18,7 @@ pub struct HistoryVersion {
     pub status: String,
     pub byte_length: Option<usize>,
     pub sha256: Option<String>,
-    pub message: String,
+    pub description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +29,7 @@ pub struct HistoryRetention {
     pub available_versions: usize,
     pub oldest_saved_at_unix_ms: Option<u64>,
     pub newest_saved_at_unix_ms: Option<u64>,
-    pub message: String,
+    pub description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +43,7 @@ pub struct HistoryTimeline {
     pub versions: Vec<HistoryVersion>,
     pub retention: HistoryRetention,
     pub protected_drafts: Vec<DraftAlternative>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CoreDescription>,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +53,7 @@ pub struct HistoryRead {
     pub source: String,
     pub read_only: bool,
     pub preview_status: String,
-    pub preview_message: String,
+    pub preview_description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -128,11 +129,12 @@ struct HistoryRecord {
 impl Core {
     fn history_context(&self, session_id: &str) -> Result<HistoryContext> {
         self.check_actor_session(session_id)?;
-        let session = self
-            .sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the note again"))?;
+        let session = self.sessions.get(session_id).cloned().ok_or_else(|| {
+            CoreError::new(
+                "sessionMissing",
+                UiMessage::error_core_history_open_note_again(),
+            )
+        })?;
         self.check_pending(&session.path)?;
         let guard = ParentGuard::acquire(&session.path)?;
         let mut handle = guard.open_file(false, false)?;
@@ -142,7 +144,7 @@ impl Core {
         let birth = self.admitted_binding(&observed.identity).ok_or_else(|| {
             CoreError::new(
                 "historyUnavailable",
-                "This source has no admitted stable note identity",
+                UiMessage::error_core_history_source_has_no_admitted_stable_note_identity(),
             )
         })?;
         if session.stamp.identity != observed.identity
@@ -154,7 +156,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current note object or declaration needs identity recovery; history was not joined by name",
+                UiMessage::error_core_history_current_note_object_or_declaration_needs_identity_recovery_history_was_not_joined_by_name(),
             ));
         }
         let root = self
@@ -169,13 +171,13 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "historyUnavailable",
-                    "The original library admission is unavailable",
+                    UiMessage::error_core_history_original_library_admission_unavailable(),
                 )
             })?;
         if !session.path.starts_with(&root) {
             return Err(CoreError::new(
                 "identityPending",
-                "The note is outside its admitted library",
+                UiMessage::error_core_history_note_outside_admitted_library(),
             ));
         }
         let in_trash = session.path.strip_prefix(&root).is_ok_and(|relative| {
@@ -189,7 +191,7 @@ impl Core {
         if !is_canonical(&session.path) && !in_trash {
             return Err(CoreError::new(
                 "identityPending",
-                "The source is not at its canonical live placement",
+                UiMessage::error_core_history_source_not_at_canonical_live_placement(),
             ));
         }
         // Missing semantic configuration does not prevent exact source viewing.
@@ -217,7 +219,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "No committed application placement proves this exact object",
+                UiMessage::error_core_history_no_committed_application_placement_proves_exact_object(),
             ));
         }
         Ok(())
@@ -249,7 +251,7 @@ impl Core {
                     let sequence = sequence.ok_or_else(|| {
                         CoreError::new(
                             "historyUnavailable",
-                            "Original placement ordering is unavailable",
+                            UiMessage::error_core_history_original_placement_ordering_unavailable(),
                         )
                     })?;
                     if sequence > limit {
@@ -315,7 +317,7 @@ impl Core {
                     let sequence = sequence.ok_or_else(|| {
                         CoreError::new(
                             "historyUnavailable",
-                            "Original placement ordering is unavailable",
+                            UiMessage::error_core_history_original_placement_ordering_unavailable(),
                         )
                     })?;
                     if sequence > limit {
@@ -417,7 +419,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "historyUnavailable",
-                "The original commit witness is invalid",
+                UiMessage::error_core_history_original_commit_witness_invalid(),
             ));
         }
         Ok((v["savedAtUnixMs"].as_u64(), v["commitSequence"].as_u64()))
@@ -494,9 +496,22 @@ impl Core {
             };
             let (saved_at, sequence) = self.history_commit_time(p)?;
             let mut version = HistoryVersion {
-                version_id: p.operation_id.clone(), revision_id: None, operation_id: p.operation_id.clone(), kind: p.kind.clone(),
-                saved_at_unix_ms: saved_at, time_basis: if saved_at.is_some() { "commitClock" } else { "unknown" }.into(), commit_sequence: sequence,
-                status: "available".into(), byte_length: Some(bytes.len()), sha256: Some(hash(&bytes)), message: "Exact retained committed source; dependencies and semantic configuration are not reconstructed".into(),
+                version_id: p.operation_id.clone(),
+                revision_id: None,
+                operation_id: p.operation_id.clone(),
+                kind: p.kind.clone(),
+                saved_at_unix_ms: saved_at,
+                time_basis: if saved_at.is_some() {
+                    "commitClock"
+                } else {
+                    "unknown"
+                }
+                .into(),
+                commit_sequence: sequence,
+                status: "available".into(),
+                byte_length: Some(bytes.len()),
+                sha256: Some(hash(&bytes)),
+                description: UiMessage::history_retained_committed_source().into(),
             };
             let checked = (|| -> Result<RevisionFact> {
                 if matches!(p.kind.as_str(), "save" | "saveAs") {
@@ -505,7 +520,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "historyUnavailable",
-                            "Original retained save belongs to another input scope",
+                            UiMessage::error_core_history_retained_save_different_scope(),
                         ));
                     }
                 }
@@ -514,19 +529,26 @@ impl Core {
                 let retained: journal::Plan =
                     serde_json::from_slice(&fs::read(self.journal_path(&p.operation_id, "plan"))?)?;
                 if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
-                    return Err(CoreError::new("invalidState", "Retained plan changed"));
+                    return Err(CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_history_retained_plan_changed(),
+                    ));
                 }
                 let facts = self.read_observation_facts(&p.operation_id)?;
                 let fact = facts
                     .into_iter()
                     .find(|f| f.path == path && f.stamp.identity == birth.identity)
                     .ok_or_else(|| {
-                        CoreError::new("missing", "The exact committed revision witness is missing")
+                        CoreError::new(
+                            "missing",
+                            UiMessage::error_core_history_exact_committed_revision_witness_missing(
+                            ),
+                        )
                     })?;
                 if fact.hash != hash(&bytes) || decode(&bytes).is_err() {
                     return Err(CoreError::new(
                         "invalidState",
-                        "The exact retained source or its integrity witness is invalid",
+                        UiMessage::error_core_history_exact_retained_source_or_integrity_witness_invalid(),
                     ));
                 }
                 // A declared ID alone never established membership; the fact
@@ -552,7 +574,7 @@ impl Core {
                     .into();
                     version.byte_length = None;
                     version.sha256 = None;
-                    version.message = e.message;
+                    version.description = e.into();
                     records.push(HistoryRecord {
                         version,
                         bytes: None,
@@ -594,7 +616,7 @@ impl Core {
             if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
                 return Err(CoreError::new(
                     "historyUnavailable",
-                    "Committed admission plan changed",
+                    UiMessage::error_core_history_committed_admission_plan_changed(),
                 ));
             }
             let fact = RevisionFact {
@@ -603,12 +625,28 @@ impl Core {
                 hash: hash(&r.bytes),
                 revision: r.revision.clone(),
             };
-            records.push(HistoryRecord { version: HistoryVersion {
-                version_id: r.revision.clone(), revision_id: Some(r.revision), operation_id: p.operation_id.clone(), kind: "admittedSource".into(),
-                saved_at_unix_ms: time, time_basis: if time.is_some() { "commitClock" } else { "unknown" }.into(), commit_sequence: sequence,
-                status: "available".into(), byte_length: Some(r.bytes.len()), sha256: Some(hash(&r.bytes)),
-                message: "Exact external preimage explicitly admitted by the retained committed operation".into(),
-            }, bytes: Some(r.bytes), fact: Some(fact) });
+            records.push(HistoryRecord {
+                version: HistoryVersion {
+                    version_id: r.revision.clone(),
+                    revision_id: Some(r.revision),
+                    operation_id: p.operation_id.clone(),
+                    kind: "admittedSource".into(),
+                    saved_at_unix_ms: time,
+                    time_basis: if time.is_some() {
+                        "commitClock"
+                    } else {
+                        "unknown"
+                    }
+                    .into(),
+                    commit_sequence: sequence,
+                    status: "available".into(),
+                    byte_length: Some(r.bytes.len()),
+                    sha256: Some(hash(&r.bytes)),
+                    description: UiMessage::history_admitted_external_preimage().into(),
+                },
+                bytes: Some(r.bytes),
+                fact: Some(fact),
+            });
         }
         records.sort_by(|a, b| {
             b.version
@@ -660,7 +698,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "currentSavedUnavailable",
-                    "The exact current saved operation evidence is unavailable",
+                    UiMessage::error_core_history_exact_current_saved_operation_evidence_unavailable(),
                 )
             })?;
         Ok(Some(saved.version.operation_id.clone()))
@@ -681,15 +719,32 @@ impl Core {
         )?;
         let mut warnings = Vec::new();
         if current_saved_version_id.is_none() {
-            warnings.push("Current bytes are an unadmitted external observation or their saved witness is unavailable; they are not listed as a saved version".into());
+            warnings.push(UiMessage::history_current_source_not_saved().into());
         }
         Ok(HistoryTimeline {
-            node_id: context.birth.node_id, workspace_id: context.birth.workspace_id, path: context.current.path, current_base_id: context.session.base_id,
-            currentness: if current_saved_version_id.is_some() { "saved" } else { "external" }.into(), current_saved_version_id,
-            retention: HistoryRetention { policy: "retainedCoreJournal".into(), complete: false, known_versions: records.len(), available_versions: available,
-                oldest_saved_at_unix_ms: times.iter().min().copied(), newest_saved_at_unix_ms: times.iter().max().copied(),
-                message: "Only committed source records still retained in this local Core journal are shown. Earlier/pruned records, keystrokes and other-device history are not guaranteed; an empty list does not prove the note was never saved".into() },
-            versions: records.into_iter().map(|r| r.version).collect(), protected_drafts, warnings,
+            node_id: context.birth.node_id,
+            workspace_id: context.birth.workspace_id,
+            path: context.current.path,
+            current_base_id: context.session.base_id,
+            currentness: if current_saved_version_id.is_some() {
+                "saved"
+            } else {
+                "external"
+            }
+            .into(),
+            current_saved_version_id,
+            retention: HistoryRetention {
+                policy: "retainedCoreJournal".into(),
+                complete: false,
+                known_versions: records.len(),
+                available_versions: available,
+                oldest_saved_at_unix_ms: times.iter().min().copied(),
+                newest_saved_at_unix_ms: times.iter().max().copied(),
+                description: UiMessage::history_retention_limited().into(),
+            },
+            versions: records.into_iter().map(|r| r.version).collect(),
+            protected_drafts,
+            warnings,
         })
     }
     fn selected_history_record(
@@ -699,12 +754,21 @@ impl Core {
     ) -> Result<HistoryRead> {
         valid_operation_id(version_id)?;
         let record = self.history_records(context)?.into_iter().find(|r| r.version.version_id == version_id)
-            .ok_or_else(|| CoreError::new("historyUnavailable", "The selected retained version does not belong to this note; latest was not substituted"))?;
+            .ok_or_else(|| CoreError::new("historyUnavailable", UiMessage::error_core_history_selected_retained_version_does_not_belong_to_note_latest_was_not_substituted()))?;
         let source = decode(&record.bytes.ok_or_else(|| {
-            CoreError::new("historyUnavailable", record.version.message.clone())
+            record
+                .version
+                .description
+                .clone()
+                .into_error("historyUnavailable")
         })?)?;
-        Ok(HistoryRead { version: record.version, source, read_only: true, preview_status: "sourceOnly".into(),
-            preview_message: "Exact source viewing remains available without its original dependencies or configuration. Historical semantic preview is unavailable; current settings are not substituted".into() })
+        Ok(HistoryRead {
+            version: record.version,
+            source,
+            read_only: true,
+            preview_status: "sourceOnly".into(),
+            preview_description: UiMessage::history_source_only_preview().into(),
+        })
     }
     pub fn read_history(&self, session_id: &str, version_id: &str) -> Result<HistoryRead> {
         let context = self.history_context(session_id)?;
@@ -715,7 +779,7 @@ impl Core {
         let selected = self.selected_history_record(&context, version_id)?;
         let records = self.history_records(&context)?;
         let saved = Self::history_saved_record(&records, &context)
-            .ok_or_else(|| CoreError::new("currentSavedUnavailable", "The current file is an external observation or its exact saved witness is missing; reopen and explicitly accept it before comparing to current saved content"))?;
+            .ok_or_else(|| CoreError::new("currentSavedUnavailable", UiMessage::error_core_history_current_file_external_observation_or_exact_saved_witness_missing_reopen_and_explicitly_accept_it_before_comparing_to_current_saved_content()))?;
         let source = decode(&context.current.bytes)?;
         Ok(HistoryComparison {
             equal: selected.source == source,
@@ -746,8 +810,9 @@ impl Core {
             }
             let guard = ParentGuard::acquire(&path)?;
             let mut file = guard.open_read_guard_file()?;
-            let Some((metadata, bytes)) =
-                hosted::read_qualified_private_record(&mut file, |file| {
+            let Some((metadata, bytes)) = hosted::read_qualified_private_record(
+                &mut file,
+                |file| {
                     let metadata = draft_recovery::read_draft_metadata(file)?;
                     self.validate_original_input_scope(&metadata.scope)?;
                     if metadata.scope != *scope {
@@ -760,12 +825,13 @@ impl Core {
                     if records >= 128 {
                         return Err(CoreError::new(
                             "budget",
-                            "Protected draft browsing exceeds 128 records or 16 MiB",
+                            UiMessage::error_core_history_protected_draft_browsing_exceeds128_records_or16_mi_b(),
                         ));
                     }
                     records += 1;
                     Ok(Some((metadata, remaining)))
-                })?
+                },
+            )?
             else {
                 continue;
             };
@@ -785,7 +851,7 @@ impl Core {
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
         self.authorize_restore_result(binding)?;
@@ -800,7 +866,7 @@ impl Core {
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
         let current = self.qualified_node_at(root, path)?;
@@ -810,7 +876,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The explicitly selected restore owner differs",
+                UiMessage::error_core_history_explicitly_selected_restore_owner_differs(),
             ));
         }
         self.retained_restore_result(plan)
@@ -820,14 +886,14 @@ impl Core {
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
         if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding: scope } if scope.workspace_id == binding.workspace_id)
         {
             return Err(CoreError::new(
                 "historyUnavailable",
-                "Original restore has another qualified input owner",
+                UiMessage::error_core_history_restore_different_owner(),
             ));
         }
         let retained: journal::Plan =
@@ -835,7 +901,7 @@ impl Core {
         if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
             return Err(CoreError::new(
                 "historyUnavailable",
-                "The original committed restore plan is unavailable or changed",
+                UiMessage::error_core_history_original_committed_restore_plan_unavailable_or_changed(),
             ));
         }
         let mut protected_drafts = Vec::new();
@@ -878,7 +944,10 @@ impl Core {
         }
         Ok(HistoryRestoreResult {
             receipt: plan.receipt.clone().ok_or_else(|| {
-                CoreError::new("invalidState", "The original save receipt is missing")
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_history_original_save_receipt_missing(),
+                )
             })?,
             source: decode(&plan.after)?,
             version_id: binding.version_id.clone(),
@@ -899,7 +968,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "historyUnavailable",
-                    "The original library admission is unavailable",
+                    UiMessage::error_core_history_original_library_admission_unavailable(),
                 )
             })?;
         let inventory = self.inventory(&root)?;
@@ -913,7 +982,7 @@ impl Core {
         if owners.len() != 1 {
             return Err(CoreError::new(
                 "identityPending",
-                "The current restore owner is unavailable or no longer qualified",
+                UiMessage::error_core_history_current_restore_owner_unavailable_or_no_longer_qualified(),
             ));
         }
         let path = Path::new(&owners[0].path);
@@ -923,7 +992,7 @@ impl Core {
         if current.identity != binding.identity {
             return Err(CoreError::new(
                 "identityPending",
-                "The restored note object was replaced",
+                UiMessage::error_core_history_restored_note_object_was_replaced(),
             ));
         }
         read_source(&mut file)?;
@@ -958,20 +1027,14 @@ impl Core {
         if plan.history_restore.is_none() {
             return Err(CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             ));
         }
         let committed = self.committed(operation_id);
         let (result, result_error) = if committed {
             match self.restore_result(plan) {
                 Ok(result) => (Some(result), None),
-                Err(error) => (
-                    None,
-                    Some(RecoveryIssue {
-                        code: error.code,
-                        message: error.message,
-                    }),
-                ),
+                Err(error) => (None, Some(error)),
             }
         } else {
             (None, None)
@@ -1015,7 +1078,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The original restore input is immutable; this operationId belongs to a different request",
+                    UiMessage::error_core_history_original_restore_input_immutable_operation_id_belongs_to_different_request(),
                 ));
             }
         }
@@ -1037,13 +1100,13 @@ impl Core {
             }
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original restore may have effects; inspect its operation and do not create another save",
+                UiMessage::error_core_history_original_restore_may_have_effects_inspect_operation_and_do_not_create_another_save(),
             ));
         }
         if !matches!(request.draft_action.as_str(), "retain" | "none") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose retain or none explicitly",
+                UiMessage::error_core_history_choose_retain_or_none_explicitly(),
             ));
         }
         self.check_session_base(&request.session_id, &request.base_id)?;
@@ -1065,14 +1128,14 @@ impl Core {
         if !matches!(request.draft_action.as_str(), "retain" | "none") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose retain or none explicitly",
+                UiMessage::error_core_history_choose_retain_or_none_explicitly(),
             ));
         }
         self.check_session_base(&request.session_id, &request.base_id)?;
         if self.sessions[&request.session_id].path != absolute_path(path)? {
             return Err(CoreError::new(
                 "operationConflict",
-                "The session and configured owner path differ",
+                UiMessage::error_core_history_session_and_configured_owner_path_differ(),
             ));
         }
         let fingerprint = hash(&serde_json::to_vec(&request)?);
@@ -1088,7 +1151,7 @@ impl Core {
         if context.in_trash {
             return Err(CoreError::new(
                 "readOnlyLifecycle",
-                "Restore the note from Trash before replacing its content with a historical version",
+                UiMessage::error_core_history_restore_note_from_trash_before_replacing_content_with_historical_version(),
             ));
         }
         let selected = self.selected_history_record(&context, &request.version_id)?;
@@ -1106,7 +1169,7 @@ impl Core {
         if request.draft_action == "none" && (dirty_persisted || dirty_buffer) {
             return Err(CoreError::new(
                 "draftProtectionRequired",
-                "An unsaved draft exists; explicitly retain it before restoring",
+                UiMessage::error_core_history_unsaved_draft_exists_explicitly_retain_it_before_restoring(),
             ));
         }
         let mut draft_records = Vec::new();

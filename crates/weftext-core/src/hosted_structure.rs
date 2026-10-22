@@ -6,6 +6,7 @@ use crate::operations::{
     sorted_entries,
 };
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 /// Captured only after the host authorizes complete subtree read/export AND
 /// schema use. No portable path, source-read grant or copy action is that grant.
@@ -166,7 +167,7 @@ impl Core {
                 if expected.as_ref().is_some_and(|prior| prior != &found) {
                     return Err(CoreError::new(
                         "identityPending",
-                        "Structural slot producer is ambiguous",
+                        UiMessage::error_core_hosted_structure_structural_slot_producer_ambiguous(),
                     ));
                 }
                 expected = Some(found);
@@ -178,7 +179,7 @@ impl Core {
             &expected.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "This slot has no exact committed structural producer",
+                    UiMessage::error_core_hosted_structure_slot_has_no_exact_committed_structural_producer(),
                 )
             })?,
             "live",
@@ -203,7 +204,11 @@ impl Core {
             source_coordinate
                 .strip_prefix(&root_coordinate)
                 .map_err(|_| {
-                    CoreError::new("outsideRoot", "Selected tree is outside the physical root")
+                    CoreError::new(
+                        "outsideRoot",
+                        UiMessage::error_core_hosted_structure_selected_tree_outside_physical_root(
+                        ),
+                    )
                 })?,
         );
         let leaf = source.join(format!(
@@ -218,7 +223,7 @@ impl Core {
         if files.len() + directories.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
-                "Tree capability exceeds 5000 members",
+                UiMessage::error_core_hosted_structure_tree_capability_exceeds5000_members(),
             ));
         }
         if !files
@@ -227,7 +232,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Selected owner changed during tree capture",
+                UiMessage::error_core_hosted_structure_selected_owner_changed_during_tree_capture(),
             ));
         }
         let mut dependencies = vec![];
@@ -276,7 +281,7 @@ impl Core {
         if !same_path(&absolute_path(root)?, &witness.root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Tree capability belongs to another root",
+                UiMessage::error_core_hosted_structure_tree_capability_belongs_to_another_root(),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner.witness)?;
@@ -290,12 +295,15 @@ impl Core {
         for f in &witness.files {
             self.check_pending(Path::new(&f.path))?;
             let actual = capture_optional(Path::new(&f.path))?.ok_or_else(|| {
-                CoreError::new("scopeChanged", "Authorized tree member disappeared")
+                CoreError::new(
+                    "scopeChanged",
+                    UiMessage::error_core_hosted_structure_authorized_tree_member_disappeared(),
+                )
             })?;
             if actual.stamp != f.stamp || actual.bytes != f.bytes {
                 return Err(CoreError::new(
                     "staleBase",
-                    "Authorized tree member changed",
+                    UiMessage::error_core_hosted_structure_authorized_tree_member_changed(),
                 ));
             }
         }
@@ -307,7 +315,7 @@ impl Core {
             if !complete || guard.directory_identity()? != d.identity || entries != d.entries {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Authorized tree membership changed",
+                    UiMessage::error_core_hosted_structure_authorized_tree_membership_changed(),
                 ));
             }
         }
@@ -338,7 +346,7 @@ impl Core {
                 if original.stamp != f.stamp || original.bytes != f.bytes {
                     return Err(CoreError::new(
                         "staleBase",
-                        "Competing captured canonical versions",
+                        UiMessage::error_core_hosted_structure_competing_captured_canonical_versions(),
                     ));
                 }
                 continue;
@@ -347,7 +355,7 @@ impl Core {
             let birth = self.admitted_binding(&f.stamp.identity).ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
-                    "Captured canonical source is not physically admitted",
+                    UiMessage::error_core_hosted_structure_captured_canonical_source_not_physically_admitted(),
                 )
             })?;
             if birth.workspace_id != workspace.workspace_id
@@ -359,7 +367,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Captured source declaration or identity is ambiguous",
+                    UiMessage::error_core_hosted_structure_captured_source_declaration_or_identity_ambiguous(),
                 ));
             }
             let places = self.node_placement_paths(&birth)?;
@@ -370,7 +378,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Captured source lacks exact committed placement",
+                    UiMessage::error_core_hosted_structure_captured_source_lacks_exact_committed_placement(),
                 ));
             }
             let path = Path::new(&f.path);
@@ -379,7 +387,7 @@ impl Core {
                 relative_path: path
                     .strip_prefix(root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "Captured source belongs outside root")
+                        CoreError::new("outsideRoot", UiMessage::error_core_hosted_structure_captured_source_belongs_outside_root())
                     })?
                     .to_string_lossy()
                     .into_owned(),
@@ -432,7 +440,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "identityPending",
-                            "Original producer birth evidence is unavailable",
+                            UiMessage::error_core_hosted_structure_original_producer_birth_evidence_unavailable(),
                         ));
                     }
                     nodes.push(ActorStructureNode {
@@ -462,7 +470,8 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Original feature is not a structural producer",
+                    UiMessage::error_core_hosted_structure_original_feature_not_structural_producer(
+                    ),
                 ));
             }
         };
@@ -486,7 +495,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "Original structural operation is not committed",
+                    UiMessage::error_core_hosted_structure_original_structural_operation_not_committed(),
                 )
             })?;
         if !same_path(root, &receipt.root) {
@@ -518,7 +527,7 @@ impl Core {
         if !original {
             return Err(CoreError::new(
                 "identityPending",
-                "Current owner is not the original physical receipt object",
+                UiMessage::error_core_hosted_structure_current_owner_not_original_physical_receipt_object(),
             ));
         }
         Ok(qualified)

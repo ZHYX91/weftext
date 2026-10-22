@@ -102,7 +102,11 @@ impl Xml {
 }
 
 pub(super) fn parse(bytes: &[u8]) -> Result<Element, DocxError> {
-    let source = std::str::from_utf8(bytes).map_err(|_| DocxError::new("模板 XML 必须是 UTF-8"))?;
+    let source = std::str::from_utf8(bytes).map_err(|_| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_xml_utf_eight_required(),
+        ))
+    })?;
     let mut reader = Reader::from_str(source);
     reader.config_mut().check_end_names = true;
     let mut stack: Vec<Element> = vec![];
@@ -111,25 +115,60 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Element, DocxError> {
     loop {
         count += 1;
         if count > 300_000 || stack.len() > 128 {
-            return Err(DocxError::new("模板 XML 超过安全预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_xml_bytes_exceeded(),
+            )));
         }
-        let event = reader
-            .read_event()
-            .map_err(|e| DocxError::new(format!("无效模板 XML：{e}")))?;
+        let event = reader.read_event().map_err(|e| {
+            DocxError::new(
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_invalid_xml(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?;
         let empty = matches!(&event, Event::Empty(_));
         match event {
             Event::Start(e) | Event::Empty(e) => {
                 let name = std::str::from_utf8(e.name().as_ref())
-                    .map_err(|_| DocxError::new("无效 XML 名称"))?
+                    .map_err(|_| {
+                        DocxError::new(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_xml_name_invalid(),
+                        ))
+                    })?
                     .to_owned();
                 let mut element = Element::new(&name);
                 for a in e.attributes() {
-                    let a = a.map_err(|e| DocxError::new(e.to_string()))?;
-                    let key = std::str::from_utf8(a.key.as_ref())
-                        .map_err(|_| DocxError::new("无效 XML 属性"))?;
-                    let value = a
-                        .unescape_value()
-                        .map_err(|e| DocxError::new(e.to_string()))?;
+                    let a = a.map_err(|e| {
+                        DocxError::new(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?;
+                    let key = std::str::from_utf8(a.key.as_ref()).map_err(|_| {
+                        DocxError::new(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_xml_attribute_invalid(),
+                        ))
+                    })?;
+                    let value = a.unescape_value().map_err(|e| {
+                        DocxError::new(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?;
                     element.attrs.push((key.into(), value.into_owned()));
                 }
                 if empty {
@@ -139,38 +178,76 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Element, DocxError> {
                 }
             }
             Event::End(_) => {
-                let e = stack
-                    .pop()
-                    .ok_or_else(|| DocxError::new("XML 结束标记不匹配"))?;
+                let e = stack.pop().ok_or_else(|| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_closing_tag_mismatch(),
+                    ))
+                })?;
                 attach(e, &mut stack, &mut root)?;
             }
             Event::Text(e) => {
-                let raw =
-                    std::str::from_utf8(e.as_ref()).map_err(|_| DocxError::new("无效 XML 文本"))?;
+                let raw = std::str::from_utf8(e.as_ref()).map_err(|_| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_text_invalid(),
+                    ))
+                })?;
                 let t = quick_xml::escape::unescape(raw)
-                    .map_err(|e| DocxError::new(e.to_string()))?
+                    .map_err(|e| {
+                        DocxError::new(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?
                     .into_owned();
                 if let Some(p) = stack.last_mut() {
                     p.children.push(Xml::Text(t));
                 } else if !t.trim().is_empty() {
-                    return Err(DocxError::new("XML 根之外存在文本"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_text_outside_root(),
+                    )));
                 }
             }
             Event::GeneralRef(e) => {
-                let raw =
-                    std::str::from_utf8(e.as_ref()).map_err(|_| DocxError::new("无效 XML 实体"))?;
+                let raw = std::str::from_utf8(e.as_ref()).map_err(|_| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_entity_invalid(),
+                    ))
+                })?;
                 let t = quick_xml::escape::unescape(&format!("&{raw};"))
-                    .map_err(|e| DocxError::new(e.to_string()))?
+                    .map_err(|e| {
+                        DocxError::new(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_xml(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?
                     .into_owned();
                 stack
                     .last_mut()
-                    .ok_or_else(|| DocxError::new("XML 根之外存在实体"))?
+                    .ok_or_else(|| {
+                        DocxError::new(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_xml_entity_outside_root(
+                            ),
+                        ))
+                    })?
                     .children
                     .push(Xml::Text(t));
             }
             Event::CData(e) => {
-                let t =
-                    std::str::from_utf8(e.as_ref()).map_err(|_| DocxError::new("无效 CDATA"))?;
+                let t = std::str::from_utf8(e.as_ref()).map_err(|_| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_cdata_invalid(),
+                    ))
+                })?;
                 if let Some(p) = stack.last_mut() {
                     p.children.push(Xml::Text(t.into()));
                 }
@@ -184,29 +261,49 @@ pub(super) fn parse(bytes: &[u8]) -> Result<Element, DocxError> {
             Event::Decl(d) => {
                 if let Some(enc) = d.encoding()
                     && !enc
-                        .map_err(|e| DocxError::new(e.to_string()))?
+                        .map_err(|e| {
+                            DocxError::new(
+                                weftext_messages::ErrorDescription::new(
+                                    weftext_messages::UiMessage::error_export_xml(),
+                                )
+                                .diagnostic(
+                                    weftext_messages::DiagnosticOrigin::Dependency,
+                                    e.to_string(),
+                                ),
+                            )
+                        })?
                         .as_ref()
                         .eq_ignore_ascii_case(b"utf-8")
                 {
-                    return Err(DocxError::new("模板 XML 必须是 UTF-8"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_xml_utf_eight_required(),
+                    )));
                 }
             }
             Event::DocType(_) | Event::PI(_) => {
-                return Err(DocxError::new("模板不能包含 DTD 或处理指令"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_xml_dtd_or_processing_instruction_forbidden())));
             }
             Event::Eof => break,
         }
     }
     if !stack.is_empty() {
-        return Err(DocxError::new("模板 XML 未闭合"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_xml_unclosed(),
+        )));
     }
-    root.ok_or_else(|| DocxError::new("模板 XML 缺少根元素"))
+    root.ok_or_else(|| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_xml_root_missing(),
+        ))
+    })
 }
 fn attach(e: Element, stack: &mut [Element], root: &mut Option<Element>) -> Result<(), DocxError> {
     if let Some(p) = stack.last_mut() {
         p.push(e);
     } else if root.replace(e).is_some() {
-        return Err(DocxError::new("XML 有多个根元素"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_xml_multiple_roots(),
+        )));
     }
     Ok(())
 }

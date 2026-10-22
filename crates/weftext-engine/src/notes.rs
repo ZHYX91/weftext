@@ -24,7 +24,18 @@ pub struct NoteSourceEntry {
     pub label: Option<String>,
     pub target: Option<String>,
     pub writable: bool,
-    pub unavailable_reason: Option<String>,
+    pub unavailable_kind: Option<NoteSourceUnavailableKind>,
+    pub unavailable_reason: Option<weftext_messages::ErrorDescription>,
+}
+
+/// Native proof facts used by edit admission, independent of presentation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteSourceUnavailableKind {
+    FrozenModuleRequired,
+    ReferenceDynamic,
+    ReferenceArgumentsComplex,
+    Other,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,14 +148,16 @@ impl crate::Engine {
         request: &crate::EditRequest,
     ) -> Result<FrozenNotesEdit, crate::EngineError> {
         if request.source_hash != source_hash(&input.source) {
-            return Err(crate::EngineError("stale-source-hash".into()));
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_source_stale(),
+            ));
         }
         let (notes, numbering) = match &request.intent {
             crate::EditIntent::NativeNote { action } => (Some(action), None),
             crate::EditIntent::HeadingNumbering { action } => (None, Some(action)),
             _ => {
-                return Err(crate::EngineError(
-                    "冻结写作入口只接受注释或标题编号操作".into(),
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_frozen_intent_unsupported(),
                 ));
             }
         };
@@ -158,10 +171,11 @@ impl crate::Engine {
         }
         const MODULE: &[u8] = include_bytes!("../../weftext-export/assets/weftext-endnotes.typ");
         let relative = if input.path.is_absolute() {
-            input
-                .path
-                .strip_prefix(&input.root)
-                .map_err(|_| crate::EngineError("冻结主源不在授权根内".into()))?
+            input.path.strip_prefix(&input.root).map_err(|_| {
+                crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_frozen_main_unauthorized(),
+                )
+            })?
         } else {
             input.path.as_path()
         };
@@ -173,8 +187,8 @@ impl crate::Engine {
         // spelled with different path separators and an explicit main copy.
         let world = crate::world::LocalWorld::frozen(&self.library, &self.fonts, input)?;
         if world.admitted_bytes(&module_key)? != Some(MODULE) {
-            return Err(crate::EngineError(
-                "当前获权冻结资源不是产品随附的准确尾注模块；草稿保持原样".into(),
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_frozen_module_mismatch(),
             ));
         }
         let pinned = PinnedEndnotes {
@@ -189,16 +203,25 @@ impl crate::Engine {
         let current_derived = world.derived_dependency_paths();
         let mut dependencies = vec![];
         if !matches!(notes, Some(NotesIntent::InsertEndnote { .. })) {
-            let current = self.render_frozen(input)?;
+            let current = match self.render_frozen_compilation(input)? {
+                crate::render::RenderCompilation::Compiled(output) => output,
+                crate::render::RenderCompilation::Rejected {
+                    diagnostics,
+                    product_diagnostics,
+                    ..
+                } => {
+                    let mut description = weftext_messages::ErrorDescription::new(
+                        crate::UiMessage::error_engine_notes_frozen_output_unavailable(),
+                    );
+                    description.diagnostics = diagnostics;
+                    return Err(crate::EngineError::new(description)
+                        .with_product_diagnostics(product_diagnostics));
+                }
+            };
             dependencies.extend(classify_note_dependencies(
                 current.dependencies.clone(),
                 &current_derived,
             ));
-            if !current.ok {
-                return Err(crate::EngineError(
-                    "当前冻结原生输出不可用；尾注修改保留输入".into(),
-                ));
-            }
             let selected = match notes {
                 Some(
                     NotesIntent::RepeatEndnote { definition, .. }
@@ -218,8 +241,8 @@ impl crate::Engine {
                         && entry.writable
                 })
             }) {
-                return Err(crate::EngineError(
-                    "当前尾注对象没有同次编译确认的唯一作者来源；输入已保留".into(),
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_endnote_origin_uncertified(),
                 ));
             }
         }
@@ -242,22 +265,25 @@ impl crate::Engine {
         let proposed_world =
             crate::world::LocalWorld::frozen(&self.library, &self.fonts, &proposed)?;
         let proposed_derived = proposed_world.derived_dependency_paths();
-        let compiled = self.render_frozen(&proposed)?;
+        let compiled = match self.render_frozen_compilation(&proposed)? {
+            crate::render::RenderCompilation::Compiled(output) => output,
+            crate::render::RenderCompilation::Rejected {
+                diagnostics,
+                product_diagnostics,
+                ..
+            } => {
+                let mut description = weftext_messages::ErrorDescription::new(
+                    crate::UiMessage::error_engine_notes_frozen_compilation_failed(),
+                );
+                description.diagnostics = diagnostics;
+                return Err(crate::EngineError::new(description)
+                    .with_product_diagnostics(product_diagnostics));
+            }
+        };
         dependencies.extend(classify_note_dependencies(
             compiled.dependencies.clone(),
             &proposed_derived,
         ));
-        if !compiled.ok {
-            return Err(crate::EngineError(format!(
-                "原生尾注修改未通过当前冻结依赖的官方编译：{}",
-                compiled
-                    .diagnostics
-                    .iter()
-                    .map(|diagnostic| diagnostic.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("；")
-            )));
-        }
         fn actual_list(node: &crate::RenderNode) -> bool {
             node.attrs
                 .get("data-weftext-role")
@@ -272,8 +298,8 @@ impl crate::Engine {
                         && !entry.writable
                 }))
         {
-            return Err(crate::EngineError(
-                "本次尾注输出缺少唯一的实际调用点来源；保留原源和输入".into(),
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_endnote_call_origin_unavailable(),
             ));
         }
         let mut from = input
@@ -405,6 +431,11 @@ mod pinned_world_tests {
         world.source(module_id).unwrap();
         let proof = pinned_endnotes_from_loaded_world(source, &world).unwrap();
         assert!(proof.certifies(source));
+        let inspection =
+            crate::numbering::inspect_heading_numbering_qualified(source, Some(&proof));
+        assert!(inspection.editable);
+        assert!(!inspection.frozen_endnotes_required);
+        assert!(crate::inspect_heading_numbering(source).frozen_endnotes_required);
         assert!(!proof.certifies(&(source.to_owned() + "\nchanged")));
         assert!(
             pinned_endnotes_from_loaded_world(&(source.to_owned() + "\nchanged"), &world).is_none()
@@ -451,12 +482,14 @@ fn body_source(body: &NotesBody) -> Result<String, crate::EngineError> {
             if confined && probe.root().errors_and_warnings().0.is_empty() {
                 Ok(body.value.clone())
             } else {
-                Err(crate::EngineError(
-                    "注释原生内容必须完整留在一个内容槽内".into(),
+                Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_note_body_slot_required(),
                 ))
             }
         }
-        NotesBodyMode::Source => Err(crate::EngineError("注释内容过长或含 NUL".into())),
+        NotesBodyMode::Source => Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_note_body_invalid(),
+        )),
     }
 }
 
@@ -473,7 +506,7 @@ fn edit_notes_qualified(
     let mut map = inspect_notes_source(source);
     if frozen_module {
         for entry in &mut map.entries {
-            if entry.unavailable_reason.as_deref() == Some("requires-frozen-endnotes-module") {
+            if entry.unavailable_kind == Some(NoteSourceUnavailableKind::FrozenModuleRequired) {
                 entry.writable = true;
                 entry.construct.writable = true;
                 if let Some(body) = &mut entry.body {
@@ -482,7 +515,11 @@ fn edit_notes_qualified(
             }
         }
     }
-    let fail = || crate::EngineError("注释操作没有当前唯一的原生来源；作者输入已保留".into());
+    let fail = || {
+        crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_note_origin_unavailable(),
+        )
+    };
     let entry = |range: &SourceRange| {
         map.entries
             .iter()
@@ -505,8 +542,9 @@ fn edit_notes_qualified(
         }
         InsertEndnote { at, body } => {
             if !frozen_module {
-                return Err(crate::EngineError(
-                    "尾注编辑需要当前获权的随附模块冻结输入".into(),
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_endnotes_frozen_input_required(
+                    ),
                 ));
             }
             certify_note_insertion(source, at)?;
@@ -650,7 +688,7 @@ fn edit_notes_qualified(
                     return Err(fail());
                 }
                 if references.iter().any(|reference| {
-                    reference.unavailable_reason.as_deref() == Some("dynamic-reference-origin")
+                    reference.unavailable_kind == Some(NoteSourceUnavailableKind::ReferenceDynamic)
                         || (reference.kind != "reference" && !reference.writable)
                 }) {
                     return Err(fail());
@@ -663,7 +701,8 @@ fn edit_notes_qualified(
                         ));
                     }
                 } else if let Some(reference) = references.iter().find(|reference| {
-                    reference.unavailable_reason.as_deref() != Some("complex-reference-arguments")
+                    reference.unavailable_kind
+                        != Some(NoteSourceUnavailableKind::ReferenceArgumentsComplex)
                 }) {
                     // Transfer the original exact declaration, including its
                     // body and label, to an existing actual native reference.
@@ -761,8 +800,8 @@ fn edit_notes_qualified(
                     .as_ref()
                     .is_some_and(|numbering| !matches!(numbering, NotesNumbering::None))
             {
-                return Err(crate::EngineError(
-                    "公式题注默认只描述；请分别选择公式本体和题注的编号模式，避免双重编号".into(),
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_equation_caption_numbering_choice(),
                 ));
             }
             let caption = match position.as_deref() {
@@ -853,7 +892,7 @@ fn edit_notes_qualified(
                                 && entry.target.as_deref() == Some(label.get())
                         }) || !footnote_relations_closed(source, &map.notes))
                     {
-                        return Err(crate::EngineError("该公式仍有编号引用或引用关系无法闭合；请先处理引用，原编号与输入已保留".into()));
+                        return Err(crate::EngineError::new(weftext_messages::UiMessage::error_engine_notes_equation_references_unresolved()));
                     }
                 }
             }
@@ -942,8 +981,8 @@ fn certify_note_insertion(source: &str, at: &SourceRange) -> Result<(), crate::E
     if exact && available {
         Ok(())
     } else {
-        Err(crate::EngineError(
-            "插入点不是当前作者源中已认证的文字／正文边界".into(),
+        Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_insertion_boundary_uncertified(),
         ))
     }
 }
@@ -954,12 +993,16 @@ fn apply_note_edits(
 ) -> Result<String, crate::EngineError> {
     edits.sort_by_key(|(range, _)| (range.start, range.end));
     if edits.windows(2).any(|pair| pair[0].0.end > pair[1].0.start) {
-        return Err(crate::EngineError("注释修改范围重叠；输入已保留".into()));
+        return Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_note_patches_overlap(),
+        ));
     }
     let mut output = source.to_string();
     for (range, replacement) in edits.into_iter().rev() {
         if output.get(range.clone()).is_none() {
-            return Err(crate::EngineError("注释来源范围已失效".into()));
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_note_range_stale(),
+            ));
         }
         output.replace_range(range, &replacement);
     }
@@ -969,8 +1012,8 @@ fn apply_note_edits(
         .0
         .is_empty()
     {
-        return Err(crate::EngineError(
-            "注释修改未通过官方语法检查；输入已保留".into(),
+        return Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_note_syntax_check_failed(),
         ));
     }
     Ok(output)
@@ -1134,14 +1177,20 @@ fn caption_edits(
         &parsed,
         figure.construct.from + usize::from(figure.construct.raw.starts_with('#')),
     )
-    .ok_or_else(|| crate::EngineError("题注对象来源已失效".into()))?;
+    .ok_or_else(|| {
+        crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_caption_origin_stale(),
+        )
+    })?;
     let mut edits = vec![];
     let caption = named_argument(call, "caption")?;
     let body = body_source(body)?;
     if let Some(position) = position
         && !matches!(position, "top" | "bottom")
     {
-        return Err(crate::EngineError("题注位置必须为 top 或 bottom".into()));
+        return Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_caption_position_invalid(),
+        ));
     }
     if let Some(caption) = caption {
         if let Some(slot) = figure.body.as_ref() {
@@ -1166,14 +1215,14 @@ fn caption_edits(
                         source,
                     )?);
                 } else {
-                    return Err(crate::EngineError(
-                        "题注位置没有唯一原生槽；输入已保留".into(),
+                    return Err(crate::EngineError::new(
+                        weftext_messages::UiMessage::error_engine_notes_caption_slot_unavailable(),
                     ));
                 }
             }
         } else {
-            return Err(crate::EngineError(
-                "计算的题注内容保留原源，请使用源码入口".into(),
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_caption_computed(),
             ));
         }
     } else {
@@ -1192,7 +1241,9 @@ fn caption_edits(
                 crate::encode_string(pattern)?
             }
             NotesNumbering::Pattern { .. } => {
-                return Err(crate::EngineError("题注编号模式为空或过长".into()));
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_caption_numbering_invalid(),
+                ));
             }
         };
         edits.push(named_argument_edit(
@@ -1235,7 +1286,9 @@ fn numbering_source(numbering: &NotesNumbering) -> Result<String, crate::EngineE
         NotesNumbering::Pattern { pattern } if !pattern.is_empty() && pattern.len() <= 128 => {
             crate::encode_string(pattern)
         }
-        _ => Err(crate::EngineError("编号模式为空或超过128字节".into())),
+        _ => Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_numbering_pattern_invalid(),
+        )),
     }
 }
 
@@ -1495,13 +1548,17 @@ fn named_argument<'a>(
     let mut found = None;
     for argument in call.args().items() {
         if let ast::Arg::Spread(_) = argument {
-            return Err(crate::EngineError("动态参数保留原源".into()));
+            return Err(crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_argument_dynamic(),
+            ));
         }
         if let ast::Arg::Named(named) = argument
             && named.name().get() == key
         {
             if found.is_some() {
-                return Err(crate::EngineError("重复参数没有唯一作者槽".into()));
+                return Err(crate::EngineError::new(
+                    weftext_messages::UiMessage::error_engine_notes_argument_duplicate(),
+                ));
             }
             found = Some(named.expr());
         }
@@ -1521,7 +1578,11 @@ fn named_argument_edit(
     }
     let args = parsed
         .find(call.args().span())
-        .ok_or_else(|| crate::EngineError("没有原生参数边界".into()))?
+        .ok_or_else(|| {
+            crate::EngineError::new(
+                weftext_messages::UiMessage::error_engine_notes_argument_boundary_unavailable(),
+            )
+        })?
         .range();
     if source[args.clone()].starts_with('(') {
         Ok((args.start + 1..args.start + 1, format!("{key}:{value},")))
@@ -1623,7 +1684,11 @@ pub fn inspect_notes_source(source: &str) -> NotesSourceMap {
                 label: None,
                 target: None,
                 writable,
-                unavailable_reason: (!writable).then(|| "unverified-native-equation-origin".into()),
+                unavailable_kind: (!writable).then_some(NoteSourceUnavailableKind::Other),
+                unavailable_reason: (!writable).then(|| {
+                    weftext_messages::UiMessage::error_engine_reason_equation_origin_unverified()
+                        .into()
+                }),
             });
         }
         if let Some(reference) = node.get().cast::<ast::Ref>() {
@@ -1657,13 +1722,20 @@ pub fn inspect_notes_source(source: &str) -> NotesSourceMap {
                 label: None,
                 target: Some(reference.target().into()),
                 writable: false,
+                unavailable_kind: Some(if direct && reference.supplement().is_some() {
+                    NoteSourceUnavailableKind::ReferenceArgumentsComplex
+                } else if direct {
+                    NoteSourceUnavailableKind::Other
+                } else {
+                    NoteSourceUnavailableKind::ReferenceDynamic
+                }),
                 unavailable_reason: Some(
                     if direct && reference.supplement().is_some() {
-                        "complex-reference-arguments"
+                        weftext_messages::UiMessage::error_engine_reason_reference_arguments_complex()
                     } else if direct {
-                        "requires-same-compile-reference-kind"
+                        weftext_messages::UiMessage::error_engine_reason_reference_kind_proof_required()
                     } else {
-                        "dynamic-reference-origin"
+                        weftext_messages::UiMessage::error_engine_reason_reference_origin_dynamic()
                     }
                     .into(),
                 ),
@@ -1714,13 +1786,13 @@ pub fn inspect_notes_source(source: &str) -> NotesSourceMap {
                 parent = ancestor.parent();
             }
             let reason = if !direct {
-                "dynamic-reference-origin"
+                weftext_messages::UiMessage::error_engine_reason_reference_origin_dynamic()
             } else if target.is_none() {
-                "computed-reference-target"
+                weftext_messages::UiMessage::error_engine_reason_reference_target_computed()
             } else if args.len() != 1 {
-                "complex-reference-arguments"
+                weftext_messages::UiMessage::error_engine_reason_reference_arguments_complex()
             } else {
-                "requires-same-compile-reference-kind"
+                weftext_messages::UiMessage::error_engine_reason_reference_kind_proof_required()
             };
             out.push(NoteSourceEntry {
                 kind: "reference".into(),
@@ -1729,6 +1801,13 @@ pub fn inspect_notes_source(source: &str) -> NotesSourceMap {
                 label: None,
                 target,
                 writable: false,
+                unavailable_kind: Some(if !direct {
+                    NoteSourceUnavailableKind::ReferenceDynamic
+                } else if args.len() != 1 {
+                    NoteSourceUnavailableKind::ReferenceArgumentsComplex
+                } else {
+                    NoteSourceUnavailableKind::Other
+                }),
                 unavailable_reason: Some(reason.into()),
             });
         }
@@ -1919,15 +1998,20 @@ pub fn inspect_notes_source(source: &str) -> NotesSourceMap {
                 label,
                 target,
                 writable,
+                unavailable_kind: (!writable).then_some(if requires_frozen && !show {
+                    NoteSourceUnavailableKind::FrozenModuleRequired
+                } else {
+                    NoteSourceUnavailableKind::Other
+                }),
                 unavailable_reason: (!writable).then(|| {
                     if show {
-                        "unverified-show-rule"
+                        weftext_messages::UiMessage::error_engine_reason_show_rule_unverified()
                     } else if requires_frozen {
-                        "requires-frozen-endnotes-module"
+                        weftext_messages::UiMessage::error_engine_reason_endnotes_frozen_module_required()
                     } else if !qualified {
-                        "unverified-native-binding-or-arguments"
+                        weftext_messages::UiMessage::error_engine_reason_note_binding_unverified()
                     } else {
-                        "computed-note-or-caption-body"
+                        weftext_messages::UiMessage::error_engine_reason_note_body_computed()
                     }
                     .into()
                 }),

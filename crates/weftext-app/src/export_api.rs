@@ -17,6 +17,12 @@ const MAX_BYTES: usize = 64 * 1024 * 1024;
 const STORE_BYTES: usize = 256 * 1024 * 1024;
 const TTL: Duration = Duration::from_secs(3600);
 
+fn failed_reply(id: &str, code: &str, description: impl Into<ErrorDescription>) -> Value {
+    let description = description.into();
+    json!({"id":id,"requestId":id,"status":"failed","code":code,
+        "explanation":description.explanation,"diagnostics":description.diagnostics,"causes":description.causes})
+}
+
 #[derive(Clone)]
 pub(crate) struct FrozenQueryOutput {
     pub(crate) root: String,
@@ -59,9 +65,17 @@ impl Drop for GenerationGuard {
             let external = serde_json::from_str::<Value>(&job.input)
                 .is_ok_and(|input| matches!(input["format"].as_str(), Some("doc" | "wps")));
             job.reply = if external {
-                json!({"id":self.id,"requestId":self.id,"status":"failed","code":"resultUnknown","message":"原外部转换已中断，准确结果尚不能确认；输入和原操作保留，不自动重跑"})
+                failed_reply(
+                    &self.id,
+                    "resultUnknown",
+                    UiMessage::error_api_export_interrupted_external_conversion(),
+                )
             } else {
-                json!({"id":self.id,"requestId":self.id,"status":"failed","code":"generationInterrupted","message":"本次生成已中断，原输入未改写；请明确重新生成"})
+                failed_reply(
+                    &self.id,
+                    "generationInterrupted",
+                    UiMessage::error_api_export_interrupted_generation(),
+                )
             };
             job.born = Instant::now();
         }
@@ -123,7 +137,7 @@ fn store(state: &AppState) -> Result<std::sync::MutexGuard<'_, ExportStore>, Api
     state
         .exports
         .lock()
-        .map_err(|_| ApiError::internal("输出会话不可用"))
+        .map_err(|_| ApiError::internal(UiMessage::error_api_export_session_unavailable()))
 }
 
 async fn legacy_capabilities() -> ApiResult {
@@ -136,9 +150,14 @@ async fn legacy_capabilities() -> ApiResult {
 struct LegacyCancel {
     request_id: String,
 }
-async fn legacy_cancel(State(state): State<AppState>, Json(req): Json<LegacyCancel>) -> ApiResult {
+async fn legacy_cancel(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<LegacyCancel>,
+) -> ApiResult {
     if uuid::Uuid::parse_str(&req.request_id).is_err() {
-        return Err(ApiError::bad("原转换请求标识无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_invalid_conversion_request_id(),
+        ));
     }
     let (active, queued) = {
         let mut store = store(&state)?;
@@ -157,7 +176,7 @@ async fn legacy_cancel(State(state): State<AppState>, Json(req): Json<LegacyCanc
             if store.legacy_queued_cancels.len() >= 64
                 && !store.legacy_queued_cancels.contains(&req.request_id)
             {
-                return Err(ApiError::bad("待取消的外部转换过多，请先检查原操作"));
+                return Err(ApiError::bad(UiMessage::error_api_export_cancel_budget()));
             }
             store.legacy_queued_cancels.insert(req.request_id.clone());
         }
@@ -167,7 +186,8 @@ async fn legacy_cancel(State(state): State<AppState>, Json(req): Json<LegacyCanc
         cancel.store(true, Ordering::Release);
     }
     Ok(Json(
-        json!({"requestId":req.request_id,"status":if active.is_some()||queued{"cancelling"}else{"notRunning"},"message":"仅请求取消原外部转换；实际状态以同一准备请求的回执为准，输入与原件保留"}),
+        json!({"requestId":req.request_id,"status":if active.is_some()||queued{"cancelling"}else{"notRunning"},
+            "explanation":UiMessage::error_api_export_cancellation_requested(),"diagnostics":[],"causes":[]}),
     ))
 }
 struct LegacyRunGuard {
@@ -194,14 +214,14 @@ pub(crate) async fn legacy_convert(
             ApiError::new(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "conversionUnavailable",
-                "当前后端未配置自己的持久外部转换目录；普通 DOCX 仍可使用",
+                UiMessage::error_api_export_persistent_conversion_directory_missing(),
             )
         })?;
         if store.legacy_active.contains_key(id) {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "pending",
-                "原外部转换仍在运行，请继续检查同一操作",
+                UiMessage::error_api_export_conversion_still_running(),
             ));
         }
         let precancelled = store.closing || store.legacy_queued_cancels.remove(id);
@@ -217,25 +237,29 @@ pub(crate) async fn legacy_convert(
     let result = super::legacy_office::convert_once(id, request, &root, cancel)
         .await
         .map_err(|error| {
-            ApiError::new(
+            let code = if matches!(error.code.as_str(), "conversionUnknown" | "receiptFailed") {
+                "resultUnknown".to_owned()
+            } else {
+                error.code.clone()
+            };
+            let (description, details) = error.into_parts();
+            ApiError::from_core_parts(
                 StatusCode::UNPROCESSABLE_ENTITY,
-                if matches!(error.code.as_str(), "conversionUnknown" | "receiptFailed") {
-                    "resultUnknown"
-                } else {
-                    &error.code
-                },
-                error.message,
+                &code,
+                description,
+                details,
             )
         })?;
     if result.status != "succeeded" {
-        return Err(ApiError::new(
+        return Err(ApiError::from_core_parts(
             StatusCode::UNPROCESSABLE_ENTITY,
             if result.status == "unknown" {
                 "resultUnknown"
             } else {
                 &result.code
             },
-            result.message.clone(),
+            result.description.clone(),
+            result.details.clone(),
         ));
     }
     Ok(result)
@@ -249,21 +273,26 @@ pub(crate) fn claim_legacy_request(
 ) -> Result<(), ApiError> {
     use std::io::Write;
     if uuid::Uuid::parse_str(id).is_err() {
-        return Err(ApiError::bad("原转换请求标识无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_invalid_conversion_request_id(),
+        ));
     }
     let root = store(state)?.legacy_root.clone().ok_or_else(|| {
         ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "conversionUnavailable",
-            "当前后端未配置持久外部转换目录",
+            UiMessage::error_api_export_conversion_directory_missing(),
         )
     })?;
     let directory = root.join("requests");
-    std::fs::create_dir_all(&directory).map_err(|_| ApiError::internal("无法保留转换原请求"))?;
+    std::fs::create_dir_all(&directory).map_err(|_| {
+        ApiError::internal(UiMessage::error_api_export_original_request_preservation_failed())
+    })?;
     let file = directory.join(format!("{id}.sha256"));
-    let fingerprint = byte_digest(
-        &serde_json::to_vec(input).map_err(|_| ApiError::internal("转换请求无法冻结"))?,
-    );
+    let fingerprint =
+        byte_digest(&serde_json::to_vec(input).map_err(|_| {
+            ApiError::internal(UiMessage::error_api_export_request_freeze_failed())
+        })?);
     match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -277,7 +306,7 @@ pub(crate) fn claim_legacy_request(
                     ApiError::new(
                         StatusCode::CONFLICT,
                         "resultUnknown",
-                        "原转换请求未完整持久化，请保留输入并检查原操作",
+                        UiMessage::error_api_export_original_request_incomplete(),
                     )
                 })?;
         }
@@ -286,32 +315,36 @@ pub(crate) fn claim_legacy_request(
                 ApiError::new(
                     StatusCode::CONFLICT,
                     "resultUnknown",
-                    "原转换请求暂不能读取；保留原操作，不重新执行",
+                    UiMessage::error_api_export_original_request_unreadable(),
                 )
             })?;
             if !meta.is_file() || meta.len() != 64 {
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "resultUnknown",
-                    "原转换请求记录不完整；保留原操作，不重新执行",
+                    UiMessage::error_api_export_original_request_record_incomplete(),
                 ));
             }
             let saved = std::fs::read(&file).map_err(|_| {
                 ApiError::new(
                     StatusCode::CONFLICT,
                     "resultUnknown",
-                    "原转换请求暂不能读取；保留原操作，不重新执行",
+                    UiMessage::error_api_export_original_request_unreadable(),
                 )
             })?;
             if saved != fingerprint.as_bytes() {
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "requestReuse",
-                    "原外部转换标识已有不同或未完整输入，请检查原操作；未启动新转换",
+                    UiMessage::error_api_export_conversion_request_reuse(),
                 ));
             }
         }
-        Err(_) => return Err(ApiError::internal("无法保留原外部转换请求")),
+        Err(_) => {
+            return Err(ApiError::internal(
+                UiMessage::error_api_export_original_conversion_request_preservation_failed(),
+            ));
+        }
     }
     Ok(())
 }
@@ -325,18 +358,20 @@ struct LegacyOutputStage {
     content_type: String,
     extension: String,
     losses: Vec<weftext_export::ExportLoss>,
-    summary: String,
+    summary: UiMessage,
     preview: Value,
 }
 fn legacy_stage_directory(state: &AppState, id: &str) -> Result<PathBuf, ApiError> {
     if uuid::Uuid::parse_str(id).is_err() {
-        return Err(ApiError::bad("原转换请求标识无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_invalid_conversion_request_id(),
+        ));
     }
     let root = store(state)?.legacy_root.clone().ok_or_else(|| {
         ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "conversionUnavailable",
-            "当前后端未配置持久外部转换目录",
+            UiMessage::error_api_export_conversion_directory_missing(),
         )
     })?;
     std::fs::create_dir_all(&root).map_err(|_| legacy_stage_unknown())?;
@@ -347,7 +382,7 @@ fn legacy_stage_unknown() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "resultUnknown",
-        "原外部转换的冻结 DOCX 阶段不完整或已改变；原件保留，不重新编译或重跑",
+        UiMessage::error_api_export_original_docx_stage_changed(),
     )
 }
 pub(crate) fn frozen_legacy_output_stage(
@@ -464,7 +499,7 @@ pub(crate) fn retain_query(
     }
     if bytes > MAX_BYTES || store.size() + bytes > STORE_BYTES {
         output["exportUnavailable"] =
-            json!("当前冻结结果超过输出缓存预算；已显示结果不会被悄悄重新查询。");
+            json!(UiMessage::error_api_export_frozen_query_cache_budget());
         return Ok(());
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -491,9 +526,11 @@ pub(crate) fn bind_embedded_query(
     let query = store
         .queries
         .get_mut(id)
-        .ok_or_else(|| ApiError::bad("冻结查询已过期，请明确重新运行"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_export_frozen_query_expired()))?;
     if query.embedded.is_some() {
-        return Err(ApiError::bad("冻结查询已绑定，不能重新关联正文位置"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_frozen_query_already_bound(),
+        ));
     }
     query.embedded = Some(basis);
     Ok(())
@@ -509,11 +546,13 @@ pub(crate) fn frozen_query(
         ApiError::new(
             StatusCode::NOT_FOUND,
             "queryExpired",
-            "原查询输出已过期；请明确重新查询并选择新结果",
+            UiMessage::error_api_export_original_query_output_expired(),
         )
     })?;
     if std::path::Path::new(&query.root) != std::path::Path::new(root) {
-        return Err(ApiError::bad("查询结果与当前笔记库不一致"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_query_library_mismatch(),
+        ));
     }
     Ok(query.clone())
 }
@@ -547,6 +586,7 @@ pub(crate) struct Binding {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PrepareRequest {
+    pub(crate) output_locale: weftext_messages::UiLocale,
     #[serde(default)]
     pub(crate) review_mode: String,
     #[serde(default)]
@@ -599,47 +639,62 @@ struct DownloadRequest {
 
 pub(crate) fn decode(bytes: &str) -> Result<Vec<u8>, ApiError> {
     if bytes.len() > MAX_BYTES * 4 / 3 + 4 {
-        return Err(ApiError::bad("上传超过 64 MiB"));
+        return Err(ApiError::bad(UiMessage::error_api_export_upload_budget()));
     }
     let value = base64::engine::general_purpose::STANDARD
         .decode(bytes)
-        .map_err(|_| ApiError::bad("上传文件编码无效"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_export_upload_encoding()))?;
     if value.len() > MAX_BYTES {
-        return Err(ApiError::bad("上传超过 64 MiB"));
+        return Err(ApiError::bad(UiMessage::error_api_export_upload_budget()));
     }
     Ok(value)
 }
 async fn inspect_template(
     State(_state): State<AppState>,
-    Json(req): Json<TemplateRequest>,
+    RequestJson(req): RequestJson<TemplateRequest>,
 ) -> ApiResult {
     let bytes = decode(&req.bytes_base64)?;
     let output = crate::work::spawn_blocking(move || template_slots(&req.format, &bytes))
         .await
-        .map_err(|_| ApiError::internal("模板检查失败"))??;
+        .map_err(|_| {
+            ApiError::internal(UiMessage::error_api_export_template_inspection_incomplete())
+        })??;
     Ok(Json(output))
 }
 
-async fn status(State(state): State<AppState>, Json(req): Json<StatusRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<StatusRequest>,
+) -> ApiResult {
     let mut store = store(&state)?;
     store.prune();
     let job = store.jobs.get(&req.request_id).ok_or_else(|| {
         ApiError::new(
             StatusCode::NOT_FOUND,
             "outputExpired",
-            "未找到此输出请求；原输入保留，可明确重新生成",
+            UiMessage::error_api_export_output_request_missing(),
         )
     })?;
     Ok(Json(job.reply.clone()))
 }
-async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>) -> ApiResult {
+async fn prepare(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<PrepareRequest>,
+) -> ApiResult {
     if uuid::Uuid::parse_str(&req.request_id).is_err() || req.source.len() > 2 * 1024 * 1024 {
-        return Err(ApiError::bad("请求标识或源长度无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_invalid_request_or_source_length(),
+        ));
     }
     if !["template", "source"].contains(&req.style_policy.as_str()) {
-        return Err(ApiError::bad("未知样式选项"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_unknown_style_policy(),
+        ));
     }
-    let input = serde_json::to_string(&req).map_err(|e| ApiError::internal(e.to_string()))?;
+    let input = serde_json::to_string(&req).map_err(|e| {
+        ApiError::internal(UiMessage::error_api_export_request_freeze_failed())
+            .diagnostic(DiagnosticOrigin::Json, e.to_string())
+    })?;
     {
         let mut store = store(&state)?;
         store.prune();
@@ -647,7 +702,7 @@ async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>)
             return Err(ApiError::new(
                 StatusCode::NOT_FOUND,
                 "outputExpired",
-                "原输出已过期；请用新请求明确重新生成，不能重用原请求编号",
+                UiMessage::error_api_export_original_output_expired(),
             ));
         }
         if let Some(job) = store.jobs.get(&req.request_id) {
@@ -655,7 +710,7 @@ async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>)
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "requestReuse",
-                    "同一输出请求不能更换输入",
+                    UiMessage::error_api_export_output_request_reuse(),
                 ));
             }
             // Only read the original persistent stages on an unknown external
@@ -671,9 +726,7 @@ async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>)
             || store.expired.len() >= 4096
             || store.size() + input.len() > STORE_BYTES
         {
-            return Err(ApiError::bad(
-                "输出缓存已满；请完成现有输出或等候过期；本会话达到 4096 个过期输出后需要重新启动",
-            ));
+            return Err(ApiError::bad(UiMessage::error_api_export_cache_budget()));
         }
         store.jobs.insert(
             req.request_id.clone(),
@@ -696,39 +749,43 @@ async fn prepare(State(state): State<AppState>, Json(req): Json<PrepareRequest>)
         Ok((artifact, preview)) => {
             if artifact.bytes.len() > MAX_BYTES || store.size() + artifact.bytes.len() > STORE_BYTES
             {
-                let job = store
-                    .jobs
-                    .get_mut(&req.request_id)
-                    .ok_or_else(|| ApiError::internal("原输出会话不可用"))?;
-                job.reply = json!({"id":req.request_id,"requestId":req.request_id,"status":"failed","message":"生成文件超过输出预算，未截断交付"});
+                let job = store.jobs.get_mut(&req.request_id).ok_or_else(|| {
+                    ApiError::internal(UiMessage::error_api_export_original_session_unavailable())
+                })?;
+                job.reply = failed_reply(
+                    &req.request_id,
+                    "outputBudget",
+                    UiMessage::error_api_export_generated_file_budget(),
+                );
                 return Ok(Json(job.reply.clone()));
             }
             let digest = byte_digest(&artifact.bytes);
             let filename = format!("weftext-{}.{}", &req.request_id[..8], artifact.extension);
             let reply = json!({"id":req.request_id,"requestId":req.request_id,"status":"prepared","filename":filename,"contentType":artifact.content_type,"length":artifact.bytes.len(),"digest":digest,"losses":artifact.losses,"summary":artifact.summary,"preview":preview,"expiresInSeconds":3600});
             if store.size() + artifact.bytes.len() + reply.to_string().len() > STORE_BYTES {
-                let job = store
-                    .jobs
-                    .get_mut(&req.request_id)
-                    .ok_or_else(|| ApiError::internal("原输出会话不可用"))?;
-                job.reply = json!({"id":req.request_id,"requestId":req.request_id,"status":"failed","code":"outputBudget","message":"完整输出预览超过缓存预算，未截断交付"});
+                let job = store.jobs.get_mut(&req.request_id).ok_or_else(|| {
+                    ApiError::internal(UiMessage::error_api_export_original_session_unavailable())
+                })?;
+                job.reply = failed_reply(
+                    &req.request_id,
+                    "outputBudget",
+                    UiMessage::error_api_export_preview_budget(),
+                );
                 return Ok(Json(job.reply.clone()));
             }
-            let job = store
-                .jobs
-                .get_mut(&req.request_id)
-                .ok_or_else(|| ApiError::internal("原输出会话不可用"))?;
+            let job = store.jobs.get_mut(&req.request_id).ok_or_else(|| {
+                ApiError::internal(UiMessage::error_api_export_original_session_unavailable())
+            })?;
             job.artifact = Some(artifact);
             job.reply = reply.clone();
             job.born = Instant::now();
             Ok(Json(reply))
         }
         Err(error) => {
-            let job = store
-                .jobs
-                .get_mut(&req.request_id)
-                .ok_or_else(|| ApiError::internal("原输出会话不可用"))?;
-            job.reply = json!({"id":req.request_id,"requestId":req.request_id,"status":"failed","code":error.code,"message":error.message});
+            let job = store.jobs.get_mut(&req.request_id).ok_or_else(|| {
+                ApiError::internal(UiMessage::error_api_export_original_session_unavailable())
+            })?;
+            job.reply = json!({"id":req.request_id,"requestId":req.request_id,"status":"failed","code":error.code,"explanation":error.explanation,"diagnostics":error.diagnostics,"causes":error.causes,"details":error.details});
             Ok(Json(job.reply.clone()))
         }
     }
@@ -737,25 +794,28 @@ fn byte_digest(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     format!("{:x}", Sha256::digest(bytes))
 }
-async fn confirm(State(state): State<AppState>, Json(req): Json<ConfirmRequest>) -> ApiResult {
+async fn confirm(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ConfirmRequest>,
+) -> ApiResult {
     let mut store = store(&state)?;
     store.prune();
     let job = store.jobs.get_mut(&req.id).ok_or_else(|| {
         ApiError::new(
             StatusCode::NOT_FOUND,
             "outputExpired",
-            "输出已过期，请重新生成",
+            UiMessage::error_api_export_output_expired(),
         )
     })?;
     let artifact = job
         .artifact
         .as_ref()
-        .ok_or_else(|| ApiError::bad("输出尚未成功生成"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_export_output_not_generated()))?;
     if !artifact.losses.is_empty() && !req.accept_losses {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "lossConfirmation",
-            "请先查看并接受本次输出的限制与损失",
+            UiMessage::error_api_export_loss_confirmation_required(),
         ));
     }
     job.confirmed = true;
@@ -764,7 +824,7 @@ async fn confirm(State(state): State<AppState>, Json(req): Json<ConfirmRequest>)
 }
 async fn download(
     State(state): State<AppState>,
-    Json(req): Json<DownloadRequest>,
+    RequestJson(req): RequestJson<DownloadRequest>,
 ) -> Result<Response, ApiError> {
     let mut store = store(&state)?;
     store.prune();
@@ -772,27 +832,27 @@ async fn download(
         ApiError::new(
             StatusCode::NOT_FOUND,
             "outputExpired",
-            "输出已过期，请重新生成",
+            UiMessage::error_api_export_output_expired(),
         )
     })?;
     if !job.confirmed {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "notConfirmed",
-            "请先确认本次输出",
+            UiMessage::error_api_export_confirmation_required(),
         ));
     }
     let artifact = job
         .artifact
         .as_ref()
-        .ok_or_else(|| ApiError::bad("没有生成文件"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_export_generated_file_missing()))?;
     let start = req.offset.unwrap_or(0);
     let end = match req.length {
         Some(length) => start.checked_add(length).ok_or_else(|| {
             ApiError::new(
                 StatusCode::RANGE_NOT_SATISFIABLE,
                 "invalidRange",
-                "下载范围无效",
+                UiMessage::error_api_export_invalid_download_range(),
             )
         })?,
         None => artifact.bytes.len(),
@@ -805,7 +865,7 @@ async fn download(
         return Err(ApiError::new(
             StatusCode::RANGE_NOT_SATISFIABLE,
             "invalidRange",
-            "下载范围无效",
+            UiMessage::error_api_export_invalid_download_range(),
         ));
     }
     let partial = start != 0 || end != artifact.bytes.len();
@@ -818,7 +878,7 @@ async fn download(
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_str(&artifact.content_type)
-            .map_err(|_| ApiError::internal("输出类型无效"))?,
+            .map_err(|_| ApiError::internal(UiMessage::error_api_export_invalid_content_type()))?,
     );
     response.headers_mut().insert(
         header::CONTENT_DISPOSITION,
@@ -875,16 +935,18 @@ struct ImportCommit {
 }
 async fn prepare_import(
     State(state): State<AppState>,
-    Json(req): Json<ImportRequest>,
+    RequestJson(req): RequestJson<ImportRequest>,
 ) -> ApiResult {
     if !["native", "docx", "doc", "wps", "bibtex", "csl-json", "ris"].contains(&req.format.as_str())
     {
         return Err(ApiError::bad(
-            "请选择 Word、Weftext 原生资料包或支持的文献格式",
+            UiMessage::error_api_export_import_format_required(),
         ));
     }
     if uuid::Uuid::parse_str(&req.operation_id).is_err() {
-        return Err(ApiError::bad("原导入操作编号无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_invalid_import_operation_id(),
+        ));
     }
     let legacy = matches!(req.format.as_str(), "doc" | "wps");
     // An existing once-only directory can only recover; it cannot launch a
@@ -906,7 +968,9 @@ async fn prepare_import(
     if new_import && !legacy_recovery {
         let loc = location(&state, &req.session_id)?;
         if std::path::Path::new(&req.root) != loc.root {
-            return Err(ApiError::bad("目标库与当前会话不一致"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_export_import_library_mismatch(),
+            ));
         }
         let sid = req.session_id.clone();
         let base = req.base_id.clone();
@@ -914,11 +978,15 @@ async fn prepare_import(
     }
     let mut bytes = decode(&req.bytes_base64)?;
     if !legacy && req.legacy_backend.is_some() {
-        return Err(ApiError::bad("此导入格式不使用外部转换后端"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_import_does_not_use_external_backend(),
+        ));
     }
     let is_docx = matches!(req.format.as_str(), "docx" | "doc" | "wps");
     if !is_docx && req.docx_options.is_some() {
-        return Err(ApiError::bad("题注配对只适用于准确 Word 中间原件"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_caption_pairing_needs_exact_word(),
+        ));
     }
     let mut originals = vec![];
     let mut conversion_losses = vec![];
@@ -953,7 +1021,9 @@ async fn prepare_import(
         bytes = converted
             .intermediate_docx
             .as_ref()
-            .ok_or_else(|| ApiError::internal("外部转换缺少准确 DOCX 中间件"))?
+            .ok_or_else(|| {
+                ApiError::internal(UiMessage::error_api_export_exact_docx_intermediate_missing())
+            })?
             .bytes
             .clone();
         originals.push(weftext_export::docx::OriginalImportAsset {
@@ -972,7 +1042,8 @@ async fn prepare_import(
             .map(|loss| weftext_export::exchange::NativeLoss {
                 path: format!("original.{}", req.format),
                 code: loss.code,
-                detail: loss.message,
+                description: loss.description,
+                product_diagnostics: loss.product_diagnostics,
             })
             .collect();
         legacy_preview = Some(converted.metadata());
@@ -1064,16 +1135,22 @@ async fn prepare_import(
     }
     Ok(Json(output))
 }
-async fn commit_import(State(state): State<AppState>, Json(req): Json<ImportCommit>) -> ApiResult {
+async fn commit_import(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ImportCommit>,
+) -> ApiResult {
     let receipt = core_call(&state, move |core| {
         let preview = core.operation_details(&req.operation_id)?;
         if !["importNative", "importBibliography", "importDocx"].contains(&preview.kind.as_str()) {
-            return Err(CoreError::new("wrongOperation", "Not an import operation"));
+            return Err(CoreError::new(
+                "wrongOperation",
+                UiMessage::error_api_export_wrong_import_operation(),
+            ));
         }
         if !preview.losses.is_empty() && !req.accept_losses {
             return Err(CoreError::new(
                 "lossConfirmation",
-                "Accept the exact import preview losses before applying this plan",
+                UiMessage::error_api_export_import_loss_confirmation_required(),
             ));
         }
         core.execute_operation(&req.operation_id, &req.plan_id)
@@ -1084,19 +1161,24 @@ async fn commit_import(State(state): State<AppState>, Json(req): Json<ImportComm
 
 async fn inspect_import(
     State(_state): State<AppState>,
-    Json(req): Json<TemplateRequest>,
+    RequestJson(req): RequestJson<TemplateRequest>,
 ) -> ApiResult {
     let bytes = decode(&req.bytes_base64)?;
     if req.format == "docx" {
         let analysis =
             crate::work::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
                 .await
-                .map_err(|_| ApiError::internal("Word 原件分析没有完成"))?
+                .map_err(|_| {
+                    ApiError::internal(UiMessage::error_api_export_word_analysis_incomplete())
+                })?
                 .map_err(|error| {
-                    ApiError::new(
+                    let (description, diagnostics) = error.into_parts();
+                    ApiError::from_product(
                         StatusCode::UNPROCESSABLE_ENTITY,
                         "docxAnalysis",
-                        error.to_string(),
+                        None,
+                        description,
+                        diagnostics,
                     )
                 })?;
         return Ok(Json(value(analysis)?));
@@ -1105,7 +1187,9 @@ async fn inspect_import(
         bibliography_import_api::inspect_bibliography_import(&req.format, &bytes)
     })
     .await
-    .map_err(|_| ApiError::internal("文献提案生成未完成"))??;
+    .map_err(|_| {
+        ApiError::internal(UiMessage::error_api_export_bibliography_proposal_incomplete())
+    })??;
     Ok(Json(
         json!({"records":proposal.records,"losses":proposal.losses}),
     ))
@@ -1185,10 +1269,18 @@ mod tests {
             extension: "docx".into(),
             losses: vec![weftext_export::ExportLoss {
                 code: "originalLoss".into(),
-                message: "original stage loss".into(),
+                description: UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: "original stage loss".into(),
+                    },
+                )
+                .into(),
+                product_diagnostics: vec![],
                 location: None,
             }],
-            summary: "original summary".into(),
+            summary: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: "original summary".into(),
+            }),
         };
         let preview = json!({"document":{"sourceHash":"original"},"query":{"queryId":"old-result","rows":["frozen"]}});
         retain_legacy_output_stage(&state, &id, &artifact, &preview).unwrap();
@@ -1224,7 +1316,7 @@ mod tests {
         }
         let Json(reply) = legacy_cancel(
             State(state.clone()),
-            Json(LegacyCancel {
+            crate::RequestJson(LegacyCancel {
                 request_id: id.clone(),
             }),
         )
@@ -1259,7 +1351,7 @@ mod tests {
             legacy_backend: None,
             docx_options: None,
         };
-        let Json(first) = prepare_import(State(state.clone()), Json(request.clone()))
+        let Json(first) = prepare_import(State(state.clone()), crate::RequestJson(request.clone()))
             .await
             .unwrap();
         assert_eq!(first["status"], "prepared");
@@ -1272,9 +1364,12 @@ mod tests {
             } else {
                 fresh_request.root.push_str("-another-library");
             }
-            let error = prepare_import(State(state.clone()), Json(fresh_request.clone()))
-                .await
-                .unwrap_err();
+            let error = prepare_import(
+                State(state.clone()),
+                crate::RequestJson(fresh_request.clone()),
+            )
+            .await
+            .unwrap_err();
             assert_eq!(
                 error.code,
                 if changed_field == "base" {
@@ -1296,7 +1391,7 @@ mod tests {
         }
         drop(state);
         let state = state_with_core(Core::new(dir.path().join("state")).unwrap());
-        let Json(retry) = prepare_import(State(state.clone()), Json(request.clone()))
+        let Json(retry) = prepare_import(State(state.clone()), crate::RequestJson(request.clone()))
             .await
             .unwrap();
         assert_eq!(retry, first);
@@ -1313,7 +1408,7 @@ mod tests {
                 }
                 _ => unreachable!(),
             }
-            let error = prepare_import(State(state.clone()), Json(changed))
+            let error = prepare_import(State(state.clone()), crate::RequestJson(changed))
                 .await
                 .unwrap_err();
             assert_eq!(error.code, "operationConflict", "changed {field}");
@@ -1321,10 +1416,13 @@ mod tests {
         let mut new_request = request.clone();
         new_request.operation_id = uuid::Uuid::new_v4().to_string();
         assert_eq!(
-            prepare_import(State(state.clone()), Json(new_request.clone()))
-                .await
-                .unwrap_err()
-                .code,
+            prepare_import(
+                State(state.clone()),
+                crate::RequestJson(new_request.clone())
+            )
+            .await
+            .unwrap_err()
+            .code,
             "invalid_request"
         );
         assert_eq!(
@@ -1340,7 +1438,7 @@ mod tests {
         assert!(!root.join("Imported").exists());
         let Json(committed) = commit_import(
             State(state.clone()),
-            Json(ImportCommit {
+            crate::RequestJson(ImportCommit {
                 operation_id: request.operation_id.clone(),
                 plan_id: first["planId"].as_str().unwrap().into(),
                 accept_losses: true,
@@ -1349,7 +1447,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(committed["status"], "committed");
-        let Json(replayed) = prepare_import(State(state.clone()), Json(request))
+        let Json(replayed) = prepare_import(State(state.clone()), crate::RequestJson(request))
             .await
             .unwrap();
         assert_eq!(replayed["planId"], first["planId"]);
@@ -1364,13 +1462,21 @@ mod tests {
             losses: if loss {
                 vec![weftext_export::ExportLoss {
                     code: "testLoss".into(),
-                    message: "Exact known loss".into(),
+                    description: UiMessage::common_operation(
+                        weftext_messages::params::CommonOperation {
+                            operation_id: "Exact known loss".into(),
+                        },
+                    )
+                    .into(),
+                    product_diagnostics: vec![],
                     location: None,
                 }]
             } else {
                 vec![]
             },
-            summary: "test".into(),
+            summary: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: "test".into(),
+            }),
         };
         let reply = json!({"id":id,"requestId":id,"status":"prepared","filename":"test.bin","digest":byte_digest(bytes),"length":bytes.len()});
         store(state).unwrap().jobs.insert(
@@ -1392,7 +1498,7 @@ mod tests {
         assert_eq!(
             download(
                 State(state.clone()),
-                Json(DownloadRequest {
+                crate::RequestJson(DownloadRequest {
                     id: id.clone(),
                     offset: None,
                     length: None
@@ -1406,7 +1512,7 @@ mod tests {
         assert_eq!(
             confirm(
                 State(state.clone()),
-                Json(ConfirmRequest {
+                crate::RequestJson(ConfirmRequest {
                     id: id.clone(),
                     accept_losses: false
                 })
@@ -1418,7 +1524,7 @@ mod tests {
         );
         let Json(reply) = confirm(
             State(state.clone()),
-            Json(ConfirmRequest {
+            crate::RequestJson(ConfirmRequest {
                 id: id.clone(),
                 accept_losses: true,
             }),
@@ -1428,7 +1534,7 @@ mod tests {
         assert_eq!(reply["digest"], byte_digest(b"abcdef"));
         let partial = download(
             State(state.clone()),
-            Json(DownloadRequest {
+            crate::RequestJson(DownloadRequest {
                 id: id.clone(),
                 offset: Some(2),
                 length: Some(3),
@@ -1447,7 +1553,7 @@ mod tests {
         assert_eq!(
             download(
                 State(state.clone()),
-                Json(DownloadRequest {
+                crate::RequestJson(DownloadRequest {
                     id: id.clone(),
                     offset: Some(2),
                     length: Some(usize::MAX)
@@ -1460,7 +1566,7 @@ mod tests {
         );
         let full = download(
             State(state.clone()),
-            Json(DownloadRequest {
+            crate::RequestJson(DownloadRequest {
                 id,
                 offset: None,
                 length: None,
@@ -1475,7 +1581,7 @@ mod tests {
         let empty = artifact(&state, b"", false);
         let _ = confirm(
             State(state.clone()),
-            Json(ConfirmRequest {
+            crate::RequestJson(ConfirmRequest {
                 id: empty.clone(),
                 accept_losses: false,
             }),
@@ -1484,7 +1590,7 @@ mod tests {
         .unwrap();
         let response = download(
             State(state),
-            Json(DownloadRequest {
+            crate::RequestJson(DownloadRequest {
                 id: empty,
                 offset: None,
                 length: None,
@@ -1500,6 +1606,27 @@ mod tests {
                 .is_empty()
         );
     }
+    #[test]
+    fn explicit_output_language_is_frozen_independently_of_exact_author_input() {
+        let frozen = json!({"requestId":"original-output","sessionId":"original-session","source":"Exact author value 😀\r\n","serial":7,"baseId":"original-base","format":"docx","outputLocale":"zh-CN"});
+        let request: PrepareRequest = serde_json::from_value(frozen.clone()).unwrap();
+        assert_eq!(request.source, "Exact author value 😀\r\n");
+        assert_eq!(request.output_locale, weftext_messages::UiLocale::ZhCn);
+        let mut selected = request.clone();
+        selected.output_locale = weftext_messages::UiLocale::EnUs;
+        assert_eq!(selected.source, request.source);
+        assert_ne!(
+            serde_json::to_vec(&selected).unwrap(),
+            serde_json::to_vec(&request).unwrap()
+        );
+        let mut missing = frozen.clone();
+        missing.as_object_mut().unwrap().remove("outputLocale");
+        assert!(serde_json::from_value::<PrepareRequest>(missing).is_err());
+        let mut unsupported = frozen;
+        unsupported["outputLocale"] = json!("en");
+        assert!(serde_json::from_value::<PrepareRequest>(unsupported).is_err());
+    }
+
     #[tokio::test]
     async fn expired_id_cannot_regenerate_and_pending_owner_is_retained() {
         let (_dir, state) = state();
@@ -1507,6 +1634,7 @@ mod tests {
         store(&state).unwrap().jobs.get_mut(&id).unwrap().born =
             Instant::now() - TTL - Duration::from_secs(1);
         let req = PrepareRequest {
+            output_locale: weftext_messages::UiLocale::ZhCn,
             review_mode: String::new(),
             include_resolved: false,
             request_id: id.clone(),
@@ -1523,7 +1651,7 @@ mod tests {
             legacy_backend: None,
         };
         assert_eq!(
-            prepare(State(state.clone()), Json(req))
+            prepare(State(state.clone()), crate::RequestJson(req))
                 .await
                 .unwrap_err()
                 .code,
@@ -1562,6 +1690,47 @@ mod tests {
     }
 
     #[test]
+    fn interrupted_external_job_retains_original_unknown_fact_and_exact_input_with_typed_explanation()
+     {
+        let (_dir, state) = state();
+        let id = artifact(&state, b"", false);
+        let input = json!({"format":"doc","requestId":id,"source":"Exact S 😀\r\n"}).to_string();
+        {
+            let mut store = store(&state).unwrap();
+            let job = store.jobs.get_mut(&id).unwrap();
+            job.input = input.clone();
+            job.artifact = None;
+            job.reply = json!({"status":"pending"});
+        }
+        drop(GenerationGuard {
+            state: state.exports.clone(),
+            id: id.clone(),
+        });
+        let store = store(&state).unwrap();
+        let job = &store.jobs[&id];
+        assert_eq!(job.input, input);
+        assert_eq!(job.reply["id"], id);
+        assert_eq!(job.reply["status"], "failed");
+        assert_eq!(job.reply["code"], "resultUnknown");
+        let description: ErrorDescription = serde_json::from_value(json!({
+            "explanation":job.reply["explanation"],"diagnostics":job.reply["diagnostics"],"causes":job.reply["causes"]
+        })).unwrap();
+        assert_eq!(
+            description.explanation.key(),
+            "error.api.export.interruptedExternalConversion"
+        );
+        assert!(description.diagnostics.is_empty());
+        assert_ne!(
+            description
+                .explanation
+                .render(weftext_messages::UiLocale::ZhCn),
+            description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs)
+        );
+        assert!(job.artifact.is_none());
+    }
+    #[test]
     fn cancelled_generation_becomes_terminal_without_overwriting_finished_job() {
         let (_dir, state) = state();
         let pending = artifact(&state, b"", false);
@@ -1580,6 +1749,14 @@ mod tests {
             let job = &store.jobs[&pending];
             assert_eq!(job.reply["status"], "failed");
             assert_eq!(job.reply["code"], "generationInterrupted");
+            assert_eq!(job.reply["requestId"], pending);
+            assert_eq!(
+                job.reply["explanation"]["key"],
+                "error.api.export.interruptedGeneration"
+            );
+            assert_eq!(job.reply["diagnostics"], json!([]));
+            assert_eq!(job.reply["causes"], json!([]));
+            assert!(job.reply.get("message").is_none());
             assert!(job.artifact.is_none());
         }
         let completed = artifact(&state, b"complete", false);

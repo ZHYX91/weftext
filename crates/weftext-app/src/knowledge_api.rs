@@ -3,6 +3,7 @@
 use super::{ApiError, ApiResult, AppState, core_call, location, remember, value};
 #[cfg(test)]
 use crate::CoreTestFixture;
+use crate::RequestJson;
 use crate::writing_api::{check_snapshot, observe_snapshot};
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ use std::{
 };
 use weftext_core::{FileChange, OperationIntent, OperationRequest, SnapshotFile};
 use weftext_knowledge as knowledge;
+use weftext_messages::UiMessage;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -51,7 +53,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
             } else {
                 "ordinaryFile"
             },
-            "当前会话是普通原生文件",
+            UiMessage::error_api_knowledge_ordinary_native_session(),
         ));
     }
     let root = loc.root.clone();
@@ -82,7 +84,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
     let workspace = cut
         .inventory
         .workspace_id
-        .ok_or_else(|| ApiError::bad("当前项目不是已接纳笔记库"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_managed_library_required()))?;
     let mut nodes = Vec::new();
     for entry in cut
         .inventory
@@ -99,8 +101,8 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
         let Some(bytes) = &file.bytes else {
             continue;
         };
-        let source =
-            String::from_utf8(bytes.clone()).map_err(|_| ApiError::bad("目标原文不是 UTF-8"))?;
+        let source = String::from_utf8(bytes.clone())
+            .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_target_source_encoding()))?;
         let title = weftext_engine::inspect_editor(&source).title.text;
         nodes.push(knowledge::NodeSnapshot {
             owner: knowledge::NodeRef {
@@ -129,7 +131,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
                 } else {
                     "ordinaryFile"
                 },
-                "当前会话尚未纳管为笔记节点",
+                UiMessage::error_api_knowledge_managed_note_session_required(),
             )
         })?
         .clone();
@@ -172,7 +174,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
             ApiError::new(
                 StatusCode::CONFLICT,
                 "resourceRevision",
-                "资源当前没有可验证的准确版本，请重新读取并明确处理",
+                UiMessage::error_api_knowledge_exact_resource_version_unavailable(),
             )
         })?;
         let fragment = resource_fragment(&resource.bytes, resolution.fragment.as_deref());
@@ -187,7 +189,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
         } else {
             &resolution.status
         },
-        "目标地址无效、身份不可用或不在当前获权笔记库内",
+        UiMessage::error_api_knowledge_target_address_unavailable(),
     ))
 }
 /// RFC 3778 / Adobe PDF open parameters use one-based page=N. Only this exact
@@ -298,7 +300,7 @@ fn proofreading_scan(
         ApiError::new(
             StatusCode::CONFLICT,
             "preview_required",
-            "请等待当前正文预览成功后再校对；不会使用旧稿结果",
+            UiMessage::error_api_knowledge_current_preview_required(),
         )
     })?;
     knowledge::proofread(&tree, &context.source, options).map_err(knowledge_error)
@@ -322,7 +324,7 @@ fn existing_finding(
 }
 async fn proofread(
     State(state): State<AppState>,
-    Json(request): Json<ProofreadRequest>,
+    RequestJson(request): RequestJson<ProofreadRequest>,
 ) -> ApiResult {
     observe(&state, &request.context)?;
     validate_processing_origin(&state, &request.context, &request.options).await?;
@@ -356,7 +358,9 @@ async fn validate_processing_origin(
         return Ok(None);
     };
     if origin.source != "shared-library" || origin.base_id.is_empty() {
-        return Err(ApiError::bad("共享处理建议缺少准确来源依据，原输入保留"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_shared_suggestion_origin_missing(),
+        ));
     }
     let root = location(state, &context.session_id)?.root;
     let read_root = root.clone();
@@ -375,19 +379,17 @@ async fn validate_processing_origin(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "processingOriginChanged",
-            "共享处理建议的原版本已变化，请保留本次输入并重新核对共享来源",
+            UiMessage::error_api_knowledge_shared_suggestion_version_changed(),
         ));
     }
-    let settings: Value = serde_json::from_slice(
-        document
-            .bytes
-            .as_deref()
-            .ok_or_else(|| ApiError::bad("原共享处理设置当前不可用"))?,
-    )
-    .map_err(|_| ApiError::bad("共享库设置当前不能解析，原输入保留"))?;
+    let settings: Value = serde_json::from_slice(document.bytes.as_deref().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_shared_settings_unavailable())
+    })?)
+    .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_shared_settings_invalid()))?;
     let processing: knowledge::ProcessingDocument =
-        serde_json::from_value(settings["processing"].clone())
-            .map_err(|_| ApiError::bad("原共享处理建议当前不可用，原输入保留"))?;
+        serde_json::from_value(settings["processing"].clone()).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_knowledge_shared_suggestion_unavailable())
+        })?;
     processing.validate().map_err(knowledge_error)?;
     let path = document.path.clone();
     let base = origin.base_id.clone();
@@ -419,18 +421,34 @@ struct StatusRequest {
 }
 
 fn knowledge_error(error: knowledge::KnowledgeError) -> ApiError {
-    ApiError::new(StatusCode::CONFLICT, &error.code, error.message)
+    {
+        let code = error.code.clone();
+        let (description, diagnostics) = error.into_parts();
+        ApiError::from_product(
+            StatusCode::CONFLICT,
+            &code,
+            Some(code.clone()),
+            description,
+            diagnostics,
+        )
+    }
 }
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, ApiError> {
-    value[key]
-        .as_str()
-        .ok_or_else(|| ApiError::bad(format!("缺少 {key}")))
+    value[key].as_str().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_hosted_required_field_missing(
+            weftext_messages::params::ErrorApiHostedRequiredFieldMissing { field: key.into() },
+        ))
+    })
 }
 fn integer(value: &Value, key: &str) -> Result<usize, ApiError> {
     value[key]
         .as_u64()
         .and_then(|n| usize::try_from(n).ok())
-        .ok_or_else(|| ApiError::bad(format!("无效的 {key}")))
+        .ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_invalid_field(
+                weftext_messages::params::ErrorApiKnowledgeInvalidField { field: key.into() },
+            ))
+        })
 }
 fn node_ref(value: &Value) -> Result<knowledge::NodeRef, ApiError> {
     Ok(knowledge::NodeRef {
@@ -446,6 +464,7 @@ fn observe(state: &AppState, context: &Context) -> Result<(), ApiError> {
         context.serial,
         None,
     )
+    .map_err(ApiError::from)
 }
 fn exact(state: &AppState, context: &Context) -> Result<(), ApiError> {
     check_snapshot(
@@ -455,26 +474,34 @@ fn exact(state: &AppState, context: &Context) -> Result<(), ApiError> {
         context.serial,
         None,
     )
+    .map_err(ApiError::from)
 }
 fn file_url(path: &str) -> Result<String, ApiError> {
     url::Url::from_file_path(path)
         .map(|url| url.into())
-        .map_err(|_| ApiError::bad("文件路径不能生成本机地址"))
+        .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_local_file_url_unavailable()))
 }
 fn file_path(url: &str) -> Result<String, ApiError> {
     url::Url::parse(url)
         .ok()
         .and_then(|url| url.to_file_path().ok())
         .map(|path| path.to_string_lossy().into_owned())
-        .ok_or_else(|| ApiError::bad("无效的本机文件地址"))
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_local_file_url_invalid()))
 }
 fn annotations_path(path: &Path) -> Result<String, ApiError> {
     Ok(path
         .parent()
-        .ok_or_else(|| ApiError::bad("笔记缺少所属目录"))?
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_note_directory_missing()))?
         .join("weftext.annotations.json")
         .to_string_lossy()
         .into_owned())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct KnowledgeReadError {
+    path: Option<String>,
+    error: ApiError,
 }
 
 struct Bundle {
@@ -484,7 +511,8 @@ struct Bundle {
     committed: knowledge::NodeSnapshot,
     source_file: SnapshotFile,
     annotations_file: SnapshotFile,
-    warnings: Vec<String>,
+    warnings: Vec<weftext_core::CoreDescription>,
+    errors: Vec<KnowledgeReadError>,
     trash: Value,
     schema: weftext_data::Schema,
     schema_generation: String,
@@ -501,81 +529,95 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     let annotation_path = annotations_path(&loc.path)?;
     let root = loc.root.clone();
     let annotation_for_cut = annotation_path.clone();
-    let (cut, annotations_file, settings, resources, resource_warnings, trash, tag_document) =
-        core_call(state, move |core| {
-            let cut = core.admitted_snapshot(&root)?;
-            let annotations = core
-                .read_snapshot(&root, &[annotation_for_cut])?
-                .files
-                .remove(0);
-            let settings = core
-                .read_snapshot(
-                    &root,
-                    &[root
-                        .join(".weftext-settings.json")
-                        .to_string_lossy()
-                        .into_owned()],
-                )?
-                .files
-                .remove(0);
-            let mut resources = Vec::new();
-            let mut warnings = Vec::new();
-            let mut bytes = 0usize;
-            for file in &cut.files {
-                match core.managed_resource_snapshot(&root, &file.path) {
-                    Ok(items) => {
-                        let size = items.iter().map(|item| item.bytes.len()).sum::<usize>();
-                        if bytes.saturating_add(size) > 64 * 1024 * 1024
-                            || resources.len() + items.len() > 5000
-                        {
-                            warnings.push(
-                                "资源索引达到本次 64 MiB/5000 项读取上限；其余资源保持不可用。"
-                                    .into(),
-                            );
-                            break;
-                        }
-                        bytes += size;
-                        resources.extend(items);
+    let (
+        cut,
+        annotations_file,
+        settings,
+        resources,
+        resource_warnings,
+        resource_errors,
+        trash,
+        tag_document,
+    ) = core_call(state, move |core| {
+        let cut = core.admitted_snapshot(&root)?;
+        let annotations = core
+            .read_snapshot(&root, &[annotation_for_cut])?
+            .files
+            .remove(0);
+        let settings = core
+            .read_snapshot(
+                &root,
+                &[root
+                    .join(".weftext-settings.json")
+                    .to_string_lossy()
+                    .into_owned()],
+            )?
+            .files
+            .remove(0);
+        let mut resources = Vec::new();
+        let mut warnings: Vec<weftext_core::CoreDescription> = Vec::new();
+        let mut errors = Vec::new();
+        let mut bytes = 0usize;
+        for file in &cut.files {
+            match core.managed_resource_snapshot(&root, &file.path) {
+                Ok(items) => {
+                    let size = items.iter().map(|item| item.bytes.len()).sum::<usize>();
+                    if bytes.saturating_add(size) > 64 * 1024 * 1024
+                        || resources.len() + items.len() > 5000
+                    {
+                        warnings
+                            .push(UiMessage::error_api_knowledge_resource_index_budget().into());
+                        break;
                     }
-                    Err(error) => warnings.push(format!("{}: {}", file.path, error.message)),
+                    bytes += size;
+                    resources.extend(items);
                 }
+                Err(error) => errors.push((file.path.clone(), error)),
             }
-            let trash = core.trash_entries(&root)?;
-            let tag_document = cut.tags.as_ref().and_then(|snapshot| {
-                core.qualified_tag_document_from_snapshot(&root, snapshot)
-                    .ok()
-            });
-            Ok((
-                cut,
-                annotations,
-                settings,
-                resources,
-                warnings,
-                trash,
-                tag_document,
-            ))
-        })
-        .await?;
+        }
+        let trash = core.trash_entries(&root)?;
+        let tag_document = cut.tags.as_ref().and_then(|snapshot| {
+            core.qualified_tag_document_from_snapshot(&root, snapshot)
+                .ok()
+        });
+        Ok((
+            cut,
+            annotations,
+            settings,
+            resources,
+            warnings,
+            errors,
+            trash,
+            tag_document,
+        ))
+    })
+    .await?;
     let inventory = cut.inventory;
     let workspace_id = inventory
         .workspace_id
         .clone()
-        .ok_or_else(|| ApiError::bad("此功能需要打开已接纳身份的笔记库"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_admitted_library_required()))?;
     let source_file = cut
         .files
         .iter()
         .find(|file| file.path == source_path)
         .cloned()
-        .ok_or_else(|| ApiError::internal("缺少正文快照"))?;
+        .ok_or_else(
+            || ApiError::internal(UiMessage::error_api_knowledge_body_snapshot_missing()),
+        )?;
     let mut nodes = Vec::new();
     let mut warnings = cut.warnings;
-    let resources_complete = resource_warnings.is_empty();
+    let resources_complete = resource_warnings.is_empty() && resource_errors.is_empty();
     warnings.extend(resource_warnings);
-    let (schema, schema_generation) = crate::data_api::knowledge_schema_from_snapshot(
-        cut.schema
-            .as_ref()
-            .ok_or_else(|| ApiError::internal("知识快照缺少字段定义事实"))?,
-    )?;
+    let (schema, schema_generation) =
+        crate::data_api::knowledge_schema_from_snapshot(cut.schema.as_ref().ok_or_else(|| {
+            ApiError::internal(UiMessage::error_api_knowledge_field_facts_missing())
+        })?)
+        .map_err(|error| {
+            let mut error = ApiError::from(error);
+            error.status = StatusCode::BAD_REQUEST;
+            error
+        })?;
     let mut dictionary_complete = true;
     let admitted = inventory
         .entries
@@ -600,25 +642,38 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         if entry.node_id.as_ref() != Some(node_id) {
             continue;
         }
-        let source =
-            String::from_utf8(bytes.clone()).map_err(|_| ApiError::bad("笔记原文不是 UTF-8"))?;
+        let source = String::from_utf8(bytes.clone())
+            .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_note_source_encoding()))?;
         let info = weftext_engine::inspect_metadata(&source);
         let title = weftext_engine::inspect_editor(&source).title;
         if title.status != "writable" && info.writer_status != "unique-literal-profile" {
             dictionary_complete = false;
-            warnings.push(format!(
-                "{} 的原生标题需要编译资格，本次未把未知标题视为缺失。",
-                entry.relative_path
-            ));
+            warnings.push(
+                UiMessage::error_api_knowledge_native_title_qualification_needed(
+                    weftext_messages::params::ErrorApiKnowledgeNativeTitleQualificationNeeded {
+                        path: entry.relative_path.clone(),
+                    },
+                )
+                .into(),
+            );
         }
         let terms = weftext_data::search_terms(&source, &schema);
         if !terms.complete {
             dictionary_complete = false;
-            warnings.push(format!(
-                "{} 名称字典部分可用：{}",
-                entry.relative_path,
-                terms.reasons.join("；")
-            ));
+            warnings.push(
+                UiMessage::error_api_knowledge_name_dictionary_partial(
+                    weftext_messages::params::ErrorApiKnowledgeNameDictionaryPartial {
+                        path: entry.relative_path.clone(),
+                    },
+                )
+                .into(),
+            );
+            warnings.extend(
+                terms
+                    .reasons
+                    .into_iter()
+                    .map(weftext_core::CoreDescription::from),
+            );
         }
         nodes.push(knowledge::NodeSnapshot {
             owner: knowledge::NodeRef {
@@ -639,14 +694,14 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         if cut.complete && admitted == nodes.len() && dictionary_complete && resources_complete {
             knowledge::Coverage::Complete
         } else {
-            warnings.push("当前图索引中有已接纳笔记不可用；显示本次准确读取的部分范围。".into());
+            warnings.push(UiMessage::error_api_knowledge_graph_index_partial().into());
             knowledge::Coverage::Partial
         };
     let committed = nodes
         .iter()
         .find(|node| file_path(&node.path).is_ok_and(|path| path == source_path))
         .cloned()
-        .ok_or_else(|| ApiError::bad("当前文件尚未接纳为有效笔记节点，请检查身份与目录"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_note_identity_unadmitted()))?;
     let mut selected = committed.clone();
     selected.source = context.source.clone();
     if selected.source != committed.source {
@@ -700,7 +755,7 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         }
     }
     let resources = resource_index;
-    let facts = serde_json::to_string(&json!({"nodes":nodes,"resources":resources,"selectedDraft":selected.source,"style":style.key,"schema":schema_generation,"tags":tag_document})).map_err(|_| ApiError::internal("无法编码索引事实"))?;
+    let facts = serde_json::to_string(&json!({"nodes":nodes,"resources":resources,"selectedDraft":selected.source,"style":style.key,"schema":schema_generation,"tags":tag_document})).map_err(|_| ApiError::internal(UiMessage::error_api_knowledge_index_fact_encoding_failed()))?;
     let tag_tree = tag_document
         .as_ref()
         .map(|document| knowledge::graph_tag_tree(&workspace_id, document));
@@ -719,6 +774,13 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         source_file,
         annotations_file,
         warnings,
+        errors: resource_errors
+            .into_iter()
+            .map(|(path, error)| KnowledgeReadError {
+                path: Some(path),
+                error: ApiError::from(error),
+            })
+            .collect(),
         trash: value(trash)?,
         schema,
         schema_generation,
@@ -780,9 +842,10 @@ async fn populate_labels(
     {
         Ok(output) => output,
         Err(error) => {
-            bundle
-                .warnings
-                .push(format!("标签编译不可用：{}", error.message));
+            bundle.errors.push(KnowledgeReadError {
+                path: Some(path.clone()),
+                error,
+            });
             return Ok(());
         }
     };
@@ -872,7 +935,7 @@ async fn qualify_link_fragment(
     let link = knowledge::native_links(&bundle.selected.source)
         .into_iter()
         .find(|link| link.from == occurrence_from)
-        .ok_or_else(|| ApiError::bad("链接位置已经变化"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_link_position_changed()))?;
     if let Some((address, _)) = link.target.split_once('#') {
         let target = knowledge::resolve_link(address, &bundle.selected, &bundle.inventory).target;
         if let Some(target) = target {
@@ -909,10 +972,9 @@ fn render_tree(
     context: &Context,
     environment_key: &str,
 ) -> Result<Option<weftext_engine::RenderNode>, ApiError> {
-    let renders = state
-        .renders
-        .lock()
-        .map_err(|_| ApiError::internal("预览会话不可用"))?;
+    let renders = state.renders.lock().map_err(|_| {
+        ApiError::internal(UiMessage::error_api_knowledge_preview_session_unavailable())
+    })?;
     let Some(render) = renders.get(&context.session_id).filter(|render| {
         render.source == context.source
             && render.serial == context.serial
@@ -926,7 +988,9 @@ fn render_tree(
     }
     serde_json::from_value(render.output["tree"].clone())
         .map(Some)
-        .map_err(|_| ApiError::internal("预览正文映射无效"))
+        .map_err(|_| {
+            ApiError::internal(UiMessage::error_api_knowledge_preview_body_mapping_invalid())
+        })
 }
 fn mentions(
     state: &AppState,
@@ -980,7 +1044,10 @@ fn annotation_projection(
     }).collect();
     json!(items)
 }
-async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -> ApiResult {
+async fn read(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<ReadRequest>,
+) -> ApiResult {
     observe(&state, &request.context)?;
     let mut bundle = bundle(&state, &request.context).await?;
     populate_diagnostic_labels(&state, &request.context, &mut bundle).await?;
@@ -1009,9 +1076,9 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         || !knowledge::source_link_projection_complete(&bundle.selected.source, &draft_links.links)
     {
         index.coverage = knowledge::Coverage::Partial;
-        bundle.warnings.push(
-            "当前草稿出链因范围上限或未验证原生依赖而部分可用；已确认结果保留，列表不代表完整零结果。".into(),
-        );
+        bundle
+            .warnings
+            .push(UiMessage::error_api_knowledge_draft_outgoing_partial().into());
     }
     index.outgoing = draft_links
         .links
@@ -1029,10 +1096,9 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         .collect();
     if !weftext_engine::inspect_editor(&request.context.source).syntax_valid {
         index.coverage = knowledge::Coverage::Partial;
-        bundle.warnings.push(
-            "当前草稿的原生语法尚未完整解析，出链列表不代表完整零结果；请保留源码并修复语法。"
-                .into(),
-        );
+        bundle
+            .warnings
+            .push(UiMessage::error_api_knowledge_draft_outgoing_syntax_partial().into());
     }
     let mut links = value(index)?;
     for group in ["outgoing", "incomingId", "incomingPath"] {
@@ -1098,14 +1164,14 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
                 &resources.resources,
             ),
             "available",
-            Vec::<String>::new(),
+            Vec::<ApiError>::new(),
         ),
         Err(error) => {
             let recovered = knowledge::recover_discussion(
                 bundle.annotations_file.bytes.as_deref().unwrap_or_default(),
             );
             let discussion:Vec<_>=recovered.into_iter().map(|view|json!({"id":view.annotation_id,"annotationId":view.annotation_id,"body":view.body,"purpose":"recovered","reviewState":view.review_state,"author":view.attribution,"createdAt":view.created_at,"targetResolution":"recoveredUnverified","verified":false})).collect();
-            (json!(discussion), "unavailable", vec![error.message])
+            (json!(discussion), "unavailable", vec![error])
         }
     };
     let mut property_inputs = Vec::new();
@@ -1138,7 +1204,7 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
             }
             Err(error) => {
                 property_complete = false;
-                property_diagnostics.push(error.to_string());
+                property_diagnostics.extend(error.into_diagnostics());
             }
         }
     }
@@ -1279,7 +1345,7 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "stale_schema",
-            "字段定义已变化，请重新读取；当前草稿保留",
+            UiMessage::error_api_knowledge_field_definition_changed(),
         ));
     }
     // The graph and its tag forest are one read. A concurrent reparent must
@@ -1300,31 +1366,37 @@ async fn read(State(state): State<AppState>, Json(request): Json<ReadRequest>) -
     let templates = match template_catalog(&bundle) {
         Ok(catalog) => catalog,
         Err(error) => {
-            bundle.warnings.push(error.message);
+            bundle.errors.push(KnowledgeReadError { path: None, error });
             builtin_template_catalog()
         }
     };
     Ok(Json(
-        json!({"graph":graph,"headingStructure":heading_structure,"links":links,"diagnostics":link_diagnostics,"renderedLinks":rendered_links,"propertyReferences":property_references,"citations":citations,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings}),
+        json!({"graph":graph,"headingStructure":heading_structure,"links":links,"diagnostics":link_diagnostics,"renderedLinks":rendered_links,"propertyReferences":property_references,"citations":citations,"mentions":mentions,"annotations":annotations,"annotationStatus":annotation_status,"annotationDiagnostics":diagnostics,"templates":templates,"trash":bundle.trash,"warnings":bundle.warnings,"errors":bundle.errors}),
     ))
 }
 fn unsigned(value: &Value, key: &str) -> Result<u64, ApiError> {
-    value[key]
-        .as_u64()
-        .ok_or_else(|| ApiError::bad(format!("无效的 {key}")))
+    value[key].as_u64().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_invalid_field(
+            weftext_messages::params::ErrorApiKnowledgeInvalidField { field: key.into() },
+        ))
+    })
 }
 fn number(value: &Value, key: &str) -> Result<f64, ApiError> {
     value[key]
         .as_f64()
         .filter(|value| value.is_finite())
-        .ok_or_else(|| ApiError::bad(format!("无效的 {key}")))
+        .ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_invalid_field(
+                weftext_messages::params::ErrorApiKnowledgeInvalidField { field: key.into() },
+            ))
+        })
 }
 fn supplied_number(value: &Value, key: &str, actual: f64) -> Result<(), ApiError> {
     if !value[key].is_null() && number(value, key)? != actual {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "resource_geometry",
-            "输入的页面、像素或时基与准确资源版本不符；标注草稿保留",
+            UiMessage::error_api_knowledge_resource_geometry_mismatch(),
         ));
     }
     Ok(())
@@ -1333,11 +1405,9 @@ fn target_from_resource(
     input: &Value,
     resource: &crate::media_api::QualifiedResource,
 ) -> Result<knowledge::AnnotationTarget, ApiError> {
-    let revision_id = resource
-        .file
-        .revision
-        .clone()
-        .ok_or_else(|| ApiError::bad("资源尚无已接纳的准确版本"))?;
+    let revision_id = resource.file.revision.clone().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_resource_version_unadmitted())
+    })?;
     target_from_resource_metadata(
         input,
         &resource.resource_ref,
@@ -1360,12 +1430,16 @@ pub(crate) fn target_from_resource_metadata(
             revision_id: revision_id.to_owned(),
         };
         if address.is_empty() || revision_id.is_empty() {
-            return Err(ApiError::bad("整资源评论需要准确资源引用和已接纳版本"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_whole_resource_version_required(),
+            ));
         }
         return Ok(target);
     }
-    let facts = crate::media_api::metadata_facts(metadata, address, revision_id)
-        .ok_or_else(|| ApiError::bad("此资源缺少已验证的区域证据"))?;
+    let facts =
+        crate::media_api::metadata_facts(metadata, address, revision_id).ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_resource_geometry_unavailable())
+        })?;
     let address = address.to_owned();
     let revision_id = revision_id.to_owned();
     let target = match (text(input, "kind")?, metadata) {
@@ -1394,10 +1468,10 @@ pub(crate) fn target_from_resource_metadata(
         }
         ("pdf_region" | "pdfRegion", crate::media_api::ResourceMetadata::Pdf { pages }) => {
             let page_index = u32::try_from(unsigned(input, "pageIndex")?)
-                .map_err(|_| ApiError::bad("无效 PDF 页号"))?;
-            let page = pages
-                .get(page_index as usize)
-                .ok_or_else(|| ApiError::bad("PDF 页号超出准确资源"))?;
+                .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_pdf_page_invalid()))?;
+            let page = pages.get(page_index as usize).ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_pdf_page_outside_resource())
+            })?;
             supplied_number(input, "width", page.width)?;
             supplied_number(input, "height", page.height)?;
             supplied_number(input, "rotation", f64::from(page.rotation))?;
@@ -1479,7 +1553,7 @@ pub(crate) fn target_from_resource_metadata(
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "unsupported_resource_target",
-                "此标注形式与资源的真实媒体类型不符，或资源格式还没有准确读取器；输入已保留",
+                UiMessage::error_api_knowledge_annotation_media_unsupported(),
             ));
         }
     };
@@ -1547,13 +1621,13 @@ fn citation_catalog(bundle: &Bundle, tree: Option<&weftext_engine::RenderNode>) 
                 )
                 .is_ok()
             });
-        choices.push(json!({"reference":reference,"title":node.title.as_deref().unwrap_or("未设置可确认标题"),"node":node.owner,"citationReady":ready,"suggestedKey":suggestion,"reason":if ready {None} else {Some("正式文献引用需要已获权且符合 library/work 的完整出版数据；仍可插入普通链接。")}}));
+        choices.push(json!({"reference":reference,"title":node.title,"titlePlaceholder":UiMessage::error_api_knowledge_title_unconfirmed(),"node":node.owner,"citationReady":ready,"suggestedKey":suggestion,"reason":if ready {None} else {Some(weftext_messages::ErrorDescription::from(UiMessage::error_api_knowledge_citation_publication_required()))}}));
     }
     let mut editor = weftext_engine::inspect_native_citation_editor(&selected.source);
     if !bundle.citation_rename_available {
         editor.rename_available = false;
         editor.rename_reason =
-            Some("当前库样式可能生成外部引用，不能证明完整改名范围；保留源码。".into());
+            Some(UiMessage::error_api_knowledge_citation_rename_scope_unproven().into());
     }
     // Source controls are deliberately kept separate from target-specific
     // display evidence. An unexecuted cite is never counted as visible.
@@ -1609,8 +1683,8 @@ fn citation_catalog(bundle: &Bundle, tree: Option<&weftext_engine::RenderNode>) 
     let displayed = tree
         .map(crate::citation_api::displayed_citations)
         .unwrap_or_default();
-    let links=knowledge::native_links(&selected.source).into_iter().filter(|link|link.kind=="native").map(|link|{let resolution=knowledge::resolve_link(&link.target,selected,&bundle.inventory);let title=resolution.target.and_then(|target|bundle.inventory.nodes.iter().find(|node|node.owner==target)).and_then(|node|node.title.clone());json!({"range":{"from":link.from,"to":link.to,"utf16From":link.utf16_from,"utf16To":link.utf16_to,"raw":selected.source.get(link.from..link.to).unwrap_or(""),"writable":true},"target":link.target,"editable":title.is_some()&&link.body_explicit,"title":title,"reason":"无可确认的获权标题或唯一可写正文；请保留源码。"})}).collect::<Vec<_>>();
-    json!({"generation":bundle.inventory.generation,"coverage":if citation_complete{"complete"}else{"partial"},"choices":choices,"editor":editor,"bindings":groups,"incoming":incoming,"displayed":displayed,"links":links,"bibliographyOwnership":if bundle.citation_rename_available && crate::citation_api::owns_single_virtual_bibliography(&selected.source){"singleVirtual"}else{"unavailable"},"displayStatus":if tree.is_some(){"nativeCompileAvailable"}else{"unavailable"},"displayExplanation":"源码引用槽与本次 HTML 编译的显示项分别记录；仅绑定、未执行的条件和 bibliography(full: true) 不计可见正文引用。多个文献表或未知归属的 key 不猜接 Work。"})
+    let links=knowledge::native_links(&selected.source).into_iter().filter(|link|link.kind=="native").map(|link|{let resolution=knowledge::resolve_link(&link.target,selected,&bundle.inventory);let title=resolution.target.and_then(|target|bundle.inventory.nodes.iter().find(|node|node.owner==target)).and_then(|node|node.title.clone());json!({"range":{"from":link.from,"to":link.to,"utf16From":link.utf16_from,"utf16To":link.utf16_to,"raw":selected.source.get(link.from..link.to).unwrap_or(""),"writable":true},"target":link.target,"editable":title.is_some()&&link.body_explicit,"title":title,"reason":if title.is_some()&&link.body_explicit {None} else {Some(weftext_messages::ErrorDescription::from(UiMessage::error_api_knowledge_native_link_title_unavailable()))}})}).collect::<Vec<_>>();
+    json!({"generation":bundle.inventory.generation,"coverage":if citation_complete{"complete"}else{"partial"},"choices":choices,"editor":editor,"bindings":groups,"incoming":incoming,"displayed":displayed,"links":links,"bibliographyOwnership":if bundle.citation_rename_available && crate::citation_api::owns_single_virtual_bibliography(&selected.source){"singleVirtual"}else{"unavailable"},"displayStatus":if tree.is_some(){"nativeCompileAvailable"}else{"unavailable"},"displayExplanation":UiMessage::error_api_knowledge_citation_display_boundary()})
 }
 
 async fn citation_products(
@@ -1628,7 +1702,7 @@ async fn citation_products(
     let environment = crate::writing_api::style_environment(state, &context.session_id).await?;
     if environment.key != bundle.style_generation {
         return Err(ApiError::bad(
-            "原生样式环境已变化，请重新读取引用；输入保留",
+            UiMessage::error_api_knowledge_native_style_changed(),
         ));
     }
     let expected = bundle
@@ -1658,7 +1732,7 @@ async fn citation_products(
             if expected.get(&file.path) != Some(&(file.bytes.clone(), file.node_id.clone())) {
                 return Err(weftext_core::CoreError::new(
                     "citationCutChanged",
-                    "引用目录与冻结编译不属于同次原生源依据",
+                    UiMessage::error_api_knowledge_citation_compile_basis_mismatch(),
                 ));
             }
         }
@@ -1708,9 +1782,9 @@ async fn citation_products(
         .as_ref()
         .map(|citation| citation.virtual_path.as_str());
     for dependency in output["dependencies"].as_array().into_iter().flatten() {
-        let path = dependency["path"]
-            .as_str()
-            .ok_or_else(|| ApiError::bad("原生引用依赖没有准确地址"))?;
+        let path = dependency["path"].as_str().ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_citation_dependency_address_missing())
+        })?;
         if derived_render_input(dependency) {
             continue;
         }
@@ -1724,7 +1798,9 @@ async fn citation_products(
                 )
             })
         {
-            return Err(ApiError::bad("原生引用依赖无法完整证明，原稿保留"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_citation_dependencies_unqualified(),
+            ));
         }
         if loc
             .root
@@ -1737,13 +1813,9 @@ async fn citation_products(
         let expected = if virtual_path == Some(path) {
             None
         } else {
-            Some(
-                captured
-                    .files
-                    .get(path)
-                    .cloned()
-                    .ok_or_else(|| ApiError::bad("原生引用依赖未进入冻结源范围"))?,
-            )
+            Some(captured.files.get(path).cloned().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_citation_dependency_outside_cut())
+            })?)
         };
         checks.push((loc.root.join(path).to_string_lossy().into_owned(), expected));
     }
@@ -1780,7 +1852,7 @@ async fn citation_products(
                 {
                     return Err(weftext_core::CoreError::new(
                         "citationDependencyChanged",
-                        "引用编译依赖已变化，未交付旧位置或编号",
+                        UiMessage::error_api_knowledge_citation_dependencies_changed(),
                     ));
                 }
             }
@@ -1806,30 +1878,30 @@ fn native_citation_intent(
     ) && !bundle.citation_rename_available
     {
         return Err(ApiError::bad(
-            "当前库样式可能生成引用，无法证明完整改名范围；原稿保留",
+            UiMessage::error_api_knowledge_style_generated_citation_rename_unsupported(),
         ));
     }
     if intent["generation"].as_str() != Some(bundle.inventory.generation.as_str()) {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "stale_index",
-            "引用目录或当前草稿已变化，请刷新后重试；输入保留",
+            UiMessage::error_api_knowledge_citation_catalog_changed(),
         ));
     }
     let fail = |error: weftext_engine::EngineError| {
-        ApiError::new(
-            StatusCode::CONFLICT,
-            "unsupported_citation_edit",
-            error.to_string(),
-        )
+        ApiError::from_engine(StatusCode::CONFLICT, "unsupported_citation_edit", error)
     };
     let range = || {
-        serde_json::from_value::<weftext_engine::SourceRange>(intent["range"].clone())
-            .map_err(|_| ApiError::bad("缺少准确原生引用范围"))
+        serde_json::from_value::<weftext_engine::SourceRange>(intent["range"].clone()).map_err(
+            |_| {
+                ApiError::bad(UiMessage::error_api_knowledge_exact_native_citation_range_required())
+            },
+        )
     };
     let form = || {
-        serde_json::from_value::<weftext_engine::CitationForm>(intent["form"].clone())
-            .map_err(|_| ApiError::bad("请选择准确引用形式"))
+        serde_json::from_value::<weftext_engine::CitationForm>(intent["form"].clone()).map_err(
+            |_| ApiError::bad(UiMessage::error_api_knowledge_exact_citation_form_required()),
+        )
     };
     match text(intent, "kind")? {
         "nativeCitationInsert" => {
@@ -1844,7 +1916,9 @@ fn native_citation_intent(
                         node.owner.workspace_id, node.owner.node_id
                     ) == work
                 })
-                .ok_or_else(|| ApiError::bad("所选 Work 当前不可用；请刷新目录"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_selected_work_unavailable())
+                })?;
             let node = if node.owner == bundle.selected.owner {
                 &bundle.selected
             } else {
@@ -1858,7 +1932,7 @@ fn native_citation_intent(
                     .any(|kind| kind == "library/work")
             {
                 return Err(ApiError::bad(
-                    "目标不符合正式文献类型，请选择普通链接或完善出版数据",
+                    UiMessage::error_api_knowledge_formal_publication_required(),
                 ));
             }
             let publication = projection
@@ -1867,7 +1941,9 @@ fn native_citation_intent(
                 .find(|field| field.field_id == "library/publication")
                 .and_then(|field| field.cell.native())
                 .cloned()
-                .ok_or_else(|| ApiError::bad("目标出版数据当前不可用"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_publication_data_unavailable())
+                })?;
             weftext_export::bibliography::project_bibliography(
                 &[weftext_export::bibliography::CitationWork {
                     key: "validation".into(),
@@ -1879,7 +1955,16 @@ fn native_citation_intent(
                 }],
                 weftext_export::bibliography::BibliographyFormat::Bibtex,
             )
-            .map_err(|error| ApiError::bad(error.to_string()))?;
+            .map_err(|error| {
+                let (description, diagnostics) = error.into_parts();
+                ApiError::from_product(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    None,
+                    description,
+                    diagnostics,
+                )
+            })?;
             let suggestion = publication
                 .member("citation_key")
                 .and_then(weftext_data::NativeValue::text)
@@ -1934,12 +2019,16 @@ fn native_citation_intent(
                         node.owner.workspace_id, node.owner.node_id
                     ) == reference
                 })
-                .ok_or_else(|| ApiError::bad("链接目标当前不可用，请刷新后重新选择"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_link_target_unavailable())
+                })?;
             let display = intent["text"]
                 .as_str()
                 .filter(|text| !text.is_empty())
                 .or(target.title.as_deref())
-                .ok_or_else(|| ApiError::bad("目标没有可确认标题，请明确输入显示文字"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_explicit_link_text_required())
+                })?;
             weftext_engine::insert_native_link(
                 source,
                 &hash,
@@ -1953,11 +2042,15 @@ fn native_citation_intent(
             let from = intent["occurrence"]["from"]
                 .as_u64()
                 .and_then(|n| usize::try_from(n).ok())
-                .ok_or_else(|| ApiError::bad("缺少准确链接范围"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_exact_link_range_required())
+                })?;
             let to = intent["occurrence"]["to"]
                 .as_u64()
                 .and_then(|n| usize::try_from(n).ok())
-                .ok_or_else(|| ApiError::bad("缺少准确链接范围"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_exact_link_range_required())
+                })?;
             let link = knowledge::native_links(source)
                 .into_iter()
                 .find(|link| {
@@ -1965,7 +2058,9 @@ fn native_citation_intent(
                         && link.to == to
                         && intent["occurrence"]["target"] == link.target
                 })
-                .ok_or_else(|| ApiError::bad("当前准确链接出现项已变化"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_link_occurrence_changed())
+                })?;
             let resolution =
                 knowledge::resolve_link(&link.target, &bundle.selected, &bundle.inventory);
             let target = resolution
@@ -1977,7 +2072,9 @@ fn native_citation_intent(
                         .iter()
                         .find(|node| node.owner == target)
                 })
-                .ok_or_else(|| ApiError::bad("目标当前不可读，未交付旧标题或修改显示文字"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_link_target_unreadable())
+                })?;
             let range = weftext_engine::SourceRange {
                 from,
                 to,
@@ -1986,10 +2083,9 @@ fn native_citation_intent(
                 raw: source[from..to].into(),
                 writable: true,
             };
-            let title = target
-                .title
-                .as_deref()
-                .ok_or_else(|| ApiError::bad("目标没有可确认的当前标题，未改变原显示文字"))?;
+            let title = target.title.as_deref().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_current_title_unavailable())
+            })?;
             weftext_engine::update_native_link_text(source, &hash, &range, title).map_err(fail)
         }
         "nativeReferenceInsert" => {
@@ -2002,7 +2098,9 @@ fn native_citation_intent(
                     .iter()
                     .any(|target| target.label == label && target.unique)
                 {
-                    return Err(ApiError::bad("标签缺失或不唯一，请刷新后重新选择"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_knowledge_label_missing_or_duplicate(),
+                    ));
                 }
                 weftext_engine::insert_native_cross_link(
                     source,
@@ -2014,7 +2112,9 @@ fn native_citation_intent(
                 .map_err(fail)
             } else {
                 if !matches!(form, "normal" | "page") {
-                    return Err(ApiError::bad("未知交叉引用形式"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_citations_unknown_cross_reference_form(),
+                    ));
                 }
                 weftext_engine::insert_native_cross_reference(
                     source,
@@ -2036,11 +2136,15 @@ fn native_citation_intent(
         "nativeReferenceInsertWithLabel" => {
             let target =
                 serde_json::from_value::<weftext_engine::SourceRange>(intent["target"].clone())
-                    .map_err(|_| ApiError::bad("缺少准确原生对象范围"))?;
+                    .map_err(|_| {
+                        ApiError::bad(
+                            UiMessage::error_api_knowledge_exact_native_object_range_required(),
+                        )
+                    })?;
             let form = text(intent, "form")?;
             if !matches!(form, "normal" | "page") {
                 return Err(ApiError::bad(
-                    "补标签同稿目前支持编号或页码引用，请在已有标签上插入自定义文字链接",
+                    UiMessage::error_api_knowledge_labelled_reference_form_unsupported(),
                 ));
             }
             weftext_engine::insert_native_cross_reference_with_label(
@@ -2053,7 +2157,9 @@ fn native_citation_intent(
             )
             .map_err(fail)
         }
-        _ => Err(ApiError::bad("未知原生引用操作")),
+        _ => Err(ApiError::bad(
+            UiMessage::error_api_knowledge_unknown_native_citation_operation(),
+        )),
     }
 }
 
@@ -2081,13 +2187,16 @@ fn clean_source(context: &Context, bundle: &Bundle) -> Result<(), ApiError> {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "save_required",
-            "这次批注操作需要已保存的准确原文；请先保存当前草稿，输入的讨论和建议会保留",
+            UiMessage::error_api_knowledge_saved_body_required(),
         ));
     }
     Ok(())
 }
 
-async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareRequest>) -> ApiResult {
+async fn prepare(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<PrepareRequest>,
+) -> ApiResult {
     observe(&state, &request.context)?;
     let kind = text(&request.intent, "kind")?;
     let loc = location(&state, &request.context.session_id)?;
@@ -2118,8 +2227,10 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
         && !kind.starts_with("nativeReference")
     {
         let loc = location(&state, &request.context.session_id)?;
-        let intent: OperationIntent = serde_json::from_value(request.intent)
-            .map_err(|error| ApiError::bad(error.to_string()))?;
+        let intent: OperationIntent = serde_json::from_value(request.intent).map_err(|error| {
+            ApiError::bad(UiMessage::error_api_knowledge_request_intent_json_invalid())
+                .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
+        })?;
         let op = OperationRequest {
             operation_id: request.operation_id,
             root: loc.root.to_string_lossy().into_owned(),
@@ -2145,7 +2256,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
         if kind == "nativeReferenceInsertWithLabel" {
             let (tree, _) = citation_products(&state, &request.context, &bundle).await?;
             let tree = tree.ok_or_else(|| {
-                ApiError::bad("请先等待当前原生预览完成，再选择准确对象；输入保留")
+                ApiError::bad(UiMessage::error_api_knowledge_preview_must_finish())
             })?;
             let target = &request.intent["target"];
             if request.intent["form"] == "normal"
@@ -2156,7 +2267,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                 .unwrap_or(false)
             {
                 return Err(ApiError::bad(
-                    "目标当前没有获证的可引用编号；可改为页码引用，或先设置对象编号",
+                    UiMessage::error_api_knowledge_reference_number_unavailable(),
                 ));
             }
             if !crate::citation_api::unlabelled_reference_targets(&request.context.source, &tree)
@@ -2164,7 +2275,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                 .any(|candidate| candidate["range"] == *target)
             {
                 return Err(ApiError::bad(
-                    "目标没有本次唯一原生对象及准确来源证明，原稿保留",
+                    UiMessage::error_api_knowledge_unique_native_origin_unavailable(),
                 ));
             }
         }
@@ -2183,7 +2294,9 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                             "heading" | "figure" | "table" | "equation" | "footnote"
                         )
                 })
-                .ok_or_else(|| ApiError::bad("目标标签缺失或有歧义"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_target_label_ambiguous())
+                })?;
             if request.intent["form"] == "normal"
                 && !tree
                     .as_ref()
@@ -2193,7 +2306,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                     .unwrap_or(false)
             {
                 return Err(ApiError::bad(
-                    "目标当前没有获证的可引用编号；请用自定义文字链接或适用的页码引用",
+                    UiMessage::error_api_knowledge_numbered_reference_unavailable(),
                 ));
             }
             if !labels.iter().any(|compiled| {
@@ -2205,7 +2318,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                         .any(|origin| origin.is_main && origin.from == target.range.from)
             }) {
                 return Err(ApiError::bad(
-                    "目标没有本次准确编译与唯一作者来源证明，请刷新预览再选择；原稿保留",
+                    UiMessage::error_api_knowledge_current_compilation_origin_required(),
                 ));
             }
         }
@@ -2223,17 +2336,19 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "stale_index",
-                "链接字典或当前草稿已变化，请重新读取；草稿保留",
+                UiMessage::error_api_knowledge_link_dictionary_changed(),
             ));
         }
         let patch = if kind == "linkConvert" {
             let from = request.intent["occurrence"]["from"]
                 .as_u64()
                 .and_then(|from| usize::try_from(from).ok())
-                .ok_or_else(|| ApiError::bad("缺少准确链接位置"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_exact_link_position_required())
+                })?;
             qualify_link_fragment(&state, &request.context, &mut bundle, from).await?;
             let form: knowledge::LinkForm = serde_json::from_value(request.intent["form"].clone())
-                .map_err(|_| ApiError::bad("未知链接形式"))?;
+                .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_unknown_link_form()))?;
             knowledge::convert_link_with_resource_fragments(
                 &bundle.selected,
                 &bundle.inventory,
@@ -2258,7 +2373,9 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
                         .iter()
                         .find(|hit| hit.start_scalar == from && hit.end_scalar == to)
                 })
-                .ok_or_else(|| ApiError::bad("当前预览没有这一准确候选范围"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_preview_candidate_unavailable())
+                })?;
             let target = node_ref(&request.intent["target"])?;
             knowledge::convert_mention_fragment(
                 &bundle.selected,
@@ -2299,8 +2416,9 @@ async fn frozen_feature_preview(
     if let Some(file) = files.iter().find(|file| {
         file.path == loc.path.to_string_lossy() && file.before.as_ref() != Some(&file.after)
     }) {
-        let after = std::str::from_utf8(&file.after)
-            .map_err(|_| ApiError::internal("准备结果正文不是 UTF-8"))?;
+        let after = std::str::from_utf8(&file.after).map_err(|_| {
+            ApiError::internal(UiMessage::error_api_knowledge_prepared_body_encoding())
+        })?;
         output["source"] = json!(after);
         output["edit"] = json!({"from":0,"to":context.source.encode_utf16().count(),"text":after});
     }
@@ -2316,13 +2434,17 @@ fn utf16_byte(source: &str, offset: usize) -> Result<usize, ApiError> {
         }
         units += ch.len_utf16();
         if units > offset {
-            return Err(ApiError::bad("选区分割了 UTF-16 字符"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_review_selection_splits_utf16(),
+            ));
         }
     }
     if units == offset {
         Ok(source.len())
     } else {
-        Err(ApiError::bad("选区超出当前正文"))
+        Err(ApiError::bad(
+            UiMessage::error_api_knowledge_selection_outside_body(),
+        ))
     }
 }
 fn source_target(
@@ -2340,14 +2462,16 @@ fn source_target(
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "revision_required",
-                    "此原文尚无 Core 验证的持久版本，请先保存原文再建立范围批注；讨论输入已保留",
+                    UiMessage::error_api_knowledge_persistent_source_version_required(),
                 ));
             }
             let from = utf16_byte(&context.source, integer(target, "from")?)?;
             let to = utf16_byte(&context.source, integer(target, "to")?)?;
             let point = target["kind"] == "source_point";
             if !point && from >= to || point && from != to {
-                return Err(ApiError::bad("范围批注需要非空选区"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_knowledge_nonempty_annotation_range_required(),
+                ));
             }
             if point
                 && !knowledge::writable_suggestion_range(
@@ -2356,7 +2480,9 @@ fn source_target(
                         .map_err(knowledge_error)?,
                 )
             {
-                return Err(ApiError::bad("插入点须位于准确可写的普通正文中"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_knowledge_writable_body_insertion_required(),
+                ));
             }
             let anchor = knowledge::source_anchor(
                 &bundle.committed,
@@ -2388,7 +2514,7 @@ fn source_target(
                     return Err(ApiError::new(
                         StatusCode::CONFLICT,
                         "element_evidence",
-                        "当前选区没有完整源元素的语法证明；请改用准确源范围，批注输入保留",
+                        UiMessage::error_api_knowledge_complete_source_element_unproved(),
                     ));
                 }
                 Ok(knowledge::AnnotationTarget::SourceElement {
@@ -2402,7 +2528,7 @@ fn source_target(
         _ => Err(ApiError::new(
             StatusCode::CONFLICT,
             "resource_evidence_required",
-            "媒体区域需要已读取资源版本及真实页面、像素或时基证据；当前输入保留，请先打开准确资源",
+            UiMessage::error_api_knowledge_media_evidence_required(),
         )),
     }
 }
@@ -2443,6 +2569,44 @@ fn new_record(
         unknown: BTreeMap::new(),
     }
 }
+/// Materialize a new author record only after the caller has selected its content language.
+/// Configured author rule text is exact content and is never translated.
+pub(crate) fn proofreading_annotation_body(
+    finding: &knowledge::ProofreadFinding,
+    locale: weftext_messages::UiLocale,
+) -> String {
+    let explanation = match &finding.message {
+        knowledge::ProofreadMessage::Product { explanation } => explanation.render(locale),
+        knowledge::ProofreadMessage::Author { author_message } => author_message.clone(),
+    };
+    match &finding.replacement {
+        Some(replacement) => {
+            UiMessage::error_api_knowledge_proofreading_annotation_with_replacement(
+                weftext_messages::params::ErrorApiKnowledgeProofreadingAnnotationWithReplacement {
+                    excerpt: finding.excerpt.clone(),
+                    finding: explanation,
+                    original: finding.excerpt.clone(),
+                    replacement: replacement.clone(),
+                },
+            )
+            .render(locale)
+        }
+        None => UiMessage::error_api_knowledge_proofreading_annotation(
+            weftext_messages::params::ErrorApiKnowledgeProofreadingAnnotation {
+                excerpt: finding.excerpt.clone(),
+                finding: explanation,
+            },
+        )
+        .render(locale),
+    }
+}
+
+fn proofreading_annotation_locale(intent: &Value) -> Result<weftext_messages::UiLocale, ApiError> {
+    text(intent, "annotationLocale")?
+        .parse()
+        .map_err(|_| ApiError::bad(UiMessage::error_api_knowledge_annotation_locale_invalid()))
+}
+
 async fn prepare_annotation(
     state: &AppState,
     request: PrepareRequest,
@@ -2451,6 +2615,9 @@ async fn prepare_annotation(
 ) -> ApiResult {
     let document = annotation_document(&bundle.annotations_file)?;
     let kind = text(&request.intent, "kind")?;
+    if kind == "annotationProofread" {
+        proofreading_annotation_locale(&request.intent)?;
+    }
     let mut source_patch = None;
     let mut changes = Vec::new();
     let mut media_target = None;
@@ -2479,10 +2646,9 @@ async fn prepare_annotation(
         .await?;
         media_target = Some(target_from_resource(input, &resource)?);
         for file in [&resource.file, &resource.manifest] {
-            let bytes = file
-                .bytes
-                .clone()
-                .ok_or_else(|| ApiError::bad("已接纳资源缺少准确字节"))?;
+            let bytes = file.bytes.clone().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_admitted_resource_bytes_missing())
+            })?;
             changes.push(FileChange {
                 path: file.path.clone(),
                 base_id: Some(file.base_id.clone()),
@@ -2529,23 +2695,34 @@ async fn prepare_annotation(
     }
     let after = match kind {
         "annotationProofread" => {
+            let annotation_locale = proofreading_annotation_locale(&request.intent)?;
             clean_source(&request.context, &bundle)?;
             let options: knowledge::ProofreadOptions =
-                serde_json::from_value(request.intent["options"].clone())
-                    .map_err(|e| ApiError::bad(e.to_string()))?;
+                serde_json::from_value(request.intent["options"].clone()).map_err(|e| {
+                    ApiError::bad(UiMessage::error_api_knowledge_annotation_options_json_invalid())
+                        .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string())
+                })?;
             let processing_dependency =
                 validate_processing_origin(state, &request.context, &options).await?;
             let ids: BTreeSet<String> = serde_json::from_value(request.intent["findings"].clone())
-                .map_err(|_| ApiError::bad("请选择当前校对结果"))?;
+                .map_err(|_| {
+                    ApiError::bad(
+                        UiMessage::error_api_knowledge_current_proofread_results_required(),
+                    )
+                })?;
             if ids.is_empty() || ids.len() > 200 {
-                return Err(ApiError::bad("每批请选择 1 至 200 条校对结果"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_knowledge_proofread_selection_budget(),
+                ));
             }
             let scan = proofreading_scan(state, &request.context, &bundle, &options)?;
             validate_processing_origin(state, &request.context, &options).await?;
             if let Some(document) = processing_dependency {
-                let bytes = document
-                    .bytes
-                    .ok_or_else(|| ApiError::bad("原共享设置快照不可用"))?;
+                let bytes = document.bytes.ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_knowledge_shared_settings_snapshot_unavailable(),
+                    )
+                })?;
                 changes.push(FileChange {
                     path: document.path,
                     base_id: Some(document.base_id),
@@ -2557,7 +2734,9 @@ async fn prepare_annotation(
                 .iter()
                 .any(|id| !scan.findings.iter().any(|f| &f.id == id))
             {
-                return Err(ApiError::bad("所选校对结果已变化，请重新检查"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_knowledge_proofread_results_changed(),
+                ));
             }
             let editor = weftext_engine::inspect_editor(&bundle.committed.source);
             let mut records = vec![];
@@ -2565,10 +2744,11 @@ async fn prepare_annotation(
                 if existing_finding(&document, finding, &bundle.committed) {
                     continue;
                 }
-                let range = finding
-                    .source_range
-                    .as_ref()
-                    .ok_or_else(|| ApiError::bad("所选结果没有准确作者源位置，请保留只读提示"))?;
+                let range = finding.source_range.as_ref().ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_knowledge_proofread_author_range_unavailable(),
+                    )
+                })?;
                 let target = source_target(
                     &request.context,
                     &bundle,
@@ -2580,16 +2760,7 @@ async fn prepare_annotation(
                     });
                 let mut record = new_record(
                     target,
-                    format!(
-                        "{}：{}{}",
-                        finding.excerpt,
-                        finding.message,
-                        finding
-                            .replacement
-                            .as_ref()
-                            .map(|r| format!("；建议：{} → {r}", finding.excerpt))
-                            .unwrap_or_default()
-                    ),
+                    proofreading_annotation_body(finding, annotation_locale),
                     if executable { "suggestion" } else { "comment" }.into(),
                     if executable {
                         finding.replacement.clone()
@@ -2597,7 +2768,8 @@ async fn prepare_annotation(
                         None
                     },
                 );
-                record.attribution = "Weftext 校对".into();
+                record.attribution = UiMessage::error_api_knowledge_proofreading_attribution()
+                    .render(annotation_locale);
                 record.labels = vec!["proofreading".into(), finding.category.clone()];
                 if request.intent["ignore"] == true {
                     record.review_state = "resolved".into();
@@ -2620,11 +2792,15 @@ async fn prepare_annotation(
                 .unwrap_or("comment")
                 .to_owned();
             if !matches!(purpose.as_str(), "comment" | "mark" | "suggestion") {
-                return Err(ApiError::bad("未知批注目的"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_review_unknown_review_purpose(),
+                ));
             }
             let replacement = if purpose == "suggestion" {
                 if target.anchor().is_none() {
-                    return Err(ApiError::bad("文字建议需要已保存的准确原文选区"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_knowledge_saved_suggestion_range_required(),
+                    ));
                 }
                 Some(text(&request.intent, "replacement")?.into())
             } else {
@@ -2645,7 +2821,9 @@ async fn prepare_annotation(
                 .records
                 .iter()
                 .find(|record| record.annotation_id == id)
-                .ok_or_else(|| ApiError::bad("原讨论已变化"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_original_discussion_changed())
+                })?;
             let mut record = new_record(
                 parent.target.clone(),
                 text(&request.intent, "body")?.into(),
@@ -2658,9 +2836,9 @@ async fn prepare_annotation(
         "annotationResolve" => document
             .resolve(
                 text(&request.intent, "annotationId")?,
-                request.intent["resolved"]
-                    .as_bool()
-                    .ok_or_else(|| ApiError::bad("缺少讨论状态"))?,
+                request.intent["resolved"].as_bool().ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_discussion_state_required())
+                })?,
             )
             .map_err(knowledge_error)?,
         "annotationReject" => document
@@ -2696,13 +2874,15 @@ async fn prepare_annotation(
                 .iter()
                 .find(|record| record.annotation_id == id)
                 .and_then(|record| record.target.anchor())
-                .ok_or_else(|| ApiError::bad("此建议缺少准确原文目标"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_suggestion_target_missing())
+                })?;
             if !knowledge::writable_suggestion_range(&bundle.committed.source, &anchor.source_range)
             {
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "source_entry",
-                    "当前建议跨越代码或结构，缺少编辑器的安全文字写入证明；建议和草稿均保留",
+                    UiMessage::error_api_knowledge_suggestion_write_unproved(),
                 ));
             }
             let plan = knowledge::suggestion_plan(
@@ -2716,7 +2896,11 @@ async fn prepare_annotation(
                 .files
                 .iter()
                 .find(|file| file.path == bundle.committed.path)
-                .ok_or_else(|| ApiError::internal("建议缺少正文变动"))?;
+                .ok_or_else(|| {
+                    ApiError::internal(
+                        UiMessage::error_api_knowledge_suggestion_body_change_missing(),
+                    )
+                })?;
             changes.push(FileChange {
                 path: bundle.source_file.path.clone(),
                 base_id: Some(bundle.source_file.base_id.clone()),
@@ -2727,10 +2911,18 @@ async fn prepare_annotation(
             plan.files
                 .into_iter()
                 .find(|file| file.path == bundle.annotations_file.path)
-                .ok_or_else(|| ApiError::internal("建议缺少独立批注变动"))?
+                .ok_or_else(|| {
+                    ApiError::internal(
+                        UiMessage::error_api_knowledge_suggestion_sidecar_change_missing(),
+                    )
+                })?
                 .after
         }
-        _ => return Err(ApiError::bad("未知批注操作")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_unknown_annotation_operation(),
+            ));
+        }
     };
     changes.push(FileChange {
         path: bundle.annotations_file.path,
@@ -2769,7 +2961,7 @@ async fn prepare_annotation(
 
 async fn prepare_operation(
     State(state): State<AppState>,
-    Json(request): Json<OperationRequest>,
+    RequestJson(request): RequestJson<OperationRequest>,
 ) -> ApiResult {
     let prepared = core_call(&state, move |core| core.capture_sync_operation(request)).await?;
     let preview = match prepared {
@@ -2791,11 +2983,17 @@ async fn prepare_operation(
 struct TrashRequest {
     root: String,
 }
-async fn read_trash(State(state): State<AppState>, Json(request): Json<TrashRequest>) -> ApiResult {
+async fn read_trash(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<TrashRequest>,
+) -> ApiResult {
     let entries = core_call(&state, move |core| core.trash_entries(request.root)).await?;
     Ok(Json(json!({"trash":entries})))
 }
-async fn commit(State(state): State<AppState>, Json(request): Json<CommitRequest>) -> ApiResult {
+async fn commit(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<CommitRequest>,
+) -> ApiResult {
     if let Some(context) = &request.context {
         exact(&state, context)?;
     }
@@ -2811,11 +3009,8 @@ async fn commit(State(state): State<AppState>, Json(request): Json<CommitRequest
             {
                 return Err(weftext_core::CoreError::new(
                     "unknown",
-                    format!(
-                        "原操作 {} 的部分步骤可能已有作用，请检查原操作结果；草稿保留。{}",
-                        request.operation_id, error.message
-                    ),
-                ));
+                    UiMessage::error_api_knowledge_original_operation_effect_uncertain(weftext_messages::params::ErrorApiKnowledgeOriginalOperationEffectUncertain { operation_id: request.operation_id.clone() }),
+                ).caused_by(error));
             }
             Err(error) => return Err(error),
         };
@@ -2830,7 +3025,9 @@ fn canonical_leaf(directory: &Path) -> Result<PathBuf, ApiError> {
     let name = directory
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| ApiError::bad("操作结果缺少准确节点名称"))?;
+        .ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_operation_node_name_missing())
+        })?;
     Ok(directory.join(format!("{name}.typ")))
 }
 pub(crate) async fn operation_output(
@@ -2841,7 +3038,7 @@ pub(crate) async fn operation_output(
 ) -> Result<Value, ApiError> {
     let mut output = value(&receipt)?;
     if let Err(error) = operation_delivery(state, &preview, &receipt, context, &mut output).await {
-        output["documentError"] = json!({"code":error.code,"message":error.message});
+        output["documentError"] = value(error)?;
     }
     Ok(output)
 }
@@ -2941,13 +3138,17 @@ async fn operation_delivery(
                     output["documentSourceMatchesCommit"] = json!(matches);
                     if !matches {
                         output["externalChanged"] = json!(true);
-                        output["documentError"] = json!({"code":"externalChanged","message":"原操作已提交，但正文随后已变化；请保留当前草稿并比较准确磁盘版本"});
+                        output["documentError"] = value(ApiError::new(
+                            StatusCode::CONFLICT,
+                            "externalChanged",
+                            UiMessage::error_api_knowledge_committed_source_changed(),
+                        ))?;
                     }
                 }
                 output["document"] = document;
             }
             Err(error) => {
-                output["documentError"] = json!({"code":error.code,"message":error.message});
+                output["documentError"] = value(error)?;
             }
         }
     }
@@ -2963,7 +3164,7 @@ async fn operation_delivery(
         let locations: Vec<_> = state
             .locations
             .lock()
-            .map_err(|_| ApiError::internal("会话暂不可用"))?
+            .map_err(|_| ApiError::internal(UiMessage::error_file_session_unavailable()))?
             .iter()
             .filter(|(id, loc)| {
                 loc.path.starts_with(&source)
@@ -2977,10 +3178,9 @@ async fn operation_delivery(
                 affected.push(json!({"priorSessionId":id,"documentDisposition":"trashed","priorPath":loc.path}));
                 continue;
             }
-            let relative = loc
-                .path
-                .strip_prefix(&source)
-                .map_err(|_| ApiError::internal("移动会话范围不一致"))?;
+            let relative = loc.path.strip_prefix(&source).map_err(|_| {
+                ApiError::internal(UiMessage::error_api_knowledge_moved_session_scope_mismatch())
+            })?;
             let path =
                 if preview.kind != "relocateDirectory" && loc.path == canonical_leaf(&source)? {
                     canonical_leaf(&result)?
@@ -2990,7 +3190,7 @@ async fn operation_delivery(
             let operation_id = receipt.operation_id.clone();
             match core_call(state,move|core|core.reopen_local_operation_node(&operation_id,&path.to_string_lossy())).await {
                 Ok(document)=>{let document=value(document)?;remember(state,&document)?;affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","document":document}));},
-                Err(error)=>affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","documentError":{"code":error.code,"message":error.message}})),
+                Err(error)=>affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","documentError":value(error)?})),
             }
         }
         output["affectedDocuments"] = json!(affected);
@@ -3008,7 +3208,7 @@ struct LinkCopyRequest {
 }
 async fn link_copy(
     State(state): State<AppState>,
-    Json(request): Json<LinkCopyRequest>,
+    RequestJson(request): RequestJson<LinkCopyRequest>,
 ) -> ApiResult {
     observe(&state, &request.context)?;
     let mut bundle = bundle(&state, &request.context).await?;
@@ -3019,7 +3219,9 @@ async fn link_copy(
         .filter(|link| link.from == from)
         .collect();
     let [link] = links.as_slice() else {
-        return Err(ApiError::bad("请选择一条准确的原生链接"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_exact_native_link_required(),
+        ));
     };
     let start = if link.kind == "native"
         && link.from > 0
@@ -3033,7 +3235,7 @@ async fn link_copy(
         .context
         .source
         .get(start..link.to)
-        .ok_or_else(|| ApiError::bad("链接范围已经变化"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_link_range_changed()))?;
     let fragments = resource_qualifications(&bundle);
     let resolution = knowledge::resolve_link_with_resource_fragments(
         &link.target,
@@ -3059,15 +3261,14 @@ async fn link_copy(
         .to
         .checked_sub(patch.range.to - patch.range.from)
         .and_then(|end| end.checked_add(patch.replacement.len()))
-        .ok_or_else(|| ApiError::bad("复制链接范围溢出"))?;
-    let full_link = patch
-        .after
-        .get(start..end)
-        .ok_or_else(|| ApiError::bad("复制链接结果不在准确范围"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_copy_link_range_overflow()))?;
+    let full_link = patch.after.get(start..end).ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_copy_link_result_outside_range())
+    })?;
     let converted = knowledge::native_links(&patch.after)
         .into_iter()
         .find(|item| item.from == link.from || item.from == start + 1)
-        .ok_or_else(|| ApiError::bad("复制链接结果缺少准确原生地址"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_knowledge_copy_link_address_missing()))?;
     let address = converted.target;
     let proof = knowledge::resolve_link_with_resource_fragments(
         &address,
@@ -3080,14 +3281,19 @@ async fn link_copy(
         || proof.resource != resolution.resource
         || proof.fragment != resolution.fragment
     {
-        return Err(ApiError::bad("复制地址未返回同一准确目标"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_copy_link_target_mismatch(),
+        ));
     }
     exact(&state, &request.context)?;
     Ok(Json(
         json!({"address":address,"fullLink":full_link,"literal":false,"status":"resolved"}),
     ))
 }
-async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<StatusRequest>,
+) -> ApiResult {
     let id = request.operation_id.clone();
     let (fact, transaction) = core_call(&state, move |core| {
         let fact = core.local_operation_status(&id)?;
@@ -3098,7 +3304,7 @@ async fn status(State(state): State<AppState>, Json(request): Json<StatusRequest
                     core.committed_operation_receipt(&id)?.ok_or_else(|| {
                         weftext_core::CoreError::new(
                             "invalidState",
-                            "Committed original has no receipt",
+                            UiMessage::error_api_knowledge_committed_receipt_missing(),
                         )
                     })?,
                 )),
@@ -3151,7 +3357,7 @@ pub(crate) async fn file_save_delivery(state: &AppState, id: String, mut output:
     }
     .await;
     if let Err(error) = delivered {
-        output["documentError"] = json!({"code":error.code,"message":error.message});
+        output["documentError"] = json!(error);
     }
     output
 }
@@ -3162,11 +3368,16 @@ struct SettleRequest {
     request_kind: String,
     wire_digest: String,
 }
-async fn settle(State(state): State<AppState>, Json(request): Json<SettleRequest>) -> ApiResult {
+async fn settle(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<SettleRequest>,
+) -> ApiResult {
     if request.wire_digest.len() != 64
         || !request.wire_digest.bytes().all(|b| b.is_ascii_hexdigit())
     {
-        return Err(ApiError::bad("原请求字节摘要必须是 64 位十六进制 SHA-256"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_wire_digest_invalid(),
+        ));
     }
     let fact = core_call(&state, move |core| {
         core.settle_local_attempt(
@@ -3190,7 +3401,8 @@ fn draft_compile_files(
     files: &BTreeMap<String, Vec<u8>>,
     source: &str,
 ) -> Result<BTreeMap<String, Vec<u8>>, ApiError> {
-    let fail = || ApiError::bad("当前草稿没有唯一的已接纳主源编译位置；原稿与输入保留");
+    let fail =
+        || ApiError::bad(UiMessage::error_api_knowledge_unique_draft_compile_position_required());
     fn key(text: &str) -> Option<String> {
         let key = text.replace('\\', "/");
         if key.is_empty()
@@ -3251,13 +3463,17 @@ fn frozen_map(
         };
         let relative = Path::new(&file.path)
             .strip_prefix(root)
-            .map_err(|_| ApiError::bad("冻结编译输入不在资料库内"))?
+            .map_err(|_| {
+                ApiError::bad(UiMessage::error_api_knowledge_frozen_compile_input_outside_library())
+            })?
             .to_string_lossy()
             .replace('\\', "/");
         if let Some(previous) = out.insert(relative, bytes.clone())
             && previous != *bytes
         {
-            return Err(ApiError::bad("冻结输入同一路径含有不同事实"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_frozen_input_facts_conflict(),
+            ));
         }
     }
     Ok(out)
@@ -3282,7 +3498,9 @@ async fn validate_render_inputs(
     let mut qualified = Vec::new();
     for dependency in output["dependencies"].as_array().into_iter().flatten() {
         let Some(path) = dependency["path"].as_str() else {
-            return Err(ApiError::bad("编译依赖缺少准确位置"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_compile_dependency_position_missing(),
+            ));
         };
         if derived_render_input(dependency) {
             continue;
@@ -3298,14 +3516,14 @@ async fn validate_render_inputs(
                 ApiError::new(
                     StatusCode::CONFLICT,
                     "template_dependency",
-                    "模板含有未被准确读取的原生依赖；重新准备后再创建",
+                    UiMessage::error_api_knowledge_template_dependency_unread(),
                 )
             })?;
         if dependency["status"] != "loaded" {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "template_dependency",
-                "模板依赖在冻结范围内不可用；原文与参数保留",
+                UiMessage::error_api_knowledge_template_dependency_unavailable(),
             ));
         }
         if bases.insert(file.base_id.clone()) {
@@ -3328,7 +3546,7 @@ fn builtin_template_catalog() -> Value {
 }
 /// Reject duplicate JSON members at every depth before preserving unknown
 /// configuration fields. A last-wins parse cannot safely qualify a write.
-struct UniqueJson(Value);
+struct UniqueJson(Value, Vec<weftext_messages::ErrorDescription>);
 impl<'de> Deserialize<'de> for UniqueJson {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Visitor;
@@ -3338,54 +3556,62 @@ impl<'de> Deserialize<'de> for UniqueJson {
                 f.write_str("JSON without duplicate object members")
             }
             fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
+                Ok(UniqueJson(json!(v), Vec::new()))
             }
             fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
+                Ok(UniqueJson(json!(v), Vec::new()))
             }
             fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
+                Ok(UniqueJson(json!(v), Vec::new()))
             }
             fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
-                serde_json::Number::from_f64(v)
-                    .map(|n| UniqueJson(Value::Number(n)))
-                    .ok_or_else(|| E::custom("invalid number"))
+                Ok(match serde_json::Number::from_f64(v) {
+                    Some(number) => UniqueJson(Value::Number(number), Vec::new()),
+                    None => UniqueJson(
+                        Value::Null,
+                        vec![UiMessage::error_api_knowledge_template_number_invalid().into()],
+                    ),
+                })
             }
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
+                Ok(UniqueJson(json!(v), Vec::new()))
             }
             fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
+                Ok(UniqueJson(json!(v), Vec::new()))
             }
             fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UniqueJson(Value::Null))
+                Ok(UniqueJson(Value::Null, Vec::new()))
             }
             fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UniqueJson(Value::Null))
+                Ok(UniqueJson(Value::Null, Vec::new()))
             }
             fn visit_seq<A: serde::de::SeqAccess<'de>>(
                 self,
                 mut seq: A,
             ) -> Result<Self::Value, A::Error> {
                 let mut values = Vec::new();
-                while let Some(UniqueJson(v)) = seq.next_element()? {
+                let mut issues = Vec::new();
+                while let Some(UniqueJson(v, child_issues)) = seq.next_element()? {
                     values.push(v);
+                    issues.extend(child_issues);
                 }
-                Ok(UniqueJson(Value::Array(values)))
+                Ok(UniqueJson(Value::Array(values), issues))
             }
             fn visit_map<A: serde::de::MapAccess<'de>>(
                 self,
                 mut map: A,
             ) -> Result<Self::Value, A::Error> {
                 let mut values = serde_json::Map::new();
+                let mut issues = Vec::new();
                 while let Some(key) = map.next_key::<String>()? {
                     if values.contains_key(&key) {
-                        return Err(serde::de::Error::custom(format!("duplicate member {key}")));
+                        issues.push(UiMessage::error_api_knowledge_template_member_duplicate(weftext_messages::params::ErrorApiKnowledgeTemplateMemberDuplicate { member: key.clone() }).into());
                     }
-                    let UniqueJson(v) = map.next_value()?;
+                    let UniqueJson(v, child_issues) = map.next_value()?;
+                    issues.extend(child_issues);
                     values.insert(key, v);
                 }
-                Ok(UniqueJson(Value::Object(values)))
+                Ok(UniqueJson(Value::Object(values), issues))
             }
         }
         deserializer.deserialize_any(Visitor)
@@ -3397,27 +3623,45 @@ pub(crate) fn template_registry(
     let settings = file
         .bytes
         .as_ref()
-        .map(|bytes| serde_json::from_slice::<UniqueJson>(bytes).map(|v| v.0))
+        .map(|bytes| serde_json::from_slice::<UniqueJson>(bytes))
         .transpose()
         .map_err(|error| {
             ApiError::new(
                 StatusCode::CONFLICT,
                 "template_settings",
-                format!("模板设置 JSON 不可验证：{error}；原始字节保留"),
+                UiMessage::error_api_knowledge_template_settings_json_invalid(),
             )
+            .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
         })?
-        .unwrap_or_else(|| json!({"version":1}));
+        .unwrap_or_else(|| UniqueJson(json!({"version":1}), Vec::new()));
+    if !settings.1.is_empty() {
+        return Err(ApiError::from_product(
+            StatusCode::CONFLICT,
+            "template_settings",
+            None,
+            UiMessage::error_api_knowledge_template_settings_json_invalid().into(),
+            settings.1,
+        ));
+    }
+    let settings = settings.0;
     if !settings.is_object() {
-        return Err(ApiError::bad("资料库设置必须是对象；原始字节保留"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_settings_object_required(),
+        ));
     }
     let definitions: Vec<knowledge::TemplateDefinition> = match settings.get("templates") {
         None => vec![],
         Some(registry) if registry["version"] == 1 => {
             serde_json::from_value(registry["entries"].clone()).map_err(|error| {
-                ApiError::bad(format!("模板登记格式不可验证：{error}；原始字节保留"))
+                ApiError::bad(UiMessage::error_api_knowledge_template_registration_json_invalid())
+                    .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
             })?
         }
-        Some(_) => return Err(ApiError::bad("模板登记版本不可验证；原始字节保留")),
+        Some(_) => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_knowledge_template_registry_version_invalid(),
+            ));
+        }
     };
     let mut ids = BTreeSet::new();
     if definitions.len() > 256
@@ -3428,7 +3672,9 @@ pub(crate) fn template_registry(
                 || definition.slots.len() > 32
         })
     {
-        return Err(ApiError::bad("模板登记身份重复或超出 256 模板/32 参数上限"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_registry_budget(),
+        ));
     }
     Ok((settings, definitions))
 }
@@ -3479,21 +3725,29 @@ pub(crate) fn parse_template_value(
             knowledge::TemplateValue::Text(
                 input
                     .as_str()
-                    .ok_or_else(|| ApiError::bad("模板文字参数必须是字符串"))?
+                    .ok_or_else(|| {
+                        ApiError::bad(
+                            UiMessage::error_api_knowledge_template_text_parameter_required(),
+                        )
+                    })?
                     .into(),
             )
         }
-        knowledge::TemplateSlotKind::Bool => knowledge::TemplateValue::Bool(
-            input
-                .as_bool()
-                .ok_or_else(|| ApiError::bad("模板布尔参数必须是布尔值"))?,
-        ),
+        knowledge::TemplateSlotKind::Bool => {
+            knowledge::TemplateValue::Bool(input.as_bool().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_template_boolean_parameter_required())
+            })?)
+        }
         knowledge::TemplateSlotKind::Int => knowledge::TemplateValue::Int(
             input
                 .as_str()
-                .ok_or_else(|| ApiError::bad("模板整数必须是十进制字符串，以保留准确 i64"))?
+                .ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_knowledge_template_integer_string_required())
+                })?
                 .parse::<i64>()
-                .map_err(|_| ApiError::bad("模板整数超出准确 i64 范围"))?,
+                .map_err(|_| {
+                    ApiError::bad(UiMessage::error_api_knowledge_template_integer_range())
+                })?,
         ),
     })
 }
@@ -3524,18 +3778,24 @@ async fn register_template(
         .unwrap_or_default()
         .to_string();
     if title.is_empty() || title.len() > 1024 || description.len() > 8192 {
-        return Err(ApiError::bad("模板名称为空或文字超出上限"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_name_budget(),
+        ));
     }
-    let inputs = request.intent["parameters"]
-        .as_array()
-        .ok_or_else(|| ApiError::bad("缺少准确模板参数槽"))?;
+    let inputs = request.intent["parameters"].as_array().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_exact_template_slot_required())
+    })?;
     if inputs.len() > 32 {
-        return Err(ApiError::bad("每个模板最多 32 个准确参数槽"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_slot_count_limit(),
+        ));
     }
     let mut slots = Vec::new();
     for input in inputs {
         let kind: knowledge::TemplateSlotKind = serde_json::from_value(input["kind"].clone())
-            .map_err(|_| ApiError::bad("未知模板参数类型"))?;
+            .map_err(|_| {
+                ApiError::bad(UiMessage::error_api_knowledge_unknown_template_parameter_type())
+            })?;
         let from = utf16_byte(&request.context.source, integer(input, "from")?)?;
         let to = utf16_byte(&request.context.source, integer(input, "to")?)?;
         slots.push(knowledge::TemplateSlot {
@@ -3558,10 +3818,14 @@ async fn register_template(
         .iter()
         .position(|definition| definition.id == id);
     if request.intent.get("templateId").is_some() && existing.is_none() {
-        return Err(ApiError::bad("待更新模板不存在"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_update_target_missing(),
+        ));
     }
     if existing.is_some_and(|index| definitions[index].source_node != bundle.committed.owner) {
-        return Err(ApiError::bad("只能从原登记源节点更新同一模板"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_original_source_required(),
+        ));
     }
     let definition = knowledge::TemplateDefinition {
         id,
@@ -3589,7 +3853,9 @@ async fn register_template(
         definitions.push(definition);
     }
     if definitions.len() > 256 {
-        return Err(ApiError::bad("登记模板达到 256 项上限"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_template_registry_capacity(),
+        ));
     }
     settings["templates"] = json!({"version":1,"entries":definitions});
     let operation = OperationRequest {
@@ -3625,7 +3891,9 @@ async fn register_template(
 }
 pub(crate) fn template_source(intent: &Value) -> Result<String, ApiError> {
     if text(intent, "templateId")? != "native-note" {
-        return Err(ApiError::bad("未知原生模板"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_knowledge_unknown_native_template(),
+        ));
     }
     let slots: Vec<_> = [
         ("title", "标题", None),
@@ -3649,9 +3917,9 @@ pub(crate) fn template_source(intent: &Value) -> Result<String, ApiError> {
     })
     .collect();
     let mut parameters = BTreeMap::new();
-    let inputs = intent["parameters"]
-        .as_object()
-        .ok_or_else(|| ApiError::bad("缺少模板参数"))?;
+    let inputs = intent["parameters"].as_object().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_template_parameter_required())
+    })?;
     for (name, input) in inputs {
         parameters.insert(
             name.clone(),
@@ -3661,7 +3929,11 @@ pub(crate) fn template_source(intent: &Value) -> Result<String, ApiError> {
                 knowledge::TemplateValue::Text(
                     input
                         .as_str()
-                        .ok_or_else(|| ApiError::bad("模板文字参数类型错误"))?
+                        .ok_or_else(|| {
+                            ApiError::bad(
+                                UiMessage::error_api_knowledge_template_text_parameter_type(),
+                            )
+                        })?
                         .into(),
                 )
             },
@@ -3681,7 +3953,9 @@ fn configured_template_source(
     let definition = definitions
         .iter()
         .find(|definition| definition.id == id)
-        .ok_or_else(|| ApiError::bad("模板登记不存在"))?;
+        .ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_knowledge_template_registration_missing())
+        })?;
     let node = bundle
         .inventory
         .nodes
@@ -3691,20 +3965,22 @@ fn configured_template_source(
             ApiError::new(
                 StatusCode::CONFLICT,
                 "staleTemplate",
-                "模板源节点不可用；参数保留",
+                UiMessage::error_api_knowledge_template_source_unavailable(),
             )
         })?;
     knowledge::validate_template_definition(definition, node).map_err(knowledge_error)?;
-    let inputs = intent["parameters"]
-        .as_object()
-        .ok_or_else(|| ApiError::bad("缺少模板参数"))?;
+    let inputs = intent["parameters"].as_object().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_knowledge_template_parameter_required())
+    })?;
     let mut parameters = BTreeMap::new();
     for (name, input) in inputs {
         let slot = definition
             .slots
             .iter()
             .find(|slot| slot.name == *name)
-            .ok_or_else(|| ApiError::bad("输入不对应登记的准确参数槽"))?;
+            .ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_template_input_slot_mismatch())
+            })?;
         parameters.insert(name.clone(), parse_template_value(input, slot.kind)?);
     }
     let source = knowledge::instantiate_template(&node.source, &definition.slots, &parameters)
@@ -3725,7 +4001,7 @@ async fn prepare_template(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "stale_environment",
-            "资料库样式已变化，请重新准备模板；参数保留",
+            UiMessage::error_api_knowledge_template_library_style_changed(),
         ));
     }
     let parent = text(&request.intent, "parent")?.to_string();
@@ -3736,7 +4012,9 @@ async fn prepare_template(
             .files
             .iter()
             .find(|file| file.path == source_path)
-            .ok_or_else(|| ApiError::bad("模板源缺少准确 Core 基础"))?
+            .ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_knowledge_template_core_basis_missing())
+            })?
             .base_id
             .clone();
         OperationIntent::TemplateNode {
@@ -3776,14 +4054,19 @@ async fn prepare_template(
     let actual = files
         .iter()
         .find(|file| Path::new(&file.path) == target)
-        .ok_or_else(|| ApiError::internal("模板计划缺少新节点准确原文"))?;
-    let actual_source = String::from_utf8(actual.after.clone())
-        .map_err(|_| ApiError::internal("模板计划原文不是 UTF-8"))?;
+        .ok_or_else(|| {
+            ApiError::internal(UiMessage::error_api_knowledge_template_plan_source_missing())
+        })?;
+    let actual_source = String::from_utf8(actual.after.clone()).map_err(|_| {
+        ApiError::internal(UiMessage::error_api_knowledge_template_plan_source_encoding())
+    })?;
     let mut inputs = frozen_map(&loc.root, &bundle.files, None)?;
     for file in &files {
         let relative = Path::new(&file.path)
             .strip_prefix(&loc.root)
-            .map_err(|_| ApiError::bad("模板创建计划不在资料库内"))?
+            .map_err(|_| {
+                ApiError::bad(UiMessage::error_api_knowledge_template_plan_outside_library())
+            })?
             .to_string_lossy()
             .replace('\\', "/");
         inputs.insert(relative, file.after.clone());
@@ -3816,7 +4099,7 @@ struct TemplatePreviewRequest {
 }
 async fn template_preview(
     State(state): State<AppState>,
-    Json(request): Json<TemplatePreviewRequest>,
+    RequestJson(request): RequestJson<TemplatePreviewRequest>,
 ) -> ApiResult {
     observe(&state, &request.context)?;
     let bundle = bundle(&state, &request.context).await?;
@@ -3854,6 +4137,89 @@ async fn template_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn template_duplicate_members_are_typed_parallel_failures_and_preserve_bytes() {
+        let members = std::iter::once("\"member\":0".to_owned())
+            .chain((1..=48).map(|index| format!("\"member\":{index}")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let original = format!("{{\"version\":1,\"outer\":{{{members}}}}}").into_bytes();
+        let snapshot = SnapshotFile {
+            path: "settings.json".into(),
+            bytes: Some(original.clone()),
+            base_id: "original-base".into(),
+            node_id: None,
+            kind: "settings".into(),
+            currentness: "observed".into(),
+            revision: None,
+        };
+        let error = template_registry(&snapshot).unwrap_err();
+        assert_eq!(error.code, "template_settings");
+        assert!(error.diagnostics.is_empty());
+        assert!(error.causes.as_slice().is_empty());
+        let Some(super::super::ApiErrorDetails::Core { error }) = error.details.as_deref() else {
+            panic!("typed failure lost")
+        };
+        let Some(weftext_core::CoreErrorDetails::Aggregate { groups }) = &error.details else {
+            panic!("parallel duplicate members lost")
+        };
+        let Some(weftext_core::ErrorDetailGroup::Product { diagnostics, .. }) = groups.first()
+        else {
+            panic!("typed duplicate members lost")
+        };
+        assert_eq!(diagnostics.len(), 48);
+        assert!(diagnostics.iter().all(|issue| issue.explanation
+            == UiMessage::error_api_knowledge_template_member_duplicate(
+                weftext_messages::params::ErrorApiKnowledgeTemplateMemberDuplicate {
+                    member: "member".into()
+                }
+            )));
+        assert_eq!(snapshot.bytes.as_ref(), Some(&original));
+    }
+
+    #[test]
+    fn proofreading_materialization_requires_explicit_independent_content_locale() {
+        assert!(proofreading_annotation_locale(&json!({"displayLocale":"en-US"})).is_err());
+        assert!(proofreading_annotation_locale(&json!({"annotationLocale":"en"})).is_err());
+        assert_eq!(
+            proofreading_annotation_locale(&json!({"annotationLocale":"en-US"})).unwrap(),
+            weftext_messages::UiLocale::EnUs
+        );
+        let finding = knowledge::ProofreadFinding {
+            id: "finding".into(),
+            category: "fixture".into(),
+            rule_id: "rule".into(),
+            rule_version: "1".into(),
+            excerpt: "作者原句 😀".into(),
+            message: knowledge::ProofreadMessage::Author {
+                author_message: "作者配置 PRIVATE exactly".into(),
+            },
+            replacement: Some("原样 replacement".into()),
+            source_range: None,
+            executable: false,
+        };
+        for locale in [
+            weftext_messages::UiLocale::ZhCn,
+            weftext_messages::UiLocale::EnUs,
+        ] {
+            let body = proofreading_annotation_body(&finding, locale);
+            assert!(body.contains("作者配置 PRIVATE exactly"));
+            assert!(body.contains("作者原句 😀"));
+            assert!(body.contains("原样 replacement"));
+        }
+        let product = knowledge::ProofreadFinding {
+            message: knowledge::ProofreadMessage::Product {
+                explanation: UiMessage::error_api_knowledge_template_number_invalid(),
+            },
+            replacement: None,
+            ..finding
+        };
+        assert_ne!(
+            proofreading_annotation_body(&product, weftext_messages::UiLocale::ZhCn),
+            proofreading_annotation_body(&product, weftext_messages::UiLocale::EnUs)
+        );
+    }
+
     #[cfg(windows)]
     #[test]
     fn draft_compile_view_keeps_the_original_core_cut_and_rejects_aliases() {
@@ -4261,7 +4627,7 @@ mod tests {
         let intent = json!({"kind":"templateRegister","title":"复用当前笔记","description":"原生源","parameters":[{"name":"body","kind":"markup","from":from,"to":from+2,"default":"默认"}]});
         let plan = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: id.clone(),
                 context: context.clone(),
                 intent: intent.clone(),
@@ -4276,7 +4642,7 @@ mod tests {
         );
         let repeat = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: id.clone(),
                 context: context.clone(),
                 intent,
@@ -4289,7 +4655,7 @@ mod tests {
         assert_eq!(plan["preview"]["files"], repeat["preview"]["files"]);
         let receipt = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: id,
                 plan_id: plan["planId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
@@ -4392,7 +4758,7 @@ mod tests {
         let byte = context.source.find("原文").unwrap();
         let from = context.source[..byte].encode_utf16().count();
         let op = uuid::Uuid::new_v4().to_string();
-        let plan=prepare(State(state.clone()),Json(PrepareRequest {operation_id:op.clone(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":{"kind":"source_range","from":from,"to":from+2,"visibleExcerpt":"原文"},"body":"修订意见","purpose":"suggestion","replacement":"修订"})})).await.map_err(|error|error.message).unwrap().0;
+        let plan=prepare(State(state.clone()),crate::RequestJson(PrepareRequest {operation_id:op.clone(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":{"kind":"source_range","from":from,"to":from+2,"visibleExcerpt":"原文"},"body":"修订意见","purpose":"suggestion","replacement":"修订"})})).await.unwrap().0;
         let loc = location(&state, &context.session_id).ok().unwrap();
         let sidecar = annotations_path(&loc.path).ok().unwrap();
         let before = core_call(&state, {
@@ -4401,7 +4767,6 @@ mod tests {
             move |core| core.read_snapshot(root, &[sidecar])
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         assert!(
             before.files[0].bytes.is_none(),
@@ -4409,14 +4774,13 @@ mod tests {
         );
         let receipt = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: op.clone(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         let document = &receipt["document"];
@@ -4424,12 +4788,11 @@ mod tests {
         context.base_id = document["baseId"].as_str().unwrap().into();
         let snapshot = read(
             State(state.clone()),
-            Json(ReadRequest {
+            crate::RequestJson(ReadRequest {
                 context: context.clone(),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         let annotation = &snapshot["annotations"][0];
@@ -4443,7 +4806,7 @@ mod tests {
         dirty.source.push_str("未保存");
         let error = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: uuid::Uuid::new_v4().to_string(),
                 context: dirty,
                 intent: json!({"kind":"annotationAccept","annotationId":id}),
@@ -4456,28 +4819,26 @@ mod tests {
         context.serial = 2;
         let accept = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: accept_op.clone(),
                 context: context.clone(),
                 intent: json!({"kind":"annotationAccept","annotationId":id}),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert!(accept["source"].as_str().unwrap().contains("修订"));
         assert_eq!(accept["changes"].as_array().unwrap().len(), 2);
         let _ = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: accept_op.clone(),
                 plan_id: accept["planId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let pair = core_call(&state, move |core| {
             core.read_snapshot(
@@ -4486,7 +4847,6 @@ mod tests {
             )
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let source = String::from_utf8(pair.files[0].bytes.clone().unwrap()).unwrap();
         assert!(source.contains("修订"));
@@ -4499,13 +4859,12 @@ mod tests {
         );
         let status = status(
             State(state),
-            Json(StatusRequest {
+            crate::RequestJson(StatusRequest {
                 operation_id: accept_op,
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(status["status"], "committed");
@@ -4521,17 +4880,16 @@ mod tests {
     async fn rename_and_unknown_result_status_rebind_the_actual_same_note() {
         let (state, context) = local_state();
         let loc = location(&state, &context.session_id).ok().unwrap();
-        let plan=prepare(State(state.clone()),Json(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"renameNode","source":loc.path.parent().unwrap().to_string_lossy(),"name":"重命名结果"})})).await.map_err(|error|error.message).unwrap().0;
+        let plan=prepare(State(state.clone()),crate::RequestJson(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"renameNode","source":loc.path.parent().unwrap().to_string_lossy(),"name":"重命名结果"})})).await.unwrap().0;
         let receipt = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(receipt["documentDisposition"], "rebound");
@@ -4544,13 +4902,12 @@ mod tests {
         assert_eq!(receipt["document"]["source"], context.source);
         let outcome = status(
             State(state.clone()),
-            Json(StatusRequest {
+            crate::RequestJson(StatusRequest {
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(outcome["status"], "committed");
@@ -4558,13 +4915,12 @@ mod tests {
         assert_eq!(outcome["document"]["nodeId"], receipt["document"]["nodeId"]);
         let unknown = status(
             State(state),
-            Json(StatusRequest {
+            crate::RequestJson(StatusRequest {
                 operation_id: uuid::Uuid::new_v4().to_string(),
                 context: Some(context),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(unknown["status"], "unknown");
@@ -4577,31 +4933,29 @@ mod tests {
         let intent = json!({"kind":"annotationCreate","target":{"kind":"whole_document"},"purpose":"comment","body":"同一意见"});
         let first = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: operation_id.clone(),
                 context: context.clone(),
                 intent: intent.clone(),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         let again = prepare(
             State(state.clone()),
-            Json(PrepareRequest {
+            crate::RequestJson(PrepareRequest {
                 operation_id: operation_id.clone(),
                 context: context.clone(),
                 intent,
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(first["planId"], again["planId"]);
         assert_eq!(first["preview"]["files"], again["preview"]["files"]);
-        let changed=prepare(State(state),Json(PrepareRequest {operation_id,context,intent:json!({"kind":"annotationCreate","target":{"kind":"whole_document"},"purpose":"comment","body":"不同意见"})})).await.err().unwrap();
+        let changed=prepare(State(state),crate::RequestJson(PrepareRequest {operation_id,context,intent:json!({"kind":"annotationCreate","target":{"kind":"whole_document"},"purpose":"comment","body":"不同意见"})})).await.err().unwrap();
         assert_eq!(changed.code, "operationConflict");
     }
     #[cfg(windows)]
@@ -4615,7 +4969,6 @@ mod tests {
             move |core| core.create_note_fixture(root, parent, "子笔记")
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let child_value = value(&child).ok().unwrap();
         remember(&state, &child_value).ok().unwrap();
@@ -4624,19 +4977,17 @@ mod tests {
         let draft = dirty_source.clone();
         core_call(&state, move |core| core.persist_draft(&child_id, &draft))
             .await
-            .map_err(|error| error.message)
             .unwrap();
-        let plan=prepare(State(state.clone()),Json(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"renameNode","source":loc.path.parent().unwrap().to_string_lossy(),"name":"新父目录"})})).await.map_err(|error|error.message).unwrap().0;
+        let plan=prepare(State(state.clone()),crate::RequestJson(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"renameNode","source":loc.path.parent().unwrap().to_string_lossy(),"name":"新父目录"})})).await.unwrap().0;
         let result = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
                 context: Some(context),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         let affected = result["affectedDocuments"]
@@ -4709,16 +5060,21 @@ mod tests {
             }
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let result = operation_output(&state, preview, receipt, Some(&context))
             .await
-            .map_err(|error| error.message)
             .unwrap();
         assert_eq!(result["status"], "committed");
         assert_eq!(result["expectedSource"], expected);
         assert_eq!(result["documentSourceMatchesCommit"], false);
         assert_eq!(result["documentError"]["code"], "externalChanged");
+        assert_eq!(
+            result["documentError"]["explanation"]["key"],
+            "error.api.knowledge.committedSourceChanged"
+        );
+        assert_eq!(result["documentError"]["diagnostics"], json!([]));
+        assert_eq!(result["documentError"]["causes"], json!([]));
+        assert!(result["documentError"].get("message").is_none());
         assert!(
             result["document"]["source"]
                 .as_str()
@@ -4751,46 +5107,41 @@ mod tests {
             }
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let _ = core_call(&state, move |core| {
             core.execute_operation(&op, &core_plan.plan_id)
         })
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let set = crate::media_api::resource_set(&state, &context.session_id)
             .await
-            .map_err(|error| error.message)
             .unwrap();
         let resource = &set.resources[0];
         let revision = resource.file.revision.as_ref().unwrap();
         let target = json!({"kind":"image_region","resource":resource.resource_ref,"revision":revision,"width":3,"height":2,"x":0,"y":0,"rectWidth":2,"rectHeight":1});
         let mut forged = target.clone();
         forged["width"] = json!(300);
-        let error=prepare(State(state.clone()),Json(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":forged,"body":"区域批注","purpose":"comment"})})).await.err().unwrap();
+        let error=prepare(State(state.clone()),crate::RequestJson(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":forged,"body":"区域批注","purpose":"comment"})})).await.err().unwrap();
         assert_eq!(error.code, "resource_geometry");
-        let plan=prepare(State(state.clone()),Json(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":target,"body":"区域批注","purpose":"comment"})})).await.map_err(|error|error.message).unwrap().0;
+        let plan=prepare(State(state.clone()),crate::RequestJson(PrepareRequest {operation_id:uuid::Uuid::new_v4().to_string(),context:context.clone(),intent:json!({"kind":"annotationCreate","target":target,"body":"区域批注","purpose":"comment"})})).await.unwrap().0;
         assert_eq!(plan["changes"].as_array().unwrap().len(), 3);
         let _ = commit(
             State(state.clone()),
-            Json(CommitRequest {
+            crate::RequestJson(CommitRequest {
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let result = read(
             State(state.clone()),
-            Json(ReadRequest {
+            crate::RequestJson(ReadRequest {
                 context: context.clone(),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(result["annotations"][0]["targetResolution"], "exact");
@@ -4816,7 +5167,7 @@ mod tests {
         ] {
             let copied = link_copy(
                 State(state.clone()),
-                Json(LinkCopyRequest {
+                crate::RequestJson(LinkCopyRequest {
                     context: draft.clone(),
                     occurrence: json!(occurrence),
                     form,

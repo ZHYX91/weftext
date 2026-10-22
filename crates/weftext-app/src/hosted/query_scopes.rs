@@ -433,7 +433,7 @@ fn guard_error(error: CoreError) -> ApiError {
         ApiError::new(
             StatusCode::CONFLICT,
             "basisRequired",
-            "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者通过配置操作显式安装后重试。",
+            UiMessage::error_api_hosted_query_scopes_existing_rules_configuration_required(),
         )
     } else {
         query::changed()
@@ -554,7 +554,13 @@ mod tests {
             )
             .await
             .unwrap_err();
-            refusals.push((error.status, error.code, error.message));
+            refusals.push((
+                error.status,
+                error.code,
+                error.explanation,
+                error.diagnostics,
+                error.causes,
+            ));
         }
         assert_eq!(refusals[0], refusals[1]);
         assert_eq!(refusals[0].0, StatusCode::NOT_FOUND);

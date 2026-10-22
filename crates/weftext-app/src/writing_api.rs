@@ -1,9 +1,10 @@
 //! HTTP adapters for exact-snapshot Typst authoring and native library styles.
 //! Draft proposals remain in the shared source buffer; Core owns persistence.
 
-use super::{ApiError, ApiResult, AppState, core_call, location, value};
+use super::{ApiError, ApiErrorDetails, ApiResult, AppState, core_call, location, value};
 #[cfg(test)]
 use crate::CoreTestFixture;
+use crate::RequestJson;
 use axum::{
     Json, Router,
     body::Body,
@@ -19,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use weftext_core::{ConfigDocument, ConfigRole, LibraryStyleDocument};
+use weftext_messages::UiMessage;
 
 /// The most recent draft supplied by this local session. This is an exact
 /// request basis, not a persisted revision or authorization obtained from a hash.
@@ -102,25 +104,25 @@ fn style_root(
             .as_ref()
             .is_some_and(|requested| !same_path(requested, &root))
         {
-            return Err(ApiError::bad("样式请求与当前会话的资料库不一致"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_writing_style_library_mismatch(),
+            ));
         }
         return Ok(root);
     }
-    requested.ok_or_else(|| ApiError::bad("请先选择资料库或打开其中的笔记"))
+    requested.ok_or_else(|| ApiError::bad(UiMessage::error_api_writing_library_or_note_required()))
 }
 
 fn style_state(document: LibraryStyleDocument) -> Result<Value, ApiError> {
     let inspection = weftext_engine::inspect_library_style(&document.source);
     let mut warnings = Vec::new();
     if !document.installed {
-        warnings.push("此资料库尚未启用默认样式；首次应用将创建原生样式资源与库设置。".to_owned());
+        warnings.push(UiMessage::error_api_writing_default_style_not_installed());
     }
     if !inspection.syntax_valid {
-        warnings.push("样式源码存在语法错误；原文保留，请在源码入口修复。".to_owned());
+        warnings.push(UiMessage::error_api_writing_style_source_syntax_warning());
     } else if inspection.controls.iter().any(|control| !control.editable) {
-        warnings.push(
-            "部分参数没有唯一可写的简化控件；自定义规则保持原样，可在源码入口编辑。".to_owned(),
-        );
+        warnings.push(UiMessage::error_api_writing_custom_style_control_warning());
     }
     let controls: Vec<_> = inspection
         .controls
@@ -143,7 +145,7 @@ fn style_state(document: LibraryStyleDocument) -> Result<Value, ApiError> {
 
 async fn styles_read(
     State(state): State<AppState>,
-    Json(req): Json<StyleReadRequest>,
+    RequestJson(req): RequestJson<StyleReadRequest>,
 ) -> ApiResult {
     let root = style_root(&state, req.session_id.as_deref(), req.root)?;
     let document = core_call(&state, move |core| core.read_library_style(root)).await?;
@@ -152,7 +154,7 @@ async fn styles_read(
 
 async fn styles_prepare(
     State(state): State<AppState>,
-    Json(req): Json<StylePrepareRequest>,
+    RequestJson(req): RequestJson<StylePrepareRequest>,
 ) -> ApiResult {
     let root = style_root(&state, req.session_id.as_deref(), req.root)?;
     if req.source.is_some()
@@ -162,7 +164,7 @@ async fn styles_prepare(
             .is_some_and(|changes| !changes.is_empty())
     {
         return Err(ApiError::bad(
-            "原生源码与简化控件改动须分别准备，避免覆盖自定义规则",
+            UiMessage::error_api_writing_separate_style_proposals_required(),
         ));
     }
     let read_root = root.clone();
@@ -183,12 +185,12 @@ async fn styles_prepare(
                     .map(|edited| edited.source)
             })
             .await
-            .map_err(|_| ApiError::internal("样式改动未完成"))?
+            .map_err(|_| ApiError::internal(UiMessage::error_api_writing_style_edit_incomplete()))?
             .map_err(|error| {
-                ApiError::new(
+                ApiError::from_engine(
                     StatusCode::UNPROCESSABLE_ENTITY,
                     "unsupported_style_edit",
-                    error.to_string(),
+                    error,
                 )
             })?
         }
@@ -198,25 +200,33 @@ async fn styles_prepare(
         return Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "style_syntax_invalid",
-            "样式源码存在语法错误；设置草稿已保留，请修复后应用",
+            UiMessage::error_api_writing_style_syntax_invalid(),
         ));
     }
     let enabled = req.enabled.unwrap_or(before.enabled);
     if after_source == before_source && enabled == before.enabled {
-        return Err(ApiError::bad("没有待应用的样式改动"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_writing_style_change_missing(),
+        ));
     }
     let source = after_source.clone();
     let plan = core_call(&state, move |core| {
         core.prepare_library_style(root, &req.base_id, &source, enabled, &req.operation_id)
     })
     .await?;
-    let summary: Vec<String> = plan
+    let summary: Vec<UiMessage> = plan
         .changes
         .iter()
         .map(|change| {
-            format!(
-                "{}：{}（{} 字节）",
-                change.action, change.path, change.bytes
+            UiMessage::error_api_writing_style_plan_change(
+                weftext_messages::params::ErrorApiWritingStylePlanChange {
+                    action: change.action.clone(),
+                    path: change.path.clone(),
+                    bytes: weftext_messages::UiInteger::new(
+                        i64::try_from(change.bytes).expect("Plan byte count fits i64"),
+                    )
+                    .expect("Plan byte budget fits a safe integer"),
+                },
             )
         })
         .collect();
@@ -231,15 +241,14 @@ fn invalidate_style_projections(state: &AppState, root: &Path) -> Result<(), Api
     let sessions: Vec<String> = state
         .locations
         .lock()
-        .map_err(|_| ApiError::internal("会话暂不可用"))?
+        .map_err(|_| ApiError::internal(UiMessage::error_file_session_unavailable()))?
         .iter()
         .filter(|(_, location)| same_path(&location.root, root))
         .map(|(id, _)| id.clone())
         .collect();
-    let mut renders = state
-        .renders
-        .lock()
-        .map_err(|_| ApiError::internal("编译会话暂不可用"))?;
+    let mut renders = state.renders.lock().map_err(|_| {
+        ApiError::internal(UiMessage::error_api_writing_compilation_session_unavailable())
+    })?;
     for session in sessions {
         renders.remove(&session);
     }
@@ -248,7 +257,7 @@ fn invalidate_style_projections(state: &AppState, root: &Path) -> Result<(), Api
 
 async fn styles_apply(
     State(state): State<AppState>,
-    Json(req): Json<StyleApplyRequest>,
+    RequestJson(req): RequestJson<StyleApplyRequest>,
 ) -> ApiResult {
     let root = style_root(&state, req.session_id.as_deref(), req.root)?;
     let operation_root = root.clone();
@@ -263,7 +272,7 @@ async fn styles_apply(
         {
             return Err(weftext_core::CoreError::new(
                 "operationConflict",
-                "This plan does not configure the selected library's style",
+                UiMessage::error_api_writing_style_plan_library_mismatch(),
             ));
         }
         core.execute_operation(&req.operation_id, &req.plan_id)
@@ -281,13 +290,12 @@ async fn styles_apply(
             Ok(Json(document))
         }
         Err(error) => {
-            let mut result = ApiError::new(
+            let result = ApiError::new(
                 StatusCode::CONFLICT,
                 "style_state_unavailable",
-                "样式操作已经提交，但当前设置暂不可读取；请保留原操作并重试读取",
-            );
-            result.details = Some(Box::new(json!({"receipt":receipt,"cause":{
-                "code":error.code,"message":error.message,"details":error.details}})));
+                UiMessage::error_api_writing_committed_style_state_unavailable(),
+            )
+            .committed_receipt(receipt, error);
             Err(result)
         }
     }
@@ -329,7 +337,7 @@ fn selected_style_enabled(settings: &ConfigDocument) -> weftext_core::Result<boo
     {
         return Err(weftext_core::CoreError::new(
             "styleSelection",
-            "Library settings and defaultStyle must be configuration objects",
+            UiMessage::error_api_writing_style_configuration_object_required(),
         ));
     }
     match value
@@ -340,7 +348,7 @@ fn selected_style_enabled(settings: &ConfigDocument) -> weftext_core::Result<boo
         None => Ok(false),
         Some(_) => Err(weftext_core::CoreError::new(
             "styleSelection",
-            "Default style enable state must be a native configuration Boolean",
+            UiMessage::error_api_writing_style_boolean_required(),
         )),
     }
 }
@@ -359,7 +367,7 @@ pub(crate) async fn style_environment(
                 if !document.installed {
                     return Err(weftext_core::CoreError::new(
                         "styleSelection",
-                        "An enabled style needs an admitted selected native module",
+                        UiMessage::error_api_writing_enabled_style_module_required(),
                     ));
                 }
                 Ok(StyleProfile::Library(document))
@@ -382,7 +390,7 @@ pub(crate) async fn style_environment(
                     ApiError::new(
                         StatusCode::CONFLICT,
                         "styleSelection",
-                        "样式模块不在当前资料库内",
+                        UiMessage::error_api_writing_style_outside_library(),
                     )
                 })?
                 .to_string_lossy()
@@ -434,7 +442,7 @@ pub(crate) async fn check_style_environment(
 ) -> Result<(), ApiError> {
     let root = location(state, session_id)?.root;
     if !same_path(&root, &environment.root) {
-        return Err(stale_snapshot());
+        return Err(stale_snapshot().into());
     }
     let basis = environment.basis.clone();
     core_call(state, move |core| {
@@ -457,7 +465,7 @@ fn recheck_style_environment(
             if core.has_library(root)? {
                 Err(weftext_core::CoreError::new(
                     "staleEnvironment",
-                    "The ordinary-file compilation profile changed to a library profile",
+                    UiMessage::error_api_writing_ordinary_profile_changed(),
                 ))
             } else {
                 Ok(())
@@ -500,26 +508,86 @@ pub(crate) fn font_asset(name: &str) -> Option<Response> {
     Some(([(header::CONTENT_TYPE, content_type)], Body::from(bytes)).into_response())
 }
 
-fn stale_snapshot() -> ApiError {
-    ApiError::new(
-        StatusCode::CONFLICT,
-        "stale_draft",
-        "编辑来源已过期；当前草稿已保留，请刷新当前编辑映射",
-    )
+/// Closed validation failures shared by the HTTP and Core-call boundaries.
+/// Keeping this domain separate prevents reverse conversion of arbitrary HTTP
+/// details, while preserving the exact snapshot checks on both sides of work.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SnapshotError {
+    Location(super::LocationError),
+    SourceBudget,
+    SourceHashMismatch,
+    Stale,
+    EditorUnavailable,
+}
+impl From<super::LocationError> for SnapshotError {
+    fn from(error: super::LocationError) -> Self {
+        Self::Location(error)
+    }
+}
+impl SnapshotError {
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            Self::Location(super::LocationError::Unavailable) | Self::EditorUnavailable => {
+                "internal"
+            }
+            Self::Location(super::LocationError::Expired) | Self::SourceBudget => "invalid_request",
+            Self::SourceHashMismatch => "source_hash_mismatch",
+            Self::Stale => "stale_draft",
+        }
+    }
+    fn explanation(self) -> UiMessage {
+        match self {
+            Self::Location(super::LocationError::Unavailable) => {
+                UiMessage::error_file_session_unavailable()
+            }
+            Self::Location(super::LocationError::Expired) => {
+                UiMessage::error_file_session_expired()
+            }
+            Self::SourceBudget => UiMessage::error_api_writing_edit_source_budget(),
+            Self::SourceHashMismatch => UiMessage::error_api_writing_source_hash_mismatch(),
+            Self::Stale => UiMessage::error_api_writing_editor_basis_expired(),
+            Self::EditorUnavailable => {
+                UiMessage::error_api_writing_editor_session_temporarily_unavailable()
+            }
+        }
+    }
+    pub(crate) fn into_core(self, code: &str) -> weftext_core::CoreError {
+        match self {
+            Self::Location(error) => error.into_core(code),
+            _ => weftext_core::CoreError::new(code, self.explanation()),
+        }
+    }
+}
+impl From<SnapshotError> for ApiError {
+    fn from(error: SnapshotError) -> Self {
+        match error {
+            SnapshotError::Location(error) => error.into(),
+            SnapshotError::SourceBudget => Self::bad(error.explanation()),
+            SnapshotError::SourceHashMismatch => Self::new(
+                StatusCode::CONFLICT,
+                "source_hash_mismatch",
+                error.explanation(),
+            ),
+            SnapshotError::Stale => {
+                Self::new(StatusCode::CONFLICT, "stale_draft", error.explanation())
+            }
+            SnapshotError::EditorUnavailable => Self::internal(error.explanation()),
+        }
+    }
+}
+fn stale_snapshot() -> SnapshotError {
+    SnapshotError::Stale
 }
 
-pub(crate) fn validate_source(source: &str, source_hash: Option<&str>) -> Result<(), ApiError> {
+pub(crate) fn validate_source(
+    source: &str,
+    source_hash: Option<&str>,
+) -> Result<(), SnapshotError> {
     if source.len() > weftext_core::MAX_SOURCE_BYTES {
-        return Err(ApiError::bad(
-            "编辑上限为 2 MiB；请保留原文并使用外部编辑器处理更大文件",
-        ));
+        return Err(SnapshotError::SourceBudget);
     }
     if source_hash.is_some_and(|expected| expected != weftext_engine::source_hash(source)) {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "source_hash_mismatch",
-            "请求中的原文与编辑映射不一致；当前草稿已保留",
-        ));
+        return Err(SnapshotError::SourceHashMismatch);
     }
     Ok(())
 }
@@ -529,7 +597,7 @@ pub(crate) fn observe_version(
     session_id: &str,
     source: &str,
     serial: u64,
-) -> Result<(), ApiError> {
+) -> Result<(), SnapshotError> {
     if let Some(old) = versions.get(session_id) {
         if serial < old.serial || serial == old.serial && source != old.source {
             return Err(stale_snapshot());
@@ -553,7 +621,7 @@ pub(crate) fn exact_version(
     session_id: &str,
     source: &str,
     serial: u64,
-) -> Result<(), ApiError> {
+) -> Result<(), SnapshotError> {
     versions
         .get(session_id)
         .filter(|old| old.serial == serial && old.source == source)
@@ -569,13 +637,13 @@ pub(crate) fn observe_snapshot(
     source: &str,
     serial: u64,
     source_hash: Option<&str>,
-) -> Result<(), ApiError> {
+) -> Result<(), SnapshotError> {
     location(state, session_id)?;
     validate_source(source, source_hash)?;
     let mut versions = state
         .editor_versions
         .lock()
-        .map_err(|_| ApiError::internal("编辑会话暂不可用"))?;
+        .map_err(|_| SnapshotError::EditorUnavailable)?;
     observe_version(&mut versions, session_id, source, serial)
 }
 
@@ -587,13 +655,13 @@ pub(crate) fn check_snapshot(
     source: &str,
     serial: u64,
     source_hash: Option<&str>,
-) -> Result<(), ApiError> {
+) -> Result<(), SnapshotError> {
     location(state, session_id)?;
     validate_source(source, source_hash)?;
     let versions = state
         .editor_versions
         .lock()
-        .map_err(|_| ApiError::internal("编辑会话暂不可用"))?;
+        .map_err(|_| SnapshotError::EditorUnavailable)?;
     exact_version(&versions, session_id, source, serial)
 }
 
@@ -616,7 +684,10 @@ struct EditRequest {
     intent: weftext_engine::EditIntent,
 }
 
-async fn editor_map(State(state): State<AppState>, Json(req): Json<SnapshotRequest>) -> ApiResult {
+async fn editor_map(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<SnapshotRequest>,
+) -> ApiResult {
     observe_snapshot(
         &state,
         &req.session_id,
@@ -627,7 +698,9 @@ async fn editor_map(State(state): State<AppState>, Json(req): Json<SnapshotReque
     let source = req.source.clone();
     let map = crate::work::spawn_blocking(move || weftext_engine::inspect_editor(&source))
         .await
-        .map_err(|_| ApiError::internal("编辑映射未完成"))?;
+        .map_err(
+            |_| ApiError::internal(UiMessage::error_api_writing_editor_mapping_incomplete()),
+        )?;
     check_snapshot(
         &state,
         &req.session_id,
@@ -640,7 +713,10 @@ async fn editor_map(State(state): State<AppState>, Json(req): Json<SnapshotReque
     Ok(Json(output))
 }
 
-async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> ApiResult {
+async fn edit(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<EditRequest>,
+) -> ApiResult {
     // Commands consume a map already observed by this session. The engine
     // reparses this same source and independently certifies the named operation.
     check_snapshot(
@@ -672,33 +748,87 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
         let original_loc = loc.clone();
         let source = req.source.clone();
         let (frozen, guards, cut_id) = core_call(&state, move |core| {
-            let expected = loc.path.parent().ok_or_else(|| weftext_core::CoreError::new("invalidPath", "Missing note directory"))?.join("weftext-endnotes.typ");
+            let expected = loc
+                .path
+                .parent()
+                .ok_or_else(|| {
+                    weftext_core::CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_api_writing_note_directory_missing(),
+                    )
+                })?
+                .join("weftext-endnotes.typ");
             let resources = core.managed_resource_snapshot(&loc.root, &loc.path)?;
-            let module = resources.into_iter().find(|resource| same_path(Path::new(&resource.path), &expected))
-                .filter(|resource| resource.identity_status == "admitted" && resource.bytes == ENDNOTES_MODULE.as_bytes())
-                .ok_or_else(|| weftext_core::CoreError::new("endnotesModuleUnavailable", "Prepare this note's exact bundled endnotes module as an owned resource first; existing files were not replaced"))?;
+            let module = resources
+                .into_iter()
+                .find(|resource| same_path(Path::new(&resource.path), &expected))
+                .filter(|resource| {
+                    resource.identity_status == "admitted"
+                        && resource.bytes == ENDNOTES_MODULE.as_bytes()
+                })
+                .ok_or_else(|| {
+                    weftext_core::CoreError::new(
+                        "endnotesModuleUnavailable",
+                        UiMessage::error_api_writing_owned_endnotes_module_required(),
+                    )
+                })?;
             let captured = core.admitted_compile_snapshot(&loc.root, "live")?;
-            let relative = expected.strip_prefix(&loc.root).map_err(|_| weftext_core::CoreError::new("outsideRoot", "Module is outside the library"))?.to_string_lossy().replace('\\', "/");
+            let relative = expected
+                .strip_prefix(&loc.root)
+                .map_err(|_| {
+                    weftext_core::CoreError::new(
+                        "outsideRoot",
+                        UiMessage::error_api_builtin_module_outside_library(),
+                    )
+                })?
+                .to_string_lossy()
+                .replace('\\', "/");
             if captured.files.get(&relative) != Some(&module.bytes) {
                 core.release_compile_dependency_cut(&captured.snapshot.cut_id);
-                return Err(weftext_core::CoreError::new("staleBase", "The module changed during capture"));
+                return Err(weftext_core::CoreError::new(
+                    "staleBase",
+                    UiMessage::error_api_writing_module_changed_during_capture(),
+                ));
             }
-            let main_path = loc.path.strip_prefix(&loc.root).map_err(|_| weftext_core::CoreError::new("outsideRoot", "The draft is outside its library"))?.to_string_lossy().replace('\\', "/");
+            let main_path = loc
+                .path
+                .strip_prefix(&loc.root)
+                .map_err(|_| {
+                    weftext_core::CoreError::new(
+                        "outsideRoot",
+                        UiMessage::error_api_writing_draft_outside_library(),
+                    )
+                })?
+                .to_string_lossy()
+                .replace('\\', "/");
             let mut files = captured.files;
             // The current author Draft is a separate, serial-checked input.
             // It replaces only the main file in the immutable compiler view;
             // dependency qualification keeps the original physical Core cut.
             files.insert(main_path, source.as_bytes().to_vec());
-            let guards = vec![(module.path, module.base_id), (module.manifest_path, module.manifest_base_id)];
-            Ok((weftext_engine::FrozenRenderRequest { source, path: loc.path, root: loc.root, files, style: captured.style }, guards, captured.snapshot.cut_id))
-        }).await?;
+            let guards = vec![
+                (module.path, module.base_id),
+                (module.manifest_path, module.manifest_base_id),
+            ];
+            Ok((
+                weftext_engine::FrozenRenderRequest {
+                    source,
+                    path: loc.path,
+                    root: loc.root,
+                    files,
+                    style: captured.style,
+                },
+                guards,
+                captured.snapshot.cut_id,
+            ))
+        })
+        .await?;
         let cleanup_cut = cut_id.clone();
         let result = async {
-            let _permit = state
-                .render_gate
-                .acquire()
-                .await
-                .map_err(|_| ApiError::internal("编译服务不可用"))?;
+            let _permit =
+                state.render_gate.acquire().await.map_err(|_| {
+                    ApiError::internal(UiMessage::error_compile_service_unavailable())
+                })?;
             let receipt = super::notes_edit_worker(frozen, engine_req).await?;
             let guard_root = original_loc.root.clone();
             // Only the worker's actual current/proposed World reads participate.
@@ -726,9 +856,9 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
             })
             .await?;
             validate_source(
-                output["source"]
-                    .as_str()
-                    .ok_or_else(|| ApiError::internal("尾注提案没有准确原生源码"))?,
+                output["source"].as_str().ok_or_else(|| {
+                    ApiError::internal(UiMessage::error_api_writing_endnotes_source_missing())
+                })?,
                 None,
             )?;
             output["serial"] = json!(req.serial);
@@ -759,14 +889,14 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
         if !same_path(&current.path, &original_loc.path)
             || !same_path(&current.root, &original_loc.root)
         {
-            return Err(stale_snapshot());
+            return Err(stale_snapshot().into());
         }
         return Ok(Json(output));
     }
     let source = req.source.clone();
     let edited = crate::work::spawn_blocking(move || weftext_engine::edit(&source, &engine_req))
         .await
-        .map_err(|_| ApiError::internal("编辑操作未完成"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_api_writing_edit_incomplete()))?;
     check_snapshot(
         &state,
         &req.session_id,
@@ -775,14 +905,14 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
         req.source_hash.as_deref(),
     )?;
     let edited = edited.map_err(|error| {
-        let mut result = ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "unsupported_edit",
-            error.to_string(),
-        );
-        result.details = Some(Box::new(
-            json!({"serial":req.serial,"sourcePreserved":true}),
-        ));
+        let mut result =
+            ApiError::from_engine(StatusCode::UNPROCESSABLE_ENTITY, "unsupported_edit", error);
+        let cause = Box::new(result.clone());
+        result.details = Some(Box::new(ApiErrorDetails::SourcePreserved {
+            serial: req.serial,
+            source_preserved: true,
+            cause,
+        }));
         result
     })?;
     validate_source(&edited.source, None)?;
@@ -794,6 +924,35 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn domain_snapshot_failures_keep_http_and_core_meaning_without_string_reclassification() {
+        for error in [
+            SnapshotError::Location(super::super::LocationError::Unavailable),
+            SnapshotError::Location(super::super::LocationError::Expired),
+            SnapshotError::SourceBudget,
+            SnapshotError::SourceHashMismatch,
+            SnapshotError::Stale,
+            SnapshotError::EditorUnavailable,
+        ] {
+            let core = error.into_core(error.code());
+            let api = ApiError::from(error);
+            assert_eq!(core.code, api.code);
+            assert_eq!(core.explanation, api.explanation);
+            assert!(core.diagnostics.is_empty());
+            assert!(api.diagnostics.is_empty());
+            assert!(api.details.is_none());
+            assert_eq!(
+                error.into_core("callerSnapshotConflict").code,
+                "callerSnapshotConflict"
+            );
+        }
+        let exact = "same author source 😀\r\n";
+        let invalid = validate_source(exact, Some("other exact hash")).unwrap_err();
+        assert!(matches!(invalid, SnapshotError::SourceHashMismatch));
+        assert_eq!(ApiError::from(invalid).status, StatusCode::CONFLICT);
+        assert_eq!(exact, "same author source 😀\r\n");
+    }
 
     #[test]
     fn old_results_cannot_install_after_newer_input() {
@@ -927,7 +1086,7 @@ mod tests {
         observe_snapshot(&state, &session_id, &source, 7, None).unwrap();
         let Json(before) = styles_read(
             State(state.clone()),
-            Json(StyleReadRequest {
+            crate::RequestJson(StyleReadRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
             }),
@@ -936,7 +1095,7 @@ mod tests {
         .unwrap();
         let Json(v1_plan) = styles_prepare(
             State(state.clone()),
-            Json(StylePrepareRequest {
+            crate::RequestJson(StylePrepareRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id: uuid::Uuid::new_v4().to_string(),
@@ -950,7 +1109,7 @@ mod tests {
         .unwrap();
         let Json(v1_state) = styles_apply(
             State(state.clone()),
-            Json(StyleApplyRequest {
+            crate::RequestJson(StyleApplyRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id: v1_plan["operationId"].as_str().unwrap().into(),
@@ -981,7 +1140,7 @@ mod tests {
         );
         let Json(v2_plan) = styles_prepare(
             State(state.clone()),
-            Json(StylePrepareRequest {
+            crate::RequestJson(StylePrepareRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id: uuid::Uuid::new_v4().to_string(),
@@ -997,7 +1156,7 @@ mod tests {
         let plan_id = v2_plan["planId"].as_str().unwrap().to_owned();
         let wrong_root = styles_apply(
             State(state.clone()),
-            Json(StyleApplyRequest {
+            crate::RequestJson(StyleApplyRequest {
                 session_id: None,
                 root: Some(directory.path().join("other-library")),
                 operation_id: operation_id.clone(),
@@ -1008,7 +1167,7 @@ mod tests {
         assert!(wrong_root.is_err());
         let _ = styles_apply(
             State(state.clone()),
-            Json(StyleApplyRequest {
+            crate::RequestJson(StyleApplyRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id,
@@ -1045,7 +1204,7 @@ mod tests {
 
         let Json(current) = styles_read(
             State(state.clone()),
-            Json(StyleReadRequest {
+            crate::RequestJson(StyleReadRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
             }),
@@ -1054,7 +1213,7 @@ mod tests {
         .unwrap();
         let Json(disable_plan) = styles_prepare(
             State(state.clone()),
-            Json(StylePrepareRequest {
+            crate::RequestJson(StylePrepareRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id: uuid::Uuid::new_v4().to_string(),
@@ -1068,7 +1227,7 @@ mod tests {
         .unwrap();
         let _ = styles_apply(
             State(state.clone()),
-            Json(StyleApplyRequest {
+            crate::RequestJson(StyleApplyRequest {
                 session_id: Some(session_id.clone()),
                 root: None,
                 operation_id: disable_plan["operationId"].as_str().unwrap().into(),

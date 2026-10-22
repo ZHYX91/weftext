@@ -5,6 +5,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+weftext-messages = { path = "../weftext-messages" }
 typst = "=0.15.1"
 typst-html = "=0.15.1"
 typst-layout = "=0.15.1"

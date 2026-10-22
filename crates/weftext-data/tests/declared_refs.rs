@@ -105,7 +105,9 @@ fn declared_refs_preserve_unknown_root_without_claiming_its_possible_targets() {
     assert!(result.unbound.iter().any(|p| p.contains("computed_opaque")));
     assert!(!result.slots.iter().any(|slot| slot.target == OPAQUE));
     assert!(validate_note(&original, &schema, &ValidationContext::default()).is_valid());
-    assert!(!typed_ref_closure(&original, &schema).unwrap().complete);
+    let strict = typed_ref_closure(&original, &schema).unwrap();
+    assert!(!strict.complete);
+    assert!(strict.complete_without_unbound_root_fields);
     assert!(typed_ref_slots(&original, &schema).is_err());
 }
 
@@ -122,6 +124,11 @@ fn declared_refs_never_approve_invalid_or_computed_known_values() {
         assert!(!result.complete, "{fields}");
         assert!(!result.reasons.is_empty());
         assert!(result.slots.is_empty());
+        assert!(
+            !typed_ref_closure(&original, &schema)
+                .unwrap()
+                .complete_without_unbound_root_fields
+        );
     }
     let original = source(&format!(", project: \"{TARGET}\", status: \"bogus\""));
     assert!(declared_typed_ref_closure(&original, &schema).is_err()); // Duplicate direct control members remain unavailable.

@@ -216,11 +216,17 @@ pub(super) fn paired_body(
     if (!options.content_hash.is_empty() || !options.caption_pairings.is_empty())
         && options.content_hash != analysis.content_hash
     {
-        return Err(DocxError::new("题注配对预览原件已变化，请重新预览"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_notes_caption_preview_changed(),
+        )));
     }
     let mut body = doc
         .child("w:body")
-        .ok_or_else(|| DocxError::new("缺少Word body"))?
+        .ok_or_else(|| {
+            DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_notes_word_body_missing(),
+            ))
+        })?
         .clone();
     let blocks: Vec<_> = body
         .children
@@ -245,9 +251,9 @@ pub(super) fn paired_body(
                 .any(|o| o.block_index == p.object_block && o.kind == p.kind)
             || p.caption_text.len() > 64 * 1024
         {
-            return Err(DocxError::new(
-                "题注配对必须一一对应真实SEQ与所选同类对象，位置和文本须有效",
-            ));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_notes_caption_pairing_invalid(),
+            )));
         }
         let mut wrapper = Element::new("weftext:pairedFigure")
             .attr("kind", &p.kind)
@@ -387,7 +393,9 @@ pub(super) fn read(
                             .and_then(|e| e.get("w:val"))
                             .is_some_and(|v| !matches!(v, "pageBottom" | "docEnd"))
                     {
-                        losses.push(NativeLoss{path:path.into(),code:"word-note-numbering-layout".into(),detail:format!("{tag} 自定义符号／起始／重启／分节位置未映射；新文档采用独立连续十进制编号，准确原件保留")});
+                        losses.push(NativeLoss{path:path.into(),code:"word-note-numbering-layout".into(),description:weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_notes_numbering_layout_unmapped(weftext_messages::params::ErrorExportDocxNotesNumberingLayoutUnmapped { tag: (tag).to_string() })),
+product_diagnostics: Vec::new(),
+});
                     }
                 }
             }
@@ -407,11 +415,11 @@ pub(super) fn read(
         let part = match package.related_part(&rel_type, "") {
             Ok(part) => part,
             Err(e) => {
-                losses.push(NativeLoss {
-                    path: "word/document.xml".into(),
-                    code: "word-note-part".into(),
-                    detail: e.0,
-                });
+                losses.push(NativeLoss::from_error(
+                    "word/document.xml".into(),
+                    "word-note-part".into(),
+                    e.0,
+                ));
                 continue;
             }
         };
@@ -423,7 +431,11 @@ pub(super) fn read(
             losses.push(NativeLoss {
                 path: part,
                 code: "word-note-part".into(),
-                detail: "注释部件根元素不匹配；正文未转换，原件保留".into(),
+                description: weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_notes_note_root_mismatch(),
+                ),
+
+                product_diagnostics: Vec::new(),
             });
             continue;
         }
@@ -443,11 +455,15 @@ pub(super) fn read(
                 losses.push(NativeLoss {
                     path: part.clone(),
                     code: "word-note-id".into(),
-                    detail: "普通注释缺少有效正整数 ID；正文未转换，原件保留".into(),
+                    description: weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_notes_ordinary_note_id_invalid(),
+                    ),
+
+                    product_diagnostics: Vec::new(),
                 });
                 continue;
             };
-            let key = (kind.into(), id);
+            let key: (String, String) = (kind.into(), id);
             if notes
                 .insert(
                     key.clone(),
@@ -467,7 +483,16 @@ pub(super) fn read(
             losses.push(NativeLoss {
                 path: part.clone(),
                 code: "word-note-duplicate-id".into(),
-                detail: format!("{} ID {} 重复；不猜正文归属，原件保留", key.0, key.1),
+                description: weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_notes_duplicate_identity(
+                        weftext_messages::params::ErrorExportDocxNotesDuplicateIdentity {
+                            kind: (key.0).to_string(),
+                            id: (key.1).to_string(),
+                        },
+                    ),
+                ),
+
+                product_diagnostics: Vec::new(),
             });
         }
     }

@@ -92,7 +92,9 @@ impl Engine {
                 }
                 page_count = document.pages().len();
                 if page_count > PAGE_LIMIT {
-                    diagnostics.push(budget_diagnostic("分页超过 1,000 页输出上限"));
+                    diagnostics.push(budget_diagnostic(
+                        crate::UiMessage::error_engine_paged_page_budget(),
+                    ));
                 } else {
                     // Default export keeps the native document metadata,
                     // embedded fonts, links and tagged PDF. No invented stable
@@ -101,7 +103,9 @@ impl Engine {
                         Ok(bytes) if bytes.len() <= PDF_LIMIT => {
                             pdf_base64 = Some(STANDARD.encode(bytes));
                         }
-                        Ok(_) => diagnostics.push(budget_diagnostic("PDF 超过 16 MiB 输出上限")),
+                        Ok(_) => diagnostics.push(budget_diagnostic(
+                            crate::UiMessage::error_engine_paged_pdf_budget(),
+                        )),
                         Err(errors) => {
                             diagnostics.extend(errors.iter().map(|d| diagnostic(d, world)));
                         }
@@ -112,6 +116,19 @@ impl Engine {
                 diagnostics.extend(errors.iter().map(|d| diagnostic(d, world)));
             }
         }
+        diagnostics.extend(world.product_diagnostics().into_iter().map(|description| {
+            Diagnostic {
+                severity: if pdf_base64.is_some() {
+                    "warning"
+                } else {
+                    "error"
+                }
+                .into(),
+                explanation: Some(description.explanation),
+                diagnostics: description.diagnostics,
+                origin: None,
+            }
+        }));
         Ok(PagedOutput {
             ok: pdf_base64.is_some(),
             pdf_base64,
@@ -126,10 +143,11 @@ impl Engine {
     }
 }
 
-fn budget_diagnostic(message: &str) -> Diagnostic {
+fn budget_diagnostic(explanation: crate::UiMessage) -> Diagnostic {
     Diagnostic {
         severity: "error".into(),
-        message: message.into(),
+        explanation: Some(explanation),
+        diagnostics: vec![],
         origin: None,
     }
 }

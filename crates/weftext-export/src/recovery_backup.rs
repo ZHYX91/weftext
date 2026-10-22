@@ -26,7 +26,15 @@ struct Member {
 }
 
 fn invalid() -> ExportError {
-    ExportError("Recovery backup does not match its original bounded v1 manifest".into())
+    ExportError::new(weftext_messages::ErrorDescription::new(
+        weftext_messages::UiMessage::error_export_recovery_backup_original_manifest_mismatch(),
+    ))
+}
+
+fn zip_budget_error() -> std::io::Error {
+    std::io::Error::other(weftext_messages::ErrorDescription::new(
+        weftext_messages::UiMessage::error_export_recovery_backup_zip_bytes_exceeded(),
+    ))
 }
 
 /// Bound actual ZIP construction, including long member names and directory
@@ -41,9 +49,7 @@ impl Write for BackupZipCursor {
             .checked_add(bytes.len() as u64)
             .is_none_or(|end| end > MAX_BACKUP_ZIP_BYTES as u64)
         {
-            return Err(std::io::Error::other(
-                "Recovery ZIP exceeds its byte budget",
-            ));
+            return Err(zip_budget_error());
         }
         self.0.write(bytes)
     }
@@ -57,9 +63,7 @@ impl Seek for BackupZipCursor {
         let next = self.0.seek(position)?;
         if next > MAX_BACKUP_ZIP_BYTES as u64 {
             self.0.set_position(before);
-            return Err(std::io::Error::other(
-                "Recovery ZIP exceeds its byte budget",
-            ));
+            return Err(zip_budget_error());
         }
         Ok(next)
     }
@@ -213,10 +217,23 @@ mod tests {
         output.write_all(b"original").unwrap();
         let position = MAX_BACKUP_ZIP_BYTES as u64 - 1;
         output.seek(SeekFrom::Start(position)).unwrap();
-        assert!(output.write_all(b"oversized header").is_err());
+        let error = ExportError::from(output.write_all(b"oversized header").unwrap_err());
+        assert!(
+            (error.description.explanation).eq(
+                &weftext_messages::UiMessage::error_export_recovery_backup_zip_bytes_exceeded()
+            )
+        );
+        assert!(error.description.diagnostics.is_empty());
         assert_eq!(output.0.get_ref(), b"original");
         assert_eq!(output.0.position(), position);
-        assert!(output.seek(SeekFrom::Current(2)).is_err());
+        let error = zip::result::ZipError::Io(output.seek(SeekFrom::Current(2)).unwrap_err());
+        let error = ExportError::from(error);
+        assert!(
+            (error.description.explanation).eq(
+                &weftext_messages::UiMessage::error_export_recovery_backup_zip_bytes_exceeded()
+            )
+        );
+        assert!(error.description.diagnostics.is_empty());
         assert_eq!(output.0.position(), position);
         output.seek(SeekFrom::Start(0)).unwrap();
         output.write_all(b"verified").unwrap();

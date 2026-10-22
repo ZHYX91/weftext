@@ -1,6 +1,7 @@
 //! Processing defaults share the existing workspace-settings object and Core
 //! operation, history and synchronization boundaries. They do not set text locale.
 use super::{ApiError, ApiResult, AppState, core_call, location, value};
+use crate::RequestJson;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -10,6 +11,7 @@ use weftext_core::{
     ActorFeatureStatus, ConfigRole, Core, CoreError, FileChange, OperationIntent, OperationRequest,
 };
 use weftext_knowledge::ProcessingDocument;
+use weftext_messages::UiMessage;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -53,29 +55,51 @@ fn selected_root(state: &AppState, request: LibraryRequest) -> Result<PathBuf, A
                 .to_string_lossy()
                 .eq_ignore_ascii_case(&actual.to_string_lossy())
         }) {
-            return Err(ApiError::bad("处理设置与当前资料库会话不一致"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_processing_session_library_mismatch(),
+            ));
         }
         Ok(actual)
     } else {
-        request.root.ok_or_else(|| ApiError::bad("请先选择资料库"))
+        request
+            .root
+            .ok_or_else(|| ApiError::bad(UiMessage::error_api_processing_library_required()))
     }
 }
 
 /// Also used by hosted settings validation. Unknown settings members stay intact.
 pub(crate) fn validate_settings(settings: &Value) -> Result<(), ApiError> {
     if !settings.is_object() || settings["version"] != 1 {
-        return Err(ApiError::bad("库设置须为原生 version:1 JSON 对象"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_processing_settings_object_version(),
+        ));
     }
     weftext_core::validate_workspace_settings(
-        &serde_json::to_vec(settings).map_err(|_| ApiError::bad("库设置无法编码"))?,
+        &serde_json::to_vec(settings)
+            .map_err(|_| ApiError::bad(UiMessage::error_api_processing_settings_encoding()))?,
     )
-    .map_err(|error| ApiError::bad(error.message))?;
+    .map_err(|error| {
+        let mut error = ApiError::from(error);
+        error.status = axum::http::StatusCode::BAD_REQUEST;
+        error.code = "invalid_request".into();
+        error
+    })?;
     if let Some(processing) = settings.get("processing") {
-        let document: ProcessingDocument = serde_json::from_value(processing.clone())
-            .map_err(|_| ApiError::bad("处理默认或词表格式无效；原输入保留"))?;
-        document
-            .validate()
-            .map_err(|error| ApiError::bad(error.to_string()))?;
+        let document: ProcessingDocument =
+            serde_json::from_value(processing.clone()).map_err(|_| {
+                ApiError::bad(UiMessage::error_api_processing_invalid_defaults_or_vocabulary())
+            })?;
+        document.validate().map_err(|error| {
+            let code = error.code.clone();
+            let (description, diagnostics) = error.into_parts();
+            ApiError::from_product(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid_request",
+                Some(code),
+                description,
+                diagnostics,
+            )
+        })?;
     }
     Ok(())
 }
@@ -85,22 +109,34 @@ fn changed_settings(
     processing: Option<&ProcessingDocument>,
 ) -> Result<Vec<u8>, ApiError> {
     if before.is_some_and(|source| source.len() > weftext_core::MAX_SOURCE_BYTES) {
-        return Err(ApiError::bad("原设置超过 2 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_processing_original_settings_budget(),
+        ));
     }
     let mut settings: Value = match before {
         Some(source) => serde_json::from_str(source)
-            .map_err(|_| ApiError::bad("原库设置不是有效 JSON；未覆盖原件"))?,
+            .map_err(|_| ApiError::bad(UiMessage::error_api_processing_original_settings_json()))?,
         None => json!({"version":1}),
     };
     // Preserve an unrecognized existing processing object when reading it, but
     // replacing/resetting it is an explicit proposal against these exact bytes.
     if !settings.is_object() || settings["version"] != 1 {
-        return Err(ApiError::bad("原库设置版本或类型不受支持；未覆盖原件"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_processing_original_settings_version(),
+        ));
     }
     if let Some(document) = processing {
-        document
-            .validate()
-            .map_err(|error| ApiError::bad(error.to_string()))?;
+        document.validate().map_err(|error| {
+            let code = error.code.clone();
+            let (description, diagnostics) = error.into_parts();
+            ApiError::from_product(
+                axum::http::StatusCode::BAD_REQUEST,
+                "invalid_request",
+                Some(code),
+                description,
+                diagnostics,
+            )
+        })?;
         settings["processing"] = value(document)?;
     } else {
         settings
@@ -109,15 +145,21 @@ fn changed_settings(
             .remove("processing");
     }
     validate_settings(&settings)?;
-    let bytes =
-        serde_json::to_vec_pretty(&settings).map_err(|_| ApiError::internal("处理设置无法编码"))?;
+    let bytes = serde_json::to_vec_pretty(&settings).map_err(|_| {
+        ApiError::internal(UiMessage::error_api_processing_changed_settings_encoding())
+    })?;
     if bytes.len() > weftext_core::MAX_SOURCE_BYTES {
-        return Err(ApiError::bad("处理设置超过 2 MiB 预算；原输入保留"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_processing_changed_settings_budget(),
+        ));
     }
     Ok(bytes)
 }
 
-async fn read(State(state): State<AppState>, Json(request): Json<LibraryRequest>) -> ApiResult {
+async fn read(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<LibraryRequest>,
+) -> ApiResult {
     let root = selected_root(&state, request)?;
     let document = core_call(&state, move |core| {
         core.read_config(root, ConfigRole::WorkspaceSettings)
@@ -128,16 +170,14 @@ async fn read(State(state): State<AppState>, Json(request): Json<LibraryRequest>
         .as_ref()
         .map(|bytes| String::from_utf8(bytes.clone()))
         .transpose()
-        .map_err(|_| ApiError::bad("库设置不是可读 UTF-8；原件保留"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_processing_settings_utf8()))?;
     let settings = source
         .as_ref()
         .map(|source| serde_json::from_str::<Value>(source))
         .transpose()
-        .map_err(|_| ApiError::bad("库设置不是有效 JSON；原件保留"))?
+        .map_err(|_| ApiError::bad(UiMessage::error_api_processing_settings_json()))?
         .unwrap_or_else(|| json!({"version":1}));
-    let warning = validate_settings(&settings)
-        .err()
-        .map(|error| error.message);
+    let warning = validate_settings(&settings).err();
     Ok(Json(
         json!({"baseId":document.base_id,"roleRef":document.role_ref,
         "beforeSource":source,"revision":document.revision,"processing":settings.get("processing"),
@@ -150,7 +190,9 @@ const PROCESSING_RESOURCE: &str = "library.processing";
 
 fn fingerprint(root: &Path, request: &PrepareRequest) -> Result<String, ApiError> {
     let frozen = json!({"root":root.to_string_lossy(),"baseId":request.base_id,"beforeSource":request.before_source,"processing":request.processing});
-    let bytes = serde_json::to_vec(&frozen).map_err(|_| ApiError::bad("原处理设置无法编码"))?;
+    let bytes = serde_json::to_vec(&frozen).map_err(|_| {
+        ApiError::bad(UiMessage::error_api_processing_original_processing_encoding())
+    })?;
     Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 fn feature_plan(
@@ -166,7 +208,7 @@ fn feature_plan(
         if existing_only { return Ok(None); }
         let path = root.join(".weftext-settings.json");
         core.validate_snapshot(root, &path, &request.base_id)?;
-        let preview = json!({"beforeSource":request.before_source,"afterSource":String::from_utf8_lossy(&after),"summary":"更新同一库设置中的共享处理建议与词表；文档和个人偏好不变。"});
+        let preview = json!({"beforeSource":request.before_source,"afterSource":String::from_utf8_lossy(&after),"summary":UiMessage::error_api_processing_shared_defaults_plan()});
         let operation = OperationRequest { operation_id: request.operation_id.clone(), root: root.to_string_lossy().into_owned(), intent: OperationIntent::UpdateFiles { changes: vec![FileChange { path: path.to_string_lossy().into_owned(), base_id: Some(request.base_id.clone()), before: request.before_source.as_ref().map(|s| s.as_bytes().to_vec()), after }] } };
         core.actor_feature_prepare(PROCESSING_RESOURCE, &request.operation_id, fingerprint, operation, preview, &[]).map(Some)
     })
@@ -199,15 +241,24 @@ async fn original_plan(
     }
 }
 
-async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareRequest>) -> ApiResult {
+async fn prepare(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<PrepareRequest>,
+) -> ApiResult {
     Ok(Json(original_plan(&state, request, false).await?))
 }
 
-async fn status(State(state): State<AppState>, Json(request): Json<PrepareRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<PrepareRequest>,
+) -> ApiResult {
     Ok(Json(original_plan(&state, request, true).await?))
 }
 
-async fn apply(State(state): State<AppState>, Json(request): Json<ApplyRequest>) -> ApiResult {
+async fn apply(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<ApplyRequest>,
+) -> ApiResult {
     let root = selected_root(
         &state,
         LibraryRequest {
@@ -224,11 +275,16 @@ async fn apply(State(state): State<AppState>, Json(request): Json<ApplyRequest>)
                     &request.request.operation_id,
                     &fingerprint,
                 )?
-                .ok_or_else(|| CoreError::new("operationMissing", "请先查询原处理设置操作"))?;
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "operationMissing",
+                        UiMessage::error_api_processing_original_lookup_required(),
+                    )
+                })?;
             if original.plan_id.as_deref() != Some(request.plan_id.as_str()) {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "处理设置计划与原操作不一致",
+                    UiMessage::error_api_processing_operation_plan_mismatch(),
                 ));
             }
             core.actor_feature_commit(
@@ -242,7 +298,10 @@ async fn apply(State(state): State<AppState>, Json(request): Json<ApplyRequest>)
     Ok(Json(value(receipt)?))
 }
 
-async fn settle(State(state): State<AppState>, Json(request): Json<PrepareRequest>) -> ApiResult {
+async fn settle(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<PrepareRequest>,
+) -> ApiResult {
     let root = selected_root(
         &state,
         LibraryRequest {

@@ -19,6 +19,9 @@ use std::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
+use weftext_messages::{DiagnosticOrigin, ErrorCauses, ErrorDescription, RawDiagnostic, UiMessage};
+#[cfg(test)]
+mod error_contract_tests;
 
 #[cfg(test)]
 trait CoreTestFixture {
@@ -84,6 +87,9 @@ mod navigation_api;
 mod owned_process;
 mod processing_api;
 mod recognition_api;
+mod request_json;
+pub(crate) use request_json::RequestJson;
+mod client_preferences_api;
 mod remote_sync;
 mod sync_api;
 mod sync_wire;
@@ -115,6 +121,32 @@ struct Location {
     path: PathBuf,
     root: PathBuf,
 }
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum LocationError {
+    Unavailable,
+    Expired,
+}
+impl LocationError {
+    pub(crate) fn into_core(self, code: &str) -> CoreError {
+        CoreError::new(
+            code,
+            match self {
+                Self::Unavailable => UiMessage::error_file_session_unavailable(),
+                Self::Expired => UiMessage::error_file_session_expired(),
+            },
+        )
+    }
+}
+impl From<LocationError> for ApiError {
+    fn from(error: LocationError) -> Self {
+        match error {
+            LocationError::Unavailable => {
+                Self::internal(UiMessage::error_file_session_unavailable())
+            }
+            LocationError::Expired => Self::bad(UiMessage::error_file_session_expired()),
+        }
+    }
+}
 #[derive(Clone)]
 struct RenderCache {
     source: String,
@@ -122,29 +154,144 @@ struct RenderCache {
     output: Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ApiError {
+    #[serde(skip)]
     status: StatusCode,
     code: String,
-    message: String,
-    details: Option<Box<Value>>,
+    #[serde(skip)]
     private_worker_failure: Option<Arc<worker_failure::WorkerFailure>>,
+    explanation: UiMessage,
+    diagnostics: Vec<RawDiagnostic>,
+    causes: ErrorCauses,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<Box<ApiErrorDetails>>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum ApiErrorDetails {
+    Core {
+        #[serde(flatten)]
+        error: CoreError,
+    },
+    CurrentSource {
+        #[serde(rename = "currentSource")]
+        current_source: String,
+    },
+    SchemaSource {
+        source: String,
+        #[serde(rename = "roleRef")]
+        role_ref: Option<String>,
+        revision: Option<String>,
+        cause: Box<ApiError>,
+    },
+    OriginalOperation {
+        fact: Value,
+        cause: Box<ApiError>,
+    },
+    EngineDiagnostics {
+        diagnostics: Vec<weftext_engine::Diagnostic>,
+    },
+    ProductDiagnostics {
+        code: Option<String>,
+        diagnostics: Vec<ErrorDescription>,
+    },
+    CommittedReceipt {
+        receipt: weftext_core::OperationReceipt,
+        cause: Box<ApiError>,
+    },
+    SourcePreserved {
+        serial: u64,
+        #[serde(rename = "sourcePreserved")]
+        source_preserved: bool,
+        cause: Box<ApiError>,
+    },
 }
 impl ApiError {
-    fn new(status: StatusCode, code: &str, message: impl Into<String>) -> Self {
+    fn new(status: StatusCode, code: &str, description: impl Into<ErrorDescription>) -> Self {
+        let description = description.into();
         Self {
             status,
             code: code.into(),
-            message: message.into(),
+            explanation: description.explanation,
+            diagnostics: description.diagnostics,
+            causes: description.causes,
             details: None,
             private_worker_failure: None,
         }
     }
-    fn bad(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::BAD_REQUEST, "invalid_request", message)
+    fn bad(description: impl Into<ErrorDescription>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, "invalid_request", description)
     }
-    fn internal(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", message)
+    fn internal(description: impl Into<ErrorDescription>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", description)
+    }
+    fn diagnostic(mut self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
+        self.diagnostics.push(RawDiagnostic {
+            origin,
+            text: text.into(),
+        });
+        self
+    }
+    fn from_data(status: StatusCode, code: &str, error: weftext_data::DataError) -> Self {
+        let mut error = Self::from(CoreError::from_data(code, error));
+        error.status = status;
+        error
+    }
+    fn from_engine(status: StatusCode, code: &str, error: weftext_engine::EngineError) -> Self {
+        let mut error = Self::from(CoreError::from_engine(code, error));
+        error.status = status;
+        error
+    }
+    fn from_product(
+        status: StatusCode,
+        code: &str,
+        source_code: Option<String>,
+        description: ErrorDescription,
+        diagnostics: Vec<ErrorDescription>,
+    ) -> Self {
+        let mut error = Self::from(CoreError::from_product(
+            code,
+            source_code,
+            description,
+            diagnostics,
+        ));
+        error.status = status;
+        error
+    }
+    fn from_core_parts(
+        status: StatusCode,
+        code: &str,
+        description: ErrorDescription,
+        details: Option<weftext_core::CoreErrorDetails>,
+    ) -> Self {
+        let mut core = CoreError::new(code, description);
+        core.details = details;
+        let mut error = Self::from(core);
+        error.status = status;
+        error
+    }
+    fn committed_receipt(
+        mut self,
+        receipt: weftext_core::OperationReceipt,
+        cause: ApiError,
+    ) -> Self {
+        let original = ErrorDescription {
+            explanation: cause.explanation.clone(),
+            diagnostics: cause.diagnostics.clone(),
+            causes: cause.causes.clone(),
+        };
+        let description = ErrorDescription::new(self.explanation.clone());
+        if let Ok(description) = description.try_caused_by(cause.code.clone(), original) {
+            self.causes = description.causes;
+        }
+        // The complete typed failure remains here even when the causal-chain budget is full.
+        self.details = Some(Box::new(ApiErrorDetails::CommittedReceipt {
+            receipt,
+            cause: Box::new(cause),
+        }));
+        self
     }
     fn worker_failure(failure: worker_failure::WorkerFailure) -> Self {
         let mut error = Self::worker_failure_summary(&failure);
@@ -225,28 +372,25 @@ impl std::error::Error for ApiError {
 }
 impl From<CoreError> for ApiError {
     fn from(error: CoreError) -> Self {
-        let value = serde_json::to_value(&error).unwrap_or(json!({"message":"文件操作失败"}));
-        let code = value["code"].as_str().unwrap_or("file_error").to_owned();
-        let message = value["message"]
-            .as_str()
-            .unwrap_or("文件操作失败")
-            .to_owned();
         Self {
             status: StatusCode::CONFLICT,
-            code,
-            message,
-            details: Some(Box::new(value)),
+            code: error.code.clone(),
+            explanation: error.explanation.clone(),
+            diagnostics: error.diagnostics.clone(),
+            causes: error.causes.clone(),
+            details: Some(Box::new(ApiErrorDetails::Core { error })),
             private_worker_failure: None,
         }
     }
 }
+impl From<ErrorDescription> for ApiError {
+    fn from(description: ErrorDescription) -> Self {
+        Self::internal(description)
+    }
+}
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (
-            self.status,
-            Json(json!({"error":{"code":self.code,"message":self.message,"details":self.details}})),
-        )
-            .into_response()
+        (self.status, Json(json!({"error":self}))).into_response()
     }
 }
 type ApiResult = Result<Json<Value>, ApiError>;
@@ -260,29 +404,30 @@ where
     crate::work::spawn_blocking(move || {
         let mut core = core
             .lock()
-            .map_err(|_| ApiError::internal("文件服务暂不可用"))?;
+            .map_err(|_| ApiError::internal(UiMessage::error_file_service_unavailable()))?;
         f(&mut core).map_err(ApiError::from)
     })
     .await
-    .map_err(|_| ApiError::internal("文件服务未完成"))?
+    .map_err(|_| ApiError::internal(UiMessage::error_file_service_incomplete()))?
 }
 fn value<T: Serialize>(v: T) -> Result<Value, ApiError> {
-    serde_json::to_value(v).map_err(|_| ApiError::internal("响应编码失败"))
+    serde_json::to_value(v)
+        .map_err(|_| ApiError::internal(UiMessage::error_response_encoding_failed()))
 }
-fn remember(state: &AppState, document: &Value) -> Result<(), ApiError> {
+fn remember(state: &AppState, document: &Value) -> Result<(), ErrorDescription> {
     let id = document["sessionId"]
         .as_str()
-        .ok_or_else(|| ApiError::internal("缺少文件会话"))?;
+        .ok_or_else(|| ErrorDescription::new(UiMessage::error_file_session_missing()))?;
     let path = document["path"]
         .as_str()
-        .ok_or_else(|| ApiError::internal("缺少文件路径"))?;
+        .ok_or_else(|| ErrorDescription::new(UiMessage::error_file_path_missing()))?;
     let root = document["root"]
         .as_str()
-        .ok_or_else(|| ApiError::internal("缺少依赖根"))?;
+        .ok_or_else(|| ErrorDescription::new(UiMessage::error_dependency_root_missing()))?;
     state
         .locations
         .lock()
-        .map_err(|_| ApiError::internal("会话暂不可用"))?
+        .map_err(|_| ErrorDescription::new(UiMessage::error_file_session_unavailable()))?
         .insert(
             id.to_owned(),
             Location {
@@ -292,14 +437,14 @@ fn remember(state: &AppState, document: &Value) -> Result<(), ApiError> {
         );
     Ok(())
 }
-fn location(state: &AppState, id: &str) -> Result<Location, ApiError> {
+fn location(state: &AppState, id: &str) -> Result<Location, LocationError> {
     state
         .locations
         .lock()
-        .map_err(|_| ApiError::internal("会话暂不可用"))?
+        .map_err(|_| LocationError::Unavailable)?
         .get(id)
         .cloned()
-        .ok_or_else(|| ApiError::bad("文件会话已失效，请重新打开并恢复草稿"))
+        .ok_or(LocationError::Expired)
 }
 /// Disposable projections have exactly the same Session coordinate. This does
 /// not delete its persisted author Draft or original-operation recovery facts.
@@ -329,7 +474,12 @@ async fn boundary(State(state): State<AppState>, request: Request, next: Next) -
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
     if host != format!("127.0.0.1:{}", state.port) && host != format!("localhost:{}", state.port) {
-        return ApiError::new(StatusCode::FORBIDDEN, "host", "不允许的访问地址").into_response();
+        return ApiError::new(
+            StatusCode::FORBIDDEN,
+            "host",
+            UiMessage::error_host_address_disallowed(),
+        )
+        .into_response();
     }
     if request.uri().path().starts_with("/api/") {
         let token = request
@@ -345,7 +495,7 @@ async fn boundary(State(state): State<AppState>, request: Request, next: Next) -
             return ApiError::new(
                 StatusCode::FORBIDDEN,
                 "session_token",
-                "此本机会话无效，请使用启动窗口中的地址重新打开",
+                UiMessage::error_local_session_invalid(),
             )
             .into_response();
         }
@@ -471,7 +621,7 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
             let root = original["root"].as_str().ok_or_else(|| {
                 CoreError::new(
                     "initialUnavailable",
-                    "The original launch root is unavailable",
+                    UiMessage::error_api_launch_root_unavailable(),
                 )
             })?;
             if let (Some(workspace), Some(node)) = (
@@ -487,7 +637,7 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
                 let session_id = original["sessionId"].as_str().ok_or_else(|| {
                     CoreError::new(
                         "initialUnavailable",
-                        "The original launch Session is unavailable",
+                        UiMessage::error_api_launch_session_unavailable(),
                     )
                 })?;
                 core.reopen_local_session(session_id)
@@ -504,8 +654,13 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
         }
         Some(Err(error)) => (
             None,
-            Some(json!({"code":error.code,
-            "message":"启动文档当前不可用，原草稿保留；请从资料库重新打开。"})),
+            Some(value(ApiError::from(
+                CoreError::new(
+                    "initialUnavailable",
+                    UiMessage::error_api_launch_document_unavailable(),
+                )
+                .caused_by(error),
+            ))?),
         ),
         None => (None, None),
     };
@@ -517,7 +672,10 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
         "localNoteTimeline":true,"embeddedQueryViews":true}}),
     ))
 }
-async fn open(State(state): State<AppState>, Json(req): Json<OpenRequest>) -> ApiResult {
+async fn open(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<OpenRequest>,
+) -> ApiResult {
     let doc = value(
         core_call(&state, move |c| match req {
             OpenRequest::Session(req) => c.reopen_local_session(&req.session_id),
@@ -528,7 +686,10 @@ async fn open(State(state): State<AppState>, Json(req): Json<OpenRequest>) -> Ap
     remember(&state, &doc)?;
     Ok(Json(doc))
 }
-async fn inventory(State(state): State<AppState>, Json(req): Json<PathRequest>) -> ApiResult {
+async fn inventory(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<PathRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |c| c.inventory(req.path)).await?,
     )?))
@@ -542,7 +703,7 @@ async fn library_creation_defaults() -> ApiResult {
 }
 async fn create_library(
     State(state): State<AppState>,
-    Json(req): Json<CreateLibraryRequest>,
+    RequestJson(req): RequestJson<CreateLibraryRequest>,
 ) -> ApiResult {
     let receipt = core_call(&state, move |c| {
         let operation_id = req
@@ -571,17 +732,17 @@ pub(crate) async fn library_creation_output(
         Ok(())
     })();
     if let Err(error) = delivered {
-        output["deliveryError"] = json!({"code":error.code,"message":error.message});
+        output["deliveryError"] = json!(error);
     }
     Ok(output)
 }
 async fn cancel_library_creation(
     State(state): State<AppState>,
-    Json(req): Json<CreateLibraryRequest>,
+    RequestJson(req): RequestJson<CreateLibraryRequest>,
 ) -> ApiResult {
     let operation_id = req
         .operation_id
-        .ok_or_else(|| ApiError::bad("请提供原创建操作编号；未生成替代操作"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_creation_operation_id_required()))?;
     Ok(Json(value(
         core_call(&state, move |c| {
             c.cancel_library_creation_with_options_and_id(req.path, req.options, &operation_id)
@@ -589,7 +750,10 @@ async fn cancel_library_creation(
         .await?,
     )?))
 }
-async fn create_note(State(state): State<AppState>, Json(req): Json<CreateNote>) -> ApiResult {
+async fn create_note(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CreateNote>,
+) -> ApiResult {
     let (preview, receipt) = core_call(&state, move |c| {
         let id = req
             .operation_id
@@ -602,21 +766,30 @@ async fn create_note(State(state): State<AppState>, Json(req): Json<CreateNote>)
         .await
         .map(Json)
 }
-async fn save(State(state): State<AppState>, Json(req): Json<SaveRequest>) -> ApiResult {
+async fn save(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<SaveRequest>,
+) -> ApiResult {
     let id = req.operation_id.clone();
     let output = value(core_call(&state, move |c| c.save(req)).await?)?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output).await,
     ))
 }
-async fn save_as(State(state): State<AppState>, Json(req): Json<SaveAsRequest>) -> ApiResult {
+async fn save_as(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<SaveAsRequest>,
+) -> ApiResult {
     let id = req.operation_id.clone();
     let output = value(core_call(&state, move |c| c.save_as(req)).await?)?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output).await,
     ))
 }
-async fn draft(State(state): State<AppState>, Json(req): Json<DraftRequest>) -> ApiResult {
+async fn draft(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<DraftRequest>,
+) -> ApiResult {
     core_call(&state, move |c| {
         c.persist_draft(&req.session_id, &req.source)
     })
@@ -635,7 +808,7 @@ async fn recovery(State(state): State<AppState>) -> ApiResult {
 }
 async fn inspect_recovery(
     State(state): State<AppState>,
-    Json(req): Json<OperationRequest>,
+    RequestJson(req): RequestJson<OperationRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |c| c.inspect_recovery(&req.operation_id)).await?,
@@ -643,7 +816,7 @@ async fn inspect_recovery(
 }
 async fn resolve_recovery(
     State(state): State<AppState>,
-    Json(req): Json<RecoveryRequest>,
+    RequestJson(req): RequestJson<RecoveryRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |c| {
@@ -655,7 +828,7 @@ async fn resolve_recovery(
 
 async fn resolve_draft(
     State(state): State<AppState>,
-    Json(req): Json<DraftResolution>,
+    RequestJson(req): RequestJson<DraftResolution>,
 ) -> ApiResult {
     core_call(&state, move |c| {
         c.resolve_draft(&req.session_id, &req.action, req.source.as_deref())
@@ -682,15 +855,21 @@ struct NotesWorkerRequest {
     input: WorkerRequest,
     request: weftext_engine::EditRequest,
 }
-async fn render(State(state): State<AppState>, Json(req): Json<RenderRequest>) -> ApiResult {
+async fn render(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RenderRequest>,
+) -> ApiResult {
     compile_output(state, req, false, None).await
 }
-async fn paged(State(state): State<AppState>, Json(req): Json<RenderRequest>) -> ApiResult {
+async fn paged(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RenderRequest>,
+) -> ApiResult {
     compile_output(state, req, true, None).await
 }
 async fn proposal_preview(
     State(state): State<AppState>,
-    Json(req): Json<ProposalPreviewRequest>,
+    RequestJson(req): RequestJson<ProposalPreviewRequest>,
 ) -> ApiResult {
     compile_output(
         state,
@@ -713,15 +892,13 @@ async fn compile_output(
     let preview_only = proposal_source.is_some();
     let compiled_source = proposal_source.unwrap_or_else(|| req.source.clone());
     if req.source.len() > 2 * 1024 * 1024 || compiled_source.len() > 2 * 1024 * 1024 {
-        return Err(ApiError::bad(
-            "预览上限为 2 MiB；完整输入仍保留在当前窗口，保存也受源码上限约束",
-        ));
+        return Err(ApiError::bad(UiMessage::error_preview_source_byte_limit()));
     }
     let loc = location(&state, &req.session_id)?;
     writing_api::observe_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
     let environment = writing_api::style_environment(&state, &req.session_id).await?;
     let citation_inputs = if weftext_engine::inspect_citation_declaration(&compiled_source)
-        .map_err(|e| ApiError::bad(e.to_string()))?
+        .map_err(|e| ApiError::from_engine(StatusCode::BAD_REQUEST, "invalid_request", e))?
         .is_some()
     {
         let root = loc.root.clone();
@@ -753,7 +930,7 @@ async fn compile_output(
         .render_gate
         .acquire()
         .await
-        .map_err(|_| ApiError::internal("编译服务不可用"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_compile_service_unavailable()))?;
     let input = WorkerRequest {
         source: compiled_source.clone(),
         path: loc.path,
@@ -803,7 +980,7 @@ async fn compile_output(
     let mut cache = state
         .renders
         .lock()
-        .map_err(|_| ApiError::internal("编译会话不可用"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_compile_session_unavailable()))?;
     let replace = cache.get(&req.session_id).is_none_or(|old| {
         req.serial > old.serial || req.serial == old.serial && req.source == old.source
     });
@@ -834,15 +1011,13 @@ async fn render_frozen_target_worker(
     use base64::Engine as _;
     let total: usize = request.files.values().map(Vec::len).sum();
     if total > 64 * 1024 * 1024 || request.source.len() > 2 * 1024 * 1024 {
-        return Err(ApiError::bad(
-            "此查询的冻结编译输入超出本机预算，结果不可当作完整。",
-        ));
+        return Err(ApiError::bad(UiMessage::error_frozen_compile_input_limit()));
     }
     let _permit = state
         .render_gate
         .acquire()
         .await
-        .map_err(|_| ApiError::internal("编译服务不可用"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_compile_service_unavailable()))?;
     render_worker(WorkerRequest {
         source: request.source,
         path: request.path,
@@ -881,7 +1056,7 @@ async fn notes_edit_worker(
     if input.source.len() > weftext_core::MAX_SOURCE_BYTES
         || input.files.values().map(Vec::len).sum::<usize>() > 64 * 1024 * 1024
     {
-        return Err(ApiError::bad("尾注编辑的冻结输入超过预算，原稿保留"));
+        return Err(ApiError::bad(UiMessage::error_notes_frozen_input_limit()));
     }
     notes_edit_from_worker(
         WorkerRequest {
@@ -912,7 +1087,8 @@ async fn notes_edit_from_worker(
 ) -> Result<NotesWorkerOutput, ApiError> {
     let output =
         bounded_compiler_worker(value(NotesWorkerRequest { input, request })?, true).await?;
-    serde_json::from_value(output).map_err(|_| ApiError::internal("尾注编译依赖回执无效，原稿保留"))
+    serde_json::from_value(output)
+        .map_err(|_| ApiError::internal(UiMessage::error_notes_dependency_receipt_invalid()))
 }
 
 async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
@@ -1179,9 +1355,6 @@ mod worker_capture_tests {
     }
 }
 
-const DISPLAY_TREE_BUDGET_ENGINE_ERROR: &str = "显示树超过安全预算；请使用源码入口";
-const DISPLAY_TREE_BUDGET_MESSAGE: &str =
-    "预览显示树超过 100000 个节点或 256 层深度的安全预算；请使用源码编辑，输入已保留。";
 const RENDER_WORKER_FAILURE_KEY: &str = "weftextRenderWorkerFailure";
 
 #[derive(Serialize, Deserialize)]
@@ -1192,36 +1365,87 @@ struct RenderWorkerFailureEnvelope {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RenderWorkerFailure {
     version: u8,
     code: RenderWorkerFailureCode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<ErrorDescription>,
+    product_diagnostics: Vec<ErrorDescription>,
 }
 
 #[derive(Serialize, Deserialize)]
 enum RenderWorkerFailureCode {
     #[serde(rename = "display_tree_budget")]
     DisplayTreeBudget,
+    #[serde(rename = "product_error")]
+    ProductError,
 }
 
 fn write_render_worker_failure(
     error: Box<dyn std::error::Error>,
     writer: &mut impl std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Only this engine-owned static failure gets a public code. Neither an
-    // arbitrary error's text nor stderr is a trusted failure protocol.
-    if !error
-        .downcast_ref::<weftext_engine::EngineError>()
-        .is_some_and(|error| error.0 == DISPLAY_TREE_BUDGET_ENGINE_ERROR)
-    {
-        return Err(error);
-    }
+    // Typed product failures cross the private pipe without rendering or parsing
+    // their display text. Unrecognized errors remain original stderr failures.
+    let (code, description, product_diagnostics) =
+        match error.downcast_ref::<weftext_engine::EngineError>() {
+            Some(weftext_engine::EngineError::DisplayTreeBudget {
+                product_diagnostics,
+            }) => (
+                RenderWorkerFailureCode::DisplayTreeBudget,
+                None,
+                product_diagnostics.clone(),
+            ),
+            Some(error) => {
+                let (description, diagnostics) = error.clone().into_parts();
+                (
+                    RenderWorkerFailureCode::ProductError,
+                    Some(description),
+                    diagnostics,
+                )
+            }
+            None => match error.downcast_ref::<ErrorDescription>() {
+                Some(description) => (
+                    RenderWorkerFailureCode::ProductError,
+                    Some(description.clone()),
+                    Vec::new(),
+                ),
+                None => {
+                    if let Some(source) = error.downcast_ref::<std::io::Error>() {
+                        (
+                            RenderWorkerFailureCode::ProductError,
+                            Some(
+                                ErrorDescription::new(UiMessage::error_api_worker_pipe_failure())
+                                    .diagnostic(DiagnosticOrigin::Os, source.to_string()),
+                            ),
+                            Vec::new(),
+                        )
+                    } else if let Some(source) = error.downcast_ref::<serde_json::Error>() {
+                        (
+                            RenderWorkerFailureCode::ProductError,
+                            Some(
+                                ErrorDescription::new(
+                                    UiMessage::error_api_worker_output_encoding_failed(),
+                                )
+                                .diagnostic(DiagnosticOrigin::Json, source.to_string()),
+                            ),
+                            Vec::new(),
+                        )
+                    } else {
+                        return Err(error);
+                    }
+                }
+            },
+        };
     serde_json::to_writer(
         &mut *writer,
         &RenderWorkerFailureEnvelope {
             failure: RenderWorkerFailure {
-                version: 1,
-                code: RenderWorkerFailureCode::DisplayTreeBudget,
+                version: 2,
+                code,
+                description,
+                product_diagnostics,
             },
         },
     )?;
@@ -1229,15 +1453,14 @@ fn write_render_worker_failure(
     Ok(())
 }
 
-fn decode_compiler_worker_output(bytes: &[u8], notes_edit: bool) -> Result<Value, ApiError> {
-    let output: Value =
-        serde_json::from_slice(bytes).map_err(|_| ApiError::internal("编译输出无效"))?;
-    if notes_edit {
-        return Ok(output);
-    }
+fn decode_compiler_worker_output(bytes: &[u8], _notes_edit: bool) -> Result<Value, ApiError> {
+    let output: Value = serde_json::from_slice(bytes).map_err(|error| {
+        ApiError::internal(UiMessage::error_compiler_output_invalid())
+            .diagnostic(DiagnosticOrigin::Json, error.to_string())
+    })?;
     let object = output
         .as_object()
-        .ok_or_else(|| ApiError::internal("编译输出无效"))?;
+        .ok_or_else(|| ApiError::internal(UiMessage::error_compiler_output_invalid()))?;
     if !object.contains_key(RENDER_WORKER_FAILURE_KEY) {
         return Ok(output);
     }
@@ -1247,41 +1470,66 @@ fn decode_compiler_worker_output(bytes: &[u8], notes_edit: bool) -> Result<Value
     let exact_objects = object.len() == 1
         && output[RENDER_WORKER_FAILURE_KEY]
             .as_object()
-            .is_some_and(|object| object.len() == 2);
-    if exact_objects
-        && matches!(
-            serde_json::from_slice::<RenderWorkerFailureEnvelope>(bytes),
+            .is_some_and(|object| object.len() == 3 || object.len() == 4);
+    if exact_objects {
+        match serde_json::from_slice::<RenderWorkerFailureEnvelope>(bytes) {
             Ok(RenderWorkerFailureEnvelope {
-                failure: RenderWorkerFailure {
-                    version: 1,
-                    code: RenderWorkerFailureCode::DisplayTreeBudget,
-                },
-            })
-        )
-    {
-        return Err(ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "display_tree_budget",
-            DISPLAY_TREE_BUDGET_MESSAGE,
-        ));
+                failure:
+                    RenderWorkerFailure {
+                        version: 2,
+                        code: RenderWorkerFailureCode::DisplayTreeBudget,
+                        description: None,
+                        product_diagnostics,
+                    },
+            }) if output[RENDER_WORKER_FAILURE_KEY].as_object().unwrap().len() == 3 => {
+                return Err(ApiError::from_product(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "display_tree_budget",
+                    None,
+                    ErrorDescription::new(UiMessage::error_preview_display_tree_budget()),
+                    product_diagnostics,
+                ));
+            }
+            Ok(RenderWorkerFailureEnvelope {
+                failure:
+                    RenderWorkerFailure {
+                        version: 2,
+                        code: RenderWorkerFailureCode::ProductError,
+                        description: Some(description),
+                        product_diagnostics: diagnostics,
+                    },
+            }) => {
+                return Err(ApiError::from_product(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "worker_product_error",
+                    None,
+                    description,
+                    diagnostics,
+                ));
+            }
+            _ => {}
+        }
     }
-    Err(ApiError::internal("编译输出无效"))
+    Err(ApiError::internal(
+        UiMessage::error_compiler_output_invalid(),
+    ))
 }
 
 #[cfg(test)]
 mod render_worker_codec_tests {
     use super::*;
+    const LOOKALIKE: &str = "显示树超过安全预算；请使用源码入口";
 
     const FAILURE: &[u8] =
-        br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}"#;
+        br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]}}"#;
 
     #[test]
     fn exact_typed_engine_budget_emits_only_the_private_code() {
         let mut output = Vec::new();
         write_render_worker_failure(
-            Box::new(weftext_engine::EngineError(
-                DISPLAY_TREE_BUDGET_ENGINE_ERROR.into(),
-            )),
+            Box::new(weftext_engine::EngineError::DisplayTreeBudget {
+                product_diagnostics: Vec::new(),
+            }),
             &mut output,
         )
         .unwrap();
@@ -1289,20 +1537,34 @@ mod render_worker_codec_tests {
         let error = decode_compiler_worker_output(&output, false).unwrap_err();
         assert_eq!(error.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(error.code, "display_tree_budget");
-        assert_eq!(error.message, DISPLAY_TREE_BUDGET_MESSAGE);
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_preview_display_tree_budget()
+        );
+        assert!(error.diagnostics.is_empty());
+        assert!(error.causes.as_slice().is_empty());
+        let Some(details) = error.details else {
+            panic!("Core error boundary missing")
+        };
+        let ApiErrorDetails::Core { error } = *details else {
+            panic!("incorrect details boundary")
+        };
         assert!(error.details.is_none());
     }
 
     #[test]
-    fn other_types_and_non_exact_engine_errors_write_nothing() {
+    fn untyped_errors_cannot_impersonate_the_private_protocol() {
+        #[derive(Debug)]
+        struct Unattributed(&'static str);
+        impl std::fmt::Display for Unattributed {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str(self.0)
+            }
+        }
+        impl std::error::Error for Unattributed {}
         let errors: Vec<Box<dyn std::error::Error>> = vec![
-            Box::new(std::io::Error::other(DISPLAY_TREE_BUDGET_ENGINE_ERROR)),
-            Box::new(weftext_engine::EngineError(format!(
-                "{DISPLAY_TREE_BUDGET_ENGINE_ERROR}\nprivate-source-or-path"
-            ))),
-            Box::new(weftext_engine::EngineError(
-                "unrelated private-source-or-path".into(),
-            )),
+            Box::new(Unattributed(LOOKALIKE)),
+            Box::new(Unattributed("unrelated private-source-or-path")),
         ];
         for original in errors {
             let original_message = original.to_string();
@@ -1314,25 +1576,154 @@ mod render_worker_codec_tests {
     }
 
     #[test]
+    fn typed_product_errors_round_trip_causes_and_original_diagnostics_in_both_workers() {
+        let original = ErrorDescription::new(UiMessage::error_api_worker_output_budget())
+            .try_caused_by(
+                "original_machine_code",
+                ErrorDescription::new(UiMessage::error_compiler_output_invalid()).diagnostic(
+                    DiagnosticOrigin::Typst,
+                    "原始 diagnostic <source>\n{literal}",
+                ),
+            )
+            .unwrap();
+        let mut output = Vec::new();
+        write_render_worker_failure(Box::new(original.clone()), &mut output).unwrap();
+        assert_ne!(output, FAILURE);
+        for notes in [false, true] {
+            let error = decode_compiler_worker_output(&output, notes).unwrap_err();
+            assert_eq!(error.code, "worker_product_error");
+            assert_eq!(error.explanation, original.explanation);
+            assert_eq!(error.diagnostics, original.diagnostics);
+            assert_eq!(error.causes, original.causes);
+        }
+        let mut output = Vec::new();
+        write_render_worker_failure(
+            Box::new(weftext_engine::EngineError::new(
+                UiMessage::error_preview_display_tree_budget(),
+            )),
+            &mut output,
+        )
+        .unwrap();
+        assert_ne!(output, FAILURE);
+        assert_eq!(
+            decode_compiler_worker_output(&output, false)
+                .unwrap_err()
+                .code,
+            "worker_product_error"
+        );
+    }
+
+    #[test]
+    fn genuine_io_keeps_its_origin_and_cannot_impersonate_display_tree_budget() {
+        let mut output = Vec::new();
+        write_render_worker_failure(Box::new(std::io::Error::other(LOOKALIKE)), &mut output)
+            .unwrap();
+        assert_ne!(output, FAILURE);
+        let error = decode_compiler_worker_output(&output, false).unwrap_err();
+        assert_eq!(error.code, "worker_product_error");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_api_worker_pipe_failure()
+        );
+        assert_eq!(
+            error.diagnostics,
+            vec![RawDiagnostic {
+                origin: DiagnosticOrigin::Os,
+                text: LOOKALIKE.into()
+            }]
+        );
+    }
+
+    #[test]
+    fn budget_and_product_frames_preserve_all_parallel_facts_for_both_workers() {
+        let parallel = (0..40)
+            .map(|index| {
+                ErrorDescription::new(UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: format!("original-{index}"),
+                    },
+                ))
+                .diagnostic(
+                    DiagnosticOrigin::Typst,
+                    format!("original diagnostic {index}\n{{literal}}"),
+                )
+            })
+            .collect::<Vec<_>>();
+        for (engine, code) in [
+            (
+                weftext_engine::EngineError::DisplayTreeBudget {
+                    product_diagnostics: parallel.clone(),
+                },
+                "display_tree_budget",
+            ),
+            (
+                weftext_engine::EngineError::new(UiMessage::error_compiler_output_invalid())
+                    .with_product_diagnostics(parallel.clone()),
+                "worker_product_error",
+            ),
+        ] {
+            let mut output = Vec::new();
+            write_render_worker_failure(Box::new(engine), &mut output).unwrap();
+            assert_eq!(
+                serde_json::from_slice::<Value>(&output).unwrap()[RENDER_WORKER_FAILURE_KEY]["version"],
+                2
+            );
+            for notes in [false, true] {
+                let error = decode_compiler_worker_output(&output, notes).unwrap_err();
+                assert_eq!(error.code, code);
+                assert_eq!(error.status, StatusCode::UNPROCESSABLE_ENTITY);
+                let Some(details) = error.details else {
+                    panic!("Core facts missing")
+                };
+                let ApiErrorDetails::Core { error } = *details else {
+                    panic!("wrong facts boundary")
+                };
+                let Some(weftext_core::CoreErrorDetails::Aggregate { groups }) = error.details
+                else {
+                    panic!("parallel group missing")
+                };
+                let [
+                    weftext_core::ErrorDetailGroup::Product {
+                        code: None,
+                        diagnostics,
+                    },
+                ] = groups.as_slice()
+                else {
+                    panic!("wrong parallel shape")
+                };
+                assert_eq!(diagnostics, &parallel);
+            }
+        }
+    }
+
+    #[test]
     fn invalid_or_unknown_failure_envelopes_use_only_fixed_invalid_output() {
         for bytes in [
-            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget"}}"#.as_slice(),
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"private-unknown-code"}}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":"1","code":"display_tree_budget"}}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget","message":"private-source-or-path"}}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"},"extra":"private-source-or-path"}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"version":1,"code":"display_tree_budget"}}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget","code":"display_tree_budget"}}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"},"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}"#,
-            br#"{"weftextRenderWorkerFailure":[1,"display_tree_budget"]}"#,
-            br#"[{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}]"#,
+            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget","productDiagnostics":[]}}"#.as_slice(),
+            br#"{"weftextRenderWorkerFailure":{"version":3,"code":"display_tree_budget","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"private-unknown-code","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":"2","code":"display_tree_budget","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[],"message":"private-source-or-path"}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[],"description":null}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":null}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"product_error","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"product_error","description":null,"productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]},"extra":"private-source-or-path"}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"version":2,"code":"display_tree_budget","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","code":"display_tree_budget","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[],"productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]},"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]}}"#,
+            br#"{"weftextRenderWorkerFailure":[2,"display_tree_budget",[]]}"#,
+            br#"[{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]}}]"#,
             br#"{"weftextRenderWorkerFailure":null}"#,
-            br#"{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}} trailing"#,
+            br#"{"weftextRenderWorkerFailure":{"version":2,"code":"display_tree_budget","productDiagnostics":[]}} trailing"#,
             br#"{"weftextRenderWorkerFailure":"#,
         ] {
             let error = decode_compiler_worker_output(bytes, false).unwrap_err();
             assert_eq!(error.code, "internal");
-            assert_eq!(error.message, "编译输出无效");
+            assert_eq!(error.explanation, UiMessage::error_compiler_output_invalid());
+            assert!(error.diagnostics.iter().all(|diagnostic| diagnostic.origin == DiagnosticOrigin::Json));
             assert!(error.details.is_none());
         }
     }
@@ -1341,7 +1732,7 @@ mod render_worker_codec_tests {
     fn ordinary_outputs_and_nested_author_fields_are_unchanged() {
         for ordinary in [
             json!({"ok":true,"tree":null,"sourceInfo":{},"products":null}),
-            json!({"ok":false,"diagnostics":[{"message":DISPLAY_TREE_BUDGET_ENGINE_ERROR}],"tree":{"attrs":{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}}}),
+            json!({"ok":false,"diagnostics":[{"message":LOOKALIKE}],"tree":{"attrs":{"weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}}}}),
         ] {
             assert_eq!(
                 decode_compiler_worker_output(&serde_json::to_vec(&ordinary).unwrap(), false)
@@ -1352,11 +1743,12 @@ mod render_worker_codec_tests {
     }
 
     #[test]
-    fn notes_output_keeps_its_existing_decoder() {
-        let output = serde_json::from_slice::<Value>(FAILURE).unwrap();
+    fn notes_output_uses_the_same_closed_error_protocol() {
         assert_eq!(
-            decode_compiler_worker_output(FAILURE, true).unwrap(),
-            output
+            decode_compiler_worker_output(FAILURE, true)
+                .unwrap_err()
+                .code,
+            "display_tree_budget"
         );
         let ordinary = json!({"edit":{"source":"retained","weftextRenderWorkerFailure":{"version":1,"code":"display_tree_budget"}},"dependencies":[]});
         assert_eq!(
@@ -1375,51 +1767,55 @@ fn find_node<'a>(node: &'a Value, key: &str) -> Option<&'a Value> {
         .iter()
         .find_map(|n| find_node(n, key))
 }
-async fn edit_literal(State(state): State<AppState>, Json(req): Json<EditRequest>) -> ApiResult {
+async fn edit_literal(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<EditRequest>,
+) -> ApiResult {
     location(&state, &req.session_id)?;
     let cache = state
         .renders
         .lock()
-        .map_err(|_| ApiError::internal("编译会话不可用"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_compile_session_unavailable()))?;
     let proof = cache
         .get(&req.session_id)
         .filter(|p| p.serial == req.serial && p.source == req.source)
-        .ok_or_else(|| ApiError::bad("编辑来源已过期，请等待当前预览"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_edit_preview_stale()))?;
     let (from, to) = if req.node_key == "@body" {
         let insertion = &proof.output["sourceInfo"]["bodyInsertion"];
         if insertion["writable"] != true {
-            return Err(ApiError::bad("当前正文没有安全插入点"));
+            return Err(ApiError::bad(UiMessage::error_body_insertion_unavailable()));
         }
         let pos = insertion["from"]
             .as_u64()
             .filter(|p| Some(*p) == insertion["to"].as_u64())
-            .ok_or_else(|| ApiError::bad("当前正文没有安全插入点"))? as usize;
+            .ok_or_else(|| ApiError::bad(UiMessage::error_body_insertion_unavailable()))?
+            as usize;
         (pos, pos)
     } else {
         let node = find_node(&proof.output["tree"], &req.node_key)
             .filter(|n| n["writable"] == true)
-            .ok_or_else(|| ApiError::bad("此区域请使用源码编辑"))?;
+            .ok_or_else(|| ApiError::bad(UiMessage::error_source_edit_required()))?;
         let origin = &node["origin"];
         if origin["isMain"] != true {
-            return Err(ApiError::bad("不能修改引用或生成内容"));
+            return Err(ApiError::bad(UiMessage::error_generated_content_read_only()));
         }
         let from = origin["from"]
             .as_u64()
-            .ok_or_else(|| ApiError::bad("缺少来源"))? as usize;
+            .ok_or_else(|| ApiError::bad(UiMessage::error_edit_origin_missing()))?
+            as usize;
         let to = origin["to"]
             .as_u64()
-            .ok_or_else(|| ApiError::bad("缺少来源"))? as usize;
+            .ok_or_else(|| ApiError::bad(UiMessage::error_edit_origin_missing()))?
+            as usize;
         if req.source.get(from..to) != origin["raw"].as_str() {
-            return Err(ApiError::bad("原文字节已变化"));
+            return Err(ApiError::bad(UiMessage::error_edit_origin_bytes_changed()));
         }
         (from, to)
     };
-    let literal =
-        weftext_engine::encode_literal(&req.text).map_err(|e| ApiError::bad(e.to_string()))?;
+    let literal = weftext_engine::encode_literal(&req.text)
+        .map_err(|e| ApiError::from_engine(StatusCode::BAD_REQUEST, "invalid_request", e))?;
     if req.node_key != "@body" && req.text.contains(['\r', '\n']) {
-        return Err(ApiError::bad(
-            "此文字区域只支持行内编辑；换段请使用新增正文或源码",
-        ));
+        return Err(ApiError::bad(UiMessage::error_inline_edit_only()));
     }
     let encoded = if req.node_key == "@body" {
         let body = match req.kind.as_deref().unwrap_or("paragraph") {
@@ -1427,21 +1823,27 @@ async fn edit_literal(State(state): State<AppState>, Json(req): Json<EditRequest
             "heading" => {
                 let level = req.level.unwrap_or(1);
                 if !(1..=9).contains(&level) {
-                    return Err(ApiError::bad("标题级别须为 1–9"));
+                    return Err(ApiError::bad(UiMessage::error_heading_level_range()));
                 }
                 format!("{} {}", "=".repeat(level as usize), literal)
             }
             "bullet" => format!("- {literal}"),
             "strong" => format!("*{literal}*"),
             "emph" => format!("_{literal}_"),
-            _ => return Err(ApiError::bad("尚未支持的正文插入形式")),
+            _ => {
+                return Err(ApiError::bad(
+                    UiMessage::error_body_insertion_kind_unsupported(),
+                ));
+            }
         };
         format!("{}{body}\n", if from > 0 { "\n\n" } else { "" })
     } else {
         literal
     };
     if !req.source.is_char_boundary(from) || !req.source.is_char_boundary(to) || from > to {
-        return Err(ApiError::bad("无效字符边界"));
+        return Err(ApiError::bad(
+            UiMessage::error_edit_character_boundary_invalid(),
+        ));
     }
     let start = req.source[..from].encode_utf16().count();
     let end = req.source[..to].encode_utf16().count();
@@ -1451,7 +1853,10 @@ async fn edit_literal(State(state): State<AppState>, Json(req): Json<EditRequest
     ))
 }
 
-async fn link_resolve(State(state): State<AppState>, Json(req): Json<LinkRequest>) -> ApiResult {
+async fn link_resolve(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<LinkRequest>,
+) -> ApiResult {
     let loc = location(&state, &req.session_id)?;
     let target = req.target.trim();
     let parsed = url::Url::parse(target).ok();
@@ -1462,7 +1867,7 @@ async fn link_resolve(State(state): State<AppState>, Json(req): Json<LinkRequest
                 return knowledge_api::resolve_address(&state, &req.session_id, url.as_str()).await;
             }
             "file" => {}
-            _ => return Err(ApiError::bad("此链接形式尚未支持，原文保留")),
+            _ => return Err(ApiError::bad(UiMessage::error_link_kind_unsupported())),
         }
     }
     // Managed targets are opened again by stable identity. Only an explicitly
@@ -1476,7 +1881,7 @@ async fn link_resolve(State(state): State<AppState>, Json(req): Json<LinkRequest
     if let Some(url) = parsed {
         let path = url
             .to_file_path()
-            .map_err(|_| ApiError::bad("无效文件链接"))?;
+            .map_err(|_| ApiError::bad(UiMessage::error_file_link_invalid()))?;
         return link_path(path, loc.root, url.fragment().map(str::to_owned));
     }
     let (path, fragment) = target
@@ -1489,30 +1894,33 @@ async fn link_resolve(State(state): State<AppState>, Json(req): Json<LinkRequest
         ));
     }
     // Standard file-URL resolution decodes percent escapes exactly once.
-    let base = url::Url::from_file_path(&loc.path).map_err(|_| ApiError::bad("来源路径无效"))?;
-    let resolved = base.join(path).map_err(|_| ApiError::bad("无效文件路径"))?;
+    let base = url::Url::from_file_path(&loc.path)
+        .map_err(|_| ApiError::bad(UiMessage::error_link_source_path_invalid()))?;
+    let resolved = base
+        .join(path)
+        .map_err(|_| ApiError::bad(UiMessage::error_file_path_invalid()))?;
     let path = resolved
         .to_file_path()
-        .map_err(|_| ApiError::bad("无效文件路径"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_file_path_invalid()))?;
     link_path(path, loc.root, fragment)
 }
 
 fn link_path(path: PathBuf, root: PathBuf, fragment: Option<String>) -> ApiResult {
     let path = path
         .canonicalize()
-        .map_err(|_| ApiError::bad("目标文件不存在"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_link_target_missing()))?;
     let root = root
         .canonicalize()
-        .map_err(|_| ApiError::bad("依赖根不可用"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_link_dependency_root_unavailable()))?;
     if !path.starts_with(&root) {
-        return Err(ApiError::bad("链接超出当前项目根，请明确打开该文件"));
+        return Err(ApiError::bad(UiMessage::error_link_outside_project_root()));
     }
     if path
         .extension()
         .is_none_or(|s| !s.eq_ignore_ascii_case("typ"))
     {
         return Err(ApiError::bad(
-            "普通文件路径只在编辑器中打开 .typ；其他文件请先登记为笔记资源",
+            UiMessage::error_ordinary_source_file_required(),
         ));
     }
     let path = ordinary_drive_path(path)?;
@@ -1536,13 +1944,17 @@ fn ordinary_drive_path(path: PathBuf) -> Result<PathBuf, ApiError> {
                         match component {
                             Component::RootDir => {}
                             Component::Normal(name) => normalized.push(name),
-                            _ => return Err(ApiError::bad("不支持的文件路径")),
+                            _ => {
+                                return Err(
+                                    ApiError::bad(UiMessage::error_file_path_unsupported()),
+                                );
+                            }
                         }
                     }
                     return Ok(normalized);
                 }
                 Prefix::Disk(_) => {}
-                _ => return Err(ApiError::bad("本地档位只支持本机盘符路径")),
+                _ => return Err(ApiError::bad(UiMessage::error_local_drive_path_required())),
             }
         }
     }
@@ -1575,9 +1987,13 @@ fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
         .take(96 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > 96 * 1024 * 1024 {
-        return Err("Frozen note edit exceeds input budget".into());
+        return Err(ErrorDescription::new(UiMessage::error_api_worker_notes_input_budget()).into());
     }
-    let NotesWorkerRequest { input, request } = serde_json::from_slice(&bytes)?;
+    let NotesWorkerRequest { input, request } =
+        serde_json::from_slice(&bytes).map_err(|error| {
+            ErrorDescription::new(UiMessage::error_api_worker_request_invalid())
+                .diagnostic(DiagnosticOrigin::Json, error.to_string())
+        })?;
     let mut files = std::collections::BTreeMap::new();
     let mut total = 0usize;
     for (path, bytes) in input.frozen_files {
@@ -1586,12 +2002,17 @@ fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
             .checked_add(decoded.len())
             .ok_or("Note edit size overflow")?;
         if total > 64 * 1024 * 1024 {
-            return Err("Frozen note files exceed budget".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_worker_notes_frozen_files_budget(),
+            )
+            .into());
         }
         files.insert(path, decoded);
     }
     if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
-        return Err("Note edit source exceeds budget".into());
+        return Err(
+            ErrorDescription::new(UiMessage::error_api_worker_notes_source_budget()).into(),
+        );
     }
     let engine = weftext_engine::Engine::new_with_system_fonts(false)?;
     let output = engine.edit_notes_frozen_with_dependencies(
@@ -1607,7 +2028,9 @@ fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
     let output =
         serde_json::to_vec(&json!({"edit": output.edit, "dependencies": output.dependencies}))?;
     if output.len() > 24 * 1024 * 1024 {
-        return Err("Note edit result exceeds budget".into());
+        return Err(
+            ErrorDescription::new(UiMessage::error_api_worker_notes_result_budget()).into(),
+        );
     }
     std::io::stdout().write_all(&output)?;
     Ok(())
@@ -1621,7 +2044,9 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
         .take(96 * 1024 * 1024 + 1)
         .read_to_string(&mut input)?;
     if input.len() > 96 * 1024 * 1024 {
-        return Err("Compile input exceeds the local budget".into());
+        return Err(
+            ErrorDescription::new(UiMessage::error_api_worker_render_input_budget()).into(),
+        );
     }
     let input: WorkerRequest = serde_json::from_str(&input)?;
     if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
@@ -1637,7 +2062,10 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
                 .checked_add(bytes.len())
                 .ok_or("Compile input size overflow")?;
             if total > 64 * 1024 * 1024 {
-                return Err("Frozen files exceed the local budget".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_worker_render_frozen_files_budget(),
+                )
+                .into());
             }
             decoded.insert(path, bytes);
         }

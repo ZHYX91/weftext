@@ -7,6 +7,7 @@ use std::{
 };
 use weftext_export::{ExportArtifact, docx, xlsx};
 use weftext_knowledge as k;
+use weftext_messages::UiInteger;
 
 const TTL: Duration = Duration::from_secs(900);
 const MAX_TEMPLATE: usize = 16 * 1024 * 1024;
@@ -142,6 +143,7 @@ struct Binding {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Prepare {
+    output_locale: weftext_messages::UiLocale,
     request_id: String,
     resource: Option<String>,
     source: Option<String>,
@@ -263,11 +265,13 @@ fn failed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "officeUnavailable",
-        "原输出未完成或冻结依据已变化；请核对原请求，输入保留。",
+        UiMessage::error_api_hosted_office_output_basis_changed(),
     )
 }
 fn id(value: &str) -> Result<(), ApiError> {
-    uuid::Uuid::parse_str(value).map_err(|_| ApiError::bad("输出请求编号无效"))?;
+    uuid::Uuid::parse_str(value).map_err(|_| {
+        ApiError::bad(UiMessage::error_api_hosted_office_output_request_id_invalid())
+    })?;
     Ok(())
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
@@ -322,12 +326,20 @@ async fn server_legacy_capabilities(state: &HostedState, auth: &Auth) -> Result<
     let mut capabilities = value(super::super::legacy_office::probe().await)?;
     capabilities["executionLocation"] = json!("server");
     capabilities["persistentStorageConfigured"] = json!(persistent);
+    let unavailable_description = value(ErrorDescription::new(
+        UiMessage::error_api_hosted_office_durable_conversion_directory_required(),
+    ))?;
     if !persistent && let Some(backends) = capabilities["backends"].as_array_mut() {
         for backend in backends {
             if let Some(directions) = backend["directions"].as_array_mut() {
                 for direction in directions {
                     direction["available"] = json!(false);
-                    direction["reason"] = json!("服务端未配置独立持久转换目录");
+                    direction.as_object_mut().ok_or_else(failed)?.extend(
+                        unavailable_description
+                            .as_object()
+                            .ok_or_else(failed)?
+                            .clone(),
+                    );
                 }
             }
         }
@@ -354,7 +366,7 @@ async fn legacy_capabilities(
 async fn legacy_cancel(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     id(&req.request_id)?;
     locked(&state, move |inner| {
@@ -472,7 +484,7 @@ fn check_draft(
         return Ok(());
     }
     let session = req.session_id.as_ref().ok_or_else(|| {
-        ApiError::bad("准确草稿输出需要 sessionId、baseId、source、serial 与 sourceHash")
+        ApiError::bad(UiMessage::error_api_hosted_office_exact_draft_output_required())
     })?;
     let opened = inner
         .sessions
@@ -581,7 +593,9 @@ fn freeze_embedded(
     let mut seen = BTreeSet::new();
     for s in &req.embedded_queries {
         if !seen.insert(&s.occurrence_id) {
-            return Err(ApiError::bad("同一正文查询不能绑定两份结果"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_office_duplicate_embedded_query_binding(),
+            ));
         }
         let source = req.source.as_deref().ok_or_else(failed)?;
         let occurrence =
@@ -598,7 +612,7 @@ fn freeze_embedded(
         };
         if q.embedded.as_ref() != Some(&basis) {
             return Err(ApiError::bad(
-                "查询结果不属于本篇准确草稿和正文位置，未重跑或借用其他结果",
+                UiMessage::error_api_hosted_office_embedded_query_result_mismatch(),
             ));
         }
         for (r, ids) in &q.authorities {
@@ -612,6 +626,8 @@ fn freeze_embedded(
         needs.embedded_authorities.push(q.query_authority.clone());
         let mut value = serde_json::to_value(&q.result).map_err(|_| failed())?;
         value["queryId"] = json!(s.query_id);
+        value["engineDiagnostics"] = json!([]);
+        value["productErrors"] = json!([]);
         items.push(super::super::embedded_output::FrozenEmbedded {
             occurrence,
             result: q.result.clone(),
@@ -743,7 +759,9 @@ fn capture_fields_only(
             serde_json::to_vec(&q.result).map_or(MAX_STORE, |b| b.len())
         });
     if size > MAX_ARTIFACT {
-        return Err(ApiError::bad("本次字段输出输入超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_field_output_input_budget(),
+        ));
     }
     cut.job.reserved = size.max(1024 * 1024);
     witness_check(inner, &cut.witnesses)?;
@@ -796,12 +814,16 @@ fn capture_exchange(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Resu
                     .len(),
             );
         if size > MAX_ARTIFACT {
-            return Err(ApiError::bad("原生整库资料包与准确输入超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_office_native_library_package_budget(),
+            ));
         }
         let (artifact, preview, citations) = native_artifact(inner, actor, export.bytes)?;
         let size = size.saturating_add(artifact.bytes.len());
         if size > MAX_ARTIFACT {
-            return Err(ApiError::bad("原生资料包及离线文献输入超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_office_native_offline_bibliography_budget(),
+            ));
         }
         cut.job.needs.citations = citations;
         access(inner, actor, &cut.job.needs, false)?;
@@ -837,8 +859,11 @@ fn capture_exchange(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Resu
                 .map_err(|_| failed())?,
         );
         check_draft(inner, actor, req, source)?;
-        citations::freeze(inner, actor, r, source)?
-            .ok_or_else(|| ApiError::bad("所选准确正文没有原生文献声明"))?
+        citations::freeze(inner, actor, r, source)?.ok_or_else(|| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_office_native_bibliography_declaration_required(),
+            )
+        })?
     };
     cut.job.needs.citations = capture.authority.clone();
     access(inner, actor, &cut.job.needs, false)?;
@@ -851,7 +876,9 @@ fn capture_exchange(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Resu
             .map(|(_, w)| w.retained_bytes())
             .sum::<usize>();
     if size > MAX_ARTIFACT {
-        return Err(ApiError::bad("本次文献输出输入超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_bibliography_output_budget(),
+        ));
     }
     cut.job.reserved = size.max(1024 * 1024);
     cut.citations = Some(capture);
@@ -872,11 +899,15 @@ fn native_artifact(
         .iter()
         .map(|l| weftext_export::ExportLoss {
             code: l.code.clone(),
-            message: l.detail.clone(),
+            description: l.description.clone(),
+            product_diagnostics: l.product_diagnostics.clone(),
             location: Some(l.path.clone()),
         })
         .collect::<Vec<_>>();
-    losses.push(super::super::export_conversions::report("native_not_recovery_backup","资料包包含已保存整库纳管内容与依赖；不包含私有历史、个人草稿或执行日志，不能替代恢复备份。"));
+    losses.push(super::super::export_conversions::report(
+        "native_not_recovery_backup",
+        UiMessage::output_hosted_office_not_recovery_backup(),
+    ));
     let preview = json!({"format":"native","scope":"savedWholeLibrary","workspaceId":package.manifest.workspace_id,"fileCount":package.files.len(),"files":package.manifest.entries});
     Ok((
         ExportArtifact {
@@ -884,9 +915,13 @@ fn native_artifact(
             content_type: "application/zip".into(),
             extension: "weftext.zip".into(),
             losses,
-            summary: format!(
-                "已保存的整个资料库：{} 个纳管文件；不是仅当前笔记或恢复备份。",
-                package.files.len()
+            summary: UiMessage::output_hosted_office_native_library_summary(
+                weftext_messages::params::OutputHostedOfficeNativeLibrarySummary {
+                    file_count: i64::try_from(package.files.len())
+                        .ok()
+                        .and_then(UiInteger::new)
+                        .ok_or_else(failed)?,
+                },
             ),
         },
         preview,
@@ -895,13 +930,19 @@ fn native_artifact(
 }
 fn decode(encoded: &str) -> Result<Vec<u8>, ApiError> {
     if encoded.len() > MAX_TEMPLATE * 4 / 3 + 4 {
-        return Err(ApiError::bad("Office 模板上限为 16 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_office_template_size_limit(),
+        ));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded)
-        .map_err(|_| ApiError::bad("Office 文件编码无效"))?;
+        .map_err(|_| {
+            ApiError::bad(UiMessage::error_api_hosted_office_office_file_encoding_invalid())
+        })?;
     if bytes.len() > MAX_TEMPLATE {
-        return Err(ApiError::bad("Office 模板上限为 16 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_office_template_size_limit(),
+        ));
     }
     Ok(bytes)
 }
@@ -926,7 +967,7 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
 async fn inspect(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Inspect>,
+    RequestJson(req): RequestJson<Inspect>,
 ) -> ApiResult {
     let check = auth.clone();
     let format = req.format.clone();
@@ -941,7 +982,7 @@ async fn inspect(
     let _permit = state
         .render_gate
         .try_acquire()
-        .map_err(|_| ApiError::bad("Office 转换正在运行，请稍后重试"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_hosted_office_office_conversion_busy()))?;
     let result = crate::work::spawn_blocking(move || {
         super::super::export_conversions::template_slots(
             if legacy_format(&req.format) {
@@ -965,7 +1006,9 @@ async fn inspect(
 }
 fn inspect_access(inner: &HostedInner, actor: &str, format: &str) -> Result<(), ApiError> {
     if !matches!(format, "docx" | "doc" | "wps" | "xlsx") {
-        return Err(ApiError::bad("模板格式无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_office_template_invalid(),
+        ));
     }
     let user = inner
         .policy
@@ -1067,7 +1110,7 @@ fn validate(req: &Prepare) -> Result<(), ApiError> {
             && !matches!(req.format.as_str(), "docx" | "doc" | "wps" | "pdf"))
     {
         return Err(ApiError::bad(
-            "请选择有效 Office 输出、准确正文或已有查询结果；未使用的参数不能静默忽略",
+            UiMessage::error_api_hosted_office_office_output_request_invalid(),
         ));
     }
     for (slot, b) in &req.bindings {
@@ -1091,7 +1134,7 @@ fn validate(req: &Prepare) -> Result<(), ApiError> {
             || (req.format == "xlsx" && matches!(b.kind.as_str(), "body" | "title"))
         {
             return Err(ApiError::bad(
-                "模板槽位绑定无效；XLSX 支持明确文本和已显示的查询结果",
+                UiMessage::error_api_hosted_office_template_slot_binding_invalid(),
             ));
         }
     }
@@ -1099,7 +1142,9 @@ fn validate(req: &Prepare) -> Result<(), ApiError> {
         && req.query_id.is_some()
         && !req.bindings.values().any(|b| b.kind == "query")
     {
-        return Err(ApiError::bad("DOCX 查询结果须明确绑定到模板槽位"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_docx_query_slot_required(),
+        ));
     }
     if let Some(s) = &req.source {
         writing_api::validate_source(s, req.source_hash.as_deref())?;
@@ -1229,7 +1274,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
         if needs.review.is_some() {
             if source.as_bytes() != bytes {
                 return Err(ApiError::bad(
-                    "带批注或修订输出需要已保存的准确正文；请先保存并核对",
+                    UiMessage::error_api_hosted_office_saved_body_required_for_review_output(),
                 ));
             }
             let root = inner.config.root.clone();
@@ -1295,12 +1340,11 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
         preview["query"] = json!({"queryId":req.query_id,"scope":"previouslyDisplayedFrozenResult","columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage,"freshness":q.result.freshness,"limited":q.result.limited});
         preview["columns"] = json!(q.columns);
         preview["rows"] = json!(q.result.rows.iter().take(12).collect::<Vec<_>>());
-        preview["summary"] =
-            json!("预览显示至多 12 行；工件使用全部原查询行及其准确状态，不重新执行查询。");
+        preview["summary"] = json!(UiMessage::error_api_export_frozen_query_preview());
     }
     let embedded = freeze_embedded(inner, actor, req, &mut needs)?;
     if !embedded.is_empty() {
-        preview["embeddedQueries"] = super::super::embedded_output::preview(&embedded);
+        preview["embeddedQueries"] = super::super::embedded_output::preview(&embedded)?;
     }
     access(inner, actor, &needs, false)?;
     let reserved = template.as_ref().map_or(0, Vec::len)
@@ -1325,7 +1369,9 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
             serde_json::to_vec(&(&q.result, &q.schema)).map_or(MAX_STORE, |b| b.len())
         });
     if reserved > MAX_ARTIFACT {
-        return Err(ApiError::bad("本次 Office 输入超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_office_input_budget(),
+        ));
     }
     Ok(Cut {
         additional_losses: vec![],
@@ -1359,7 +1405,9 @@ fn freeze_reviews(
     req: &Prepare,
 ) -> Result<Vec<docx::DocxReview>, ApiError> {
     if bytes.len() > 4 * 1024 * 1024 {
-        return Err(ApiError::bad("批注超过输出预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_annotation_output_budget(),
+        ));
     }
     let doc = k::decode_annotations(bytes).map_err(|_| failed())?;
     let mut selected: BTreeSet<_> = doc
@@ -1385,8 +1433,8 @@ fn freeze_reviews(
         let suggestion=r.suggestion.as_ref().filter(|_|owned);
         let replacement=if req.review_mode=="changes" {suggestion.filter(|s|s.state=="pending" && !s.requires_reconfirmation && s.confirmed_revision==current.revision_id && range.as_ref().is_some_and(|r|k::writable_suggestion_range(&current.source,r))).map(|s|s.replacement.clone())}else{None};
         let mut body=r.body.clone();
-        if let Some(s)=suggestion {body.push_str(&format!("\n建议状态：{}；拟替换为：{}",s.state,s.replacement));}
-        let downgrade_reason=(req.review_mode=="changes" && r.suggestion.as_ref().is_some_and(|s|s.state=="pending") && replacement.is_none()).then(||"该建议不能按准确文字修订输出；保留获权讨论并报告未定位目标。".into());
+        if let Some(s)=suggestion {body.push('\n'); body.push_str(&UiMessage::error_api_export_conversion_review_suggestion_appendix(weftext_messages::params::ErrorApiExportConversionReviewSuggestionAppendix { state:s.state.clone(),replacement:s.replacement.clone() }).render(req.output_locale));}
+        let downgrade_reason=(req.review_mode=="changes" && r.suggestion.as_ref().is_some_and(|s|s.state=="pending") && replacement.is_none()).then(||ErrorDescription::new(UiMessage::error_api_export_conversion_review_suggestion_downgrade()));
         let empty_body_point=range.as_ref().is_some_and(|r|r.from==r.to && r.from==current.source.len() && k::writable_suggestion_range(&current.source,r));
         docx::DocxReview{id:r.annotation_id.clone(),parent:r.reply_to.clone(),author:r.attribution.clone(),date:docx::word_comment_date(&r.created_at),body,resolved:r.review_state=="resolved",range:range.map(|r|(r.from,r.to)),whole_document:matches!(&r.target,k::AnnotationTarget::WholeDocument{node}if node==&current.owner),replacement,downgrade_reason,empty_body_point}
     }).collect())
@@ -1420,7 +1468,7 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
             }
             .into(),
             losses: result.losses,
-            summary: "获权出版字段的准确冻结文献；未读取署名对象或全文用于补值。".into(),
+            summary: UiMessage::output_hosted_office_bibliography_summary(),
         }
     } else if req.format == "pdf" {
         let output: weftext_engine::PagedOutput =
@@ -1436,9 +1484,13 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
             content_type: "application/pdf".into(),
             extension: "pdf".into(),
             losses: vec![],
-            summary: format!(
-                "原生 PDF：{} 页；准确草稿与选中查询结果的冻结输出。",
-                output.page_count
+            summary: UiMessage::output_hosted_office_pdf_summary(
+                weftext_messages::params::OutputHostedOfficePdfSummary {
+                    page_count: i64::try_from(output.page_count)
+                        .ok()
+                        .and_then(UiInteger::new)
+                        .ok_or_else(failed)?,
+                },
             ),
         }
     } else if req.format == "docx" {
@@ -1447,6 +1499,7 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
         let embedded_losses = super::super::embedded_output::materialize(
             render.tree.as_mut().ok_or_else(failed)?,
             &cut.embedded,
+            req.output_locale,
         )?;
         let mut bindings = BTreeMap::new();
         for (name, b) in &req.bindings {
@@ -1565,7 +1618,8 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
         };
         let request = xlsx::XlsxRequest {
             sheets: vec![xlsx::XlsxSheetInput {
-                name: "资料".into(),
+                name: UiMessage::error_api_export_conversion_data_sheet_name()
+                    .render(req.output_locale),
                 columns,
                 result,
                 schema,
@@ -1580,7 +1634,7 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
         if req.style_policy == "source" {
             a.losses.push(c::report(
                 "xlsx_source_style_unmapped",
-                "XLSX 输出冻结字段数据；原生正文排版样式没有映射为 Excel 样式。",
+                UiMessage::error_api_export_conversion_xlsx_source_style_unmapped(),
             ));
         }
         a
@@ -1590,7 +1644,9 @@ fn convert(req: Prepare, mut cut: Cut, render: Option<Value>) -> Result<ExportAr
     }
     artifact.losses.extend(cut.additional_losses);
     if artifact.bytes.len() > MAX_ARTIFACT {
-        return Err(ApiError::bad("Office 工件超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_office_artifact_budget(),
+        ));
     }
     Ok(artifact)
 }
@@ -1616,7 +1672,7 @@ struct LegacyStage {
     docx_sha256: String,
     docx_length: usize,
     losses: Vec<weftext_export::ExportLoss>,
-    summary: String,
+    summary: UiMessage,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1626,7 +1682,7 @@ struct LegacyReady {
     output_length: usize,
     preview: Value,
     losses: Vec<weftext_export::ExportLoss>,
-    summary: String,
+    summary: UiMessage,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1658,16 +1714,19 @@ fn legacy_location(
     actor: &str,
     request: &str,
 ) -> Result<(PathBuf, PathBuf), ApiError> {
-    let uuid = uuid::Uuid::parse_str(request)
-        .map_err(|_| ApiError::bad("旧格式输出需要标准 UUID v4 编号"))?;
+    let uuid = uuid::Uuid::parse_str(request).map_err(|_| {
+        ApiError::bad(UiMessage::error_api_hosted_office_legacy_output_uuid_required())
+    })?;
     if uuid.get_version_num() != 4 || uuid.to_string() != request {
-        return Err(ApiError::bad("旧格式输出需要标准 UUID v4 编号"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_legacy_output_uuid_required(),
+        ));
     }
     let root = inner.office.legacy_root.as_ref().ok_or_else(|| {
         ApiError::new(
             StatusCode::CONFLICT,
             "legacyStorageUnavailable",
-            "服务端未配置独立持久转换目录",
+            UiMessage::error_api_hosted_office_durable_conversion_directory_required(),
         )
     })?;
     let namespace = digest(&serde_json::to_vec(&json!({"scope":scope(inner,actor),"root":inner.config.root,"deployment":inner.config.deployment})).map_err(|_| failed())?);
@@ -1833,7 +1892,10 @@ fn legacy_request(req: &Prepare, bytes: Vec<u8>) -> super::super::legacy_office:
     }
 }
 fn unknown_answer(request: &str, code: &str) -> Value {
-    json!({"requestId":request,"status":"unknown","code":code,"message":"原操作结果无法确认；准确输入与编号保留，未重新执行转换。","executionLocation":"server"})
+    let description = ErrorDescription::new(UiMessage::error_api_hosted_office_result_unknown());
+    json!({"requestId":request,"status":"unknown","code":code,
+        "explanation":description.explanation,"diagnostics":description.diagnostics,"causes":description.causes,
+        "executionLocation":"server"})
 }
 struct LegacyRunGuard {
     state: HostedState,
@@ -1921,7 +1983,7 @@ async fn recover_legacy(
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "operationConflict",
-                "同一输出编号不能用于不同内容",
+                UiMessage::error_api_hosted_office_output_request_input_conflict(),
             ));
         }
         let Ok((dir, conversions)) = legacy_location(inner, &actor, &request_owned) else {
@@ -2164,7 +2226,7 @@ async fn prepare_legacy(
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "operationConflict",
-                    "同一输出编号不能用于不同内容",
+                    UiMessage::error_api_hosted_office_output_request_input_conflict(),
                 ));
             }
             let answer = lookup(inner, &actor, &captured.request_id, false)?
@@ -2190,7 +2252,7 @@ async fn prepare_legacy(
                 .saturating_add(cut.job.reserved)
                 > MAX_STORE
         {
-            return Err(ApiError::bad("Office 工件缓存已满，请稍后重试"));
+            return Err(ApiError::bad(UiMessage::error_api_hosted_office_office_artifact_cache_capacity()));
         }
         let mut registered = registered.lock().map_err(|_| failed())?;
         if inner.office.closing || initial_cancel.load(Ordering::Acquire) {
@@ -2327,20 +2389,18 @@ async fn prepare_legacy(
     let mut losses = stage.losses;
     losses.extend(
         result
-            .losses()
+            .public_losses()
             .into_iter()
             .map(|l| weftext_export::ExportLoss {
                 code: l.code,
-                message: l.message,
+                description: l.description,
+                product_diagnostics: l.product_diagnostics,
                 location: l.location,
             }),
     );
-    let summary = format!(
-        "{}；服务端 {} 外部转换为 {}，请核对单独的转换损失。",
-        stage.summary,
-        result.backend,
-        req.format.to_uppercase()
-    );
+    // Original output meaning stays typed. The existing conversion metadata
+    // independently carries the exact backend, format and typed result.
+    let summary = stage.summary;
     let artifact = ExportArtifact {
         bytes: generated.bytes.clone(),
         content_type: if req.format == "doc" {
@@ -2488,7 +2548,7 @@ impl Drop for PendingGuard {
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     validate(&req)?;
     if legacy_format(&req.format) {
@@ -2511,7 +2571,7 @@ async fn prepare(
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "operationConflict",
-                    "同一输出编号不能用于不同内容",
+                    UiMessage::error_api_hosted_office_output_request_input_conflict(),
                 ));
             }
             let answer = if let Some(job) = lookup(inner, &actor, &captured.request_id, false)? {
@@ -2539,7 +2599,9 @@ async fn prepare(
                 .saturating_add(cut.job.reserved)
                 > MAX_STORE
         {
-            return Err(ApiError::bad("Office 工件缓存已满，请稍后重试"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_office_office_artifact_cache_capacity(),
+            ));
         }
         if !inner
             .core
@@ -2578,6 +2640,7 @@ async fn prepare(
                 &worker.source,
                 &cut.embedded,
                 &output.embedded_queries,
+                req.output_locale,
             )?;
             cut.additional_losses.extend(losses);
             if source != worker.source {
@@ -2653,7 +2716,7 @@ async fn prepare(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     if let Some(answer) = restore_legacy_if_needed(&state, &auth, &req.request_id).await? {
         return Ok(Json(answer));
@@ -2670,7 +2733,7 @@ async fn status(
 async fn confirm(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Confirm>,
+    RequestJson(req): RequestJson<Confirm>,
 ) -> ApiResult {
     restore_legacy_if_needed(&state, &auth, &req.request_id).await?;
     locked(&state, move |inner| {
@@ -2683,7 +2746,9 @@ async fn confirm(
             || job.digest.as_deref() != Some(&req.digest)
             || (!artifact.losses.is_empty() && !req.accept_losses)
         {
-            return Err(ApiError::bad("请确认这份准确工件摘要及其转换损失"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_office_exact_artifact_confirmation_required(),
+            ));
         }
         if legacy_format(&job.needs.format) {
             let (dir, _) = legacy_location(inner, &actor, &req.request_id)?;
@@ -2728,14 +2793,14 @@ async fn confirm(
 async fn chunk(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<OutputChunk>,
+    RequestJson(req): RequestJson<OutputChunk>,
 ) -> ApiResult {
     restore_legacy_if_needed(&state, &auth, &req.request_id).await?;
     locked(&state,move|inner|{
         let actor=inner.actor(&auth)?;
         let job=lookup(inner,&actor,&req.request_id,true)?.filter(|j|j.status=="confirmed").ok_or_else(failed)?;
         let artifact=job.artifact.ok_or_else(failed)?;
-        if req.offset>artifact.bytes.len() {return Err(ApiError::bad("下载偏移超出原工件"));}
+        if req.offset>artifact.bytes.len() {return Err(ApiError::bad(UiMessage::error_api_hosted_office_artifact_download_offset_invalid()));}
         let end=req.offset.saturating_add(64*1024).min(artifact.bytes.len());let bytes=&artifact.bytes[req.offset..end];
         Ok(Json(json!({"requestId":req.request_id,"bytesBase64":base64::engine::general_purpose::STANDARD.encode(bytes),"offset":req.offset,"length":bytes.len(),"total":artifact.bytes.len(),"sha256":job.digest,"done":end==artifact.bytes.len()})))
     }).await
@@ -2744,7 +2809,7 @@ async fn chunk(
 mod tests {
     use super::*;
     fn request(format: &str) -> Prepare {
-        serde_json::from_value(json!({"requestId":uuid::Uuid::new_v4(),"format":format,"reviewMode":"none","includeResolved":false,"stylePolicy":"template","bindings":{}})).unwrap()
+        serde_json::from_value(json!({"requestId":uuid::Uuid::new_v4(),"outputLocale":"zh-CN","format":format,"reviewMode":"none","includeResolved":false,"stylePolicy":"template","bindings":{}})).unwrap()
     }
     fn seed_legacy(
         state: &HostedState,
@@ -2796,10 +2861,17 @@ mod tests {
             docx_length: bytes.len(),
             losses: vec![weftext_export::ExportLoss {
                 code: "frozenLoss".into(),
-                message: "original DOCX stage loss".into(),
+                description: ErrorDescription::new(UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: req.request_id.clone(),
+                    },
+                )),
+                product_diagnostics: vec![],
                 location: None,
             }],
-            summary: "frozen DOCX stage".into(),
+            summary: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: req.request_id.clone(),
+            }),
         };
         write_stage(&dir, &stage, &bytes).unwrap();
         let once = conversions.join(&req.request_id);
@@ -2823,7 +2895,11 @@ mod tests {
             request_id: req.request_id.clone(),
             status: "succeeded".into(),
             code: "converted".into(),
-            message: "synthetic durable adapter receipt".into(),
+            description: ErrorDescription::new(UiMessage::common_operation(
+                weftext_messages::params::CommonOperation {
+                    operation_id: req.request_id.clone(),
+                },
+            )),
             backend: "libreoffice".into(),
             backend_version: Some("fixture".into()),
             direction: super::super::super::legacy_office::Direction::DocxToDoc,
@@ -2832,7 +2908,6 @@ mod tests {
             generated: Some(make_artifact("generated.doc", output, &generated)),
             features: vec![],
             workspace: once.clone(),
-            diagnostic: String::new(),
         };
         let conversion_fingerprint=digest(json!({"version":1,"backend":"libreoffice","direction":"docxToDoc","sha256":digest(&bytes),"length":bytes.len()}).to_string().as_bytes());
         std::fs::write(once.join("request.json"),serde_json::to_vec(&json!({"schemaVersion":1,"requestId":req.request_id,"fingerprint":conversion_fingerprint,"backend":"libreoffice","direction":"docxToDoc","inputSha256":digest(&bytes),"inputLength":bytes.len()})).unwrap()).unwrap();
@@ -2851,7 +2926,9 @@ mod tests {
                 output_length: generated.len(),
                 preview: stage.preview.clone(),
                 losses: stage.losses.clone(),
-                summary: "exact original published output".into(),
+                summary: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                    operation_id: req.request_id.clone(),
+                }),
             };
             durable_write(
                 &dir.join("ready.json"),
@@ -2960,7 +3037,7 @@ mod tests {
         let Json(_) = confirm(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Confirm {
+            crate::RequestJson(Confirm {
                 request_id: req.request_id.clone(),
                 digest: digest(&generated),
                 accept_losses: true,
@@ -2972,7 +3049,7 @@ mod tests {
         let Json(restored) = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(RequestId {
+            crate::RequestJson(RequestId {
                 request_id: req.request_id.clone(),
             }),
         )
@@ -2982,7 +3059,7 @@ mod tests {
         let Json(bytes) = chunk(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(OutputChunk {
+            crate::RequestJson(OutputChunk {
                 request_id: req.request_id.clone(),
                 offset: 0,
             }),
@@ -3018,7 +3095,7 @@ mod tests {
             chunk(
                 State(state),
                 Extension(auth),
-                Json(OutputChunk {
+                crate::RequestJson(OutputChunk {
                     request_id: req.request_id,
                     offset: 0
                 })
@@ -3152,7 +3229,9 @@ mod tests {
             output_length: generated.len(),
             preview: json!({"frozenSource":"s".repeat(5*1024*1024)}),
             losses: stage.losses,
-            summary: "large accepted metadata".into(),
+            summary: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: req.request_id.clone(),
+            }),
         };
         durable_write(
             &dir.join("ready.json"),
@@ -3316,7 +3395,7 @@ mod tests {
         let Json(answer) = legacy_cancel(
             State(state.clone()),
             Extension(auth),
-            Json(RequestId {
+            crate::RequestJson(RequestId {
                 request_id: req.request_id.clone(),
             }),
         )
@@ -3423,11 +3502,22 @@ mod tests {
         validate(&bib).unwrap();
         bib.source = Some("private body".into());
         assert!(validate(&bib).is_err());
-        // New absent inputs cannot change the durable fingerprint of a prior
-        // Office request after a server upgrade.
-        let legacy = json!({"requestId":uuid::Uuid::new_v4().to_string(),"resource":null,"source":null,"format":"xlsx","reviewMode":"none","includeResolved":false,"queryId":"originalQuery","template":null,"stylePolicy":"template","bindings":{"fixed":{"kind":"text","text":"exact"}}});
-        let parsed: Prepare = serde_json::from_value(legacy.clone()).unwrap();
-        assert_eq!(serde_json::to_value(parsed).unwrap(), legacy);
+        // The selected output language is an explicit part of the exact request,
+        // independent of UI preferences; omission is not an implicit default.
+        let frozen = json!({"requestId":uuid::Uuid::new_v4().to_string(),"outputLocale":"zh-CN","resource":null,"source":null,"format":"xlsx","reviewMode":"none","includeResolved":false,"queryId":"originalQuery","template":null,"stylePolicy":"template","bindings":{"fixed":{"kind":"text","text":"exact"}}});
+        let parsed: Prepare = serde_json::from_value(frozen.clone()).unwrap();
+        assert_eq!(serde_json::to_value(parsed).unwrap(), frozen);
+        let mut missing = frozen.clone();
+        missing.as_object_mut().unwrap().remove("outputLocale");
+        assert!(serde_json::from_value::<Prepare>(missing).is_err());
+        let mut selected = frozen.clone();
+        selected["outputLocale"] = json!("en-US");
+        assert_ne!(
+            digest(&serde_json::to_vec(&frozen).unwrap()),
+            digest(&serde_json::to_vec(&selected).unwrap())
+        );
+        selected["outputLocale"] = json!("en");
+        assert!(serde_json::from_value::<Prepare>(selected).is_err());
     }
     #[test]
     fn exact_output_uses_original_hosted_source_actor_and_rechecks_session_and_draft() {

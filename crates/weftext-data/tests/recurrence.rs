@@ -1,5 +1,7 @@
 use serde_json::json;
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 fn date(s: &str) -> NativeValue {
     NativeValue::Date(s.into())
 }
@@ -693,26 +695,27 @@ fn table_bounds_noncanonical_keys_versions_missing_pack_and_coverage_reject_expl
     }
     let mut wrong = p.clone();
     set(&mut wrong, "calendar_version", instant("missing"));
-    assert!(
-        period_bounds(&wrong, &s)
-            .unwrap_err()
-            .0
-            .contains("versions")
+    assert_data_error(
+        &period_bounds(&wrong, &s).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_temporal_period_provider_versions_unavailable_under_policy(),
     );
-    assert!(period_step(&p, -1, &s).unwrap_err().0.contains("coverage"));
-    assert!(
-        period_for_date("table", "day", &date("2026-01-04"), &s)
-            .unwrap_err()
-            .0
-            .contains("coverage")
+    assert_data_error(
+        &period_step(&p, -1, &s).unwrap_err(),
+        DataErrorKind::Coverage,
+        UiMessage::error_data_temporal_period_step_coverage_unavailable(),
+    );
+    assert_data_error(
+        &period_for_date("table", "day", &date("2026-01-04"), &s).unwrap_err(),
+        DataErrorKind::Coverage,
+        UiMessage::error_data_temporal_calendar_table_coverage_unavailable(),
     );
     let mut missing = s.clone();
     missing.providers.retain(|p| p.id != "calendars/test");
-    assert!(
-        period_bounds(&p, &missing)
-            .unwrap_err()
-            .0
-            .contains("unavailable")
+    assert_data_error(
+        &period_bounds(&p, &missing).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_temporal_series_calendar_provider_unavailable(),
     );
     let mut s = table_schema();
     s.providers
@@ -721,7 +724,11 @@ fn table_bounds_noncanonical_keys_versions_missing_pack_and_coverage_reject_expl
         .unwrap()
         .data["epoch_date"] = json!("2026-01-06");
     let p = period_for_date("table", "week", &date("2026-01-06"), &s).unwrap_err();
-    assert!(p.0.contains("coverage"));
+    assert_data_error(
+        &p,
+        DataErrorKind::Coverage,
+        UiMessage::error_data_temporal_period_outside_calendar_table_coverage(),
+    );
 }
 #[test]
 fn period_zoned_bounds_use_exact_series_zone_and_explicit_fold() {
@@ -932,12 +939,8 @@ fn actual_native_event_field_validation_proves_anchor_membership_and_preserves_r
     let invalid_source = source(&recurrence);
     let invalid = validate_note(&invalid_source, &schema, &ValidationContext::default());
     assert!(!invalid.is_valid());
-    assert!(
-        invalid
-            .diagnostics
-            .iter()
-            .any(|d| d.contains("not a member"))
-    );
+    assert!(invalid.diagnostics.iter().any(|d| d.explanation
+        == UiMessage::error_data_recurrence_exception_onset_outside_base_and_rdate()));
     let projected = project(&invalid_source, &schema);
     let raw = projected
         .fields

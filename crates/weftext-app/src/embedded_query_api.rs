@@ -2,6 +2,7 @@
 //! buffer/Undo owns edits; this adapter never saves or installs definitions.
 use super::*;
 use std::collections::BTreeMap;
+use weftext_messages::UiMessage;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -42,14 +43,44 @@ struct EditRequest {
     action: Option<String>,
 }
 fn query_error(error: weftext_data::DataError) -> ApiError {
-    ApiError::new(
-        StatusCode::CONFLICT,
-        "embeddedQueryUnavailable",
-        error.to_string(),
-    )
+    ApiError::from_data(StatusCode::CONFLICT, "embeddedQueryUnavailable", error)
 }
 
-async fn discover(State(state): State<AppState>, Json(req): Json<DiscoverRequest>) -> ApiResult {
+// Source-origin and Data-control failures are independent facts. Preserve the
+// original chosen headline while retaining classification and every problem.
+fn occurrence_error(
+    occurrence: &weftext_data::EmbeddedQueryOccurrence,
+    code: &str,
+    description: ErrorDescription,
+) -> ApiError {
+    let mut groups = Vec::new();
+    if let Some(classification) = occurrence.control_kind {
+        let mut diagnostics = occurrence
+            .control_reason
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>();
+        diagnostics.extend(occurrence.control_diagnostics.clone());
+        groups.push(weftext_core::ErrorDetailGroup::Data {
+            classification,
+            diagnostics,
+        });
+    }
+    if let Some(source) = occurrence.source.reason.clone() {
+        groups.push(weftext_core::ErrorDetailGroup::Product {
+            code: None,
+            diagnostics: vec![source],
+        });
+    }
+    let details =
+        (!groups.is_empty()).then_some(weftext_core::CoreErrorDetails::Aggregate { groups });
+    ApiError::from_core_parts(StatusCode::CONFLICT, code, description, details)
+}
+
+async fn discover(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<DiscoverRequest>,
+) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -67,13 +98,16 @@ async fn discover(State(state): State<AppState>, Json(req): Json<DiscoverRequest
         )
     })
     .await
-    .map_err(|_| ApiError::internal("Query source discovery did not complete"))?;
+    .map_err(|_| {
+        ApiError::internal(UiMessage::error_api_embedded_query_query_discovery_incomplete())
+    })?;
     if read_only {
         for occurrence in &mut occurrences {
             occurrence.writable = false;
             occurrence.builder_supported = false;
             occurrence.source.range.writable = false;
-            occurrence.source.reason = Some("此会话是只读笔记，Query 源码不能写入。".into());
+            occurrence.source.reason =
+                Some(UiMessage::error_api_embedded_query_read_only_source().into());
         }
     }
     writing_api::check_snapshot(
@@ -88,7 +122,10 @@ async fn discover(State(state): State<AppState>, Json(req): Json<DiscoverRequest
     ))
 }
 
-async fn run(State(state): State<AppState>, Json(req): Json<RunRequest>) -> ApiResult {
+async fn run(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RunRequest>,
+) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -100,14 +137,17 @@ async fn run(State(state): State<AppState>, Json(req): Json<RunRequest>) -> ApiR
     let occurrence =
         weftext_data::embedded_query(&req.source, &req.occurrence_id).map_err(query_error)?;
     if !occurrence.runnable {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
+        return Err(occurrence_error(
+            &occurrence,
             "embeddedQueryUnavailable",
             occurrence
                 .source
                 .reason
-                .or(occurrence.control_reason)
-                .unwrap_or_else(|| "Query source cannot be qualified for this Draft".into()),
+                .clone()
+                .or_else(|| occurrence.control_reason.clone())
+                .unwrap_or_else(|| {
+                    UiMessage::error_api_embedded_query_draft_source_unqualified().into()
+                }),
         ));
     }
     let result = data_api::run_embedded_query(
@@ -144,7 +184,10 @@ async fn run(State(state): State<AppState>, Json(req): Json<RunRequest>) -> ApiR
     ))
 }
 
-async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> ApiResult {
+async fn edit(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<EditRequest>,
+) -> ApiResult {
     // An edit must match a previously observed opening basis. Registering an
     // old proposal here would allow it to acquire a writer after latency.
     writing_api::check_snapshot(
@@ -161,13 +204,16 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
             let occurrence = weftext_data::embedded_query(&req.source, &req.occurrence_id)
                 .map_err(query_error)?;
             if !occurrence.builder_supported {
-                return Err(ApiError::new(
-                    StatusCode::CONFLICT,
+                return Err(occurrence_error(
+                    &occurrence,
                     "embeddedQueryBuilderUnsupported",
                     occurrence
                         .control_reason
-                        .or(occurrence.source.reason)
-                        .unwrap_or_else(|| "Builder cannot preserve this native Query".into()),
+                        .clone()
+                        .or_else(|| occurrence.source.reason.clone())
+                        .unwrap_or_else(|| {
+                            UiMessage::error_api_embedded_query_builder_cannot_preserve().into()
+                        }),
                 ));
             }
             data_api::validate_embedded_query_plan(
@@ -194,7 +240,7 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
         }
         _ => {
             return Err(ApiError::bad(
-                "Provide exactly one builder plan or source replacement",
+                UiMessage::error_api_embedded_query_single_query_proposal_required(),
             ));
         }
     };
@@ -214,6 +260,62 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     const QUERY: &str = "#metadata((kind: \"weftext.query\", key: \"f8597b15-6b7f-4a6a-9b52-c2732730fe41\", binding: (schema: \"weftext-config://58c47256-bfce-4d29-a037-b83a3a644fb0/schema\", revision: \"8a81e35f-ad48-4c12-af4f-3d2607102fa9\", language: \"weftext.query.cel.v1\"), where: \"true\")) <weftext-query-one>";
+
+    #[test]
+    fn control_failure_keeps_real_classification_and_all_parallel_source_facts() {
+        let mut occurrence = weftext_data::embedded_queries(QUERY).remove(0);
+        let original_range = serde_json::to_value(&occurrence.source.range).unwrap();
+        let parallel = (0..48)
+            .map(|index| {
+                ErrorDescription::new(UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: format!("problem-{index}"),
+                    },
+                ))
+                .diagnostic(
+                    DiagnosticOrigin::Dependency,
+                    format!("original diagnostic {index}"),
+                )
+            })
+            .collect::<Vec<_>>();
+        occurrence.control_kind = Some(weftext_data::DataErrorKind::NativeBudget);
+        occurrence.control_reason = Some(UiMessage::common_save().into());
+        occurrence.control_diagnostics = parallel.clone();
+        let source = ErrorDescription::new(UiMessage::error_api_embedded_query_read_only_source());
+        occurrence.source.reason = Some(source.clone());
+        let error = occurrence_error(&occurrence, "embeddedQueryUnavailable", source.clone());
+        let wire = serde_json::to_value(&error).unwrap();
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert_eq!(wire["code"], "embeddedQueryUnavailable");
+        assert_eq!(
+            wire["explanation"],
+            serde_json::to_value(&source.explanation).unwrap()
+        );
+        let groups = wire["details"]["details"]["groups"].as_array().unwrap();
+        assert_eq!(groups[0]["classification"], "nativeBudget");
+        let problems = groups[0]["diagnostics"].as_array().unwrap();
+        assert_eq!(problems.len(), 49);
+        assert_eq!(
+            problems[0],
+            serde_json::to_value(occurrence.control_reason.as_ref().unwrap()).unwrap()
+        );
+        assert_eq!(
+            &problems[1..],
+            serde_json::to_value(&parallel).unwrap().as_array().unwrap()
+        );
+        assert_eq!(
+            groups[1]["diagnostics"],
+            serde_json::to_value(vec![source]).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&occurrence.source.range).unwrap(),
+            original_range
+        );
+        assert_eq!(
+            occurrence.control_kind,
+            Some(weftext_data::DataErrorKind::NativeBudget)
+        );
+    }
 
     fn fixture() -> (tempfile::TempDir, AppState, String) {
         let directory = tempfile::tempdir().unwrap();
@@ -243,7 +345,7 @@ mod tests {
         let (directory, state, session) = fixture();
         let Json(found) = discover(
             State(state.clone()),
-            Json(DiscoverRequest {
+            crate::RequestJson(DiscoverRequest {
                 session_id: session.clone(),
                 source: QUERY.into(),
                 serial: 1,
@@ -255,7 +357,7 @@ mod tests {
         let id = found["occurrences"][0]["id"].as_str().unwrap().to_string();
         let Json(patch) = edit(
             State(state.clone()),
-            Json(EditRequest {
+            crate::RequestJson(EditRequest {
                 session_id: session.clone(),
                 source: QUERY.into(),
                 serial: 1,
@@ -283,7 +385,7 @@ mod tests {
         .unwrap();
         let error = edit(
             State(state),
-            Json(EditRequest {
+            crate::RequestJson(EditRequest {
                 session_id: session,
                 source: QUERY.into(),
                 serial: 1,
@@ -304,7 +406,7 @@ mod tests {
         let (_directory, state, session) = fixture();
         let Json(found) = discover(
             State(state.clone()),
-            Json(DiscoverRequest {
+            crate::RequestJson(DiscoverRequest {
                 session_id: session.clone(),
                 source: QUERY.into(),
                 serial: 1,
@@ -315,7 +417,7 @@ mod tests {
         .unwrap();
         let error = run(
             State(state),
-            Json(RunRequest {
+            crate::RequestJson(RunRequest {
                 session_id: session,
                 source: QUERY.into(),
                 serial: 1,
@@ -327,5 +429,45 @@ mod tests {
         .await
         .unwrap_err();
         assert_eq!(error.code, "queryUnavailable");
+    }
+}
+
+#[cfg(test)]
+mod typed_error_tests {
+    use super::*;
+    use weftext_core::{CoreErrorDetails, ErrorDetailGroup};
+    use weftext_messages::ErrorDescription;
+
+    #[test]
+    fn embedded_query_error_keeps_semantic_kind_and_all_parallel_diagnostics() {
+        let explanation = UiMessage::error_api_embedded_query_draft_source_unqualified();
+        let diagnostics: Vec<_> = (0..48)
+            .map(|_| ErrorDescription::new(UiMessage::error_api_embedded_query_read_only_source()))
+            .collect();
+        let error = query_error(
+            weftext_data::DataError::native_budget(explanation.clone())
+                .with_diagnostics(diagnostics.clone()),
+        );
+        assert_eq!(error.status, StatusCode::CONFLICT);
+        assert_eq!(error.code, "embeddedQueryUnavailable");
+        assert_eq!(error.explanation, explanation);
+        assert!(error.causes.as_slice().is_empty());
+        let Some(ApiErrorDetails::Core { error: core }) = error.details.as_deref() else {
+            panic!("missing original Core error");
+        };
+        let Some(CoreErrorDetails::Aggregate { groups }) = &core.details else {
+            panic!("missing typed Data error details");
+        };
+        let [
+            ErrorDetailGroup::Data {
+                classification,
+                diagnostics: retained,
+            },
+        ] = groups.as_slice()
+        else {
+            panic!("unexpected Data error detail kind");
+        };
+        assert_eq!(*classification, weftext_data::DataErrorKind::NativeBudget);
+        assert_eq!(retained, &diagnostics);
     }
 }

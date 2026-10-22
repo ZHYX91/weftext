@@ -2,6 +2,7 @@
 //! stores no state and never grants an identity from the current pathname.
 use super::*;
 use crate::sync::ObjectKey;
+use weftext_messages::UiMessage;
 
 pub(crate) struct OriginalTrashRoot {
     pub(crate) operation_id: String,
@@ -77,7 +78,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Clone Trash has a different original workspace",
+                    UiMessage::error_core_operations_clone_trash_has_different_original_workspace(),
                 ));
             }
             let Mutation::CreateTree {
@@ -89,13 +90,13 @@ impl Core {
             else {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Clone Trash requires its original CreateTree",
+                    UiMessage::error_core_operations_clone_trash_requires_original_create_tree(),
                 ));
             };
             if !locator_equal(target, &display(root)) {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Clone Trash escaped its original receiver",
+                    UiMessage::error_core_operations_clone_trash_escaped_original_receiver(),
                 ));
             }
             for object in &setup.initial {
@@ -109,7 +110,8 @@ impl Core {
                     _ => {
                         return Err(CoreError::new(
                             "invalidPlan",
-                            "Clone Trash lacks a placed content role",
+                            UiMessage::error_core_operations_clone_trash_lacks_placed_content_role(
+                            ),
                         ));
                     }
                 };
@@ -120,7 +122,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "identityPending",
-                            "Clone Trash lacks its exact original output",
+                            UiMessage::error_core_operations_clone_trash_lacks_exact_original_output(),
                         )
                     })?;
                 if object.state.files.get(&leaf) != Some(&hash(&output.after))
@@ -129,7 +131,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "Clone Trash differs from its original role and file revision",
+                        UiMessage::error_core_operations_clone_trash_differs_from_original_role_and_file_revision(),
                     ));
                 }
                 let identity = self
@@ -137,7 +139,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "identityPending",
-                            "Clone Trash lacks its original materialized directory",
+                            UiMessage::error_core_operations_clone_trash_lacks_original_materialized_directory(),
                         )
                     })?;
                 let leaf_identity = self
@@ -145,7 +147,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "identityPending",
-                            "Clone Trash lacks its original materialized file",
+                            UiMessage::error_core_operations_clone_trash_lacks_original_materialized_file(),
                         )
                     })?;
                 if let Some(id) = &node_id {
@@ -161,7 +163,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "identityConflict",
-                            "Clone Trash Node lacks its exact original birth",
+                            UiMessage::error_core_operations_clone_trash_node_lacks_exact_original_birth(),
                         ));
                     }
                 } else if let ObjectKey::Directory(id) = &object.object {
@@ -170,7 +172,7 @@ impl Core {
                     if marker["directoryId"] != *id {
                         return Err(CoreError::new(
                             "identityConflict",
-                            "Clone Trash Directory marker differs from its exact role",
+                            UiMessage::error_core_operations_clone_trash_directory_marker_differs_from_exact_role(),
                         ));
                     }
                 }
@@ -216,13 +218,13 @@ impl Core {
                 } else {
                     "trashMissing"
                 },
-                "The original committed operation has no matching retained Node root",
+                UiMessage::error_core_operations_original_committed_operation_has_no_matching_retained_node_root(),
             )
         })?;
         if selected.next().is_some() {
             return Err(CoreError::new(
                 "trashSelectionRequired",
-                "Select the exact Node identity from this operation's retained Trash roots",
+                UiMessage::error_core_operations_select_exact_node_identity_from_operation_s_retained_trash_roots(),
             ));
         }
         Ok(first)
@@ -236,13 +238,16 @@ impl Core {
         if guard.directory_identity()? != entry.identity {
             return Err(CoreError::new(
                 "identityConflict",
-                "The original committed Trash directory was replaced",
+                UiMessage::error_core_operations_original_committed_trash_directory_was_replaced(),
             ));
         }
         let source = entry.path.join(&entry.leaf);
         self.check_pending(&source)?;
         let file = capture_optional(&source)?.ok_or_else(|| {
-            CoreError::new("missingNode", "The retained canonical source is missing")
+            CoreError::new(
+                "missingNode",
+                UiMessage::error_core_operations_retained_canonical_source_missing(),
+            )
         })?;
         if file.stamp.identity != entry.leaf_identity
             || self
@@ -251,7 +256,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "The retained canonical source is not its original admitted object",
+                UiMessage::error_core_operations_retained_canonical_source_not_original_admitted_object(),
             ));
         }
         Ok(file)
@@ -269,7 +274,7 @@ fn add_root(roots: &mut Vec<OriginalTrashRoot>, root: OriginalTrashRoot) -> Resu
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "Original Trash Plans disagree on a retained physical tree",
+                UiMessage::error_core_operations_original_trash_plans_disagree_on_retained_physical_tree(),
             ));
         }
         return Ok(());
@@ -277,7 +282,7 @@ fn add_root(roots: &mut Vec<OriginalTrashRoot>, root: OriginalTrashRoot) -> Resu
     if roots.len() == MAX_OPERATION_FILES {
         return Err(CoreError::new(
             "budget",
-            "Original Trash roots exceed the bounded operation scope",
+            UiMessage::error_core_operations_original_trash_roots_exceed_bounded_operation_scope(),
         ));
     }
     roots.push(root);

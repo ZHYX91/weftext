@@ -561,7 +561,8 @@ fn dynamic_trivia_partial_topology_and_stale_requests_are_refused() {
     assert!(
         edit(&format!("前{source}"), &request)
             .unwrap_err()
-            .0
-            .contains("stale-source")
+            .description()
+            .explanation
+            == weftext_engine::UiMessage::error_engine_editor_source_stale()
     );
 }

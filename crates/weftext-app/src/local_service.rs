@@ -17,6 +17,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+use weftext_messages::UiMessage;
 
 /// An explicit document locator; Core still qualifies identity and restores Draft.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -127,9 +128,12 @@ impl LocalService {
                 let path = std::path::absolute(document.path)?;
                 let root = document.root.map(std::path::absolute).transpose()?;
                 let opened = core.open(path, root).map_err(io::Error::other)?;
-                serde_json::to_value(opened)
-                    .map(Arc::new)
-                    .map_err(io::Error::other)
+                serde_json::to_value(opened).map(Arc::new).map_err(|error| {
+                    let mut error = api::CoreError::from(error);
+                    error.explanation =
+                        weftext_messages::UiMessage::error_local_service_document_encoding_failed();
+                    io::Error::other(error)
+                })
             })
             .transpose()?;
         let port = listener.local_addr()?.port();
@@ -154,7 +158,7 @@ impl LocalService {
             initial,
         };
         if let Some(document) = state.initial.as_ref() {
-            api::remember(&state, document).map_err(|error| io::Error::other(error.message))?;
+            api::remember(&state, document).map_err(io::Error::other)?;
         }
         let admitting = Arc::new(AtomicBool::new(true));
         let router = router(state.clone()).layer(middleware::from_fn_with_state(
@@ -330,6 +334,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn authenticated_preference_json_rejections_use_typed_wire_and_preserve_original_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("state");
+        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
+            .await
+            .unwrap();
+        let address = url::Url::parse(service.browser_url()).unwrap();
+        let token = address
+            .fragment()
+            .unwrap()
+            .strip_prefix("token=")
+            .unwrap()
+            .to_owned();
+        let endpoint = format!(
+            "http://127.0.0.1:{}/api/client-preferences/update",
+            address.port().unwrap()
+        );
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let host = tokio::spawn(service.serve_until(async {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::new();
+        let saved = client
+            .post(&endpoint)
+            .header("x-weftext-token", &token)
+            .json(&serde_json::json!({"expectedRevision":0,"preferences":{"uiLocale":"en-US"}}))
+            .send()
+            .await
+            .unwrap();
+        assert!(saved.status().is_success());
+        assert_eq!(
+            saved.json::<serde_json::Value>().await.unwrap()["revision"],
+            1
+        );
+        let path = data.join("device-state/client-preferences.json");
+        let original = std::fs::read(&path).unwrap();
+        for (credential, content_type, body, status, key) in [
+            (
+                None,
+                Some("application/json"),
+                "{",
+                reqwest::StatusCode::FORBIDDEN,
+                "error.localSessionInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                "{",
+                reqwest::StatusCode::BAD_REQUEST,
+                "error.api.jsonSyntaxInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                None,
+                "{",
+                reqwest::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "error.api.jsonContentTypeRequired",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                r#"{"expectedRevision":1,"preferences":{"uiLocale":"en"}}"#,
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+                "error.api.jsonDataInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                r#"{"expectedRevision":1,"preferences":{"uiLocale":{"en-US":null}}}"#,
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+                "error.api.jsonDataInvalid",
+            ),
+        ] {
+            let mut request = client.post(&endpoint).body(body);
+            if let Some(credential) = credential {
+                request = request.header("x-weftext-token", credential);
+            }
+            if let Some(content_type) = content_type {
+                request = request.header("content-type", content_type);
+            }
+            let response = request.send().await.unwrap();
+            assert_eq!(response.status(), status);
+            let response: serde_json::Value = response.json().await.unwrap();
+            assert_eq!(response["error"]["explanation"]["key"], key);
+            assert!(response["error"].get("message").is_none());
+            assert!(response["error"]["causes"].is_array());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+        assert!(!data.join("device-state/identity.json").exists());
+        stop.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), host)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
     async fn host_shutdown_releases_the_only_core_lease_and_listener() {
         let directory = tempfile::tempdir().unwrap();
         let data = directory.path().join("state");
@@ -407,7 +509,23 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
-        assert!(error.to_string().contains("Cannot bind Weftext"));
+        let original = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<api::CoreError>())
+            .expect("Bind error discarded its typed Core/OS facts");
+        assert_eq!(
+            original.explanation,
+            weftext_messages::UiMessage::error_local_service_bind_failed(
+                weftext_messages::params::ErrorLocalServiceBindFailed {
+                    port: occupied.local_addr().unwrap().port().to_string()
+                },
+            )
+        );
+        assert_eq!(original.diagnostics.len(), 1);
+        assert_eq!(
+            original.diagnostics[0].origin,
+            weftext_messages::DiagnosticOrigin::Os
+        );
         let retry = LocalService::bind(LocalServiceOptions::new(data))
             .await
             .unwrap();

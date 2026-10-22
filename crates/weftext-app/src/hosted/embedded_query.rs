@@ -77,10 +77,13 @@ fn qualify(
 }
 
 fn query_error(_: weftext_data::DataError) -> ApiError {
+    invalid_query()
+}
+fn invalid_query() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "embeddedQueryUnavailable",
-        "当前原生查询或准确来源不可用，保留原文；请重新检查该查询",
+        UiMessage::error_api_hosted_embedded_query_native_query_basis_unavailable(),
     )
 }
 
@@ -102,7 +105,7 @@ async fn check(
 async fn discover(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Snapshot>,
+    RequestJson(req): RequestJson<Snapshot>,
 ) -> ApiResult {
     check(&state, &auth, &req, true, false).await?;
     let source = req.source.clone();
@@ -113,7 +116,11 @@ async fn discover(
         )
     })
     .await
-    .map_err(|_| ApiError::internal("查询来源检查未完成"))?;
+    .map_err(|_| {
+        ApiError::internal(
+            UiMessage::error_api_hosted_embedded_query_query_origin_check_incomplete(),
+        )
+    })?;
     let (_, _, rights) = check(&state, &auth, &req, false, false).await?;
     for occurrence in &mut occurrences {
         if !rights.write {
@@ -123,7 +130,12 @@ async fn discover(
         }
         if !rights.query.definitions {
             occurrence.runnable = false;
-            occurrence.control_reason = Some("运行此定义需要独立的查询定义读取权限".into());
+            // This is the authorization projection, not a reclassification of
+            // private definition diagnostics for a caller without read rights.
+            occurrence.control_reason =
+                Some(UiMessage::error_api_hosted_embedded_query_definition_read_required().into());
+            occurrence.control_kind = Some(weftext_data::DataErrorKind::Unavailable);
+            occurrence.control_diagnostics.clear();
         }
     }
     Ok(Json(json!({"serial":req.serial,"source":req.source,
@@ -134,7 +146,7 @@ async fn discover(
 async fn run(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Run>,
+    RequestJson(req): RequestJson<Run>,
 ) -> ApiResult {
     let basis = Snapshot {
         session_id: req.session_id,
@@ -149,7 +161,7 @@ async fn run(
     let occurrence =
         weftext_data::embedded_query(&basis.source, &req.occurrence_id).map_err(query_error)?;
     if !occurrence.runnable {
-        return Err(query_error(weftext_data::DataError(String::new())));
+        return Err(invalid_query());
     }
     let output = query::run_embedded(
         &state,
@@ -200,7 +212,7 @@ async fn run(
 async fn edit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Edit>,
+    RequestJson(req): RequestJson<Edit>,
 ) -> ApiResult {
     let basis = Snapshot {
         session_id: req.session_id,
@@ -215,7 +227,7 @@ async fn edit(
             let occurrence = weftext_data::embedded_query(&basis.source, &req.occurrence_id)
                 .map_err(query_error)?;
             if !occurrence.builder_supported {
-                return Err(query_error(weftext_data::DataError(String::new())));
+                return Err(invalid_query());
             }
             let plan = query::validate_embedded(
                 &state,
@@ -239,7 +251,11 @@ async fn edit(
             weftext_data::arrange_embedded_query(&basis.source, &req.occurrence_id, &action)
                 .map_err(query_error)?
         }
-        _ => return Err(ApiError::bad("请选择完整构建器提案或准确源码替换之一")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_embedded_query_single_query_proposal_required(),
+            ));
+        }
     };
     check(&state, &auth, &basis, false, true).await?;
     data_api::patch_response(patch, basis.serial, &basis.source)

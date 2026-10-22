@@ -33,13 +33,13 @@ impl QualifiedLibrary {
         if serde_json::to_vec(self)?.len() > 1536 {
             return Err(CoreError::new(
                 "budget",
-                "Qualified input metadata exceeds its bounded header budget",
+                UiMessage::error_core_file_save_scope_qualified_metadata_budget_exceeded(),
             ));
         }
         if !Path::new(&self.root).is_absolute() {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Original qualified library root is not absolute",
+                UiMessage::error_core_file_save_scope_original_library_root_not_absolute(),
             ));
         }
         Ok(())
@@ -59,7 +59,7 @@ pub(crate) fn read_input_scope(
     let value = hosted::read_first_metadata(file, "scope")?.ok_or_else(|| {
         CoreError::new(
             "unsupportedInputScope",
-            "Retained input has no supported original scope; its original bytes remain unchanged",
+            UiMessage::error_core_file_save_scope_retained_input_scope_unsupported(),
         )
     })?;
     let scope: QualifiedInputScope = serde_json::from_slice(&value)?;
@@ -92,7 +92,7 @@ impl FileSaveData {
 pub(crate) fn unsupported_scope() -> CoreError {
     CoreError::new(
         "unsupportedFileSaveEvidence",
-        "This retained file save has no supported original scope; its receipt is historical evidence, not writer or backup qualification",
+        UiMessage::error_core_file_save_scope_retained_file_save_scope_unsupported(),
     )
 }
 pub(crate) fn fingerprint(
@@ -123,7 +123,7 @@ impl Core {
             if !same_locator(&binding.root, &original) {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original input library locator contradicts its admission",
+                    UiMessage::error_core_file_save_scope_original_locator_contradicts_admission(),
                 ));
             }
         }
@@ -132,9 +132,12 @@ impl Core {
     /// The nearest qualified library is a discovery boundary. Observe real
     /// ancestors even when an ordinary open selected only its immediate parent.
     pub(crate) fn capture_file_save_scope(&self, path: &Path) -> Result<QualifiedInputScope> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| CoreError::new("invalidPath", "Missing file parent"))?;
+        let parent = path.parent().ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_file_save_scope_file_parent_missing(),
+            )
+        })?;
         let _parent_guard = ParentGuard::acquire(path)?;
         for candidate in parent.ancestors() {
             if let Some(workspace) = self.workspace(candidate)? {
@@ -163,7 +166,7 @@ impl Core {
                     Ok(_) => {
                         return Err(CoreError::new(
                             "unadmittedLibrary",
-                            "Existing ancestor controls do not prove an original file owner",
+                            UiMessage::error_core_file_save_scope_ancestor_owner_unproven(),
                         ));
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -181,7 +184,7 @@ impl Core {
         if self.capture_file_save_scope(path)? != *scope {
             return Err(CoreError::new(
                 "scopeChanged",
-                "The original file's physical owner changed; its input and original Session are retained",
+                UiMessage::error_core_file_save_scope_physical_owner_changed(),
             ));
         }
         Ok(())
@@ -197,7 +200,7 @@ impl Core {
                 if history::history_relative_path(path, Path::new(&binding.root)).is_none() {
                     return Err(CoreError::new(
                         "invalidState",
-                        "Original file-save library scope contradicts its original target",
+                        UiMessage::error_core_file_save_scope_target_contradicts_scope(),
                     ));
                 }
             }
@@ -377,14 +380,16 @@ mod tests {
         fs::write(root.join(".weftext-workspace.json"), "damaged controls").unwrap();
         let readable = core.open(&path, None).unwrap();
         assert_eq!(readable.source, "readable input");
+        let scope_error = core.sessions[&readable.session_id]
+            .file_scope
+            .as_ref()
+            .unwrap_err();
+        assert_eq!(scope_error.code, "unadmittedLibrary");
         assert_eq!(
-            core.sessions[&readable.session_id]
-                .file_scope
-                .as_ref()
-                .unwrap_err()
-                .code,
-            "unadmittedLibrary"
+            scope_error.explanation,
+            UiMessage::error_core_file_save_scope_ancestor_owner_unproven()
         );
+        assert!(scope_error.diagnostics.is_empty());
         assert_eq!(
             core.persist_draft(&readable.session_id, "Y")
                 .unwrap_err()

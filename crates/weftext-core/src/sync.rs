@@ -4,6 +4,7 @@
 use super::{CoreError, Result, hash};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use weftext_messages::UiMessage;
 
 const MAX_COMMITS: usize = 2_000;
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
@@ -39,8 +40,10 @@ pub use revalidation_native::{
 pub(crate) mod revalidation_writer;
 pub use apply::SyncResolution;
 pub use revalidation::{
-    SyncRevalidation, SyncRevalidationCut, SyncRevalidationDecision, SyncRevalidationReview,
+    RequiredSemanticEvidence, SyncRevalidation, SyncRevalidationCut, SyncRevalidationDecision,
+    SyncRevalidationReview,
 };
+pub use revalidation_evidence::{EvidenceGap, UnfulfilledEvidence};
 pub(crate) mod replica;
 pub use replica::SyncBindingInfo;
 const MAX_CHANGES: usize = 5_000;
@@ -125,7 +128,7 @@ impl Manifest {
         self.validate()?;
         let bytes = serde_json::to_vec(self)?;
         if bytes.len() > MAX_MANIFEST_BYTES {
-            return Err(invalid("Manifest exceeds 4 MiB"));
+            return Err(invalid(UiMessage::error_core_sync_manifest_exceeds4_mi_b()));
         }
         Ok(hash(&bytes))
     }
@@ -137,7 +140,9 @@ impl Manifest {
             || self.dependencies.len() > MAX_CHANGES
             || self.parents.len() > MAX_COMMITS
         {
-            return Err(invalid("Unsupported or oversized manifest"));
+            return Err(invalid(
+                UiMessage::error_core_sync_unsupported_or_oversized_manifest(),
+            ));
         }
         for id in [&self.workspace_id, &self.replica_id, &self.operation_id] {
             uuid(id)?;
@@ -157,7 +162,8 @@ impl Manifest {
                 || change.before.contains(&change.revision)
             {
                 return Err(invalid(
-                    "Duplicate object/revision or invalid predecessor set",
+                    UiMessage::error_core_sync_duplicate_object_revision_or_invalid_predecessor_set(
+                    ),
                 ));
             }
             for before in &change.before {
@@ -177,7 +183,7 @@ impl Manifest {
                     != change.after.file_revisions.len()
             {
                 return Err(invalid(
-                    "Every portable file requires its exact distinct content revision",
+                    UiMessage::error_core_sync_every_portable_file_requires_exact_distinct_content_revision(),
                 ));
             }
             for revision in change.after.file_revisions.values() {
@@ -187,7 +193,7 @@ impl Manifest {
                 key(parent)?;
                 if !matches!(parent, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
                     return Err(invalid(
-                        "Placement parent must be a typed Node or Directory",
+                        UiMessage::error_core_sync_placement_parent_must_typed_node_or_directory(),
                     ));
                 }
             }
@@ -195,14 +201,16 @@ impl Manifest {
             count += change.after.files.len();
             if count > MAX_FILES || change.after.files.is_empty() {
                 return Err(invalid(
-                    "A content state must retain its exact bounded files",
+                    UiMessage::error_core_sync_content_state_must_retain_exact_bounded_files(),
                 ));
             }
             let mut names = BTreeSet::new();
             for (path, blob) in &change.after.files {
                 relative(path)?;
                 if !names.insert(path.to_lowercase()) {
-                    return Err(invalid("Case-colliding file names"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_case_colliding_file_names(),
+                    ));
                 }
                 digest(blob)?;
             }
@@ -221,7 +229,9 @@ impl Manifest {
                     || !change.after.files.contains_key(path)
                     || change.after.parent.is_some())
             {
-                return Err(invalid("Configuration must have its exact content role"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_configuration_must_have_exact_content_role(),
+                ));
             }
         }
         let mut dependencies = BTreeSet::new();
@@ -231,7 +241,7 @@ impl Manifest {
                 || dependency.revisions.is_empty()
                 || dependency.revisions.len() > MAX_COMMITS
             {
-                return Err(invalid("Invalid dependency cut"));
+                return Err(invalid(UiMessage::error_core_sync_invalid_dependency_cut()));
             }
             for revision in &dependency.revisions {
                 uuid(revision)?;
@@ -261,7 +271,7 @@ pub enum Admission {
         missing_blobs: BTreeSet<String>,
     },
     Rejected {
-        reason: String,
+        reason: CoreDescription,
     },
 }
 
@@ -289,7 +299,7 @@ pub struct ReplicaGraph {
     manifests: BTreeMap<String, Manifest>,
     blobs: BTreeMap<String, Vec<u8>>,
     admitted: BTreeSet<String>,
-    rejected: BTreeMap<String, String>,
+    rejected: BTreeMap<String, CoreDescription>,
     total_bytes: usize,
 }
 
@@ -311,17 +321,21 @@ impl ReplicaGraph {
     pub fn offer_blob(&mut self, id: &str, bytes: Vec<u8>) -> Result<()> {
         digest(id)?;
         if bytes.len() > MAX_BLOB_BYTES || hash(&bytes) != id {
-            return Err(invalid("Blob digest mismatch or size limit"));
+            return Err(invalid(
+                UiMessage::error_core_sync_blob_digest_mismatch_or_size_limit(),
+            ));
         }
         if let Some(old) = self.blobs.get(id) {
             return if old == &bytes {
                 Ok(())
             } else {
-                Err(invalid("Blob collision"))
+                Err(invalid(UiMessage::error_core_sync_blob_collision()))
             };
         }
         if self.total_bytes + bytes.len() > MAX_STORE_BYTES || self.blobs.len() >= MAX_BLOBS {
-            return Err(invalid("Replica content budget exceeded"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_content_budget_exceeded(),
+            ));
         }
         self.total_bytes += bytes.len();
         self.blobs.insert(id.into(), bytes);
@@ -331,20 +345,26 @@ impl ReplicaGraph {
 
     pub fn offer_manifest(&mut self, id: &str, manifest: Manifest) -> Result<Admission> {
         if manifest.workspace_id != self.workspace_id || manifest.id()? != id {
-            return Err(invalid("Wrong workspace or manifest digest"));
+            return Err(invalid(
+                UiMessage::error_core_sync_wrong_workspace_or_manifest_digest(),
+            ));
         }
         if let Some(old) = self.manifests.get(id) {
             if old != &manifest {
-                return Err(invalid("Manifest collision"));
+                return Err(invalid(UiMessage::error_core_sync_manifest_collision()));
             }
             return self.status(id);
         }
         if self.manifests.len() >= MAX_COMMITS {
-            return Err(invalid("Replica history budget exceeded"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_history_budget_exceeded(),
+            ));
         }
         let size = serde_json::to_vec(&manifest)?.len();
         if self.total_bytes + size > MAX_STORE_BYTES {
-            return Err(invalid("Replica metadata/content budget exceeded"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_metadata_content_budget_exceeded(),
+            ));
         }
         // Equivocation never silently replaces the original operation. This is
         // an integrity diagnostic, not a malicious-transport security claim.
@@ -354,7 +374,7 @@ impl ReplicaGraph {
             .any(|m| m.replica_id == manifest.replica_id && m.operation_id == manifest.operation_id)
         {
             return Err(invalid(
-                "Replica operation already has another exact manifest",
+                UiMessage::error_core_sync_replica_operation_already_has_another_exact_manifest(),
             ));
         }
         self.total_bytes += size;
@@ -367,7 +387,7 @@ impl ReplicaGraph {
         let manifest = self
             .manifests
             .get(id)
-            .ok_or_else(|| invalid("Unknown manifest"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_unknown_manifest()))?;
         if self.admitted.contains(id) {
             return Ok(Admission::Accepted);
         }
@@ -417,14 +437,16 @@ impl ReplicaGraph {
     /// edit depend on a global frontier; compound transactions remain indivisible.
     pub fn export_objects(&self, objects: &BTreeSet<ObjectKey>) -> Result<SyncBundle> {
         if objects.is_empty() || objects.len() > MAX_CHANGES {
-            return Err(invalid("Select a bounded nonempty set of content objects"));
+            return Err(invalid(
+                UiMessage::error_core_sync_select_bounded_nonempty_set_of_content_objects(),
+            ));
         }
         let view = self.objects()?;
         let mut cut = BTreeSet::new();
         for object in objects {
-            let current = view
-                .get(object)
-                .ok_or_else(|| invalid("Selected object has no admitted content"))?;
+            let current = view.get(object).ok_or_else(|| {
+                invalid(UiMessage::error_core_sync_selected_object_has_no_admitted_content())
+            })?;
             cut.extend(current.versions.iter().map(|v| v.commit.clone()));
         }
         let manifests: BTreeMap<_, _> = self
@@ -445,7 +467,9 @@ impl ReplicaGraph {
 
     pub fn view_at(&self, cut: &BTreeSet<String>) -> Result<BTreeMap<ObjectKey, ObjectView>> {
         if !cut.is_subset(&self.admitted) {
-            return Err(invalid("Cut includes unadmitted history"));
+            return Err(invalid(
+                UiMessage::error_core_sync_cut_includes_unadmitted_history(),
+            ));
         }
         let closure = self.closure(cut);
         let mut candidates: BTreeMap<ObjectKey, Vec<Version>> = BTreeMap::new();
@@ -503,7 +527,7 @@ impl ReplicaGraph {
         current: &BTreeMap<ObjectKey, ObjectView>,
     ) -> Result<Vec<ObjectKey>> {
         if !self.admitted.contains(id) {
-            return Err(invalid("Manifest is not admitted"));
+            return Err(invalid(UiMessage::error_core_sync_manifest_not_admitted()));
         }
         Ok(self.manifests[id]
             .dependencies
@@ -552,7 +576,7 @@ impl ReplicaGraph {
                         self.admitted.insert(id);
                     }
                     Err(e) => {
-                        self.rejected.insert(id, e.message);
+                        self.rejected.insert(id, e.into());
                     }
                 }
             }
@@ -565,7 +589,9 @@ impl ReplicaGraph {
         // Pairing pins the exact genesis. Arrival order cannot select an
         // unrelated root, even if someone copied the WorkspaceId string.
         if manifest.parents.is_empty() && id != self.genesis {
-            return Err(invalid("Unrelated genesis for this workspace"));
+            return Err(invalid(
+                UiMessage::error_core_sync_unrelated_genesis_for_workspace(),
+            ));
         }
         let existing: BTreeSet<_> = self
             .admitted
@@ -580,13 +606,15 @@ impl ReplicaGraph {
                 .collect();
             if before != change.before || existing.contains(&change.revision) {
                 return Err(invalid(
-                    "Predecessors do not match the complete parent cut or revision was reused",
+                    UiMessage::error_core_sync_predecessors_do_not_match_complete_parent_cut_or_revision_was_reused(),
                 ));
             }
             // A retirement is a version, not absence. It retains the original
             // content, so missing objects cannot silently masquerade as deletes.
             if change.before.is_empty() && change.after.retired {
-                return Err(invalid("Cannot retire an object that was never born"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_cannot_retire_object_was_never_born(),
+                ));
             }
         }
         // Repeated immutable content can keep its revision through a move or
@@ -606,7 +634,7 @@ impl ReplicaGraph {
                         .is_some_and(|old| old != binding)
                     {
                         return Err(invalid(
-                            "A portable file revision was reused for other bytes or owner",
+                            UiMessage::error_core_sync_portable_file_revision_was_reused_for_other_bytes_or_owner(),
                         ));
                     }
                 }
@@ -619,7 +647,9 @@ impl ReplicaGraph {
                 .flat_map(|v| v.versions.iter().map(|v| v.revision.clone()))
                 .collect();
             if actual != dependency.revisions {
-                return Err(invalid("Dependency does not match the parent cut"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_dependency_does_not_match_parent_cut(),
+                ));
             }
         }
         Ok(())
@@ -656,14 +686,16 @@ impl ReplicaGraph {
     }
 }
 
-fn invalid(message: &str) -> CoreError {
+fn invalid(message: UiMessage) -> CoreError {
     CoreError::new("invalidSync", message)
 }
 fn uuid(id: &str) -> Result<()> {
     if uuid::Uuid::parse_str(id).is_ok_and(|u| u.to_string() == id) {
         Ok(())
     } else {
-        Err(invalid("Expected a canonical UUID"))
+        Err(invalid(
+            UiMessage::error_core_sync_expected_canonical_u_u_i_d(),
+        ))
     }
 }
 fn digest(id: &str) -> Result<()> {
@@ -674,7 +706,9 @@ fn digest(id: &str) -> Result<()> {
     {
         Ok(())
     } else {
-        Err(invalid("Expected a SHA-256 digest"))
+        Err(invalid(
+            UiMessage::error_core_sync_expected_s_h_a256_digest(),
+        ))
     }
 }
 fn key(key: &ObjectKey) -> Result<()> {
@@ -698,13 +732,15 @@ fn component(name: &str) -> Result<()> {
         || matches!(name, "." | "..")
         || reserved
     {
-        return Err(invalid("Unsafe portable path component"));
+        return Err(invalid(
+            UiMessage::error_core_sync_unsafe_portable_path_component(),
+        ));
     }
     Ok(())
 }
 fn relative(path: &str) -> Result<()> {
     if path.len() > 4096 {
-        return Err(invalid("Portable path is too long"));
+        return Err(invalid(UiMessage::error_core_sync_portable_path_too_long()));
     }
     for part in path.split('/') {
         component(part)?;
@@ -721,7 +757,9 @@ fn relative(path: &str) -> Result<()> {
                 | "hosted-policy.json"
         )
     }) {
-        return Err(invalid("Runtime control file is not portable content"));
+        return Err(invalid(
+            UiMessage::error_core_sync_runtime_control_file_not_portable_content(),
+        ));
     }
     Ok(())
 }

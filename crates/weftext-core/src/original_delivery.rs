@@ -41,12 +41,13 @@ mod tests {
         fs::rename(&path, &retained).unwrap();
         fs::write(&path, &opened.source).unwrap();
         let session_count = core.sessions.len();
+        let error = core.reopen_local_session(&opened.session_id).unwrap_err();
+        assert_eq!(error.code, "sourceIdentityChanged");
         assert_eq!(
-            core.reopen_local_session(&opened.session_id)
-                .unwrap_err()
-                .code,
-            "sourceIdentityChanged"
+            error.explanation,
+            UiMessage::error_core_original_delivery_original_open_file_unavailable()
         );
+        assert!(error.diagnostics.is_empty());
         assert_eq!(core.sessions.len(), session_count);
         assert_eq!(fs::read(&retained).unwrap(), fs::read(&path).unwrap());
         // A separately requested path open remains a new intent, not an old tab refresh.
@@ -302,7 +303,7 @@ impl Core {
         let unavailable = || {
             CoreError::new(
                 "sourceIdentityChanged",
-                "The original open file is unavailable; the current path cannot replace its writer",
+                UiMessage::error_core_original_delivery_original_open_file_unavailable(),
             )
         };
         let scope = original.file_scope.clone()?;
@@ -344,7 +345,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "This retry differs from the complete original save request",
+                UiMessage::error_core_original_delivery_save_retry_differs(),
             ));
         }
         Ok(self
@@ -374,7 +375,7 @@ impl Core {
         let unavailable = || {
             CoreError::new(
                 "committedResultUnavailable",
-                "The exact original physical result is not currently deliverable",
+                UiMessage::error_core_original_delivery_physical_result_unavailable(),
             )
         };
         if !self.original_commit_fact(id)? {
@@ -493,7 +494,7 @@ impl Core {
         let invalid = || {
             CoreError::new(
                 "committedResultUnavailable",
-                "The requested node is not an exact original producer member",
+                UiMessage::error_core_original_delivery_producer_member_mismatch(),
             )
         };
         let plan = self.operations.get(id).ok_or_else(invalid)?;

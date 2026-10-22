@@ -16,10 +16,56 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering as AtomicOrdering},
     },
 };
+
+const MAX_HOST_FAILURES: usize = 128;
+const MAX_HOST_FAILURE_BYTES: usize = 8 * 1024 * 1024;
+
+/// One evaluation owns this channel. An opaque Arc identity transports host
+/// failure through pinned CEL; product explanations never cross its string API.
+#[derive(Debug, Clone, Default)]
+struct HostFailures(Arc<Mutex<HostFailureState>>);
+#[derive(Debug, Default)]
+struct HostFailureState {
+    errors: Vec<DataError>,
+    bytes: usize,
+    exhausted: bool,
+    // cel 0.15 propagates and clones UndeclaredReference's Arc without
+    // rebuilding it. This one request-local identity is transport, never a
+    // missing author symbol and never a diagnostic string to inspect/render.
+    sentinel: Arc<String>,
+}
+impl HostFailures {
+    fn error(&self, error: DataError) -> ExecutionError {
+        let bytes = serde_json::to_vec(&(error.description(), error.details()))
+            .expect("typed host errors serialize")
+            .len();
+        let mut state = self.0.lock().expect("evaluation-local host error lock");
+        if state.errors.len() >= MAX_HOST_FAILURES
+            || bytes > MAX_HOST_FAILURE_BYTES.saturating_sub(state.bytes)
+        {
+            // Reaching this explicit admission boundary is itself a host
+            // budget failure. Earlier original diagnostics remain available.
+            state.exhausted = true;
+        } else {
+            state.bytes += bytes;
+            state.errors.push(error);
+        }
+        ExecutionError::UndeclaredReference(state.sentinel.clone())
+    }
+    fn take(&self) -> HostFailureState {
+        std::mem::take(&mut *self.0.lock().expect("evaluation-local host error lock"))
+    }
+}
+
+impl HostFailureState {
+    fn owns_transport(&self, error: &ExecutionError) -> bool {
+        matches!(error, ExecutionError::UndeclaredReference(identity) if Arc::ptr_eq(identity, &self.sentinel))
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -159,7 +205,11 @@ pub(crate) fn query_projection(
                 field_id: f.id.clone(),
                 key: f.key.clone(),
                 cell: fields.get(&f.id).cloned().unwrap_or(Cell::Unavailable {
-                    reason: "authorized-field-unavailable".into(),
+                    kind: crate::DataErrorKind::Unavailable,
+                    diagnostics: Vec::new(),
+                    reason:
+                        weftext_messages::UiMessage::error_data_query_authorized_field_unavailable()
+                            .into(),
                 }),
                 source_range: None,
                 raw: None,
@@ -170,6 +220,7 @@ pub(crate) fn query_projection(
             .collect(),
         unknown_fields: vec![],
         diagnostics: vec![],
+        budget_exhausted: fields.values().any(Cell::is_native_budget),
     }
 }
 
@@ -231,8 +282,11 @@ impl FrozenTagStructure {
             })
     }
     pub fn new(workspace_id: String, document: TagDocument) -> Result<Self> {
-        uuid::Uuid::parse_str(&workspace_id)
-            .map_err(|_| DataError("Invalid tag structure workspace".into()))?;
+        uuid::Uuid::parse_str(&workspace_id).map_err(|_| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_query_invalid_tag_structure_workspace(),
+            )
+        })?;
         let forest = document.forest()?;
         Ok(Self {
             workspace_id,
@@ -244,17 +298,23 @@ impl FrozenTagStructure {
         let (workspace, id) = reference
             .strip_prefix("weftext-tag://")
             .and_then(|s| s.split_once('/'))
-            .ok_or_else(|| DataError("A typed TagRef is required".into()))?;
+            .ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_typed_tag_ref_required(),
+                )
+            })?;
         if uuid::Uuid::parse_str(workspace).is_err() || uuid::Uuid::parse_str(id).is_err() {
-            return Err(DataError("Invalid TagRef identity".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_invalid_tag_ref_identity(),
+            ));
         }
         Ok((workspace, id))
     }
     pub(crate) fn validate_root<'a>(&self, reference: &'a str) -> Result<&'a str> {
         let (workspace, id) = Self::parts(reference)?;
         if workspace != self.workspace_id || !self.forest.contains(id) {
-            return Err(DataError(
-                "Tag root unavailable in the frozen qualified tree".into(),
+            return Err(DataError::unavailable(
+                weftext_messages::UiMessage::error_data_query_tag_root_unavailable_in_frozen_qualified_tree(),
             ));
         }
         Ok(id)
@@ -288,7 +348,7 @@ pub struct QueryResult {
     pub rows: Vec<QueryRow>,
     pub coverage: String,
     pub freshness: String,
-    pub diagnostics: Vec<String>,
+    pub diagnostics: Vec<ErrorDescription>,
     pub total_known: usize,
     pub limited: bool,
     pub aggregate_exact: bool,
@@ -379,8 +439,8 @@ pub(crate) fn symbols(schema: &Schema) -> Result<BTreeMap<String, QType>> {
             .insert(f.key.clone(), shape_type(schema, &f.shape))
             .is_some()
         {
-            return Err(DataError(
-                "Schema field conflicts with reserved Query product".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_schema_field_conflicts_with_reserved_query_product(),
             ));
         }
     }
@@ -417,7 +477,9 @@ fn typecheck(
     depth: usize,
 ) -> Result<QType> {
     if depth > 64 {
-        return Err(DataError("CEL expression nesting budget".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_query_cel_nesting_budget_exceeded(),
+        ));
     }
     let child = |e: &IdedExpr| typecheck(e, schema, vars, depth + 1);
     Ok(match &e.expr {
@@ -425,19 +487,30 @@ fn typecheck(
             LiteralValue::Boolean(_) => scalar("bool"),
             LiteralValue::Double(v) => {
                 if !v.into_inner().is_finite() {
-                    return Err(DataError("Nonfinite float literal".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_nonfinite_float_literal(),
+                    ));
                 }
                 scalar("float")
             }
             LiteralValue::Int(_) => scalar("int"),
             LiteralValue::String(_) => scalar("text"),
             LiteralValue::Null => scalar("none"),
-            _ => return Err(DataError("CEL profile excludes uint/bytes".into())),
+            _ => {
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_uint_and_bytes_excluded(),
+                ));
+            }
         },
-        Expr::Ident(n) => vars
-            .get(n)
-            .cloned()
-            .ok_or_else(|| DataError(format!("Unknown CEL symbol {n}")))?,
+        Expr::Ident(n) => vars.get(n).cloned().ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_query_unknown_cel_symbol(
+                    weftext_messages::params::ErrorDataQueryUnknownCelSymbol {
+                        symbol: (n).to_string(),
+                    },
+                ),
+            )
+        })?,
         Expr::Select(s) => {
             let t = child(&s.operand)?;
             let member = |t: &QType| match t {
@@ -458,15 +531,23 @@ fn typecheck(
                         None
                     }
                 })
-                .ok_or_else(|| DataError(format!("Unknown typed record member {}", s.field)))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_query_unknown_typed_record_member(
+                            weftext_messages::params::ErrorDataQueryUnknownTypedRecordMember {
+                                member_name: (s.field).to_string(),
+                            },
+                        ),
+                    )
+                })?;
             if s.test { scalar("bool") } else { result }
         }
         Expr::List(l) => {
             let types = l.elements.iter().map(child).collect::<Result<Vec<_>>>()?;
             let item = types.first().cloned().unwrap_or(QType::Any);
             if types.iter().any(|t| !compatible(t, &item)) {
-                return Err(DataError(
-                    "CEL list elements require one declared item type".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_list_item_types_disagree(),
                 ));
             }
             QType::List(Box::new(item))
@@ -475,12 +556,19 @@ fn typecheck(
             let mut members = BTreeMap::new();
             for entry in &m.entries {
                 let EntryExpr::MapEntry(v) = &entry.expr else {
-                    return Err(DataError("Struct values excluded".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_struct_values_excluded(),
+                    ));
                 };
-                let k = literal_text(&v.key)
-                    .ok_or_else(|| DataError("Only string-key records in Query profile".into()))?;
+                let k = literal_text(&v.key).ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_query_query_record_requires_string_keys(),
+                    )
+                })?;
                 if members.insert(k, child(&v.value)?).is_some() {
-                    return Err(DataError("Duplicate CEL record member".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_duplicate_cel_record_member(),
+                    ));
                 }
             }
             if members.is_empty() {
@@ -494,7 +582,7 @@ fn typecheck(
             let item = match iter {
                 QType::List(t) => *t,
                 QType::Record(_) | QType::Map(_) => scalar("text"),
-                _ => return Err(DataError("Comprehension needs a typed list/record".into())),
+                _ => return Err(DataError::new(weftext_messages::UiMessage::error_data_query_comprehension_requires_typed_collection())),
             };
             let mut inner = vars.clone();
             inner.insert(c.iter_var.clone(), item.clone());
@@ -511,9 +599,9 @@ fn typecheck(
         Expr::Call(c) => {
             if c.func_name == "field" {
                 let name = field_name(e, schema)
-                    .ok_or_else(|| DataError("field requires a literal existing FieldId".into()))?;
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_field_requires_existing_literal_field_id()))?;
                 return vars.get(&name).cloned().ok_or_else(|| {
-                    DataError("Field is unavailable in this expression scope".into())
+                    DataError::unavailable(weftext_messages::UiMessage::error_data_query_field_unavailable_in_expression_scope())
                 });
             }
             if matches!(
@@ -524,8 +612,8 @@ fn typecheck(
                     || c.args.len() != 1
                     || field_name(&c.args[0], schema).is_none()
                 {
-                    return Err(DataError(
-                        "Cell predicate requires a direct field reference".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_cell_predicate_requires_direct_field(),
                     ));
                 }
                 return Ok(scalar("bool"));
@@ -545,8 +633,8 @@ fn typecheck(
                     | "exactSeconds"
             ) {
                 if c.target.is_some() || c.args.len() != 1 || literal_text(&c.args[0]).is_none() {
-                    return Err(DataError(
-                        "Typed constructor requires one literal string".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_typed_constructor_requires_literal_string(),
                     ));
                 }
                 let (semantic, _) =
@@ -568,36 +656,40 @@ fn typecheck(
                         }
                     }
                     if c.target.is_some() || args.len() != 2 || args.iter().any(|t| !tag_ref(t)) {
-                        return Err(DataError(
-                            "tagInSubtree requires two typed tag_ref inputs".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_tag_in_subtree_requires_two_tag_refs(),
                         ));
                     }
                     let root = &c.args[1].expr;
                     if matches!(root, Expr::Ident(name) if name.starts_with("@weftext_local_") || schema.field(name).is_some())
                     {
-                        return Err(DataError(
-                            "tagInSubtree root cannot depend on a row or lexical local".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_tag_root_depends_on_row_or_lexical_local(),
                         ));
                     }
                     if !matches!(root, Expr::Ident(_))
                         && !matches!(root, Expr::Call(c) if c.func_name == "tagRef")
                     {
-                        return Err(DataError(
-                            "tagInSubtree root requires a literal TagRef or frozen parameter"
-                                .into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_tag_root_requires_literal_or_frozen_parameter(),
                         ));
                     }
                     scalar("bool")
                 }
                 "_&&_" | "_||_" => {
                     if args.len() != 2 || args.iter().any(|v| !compatible(v, &scalar("bool"))) {
-                        return Err(DataError("Logical operands must be bool".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_logical_operands_require_bool(),
+                        ));
                     }
                     scalar("bool")
                 }
                 "!_" | "@not_strictly_false" => {
                     if args.len() != 1 || !compatible(&args[0], &scalar("bool")) {
-                        return Err(DataError("Boolean operand required".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_boolean_operand_required(
+                            ),
+                        ));
                     }
                     scalar("bool")
                 }
@@ -606,7 +698,7 @@ fn typecheck(
                         || !compatible(&args[0], &scalar("bool"))
                         || !compatible(&args[1], &args[2])
                     {
-                        return Err(DataError("Conditional branches/types disagree".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_query_conditional_branches_or_types_disagree()));
                     }
                     if matches!(args[1], QType::Any) {
                         args[2].clone()
@@ -616,15 +708,18 @@ fn typecheck(
                 }
                 "_==_" | "_!=_" | "_<_" | "_<=_" | "_>_" | "_>=_" => {
                     if args.len() != 2 || !compatible(&args[0], &args[1]) {
-                        return Err(DataError(
-                            "Query forbids implicit scalar/numeric/date conversion".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_implicit_scalar_numeric_date_conversion_forbidden(),
                         ));
                     }
                     scalar("bool")
                 }
                 "_+_" | "_-_" | "_*_" | "_/_" | "_%_" => {
                     if args.len() != 2 || !compatible(&args[0], &args[1]) {
-                        return Err(DataError("Arithmetic types disagree".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_arithmetic_types_disagree(
+                            ),
+                        ));
                     }
                     if let (QType::List(a), QType::List(b)) = (&args[0], &args[1]) {
                         QType::List(if matches!(a.as_ref(), QType::Any) {
@@ -640,31 +735,43 @@ fn typecheck(
                     if args.len() != 1
                         || !matches!(args[0],QType::Scalar(ref s)if s=="int"||s=="float")
                     {
-                        return Err(DataError("Unary numeric operand".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_unary_operand_requires_number(),
+                        ));
                     }
                     args[0].clone()
                 }
                 "_[_]" => {
                     if args.len() != 2 {
-                        return Err(DataError("Index arity".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_index_arity_mismatch(),
+                        ));
                     }
                     match &args[0] {
                         QType::List(a) if compatible(&args[1], &scalar("int")) => *a.clone(),
                         QType::Map(v) => *v.clone(),
                         QType::Record(m) => {
                             let key = c.args.last().and_then(literal_text).ok_or_else(|| {
-                                DataError("Typed record index requires literal key".into())
+                                DataError::new(weftext_messages::UiMessage::error_data_query_typed_record_index_requires_literal_key())
                             })?;
-                            m.get(&key)
-                                .cloned()
-                                .ok_or_else(|| DataError("Unknown record key".into()))?
+                            m.get(&key).cloned().ok_or_else(|| {
+                                DataError::new(
+                                    weftext_messages::UiMessage::error_data_query_unknown_record_key(),
+                                )
+                            })?
                         }
-                        _ => return Err(DataError("Index type mismatch".into())),
+                        _ => {
+                            return Err(DataError::new(
+                                weftext_messages::UiMessage::error_data_query_index_type_mismatch(),
+                            ));
+                        }
                     }
                 }
                 "_in_" => {
                     if args.len() != 2 {
-                        return Err(DataError("in arity".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_in_arity_mismatch(),
+                        ));
                     }
                     let valid = match &args[1] {
                         QType::List(item) => compatible(&args[0], item),
@@ -672,8 +779,9 @@ fn typecheck(
                         _ => false,
                     };
                     if !valid {
-                        return Err(DataError(
-                            "in requires the declared list item or text record-key type".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_in_operand_type_mismatch(
+                            ),
                         ));
                     }
                     scalar("bool")
@@ -683,20 +791,20 @@ fn typecheck(
                         || !(matches!(args[0], QType::List(_) | QType::Record(_) | QType::Map(_))
                             || args[0] == scalar("text"))
                     {
-                        return Err(DataError("size requires string/list/record".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_query_size_requires_string_list_or_record()));
                     }
                     scalar("int")
                 }
                 "contains" | "startsWith" | "endsWith" => {
                     if args.len() != 2 || args.iter().any(|v| !compatible(v, &scalar("text"))) {
-                        return Err(DataError("String predicate requires text".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_query_string_predicate_requires_text()));
                     }
                     scalar("bool")
                 }
                 "expandRecurrence" => {
                     if c.target.is_some() || args.len() != 3 {
-                        return Err(DataError(
-                            "expandRecurrence requires event, window and explicit budget".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_recurrence_expansion_inputs_required(),
                         ));
                     }
                     if !schema
@@ -704,16 +812,16 @@ fn typecheck(
                         .iter()
                         .any(|p| p.implementation.id == "weftext.temporal.rules.v2")
                     {
-                        return Err(DataError(
-                            "Temporal provider is not installed in the baseline".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_temporal_provider_absent_from_baseline(),
                         ));
                     }
                     recurrence_result_type()
                 }
                 "containsDate" | "rangeOverlap" | "compareTemporal" => {
                     if c.target.is_some() || args.len() != 2 {
-                        return Err(DataError(
-                            "Temporal provider call requires two declared inputs".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_temporal_provider_requires_two_inputs(),
                         ));
                     }
                     if !schema
@@ -721,8 +829,8 @@ fn typecheck(
                         .iter()
                         .any(|p| p.implementation.id == "weftext.temporal.rules.v2")
                     {
-                        return Err(DataError(
-                            "Temporal provider is not installed in the baseline".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_temporal_provider_absent_from_baseline(),
                         ));
                     }
                     if c.func_name == "compareTemporal" {
@@ -733,8 +841,8 @@ fn typecheck(
                 }
                 "nextCivilDay" | "rangeDuration" | "duringDuration" | "periodBounds" => {
                     if c.target.is_some() || args.len() != 1 {
-                        return Err(DataError(
-                            "Temporal provider call requires one declared input".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_temporal_provider_requires_one_input(),
                         ));
                     }
                     if !schema
@@ -742,8 +850,8 @@ fn typecheck(
                         .iter()
                         .any(|p| p.implementation.id == "weftext.temporal.rules.v2")
                     {
-                        return Err(DataError(
-                            "Temporal provider is not installed in the baseline".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_temporal_provider_absent_from_baseline(),
                         ));
                     }
                     if c.func_name == "nextCivilDay" {
@@ -758,16 +866,13 @@ fn typecheck(
                     }
                 }
                 _ => {
-                    return Err(DataError(format!(
-                        "Function {} is not registered in weftext.query.cel.v1",
-                        c.func_name
-                    )));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_function_not_registered_in_cel_profile(weftext_messages::params::ErrorDataQueryFunctionNotRegisteredInCelProfile {function_name: (c.func_name).to_string()})));
                 }
             }
         }
         _ => {
-            return Err(DataError(
-                "CEL profile excludes dynamic/struct syntax".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_dynamic_and_struct_syntax_excluded(),
             ));
         }
     })
@@ -784,9 +889,14 @@ pub(crate) fn compile(
     vars: &BTreeMap<String, QType>,
 ) -> Result<Compiled> {
     if expr.len() > 16384 {
-        return Err(DataError("CEL source exceeds profile budget".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_query_cel_source_budget_exceeded(),
+        ));
     }
-    let p = Program::compile(expr).map_err(|e| DataError(e.to_string()))?;
+    let p = Program::compile(expr).map_err(|error| {
+        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+    })?;
     let mut ast = p.expression().clone();
     alpha_rename(&mut ast, &BTreeMap::new(), &mut 0);
     let ty = typecheck(&ast, schema, vars, 0)?;
@@ -840,19 +950,21 @@ struct ExactAtom {
     value: NativeValue,
     semantic: String,
     ty: CelType,
+    failures: HostFailures,
 }
 impl ExactAtom {
-    fn new(value: NativeValue, semantic: &str) -> Self {
+    fn new(value: NativeValue, semantic: &str, failures: &HostFailures) -> Self {
         Self {
             value,
             semantic: semantic.into(),
             ty: CelType::new_opaque_type(format!("weftext.{semantic}")),
+            failures: failures.clone(),
         }
     }
 }
 impl Clone for ExactAtom {
     fn clone(&self) -> Self {
-        Self::new(self.value.clone(), &self.semantic)
+        Self::new(self.value.clone(), &self.semantic, &self.failures)
     }
 }
 impl StaticVal for ExactAtom {}
@@ -883,9 +995,15 @@ impl Comparer for ExactAtom {
         let other = rhs
             .downcast_ref::<Self>()
             .filter(|o| o.semantic == self.semantic)
-            .ok_or_else(|| ExecutionError::UnexpectedType {
-                got: rhs.get_type().name().into(),
-                want: self.ty.name().into(),
+            .ok_or_else(|| {
+                self.failures.error(DataError::new(
+                    UiMessage::error_data_query_exact_comparison_type_mismatch(
+                        weftext_messages::params::ErrorDataQueryExactComparisonTypeMismatch {
+                            actual: rhs.get_type().name().into(),
+                            expected: self.ty.name().into(),
+                        },
+                    ),
+                ))
             })?;
         let result = match self.semantic.as_str() {
             "exact_decimal" | "exact_seconds" => self
@@ -907,9 +1025,10 @@ impl Comparer for ExactAtom {
                 .map(|(a, b)| a.cmp(b)),
             _ => compare_native(&self.value, &other.value).ok(),
         };
-        result.ok_or_else(|| ExecutionError::FunctionError {
-            function: "compare".into(),
-            message: "Exact same-type comparison unavailable".into(),
+        result.ok_or_else(|| {
+            self.failures.error(DataError::unavailable(
+                UiMessage::error_data_query_exact_comparison_unavailable(),
+            ))
         })
     }
 }
@@ -921,6 +1040,7 @@ struct OrderedRecord {
 }
 struct OrderedRecordConstructor {
     schema: Arc<Schema>,
+    failures: HostFailures,
 }
 impl cel::extractors::IntoFunction<OrderedRecordConstructor> for OrderedRecordConstructor {
     fn into_function(
@@ -932,7 +1052,11 @@ impl cel::extractors::IntoFunction<OrderedRecordConstructor> for OrderedRecordCo
             + Send
             + Sync,
     > {
-        fn owned(value: &dyn Val, schema: &Schema) -> Result<Box<dyn Val>> {
+        fn owned(
+            value: &dyn Val,
+            schema: &Schema,
+            failures: &HostFailures,
+        ) -> Result<Box<dyn Val>> {
             if let Some(atom) = value.downcast_ref::<ExactAtom>() {
                 return Ok(Box::new(atom.clone()));
             }
@@ -943,24 +1067,29 @@ impl cel::extractors::IntoFunction<OrderedRecordConstructor> for OrderedRecordCo
                 return Ok(Box::new(CelList::from(
                     list.inner()
                         .iter()
-                        .map(|v| owned(v.as_ref(), schema))
+                        .map(|v| owned(v.as_ref(), schema, failures))
                         .collect::<Result<Vec<_>>>()?,
                 )));
             }
-            Ok(to_cel(&from_cel(value)?, schema, None))
+            Ok(to_cel(&from_cel(value)?, schema, None, failures))
         }
         Box::new(move |context| {
             if !context.args.len().is_multiple_of(2) {
-                return Err(context.error("Malformed internal record constructor"));
+                return Err(self.failures.error(DataError::new(
+                    UiMessage::error_data_query_record_constructor_invalid(),
+                )));
             }
             let mut members = vec![];
             for pair in context.args.as_chunks::<2>().0 {
                 let BuiltinRef::String(key) = pair[0].as_builtin() else {
-                    return Err(context.error("Record key must be text"));
+                    return Err(self.failures.error(DataError::new(
+                        UiMessage::error_data_query_record_key_text_required(),
+                    )));
                 };
                 members.push((
                     CelString::from(key.inner().to_string()),
-                    owned(pair[1].as_ref(), &self.schema).map_err(|e| context.error(e.0))?,
+                    owned(pair[1].as_ref(), &self.schema, &self.failures)
+                        .map_err(|error| self.failures.error(error))?,
                 ));
             }
             Ok(CowVal::Owned(Box::new(OrderedRecord { members })))
@@ -1074,7 +1203,12 @@ impl Iterable for OrderedRecord {
         })
     }
 }
-fn to_cel(v: &NativeValue, schema: &Schema, shape: Option<&Shape>) -> Box<dyn Val> {
+fn to_cel(
+    v: &NativeValue,
+    schema: &Schema,
+    shape: Option<&Shape>,
+    failures: &HostFailures,
+) -> Box<dyn Val> {
     let selected = shape.map(|s| schema.resolve(s));
     let selected = if let Some(Shape::Union {
         variants,
@@ -1094,7 +1228,7 @@ fn to_cel(v: &NativeValue, schema: &Schema, shape: Option<&Shape>) -> Box<dyn Va
             "exact_decimal" | "exact_seconds" | "instant" | "node_ref" | "resource_ref" | "tag_ref"
         )
     {
-        return Box::new(ExactAtom::new(v.clone(), semantic));
+        return Box::new(ExactAtom::new(v.clone(), semantic, failures));
     }
     match v {
         NativeValue::None => Box::new(CelNull),
@@ -1102,11 +1236,13 @@ fn to_cel(v: &NativeValue, schema: &Schema, shape: Option<&Shape>) -> Box<dyn Va
         NativeValue::Bool(v) => Box::new(CelBool::from(*v)),
         NativeValue::Int(s) => Box::new(CelInt::from(s.parse::<i64>().unwrap())),
         NativeValue::Float(s) => Box::new(CelDouble::from(s.parse::<f64>().unwrap())),
-        NativeValue::Decimal(_) => Box::new(ExactAtom::new(v.clone(), "decimal")),
-        NativeValue::Date(_) => Box::new(ExactAtom::new(v.clone(), "date")),
-        NativeValue::Time(_) => Box::new(ExactAtom::new(v.clone(), "time")),
-        NativeValue::LocalDatetime(_) => Box::new(ExactAtom::new(v.clone(), "local_datetime")),
-        NativeValue::Duration(_) => Box::new(ExactAtom::new(v.clone(), "duration")),
+        NativeValue::Decimal(_) => Box::new(ExactAtom::new(v.clone(), "decimal", failures)),
+        NativeValue::Date(_) => Box::new(ExactAtom::new(v.clone(), "date", failures)),
+        NativeValue::Time(_) => Box::new(ExactAtom::new(v.clone(), "time", failures)),
+        NativeValue::LocalDatetime(_) => {
+            Box::new(ExactAtom::new(v.clone(), "local_datetime", failures))
+        }
+        NativeValue::Duration(_) => Box::new(ExactAtom::new(v.clone(), "duration", failures)),
         NativeValue::Array(a) => {
             let items = if let Some(Shape::List { items, .. }) = selected {
                 Some(items.as_ref())
@@ -1115,7 +1251,7 @@ fn to_cel(v: &NativeValue, schema: &Schema, shape: Option<&Shape>) -> Box<dyn Va
             };
             Box::new(CelList::from(
                 a.iter()
-                    .map(|v| to_cel(v, schema, items))
+                    .map(|v| to_cel(v, schema, items, failures))
                     .collect::<Vec<_>>(),
             ))
         }
@@ -1135,6 +1271,7 @@ fn to_cel(v: &NativeValue, schema: &Schema, shape: Option<&Shape>) -> Box<dyn Va
                                 &m.value,
                                 schema,
                                 members.and_then(|a| a.get(&m.key)).map(|m| &m.shape),
+                                failures,
                             ),
                         )
                     })
@@ -1169,7 +1306,9 @@ fn from_cel(v: &dyn Val) -> Result<NativeValue> {
     }
     if let Some(v) = v.downcast_ref::<CelDouble>() {
         if !v.into_inner().is_finite() {
-            return Err(DataError("Nonfinite float result".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_nonfinite_float_result(),
+            ));
         }
         return Ok(NativeValue::Float(v.into_inner().to_string()));
     }
@@ -1188,7 +1327,9 @@ fn from_cel(v: &dyn Val) -> Result<NativeValue> {
             let mut out = vec![];
             for (k, v) in a.inner() {
                 let CelMapKey::String(k) = k else {
-                    return Err(DataError("Result record key must be text".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_result_record_key_requires_text(),
+                    ));
                 };
                 out.push(NativeMember {
                     key: k.inner().to_string(),
@@ -1198,7 +1339,9 @@ fn from_cel(v: &dyn Val) -> Result<NativeValue> {
             out.sort_by(|a, b| a.key.cmp(&b.key));
             Ok(NativeValue::Record(out))
         }
-        _ => Err(DataError("Unsupported CEL result type".into())),
+        _ => Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_unsupported_cel_result_type(),
+        )),
     }
 }
 fn typed_constant(name: &str, text: String) -> Result<(&'static str, NativeValue)> {
@@ -1214,10 +1357,16 @@ fn typed_constant(name: &str, text: String) -> Result<(&'static str, NativeValue
         "tagRef" => ("tag_ref", NativeValue::Text(text)),
         "duration" => ("duration", NativeValue::Duration(text)),
         "exactSeconds" => ("exact_seconds", NativeValue::Text(text)),
-        _ => return Err(DataError("Unknown typed constant constructor".into())),
+        _ => {
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_unknown_typed_constant_constructor(),
+            ));
+        }
     };
     if !scalar_valid(semantic, &value) {
-        return Err(DataError("Invalid typed Query constant".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_invalid_typed_query_constant(),
+        ));
     }
     Ok((semantic, value))
 }
@@ -1230,12 +1379,13 @@ fn bind_ast(
     cells: &BTreeMap<String, Cell>,
     context: &mut Context,
     counter: &mut usize,
+    failures: &HostFailures,
 ) -> Result<()> {
     if let Expr::Call(c) = &ast.expr {
         if c.func_name == "field" {
-            ast.expr = Expr::Ident(
-                field_name(ast, schema).ok_or_else(|| DataError("Unresolved field".into()))?,
-            );
+            ast.expr = Expr::Ident(field_name(ast, schema).ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_field_unresolved())
+            })?);
             return Ok(());
         }
         if matches!(
@@ -1271,22 +1421,29 @@ fn bind_ast(
             let (semantic, value) = typed_constant(&c.func_name, s)?;
             let name = format!("@weftext_constant_{}", *counter);
             *counter += 1;
-            context.add_variable_as_val(&name, Box::new(ExactAtom::new(value, semantic)));
+            context.add_variable_as_val(&name, Box::new(ExactAtom::new(value, semantic, failures)));
             ast.expr = Expr::Ident(name);
             return Ok(());
         }
     }
-    visit_children_mut(ast, |e| bind_ast(e, schema, cells, context, counter))?;
+    visit_children_mut(ast, |e| {
+        bind_ast(e, schema, cells, context, counter, failures)
+    })?;
     if let Expr::Map(map) = &ast.expr {
         let mut args = vec![];
         for entry in &map.entries {
             let EntryExpr::MapEntry(entry) = &entry.expr else {
-                return Err(DataError("Only static string-key records".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_record_requires_static_string_keys(),
+                ));
             };
             args.push(entry.key.clone());
             args.push(entry.value.clone());
         }
-        let program = Program::compile("weftext_record()").map_err(|e| DataError(e.to_string()))?;
+        let program = Program::compile("weftext_record()").map_err(|error| {
+            DataError::unavailable(UiMessage::error_data_query_record_compilation_failed())
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
         let Expr::Call(mut call) = program.expression().expr.clone() else {
             unreachable!()
         };
@@ -1401,7 +1558,13 @@ pub(crate) fn evaluate(
                 None
             }
         });
-        if name.as_ref().and_then(|n|cells.get(n)).is_some_and(|c|matches!(c,Cell::Unavailable{reason}if reason.contains("native-decoder")&&reason.contains("budget"))){return true;}
+        if name
+            .as_ref()
+            .and_then(|n| cells.get(n))
+            .is_some_and(Cell::is_native_budget)
+        {
+            return true;
+        }
         let mut ast = ast.clone();
         let mut consumed = false;
         let _ = visit_children_mut(&mut ast, |child| {
@@ -1423,7 +1586,9 @@ pub(crate) fn evaluate(
     let max = max.max(literal_collection_bound(&compiled.ast));
     let cost = ast_cost(&compiled.ast, max);
     if cost > *budget {
-        return Err(DataError("host-budget-exhausted".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_query_host_budget_exhausted(),
+        ));
     }
     *budget -= cost;
     if let Expr::Ident(name) = &compiled.ast.expr
@@ -1437,23 +1602,40 @@ pub(crate) fn evaluate(
         return Ok(cell.clone());
     }
     let mut context = Context::with_env(env.env.clone());
+    let failures = HostFailures::default();
     context
         .add_function::<TagSubtreeFunction, _>(
             "tagInSubtree",
             TagSubtreeFunction {
                 structure: env.tag_structure.clone(),
                 partial: env.tag_partial.clone(),
+                failures: failures.clone(),
             },
         )
-        .map_err(|e| DataError(e.to_string()))?;
+        .map_err(|error| {
+            DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                    function: "tagInSubtree".into(),
+                },
+            ))
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
     context
         .add_function::<OrderedRecordConstructor, _>(
             "@weftext_ordered_record",
             OrderedRecordConstructor {
                 schema: env.schema.clone(),
+                failures: failures.clone(),
             },
         )
-        .map_err(|e| DataError(e.to_string()))?;
+        .map_err(|error| {
+            DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                    function: "@weftext_ordered_record".into(),
+                },
+            ))
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
     for (name, arity) in TEMPORAL_CALLS {
         context
             .add_function::<ProviderFunction, _>(
@@ -1465,9 +1647,17 @@ pub(crate) fn evaluate(
                     partial: env.provider_partial.clone(),
                     trace: env.provider_trace.clone(),
                     failed: env.provider_failed.clone(),
+                    failures: failures.clone(),
                 },
             )
-            .map_err(|e| DataError(e.to_string()))?;
+            .map_err(|error| {
+                DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                    weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                        function: (*name).into(),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
     }
     let self_shape = Shape::Scalar {
         semantic: "node_ref".into(),
@@ -1483,6 +1673,7 @@ pub(crate) fn evaluate(
                         .get(name)
                         .or_else(|| schema.field(name).map(|f| &f.shape))
                         .or_else(|| (name == "self").then_some(&self_shape)),
+                    &failures,
                 ),
             ),
             Cell::Null => context.add_variable_as_val(name, Box::new(CelNull)),
@@ -1490,19 +1681,60 @@ pub(crate) fn evaluate(
         }
     }
     let mut ast = compiled.ast.clone();
-    bind_ast(&mut ast, schema, cells, &mut context, &mut 0)?;
-    match CelValue::resolve_val(&ast, &context) {
+    bind_ast(&mut ast, schema, cells, &mut context, &mut 0, &failures)?;
+    let result = CelValue::resolve_val(&ast, &context);
+    let failures = failures.take();
+    let final_raw = result
+        .as_ref()
+        .err()
+        .filter(|error| !failures.owns_transport(error))
+        .map(ToString::to_string);
+    let HostFailureState {
+        errors, exhausted, ..
+    } = failures;
+    if exhausted {
+        let mut reason =
+            ErrorDescription::new(UiMessage::error_data_query_host_diagnostic_budget());
+        if let Some(original) = final_raw {
+            reason = reason.diagnostic(DiagnosticOrigin::Dependency, original);
+        }
+        return Ok(Cell::unavailable_group(
+            DataErrorKind::Budget,
+            reason,
+            errors
+                .into_iter()
+                .flat_map(DataError::into_diagnostics)
+                .collect(),
+        ));
+    }
+    match result {
         Ok(v) => match from_cel(v.as_ref()) {
             Ok(v) => Ok(if matches!(v, NativeValue::None) {
                 Cell::Null
             } else {
                 Cell::value(v)
             }),
-            Err(e) => Ok(Cell::Unavailable { reason: e.0 }),
+            Err(error) => Ok(Cell::unavailable_error(error)),
         },
-        Err(e) => Ok(Cell::Unavailable {
-            reason: e.to_string(),
-        }),
+        Err(_) if !errors.is_empty() => {
+            let mut reason =
+                ErrorDescription::new(UiMessage::error_data_query_host_execution_unavailable());
+            if let Some(original) = final_raw {
+                reason = reason.diagnostic(DiagnosticOrigin::Dependency, original);
+            }
+            Ok(Cell::unavailable_group(
+                DataErrorKind::Unavailable,
+                reason,
+                errors
+                    .into_iter()
+                    .flat_map(DataError::into_diagnostics)
+                    .collect(),
+            ))
+        }
+        Err(error) => Ok(Cell::unavailable_error(
+            DataError::unavailable(UiMessage::error_data_query_execution_unavailable())
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string()),
+        )),
     }
 }
 /// Evaluates a frozen terminal; callers must publish its freshness through Core.
@@ -1534,7 +1766,10 @@ fn duration_result_type() -> QType {
 fn recurrence_result_type() -> QType {
     QType::Record(BTreeMap::from([
         ("status".into(), scalar("text")),
-        ("diagnostics".into(), QType::List(Box::new(scalar("text")))),
+        (
+            "diagnostics".into(),
+            QType::List(Box::new(product_description_type())),
+        ),
         ("steps".into(), scalar("int")),
         ("providers".into(), QType::List(Box::new(scalar("text")))),
         (
@@ -1552,6 +1787,258 @@ fn recurrence_result_type() -> QType {
             ])))),
         ),
     ]))
+}
+fn product_description_type() -> QType {
+    let message = || {
+        QType::Record(BTreeMap::from([
+            ("key".into(), scalar("text")),
+            ("params".into(), QType::Map(Box::new(QType::Any))),
+        ]))
+    };
+    let diagnostics = || {
+        QType::List(Box::new(QType::Record(BTreeMap::from([
+            ("origin".into(), scalar("text")),
+            ("text".into(), scalar("text")),
+        ]))))
+    };
+    QType::Record(BTreeMap::from([
+        ("explanation".into(), message()),
+        ("diagnostics".into(), diagnostics()),
+        (
+            "causes".into(),
+            QType::List(Box::new(QType::Record(BTreeMap::from([
+                ("code".into(), scalar("text")),
+                ("explanation".into(), message()),
+                ("diagnostics".into(), diagnostics()),
+            ])))),
+        ),
+    ]))
+}
+
+#[cfg(test)]
+mod typed_host_error_tests {
+    use super::*;
+
+    fn cells() -> BTreeMap<String, Cell> {
+        BTreeMap::from([
+            ("a".into(), Cell::value(NativeValue::Text(
+                "weftext-tag://58c47256-bfce-4d29-a037-b83a3a644fb0/00000000-0000-4000-8000-000000000001".into(),
+            ))),
+            ("b".into(), Cell::value(NativeValue::Text(
+                "weftext-tag://58c47256-bfce-4d29-a037-b83a3a644fb0/00000000-0000-4000-8000-000000000002".into(),
+            ))),
+        ])
+    }
+    fn variables() -> BTreeMap<String, QType> {
+        BTreeMap::from([
+            ("a".into(), scalar("tag_ref")),
+            ("b".into(), scalar("tag_ref")),
+        ])
+    }
+
+    #[test]
+    fn real_cel_host_failure_retains_typed_evidence_and_does_not_leak_into_the_next_evaluation() {
+        let schema = Schema::bundled().unwrap();
+        let env = query_env_traced(&schema, None).unwrap();
+        let input = cells();
+        let before = serde_json::to_vec(&input).unwrap();
+        let expression = compile("tagInSubtree(a,b)", &schema, &variables()).unwrap();
+        let result = evaluate(&expression, &input, &schema, &mut 100_000, &env).unwrap();
+        let Cell::Unavailable {
+            kind, diagnostics, ..
+        } = result
+        else {
+            panic!("missing frozen tag structure must remain unavailable")
+        };
+        assert_eq!(kind, DataErrorKind::Unavailable);
+        assert_eq!(diagnostics.len(), 1);
+        assert!(diagnostics[0].diagnostics.is_empty());
+        assert!(
+            diagnostics[0]
+                .explanation
+                .key()
+                .starts_with("error.data.query.")
+        );
+        assert_eq!(serde_json::to_vec(&input).unwrap(), before);
+        let next = compile("true", &schema, &BTreeMap::new()).unwrap();
+        assert_eq!(
+            evaluate(&next, &BTreeMap::new(), &schema, &mut 100_000, &env).unwrap(),
+            Cell::value(NativeValue::Bool(true))
+        );
+    }
+
+    #[test]
+    fn concurrent_evaluations_keep_host_failures_and_successes_isolated() {
+        let handles = (0..8)
+            .map(|index| {
+                std::thread::spawn(move || {
+                    let schema = Schema::bundled().unwrap();
+                    let env = query_env_traced(&schema, None).unwrap();
+                    let source = if index % 2 == 0 {
+                        "tagInSubtree(a,b)"
+                    } else {
+                        "true"
+                    };
+                    let expression = compile(source, &schema, &variables()).unwrap();
+                    let result =
+                        evaluate(&expression, &cells(), &schema, &mut 100_000, &env).unwrap();
+                    if index % 2 == 0 {
+                        let Cell::Unavailable { diagnostics, .. } = result else {
+                            panic!("missing local host input")
+                        };
+                        assert_eq!(diagnostics.len(), 1);
+                        assert_eq!(
+                            diagnostics[0].explanation,
+                            UiMessage::error_data_query_frozen_tag_structure_unavailable()
+                        );
+                    } else {
+                        assert_eq!(result, Cell::value(NativeValue::Bool(true)));
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn host_diagnostic_budget_cannot_be_absorbed_by_cel_true_and_retains_earlier_failures() {
+        let schema = Schema::bundled().unwrap();
+        let env = query_env_traced(&schema, None).unwrap();
+        let source = format!(
+            "[{}].all(x,x)",
+            std::iter::repeat_n("(tagInSubtree(a,b) || true)", MAX_HOST_FAILURES + 1)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let expression = compile(&source, &schema, &variables()).unwrap();
+        let result = evaluate(&expression, &cells(), &schema, &mut 1_000_000, &env).unwrap();
+        let Cell::Unavailable {
+            kind,
+            reason,
+            diagnostics,
+        } = result
+        else {
+            panic!("host diagnostic budget must be explicit")
+        };
+        assert_eq!(kind, DataErrorKind::Budget);
+        assert_eq!(
+            reason.explanation.key(),
+            "error.data.query.hostDiagnosticBudget"
+        );
+        assert_eq!(diagnostics.len(), MAX_HOST_FAILURES);
+    }
+
+    #[test]
+    fn absorbed_host_failure_does_not_hide_a_later_original_cel_failure() {
+        let schema = Schema::bundled().unwrap();
+        let env = query_env_traced(&schema, None).unwrap();
+        let expression = compile(
+            "(tagInSubtree(a,b) || true) && (1 / 0 == 0)",
+            &schema,
+            &variables(),
+        )
+        .unwrap();
+        let result = evaluate(&expression, &cells(), &schema, &mut 100_000, &env).unwrap();
+        let Cell::Unavailable {
+            reason,
+            diagnostics,
+            ..
+        } = result
+        else {
+            panic!("the independent division failure remains unavailable")
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].explanation,
+            UiMessage::error_data_query_frozen_tag_structure_unavailable()
+        );
+        assert_eq!(reason.diagnostics.len(), 1);
+        let actual = compile("1 / 0 == 0", &schema, &BTreeMap::new()).unwrap();
+        let Cell::Unavailable {
+            reason: raw_only, ..
+        } = evaluate(&actual, &BTreeMap::new(), &schema, &mut 100_000, &env).unwrap()
+        else {
+            panic!("same native division fails")
+        };
+        assert_eq!(reason.diagnostics, raw_only.diagnostics);
+    }
+
+    #[test]
+    fn transport_is_clone_preserved_identity_and_does_not_absorb_author_undeclared_errors_or_has() {
+        let failures = HostFailures::default();
+        let transport = failures.error(DataError::unavailable(
+            UiMessage::error_data_query_frozen_tag_structure_unavailable(),
+        ));
+        let clone = transport.clone();
+        let state = failures.take();
+        assert!(state.owns_transport(&transport));
+        assert!(state.owns_transport(&clone));
+        assert!(
+            !state.owns_transport(&ExecutionError::UndeclaredReference(
+                Arc::new(String::new())
+            ))
+        );
+        let separate = HostFailures::default().take();
+        assert!(!separate.owns_transport(&transport));
+
+        let schema = Schema::bundled().unwrap();
+        let env = query_env_traced(&schema, None).unwrap();
+        let author = compile(
+            "authorName",
+            &schema,
+            &BTreeMap::from([("authorName".into(), scalar("bool"))]),
+        )
+        .unwrap();
+        let Cell::Unavailable {
+            reason,
+            diagnostics,
+            ..
+        } = evaluate(&author, &BTreeMap::new(), &schema, &mut 100_000, &env).unwrap()
+        else {
+            panic!("the declared but unbound author symbol remains a native runtime failure")
+        };
+        assert!(diagnostics.is_empty());
+        assert_eq!(reason.diagnostics.len(), 1);
+        assert_eq!(reason.diagnostics[0].origin, DiagnosticOrigin::Dependency);
+
+        let presence = compile(
+            "has({\"value\":tagInSubtree(a,b)}.value)",
+            &schema,
+            &variables(),
+        )
+        .unwrap();
+        let result = evaluate(&presence, &cells(), &schema, &mut 100_000, &env).unwrap();
+        assert!(
+            matches!(result, Cell::Unavailable { .. }),
+            "has must not absorb a host execution failure as an absent key"
+        );
+    }
+
+    #[test]
+    fn unknown_cel_runtime_diagnostic_stays_original_and_separate_from_the_product_summary() {
+        let schema = Schema::bundled().unwrap();
+        let env = query_env_traced(&schema, None).unwrap();
+        let expression = compile("1 / 0", &schema, &BTreeMap::new()).unwrap();
+        let result = evaluate(&expression, &BTreeMap::new(), &schema, &mut 100_000, &env).unwrap();
+        let Cell::Unavailable {
+            reason,
+            diagnostics,
+            ..
+        } = result
+        else {
+            panic!("division failure must remain unavailable")
+        };
+        assert_eq!(
+            reason.explanation.key(),
+            "error.data.query.executionUnavailable"
+        );
+        assert_eq!(reason.diagnostics.len(), 1);
+        assert_eq!(reason.diagnostics[0].origin, DiagnosticOrigin::Dependency);
+        assert!(!reason.diagnostics[0].text.is_empty());
+        assert!(diagnostics.is_empty());
+    }
 }
 pub(crate) struct QueryRuntime {
     pub(crate) tag_structure: Option<FrozenTagStructure>,
@@ -1699,8 +2186,9 @@ pub(crate) fn preflight_provider_expression(
     preflight_expression(compiled, parameters, schema, remaining, env, true)
         .map(|_| ())
         .map_err(|error| {
-            if error.0 == "Closed Query expression is invalid or unavailable" {
-                DataError("Query provider unavailable".into())
+            if error.kind() == DataErrorKind::ClosedExpressionUnavailable {
+                DataError::unavailable(UiMessage::error_data_query_provider_unavailable())
+                    .with_diagnostics(error.into_diagnostics())
             } else {
                 error
             }
@@ -1745,9 +2233,23 @@ fn preflight_expression(
         if !matches!(value, Cell::Value { .. } | Cell::Null)
             || env.provider_failed.load(AtomicOrdering::Relaxed)
         {
-            return Err(DataError(
-                "Closed Query expression is invalid or unavailable".into(),
-            ));
+            let diagnostics = match value {
+                Cell::Unavailable {
+                    reason,
+                    diagnostics,
+                    ..
+                } => {
+                    let mut all = vec![reason];
+                    all.extend(diagnostics);
+                    all
+                }
+                Cell::Invalid { diagnostics, .. } => diagnostics,
+                _ => Vec::new(),
+            };
+            return Err(DataError::closed_expression(
+                UiMessage::error_data_query_closed_expression_unavailable(),
+            )
+            .with_diagnostics(diagnostics));
         }
         Ok(value)
     }
@@ -1861,6 +2363,7 @@ fn preflight_expression(
 struct TagSubtreeFunction {
     structure: Option<FrozenTagStructure>,
     partial: Arc<AtomicBool>,
+    failures: HostFailures,
 }
 impl cel::extractors::IntoFunction<TagSubtreeFunction> for TagSubtreeFunction {
     fn into_function(
@@ -1875,24 +2378,27 @@ impl cel::extractors::IntoFunction<TagSubtreeFunction> for TagSubtreeFunction {
         Box::new(move |context| {
             let result = (|| {
                 if context.args.len() != 2 {
-                    return Err(DataError("tagInSubtree arity".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_tag_in_subtree_arity_mismatch(
+                        ),
+                    ));
                 }
                 let candidate = from_cel(context.args[0].as_ref())?;
                 let root = from_cel(context.args[1].as_ref())?;
                 let (NativeValue::Text(candidate), NativeValue::Text(root)) = (candidate, root)
                 else {
-                    return Err(DataError("tagInSubtree requires typed TagRefs".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_tag_in_subtree_requires_typed_tag_refs()));
                 };
                 self.structure
                     .as_ref()
-                    .ok_or_else(|| DataError("Frozen tag structure unavailable".into()))?
+                    .ok_or_else(|| DataError::unavailable(weftext_messages::UiMessage::error_data_query_frozen_tag_structure_unavailable()))?
                     .in_subtree(&candidate, &root)
             })();
             match result {
                 Ok(value) => Ok(CowVal::Owned(Box::new(CelBool::from(value)))),
                 Err(error) => {
                     self.partial.store(true, AtomicOrdering::Relaxed);
-                    Err(context.error(error.0))
+                    Err(self.failures.error(error))
                 }
             }
         })
@@ -1905,6 +2411,7 @@ struct ProviderFunction {
     partial: Arc<AtomicBool>,
     trace: Option<crate::query_providers::ProviderTrace>,
     failed: Arc<AtomicBool>,
+    failures: HostFailures,
 }
 impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
     fn into_function(
@@ -1918,27 +2425,39 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
     > {
         Box::new(move |context| {
             if context.args.len() != self.arity {
-                return Err(context.error("Provider arity mismatch"));
+                return Err(self.failures.error(DataError::new(
+                    UiMessage::error_data_query_provider_arity_mismatch(),
+                )));
             }
             let values = context
                 .args
                 .iter()
                 .map(|v| from_cel(v.as_ref()))
                 .collect::<Result<Vec<_>>>()
-                .map_err(|e| context.error(e.0))?;
+                .map_err(|error| self.failures.error(error))?;
             if let Some(trace) = &self.trace {
                 let mut dependencies = crate::query_providers::SemanticDependencies::default();
                 dependencies
                     .call(&self.schema, self.name, &values)
-                    .map_err(|_| context.error("Query provider unavailable"))?;
-                trace
-                    .record(&dependencies)
-                    .map_err(|_| context.error("Query provider dependency budget exhausted"))?;
+                    .map_err(|error| {
+                        self.failures.error(
+                            DataError::unavailable(
+                                UiMessage::error_data_query_provider_unavailable(),
+                            )
+                            .with_diagnostics(error.into_diagnostics()),
+                        )
+                    })?;
+                trace.record(&dependencies).map_err(|error| {
+                    self.failures.error(
+                        DataError::budget(UiMessage::error_data_query_provider_dependency_budget())
+                            .with_diagnostics(error.into_diagnostics()),
+                    )
+                })?;
             }
             let cell = match self.name {
                 "expandRecurrence" => {
-                    let budget =
-                        ExpansionBudget::from_native(&values[2]).map_err(|e| context.error(e.0))?;
+                    let budget = ExpansionBudget::from_native(&values[2])
+                        .map_err(|error| self.failures.error(error))?;
                     let result = expand_event(&values[0], &values[1], &self.schema, budget);
                     if result.status == ExpansionStatus::Partial {
                         self.partial.store(true, AtomicOrdering::Relaxed);
@@ -1947,9 +2466,11 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
                         ExpansionStatus::Complete | ExpansionStatus::Partial => {
                             Cell::value(result.native())
                         }
-                        _ => Cell::Unavailable {
-                            reason: result.diagnostics.join("; "),
-                        },
+                        _ => Cell::unavailable_group(
+                            DataErrorKind::Unavailable,
+                            UiMessage::error_data_query_recurrence_unavailable(),
+                            result.diagnostics,
+                        ),
                     }
                 }
                 "containsDate" => contains_date(&values[0], &values[1], &self.schema),
@@ -1960,7 +2481,7 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
                 "duringDuration" => during_duration(&values[0], &self.schema),
                 _ => period_bounds(&values[0], &self.schema)
                     .map(Cell::value)
-                    .unwrap_or_else(|e| Cell::Unavailable { reason: e.0 }),
+                    .unwrap_or_else(Cell::unavailable_error),
             };
             if self.trace.is_some()
                 && matches!(cell, Cell::Unavailable { .. } | Cell::Invalid { .. })
@@ -1979,11 +2500,27 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
                         }
                         _ => None,
                     };
-                    Ok(CowVal::Owned(to_cel(&value, &self.schema, shape.as_ref())))
+                    Ok(CowVal::Owned(to_cel(
+                        &value,
+                        &self.schema,
+                        shape.as_ref(),
+                        &self.failures,
+                    )))
                 }
-                Cell::Unavailable { reason } => Err(context.error(reason)),
-                Cell::Invalid { diagnostics, .. } => Err(context.error(diagnostics.join("; "))),
-                _ => Err(context.error("Non-value provider result")),
+                Cell::Unavailable {
+                    kind,
+                    reason,
+                    diagnostics,
+                } => Err(self
+                    .failures
+                    .error(DataError::with_kind(kind, reason).with_diagnostics(diagnostics))),
+                Cell::Invalid { diagnostics, .. } => Err(self.failures.error(
+                    DataError::new(UiMessage::error_data_query_provider_result_invalid())
+                        .with_diagnostics(diagnostics),
+                )),
+                _ => Err(self.failures.error(DataError::unavailable(
+                    UiMessage::error_data_query_provider_result_not_value(),
+                ))),
             }
         })
     }
@@ -2069,10 +2606,14 @@ pub(crate) fn execute_query_leaf_traced(
     if !matches!(input.coverage.as_str(), "complete" | "partial")
         || !matches!(input.freshness.as_str(), "current" | "stale")
     {
-        return Err(DataError("Invalid input coverage/freshness".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_invalid_input_coverage_or_freshness(),
+        ));
     }
     if !matches!(plan.scope.lifecycle.as_str(), "" | "live" | "trash") {
-        return Err(DataError("Unsupported lifecycle scope".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_unsupported_lifecycle_scope(),
+        ));
     }
     let lifecycle = if plan.scope.lifecycle.is_empty() {
         "live"
@@ -2085,8 +2626,8 @@ pub(crate) fn execute_query_leaf_traced(
             .insert(name.clone(), shape_type(schema, shape))
             .is_some()
         {
-            return Err(DataError(
-                "Parameter collides with a reserved product/field".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_parameter_collides_with_reserved_product_or_field(),
             ));
         }
     }
@@ -2095,11 +2636,15 @@ pub(crate) fn execute_query_leaf_traced(
         .as_ref()
         .map(|u| {
             if vars.contains_key(&u.binding) || u.binding.is_empty() {
-                return Err(DataError("Unnest binding collides with symbol".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_unnest_binding_collides_with_symbol(),
+                ));
             }
             let c = compile(&u.array, schema, &vars)?;
             let QType::List(item) = &c.ty else {
-                return Err(DataError("Unnest requires array".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_unnest_requires_array(),
+                ));
             };
             vars.insert(u.binding.clone(), *item.clone());
             Ok(c)
@@ -2112,7 +2657,9 @@ pub(crate) fn execute_query_leaf_traced(
         .map(|s| compile(s, schema, &vars))
         .transpose()?;
     if predicate.as_ref().is_some_and(|p| p.ty != scalar("bool")) {
-        return Err(DataError("where must return bool".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_where_requires_boolean_result(),
+        ));
     }
     let columns = if plan.select.is_empty() {
         vec![
@@ -2137,10 +2684,10 @@ pub(crate) fn execute_query_leaf_traced(
         .iter()
         .map(|o| {
             if !matches!(o.nulls.as_str(), "first" | "last") {
-                return Err(DataError("Sort nulls must be first/last".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_query_sort_null_placement_invalid()));
             }
             let compiled=compile(&o.expr, schema, &vars)?;
-            if !orderable(&compiled.ty){return Err(DataError("Sort needs one declared scalar comparator; record/array/precision unions need an explicit provider".into()));}
+            if !orderable(&compiled.ty){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_sort_requires_declared_scalar_comparator()));}
             Ok(compiled)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -2155,20 +2702,20 @@ pub(crate) fn execute_query_leaf_traced(
             .iter()
             .map(|a| {
                 if !matches!(a.op.as_str(), "count" | "sum" | "min" | "max") {
-                    return Err(DataError("Unknown aggregate".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_unknown_aggregate()));
                 }
                 if a.op == "count" {
-                    if a.expr.is_some(){return Err(DataError("count is the explicit row-count aggregate and takes no expression".into()));}
+                    if a.expr.is_some(){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_row_count_aggregate_rejects_expression()));}
                     Ok(None)
                 } else {
                     let compiled=compile(
                         a.expr
                             .as_deref()
-                            .ok_or_else(|| DataError("Aggregate expression required".into()))?,
+                            .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_aggregate_expression_required()))?,
                         schema,
                         &vars,
                     )?;
-                    if a.op=="sum"&&!matches!(&compiled.ty,QType::Scalar(s)if matches!(s.as_str(),"int"|"decimal"|"exact_decimal")){return Err(DataError("sum needs int or exact decimal without implicit promotion".into()));}
+                    if a.op=="sum"&&!matches!(&compiled.ty,QType::Scalar(s)if matches!(s.as_str(),"int"|"decimal"|"exact_decimal")){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_sum_requires_integer_or_exact_decimal()));}
                     Ok(Some(compiled))
                 }
             })
@@ -2180,17 +2727,18 @@ pub(crate) fn execute_query_leaf_traced(
     let mut names = BTreeSet::new();
     for c in &columns {
         if c.name.is_empty() || !names.insert(&c.name) {
-            return Err(DataError("Duplicate projection column".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_duplicate_projection_column(),
+            ));
         }
     }
     let wanted = plan
         .types
         .iter()
         .map(|t| {
-            schema
-                .type_id(t)
-                .map(str::to_owned)
-                .ok_or_else(|| DataError("Unknown Query type".into()))
+            schema.type_id(t).map(str::to_owned).ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_unknown_query_type())
+            })
         })
         .collect::<Result<Vec<_>>>()?;
     let mut notes: Vec<_> = input.notes.iter().collect();
@@ -2225,31 +2773,36 @@ pub(crate) fn execute_query_leaf_traced(
         bytes = bytes.saturating_add(query_note_bytes(note, metadata)?);
         if bytes > limits.max_source_bytes || data_rows.len() >= limits.max_rows {
             partial = true;
-            diagnostics.push("host-budget-exhausted".into());
+            diagnostics
+                .push(weftext_messages::UiMessage::error_data_query_host_budget_exhausted().into());
             break;
         }
         let projection = query_projection(note, schema, metadata);
         if projection.qualification != "qualified" {
             partial = true;
-            diagnostics.push(format!(
-                "{}: control projection unavailable",
-                note.entity_key
-            ));
-            diagnostics.extend(
-                projection
-                    .diagnostics
-                    .iter()
-                    .filter(|reason| reason.contains("budget"))
-                    .cloned(),
+            diagnostics.push(
+                weftext_messages::UiMessage::error_data_query_note_control_projection_unavailable(
+                    weftext_messages::params::ErrorDataQueryNoteControlProjectionUnavailable {
+                        entity: note.entity_key.clone(),
+                    },
+                )
+                .into(),
             );
+            if projection.budget_exhausted {
+                diagnostics.extend(projection.diagnostics.iter().cloned());
+            }
             continue;
         }
         if !projection.diagnostics.is_empty() {
             partial = true;
-            diagnostics.push(format!(
-                "{}: type closure invalid/unavailable",
-                note.entity_key
-            ));
+            diagnostics.push(
+                weftext_messages::UiMessage::error_data_query_note_type_closure_unavailable(
+                    weftext_messages::params::ErrorDataQueryNoteTypeClosureUnavailable {
+                        entity: note.entity_key.clone(),
+                    },
+                )
+                .into(),
+            );
         }
         if !wanted.iter().all(|t| projection.resolved_types.contains(t)) {
             continue;
@@ -2288,7 +2841,11 @@ pub(crate) fn execute_query_leaf_traced(
                     .map(NativeValue::Text)
                     .map(Cell::value)
                     .unwrap_or(Cell::Unavailable {
-                        reason: "identity-not-authorized".into(),
+                        kind: crate::DataErrorKind::Unavailable,
+                        diagnostics: Vec::new(),
+                        reason:
+                            weftext_messages::UiMessage::error_data_query_identity_not_authorized()
+                                .into(),
                     }),
             );
             cells.insert(
@@ -2302,7 +2859,11 @@ pub(crate) fn execute_query_leaf_traced(
                         ))
                     })
                     .unwrap_or(Cell::Unavailable {
-                        reason: "types-not-authorized".into(),
+                        kind: crate::DataErrorKind::Unavailable,
+                        diagnostics: Vec::new(),
+                        reason: weftext_messages::UiMessage::error_data_query_types_not_authorized(
+                        )
+                        .into(),
                     }),
             );
         }
@@ -2313,8 +2874,12 @@ pub(crate) fn execute_query_leaf_traced(
                 .map(NativeValue::Text)
                 .map(Cell::value)
                 .unwrap_or(Cell::Unavailable {
-                    reason: "qualified-title-product-unavailable".into(),
-                }),
+                kind: crate::DataErrorKind::Unavailable,
+                diagnostics: Vec::new(),
+                reason:
+                    weftext_messages::UiMessage::error_data_query_qualified_title_product_unavailable()
+                        .into(),
+            }),
         );
         cells.insert(
             "body".into(),
@@ -2323,8 +2888,12 @@ pub(crate) fn execute_query_leaf_traced(
                 .map(NativeValue::Text)
                 .map(Cell::value)
                 .unwrap_or(Cell::Unavailable {
-                    reason: "qualified-body-product-unavailable".into(),
-                }),
+                kind: crate::DataErrorKind::Unavailable,
+                diagnostics: Vec::new(),
+                reason:
+                    weftext_messages::UiMessage::error_data_query_qualified_body_product_unavailable()
+                        .into(),
+            }),
         );
         let products = note
             .products
@@ -2338,21 +2907,21 @@ pub(crate) fn execute_query_leaf_traced(
             if note.products.is_some() {
                 cells.insert(
                     "title".into(),
-                    Cell::Unavailable {
-                        reason: "qualified-html-product-unavailable".into(),
+                    Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+                        reason: weftext_messages::UiMessage::error_data_query_qualified_html_product_unavailable().into(),
                     },
                 );
                 cells.insert(
                     "body".into(),
-                    Cell::Unavailable {
-                        reason: "qualified-html-product-unavailable".into(),
+                    Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+                        reason: weftext_messages::UiMessage::error_data_query_qualified_html_product_unavailable().into(),
                     },
                 );
             }
             cells.insert(
                 "headings".into(),
-                Cell::Unavailable {
-                    reason: "qualified-html-headings-unavailable".into(),
+                Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+                    reason: weftext_messages::UiMessage::error_data_query_qualified_html_headings_unavailable().into(),
                 },
             );
         }
@@ -2372,12 +2941,15 @@ pub(crate) fn execute_query_leaf_traced(
                     .collect(),
                 Ok(_) => {
                     partial = true;
-                    diagnostics.push("unnest input undecided".into());
+                    diagnostics.push(
+                        weftext_messages::UiMessage::error_data_query_unnest_input_undecided()
+                            .into(),
+                    );
                     continue;
                 }
                 Err(e) => {
                     partial = true;
-                    diagnostics.push(e.0);
+                    diagnostics.extend(e.into_diagnostics());
                     break;
                 }
             }
@@ -2387,7 +2959,9 @@ pub(crate) fn execute_query_leaf_traced(
         for (key, cells) in expanded {
             if data_rows.len() >= limits.max_rows {
                 partial = true;
-                diagnostics.push("host-budget-exhausted".into());
+                diagnostics.push(
+                    weftext_messages::UiMessage::error_data_query_host_budget_exhausted().into(),
+                );
                 break 'notes;
             }
             if let Some(p) = &predicate {
@@ -2400,12 +2974,19 @@ pub(crate) fn execute_query_leaf_traced(
                     }) => continue,
                     Ok(_) => {
                         partial = true;
-                        diagnostics.push(format!("{key}: filter undecided"));
+                        diagnostics.push(
+                            weftext_messages::UiMessage::error_data_query_row_filter_undecided(
+                                weftext_messages::params::ErrorDataQueryRowFilterUndecided {
+                                    row: key.clone(),
+                                },
+                            )
+                            .into(),
+                        );
                         continue;
                     }
                     Err(e) => {
                         partial = true;
-                        diagnostics.push(e.0);
+                        diagnostics.extend(e.into_diagnostics());
                         break 'notes;
                     }
                 }
@@ -2432,7 +3013,10 @@ pub(crate) fn execute_query_leaf_traced(
                 (Ok(v), Ok(o), Ok(k), Ok(a)) => (v, o, k, a),
                 _ => {
                     partial = true;
-                    diagnostics.push("host-budget-exhausted".into());
+                    diagnostics.push(
+                        weftext_messages::UiMessage::error_data_query_host_budget_exhausted()
+                            .into(),
+                    );
                     break 'notes;
                 }
             };
@@ -2441,7 +3025,14 @@ pub(crate) fn execute_query_leaf_traced(
                 .any(|c| matches!(c, Cell::Unavailable { .. } | Cell::Invalid { .. }))
             {
                 partial = true;
-                diagnostics.push(format!("{key}: sort input undecided"));
+                diagnostics.push(
+                    weftext_messages::UiMessage::error_data_query_row_sort_input_undecided(
+                        weftext_messages::params::ErrorDataQueryRowSortInputUndecided {
+                            row: key.clone(),
+                        },
+                    )
+                    .into(),
+                );
             }
             let row = QueryRow {
                 key,
@@ -2467,14 +3058,17 @@ pub(crate) fn execute_query_leaf_traced(
                 .any(|k| matches!(k, Cell::Invalid { .. } | Cell::Unavailable { .. }))
             {
                 partial = true;
-                diagnostics.push("group key undecided".into());
+                diagnostics.push(
+                    weftext_messages::UiMessage::error_data_query_advanced_group_key_undecided()
+                        .into(),
+                );
                 continue;
             }
             let k = match canonical_cells(&keys, &group_keys) {
                 Ok(k) => k,
                 Err(e) => {
                     partial = true;
-                    diagnostics.push(e.0);
+                    diagnostics.extend(e.into_diagnostics());
                     continue;
                 }
             };
@@ -2533,15 +3127,22 @@ pub(crate) fn execute_query_leaf_traced(
     }
     if env.tag_partial.load(AtomicOrdering::Relaxed) {
         partial = true;
-        diagnostics.push("tag structure input unavailable".into());
+        diagnostics.push(
+            weftext_messages::UiMessage::error_data_query_advanced_tag_structure_input_unavailable(
+            )
+            .into(),
+        );
     }
     if env.provider_partial.load(AtomicOrdering::Relaxed) {
         partial = true;
-        diagnostics.push("temporal expansion partial".into());
+        diagnostics.push(
+            weftext_messages::UiMessage::error_data_query_advanced_temporal_expansion_partial()
+                .into(),
+        );
     }
     if env.native_budget_partial.load(AtomicOrdering::Relaxed) {
         partial = true;
-        diagnostics.push("native-decoder traversal budget exhausted in consumed field".into());
+        diagnostics.push(weftext_messages::UiMessage::error_data_query_advanced_consumed_field_decoder_budget_exhausted().into());
     }
     let total_known = rows.len();
     let limited = plan.take.is_some_and(|n| n < rows.len());
@@ -2600,23 +3201,25 @@ pub(crate) fn orderable(ty: &QType) -> bool {
 fn compare_typed(a: &NativeValue, b: &NativeValue, ty: &QType) -> Result<Ordering> {
     match ty {
         QType::Scalar(s) if s == "exact_decimal" || s == "exact_seconds" => {
-            Ok(ExactDecimal::parse(
-                a.text()
-                    .ok_or_else(|| DataError("Expected exact decimal".into()))?,
-            )?
-            .compare(&ExactDecimal::parse(
-                b.text()
-                    .ok_or_else(|| DataError("Expected exact decimal".into()))?,
-            )?))
+            Ok(ExactDecimal::parse(a.text().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_exact_decimal_expected(),
+                )
+            })?)?
+            .compare(&ExactDecimal::parse(b.text().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_exact_decimal_expected(),
+                )
+            })?)?))
         }
-        QType::Scalar(s) if s == "instant" => Ok(ExactInstant::parse(
-            a.text()
-                .ok_or_else(|| DataError("Expected instant".into()))?,
-        )?
-        .compare(&ExactInstant::parse(
-            b.text()
-                .ok_or_else(|| DataError("Expected instant".into()))?,
-        )?)),
+        QType::Scalar(s) if s == "instant" => {
+            Ok(ExactInstant::parse(a.text().ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_instant_expected())
+            })?)?
+            .compare(&ExactInstant::parse(b.text().ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_instant_expected())
+            })?)?))
+        }
         _ => compare_native(a, b),
     }
 }
@@ -2685,8 +3288,8 @@ pub(crate) fn canonical_native(v: &NativeValue, ty: &QType) -> Result<String> {
             }
         }
         if variants.iter().any(exact_text) {
-            return Err(DataError(
-                "typed-union equality requires an available selected schema branch".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_union_equality_requires_selected_schema_branch(),
             ));
         }
     }
@@ -2694,7 +3297,11 @@ pub(crate) fn canonical_native(v: &NativeValue, ty: &QType) -> Result<String> {
     {
         let s = match v {
             NativeValue::Decimal(s) | NativeValue::Text(s) => s,
-            _ => return Err(DataError("Invalid decimal key".into())),
+            _ => {
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_invalid_decimal_key(),
+                ));
+            }
         };
         let n = ExactDecimal::parse(s)?;
         let mut coefficient = n.coefficient;
@@ -2708,10 +3315,9 @@ pub(crate) fn canonical_native(v: &NativeValue, ty: &QType) -> Result<String> {
         return Ok(format!("decimal:{coefficient}:{scale}"));
     }
     if matches!(ty,QType::Scalar(s)if s=="instant") {
-        let n = ExactInstant::parse(
-            v.text()
-                .ok_or_else(|| DataError("Invalid instant key".into()))?,
-        )?;
+        let n = ExactInstant::parse(v.text().ok_or_else(|| {
+            DataError::new(weftext_messages::UiMessage::error_data_query_invalid_instant_key())
+        })?)?;
         let fraction = canonical_native(
             &NativeValue::Text(n.fraction.spelling()),
             &scalar("exact_decimal"),
@@ -2763,7 +3369,10 @@ pub(crate) fn aggregate_cell(op: &str, values: &[Option<&Cell>], ty: Option<&QTy
         )
     }) {
         return Cell::Unavailable {
-            reason: "aggregate input undecided".into(),
+            kind: crate::DataErrorKind::Unavailable,
+            diagnostics: Vec::new(),
+            reason: weftext_messages::UiMessage::error_data_query_aggregate_input_undecided()
+                .into(),
         };
     }
     let vals = vals.iter().filter_map(|v| v.native()).collect::<Vec<_>>();
@@ -2782,8 +3391,12 @@ pub(crate) fn aggregate_cell(op: &str, values: &[Option<&Cell>], ty: Option<&QTy
             return sum
                 .map(|s| Cell::value(NativeValue::Text(s.spelling())))
                 .unwrap_or(Cell::Unavailable {
-                    reason: "exact decimal sum type mismatch".into(),
-                });
+                kind: crate::DataErrorKind::Unavailable,
+                diagnostics: Vec::new(),
+                reason:
+                    weftext_messages::UiMessage::error_data_query_exact_decimal_sum_type_mismatch()
+                        .into(),
+            });
         }
         let first = vals[0];
         return match first {
@@ -2793,7 +3406,7 @@ pub(crate) fn aggregate_cell(op: &str, values: &[Option<&Cell>], ty: Option<&QTy
                     .try_fold(0i64, |a, v| a.checked_add(v.integer()?));
                 sum.map(|s| Cell::value(NativeValue::Int(s.to_string())))
                     .unwrap_or(Cell::Invalid {
-                        diagnostics: vec!["i64 sum overflow/type mismatch".into()],
+                        diagnostics: vec![weftext_messages::UiMessage::error_data_query_i64_sum_overflow_or_type_mismatch().into()],
                         value: None,
                     })
             }
@@ -2805,13 +3418,13 @@ pub(crate) fn aggregate_cell(op: &str, values: &[Option<&Cell>], ty: Option<&QTy
                         _ => None,
                     });
                 sum.map(|s| Cell::value(NativeValue::Decimal(s.spelling())))
-                    .unwrap_or(Cell::Unavailable {
-                        reason: "decimal sum type mismatch".into(),
+                    .unwrap_or(Cell::Unavailable {kind: crate::DataErrorKind::Unavailable, diagnostics: Vec::new(),
+                        reason: weftext_messages::UiMessage::error_data_query_decimal_sum_type_mismatch().into(),
                     })
             }
             _ => Cell::Invalid {
                 diagnostics: vec![
-                    "sum supports int/native exact decimal without conversion".into(),
+                    weftext_messages::UiMessage::error_data_query_sum_supports_integer_or_native_exact_decimal().into(),
                 ],
                 value: None,
             },
@@ -2824,7 +3437,11 @@ pub(crate) fn aggregate_cell(op: &str, values: &[Option<&Cell>], ty: Option<&QTy
             Ok(_) => {}
             Err(_) => {
                 return Cell::Unavailable {
-                    reason: "aggregate comparator unavailable".into(),
+                    kind: crate::DataErrorKind::Unavailable,
+                    diagnostics: Vec::new(),
+                    reason:
+                        weftext_messages::UiMessage::error_data_query_aggregate_comparator_unavailable()
+                            .into(),
                 };
             }
         }
@@ -2856,7 +3473,9 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
     };
     let parsed = Source::detached(source);
     if !parsed.root().errors_and_warnings().0.is_empty() {
-        return Err(DataError("Incomplete saved-definition source".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_saved_definition_source_incomplete(),
+        ));
     }
     let labels = parsed
         .root()
@@ -2869,7 +3488,9 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
     let mut out = vec![];
     for label in labels {
         let Some(range) = weftext_engine::certify_metadata_declaration(source, &label) else {
-            return Err(DataError("Saved Query binding unavailable".into()));
+            return Err(DataError::unavailable(
+                weftext_messages::UiMessage::error_data_query_saved_query_binding_unavailable(),
+            ));
         };
         let call = parsed
             .root()
@@ -2880,7 +3501,9 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
                     .find(c.to_untyped().span())
                     .is_some_and(|n| n.range().start == range.from)
             })
-            .ok_or_else(|| DataError("Missing Query call".into()))?;
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_query_call_missing())
+            })?;
         let expr = call
             .args()
             .items()
@@ -2891,61 +3514,85 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
                     None
                 }
             })
-            .ok_or_else(|| DataError("Missing Query dictionary".into()))?;
+            .ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_query_dictionary_missing(),
+                )
+            })?;
         let dictionary = expr
             .to_untyped()
             .cast::<ast::Dict>()
-            .ok_or_else(|| DataError("Saved Query requires a direct native dictionary".into()))?;
+            .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_saved_query_requires_direct_native_dictionary()))?;
         for item in dictionary.items() {
             let (key, value) = match item {
                 ast::DictItem::Named(n) => (n.name().get().to_string(), n.expr()),
                 ast::DictItem::Keyed(n) => {
-                    let key =
-                        n.key().to_untyped().cast::<ast::Str>().ok_or_else(|| {
-                            DataError("Saved Query key syntax is computed".into())
-                        })?;
+                    let key = n.key().to_untyped().cast::<ast::Str>().ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_query_saved_query_key_computed(
+                            ),
+                        )
+                    })?;
                     (key.get().to_string(), n.expr())
                 }
-                _ => return Err(DataError("Saved Query dictionary is computed".into())),
+                _ => return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_saved_query_dictionary_computed(),
+                )),
             };
             if matches!(key.as_str(), "kind" | "key")
                 && value.to_untyped().cast::<ast::Str>().is_none()
             {
-                return Err(DataError(
-                    "Saved Query kind/key require direct string controls".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_saved_query_kind_and_key_require_direct_strings(),
                 ));
             }
         }
         let value = crate::native::decode_node(expr.to_untyped(), &parsed)
             .value
-            .ok_or_else(|| DataError("Saved Query is computed".into()))?;
-        let record = value
-            .record()
-            .ok_or_else(|| DataError("Saved Query requires dictionary".into()))?;
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_saved_query_computed())
+            })?;
+        let record = value.record().ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_query_saved_query_requires_dictionary(),
+            )
+        })?;
         let allowed = [
             "kind", "key", "binding", "scope", "types", "where", "select", "order", "take",
             "group", "unnest", "advanced",
         ];
         if record.iter().any(|m| !allowed.contains(&m.key.as_str())) {
-            return Err(DataError("Unknown saved Query member".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_unknown_saved_query_member(),
+            ));
         }
         if value.member("kind").and_then(NativeValue::text) != Some("weftext.query") {
-            return Err(DataError("Incorrect Query role".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_incorrect_query_role(),
+            ));
         }
         let key = value
             .member("key")
             .and_then(NativeValue::text)
             .filter(|s| uuid_v4(s))
-            .ok_or_else(|| DataError("Saved Query key must be UUIDv4".into()))?
+            .ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_saved_query_key_requires_uuid_v4(
+                    ),
+                )
+            })?
             .to_string();
         if !keys.insert(key.clone()) {
-            return Err(DataError("Duplicate saved Query key".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_duplicate_saved_query_key(),
+            ));
         }
-        let binding: SavedQueryBinding = serde_json::from_value(native_json(
-            value
-                .member("binding")
-                .ok_or_else(|| DataError("Missing schema binding".into()))?,
-        )?)?;
+        let binding: SavedQueryBinding =
+            serde_json::from_value(native_json(value.member("binding").ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_query_schema_binding_missing(),
+                )
+            })?)?)?;
         if binding.language != "weftext.query.cel.v1"
             || !scalar_valid("schema_ref", &NativeValue::Text(binding.schema.clone()))
             || !scalar_valid(
@@ -2953,7 +3600,9 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
                 &NativeValue::Text(binding.revision.clone()),
             )
         {
-            return Err(DataError("Unsupported saved Query baseline/profile".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_unsupported_saved_query_baseline_or_profile(),
+            ));
         }
         let mut json = crate::query_advanced::saved_plan_json(&value)?;
         json.as_object_mut()
@@ -2964,8 +3613,8 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
             .and_then(serde_json::Value::as_object_mut)
             && scope.remove("library").is_some_and(|v| v != "current")
         {
-            return Err(DataError(
-                "Saved scope library must be current owner".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_saved_scope_library_must_be_current_owner(),
             ));
         }
         let plan: QueryPlan = serde_json::from_value(json)?;
@@ -2985,7 +3634,9 @@ fn native_json(v: &NativeValue) -> Result<serde_json::Value> {
         NativeValue::Bool(b) => (*b).into(),
         NativeValue::Int(s) => s
             .parse::<i64>()
-            .map_err(|_| DataError("Invalid int".into()))?
+            .map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_query_invalid_integer())
+            })?
             .into(),
         NativeValue::Array(a) => {
             serde_json::Value::Array(a.iter().map(native_json).collect::<Result<Vec<_>>>()?)
@@ -2996,8 +3647,8 @@ fn native_json(v: &NativeValue) -> Result<serde_json::Value> {
                 .collect::<Result<serde_json::Map<_, _>>>()?,
         ),
         _ => {
-            return Err(DataError(
-                "Saved Query structure requires native text/int/bool/record/list".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_saved_query_requires_native_structural_values(),
             ));
         }
     })
@@ -3028,14 +3679,18 @@ pub fn select_definition(
         .filter(|v| revision.map_or(v.current, |r| &v.revision == r))
         .collect::<Vec<_>>();
     if selected.len() != 1 {
-        return Err(DataError(
-            "definition_unavailable: exact revision not retained/ambiguous".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_query_definition_revision_not_retained_or_ambiguous(),
         ));
     }
     saved_queries(&selected[0].source)?
         .into_iter()
         .find(|v| &v.key == key)
-        .ok_or_else(|| DataError("definition_unavailable: key missing at selected revision".into()))
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_query_definition_key_missing_at_revision(),
+            )
+        })
 }
 
 /// Insert a Core-reserved definition key or replace its exact direct declaration.
@@ -3123,8 +3778,9 @@ fn upsert_saved_query_impl(
     validate: bool,
 ) -> Result<FieldPatch> {
     if !uuid_v4(key) || existing_key.is_some_and(|old| old != key) {
-        return Err(DataError(
-            "Saved definition key must be Core-reserved and unchanged".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_definition_key_must_remain_core_reserved(
+            ),
         ));
     }
     if !label.starts_with("weftext-query-")
@@ -3133,8 +3789,8 @@ fn upsert_saved_query_impl(
             .chars()
             .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_'))
     {
-        return Err(DataError(
-            "Saved Query label requires reserved prefix and a native alphanumeric name".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_query_label_requires_reserved_prefix_and_native_name(),
         ));
     }
     if binding.language != "weftext.query.cel.v1"
@@ -3144,8 +3800,8 @@ fn upsert_saved_query_impl(
             &NativeValue::Text(binding.revision.clone()),
         )
     {
-        return Err(DataError(
-            "Saved Query requires an exact schema/profile binding".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_saved_query_requires_exact_schema_profile_binding(),
         ));
     }
     if validate {
@@ -3157,8 +3813,8 @@ fn upsert_saved_query_impl(
     }
     let definitions = saved_queries(source)?;
     if definitions.iter().any(|d| d.key != key && d.label == label) {
-        return Err(DataError(
-            "Saved Query label conflicts with another definition".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_query_label_conflicts_with_definition(),
         ));
     }
     let mut json = serde_json::to_value(plan)?;
@@ -3183,19 +3839,21 @@ fn upsert_saved_query_impl(
         let old = definitions
             .iter()
             .find(|d| d.key == old_key)
-            .ok_or_else(|| DataError("Selected definition is not current in this source".into()))?;
+            .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_selected_definition_not_current_in_source()))?;
         let range = weftext_engine::certify_metadata_declaration(source, &old.label)
-            .ok_or_else(|| DataError("Definition writer binding unavailable".into()))?;
+            .ok_or_else(|| DataError::unavailable(weftext_messages::UiMessage::error_data_query_definition_writer_binding_unavailable()))?;
         (range.from, range.to, declaration)
     } else {
         if definitions.iter().any(|d| d.key == key) {
-            return Err(DataError("Definition key already exists".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_definition_key_already_exists(),
+            ));
         }
         // Keep root identity before every other application declaration. The
         // saved role's safe-prefix proof separately checks its static tree.
         let root =
             weftext_engine::certify_metadata_declaration(source, "weftext").ok_or_else(|| {
-                DataError("Saved definition insertion requires qualified root control".into())
+                DataError::new(weftext_messages::UiMessage::error_data_query_definition_insertion_requires_qualified_root())
             })?;
         let from = root.to;
         (from, from, format!("\n#{declaration}\n"))
@@ -3203,8 +3861,9 @@ fn upsert_saved_query_impl(
     let patched = format!("{}{}{}", &source[..from], text, &source[to..]);
     let after = saved_queries(&patched)?;
     if !after.iter().any(|d| d.key == key && d.label == label) {
-        return Err(DataError(
-            "Saved Query writer failed official AST readback".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_saved_query_official_ast_readback_failed(
+            ),
         ));
     }
     // Existing root control must retain its qualification and identity.
@@ -3213,8 +3872,8 @@ fn upsert_saved_query_impl(
     if before_root.qualification == "qualified"
         && (after_root.qualification != "qualified" || before_root.id != after_root.id)
     {
-        return Err(DataError(
-            "Definition edit invalidated root control qualification".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_definition_edit_invalidated_root_qualification(),
         ));
     }
     Ok(FieldPatch {
@@ -3244,7 +3903,11 @@ pub(crate) fn json_native(value: &serde_json::Value) -> Result<NativeValue> {
         serde_json::Value::String(s) => NativeValue::Text(s.clone()),
         serde_json::Value::Number(n) => NativeValue::Int(
             n.as_i64()
-                .ok_or_else(|| DataError("Query structure accepts only i64 numeric values".into()))?
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_query_query_numeric_values_require_i64(),
+                    )
+                })?
                 .to_string(),
         ),
         serde_json::Value::Array(a) => {

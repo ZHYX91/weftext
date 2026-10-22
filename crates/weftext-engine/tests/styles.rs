@@ -67,8 +67,8 @@ fn library_inverse_requires_certified_single_passthrough() {
         let map = inspect_editor_with_style("正文", &style);
         assert!(map.literal_regions.is_empty());
         assert_eq!(
-            map.unavailable_reason.as_deref(),
-            Some("unverified-library-style")
+            map.unavailable_reason.map(|reason| reason.explanation),
+            Some(UiMessage::error_engine_reason_library_style_unverified())
         );
         let out = engine()
             .render_with_style("正文", &dir.path().join("note.typ"), dir.path(), &style)
@@ -434,20 +434,44 @@ fn unsafe_author_css_attribute_remains_unavailable() {
 #[test]
 fn unsupported_native_paint_and_stroke_are_explicit_flow_diagnostics() {
     let dir = TempDir::new().unwrap();
-    for source in [
-        "#set text(fill: gradient.linear(red, blue))\n渐变文字",
-        "#table(columns:1,stroke:(dash:\"dashed\", thickness:1pt),[单格])",
+    for (source, key) in [
+        (
+            "#set text(fill: gradient.linear(red, blue))\n渐变文字",
+            "error.engine.render.nonSolidTextPaint",
+        ),
+        (
+            "#table(columns:1,stroke:(dash:\"dashed\", thickness:1pt),[单格])",
+            "error.engine.render.tableStrokeUnsupported",
+        ),
+        (
+            "#set table(fill:gradient.linear(red, blue))\n#table(columns:1,[单格])",
+            "error.engine.render.nonSolidTableFill",
+        ),
+        (
+            "#set list(marker:n => str(n))\n- 作者原文",
+            "error.engine.render.dynamicListMarker",
+        ),
     ] {
         let out = engine()
             .render(source, &dir.path().join("note.typ"), dir.path())
             .unwrap();
         assert!(out.ok, "{source}\n{:?}", out.diagnostics);
         assert!(
-            out.diagnostics
-                .iter()
-                .any(|d| d.message.contains("no flow style adapter")),
+            out.diagnostics.iter().any(|diagnostic| diagnostic
+                .explanation
+                .as_ref()
+                .is_some_and(|message| message.key() == key)),
             "{:?}",
             out.diagnostics
+        );
+        assert!(
+            out.diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic
+                    .explanation
+                    .as_ref()
+                    .is_some_and(|message| message.key() == key))
+                .all(|diagnostic| diagnostic.diagnostics.is_empty())
         );
     }
 }

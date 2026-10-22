@@ -160,12 +160,11 @@ fn dependency_root_and_packages_are_restricted() {
     assert!(!output.ok);
     let package = render("#import \"@preview/example:0.1.0\"", root.path());
     assert!(!package.ok);
-    assert!(
-        package
-            .diagnostics
-            .iter()
-            .any(|d| d.message.contains("packages are unavailable"))
-    );
+    assert!(package.diagnostics.iter().any(|d| {
+        d.explanation
+            .as_ref()
+            .is_some_and(|message| message.key() == "error.engine.world.packagesUnavailable")
+    }));
 }
 
 #[test]

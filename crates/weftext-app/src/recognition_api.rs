@@ -36,18 +36,18 @@ pub(crate) fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "recognitionChanged",
-        "原件、设置、授权或导入计划已变化；保留原输入并核对原操作。",
+        UiMessage::error_api_recognition_original_basis_changed(),
     )
 }
 fn unavailable() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "recognitionUnavailable",
-        "独立识别运行时不可用；仍可保留原件，请检查执行端依赖。",
+        UiMessage::error_api_recognition_runtime_unavailable(),
     )
 }
 fn io_error(_: std::io::Error) -> ApiError {
-    ApiError::internal("识别作业资料无法读取或写入；原件与已有结果保留。")
+    ApiError::internal(UiMessage::error_api_recognition_job_storage_unavailable())
 }
 pub(crate) fn uuid(value: &str) -> Result<(), ApiError> {
     if uuid::Uuid::parse_str(value)
@@ -55,7 +55,9 @@ pub(crate) fn uuid(value: &str) -> Result<(), ApiError> {
     {
         Ok(())
     } else {
-        Err(ApiError::bad("操作编号须为准确 UUID v4"))
+        Err(ApiError::bad(
+            UiMessage::error_api_recognition_invalid_operation_id(),
+        ))
     }
 }
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), ApiError> {
@@ -227,7 +229,7 @@ impl Store {
             return Err(ApiError::new(
                 StatusCode::NOT_FOUND,
                 "recognitionUnavailable",
-                "识别作业当前不可用。",
+                UiMessage::error_api_recognition_job_unavailable(),
             ));
         }
         serde_json::from_value(read_json(&p, 24 * 1024 * 1024)?).map_err(|_| changed())
@@ -344,7 +346,7 @@ impl Store {
             return Err(ApiError::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 "recognitionBusy",
-                "识别任务已达并行预算，请等待或取消原任务。",
+                UiMessage::error_api_recognition_parallel_budget(),
             ));
         }
         check_store_budget(self.root.as_ref().ok_or_else(unavailable)?)?;
@@ -388,13 +390,17 @@ pub(crate) struct Run {
 }
 pub(crate) fn upload(value: &str) -> Result<Vec<u8>, ApiError> {
     if value.len() > MAX_INPUT.div_ceil(3) * 4 {
-        return Err(ApiError::bad("识别原件上限为16MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_input_budget(),
+        ));
     }
     let b = base64::engine::general_purpose::STANDARD
         .decode(value)
-        .map_err(|_| ApiError::bad("原件编码无效"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_recognition_input_encoding()))?;
     if b.is_empty() || b.len() > MAX_INPUT {
-        return Err(ApiError::bad("原件须为1字节至16MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_input_length(),
+        ));
     }
     Ok(b)
 }
@@ -406,7 +412,9 @@ fn validate_options(req: &Start) -> Result<(), ApiError> {
             .len()
             > 128 * 1024
     {
-        return Err(ApiError::bad("识别格式或设置无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_invalid_format_or_settings(),
+        ));
     }
     let allowed = [
         "purpose",
@@ -432,13 +440,17 @@ fn validate_options(req: &Start) -> Result<(), ApiError> {
             Some("resource" | "text" | "note")
         )
     {
-        return Err(ApiError::bad("识别目的或设置无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_invalid_purpose_or_settings(),
+        ));
     }
     if req.format == "docx"
         && req.options["purpose"] != "resource"
         && req.options["scheme"] != "official-document-cn-mainland-hans@1"
     {
-        return Err(ApiError::bad("DOCX识别仅支持已声明公文方案"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_docx_scheme_unsupported(),
+        ));
     }
     Ok(())
 }
@@ -607,7 +619,9 @@ fn check_store_budget(root: &Path) -> Result<(), ApiError> {
             let entry = entry.map_err(io_error)?;
             *count += 1;
             if *count > 10000 {
-                return Err(ApiError::bad("识别保留资料数量已达预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_recognition_retained_job_count_budget(),
+                ));
             }
             let m = entry.file_type().map_err(io_error)?;
             if m.is_symlink() {
@@ -622,7 +636,7 @@ fn check_store_budget(root: &Path) -> Result<(), ApiError> {
                 *bytes += entry.metadata().map_err(io_error)?.len();
                 if *bytes > 256 * 1024 * 1024 {
                     return Err(ApiError::bad(
-                        "识别保留资料已达256MiB预算；请由所有者核对保留范围。",
+                        UiMessage::error_api_recognition_retained_byte_budget(),
                     ));
                 }
             }
@@ -673,7 +687,7 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
             ApiError::new(
                 StatusCode::TOO_MANY_REQUESTS,
                 "recognitionBusy",
-                "识别及原页预览已达并行预算，请稍后重试。",
+                UiMessage::error_api_recognition_preview_parallel_budget(),
             )
         })?;
     let python = run.python.as_ref().ok_or_else(unavailable)?;
@@ -804,7 +818,9 @@ pub(crate) async fn preview_job(
         || claim.request.options["purpose"] == "resource"
         || claim.request.format == "docx"
     {
-        return Err(ApiError::bad("当前原件没有可用页面预览"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_page_preview_unavailable(),
+        ));
     }
     let store = Store {
         root: Some(store_root.clone()),
@@ -839,7 +855,7 @@ pub(crate) async fn preview_job(
     Ok(value)
 }
 pub(crate) fn capabilities(store: &Store, executor: &str) -> Value {
-    json!({"version":1,"available":store.runtime().is_some(),"executor":executor,"formats":["pdf","png","jpeg","docx"],"models":[{"id":"eng","languages":["eng"]},{"id":"chi_sim","languages":["chi_sim"]},{"id":"chi_tra","languages":["chi_tra"]},{"id":"chi_sim+eng","languages":["chi_sim","eng"]},{"id":"chi_tra+eng","languages":["chi_tra","eng"]}],"schemes":[{"id":"official-document-cn-mainland-hans@1","title":"中国大陆简体公文"},{"id":"invoice-cn-mainland-digital-ordinary-single-page@1","title":"中国大陆电子发票（普通发票）标准单页"}],"limits":{"inputBytes":MAX_INPUT,"pages":100,"resultBytes":MAX_RESULT,"jobSeconds":900,"pageSeconds":60,"concurrentExecutions":2,"retainedBytes":268435456},"implementationDigest":implementation_digest()})
+    json!({"version":1,"available":store.runtime().is_some(),"executor":executor,"formats":["pdf","png","jpeg","docx"],"models":[{"id":"eng","languages":["eng"]},{"id":"chi_sim","languages":["chi_sim"]},{"id":"chi_tra","languages":["chi_tra"]},{"id":"chi_sim+eng","languages":["chi_sim","eng"]},{"id":"chi_tra+eng","languages":["chi_tra","eng"]}],"schemes":[{"id":"official-document-cn-mainland-hans@1","title":UiMessage::error_api_recognition_mainland_official_document_title()},{"id":"invoice-cn-mainland-digital-ordinary-single-page@1","title":UiMessage::error_api_recognition_mainland_invoice_title()}],"limits":{"inputBytes":MAX_INPUT,"pages":100,"resultBytes":MAX_RESULT,"jobSeconds":900,"pageSeconds":60,"concurrentExecutions":2,"retainedBytes":268435456},"implementationDigest":implementation_digest()})
 }
 pub(crate) fn qualified_capabilities(store: &Store, executor: &str) -> Value {
     let mut value = capabilities(store, executor);
@@ -962,7 +978,9 @@ pub(crate) fn receipt(status: ActorFeatureStatus, current: bool) -> Value {
 }
 fn local_context(state: &AppState, target: &Target) -> Result<Context, ApiError> {
     if target.slot.is_some() {
-        return Err(ApiError::bad("本地导入不能选择托管槽位"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_local_target_cannot_be_hosted(),
+        ));
     }
     let loc = location(state, target.session_id.as_deref().ok_or_else(changed)?)?;
     let parent = target
@@ -972,7 +990,9 @@ fn local_context(state: &AppState, target: &Target) -> Result<Context, ApiError>
         .unwrap_or_else(|| loc.root.clone());
     let parent = std::path::absolute(parent).map_err(io_error)?;
     if !parent.starts_with(&loc.root) {
-        return Err(ApiError::bad("导入目的须在当前库内"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_target_outside_library(),
+        ));
     }
     let name = target.name.clone().unwrap_or_else(|| "Imported".into());
     let binding = hash(
@@ -1021,16 +1041,26 @@ async fn local_capabilities(State(state): State<AppState>) -> ApiResult {
         "local",
     )))
 }
-async fn local_fields(State(state): State<AppState>, Json(req): Json<Fields>) -> ApiResult {
+async fn local_fields(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Fields>,
+) -> ApiResult {
     let ctx = local_context(&state, &req.target)?;
     let v = core_call(&state, move |core| {
-        schema_fields(core, &ctx.root)
-            .map_err(|_| CoreError::new("recognitionFields", "识别字段不可用"))
+        schema_fields(core, &ctx.root).map_err(|_| {
+            CoreError::new(
+                "recognitionFields",
+                UiMessage::error_api_recognition_fields_unavailable(),
+            )
+        })
     })
     .await?;
     Ok(Json(v))
 }
-async fn local_start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResult {
+async fn local_start(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Start>,
+) -> ApiResult {
     let ctx = local_context(&state, &req.target)?;
     let (claim, run) = { lock_store(&state)?.recognition.begin(ctx, req)? };
     let reply = lock_store(&state)?.recognition.reply(&claim)?;
@@ -1071,17 +1101,26 @@ fn local_claim(state: &AppState, id: &str) -> Result<(Claim, Context), ApiError>
     }
     Err(changed())
 }
-async fn local_status(State(state): State<AppState>, Json(req): Json<JobRequest>) -> ApiResult {
+async fn local_status(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<JobRequest>,
+) -> ApiResult {
     let (claim, _) = local_claim(&state, &req.job_id)?;
     Ok(Json(lock_store(&state)?.recognition.reply(&claim)?))
 }
-async fn local_cancel(State(state): State<AppState>, Json(req): Json<JobRequest>) -> ApiResult {
+async fn local_cancel(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<JobRequest>,
+) -> ApiResult {
     let (claim, ctx) = local_claim(&state, &req.job_id)?;
     let mut store = lock_store(&state)?;
     store.recognition.cancel(&ctx.scope, &req.job_id)?;
     Ok(Json(store.recognition.reply(&claim)?))
 }
-async fn local_preview(State(state): State<AppState>, Json(req): Json<Preview>) -> ApiResult {
+async fn local_preview(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Preview>,
+) -> ApiResult {
     let (claim, _) = local_claim(&state, &req.job_id)?;
     let (root, runtime, cancel) = {
         let store = lock_store(&state)?;
@@ -1099,7 +1138,9 @@ pub(crate) fn download(store: &Store, claim: &Claim) -> Result<Value, ApiError> 
     if claim.request.options["purpose"] == "resource"
         || claim.request.options["operation"] == "inspect"
     {
-        return Err(ApiError::bad("本次作业未执行可交付文字提取。"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_recognition_text_extraction_unavailable(),
+        ));
     }
     let e = evidence(store, claim)?;
     let mut text = String::new();
@@ -1126,11 +1167,17 @@ pub(crate) fn download(store: &Store, claim: &Claim) -> Result<Value, ApiError> 
         json!({"jobId":claim.request.job_id,"fileName":"recognized.txt","mediaType":"text/plain","sha256":hash(text.as_bytes()),"dataBase64":base64::engine::general_purpose::STANDARD.encode(text.as_bytes()),"provenance":{"fileName":"recognized-provenance.json","mediaType":"application/json","sha256":hash(&provenance),"dataBase64":base64::engine::general_purpose::STANDARD.encode(provenance)}}),
     )
 }
-async fn local_download(State(state): State<AppState>, Json(req): Json<JobRequest>) -> ApiResult {
+async fn local_download(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<JobRequest>,
+) -> ApiResult {
     let (claim, _) = local_claim(&state, &req.job_id)?;
     Ok(Json(download(&lock_store(&state)?.recognition, &claim)?))
 }
-async fn local_prepare(State(state): State<AppState>, Json(req): Json<Prepare>) -> ApiResult {
+async fn local_prepare(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Prepare>,
+) -> ApiResult {
     let ctx = local_context(&state, &req.target)?;
     let (claim, evidence, bytes) = {
         let store = lock_store(&state)?;
@@ -1149,7 +1196,7 @@ async fn local_prepare(State(state): State<AppState>, Json(req): Json<Prepare>) 
         req.review.clone(),
         &req.operation_id,
     );
-    let preview = json!({"summary":"保留准确原件及只读来源证据，创建可编辑原生笔记；映射字段写入已安装 Schema。","_recognition":decision(&claim,&ctx),"fields":req.review.fields});
+    let preview = json!({"summary":UiMessage::error_api_recognition_native_import_plan(),"_recognition":decision(&claim,&ctx),"fields":req.review.fields});
     let v = core_call(&state, move |core| {
         core.with_actor_for_root(&ctx.scope, &ctx.root, |c| {
             c.actor_feature_prepare(&ctx.resource, &req.operation_id, &fp, request, preview, &[])
@@ -1158,7 +1205,10 @@ async fn local_prepare(State(state): State<AppState>, Json(req): Json<Prepare>) 
     .await?;
     Ok(Json(receipt(v, true)))
 }
-async fn local_operation(State(state): State<AppState>, Json(req): Json<Operation>) -> ApiResult {
+async fn local_operation(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Operation>,
+) -> ApiResult {
     local_action(state, req, None, false).await
 }
 #[derive(Deserialize)]
@@ -1170,7 +1220,7 @@ struct OpenResult {
 }
 async fn local_open_result(
     State(state): State<AppState>,
-    Json(req): Json<OpenResult>,
+    RequestJson(req): RequestJson<OpenResult>,
 ) -> ApiResult {
     uuid(&req.operation_id)?;
     let context = local_context(&state, &req.target)?;
@@ -1184,10 +1234,16 @@ async fn local_open_result(
     remember(&state, &document)?;
     Ok(Json(document))
 }
-async fn local_settle(State(state): State<AppState>, Json(req): Json<Operation>) -> ApiResult {
+async fn local_settle(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Operation>,
+) -> ApiResult {
     local_action(state, req, None, true).await
 }
-async fn local_commit(State(state): State<AppState>, Json(req): Json<Commit>) -> ApiResult {
+async fn local_commit(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Commit>,
+) -> ApiResult {
     local_action(
         state,
         Operation {
@@ -1209,7 +1265,7 @@ async fn local_action(
     let ctx = local_context(&state, &req.target)?;
     let v=core_call(&state,move|core|core.with_actor_for_root(&ctx.scope,&ctx.root,|c|{
         let old=c.actor_feature_status(&ctx.resource,&req.operation_id)?;
-        if let Some((plan,accept))=commit {let s=old.ok_or_else(||CoreError::new("recognitionOperation","原导入计划不可用"))?;if s.status=="prepared"&&!decision_current(&s.preview,&ctx){return Err(CoreError::new("recognitionChanged","原识别设置或计划失效"));}let s=c.actor_feature_commit_with_losses(&ctx.resource,&req.operation_id,&plan,accept)?;let same=decision_current(&s.preview,&ctx);return Ok(receipt(s,same));}
+        if let Some((plan,accept))=commit {let s=old.ok_or_else(||CoreError::new("recognitionOperation",UiMessage::error_api_recognition_original_plan_unavailable()))?;if s.status=="prepared"&&!decision_current(&s.preview,&ctx){return Err(CoreError::new("recognitionChanged",UiMessage::error_api_recognition_original_settings_expired()));}let s=c.actor_feature_commit_with_losses(&ctx.resource,&req.operation_id,&plan,accept)?;let same=decision_current(&s.preview,&ctx);return Ok(receipt(s,same));}
         let s=if settle{Some(c.actor_feature_settle(&ctx.resource,&req.operation_id)?)}else{old};Ok(s.map(|s|{let same=decision_current(&s.preview,&ctx);receipt(s,same)}).unwrap_or_else(||json!({"operationId":req.operation_id,"status":"notRegistered","commitAllowed":false,"preview":{},"nodeRefs":[]})))
     })).await?;
     Ok(Json(v))

@@ -13,6 +13,7 @@ use crate::{
         FileChange, FrozenOperation, Mutation, NewBirth, capture_optional, change, ensure_absent,
     },
 };
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -53,7 +54,9 @@ impl Core {
                 | OperationIntent::CloneSync { .. }
                 | OperationIntent::AdoptSyncExternal { .. }
         ) {
-            return Err(invalid("This is not a retained sync proposal"));
+            return Err(invalid(
+                UiMessage::error_core_sync_retained_sync_proposal_required(),
+            ));
         }
         Ok(transaction.request.clone())
     }
@@ -78,12 +81,14 @@ impl Core {
                 | OperationIntent::CloneSync { .. }
                 | OperationIntent::AdoptSyncExternal { .. }
         ) {
-            return Err(invalid("Only a frozen sync proposal can be cancelled here"));
+            return Err(invalid(
+                UiMessage::error_core_sync_frozen_proposal_cancellation_required(),
+            ));
         }
         if preview.plan_id != plan_id {
             return Err(CoreError::new(
                 "planConflict",
-                "Cancel the exact original sync proposal",
+                UiMessage::error_core_sync_cancel_exact_original_sync_proposal(),
             ));
         }
         if matches!(preview.status.as_str(), "committed" | "resolved") {
@@ -92,7 +97,7 @@ impl Core {
         if self.journal_path(operation_id, "install").exists() {
             return Err(CoreError::new(
                 "recoveryPending",
-                "Original installation may have effects; inspect recovery instead",
+                UiMessage::error_core_author_order_original_installation_may_have_effects_inspect_recovery_instead(),
             ));
         }
         self.resolve_record(operation_id, "cancelPrepared")?;
@@ -110,7 +115,7 @@ impl Core {
             if old.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Replica operation already names different input",
+                    UiMessage::error_core_sync_replica_operation_already_names_different_input(),
                 ));
             }
             return self.operation_details(&request.operation_id);
@@ -149,13 +154,17 @@ impl Core {
                 resolutions.clone(),
                 blobs.clone(),
             ),
-            _ => return Err(invalid("Expected replica application intent")),
+            _ => {
+                return Err(invalid(
+                    UiMessage::error_core_sync_replica_application_intent_required(),
+                ));
+            }
         };
         if identity != &setup.identity
             || self.require_workspace(&root)?.workspace_id != identity.workspace_id
         {
             return Err(invalid(
-                "Replica identity does not match this local binding",
+                UiMessage::error_core_sync_replica_binding_identity_mismatch(),
             ));
         }
         if requested.is_empty()
@@ -163,7 +172,7 @@ impl Core {
             || (!resolutions.is_empty() && requested.len() != resolutions.len())
         {
             return Err(invalid(
-                "Select a bounded nonempty set without duplicate resolutions",
+                UiMessage::error_core_sync_resolution_selection_bounded_nonempty(),
             ));
         }
         // Make every original committed local branch visible before inspecting
@@ -179,9 +188,9 @@ impl Core {
             let cut = needed
                 .iter()
                 .map(|key| {
-                    current
-                        .get(key)
-                        .ok_or_else(|| invalid("Selected object is unavailable"))
+                    current.get(key).ok_or_else(|| {
+                        invalid(UiMessage::error_core_sync_selected_object_unavailable())
+                    })
                 })
                 .collect::<Result<Vec<_>>>()?
                 .into_iter()
@@ -218,7 +227,7 @@ impl Core {
         }) {
             return Err(CoreError::new(
                 "syncIncomplete",
-                "Hydrate the selected incomplete transaction before applying content",
+                UiMessage::error_core_sync_hydrate_selected_incomplete_transaction_before_applying_content(),
             ));
         }
         let expected_versions: Vec<_> = needed
@@ -235,7 +244,7 @@ impl Core {
                 if resolution.revisions != revisions(view) || view.versions.len() < 2 {
                     return Err(CoreError::new(
                         "syncConflictChanged",
-                        "Review the exact current conflict branches before resolving",
+                        UiMessage::error_core_sync_review_exact_current_conflict_branches_before_resolving(),
                     ));
                 }
                 for version in &view.versions {
@@ -246,21 +255,21 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "syncSemanticDecisionRequired",
-                            "The reviewed conflict has changed semantic dependencies; use an explicit typed revalidation decision",
+                            UiMessage::error_core_sync_reviewed_conflict_has_changed_semantic_dependencies_use_explicit_typed_revalidation_decision(),
                         ));
                     }
                 }
             } else if view.versions.len() != 1 {
                 return Err(CoreError::new(
                     "syncConflict",
-                    "This selected transaction has unresolved concurrent versions",
+                    UiMessage::error_core_sync_selected_transaction_has_unresolved_concurrent_versions(),
                 ));
             } else {
                 let version = &view.versions[0];
                 if !graph.unsettled_dependencies(&version.commit)?.is_empty() {
                     return Err(CoreError::new(
                         "syncDependencyConflict",
-                        "The incoming version requires revalidation against changed semantic dependencies",
+                        UiMessage::error_core_sync_incoming_version_requires_revalidation_against_changed_semantic_dependencies(),
                     ));
                 }
                 states.insert(key.clone(), version.clone());
@@ -268,7 +277,7 @@ impl Core {
         }
         let publication = if resolutions.is_empty() {
             if !supplied.is_empty() {
-                return Err(invalid("Unexpected merge blobs"));
+                return Err(invalid(UiMessage::error_core_sync_merge_blobs_unexpected()));
             }
             None
         } else {
@@ -277,7 +286,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "budget",
-                    "Merge content exceeds the bounded operation budget",
+                    UiMessage::error_core_sync_merge_content_exceeds_bounded_operation_budget(),
                 ));
             }
             for (id, bytes) in &supplied {
@@ -335,7 +344,7 @@ impl Core {
             graph.offer_manifest(&id, manifest.clone())?;
             if graph.status(&id)? != Admission::Accepted {
                 return Err(invalid(
-                    "Merged state has missing content or invalid causal predecessors",
+                    UiMessage::error_core_sync_merged_content_or_predecessor_invalid(),
                 ));
             }
             for c in &manifest.changes {
@@ -350,7 +359,9 @@ impl Core {
             }
             let used: BTreeSet<_> = manifest.blobs().into_iter().cloned().collect();
             if supplied.keys().any(|k| !used.contains(k)) {
-                return Err(invalid("Merge contains unrelated blobs"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_merge_contains_unrelated_blobs(),
+                ));
             }
             Some(SyncPublication {
                 root: display(&root),
@@ -447,7 +458,7 @@ impl Core {
                 let state = &states[&key].state;
                 let directory = if state.retired {
                     let original = local.get(&key).filter(|old| old.state == *state).ok_or_else(|| {
-                        CoreError::new("syncStructureRequired", "A changed or new retired object requires the original guarded structure application")
+                        CoreError::new("syncStructureRequired", UiMessage::error_core_sync_changed_or_new_retired_object_requires_original_guarded_structure_application())
                     })?;
                     PathBuf::from(&original.directory)
                 } else if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
@@ -480,7 +491,9 @@ impl Core {
                 remaining.remove(&key);
             }
             if remaining.len() == prior {
-                return Err(invalid("Placement has a missing parent or a cycle"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_placement_parent_or_cycle(),
+                ));
             }
         }
         let mut directory_claims = BTreeMap::new();
@@ -495,7 +508,7 @@ impl Core {
                     })
                 {
                     return Err(invalid(
-                        "Another content object occupies the incoming directory",
+                        UiMessage::error_core_sync_incoming_directory_occupied(),
                     ));
                 }
             }
@@ -523,7 +536,7 @@ impl Core {
             }) {
                 return Err(CoreError::new(
                     "syncStructureRequired",
-                    "Placement, retirement and file removal require a guarded structure application",
+                    UiMessage::error_core_sync_placement_retirement_and_file_removal_require_guarded_structure_application(),
                 ));
             }
             if old.is_none() && matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
@@ -543,8 +556,11 @@ impl Core {
                             },
                             "trash",
                         )?;
-                        capture_optional(&path)?
-                            .ok_or_else(|| invalid("The original retired source is unavailable"))?
+                        capture_optional(&path)?.ok_or_else(|| {
+                            invalid(
+                                UiMessage::error_core_sync_original_retired_source_unavailable(),
+                            )
+                        })?
                     } else {
                         self.managed_node(&root, directory, false)?
                     };
@@ -553,7 +569,7 @@ impl Core {
                         .is_none_or(|b| b.node_id != *id)
                     {
                         return Err(invalid(
-                            "Local node is no longer the originally admitted object",
+                            UiMessage::error_core_sync_original_node_admission_changed(),
                         ));
                     }
                 } else {
@@ -574,26 +590,24 @@ impl Core {
                     &guard.directory_identity()?,
                 )? {
                     return Err(invalid(
-                        "Local directory no longer has its original admission",
+                        UiMessage::error_core_sync_original_directory_admission_missing(),
                     ));
                 }
             }
             for (relative, digest) in &state.files {
                 let path = directory.join(relative);
                 if !paths.insert(display(&path).to_lowercase()) {
-                    return Err(invalid("Incoming files overlap"));
+                    return Err(invalid(UiMessage::error_core_sync_incoming_files_overlap()));
                 }
                 self.check_pending(&path)?;
                 let mut parent = path.parent().unwrap();
                 while !parent.exists() && parent != root {
-                    created_directories.insert(display(
-                        parent
-                            .strip_prefix(&root)
-                            .map_err(|_| invalid("Incoming file escaped root"))?,
-                    ));
-                    parent = parent
-                        .parent()
-                        .ok_or_else(|| invalid("Incoming file escaped root"))?;
+                    created_directories.insert(display(parent.strip_prefix(&root).map_err(
+                        |_| invalid(UiMessage::error_core_sync_incoming_file_outside_root()),
+                    )?));
+                    parent = parent.parent().ok_or_else(|| {
+                        invalid(UiMessage::error_core_sync_incoming_file_outside_root())
+                    })?;
                 }
                 let captured = if path.parent().unwrap().exists() {
                     capture_optional(&path)?
@@ -605,7 +619,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Actual local content differs from the installed replica base; preserve and explicitly adopt it first",
+                        UiMessage::error_core_sync_actual_local_content_differs_from_installed_replica_base_preserve_and_explicitly_adopt_it_first(),
                     ));
                 }
                 if matches!(key, ObjectKey::Tags)
@@ -613,18 +627,24 @@ impl Core {
                         .as_ref()
                         .is_some_and(|f| self.accepted_revision(f).is_none())
                 {
-                    return Err(invalid("Tag registry is not the original observed file"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_tag_registry_original_observation_changed(),
+                    ));
                 }
                 let bytes = graph
                     .blob(digest)
-                    .ok_or_else(|| invalid("Incoming content is missing"))?
+                    .ok_or_else(|| invalid(UiMessage::error_core_sync_incoming_content_missing()))?
                     .to_vec();
                 if let Some(id) = resources.get(relative) {
                     if !resource_ids.insert(id.clone()) {
-                        return Err(invalid("Resource identity is duplicated across objects"));
+                        return Err(invalid(
+                            UiMessage::error_core_sync_resource_identity_duplicate_across_objects(),
+                        ));
                     }
                     let ObjectKey::Node(node_id) = &key else {
-                        return Err(invalid("Resource lacks Node owner"));
+                        return Err(invalid(
+                            UiMessage::error_core_sync_resource_node_owner_missing(),
+                        ));
                     };
                     if let Some(file) = &captured {
                         if !self.admitted_resource(
@@ -634,7 +654,7 @@ impl Core {
                             &file.stamp.identity,
                         ) {
                             return Err(invalid(
-                                "Incoming resource identity differs from local admission",
+                                UiMessage::error_core_sync_incoming_resource_admission_mismatch(),
                             ));
                         }
                     } else {
@@ -649,7 +669,7 @@ impl Core {
                     && relative != "weftext.resources.json"
                 {
                     return Err(invalid(
-                        "A newly received file requires an admitted content role",
+                        UiMessage::error_core_sync_new_file_content_role_required(),
                     ));
                 }
                 let revision = state.file_revisions[relative].clone();
@@ -699,17 +719,22 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Incoming application exceeds the 64 MiB / 5000 file transaction budget",
+                UiMessage::error_core_sync_incoming_application_exceeds64_mi_b5000_file_transaction_budget(),
             ));
         }
         if before == after {
             return Err(CoreError::new(
                 "syncCurrent",
-                "Selected objects already have these installed versions",
+                UiMessage::error_core_sync_selected_objects_already_have_these_installed_versions(),
             ));
         }
-        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id, status: "committed".into(), path: display(&root), node_ids: preview.node_map.keys().cloned().collect(),
-            message: "Selected content committed through the original guarded transaction; existing session drafts are retained".into() };
+        let receipt = OperationReceipt {
+            operation_id: request.operation_id.clone(),
+            plan_id,
+            status: "committed".into(),
+            path: display(&root),
+            node_ids: preview.node_map.keys().cloned().collect(),
+        };
         let mut plan = Plan::file(
             request.operation_id.clone(),
             fingerprint,
@@ -820,7 +845,9 @@ impl Core {
         self.sync_local_owner()?;
         let setup = self.sync_setup_for(Path::new(&application.root))?;
         if setup.identity != application.identity {
-            return Err(invalid("Replica identity changed"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_identity_changed(),
+            ));
         }
         let (local, _) = self.sync_local_state(setup)?;
         if application
@@ -834,7 +861,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncBasisChanged",
-                "A local commit changed the reviewed replica basis",
+                UiMessage::error_core_sync_local_commit_changed_reviewed_replica_basis(),
             ));
         }
         Ok(())
@@ -852,14 +879,15 @@ impl Core {
         }) {
             return Err(CoreError::new(
                 "syncConflictChanged",
-                "Received versions changed after review; retain the original proposal and review again",
+                UiMessage::error_core_sync_received_versions_changed_after_review_retain_original_proposal_and_review_again(),
             ));
         }
         if let Some(evidence) = &application.semantic_evidence {
-            let transaction = plan
-                .transaction
-                .as_ref()
-                .ok_or_else(|| invalid("Semantic evidence requires the original transaction"))?;
+            let transaction = plan.transaction.as_ref().ok_or_else(|| {
+                invalid(
+                    UiMessage::error_core_sync_semantic_evidence_original_transaction_required(),
+                )
+            })?;
             self.validate_sync_semantic_request_evidence(
                 &transaction.request,
                 application,
@@ -890,11 +918,11 @@ pub(crate) fn validate_state(
             .files
             .get(&format!("{}.typ", state.name))
             .and_then(|b| graph.blob(b))
-            .ok_or_else(|| invalid("Node has no canonical source"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_node_canonical_source_missing()))?;
         crate::check_size(source)?;
         if weftext_engine::inspect(&crate::decode(source)?).id.as_ref() != Some(id) {
             return Err(invalid(
-                "Incoming canonical source changes the Node identity",
+                UiMessage::error_core_sync_incoming_canonical_node_identity_changed(),
             ));
         }
         if let Some(blob) = state.files.get("weftext.resources.json") {
@@ -902,16 +930,18 @@ pub(crate) fn validate_state(
             let entries = manifest["resources"]
                 .as_array()
                 .filter(|_| manifest["version"] == 1)
-                .ok_or_else(|| invalid("Invalid owned resource manifest"))?;
+                .ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_owned_resource_manifest_invalid())
+                })?;
             let mut ids = BTreeSet::new();
             let mut paths = BTreeSet::new();
             for entry in entries {
-                let id = entry["resourceId"]
-                    .as_str()
-                    .ok_or_else(|| invalid("Resource identity missing"))?;
+                let id = entry["resourceId"].as_str().ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_resource_identity_missing())
+                })?;
                 let path = entry["path"]
                     .as_str()
-                    .ok_or_else(|| invalid("Resource path missing"))?;
+                    .ok_or_else(|| invalid(UiMessage::error_core_sync_resource_path_missing()))?;
                 uuid(id)?;
                 super::relative(path)?;
                 if !ids.insert(id)
@@ -925,7 +955,9 @@ pub(crate) fn validate_state(
                             | "weftext.directory.json"
                     )
                 {
-                    return Err(invalid("Duplicate or invalid owned resource binding"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_owned_resource_binding_duplicate_or_invalid(),
+                    ));
                 }
                 resources.insert(path.into(), id.into());
             }
@@ -934,7 +966,7 @@ pub(crate) fn validate_state(
     for (path, digest) in &state.files {
         let bytes = graph
             .blob(digest)
-            .ok_or_else(|| invalid("Missing incoming file blob"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_incoming_file_blob_missing()))?;
         if matches!(key, ObjectKey::Tags) {
             crate::directory_identity::validate_sync_tags(bytes)?;
         }
@@ -957,7 +989,9 @@ pub(crate) fn validate_state(
         {
             crate::directory_identity::validate_directory_marker(bytes)?;
             if serde_json::from_slice::<serde_json::Value>(bytes)?["directoryId"] != *id {
-                return Err(invalid("Directory identity changed"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_directory_identity_changed(),
+                ));
             }
         }
     }

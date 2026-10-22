@@ -12,11 +12,11 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "staleEnvironment",
-        "获权输入或准确资源版本已变化，请保留输入并重新核对。",
+        UiMessage::error_api_hosted_inputs_input_basis_changed(),
     )
 }
 fn budget() -> ApiError {
-    ApiError::bad("本次输入及其原始依据超出 32 MiB 或 64 个输入的预算")
+    ApiError::bad(UiMessage::error_api_hosted_inputs_input_basis_budget())
 }
 pub(super) fn path(inner: &HostedInner, actor: &str, id: &str) -> Result<String, ApiError> {
     if let Ok(file) = inner.file(id) {

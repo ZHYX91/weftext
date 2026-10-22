@@ -2,6 +2,7 @@
 use super::*;
 use operations::Mutation;
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +46,7 @@ impl Core {
         if !content_import(&request.intent) {
             return Err(CoreError::new(
                 "unsupportedIntent",
-                "Content import requires a native or bibliography producer",
+                UiMessage::error_core_hosted_content_import_content_import_requires_native_or_bibliography_producer(),
             ));
         }
         feature::valid_resource(destination_slot)?;
@@ -94,7 +95,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original import birth evidence is unavailable",
+                    UiMessage::error_core_hosted_content_import_original_import_birth_evidence_unavailable(),
                 ));
             }
             let relative =
@@ -114,7 +115,7 @@ impl Core {
             if members.len() == 5000 || metadata > MAX_SOURCE_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Import member metadata exceeds its budget",
+                    UiMessage::error_core_hosted_content_import_import_member_metadata_exceeds_budget(),
                 ));
             }
             members.push(ContentImportMember {
@@ -173,7 +174,7 @@ impl Core {
         if crate::history::history_relative_path(&target, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Import slot is outside its configured root",
+                UiMessage::error_core_hosted_content_import_import_slot_outside_configured_root(),
             ));
         }
         let workspace = self.require_workspace(&root)?;
@@ -223,7 +224,7 @@ impl Core {
                 if members.len() == 5000 || metadata > MAX_SOURCE_BYTES {
                     return Err(CoreError::new(
                         "budget",
-                        "Import slot members exceed their budget",
+                        UiMessage::error_core_hosted_content_import_import_slot_members_exceed_their_budget(),
                     ));
                 }
                 members.push(member);
@@ -235,7 +236,7 @@ impl Core {
                 Ok(_) => {
                     return Err(CoreError::new(
                         "slotUnavailable",
-                        "An unrelated object occupies the future import slot",
+                        UiMessage::error_core_hosted_content_import_unrelated_object_occupies_future_import_slot(),
                     ));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -324,7 +325,7 @@ impl Core {
             &owner.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "This member has no original committed hosted import producer",
+                    UiMessage::error_core_hosted_content_import_member_has_no_original_committed_hosted_import_producer(),
                 )
             })?,
             "live",

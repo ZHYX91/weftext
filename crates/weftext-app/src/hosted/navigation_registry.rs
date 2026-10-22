@@ -146,14 +146,14 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "navigationChanged",
-        "原导航依据、配置或权限已变化；请保留输入并核对原操作。",
+        UiMessage::error_api_hosted_navigation_registry_navigation_basis_changed(),
     )
 }
 fn core_error(_: CoreError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "navigationUnavailable",
-        "当前原对象、注册表或原操作不可用；请保留输入并核对原操作状态。",
+        UiMessage::error_api_hosted_navigation_registry_navigation_original_unavailable(),
     )
 }
 fn valid_operation(id: &str) -> Result<(), ApiError> {
@@ -162,7 +162,9 @@ fn valid_operation(id: &str) -> Result<(), ApiError> {
     {
         Ok(())
     } else {
-        Err(ApiError::bad("操作编号须为规范 UUID"))
+        Err(ApiError::bad(
+            UiMessage::error_api_hosted_navigation_registry_canonical_operation_id_required(),
+        ))
     }
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -273,7 +275,9 @@ fn authorize(inner: &HostedInner, actor: &str, intent: &Intent) -> Result<(), Ap
                 || display_name.chars().count() > 256
                 || display_name.contains('\0')
             {
-                return Err(ApiError::bad("标签显示名须为 1 至 256 个字符"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_navigation_registry_tag_display_name_length(),
+                ));
             }
             if let Intent::CreateTag {
                 assign_to: Some(target),
@@ -394,7 +398,7 @@ fn retain(
     {
         let _ = inner.core.take_snapshot_witness(&registry.base_id);
         return Err(ApiError::bad(
-            "标签注册表依据达到有界容量；请稍后重读，输入保留",
+            UiMessage::error_api_hosted_navigation_registry_tag_basis_capacity(),
         ));
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -437,7 +441,9 @@ fn tag_cut(inner: &mut HostedInner) -> Result<(TagRegistrySnapshot, usize), ApiE
                 .len(),
         );
         if bytes > MAX_REGISTRY {
-            return Err(ApiError::bad("标签注册表超过本次 4 MiB 准确依据预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_navigation_registry_tag_registry_budget(),
+            ));
         }
         inner
             .core
@@ -603,7 +609,7 @@ fn build(inner: &mut HostedInner, actor: &str, req: Prepare) -> Result<Value, Ap
     let bytes = serde_json::to_vec(&req).map_err(|_| changed())?;
     if bytes.len() > 256 * 1024 {
         return Err(ApiError::bad(
-            "导航提案超过 256 KiB 输入预算；请保留输入并缩小提案",
+            UiMessage::error_api_hosted_navigation_registry_navigation_proposal_budget(),
         ));
     }
     let fingerprint = digest(&bytes);
@@ -813,7 +819,7 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -826,7 +832,7 @@ async fn prepare(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -850,7 +856,7 @@ async fn operation(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -871,7 +877,7 @@ async fn settle(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -907,7 +913,7 @@ async fn commit(
 async fn resolve(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Resolve>,
+    RequestJson(req): RequestJson<Resolve>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;

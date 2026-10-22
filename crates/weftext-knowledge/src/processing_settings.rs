@@ -87,7 +87,7 @@ impl ProcessingDocument {
         if self.schema_version != 1 {
             return Err(KnowledgeError::new(
                 "processingVersion",
-                "不支持此处理设置版本；原文保留",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_version_unsupported()),
             ));
         }
         let options = crate::ProofreadOptions {
@@ -131,7 +131,7 @@ impl ProcessingLanguage {
         {
             return Err(KnowledgeError::new(
                 "processingLanguage",
-                "语言、文字体系或地区代码无效；未知值请留空",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_locale_code_invalid()),
             ));
         }
         Ok(())
@@ -170,7 +170,7 @@ impl ProcessingSettings {
         {
             return Err(KnowledgeError::new(
                 "processingSettings",
-                "处理设置需要明确版本、方案及有界语言和依赖",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_explicit_bounded_settings_required()),
             ));
         }
         for language in &self.languages {
@@ -180,7 +180,7 @@ impl ProcessingSettings {
             if !token(&dep.id, 100) || !token(&dep.version, 100) {
                 return Err(KnowledgeError::new(
                     "processingDependency",
-                    "依赖需要标识和准确版本",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_dependency_identity_version_required()),
                 ));
             }
         }
@@ -194,7 +194,7 @@ impl ProcessingRuleScope {
         {
             return Err(KnowledgeError::new(
                 "processingScope",
-                "通用语言范围不能同时声明限定语言、文字体系或地区",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_universal_scope_conflict()),
             ));
         }
         for values in [
@@ -207,7 +207,7 @@ impl ProcessingRuleScope {
             if values.len() > 100 || values.iter().any(|v| !token(v, 100)) {
                 return Err(KnowledgeError::new(
                     "processingScope",
-                    "规则范围代码无效或超过预算",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_rule_scope_invalid()),
                 ));
             }
         }
@@ -219,7 +219,7 @@ impl ProcessingRuleScope {
         {
             return Err(KnowledgeError::new(
                 "processingDependency",
-                "规则依赖需要标识和准确版本",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_processing_settings_rule_dependency_identity_version_required()),
             ));
         }
         Ok(())

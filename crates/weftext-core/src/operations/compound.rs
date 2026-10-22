@@ -3,6 +3,7 @@ use super::*;
 use crate::backend::MultiNamespaceGuard;
 use crate::journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use crate::transaction_recovery::RecoveryCapture;
+use weftext_messages::UiMessage;
 
 #[path = "compound_placement.rs"]
 mod placement;
@@ -35,7 +36,7 @@ fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
         }
         _ => Err(CoreError::new(
             "invalidPlan",
-            "Compound requires bounded independent original placements",
+            UiMessage::error_core_operations_compound_requires_bounded_independent_original_placements(),
         )),
     }
 }
@@ -84,7 +85,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         if slots.insert(path, true).is_some() {
             return Err(CoreError::new(
                 "invalidPlan",
-                "A compound file and directory share a final namespace slot",
+                UiMessage::error_core_operations_compound_file_and_directory_share_final_namespace_slot(),
             ));
         }
     }
@@ -92,7 +93,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         if slots.insert(PathBuf::from(directory), true).is_some() {
             return Err(CoreError::new(
                 "invalidPlan",
-                "A create-only directory overlaps an original final namespace slot",
+                UiMessage::error_core_operations_create_only_directory_overlaps_original_final_namespace_slot(),
             ));
         }
     }
@@ -118,7 +119,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Compound final namespace slots collide or a file is used as a directory",
+                UiMessage::error_core_operations_compound_final_namespace_slots_collide_or_file_used_as_directory(),
             ));
         }
     }
@@ -163,7 +164,7 @@ fn expected_parent(
             {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Created target parent is not in this original Plan",
+                    UiMessage::error_core_operations_created_target_parent_not_in_original_plan(),
                 ));
             }
             core.materialized_identity(&plan.operation_id, Path::new(created_directory))
@@ -183,7 +184,8 @@ fn verify_created_membership(
         if !complete {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Created directory membership exceeds its bounded proof",
+                UiMessage::error_core_operations_created_directory_membership_exceeds_bounded_proof(
+                ),
             ));
         }
         let mut allowed = BTreeSet::new();
@@ -244,7 +246,7 @@ fn verify_created_membership(
         {
             return Err(CoreError::new(
                 "thirdState",
-                "Created directory has an unplanned member",
+                UiMessage::error_core_operations_created_directory_has_unplanned_member(),
             ));
         }
     }
@@ -274,7 +276,7 @@ fn member(
         identity_binding: "unavailable".into(),
         expected_identity: expected.map(RecoveryIdentity::from),
         current_identity: None,
-        message: String::new(),
+        description: None,
     }
 }
 fn bound_directory(path: &Path) -> Result<Option<FileIdentity>> {
@@ -303,14 +305,14 @@ fn phase(step: &RelocationStep) -> Result<StepPhase> {
                 }
                 _ => Err(CoreError::new(
                     "thirdState",
-                    "Canonical namespace is not an original before/intermediate state",
+                    UiMessage::error_core_operations_canonical_namespace_not_original_before_intermediate_state(),
                 )),
             }
         }
         (None, Some(identity)) if identity == step.source_identity => Ok(StepPhase::After),
         _ => Err(CoreError::new(
             "thirdState",
-            "Original moving root is missing, replaced, or its other location is occupied",
+            UiMessage::error_core_operations_original_moving_root_missing_replaced_or_other_location_occupied(),
         )),
     }
 }
@@ -432,7 +434,7 @@ fn check_membership(
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "An original Compound directory identity or captured member changed",
+                UiMessage::error_core_operations_original_compound_directory_identity_or_captured_member_changed(),
             ));
         }
         for (name, attributes) in entries {
@@ -465,7 +467,10 @@ fn check_step_identity(
                     .iter()
                     .find(|(path, _)| locator_equal(path, parking))
                     .ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Original parking parent evidence is missing")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_original_parking_parent_evidence_missing(),
+                        )
                     })?
                     .1
                     .clone(),
@@ -490,7 +495,8 @@ fn check_step_identity(
     {
         return Err(CoreError::new(
             "thirdState",
-            "Compound original directory or parent identity changed",
+            UiMessage::error_core_operations_compound_original_directory_or_parent_identity_changed(
+            ),
         ));
     }
     // Both address slots are part of the same namespace closure. Equal bytes
@@ -514,7 +520,7 @@ fn check_step_identity(
     {
         return Err(CoreError::new(
             "thirdState",
-            "The original parking parent was replaced",
+            UiMessage::error_core_operations_original_parking_parent_was_replaced(),
         ));
     }
     Ok(())
@@ -554,13 +560,13 @@ fn open_tree(
         {
             return Err(CoreError::new(
                 "conflict",
-                "Retired member attributes changed",
+                UiMessage::error_core_operations_retired_member_attributes_changed(),
             ));
         }
         if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "Compound member no longer has its original stamp and bytes",
+                UiMessage::error_core_operations_compound_member_no_longer_has_original_stamp_and_bytes(),
             ));
         }
         handles.push((index, handle));
@@ -580,7 +586,7 @@ fn open_tree(
             .ok_or_else(|| {
                 CoreError::new(
                     "invalidPlan",
-                    "Placement member lacks the same original captured file",
+                    UiMessage::error_core_operations_placement_member_lacks_same_original_captured_file(),
                 )
             })?;
         if captured.stamp.identity != entry.identity
@@ -588,7 +594,7 @@ fn open_tree(
         {
             return Err(CoreError::new(
                 "thirdState",
-                "Compound original placement member or parent changed",
+                UiMessage::error_core_operations_compound_original_placement_member_or_parent_changed(),
             ));
         }
     }
@@ -606,13 +612,18 @@ fn move_final(
     if union.target_parent_identity(index)? != expected_parent(core, plan, step)? {
         return Err(CoreError::new(
             "thirdState",
-            "Original final parent changed before placement",
+            UiMessage::error_core_operations_original_final_parent_changed_before_placement(),
         ));
     }
     let name = Path::new(&step.target)
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_original_final_directory_name_invalid(),
+            )
+        })?;
     union.select(index)?.move_source(name)?;
     protect_final_source(union, index, plan.transaction.as_ref().unwrap(), step)
 }
@@ -632,11 +643,21 @@ fn protect_final_source(
                 &display(&Path::new(&step.source).join(&step.old_leaf)),
             )
         })
-        .ok_or_else(|| CoreError::new("invalidPlan", "Final source canonical input is missing"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_final_source_canonical_input_missing(),
+            )
+        })?;
     let name = Path::new(&step.target)
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_original_final_directory_name_invalid(),
+            )
+        })?;
     union.finish_source_move(index, name, &step.new_leaf, &original.stamp.identity)
 }
 
@@ -655,11 +676,17 @@ fn rename_original_leaf(
                 &display(&Path::new(&step.source).join(&step.old_leaf)),
             )
         })
-        .ok_or_else(|| CoreError::new("invalidPlan", "Compound canonical before image missing"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_compound_canonical_before_image_missing(),
+            )
+        })?;
     if stamp(&leaf)? != original.stamp || read_blob(&mut leaf)? != original.bytes {
         return Err(CoreError::new(
             "recoveryPending",
-            "Original canonical input changed before its namespace step",
+            UiMessage::error_core_operations_original_canonical_input_changed_before_namespace_step(
+            ),
         ));
     }
     if step.old_leaf != step.new_leaf {
@@ -679,7 +706,7 @@ fn verify_creation_absence(
             Ok(_) => {
                 return Err(CoreError::new(
                     "exists",
-                    "Renamed canonical filename is occupied",
+                    UiMessage::error_core_operations_renamed_canonical_filename_occupied(),
                 ));
             }
         }
@@ -700,7 +727,7 @@ fn verify_creation_absence(
                     Ok(_) => {
                         return Err(CoreError::new(
                             "exists",
-                            "Compound create-only participant is occupied",
+                            UiMessage::error_core_operations_compound_create_only_participant_occupied(),
                         ));
                     }
                 }
@@ -718,7 +745,7 @@ impl Core {
         let t = plan.transaction.as_ref().ok_or_else(|| {
             CoreError::new(
                 "invalidPlan",
-                "The original Compound transaction is missing",
+                UiMessage::error_core_operations_original_compound_transaction_missing(),
             )
         })?;
         validate_compound_namespace(t)?;
@@ -863,7 +890,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "recoveryPending",
-                            "An original unfinished writer overlaps this compound namespace; inspect its retained operation before any effect",
+                            UiMessage::error_core_operations_original_unfinished_writer_overlaps_compound_namespace_inspect_retained_operation_before_any_effect(),
                         ));
                     }
                 }
@@ -886,13 +913,13 @@ impl Core {
                 Some(_) => {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Created directory is not its original materialized object",
+                        UiMessage::error_core_operations_created_directory_not_original_materialized_object(),
                     ));
                 }
                 None if expected.is_some() => {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Original created directory disappeared",
+                        UiMessage::error_core_operations_original_created_directory_disappeared(),
                     ));
                 }
                 None => {
@@ -924,7 +951,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Created directory changed across its original namespace step",
+                    UiMessage::error_core_operations_created_directory_changed_across_original_namespace_step(),
                 ));
             }
         }
@@ -961,7 +988,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "invalidPlan",
-                        "Compound namespace targets overlap under the Windows ordinal name comparison",
+                        UiMessage::error_core_operations_compound_namespace_targets_overlap_under_windows_ordinal_name_comparison(),
                     ));
                 }
             }
@@ -995,7 +1022,7 @@ impl Core {
             if guard.directory_identity()? != *expected {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Compound external write parent changed",
+                    UiMessage::error_core_operations_compound_external_write_parent_changed(),
                 ));
             }
             outside_guards.push(guard);
@@ -1005,7 +1032,7 @@ impl Core {
             if guard.directory_identity()? != absent.parent {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Compound absent dependency parent changed",
+                    UiMessage::error_core_operations_compound_absent_dependency_parent_changed(),
                 ));
             }
             ensure_absent(Path::new(&absent.path))?;
@@ -1055,7 +1082,7 @@ impl Core {
             if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
                 return Err(CoreError::new(
                     "conflict",
-                    "Compound external dependency changed",
+                    UiMessage::error_core_operations_compound_external_dependency_changed(),
                 ));
             }
             outside_handles.push((index, handle));
@@ -1083,7 +1110,7 @@ impl Core {
             if union.directory_identity(key)?.is_some() {
                 return Err(CoreError::new(
                     "exists",
-                    "Create-only directory is occupied",
+                    UiMessage::error_core_operations_create_only_directory_occupied(),
                 ));
             }
         }
@@ -1167,7 +1194,11 @@ impl Core {
                     .iter()
                     .position(|(member, _)| *member == original)
                     .ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Retirement lacks its original guarded file")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_retirement_lacks_original_guarded_file(
+                            ),
+                        )
                     })?;
                 outside_handles.remove(position).1
             };
@@ -1226,7 +1257,10 @@ impl Core {
                 .iter()
                 .find(|change| locator_equal(&change.path, &path))
                 .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Compound mapped participant missing")
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_operations_compound_mapped_participant_missing(),
+                    )
                 })?;
             if change.before.as_ref() != Some(&change.after) {
                 write_blob(file, &change.after)?;
@@ -1234,7 +1268,7 @@ impl Core {
             if read_blob(file)? != change.after {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "Compound after image verification failed",
+                    UiMessage::error_core_operations_compound_after_image_verification_failed(),
                 ));
             }
             materialized.push((path, stamp(file)?));
@@ -1303,11 +1337,10 @@ impl Core {
             } else {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Create-only directory lost its exact original materialization",
+                    UiMessage::error_core_operations_create_only_directory_lost_exact_original_materialization(),
                 ));
             }
-            directory.message =
-                "Only this Plan's create-only directory may supply the planned parent".into();
+            directory.description = Some(UiMessage::recovery_compound_directory_parent().into());
             capture.members.push(directory);
         }
         verify_created_membership(t, &union, &keys)?;
@@ -1353,7 +1386,7 @@ impl Core {
                 StepPhase::After => "knownAfter",
             }
             .into();
-            root.message = "Exact original namespace root, parents and membership retained".into();
+            root.description = Some(UiMessage::recovery_compound_namespace_retained().into());
             capture.members.push(root);
             for original in &t.files {
                 if t.is_retired_member(&original.path) {
@@ -1401,11 +1434,11 @@ impl Core {
                 }
                 .into();
                 m.identity_binding = if bound { "original" } else { "mismatch" }.into();
-                m.message = "Exact original compound file and before/after bytes".into();
+                m.description = Some(UiMessage::recovery_compound_file_retained().into());
                 if !before && !after {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Compound file is neither its original before nor exact after object",
+                        UiMessage::error_core_operations_compound_file_neither_original_before_nor_exact_after_object(),
                     ));
                 }
                 capture.files.push((capture.members.len(), held));
@@ -1424,7 +1457,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Original compound member parent changed",
+                        UiMessage::error_core_operations_original_compound_member_parent_changed(),
                     ));
                 }
                 if !t.files.iter().any(|file| {
@@ -1434,7 +1467,7 @@ impl Core {
                 }) {
                     return Err(CoreError::new(
                         "invalidPlan",
-                        "Compound placement member lacks original physical input",
+                        UiMessage::error_core_operations_compound_placement_member_lacks_original_physical_input(),
                     ));
                 }
             }
@@ -1466,7 +1499,7 @@ impl Core {
                         Err(error) if error.code == "missing" => {
                             return Err(CoreError::new(
                                 "thirdState",
-                                "Original created compound object disappeared",
+                                UiMessage::error_core_operations_original_created_compound_object_disappeared(),
                             ));
                         }
                         Err(error) => return Err(error),
@@ -1479,7 +1512,7 @@ impl Core {
                             {
                                 return Err(CoreError::new(
                                     "thirdState",
-                                    "Compound create-only output is not the original materialized before/after object",
+                                    UiMessage::error_core_operations_compound_create_only_output_not_original_materialized_before_after_object(),
                                 ));
                             }
                             m.matches_before = bytes.is_empty();
@@ -1496,7 +1529,7 @@ impl Core {
                             capture.files.push((capture.members.len(), file));
                         }
                     }
-                    m.message = "Original compound create-only output; only its original materialization may resume".into();
+                    m.description = Some(UiMessage::recovery_compound_create_output().into());
                     capture.members.push(m);
                 }
             }
@@ -1524,7 +1557,8 @@ impl Core {
             let compound = capture.compound.as_mut().ok_or_else(|| {
                 CoreError::new(
                     "recoveryConflict",
-                    "Original compound namespace proof is unavailable",
+                    UiMessage::error_core_operations_original_compound_namespace_proof_unavailable(
+                    ),
                 )
             })?;
             self.materialize_compound_directories(
@@ -1656,7 +1690,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Compound original file changed during namespace continuation",
+                    UiMessage::error_core_operations_compound_original_file_changed_during_namespace_continuation(),
                 ));
             }
             capture.members[member_index].matches_after =
@@ -1687,14 +1721,17 @@ impl Core {
     ) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let compound = capture.compound.as_mut().ok_or_else(|| {
-            CoreError::new("recoveryConflict", "Original namespace proof missing")
+            CoreError::new(
+                "recoveryConflict",
+                UiMessage::error_core_operations_original_namespace_proof_missing(),
+            )
         })?;
         let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in steps(t)?.iter().enumerate() {
             if compound.phases[index] != StepPhase::After {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Original namespace is incomplete",
+                    UiMessage::error_core_operations_original_namespace_incomplete(),
                 ));
             }
             check_membership(
@@ -1720,7 +1757,10 @@ impl Core {
                 .iter_mut()
                 .find(|(member, _)| *member == index)
                 .ok_or_else(|| {
-                    CoreError::new("recoveryConflict", "Original retired file proof is missing")
+                    CoreError::new(
+                        "recoveryConflict",
+                        UiMessage::error_core_operations_original_retired_file_proof_missing(),
+                    )
                 })?
                 .1;
             retirement::verify_held(self, plan, &compound.namespace, retired, file)?;
@@ -1745,7 +1785,7 @@ impl Core {
                 if compound.phases[index] != StepPhase::After {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "Create-only output's original placement is incomplete",
+                        UiMessage::error_core_operations_create_only_output_s_original_placement_incomplete(),
                     ));
                 }
                 return Ok(Some(
@@ -1776,7 +1816,7 @@ fn compound_failpoint(name: &str) -> Result<()> {
         COMPOUND_FAILPOINT.with(|point| *point.borrow_mut() = None);
         return Err(CoreError::new(
             "testInterrupted",
-            "Interrupted original compound operation",
+            UiMessage::error_core_operations_interrupted_original_compound_operation(),
         ));
     }
     let _ = name;

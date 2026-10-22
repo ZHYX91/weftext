@@ -10,11 +10,12 @@ use crate::operations::{
     RetiredMember, capture_optional, change, snapshot_tree,
 };
 use crate::{Core, OperationPreview, OperationReceipt, Path, PathBuf, display, fresh};
+use weftext_messages::UiMessage;
 
 fn structure_required() -> CoreError {
     CoreError::new(
         "syncStructureRequired",
-        "Combined structure/content changes require one complete guarded plan; received versions are retained",
+        UiMessage::error_core_sync_combined_structure_content_changes_require_one_complete_guarded_plan_received_versions_retained(),
     )
 }
 struct CompoundBudget {
@@ -72,7 +73,11 @@ pub(crate) fn compound_locations(
                         parent.join(&state.name)
                     }
                 }
-                _ if state.retired => return Err(invalid("Only placed content can be retired")),
+                _ if state.retired => {
+                    return Err(invalid(
+                        UiMessage::error_core_sync_retirement_requires_placed_content(),
+                    ));
+                }
                 _ => root.to_path_buf(),
             };
             locations.insert(object.clone(), directory);
@@ -80,7 +85,7 @@ pub(crate) fn compound_locations(
         }
         if remaining.len() == prior {
             return Err(invalid(
-                "Compound placement lacks a reviewed parent or is cyclic",
+                UiMessage::error_core_sync_compound_placement_parent_or_cycle(),
             ));
         }
     }
@@ -131,7 +136,7 @@ fn plan_parent_directories(
         if created.insert(display(final_path)) && created.len() > MAX_FILES {
             return Err(CoreError::new(
                 "budget",
-                "Too many compound create-only directories",
+                UiMessage::error_core_sync_too_many_compound_create_only_directories(),
             ));
         }
         if original.parent().unwrap().exists()
@@ -151,18 +156,22 @@ fn plan_parent_directories(
 }
 impl CompoundBudget {
     fn charge(&mut self, bytes: usize, files: usize) -> Result<()> {
-        let next_bytes = self
-            .bytes
-            .checked_add(bytes)
-            .ok_or_else(|| CoreError::new("budget", "Compound byte budget overflow"))?;
-        let next_files = self
-            .files
-            .checked_add(files)
-            .ok_or_else(|| CoreError::new("budget", "Compound file budget overflow"))?;
+        let next_bytes = self.bytes.checked_add(bytes).ok_or_else(|| {
+            CoreError::new(
+                "budget",
+                UiMessage::error_core_sync_compound_byte_budget_overflow(),
+            )
+        })?;
+        let next_files = self.files.checked_add(files).ok_or_else(|| {
+            CoreError::new(
+                "budget",
+                UiMessage::error_core_sync_compound_file_budget_overflow(),
+            )
+        })?;
         if next_bytes > MAX_BLOB_BYTES || next_files > MAX_FILES {
             return Err(CoreError::new(
                 "budget",
-                "Compound proof exceeds 64 MiB / 5000 files",
+                UiMessage::error_core_sync_compound_proof_exceeds64_mi_b5000_files(),
             ));
         }
         self.bytes = next_bytes;
@@ -377,7 +386,7 @@ impl Core {
                 if expected_directory.is_some_and(|identity| identity != source_identity) {
                     return Err(CoreError::new(
                         "conflict",
-                        "Original directory changed while qualifying a planned parent",
+                        UiMessage::error_core_sync_original_directory_changed_while_qualifying_planned_parent(),
                     ));
                 }
                 let old_leaf = Path::new(&canonical.path)
@@ -397,7 +406,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "conflict",
-                        "Original source changed while qualifying a planned parent",
+                        UiMessage::error_core_sync_original_source_changed_while_qualifying_planned_parent(),
                     ));
                 }
                 let target_parent_identity = if original_parent.exists() {
@@ -410,7 +419,7 @@ impl Core {
                         Ok(_) => {
                             return Err(CoreError::new(
                                 "exists",
-                                "Compound final child slot is occupied by another directory",
+                                UiMessage::error_core_sync_compound_final_child_slot_occupied_by_another_directory(),
                             ));
                         }
                         Err(error) if error.code == "missing" => {}
@@ -573,13 +582,13 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "syncExternalChange",
-                                "Installed subtree member is missing",
+                                UiMessage::error_core_sync_installed_subtree_member_missing(),
                             )
                         })?;
                     if hash(&file.bytes) != *digest {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Subtree has an external edit; preserve and adopt it first",
+                            UiMessage::error_core_sync_subtree_has_external_edit_preserve_and_adopt_it_first(),
                         ));
                     }
                     self.check_pending(&path)?;
@@ -596,7 +605,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Moved Node identity differs from its original admission",
+                            UiMessage::error_core_sync_moved_node_identity_differs_from_original_admission(),
                         ));
                     }
                     if let Some(manifest) = files.iter().find(|f| {
@@ -625,7 +634,7 @@ impl Core {
                             ) {
                                 return Err(CoreError::new(
                                     "syncExternalChange",
-                                    "Moved resource identity differs from its original admission",
+                                    UiMessage::error_core_sync_moved_resource_identity_differs_from_original_admission(),
                                 ));
                             }
                         }
@@ -640,7 +649,7 @@ impl Core {
                     if !self.directory_admitted(&identity.workspace_id, id, &directory.identity)? {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Moved directory identity differs from its original admission",
+                            UiMessage::error_core_sync_moved_directory_identity_differs_from_original_admission(),
                         ));
                     }
                 }
@@ -654,7 +663,8 @@ impl Core {
                     if hash(&captured.bytes) != *digest {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Relocation prerequisite has an external change",
+                            UiMessage::error_core_sync_relocation_prerequisite_has_external_change(
+                            ),
                         ));
                     }
                     write_parents.push((
@@ -683,7 +693,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Unmoved content participant lost its original identity",
+                        UiMessage::error_core_sync_unmoved_content_participant_lost_original_identity(),
                     ));
                 }
             }
@@ -717,7 +727,7 @@ impl Core {
                 ) {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "Retired Resource lost its original physical admission",
+                        UiMessage::error_core_sync_retired_resource_lost_original_physical_admission(),
                     ));
                 }
                 let guard = ParentGuard::acquire(&source)?;
@@ -727,7 +737,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Retired Resource changed during planning",
+                        UiMessage::error_core_sync_retired_resource_changed_during_planning(),
                     ));
                 }
                 let retention = root
@@ -781,7 +791,9 @@ impl Core {
             for (name, digest) in &new.state.files {
                 let path = Path::new(&new.directory).join(name);
                 if !file_paths.insert(display(&path).replace('/', "\\").to_ascii_lowercase()) {
-                    return Err(invalid("Compound incoming content files overlap"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_compound_incoming_files_overlap(),
+                    ));
                 }
                 let preimage = Path::new(&old.directory).join(old_name(name));
                 let captured = files.iter().find(|f| Path::new(&f.path) == preimage);
@@ -789,7 +801,8 @@ impl Core {
                 if captured.map(|f| hash(&f.bytes)).as_ref() != expected {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "A new incoming filename is occupied by local content",
+                        UiMessage::error_core_sync_new_incoming_filename_occupied_by_local_content(
+                        ),
                     ));
                 }
                 if captured.is_none() {
@@ -807,7 +820,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Incoming creation is occupied",
+                            UiMessage::error_core_sync_incoming_creation_occupied(),
                         ));
                     }
                     if !resources.contains_key(name)
@@ -828,7 +841,7 @@ impl Core {
                 if let Some(resource_id) = resources.get(name) {
                     if !resource_ids.insert(resource_id.clone()) {
                         return Err(invalid(
-                            "Compound incoming resource identity is duplicated across owners",
+                            UiMessage::error_core_sync_compound_resource_owner_identity_duplicate(),
                         ));
                     }
                     let ObjectKey::Node(owner) = object else {
@@ -843,7 +856,7 @@ impl Core {
                         ) {
                             return Err(CoreError::new(
                                 "syncExternalChange",
-                                "Incoming resource changed its admitted identity",
+                                UiMessage::error_core_sync_incoming_resource_changed_admitted_identity(),
                             ));
                         }
                     } else {
@@ -858,7 +871,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Registry no longer has its original observed admission",
+                        UiMessage::error_core_sync_registry_no_longer_has_original_observed_admission(),
                     ));
                 }
                 let blob = graph.blob(digest).ok_or_else(structure_required)?;
@@ -902,7 +915,9 @@ impl Core {
                 if matches!(object, ObjectKey::Directory(_))
                     && !version.state.files.contains_key("weftext.directory.json")
                 {
-                    return Err(invalid("New directory has no exact identity marker"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_new_directory_marker_missing(),
+                    ));
                 }
                 for (name, digest) in &version.state.files {
                     let path = directory.join(name);
@@ -918,14 +933,16 @@ impl Core {
                         &mut write_parents,
                     )?;
                     if !file_paths.insert(display(&path).replace('/', "\\").to_ascii_lowercase()) {
-                        return Err(invalid("New Node overlaps another compound participant"));
+                        return Err(invalid(
+                            UiMessage::error_core_sync_new_node_participant_overlap(),
+                        ));
                     }
                     let bytes = graph.blob(digest).ok_or_else(structure_required)?;
                     budget.charge(bytes.len(), 1)?;
                     if let Some(resource) = resources.get(name) {
                         if !resource_ids.insert(resource.clone()) {
                             return Err(invalid(
-                                "New resource identity is duplicated across owners",
+                                UiMessage::error_core_sync_new_resource_owner_identity_duplicate(),
                             ));
                         }
                         preview.resource_map.insert(
@@ -981,7 +998,7 @@ impl Core {
             if matches!(object, ObjectKey::Rules) && self.query_rules_ever_committed(&root)? {
                 return Err(CoreError::new(
                     "rulesUnavailable",
-                    "Previously committed Rules cannot be reconstructed as a new missing configuration",
+                    UiMessage::error_core_sync_previously_committed_rules_cannot_reconstructed_as_new_missing_configuration(),
                 ));
             }
             self.check_pending(&path)?;
@@ -992,10 +1009,12 @@ impl Core {
             self.validate_update(&root, &path, bytes)?;
             if matches!(object, ObjectKey::Schema) {
                 weftext_data::Schema::from_author_json(&crate::decode(bytes)?)
-                    .map_err(|error| CoreError::new("invalidSchema", error.to_string()))?;
+                    .map_err(|error| CoreError::from_data("invalidSchema", error))?;
             }
             if !file_paths.insert(display(&path).replace('/', "\\").to_ascii_lowercase()) {
-                return Err(invalid("New configuration overlaps a compound participant"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_new_configuration_participant_overlap(),
+                ));
             }
             write_parents.push((
                 display(&path),
@@ -1035,7 +1054,7 @@ impl Core {
         if directories.len() + created_directories.len() > MAX_FILES {
             return Err(CoreError::new(
                 "budget",
-                "Compound directory budget exceeded",
+                UiMessage::error_core_sync_compound_directory_budget_exceeded(),
             ));
         }
         if files.len() + updates.iter().filter(|c| c.before.is_none()).count() + created_files.len()
@@ -1050,7 +1069,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Relocation including prerequisites exceeds the 64 MiB / 5000 file budget",
+                UiMessage::error_core_sync_relocation_including_prerequisites_exceeds64_mi_b5000_file_budget(),
             ));
         }
         for file in &files {
@@ -1078,13 +1097,13 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "identityUnavailable",
-                            "Installed physical evidence is unavailable",
+                            UiMessage::error_core_sync_installed_physical_evidence_unavailable(),
                         )
                     })?;
                 if captured.stamp != *stamp || hash(&captured.bytes) != *digest {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Compound input differs from its exact installed physical version; adopt external content first",
+                        UiMessage::error_core_sync_compound_input_differs_from_exact_installed_physical_version_adopt_external_content_first(),
                     ));
                 }
             }
@@ -1128,7 +1147,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Compound proof exceeds 64 MiB / 5000 files",
+                UiMessage::error_core_sync_compound_proof_exceeds64_mi_b5000_files(),
             ));
         }
         let mutation = Mutation::Compound {
@@ -1139,7 +1158,13 @@ impl Core {
             births,
             retired_members,
         };
-        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id: preview.plan_id.clone(), status: "committed".into(), path: display(&root), node_ids: preview.node_map.keys().cloned().collect(), message: "Independent received placements and content committed through one original namespace decision; drafts retained".into() };
+        let receipt = OperationReceipt {
+            operation_id: request.operation_id.clone(),
+            plan_id: preview.plan_id.clone(),
+            status: "committed".into(),
+            path: display(&root),
+            node_ids: preview.node_map.keys().cloned().collect(),
+        };
         let mut plan = Plan::file(
             request.operation_id.clone(),
             fingerprint,
@@ -1193,7 +1218,7 @@ impl Core {
                 .to_ascii_lowercase();
             if !originals.insert(original) || !finals.insert(final_path) {
                 return Err(invalid(
-                    "Compound original/final participant addresses overlap",
+                    UiMessage::error_core_sync_compound_participant_addresses_overlap(),
                 ));
             }
         }
@@ -1201,7 +1226,7 @@ impl Core {
             for file in created_files {
                 if !finals.insert(file.path.replace('/', "\\").to_ascii_lowercase()) {
                     return Err(invalid(
-                        "Compound create-only output overlaps an original participant",
+                        UiMessage::error_core_sync_compound_create_output_overlap(),
                     ));
                 }
             }

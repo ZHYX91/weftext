@@ -18,32 +18,54 @@ use weftext_export::xlsx::{
 };
 use weftext_export::{ExportArtifact, ExportLoss};
 
-fn unavailable(message: impl Into<String>) -> ApiError {
+fn unavailable(description: impl Into<ErrorDescription>) -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
         "conversionUnavailable",
-        message,
+        description,
     )
 }
-fn convert_error(error: impl std::fmt::Display) -> ApiError {
-    unavailable(error.to_string())
+fn convert_error(error: weftext_export::ExportError) -> ApiError {
+    let (description, diagnostics) = error.into_parts();
+    ApiError::from_product(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "conversionUnavailable",
+        None,
+        description,
+        diagnostics,
+    )
 }
-pub(crate) fn report(code: &str, message: &str) -> ExportLoss {
+fn native_error(error: weftext_export::exchange::NativeError) -> CoreError {
+    let code = error.code.clone();
+    let (description, diagnostics) = error.into_parts();
+    CoreError::from_product(&code, Some(code.clone()), description, diagnostics)
+}
+fn knowledge_error(error: weftext_knowledge::KnowledgeError) -> CoreError {
+    let code = error.code.clone();
+    let (description, diagnostics) = error.into_parts();
+    CoreError::from_product(&code, Some(code.clone()), description, diagnostics)
+}
+pub(crate) fn report(code: &str, description: impl Into<ErrorDescription>) -> ExportLoss {
     ExportLoss {
         code: code.into(),
-        message: message.into(),
+        description: description.into(),
+        product_diagnostics: vec![],
         location: None,
     }
 }
 fn decode(value: &str) -> Result<Vec<u8>, ApiError> {
     if value.len() > 64 * 1024 * 1024 * 4 / 3 + 4 {
-        return Err(ApiError::bad("模板超过64 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_template_budget(),
+        ));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(value)
-        .map_err(|_| ApiError::bad("模板编码无效"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_export_conversion_template_encoding()))?;
     if bytes.len() > 64 * 1024 * 1024 {
-        return Err(ApiError::bad("模板超过64 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_template_budget(),
+        ));
     }
     Ok(bytes)
 }
@@ -53,14 +75,16 @@ pub(crate) fn template_slots(format: &str, bytes: &[u8]) -> Result<Value, ApiErr
         "docx"=>weftext_export::docx::list_template_controls(bytes).map_err(convert_error)?.into_iter().map(|c|{
             let supported=c.placement!="unsupported";
             json!({"name":c.tag,"kind":"content","label":c.alias.unwrap_or_else(||c.tag.clone()),"supported":supported,
-                "placement":c.placement,"reason":if supported{None}else{Some("内容控件的结构位置暂不支持")}})
+                "placement":c.placement,"description":null,"reason":if supported{None}else{Some(weftext_export::ExportError::new(UiMessage::error_api_export_conversion_unsupported_content_control()))}})
         }).collect::<Vec<_>>(),
         "xlsx"=>weftext_export::xlsx::inspect_xlsx_template(bytes).map_err(convert_error)?.anchors.into_iter().map(|a|{
             let kind=if a.kind=="table"{"table"}else if a.rows==1&&a.columns==1{"cell"}else{"range"};
-            let label=if let Some(sheet)=&a.sheet {format!("{} · {} · {}列/{}数据行",a.name,sheet,a.columns,a.capacity)}else{a.name.clone()};
-            json!({"name":a.name,"kind":kind,"label":label,"supported":a.supported,"reason":a.reason,"rows":a.rows,"columns":a.columns,"capacity":a.capacity})
+            let description=a.sheet.as_ref().map(|sheet| UiMessage::error_api_export_conversion_xlsx_anchor_description(weftext_messages::params::ErrorApiExportConversionXlsxAnchorDescription {
+                name:a.name.clone(),sheet:sheet.clone(),columns:weftext_messages::UiInteger::new(i64::try_from(a.columns).expect("template column count fits i64")).expect("template column budget fits safe integer"),capacity:weftext_messages::UiInteger::new(i64::try_from(a.capacity).expect("template row count fits i64")).expect("template row budget fits safe integer")}));
+            let label=a.name.clone();
+            json!({"name":a.name,"kind":kind,"label":label,"description":description,"supported":a.supported,"reason":a.reason,"rows":a.rows,"columns":a.columns,"capacity":a.capacity})
         }).collect::<Vec<_>>(),
-        _=>return Err(ApiError::bad("该输出格式不支持Office模板")),
+        _=>return Err(ApiError::bad(UiMessage::error_api_export_conversion_office_template_unsupported())),
     };
     Ok(json!({"slots":slots,"warnings":[]}))
 }
@@ -75,13 +99,18 @@ struct DocumentCut {
     workspace_id: Option<String>,
     owner_id: Option<String>,
     citations: Option<super::citation_api::FrozenCitations>,
-    warnings: Vec<String>,
+    warnings: Vec<weftext_core::CoreDescription>,
     complete: bool,
 }
 fn relative(root: &Path, path: &Path) -> Result<String, CoreError> {
     path.strip_prefix(root)
         .map(|p| p.to_string_lossy().replace('\\', "/"))
-        .map_err(|_| CoreError::new("outsideRoot", "Export source is outside its frozen root"))
+        .map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_api_export_conversion_source_outside_frozen_root(),
+            )
+        })
 }
 fn capture(
     core: &mut Core,
@@ -92,7 +121,10 @@ fn capture(
         req.review_mode.as_str(),
         "" | "none" | "comments" | "changes"
     ) {
-        return Err(CoreError::new("reviewMode", "请选择正文、批注或修订输出"));
+        return Err(CoreError::new(
+            "reviewMode",
+            UiMessage::error_api_export_conversion_review_mode_required(),
+        ));
     }
     core.check_session_base(&req.session_id, &req.base_id)?;
     let inventory = core.inventory(&loc.root)?;
@@ -116,10 +148,16 @@ fn capture(
             file.bytes = Some(req.source.as_bytes().to_vec());
         }
         let schema_file = frozen.snapshot.schema.as_ref().ok_or_else(|| {
-            CoreError::new("schemaUnavailable", "Frozen schema role is unavailable")
+            CoreError::new(
+                "schemaUnavailable",
+                UiMessage::error_api_export_conversion_frozen_schema_unavailable(),
+            )
         })?;
-        let (schema, _) = super::data_api::knowledge_schema_from_snapshot(schema_file)
-            .map_err(|e| CoreError::new("schemaUnavailable", e.message))?;
+        let (schema, _) =
+            super::data_api::knowledge_schema_from_snapshot(schema_file).map_err(|mut error| {
+                error.code = "schemaUnavailable".into();
+                error
+            })?;
         let schema_json = serde_json::to_value(&schema)?;
         let citations = super::citation_api::freeze_citations(&mut frozen, &req.source, &loc.path)?;
         core.check_session_base(&req.session_id, &req.base_id)?;
@@ -140,13 +178,13 @@ fn capture(
         if matches!(req.review_mode.as_str(), "comments" | "changes") && req.format == "docx" {
             return Err(CoreError::new(
                 "reviewUnavailable",
-                "当前普通文件没有受管批注，请选择正文输出",
+                UiMessage::error_api_export_conversion_ordinary_file_has_no_review(),
             ));
         }
         if inventory.status != "ordinary" {
             return Err(CoreError::new(
                 "unadmittedLibrary",
-                "Incomplete or unadmitted library cannot fall back to ordinary export",
+                UiMessage::error_api_export_conversion_library_cannot_fall_back_to_ordinary(),
             ));
         }
         let mut files = core.ordinary_export_files(&req.session_id, &req.base_id, &loc.root)?;
@@ -158,21 +196,21 @@ fn capture(
         }) {
             return Err(CoreError::new(
                 "unadmittedLibrary",
-                "Managed library control files exist without qualified admission; choose an ordinary source root instead",
+                UiMessage::error_api_export_conversion_library_admission_required(),
             ));
         }
         if weftext_engine::inspect_citation_declaration(&req.source)
-            .map_err(|e| CoreError::new("citationUnavailable", e.to_string()))?
+            .map_err(|e| CoreError::from_engine("citationUnavailable", e))?
             .is_some()
         {
             return Err(CoreError::new(
                 "citationUnavailable",
-                "Stable citation Work declarations need a managed frozen library cut",
+                UiMessage::error_api_export_conversion_citations_need_managed_cut(),
             ));
         }
         files.insert(key, req.source.as_bytes().to_vec());
         let schema =
-            Schema::bundled().map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+            Schema::bundled().map_err(|error| CoreError::from_data("schemaUnavailable", error))?;
         let schema_json = serde_json::to_value(&schema)?;
         core.check_session_base(&req.session_id, &req.base_id)?;
         Ok(DocumentCut {
@@ -208,25 +246,34 @@ fn freeze_reviews(
         .files
         .iter()
         .find(|f| Path::new(&f.path) == loc.path)
-        .ok_or_else(|| CoreError::new("reviewSource", "正文不在准确快照内"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "reviewSource",
+                UiMessage::error_api_export_conversion_review_source_missing(),
+            )
+        })?;
     if source.bytes.as_deref() != Some(req.source.as_bytes()) {
         return Err(CoreError::new(
             "reviewDraft",
-            "带批注／修订输出需要已保存的准确正文；请先保存并重新打开输出面板，草稿保留",
+            UiMessage::error_api_export_conversion_saved_review_source_required(),
         ));
     }
     let key = relative(
         &loc.root,
         &loc.path
             .parent()
-            .ok_or_else(|| CoreError::new("reviewSource", "缺少笔记目录"))?
+            .ok_or_else(|| {
+                CoreError::new(
+                    "reviewSource",
+                    UiMessage::error_api_export_conversion_note_directory_missing(),
+                )
+            })?
             .join("weftext.annotations.json"),
     )?;
     let Some(bytes) = frozen.files.get(&key) else {
         return Ok(vec![]);
     };
-    let annotations =
-        k::decode_annotations(bytes).map_err(|e| CoreError::new(&e.code, e.message))?;
+    let annotations = k::decode_annotations(bytes).map_err(knowledge_error)?;
     let owner = k::NodeRef {
         workspace_id: frozen
             .snapshot
@@ -268,9 +315,9 @@ fn freeze_reviews(
     Ok(annotations.records.iter().filter(|r|selected.contains(&r.annotation_id)).map(|r| {
         let range=r.target.anchor().and_then(|a|k::resolve_anchor(a,Some(&current),&[]).current_range);
         let replacement=if req.review_mode=="changes" {r.suggestion.as_ref().filter(|s|s.state=="pending" && !s.requires_reconfirmation && s.confirmed_revision==current.revision_id && range.as_ref().is_some_and(|range|k::writable_suggestion_range(&req.source,range))).map(|s|s.replacement.clone())}else{None};
-        let mut body=r.body.clone(); if let Some(s)=&r.suggestion {body.push_str(&format!("\n建议状态：{}；拟替换为：{}",s.state,s.replacement));if req.review_mode=="changes" && s.state=="pending" && replacement.is_none(){body.push_str("\n此建议不满足准确文字修订输出条件，仅保留批注。");}}
+        let mut body=r.body.clone(); if let Some(s)=&r.suggestion {body.push('\n'); body.push_str(&UiMessage::error_api_export_conversion_review_suggestion_appendix(weftext_messages::params::ErrorApiExportConversionReviewSuggestionAppendix { state:s.state.clone(),replacement:s.replacement.clone() }).render(req.output_locale));if req.review_mode=="changes" && s.state=="pending" && replacement.is_none(){body.push('\n');body.push_str(&UiMessage::error_api_export_conversion_review_suggestion_comment_only().render(req.output_locale));}}
         let empty_body_point = range.as_ref().is_some_and(|r|r.from==r.to && r.from==req.source.len() && k::writable_suggestion_range(&req.source,r));
-        let downgrade_reason = (req.review_mode=="changes" && r.suggestion.as_ref().is_some_and(|s|s.state=="pending") && replacement.is_none()).then(||"此待审建议不满足准确文字修订输出条件；能定位的目标仅输出普通批注，否则列为未定位损失".into());
+        let downgrade_reason = (req.review_mode=="changes" && r.suggestion.as_ref().is_some_and(|s|s.state=="pending") && replacement.is_none()).then(||ErrorDescription::new(UiMessage::error_api_export_conversion_review_suggestion_downgrade()));
         weftext_export::docx::DocxReview{id:r.annotation_id.clone(),parent:r.reply_to.clone(),author:r.attribution.clone(),date:weftext_export::docx::word_comment_date(&r.created_at),body,resolved:r.review_state=="resolved",range:range.map(|r|(r.from,r.to)),whole_document:matches!(&r.target,k::AnnotationTarget::WholeDocument{node}if node==&owner),replacement,downgrade_reason,empty_body_point}
     }).collect())
 }
@@ -316,14 +363,17 @@ pub(crate) async fn generate(
             },
         )
         .await?;
-        let generated = converted
-            .generated
-            .as_ref()
-            .ok_or_else(|| unavailable("外部软件没有返回准确生成物；中间 DOCX 已保留"))?;
+        let generated = converted.generated.as_ref().ok_or_else(|| {
+            unavailable(UiMessage::error_api_export_conversion_external_artifact_missing())
+        })?;
         let has_session = state
             .locations
             .lock()
-            .map_err(|_| ApiError::internal("编辑会话暂不可用"))?
+            .map_err(|_| {
+                ApiError::internal(
+                    UiMessage::error_api_writing_editor_session_temporarily_unavailable(),
+                )
+            })?
             .contains_key(&req.session_id);
         if !restored || has_session {
             super::writing_api::check_snapshot(
@@ -338,9 +388,8 @@ pub(crate) async fn generate(
             core_call(state, move |core| core.check_session_base(&sid, &base)).await?;
         } else {
             preview["document"]["scope"] = json!("recoveredFrozenOutput");
-            preview["recoveryNotice"] = json!(
-                "恢复原操作封存的 DOCX 输入及预览；没有重新读取当前笔记、Query 或依赖，也未重新执行外部软件。"
-            );
+            preview["recoveryNotice"] =
+                json!(UiMessage::error_api_export_conversion_original_frozen_stage_recovered());
         }
         artifact.bytes = generated.bytes.clone();
         artifact.extension = req.format.clone();
@@ -354,22 +403,21 @@ pub(crate) async fn generate(
             .losses
             .extend(converted.losses().into_iter().map(|loss| ExportLoss {
                 code: loss.code,
-                message: loss.message,
+                description: loss.description,
+                product_diagnostics: loss.product_diagnostics,
                 location: loss.location,
             }));
-        artifact.summary = format!(
-            "{}；通过 {} 的 DOCX → {} 可选外部转换，须另核各项损失",
-            artifact.summary,
-            converted.backend,
-            req.format.to_uppercase()
-        );
+        // Keep the original typed stage summary. The separate conversion
+        // metadata describes its actual backend and unverified losses.
         preview["format"] = json!(req.format);
         preview["legacyConversion"] = converted.metadata();
         preview["executionLocation"] = json!("currentBackend");
         return Ok((artifact, preview));
     }
     if req.legacy_backend.is_some() {
-        return Err(ApiError::bad("此输出格式不使用外部转换后端；没有忽略选择"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_external_backend_unused(),
+        ));
     }
     let loc = location(state, &req.session_id)?;
     super::writing_api::observe_snapshot(state, &req.session_id, &req.source, req.serial, None)?;
@@ -378,17 +426,21 @@ pub(crate) async fn generate(
     core_call(state, move |core| core.check_session_base(&sid, &base)).await?;
     let mut preview = json!({"format":req.format,"document":{"sessionId":req.session_id,"baseId":req.base_id,"serial":req.serial,"sourceHash":weftext_engine::source_hash(&req.source),"scope":"currentDraft"},"stylePolicy":req.style_policy});
     if !req.embedded_queries.is_empty() && !matches!(req.format.as_str(), "docx" | "pdf") {
-        return Err(ApiError::bad("正文查询结果只适用于 DOCX/PDF 随文输出"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_embedded_query_format(),
+        ));
     }
     if !matches!(req.format.as_str(), "docx" | "xlsx")
         && (req.template.is_some() || !req.bindings.is_empty())
     {
         return Err(ApiError::bad(
-            "该格式不支持模板或槽位绑定；没有忽略上传内容",
+            UiMessage::error_api_export_conversion_template_or_bindings_unsupported(),
         ));
     }
     if req.template.is_none() && !req.bindings.is_empty() {
-        return Err(ApiError::bad("没有模板时不能传入槽位绑定"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_bindings_require_template(),
+        ));
     }
     let (mut artifact, more) = match req.format.as_str() {
         "source" => (
@@ -397,7 +449,7 @@ pub(crate) async fn generate(
                 content_type: "text/plain; charset=utf-8".into(),
                 extension: "typ".into(),
                 losses: vec![],
-                summary: "当前草稿的准确原生Typst字节；不包含外部依赖或库内其他资料".into(),
+                summary: UiMessage::error_api_export_conversion_native_source_summary(),
             },
             json!({"source":req.source,"sourceBytes":req.source.len()}),
         ),
@@ -405,7 +457,7 @@ pub(crate) async fn generate(
         "pdf" => pdf(state, req, &loc).await?,
         "docx" | "xlsx" | "bibtex" | "cslJson" | "csl-json" | "ris" => {
             let embedded = super::embedded_output::freeze(state, req, &loc.root.to_string_lossy())?;
-            preview["embeddedQueries"] = super::embedded_output::preview(&embedded);
+            preview["embeddedQueries"] = super::embedded_output::preview(&embedded)?;
             let cut_req = req.clone();
             let cut_loc = loc.clone();
             let mut cut = core_call(state, move |core| capture(core, &cut_loc, &cut_req)).await?;
@@ -457,14 +509,14 @@ pub(crate) async fn generate(
                 let render = render
                     .map(|output| {
                         serde_json::from_value::<RenderOutput>(output)
-                            .map_err(|_| ApiError::internal("冻结HTML编译合同无效"))
+                            .map_err(|_| ApiError::internal(UiMessage::error_api_export_conversion_invalid_frozen_html_contract()))
                     })
                     .transpose()?;
                 let frozen_result = query
                     .as_ref()
                     .map(|q| {
                         serde_json::from_value::<QueryResult>(q.value.clone())
-                            .map_err(|_| ApiError::internal("冻结Query合同不可读取"))
+                            .map_err(|_| ApiError::internal(UiMessage::error_api_export_conversion_frozen_query_contract_unreadable()))
                     })
                     .transpose()?;
                 match req_owned.format.as_str() {
@@ -493,15 +545,19 @@ pub(crate) async fn generate(
                 }
             })
             .await
-            .map_err(|_| ApiError::internal("输出转换没有完成"))??
+            .map_err(|_| ApiError::internal(UiMessage::error_api_export_conversion_conversion_incomplete()))??
         }
-        _ => return Err(ApiError::bad("未知输出格式")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_export_conversion_unknown_format(),
+            ));
+        }
     };
     if !matches!(req.format.as_str(), "docx" | "xlsx") && req.query_id.is_some() {
-        preview["query"] = json!({"queryId":req.query_id,"included":false,"scope":"outsideSelectedFormat","reason":"该格式使用当前草稿、已保存整库或明确文献Work"});
+        preview["query"] = json!({"queryId":req.query_id,"included":false,"scope":"outsideSelectedFormat","reason":UiMessage::error_api_export_conversion_query_outside_format_scope()});
         artifact.losses.push(report(
             "query_not_in_format_scope",
-            "该格式输出当前草稿、已保存整库或当前文献Work；本次显示的Query结果不在其内容范围。",
+            UiMessage::error_api_export_conversion_query_outside_format(),
         ));
     }
     if let Some(object) = more.as_object() {
@@ -533,24 +589,30 @@ async fn pdf(
         style: cut.style,
     };
     let compile = |value: Value| -> Result<weftext_engine::PagedOutput, ApiError> {
-        let output: weftext_engine::PagedOutput =
-            serde_json::from_value(value).map_err(|_| ApiError::internal("冻结分页合同无效"))?;
+        let output: weftext_engine::PagedOutput = serde_json::from_value(value).map_err(|_| {
+            ApiError::internal(
+                UiMessage::error_api_export_conversion_invalid_frozen_paged_contract(),
+            )
+        })?;
         if !output.ok {
-            return Err(unavailable(format!(
-                "PDF 编译失败：{}",
-                output
-                    .diagnostics
-                    .iter()
-                    .map(|d| d.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("；")
-            )));
+            let mut error =
+                unavailable(UiMessage::error_api_export_conversion_pdf_compile_failed());
+            // Compiler diagnostics are a collection with source locations,
+            // not a causal error chain. Keep the complete typed collection.
+            error.details = Some(Box::new(ApiErrorDetails::EngineDiagnostics {
+                diagnostics: output.diagnostics,
+            }));
+            return Err(error);
         }
         Ok(output)
     };
     let original = compile(render_frozen_target_worker(state, input.clone(), true).await?)?;
-    let (source, losses) =
-        super::embedded_output::paged_source(&req.source, &embedded, &original.embedded_queries)?;
+    let (source, losses) = super::embedded_output::paged_source(
+        &req.source,
+        &embedded,
+        &original.embedded_queries,
+        req.output_locale,
+    )?;
     let output = if source == req.source {
         original
     } else {
@@ -559,22 +621,24 @@ async fn pdf(
         input.files.insert(key, input.source.as_bytes().to_vec());
         compile(render_frozen_target_worker(state, input, true).await?)?
     };
-    let bytes = decode(
-        output
-            .pdf_base64
-            .as_deref()
-            .ok_or_else(|| unavailable("PDF 没有生成文件"))?,
-    )?;
-    let preview = json!({"target":"paged","scope":"frozenDraftWithSelectedQueryResults","cutId":cut.cut_id,"complete":cut.complete,"warnings":cut.warnings,"pageCount":output.page_count,"embeddedQueries":super::embedded_output::preview(&embedded),"diagnostics":output.diagnostics});
+    let bytes =
+        decode(output.pdf_base64.as_deref().ok_or_else(|| {
+            unavailable(UiMessage::error_api_export_conversion_pdf_file_missing())
+        })?)?;
+    let preview = json!({"target":"paged","scope":"frozenDraftWithSelectedQueryResults","cutId":cut.cut_id,"complete":cut.complete,"warnings":cut.warnings,"pageCount":output.page_count,"embeddedQueries":super::embedded_output::preview(&embedded)?,"diagnostics":output.diagnostics});
     Ok((
         ExportArtifact {
             bytes,
             content_type: "application/pdf".into(),
             extension: "pdf".into(),
             losses,
-            summary: format!(
-                "原生 PDF：{} 页，保留已选择正文查询的冻结行和原运行状态",
-                output.page_count
+            summary: UiMessage::error_api_export_conversion_pdf_summary(
+                weftext_messages::params::ErrorApiExportConversionPdfSummary {
+                    pages: weftext_messages::UiInteger::new(
+                        i64::try_from(output.page_count).expect("page count is bounded"),
+                    )
+                    .expect("page count is a safe integer"),
+                },
             ),
         },
         preview,
@@ -589,12 +653,14 @@ async fn native(
     let locations = state
         .locations
         .lock()
-        .map_err(|_| ApiError::internal("文档会话不可用"))?
+        .map_err(|_| {
+            ApiError::internal(UiMessage::error_api_writing_document_session_unavailable())
+        })?
         .clone();
     let versions = state
         .editor_versions
         .lock()
-        .map_err(|_| ApiError::internal("编辑会话不可用"))?
+        .map_err(|_| ApiError::internal(UiMessage::error_api_writing_editor_session_unavailable()))?
         .clone();
     let drafts = versions
         .into_iter()
@@ -607,28 +673,65 @@ async fn native(
         .collect::<Vec<_>>();
     let request = req.clone();
     let location = loc.clone();
-    let (bytes,package)=core_call(state,move|core|{
-        core.check_session_base(&request.session_id,&request.base_id)?;
-        let bytes=core.export_native_package(&location.root)?;
-        let mut package=weftext_export::exchange::read_native_package(&bytes).map_err(|e|CoreError::new(&e.code,e.message))?;
-        let key=relative(&location.root,&location.path)?;
-        if package.files.get(&key).map(Vec::as_slice)!=Some(request.source.as_bytes()){return Err(CoreError::new("dirtyDraft","Native package exports the saved whole library; save the current draft first"));}
-        for(path,source)in drafts{let key=relative(&location.root,&path)?;if package.files.get(&key).is_some_and(|saved|saved.as_slice()!=source.as_bytes()){return Err(CoreError::new("dirtyDraft","Another open library document has an unsaved draft; save it before whole-library export"));}}
+    let (bytes, package) = core_call(state, move |core| {
+        core.check_session_base(&request.session_id, &request.base_id)?;
+        let bytes = core.export_native_package(&location.root)?;
+        let mut package =
+            weftext_export::exchange::read_native_package(&bytes).map_err(native_error)?;
+        let key = relative(&location.root, &location.path)?;
+        if package.files.get(&key).map(Vec::as_slice) != Some(request.source.as_bytes()) {
+            return Err(CoreError::new(
+                "dirtyDraft",
+                UiMessage::error_api_export_conversion_save_current_draft_before_native_export(),
+            ));
+        }
+        for (path, source) in drafts {
+            let key = relative(&location.root, &path)?;
+            if package
+                .files
+                .get(&key)
+                .is_some_and(|saved| saved.as_slice() != source.as_bytes())
+            {
+                return Err(CoreError::new(
+                    "dirtyDraft",
+                    UiMessage::error_api_export_conversion_save_other_draft_before_native_export(),
+                ));
+            }
+        }
         complete_native_bibliographies(&mut package)?;
-        let bytes=weftext_export::exchange::write_native_package(&package).map_err(|e|CoreError::new(&e.code,e.message))?;
-        core.check_session_base(&request.session_id,&request.base_id)?;Ok((bytes,package))
-    }).await?;
-    let losses=package.manifest.losses.iter().map(|l|ExportLoss{code:l.code.clone(),message:l.detail.clone(),location:Some(l.path.clone())}).chain(std::iter::once(report("native_not_recovery_backup","该原生资料包包含已保存的整库纳管内容与可交付依赖；不包含本机历史、执行日志或未登记原始文件，不能替代恢复备份。"))).collect();
-    let preview = json!({"scope":"savedWholeLibrary","workspaceId":package.manifest.workspace_id,"fileCount":package.files.len(),"files":package.manifest.entries,"summary":"已保存的整个资料库；不是仅当前笔记"});
+        let bytes =
+            weftext_export::exchange::write_native_package(&package).map_err(native_error)?;
+        core.check_session_base(&request.session_id, &request.base_id)?;
+        Ok((bytes, package))
+    })
+    .await?;
+    let losses = package
+        .manifest
+        .losses
+        .iter()
+        .map(|loss| ExportLoss {
+            code: loss.code.clone(),
+            description: loss.description.clone(),
+            product_diagnostics: loss.product_diagnostics.clone(),
+            location: Some(loss.path.clone()),
+        })
+        .chain(std::iter::once(report(
+            "native_not_recovery_backup",
+            UiMessage::error_api_export_conversion_native_package_not_recovery_backup(),
+        )))
+        .collect();
+    let preview = json!({"scope":"savedWholeLibrary","workspaceId":package.manifest.workspace_id,"fileCount":package.files.len(),"files":package.manifest.entries,"summary":UiMessage::error_api_export_conversion_whole_library_scope()});
     Ok((
         ExportArtifact {
             bytes,
             content_type: "application/zip".into(),
             extension: "weftext.zip".into(),
             losses,
-            summary: format!(
-                "已保存的整个资料库：{}个纳管资料/依赖文件；不是仅当前笔记，也不是恢复备份",
-                package.files.len()
+            summary: UiMessage::error_api_export_conversion_native_package_summary(
+                weftext_messages::params::ErrorApiExportConversionNativePackageSummary {
+                    files: weftext_messages::UiInteger::new(package.files.len() as i64)
+                        .expect("native package file count is bounded"),
+                },
             ),
         },
         preview,
@@ -650,10 +753,11 @@ fn complete_native_bibliographies(
         .collect::<Vec<_>>();
     let mut generated = vec![];
     for (path, owner) in &sources {
-        let source = std::str::from_utf8(&package.files[*path])
-            .map_err(|_| unavailable("Saved citation owner is not UTF-8"))?;
+        let source = std::str::from_utf8(&package.files[*path]).map_err(|_| {
+            unavailable(UiMessage::error_api_export_conversion_saved_citation_owner_encoding())
+        })?;
         let Some(declaration) = weftext_engine::inspect_citation_declaration(source)
-            .map_err(|e| CoreError::new("citationDeclarationUnavailable", e.to_string()))?
+            .map_err(|e| CoreError::from_engine("citationDeclarationUnavailable", e))?
         else {
             continue;
         };
@@ -662,34 +766,39 @@ fn complete_native_bibliographies(
         {
             return Err(CoreError::new(
                 "citationDeclarationUnavailable",
-                "Saved citations require their exact owner and one unambiguous virtual bibliography",
+                UiMessage::error_api_export_conversion_citation_owner_ambiguous(),
             ));
         }
         let schema_bytes = &package.files[&package.manifest.schema_path];
         let schema = std::str::from_utf8(schema_bytes)
-            .map_err(|_| CoreError::new("citationSchemaUnavailable", "Frozen schema is not UTF-8"))
+            .map_err(|_| {
+                CoreError::new(
+                    "citationSchemaUnavailable",
+                    UiMessage::error_api_export_conversion_frozen_schema_encoding(),
+                )
+            })
             .and_then(|source| {
                 Schema::from_author_json(source)
-                    .map_err(|e| CoreError::new("citationSchemaUnavailable", e.to_string()))
+                    .map_err(|error| CoreError::from_data("citationSchemaUnavailable", error))
             })?;
         let mut works = vec![];
         for entry in declaration.entries {
             let prefix = format!("weftext-node://{}/", package.manifest.workspace_id);
-            let node = entry
-                .work
-                .strip_prefix(&prefix)
-                .ok_or_else(|| unavailable("Work is outside the saved library cut"))?;
+            let node = entry.work.strip_prefix(&prefix).ok_or_else(|| {
+                unavailable(UiMessage::error_api_export_conversion_work_outside_saved_cut())
+            })?;
             let matches = sources
                 .iter()
                 .filter(|(_, source)| source.node_id.as_deref() == Some(node))
                 .collect::<Vec<_>>();
             let [(work_path, work_entry)] = matches.as_slice() else {
                 return Err(unavailable(
-                    "Work has no unique saved source in this library cut",
+                    UiMessage::error_api_export_conversion_saved_work_ambiguous(),
                 ));
             };
-            let source = std::str::from_utf8(&package.files[*work_path])
-                .map_err(|_| unavailable("Saved Work is not UTF-8"))?;
+            let source = std::str::from_utf8(&package.files[*work_path]).map_err(|_| {
+                unavailable(UiMessage::error_api_export_conversion_saved_work_encoding())
+            })?;
             let projection = weftext_data::project(source, &schema);
             if projection.qualification != "qualified"
                 || projection.id.as_deref() != Some(node)
@@ -700,7 +809,7 @@ fn complete_native_bibliographies(
             {
                 return Err(CoreError::new(
                     "citationWorkType",
-                    "Saved target does not qualify as installed library/work in this cut",
+                    UiMessage::error_api_export_conversion_saved_work_type_unavailable(),
                 ));
             }
             let publication = projection
@@ -712,7 +821,7 @@ fn complete_native_bibliographies(
                 .ok_or_else(|| {
                     CoreError::new(
                         "citationPublicationUnavailable",
-                        "Saved Work publication is absent, invalid or unavailable",
+                        UiMessage::error_api_export_conversion_saved_publication_unavailable(),
                     )
                 })?;
             works.push(CitationWork {
@@ -729,15 +838,23 @@ fn complete_native_bibliographies(
                 },
             });
         }
-        let bibliography = project_bibliography(&works, BibliographyFormat::Bibtex)
-            .map_err(|e| CoreError::new("citationBibliographyUnavailable", e.to_string()))?;
+        let bibliography =
+            project_bibliography(&works, BibliographyFormat::Bibtex).map_err(|error| {
+                let (description, diagnostics) = error.into_parts();
+                CoreError::from_product(
+                    "citationBibliographyUnavailable",
+                    None,
+                    description,
+                    diagnostics,
+                )
+            })?;
         generated.push((owner.node_id.clone().unwrap(), bibliography.bytes));
     }
     // Retain all originals if any generated path collides or exceeds budget.
     let mut completed = package.clone();
     for (owner, bytes) in generated {
         weftext_export::exchange::append_generated_bibliography(&mut completed, &owner, bytes)
-            .map_err(|e| CoreError::new(&e.code, e.message))?;
+            .map_err(native_error)?;
     }
     *package = completed;
     Ok(())
@@ -745,7 +862,9 @@ fn complete_native_bibliographies(
 
 fn field_cell(projection: &NoteProjection, name: &str) -> Result<Cell, ApiError> {
     if projection.qualification != "qualified" {
-        return Err(unavailable("当前草稿的typed属性投影不可用"));
+        return Err(unavailable(
+            UiMessage::error_api_export_conversion_draft_projection_unavailable(),
+        ));
     }
     let matches = projection
         .fields
@@ -753,9 +872,13 @@ fn field_cell(projection: &NoteProjection, name: &str) -> Result<Cell, ApiError>
         .filter(|f| f.key == name || f.field_id == name)
         .collect::<Vec<_>>();
     if matches.len() != 1 {
-        return Err(unavailable(format!(
-            "属性‘{name}’不在当前草稿的唯一typed字段合同中"
-        )));
+        return Err(unavailable(
+            UiMessage::error_api_export_conversion_field_not_unique(
+                weftext_messages::params::ErrorApiExportConversionFieldNotUnique {
+                    name: name.into(),
+                },
+            ),
+        ));
     }
     Ok(matches[0].cell.clone())
 }
@@ -770,26 +893,24 @@ pub(crate) fn cell_text(cell: &Cell) -> Result<String, ApiError> {
             | NativeValue::Time(s)
             | NativeValue::LocalDatetime(s)
             | NativeValue::Duration(s) => s.clone(),
-            NativeValue::None => "〈null〉".into(),
+            NativeValue::None => "<null>".into(),
             NativeValue::Bool(b) => b.to_string(),
-            NativeValue::Array(_) | NativeValue::Record(_) => {
-                serde_json::to_string_pretty(value)
-                    .map_err(|e| ApiError::internal(e.to_string()))?
-            }
+            NativeValue::Array(_) | NativeValue::Record(_) => serde_json::to_string_pretty(value)
+                .map_err(|e| {
+                ApiError::internal(UiMessage::error_api_export_conversion_cell_encoding_failed())
+                    .diagnostic(DiagnosticOrigin::Json, e.to_string())
+            })?,
         },
-        Cell::Absent => "〈缺值 absent〉".into(),
-        Cell::Null => "〈null〉".into(),
-        Cell::Invalid { diagnostics, value } => format!(
-            "〈invalid：{}〉{}",
-            diagnostics.join("；"),
-            value
-                .as_ref()
-                .map(|v| cell_text(&Cell::value(v.clone())))
-                .transpose()?
-                .map(|s| format!("\n{s}"))
-                .unwrap_or_default()
-        ),
-        Cell::Unavailable { reason } => format!("〈unavailable：{reason}〉"),
+        Cell::Absent => "<absent>".into(),
+        Cell::Null => "<null>".into(),
+        // Error cells use the same closed machine representation as CSV/TSV.
+        // UI language never becomes author data or discards parallel diagnostics.
+        Cell::Invalid { .. } | Cell::Unavailable { .. } => {
+            serde_json::to_string(cell).map_err(|error| {
+                ApiError::internal(UiMessage::error_api_export_conversion_cell_encoding_failed())
+                    .diagnostic(DiagnosticOrigin::Json, error.to_string())
+            })?
+        }
     })
 }
 fn binding_cell(
@@ -800,23 +921,25 @@ fn binding_cell(
     match binding.kind.as_str() {
         "field" => field_cell(
             projection,
-            binding
-                .field
-                .as_deref()
-                .ok_or_else(|| ApiError::bad("属性绑定缺少字段"))?,
+            binding.field.as_deref().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_export_conversion_field_binding_missing_field())
+            })?,
         ),
         "text" => Ok(Cell::value(NativeValue::Text(
-            binding
-                .text
-                .clone()
-                .ok_or_else(|| ApiError::bad("固定文字绑定缺少内容"))?,
+            binding.text.clone().ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_export_conversion_literal_binding_missing_text())
+            })?,
         ))),
         "title" => render
             .and_then(|r| r.products.as_ref())
             .and_then(|p| p.title.clone())
             .map(|s| Cell::value(NativeValue::Text(s)))
-            .ok_or_else(|| unavailable("同次冻结HTML产品没有唯一笔记标题；没有从文件名发明标题")),
-        _ => Err(ApiError::bad("单元格槽位仅支持typed属性、标题或固定文字")),
+            .ok_or_else(|| {
+                unavailable(UiMessage::error_api_export_conversion_unique_title_unavailable())
+            }),
+        _ => Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_unsupported_cell_binding(),
+        )),
     }
 }
 pub(crate) fn node(tag: &str, key: String, children: Vec<RenderNode>) -> RenderNode {
@@ -848,7 +971,9 @@ pub(crate) fn query_table(
     columns: &[String],
 ) -> Result<RenderNode, ApiError> {
     if columns.is_empty() || columns.len() > 512 || result.rows.len() > 4999 {
-        return Err(unavailable("DOCX Query表格超过行列预算；没有截断行"));
+        return Err(unavailable(
+            UiMessage::error_api_export_conversion_query_table_budget(),
+        ));
     }
     let names: std::collections::BTreeSet<_> = columns.iter().collect();
     if names.len() != columns.len()
@@ -862,7 +987,7 @@ pub(crate) fn query_table(
             .any(|row| row.cells.keys().any(|key| !names.contains(key)))
     {
         return Err(unavailable(
-            "DOCX列顺序遗漏冻结Query单元格或重复列；没有静默丢弃内容",
+            UiMessage::error_api_export_conversion_query_column_mismatch(),
         ));
     }
     let mut rows = vec![node(
@@ -907,10 +1032,13 @@ pub(crate) fn query_table(
 pub(crate) fn query_losses(result: &QueryResult) -> Vec<ExportLoss> {
     let mut losses = vec![report(
         "docx_query_structure",
-        "DOCX中的Query表保留列顺序、行顺序、精确文字与各Cell状态；机器重入需要原生/完整XLSX结构输出。",
+        UiMessage::error_api_export_conversion_docx_query_structure(),
     )];
     if result.coverage != "complete" || result.limited || !result.aggregate_exact {
-        losses.push(report("query_incomplete","导出的是已显示的冻结Query行；部分覆盖、显示上限或非精确聚合保持原状态，不是完整精确总数。"));
+        losses.push(report(
+            "query_incomplete",
+            UiMessage::error_api_export_conversion_query_incomplete(),
+        ));
     }
     losses
 }
@@ -933,12 +1061,16 @@ fn docx(
     let mut query_bound = false;
     if template.is_none() || req.bindings.values().any(|binding| binding.kind == "body") {
         if let Some(tree) = render.tree.as_mut() {
-            losses.extend(super::embedded_output::materialize(tree, embedded)?);
+            losses.extend(super::embedded_output::materialize(
+                tree,
+                embedded,
+                req.output_locale,
+            )?);
         }
     } else if !embedded.is_empty() {
         losses.push(report(
             "embedded_query_body_not_selected",
-            "本次模板未绑定正文；已选择的正文查询结果不在输出范围。",
+            UiMessage::error_api_export_conversion_embedded_body_not_selected(),
         ));
     }
     for (name, binding) in &req.bindings {
@@ -946,41 +1078,53 @@ fn docx(
             "body" => DocxBinding::Body,
             "title" => DocxBinding::Title,
             "text" => DocxBinding::Text {
-                value: binding
-                    .text
-                    .clone()
-                    .ok_or_else(|| ApiError::bad("固定文字缺失"))?,
+                value: binding.text.clone().ok_or_else(|| {
+                    ApiError::bad(UiMessage::error_api_export_conversion_literal_missing())
+                })?,
             },
             "field" => {
                 let cell = field_cell(
                     projection,
-                    binding
-                        .field
-                        .as_deref()
-                        .ok_or_else(|| ApiError::bad("属性字段缺失"))?,
+                    binding.field.as_deref().ok_or_else(|| {
+                        ApiError::bad(UiMessage::error_api_export_conversion_field_missing())
+                    })?,
                 )?;
-                losses.push(report("docx_field_structure","属性槽位保留精确可读文字与状态；DOCX不携带完整typed字段结构，重入请使用原生或XLSX输出。"));
+                losses.push(report(
+                    "docx_field_structure",
+                    UiMessage::error_api_export_conversion_docx_field_structure(),
+                ));
                 DocxBinding::Text {
                     value: cell_text(&cell)?,
                 }
             }
             "query" => {
-                let query = query.ok_or_else(|| ApiError::bad("Query绑定缺少冻结结果标识"))?;
+                let query = query.ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_export_conversion_query_binding_missing_result(),
+                    )
+                })?;
                 query_bound = true;
                 DocxBinding::Nodes {
                     nodes: vec![query_table(query, columns.unwrap())?],
                 }
             }
-            _ => return Err(ApiError::bad(format!("未知DOCX绑定类型：{}", binding.kind))),
+            _ => {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_export_conversion_unknown_docx_binding(
+                        weftext_messages::params::ErrorApiExportConversionUnknownDocxBinding {
+                            kind: binding.kind.clone(),
+                        },
+                    ),
+                ));
+            }
         };
         bindings.insert(name.clone(), mapped);
     }
     if let Some(query) = query {
         if template.is_none() {
-            let tree = render
-                .tree
-                .take()
-                .ok_or_else(|| unavailable("冻结HTML编译缺少正文树"))?;
+            let tree = render.tree.take().ok_or_else(|| {
+                unavailable(UiMessage::error_api_export_conversion_frozen_html_body_missing())
+            })?;
             render.tree = Some(node(
                 "div",
                 "document-with-frozen-query".into(),
@@ -990,7 +1134,7 @@ fn docx(
         }
         if !query_bound {
             return Err(ApiError::bad(
-                "已选择Query结果，但模板没有Query槽位绑定；请绑定或明确去除Query输出选择",
+                UiMessage::error_api_export_conversion_query_selection_not_bound(),
             ));
         }
         losses.extend(query_losses(query));
@@ -1019,12 +1163,12 @@ fn note_result(
 ) -> Result<(QueryResult, Vec<String>), ApiError> {
     if projection.qualification != "qualified" || projection.fields.is_empty() {
         return Err(unavailable(
-            "当前笔记没有可导出的已限定typed字段；请选择冻结Query或原生源码输出",
+            UiMessage::error_api_export_conversion_qualified_fields_unavailable(),
         ));
     }
     if cut.owner_id.is_some() && projection.id != cut.owner_id {
         return Err(unavailable(
-            "草稿中的笔记 ID 与已纳管身份不一致；不能将其字段导出为原笔记",
+            UiMessage::error_api_export_conversion_draft_owner_mismatch(),
         ));
     }
     let mut cells = BTreeMap::new();
@@ -1039,7 +1183,13 @@ fn note_result(
         cells.insert(
             key,
             Cell::Invalid {
-                diagnostics: vec![format!("Unknown field preserved; source: {}", field.raw)],
+                diagnostics: vec![ErrorDescription::new(
+                    UiMessage::error_api_export_conversion_unknown_field_preserved(
+                        weftext_messages::params::ErrorApiExportConversionUnknownFieldPreserved {
+                            source: field.raw.clone(),
+                        },
+                    ),
+                )],
                 value: field.value.clone(),
             },
         );
@@ -1109,14 +1259,17 @@ fn xlsx(
         }
     }
     if req.query_id.is_none() && !queries.is_empty() {
-        return Err(ApiError::bad("Query区域绑定需要实际缓存Query结果标识"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_export_conversion_query_region_needs_frozen_result(),
+        ));
     }
     let request = XlsxRequest {
         sheets: result_and_schema
             .as_ref()
             .map(|(result, columns, schema)| {
                 vec![XlsxSheetInput {
-                    name: "资料".into(),
+                    name: UiMessage::error_api_export_conversion_data_sheet_name()
+                        .render(req.output_locale),
                     columns: columns.clone(),
                     result: result.clone(),
                     schema: Some(schema.clone()),
@@ -1131,12 +1284,15 @@ fn xlsx(
     };
     let mut artifact = weftext_export::xlsx::export_xlsx(&request).map_err(convert_error)?;
     if req.style_policy == "source" {
-        artifact.losses.push(report("xlsx_source_style_unmapped","XLSX只映射typed数据；原生Typst排版样式未映射为Excel单元格样式，当前模板/工作簿样式保留。"));
+        artifact.losses.push(report(
+            "xlsx_source_style_unmapped",
+            UiMessage::error_api_export_conversion_xlsx_source_style_unmapped(),
+        ));
     }
     let preview = if let Some((result, columns, _)) = result_and_schema {
-        json!({"sheets":[{"name":"资料","columns":columns,"rowCount":result.rows.len(),"coverage":result.coverage,"freshness":result.freshness,"limited":result.limited}],"rows":result.rows.iter().take(12).collect::<Vec<_>>(),"previewRowsShown":result.rows.len().min(12),"summary":"预览仅显示前12行；工件包含所有冻结行，超预算明确拒绝"})
+        json!({"sheets":[{"name":UiMessage::error_api_export_conversion_data_sheet_name().render(req.output_locale),"columns":columns,"rowCount":result.rows.len(),"coverage":result.coverage,"freshness":result.freshness,"limited":result.limited}],"rows":result.rows.iter().take(12).collect::<Vec<_>>(),"previewRowsShown":result.rows.len().min(12),"summary":UiMessage::error_api_export_conversion_complete_frozen_rows_preview()})
     } else {
-        json!({"scope":"typedTemplateFields","fields":request.template.as_ref().map(|t|&t.fields),"summary":"仅填入明确选择的单元格字段；精确Cell状态在结构附表"})
+        json!({"scope":"typedTemplateFields","fields":request.template.as_ref().map(|t|&t.fields),"summary":UiMessage::error_api_export_conversion_selected_template_fields_preview()})
     };
     Ok((artifact, preview))
 }
@@ -1149,7 +1305,11 @@ fn bibliography(
         "bibtex" => BibliographyFormat::Bibtex,
         "cslJson" | "csl-json" => BibliographyFormat::CslJson,
         "ris" => BibliographyFormat::Ris,
-        _ => return Err(ApiError::bad("未知文献格式")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_export_conversion_unknown_bibliography_format(),
+            ));
+        }
     };
     let works = if let Some(citations) = &cut.citations {
         citations.works.clone()
@@ -1160,24 +1320,29 @@ fn bibliography(
                 .iter()
                 .any(|t| t == "library/work")
         {
-            return Err(unavailable("当前笔记不是typed文献Work，且没有明确文献声明"));
+            return Err(unavailable(
+                UiMessage::error_api_export_conversion_work_declaration_required(),
+            ));
         }
         let owner = cut
             .owner_id
             .as_ref()
             .filter(|id| projection.id.as_ref() == Some(id))
-            .ok_or_else(|| unavailable("当前文献没有同次纳管Work身份"))?;
-        let workspace = cut
-            .workspace_id
-            .as_ref()
-            .ok_or_else(|| unavailable("文献输出需要纳管库身份"))?;
+            .ok_or_else(|| {
+                unavailable(UiMessage::error_api_export_conversion_work_identity_missing())
+            })?;
+        let workspace = cut.workspace_id.as_ref().ok_or_else(|| {
+            unavailable(UiMessage::error_api_export_conversion_work_library_required())
+        })?;
         let publication = projection
             .fields
             .iter()
             .find(|f| f.field_id == "library/publication")
             .and_then(|f| f.cell.native())
             .cloned()
-            .ok_or_else(|| unavailable("文献publication字段缺席、无效或不可用"))?;
+            .ok_or_else(|| {
+                unavailable(UiMessage::error_api_export_conversion_publication_unavailable())
+            })?;
         vec![CitationWork {
             key: format!("work_{}", owner.replace('-', "")),
             work: FrozenWork {
@@ -1203,9 +1368,11 @@ fn bibliography(
             content_type: content_type.into(),
             extension: extension.into(),
             losses: projection.losses,
-            summary: format!(
-                "{}篇按明确Work身份冻结的文献；没有按DOI、标题或建议键猜测关联",
-                works.len()
+            summary: UiMessage::error_api_export_conversion_bibliography_summary(
+                weftext_messages::params::ErrorApiExportConversionBibliographySummary {
+                    works: weftext_messages::UiInteger::new(works.len() as i64)
+                        .expect("bibliography work count is bounded"),
+                },
             ),
         },
         json!({"scope":"frozenCitationWorks","works":works,"dependencies":projection.dependencies}),
@@ -1214,6 +1381,42 @@ fn bibliography(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn captured_document_warnings_keep_core_descriptions_and_exact_missing_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        core.create_library(&root).unwrap();
+        let selected = core.create_note_fixture(&root, &root, "Selected").unwrap();
+        let missing = core.create_note_fixture(&root, &root, "Missing").unwrap();
+        let original = std::fs::read(&missing.path).unwrap();
+        let retained = temp.path().join("original-missing-source.typ");
+        std::fs::rename(&missing.path, &retained).unwrap();
+        let request:PrepareRequest=serde_json::from_value(json!({"requestId":uuid::Uuid::new_v4(),"sessionId":selected.session_id,"source":selected.source,"serial":1,"baseId":selected.base_id,"format":"docx","outputLocale":"zh-CN"})).unwrap();
+        let location = Location {
+            path: selected.path.into(),
+            root: root.clone(),
+        };
+        let cut = capture(&mut core, &location, &request).unwrap();
+        assert!(!cut.complete);
+        let owner = missing.node_id.unwrap();
+        let warning = cut
+            .warnings
+            .iter()
+            .find(|warning| {
+                warning.explanation.key() == "error.core.operations.admittedNodeUnavailable"
+            })
+            .unwrap();
+        let wire = serde_json::to_value(warning).unwrap();
+        assert_eq!(wire["explanation"]["params"]["nodeId"], owner);
+        let decoded: weftext_core::CoreDescription = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(&decoded, warning);
+        assert!(wire.get("message").is_none());
+        assert_eq!(std::fs::read(&retained).unwrap(), original);
+        core.release_compile_dependency_cut(&cut.cut_id);
+    }
+
     use super::*;
     use weftext_export::exchange::{
         NATIVE_FORMAT, NATIVE_VERSION, NativeEntry, NativeFileRole, NativeManifest, NativePackage,
@@ -1364,7 +1567,13 @@ mod tests {
             .push(weftext_export::exchange::NativeLoss {
                 path: "Owner/WEFTEXT.CITATIONS.BIB".into(),
                 code: "unregisteredFileOmitted".into(),
-                detail: "Original remains outside the package".into(),
+                description: UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: "Original remains outside the package".into(),
+                    },
+                )
+                .into(),
+                product_diagnostics: vec![],
             });
         let originals = package.files.clone();
         assert_eq!(
@@ -1377,6 +1586,11 @@ mod tests {
     }
     #[test]
     fn readable_typed_slots_keep_exact_text_and_distinct_states() {
+        let issue = ErrorDescription::new(UiMessage::common_operation(
+            weftext_messages::params::CommonOperation {
+                operation_id: "original diagnostic 😀".into(),
+            },
+        ));
         assert_eq!(
             cell_text(&Cell::value(NativeValue::Int("9223372036854775807".into()))).unwrap(),
             "9223372036854775807"
@@ -1392,11 +1606,13 @@ mod tests {
             Cell::Absent,
             Cell::Null,
             Cell::Invalid {
-                diagnostics: vec!["bad".into()],
+                diagnostics: vec![issue.clone()],
                 value: None,
             },
             Cell::Unavailable {
-                reason: "missing".into(),
+                kind: weftext_data::DataErrorKind::Unavailable,
+                reason: issue.clone(),
+                diagnostics: vec![],
             },
         ]
         .map(|c| cell_text(&c).unwrap());
@@ -1411,6 +1627,23 @@ mod tests {
             cell_text(&Cell::value(NativeValue::Text("=1+1".into()))).unwrap(),
             "=1+1"
         );
+        let invalid = Cell::Invalid {
+            diagnostics: vec![issue.clone(); 40],
+            value: Some(NativeValue::Text(
+                "Exact invalid author value 😀\r\n".into(),
+            )),
+        };
+        let exported: Value = serde_json::from_str(&cell_text(&invalid).unwrap()).unwrap();
+        assert_eq!(exported["state"], "invalid");
+        assert_eq!(exported["diagnostics"].as_array().unwrap().len(), 40);
+        assert_eq!(
+            exported["value"],
+            value(NativeValue::Text(
+                "Exact invalid author value 😀\r\n".into()
+            ))
+            .unwrap()
+        );
+        assert_eq!(exported, value(&invalid).unwrap());
     }
     #[test]
     fn unsupported_binding_and_template_formats_refuse() {

@@ -31,8 +31,10 @@ fn managed_heading_numbering_stays_in_shared_editor_and_rejects_modified_rules()
         .source
         .replace("set heading(numbering: none)", "it => it");
     assert_eq!(
-        inspect_editor(&altered).unavailable_reason.as_deref(),
-        Some("unverified-show-rule")
+        inspect_editor(&altered)
+            .unavailable_reason
+            .map(|reason| reason.explanation),
+        Some(UiMessage::error_engine_reason_show_rule_unverified())
     );
 }
 

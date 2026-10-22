@@ -28,18 +28,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use styles::{RunStyle, Styles};
 use weftext_engine::{RenderNode, RenderOutput};
+use weftext_messages::ErrorDescription;
 use xml::{Element, Xml, val};
 
 #[derive(Debug)]
-struct DocxError(String);
+struct DocxError(ExportError);
 impl DocxError {
-    fn new(message: impl ToString) -> Self {
-        Self(message.to_string())
+    fn new(description: impl Into<ErrorDescription>) -> Self {
+        Self(ExportError::new(description))
+    }
+    fn from_data(error: weftext_data::DataError) -> Self {
+        Self(ExportError::from_data(error))
+    }
+    fn from_native(error: crate::exchange::NativeError) -> Self {
+        Self(ExportError::from_native(error))
+    }
+    fn from_engine(error: weftext_engine::EngineError) -> Self {
+        Self(ExportError::from_engine(error))
     }
 }
 impl From<DocxError> for ExportError {
     fn from(value: DocxError) -> Self {
-        Self(value.0)
+        value.0
     }
 }
 
@@ -84,9 +94,11 @@ pub struct TemplateControl {
 /// Inspect bounded DOCX bytes without executing Word or modifying the template.
 pub fn list_template_controls(bytes: &[u8]) -> crate::Result<Vec<TemplateControl>> {
     let package = Package::load(Some(bytes))?;
-    let doc = package
-        .xml("word/document.xml")?
-        .ok_or_else(|| ExportError("模板缺少主文档".into()))?;
+    let doc = package.xml("word/document.xml")?.ok_or_else(|| {
+        ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_template_main_document_missing(),
+        ))
+    })?;
     validate_document(&doc)?;
     let mut result = vec![];
     controls(&doc, "", &mut result);
@@ -129,7 +141,9 @@ pub fn export_reviewed_docx(
 }
 fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifact, DocxError> {
     if !input.render.ok {
-        return Err(DocxError::new("DOCX 需要一次成功的冻结 HTML 编译"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_successful_frozen_html_required(),
+        )));
     }
     if input
         .render
@@ -137,19 +151,24 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         .as_ref()
         .is_none_or(|p| p.target != "html")
     {
-        return Err(DocxError::new("DOCX 默认 profile 需要同次 HTML 编译的产品"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_same_compile_products_required(),
+        )));
     }
-    let tree = input
-        .render
-        .tree
-        .as_ref()
-        .ok_or_else(|| DocxError::new("冻结编译缺少最终语义树"))?;
+    let tree = input.render.tree.as_ref().ok_or_else(|| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_final_semantic_tree_missing(),
+        ))
+    })?;
     check_tree(tree, 0, &mut 0usize)?;
     for binding in input.bindings.values() {
         if let DocxBinding::Text { value } = binding
             && !value.chars().all(valid_xml_char)
         {
-            return Err(DocxError::new("字段文字包含 DOCX/XML 不能保留的控制字符"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_field_control_character_unsupported(
+                ),
+            )));
         }
         if let DocxBinding::Nodes { nodes } = binding {
             let mut count = 0;
@@ -159,9 +178,11 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         }
     }
     let mut package = Package::load(input.template)?;
-    let mut doc = package
-        .xml("word/document.xml")?
-        .ok_or_else(|| DocxError::new("缺少 DOCX 主文档"))?;
+    let mut doc = package.xml("word/document.xml")?.ok_or_else(|| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_main_document_missing(),
+        ))
+    })?;
     validate_document(&doc)?;
     let style_xml = package
         .xml("word/styles.xml")?
@@ -242,7 +263,17 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
     }
     for (key, pattern) in patterns {
         if pattern.as_ref() != Some(&chosen_pattern) {
-            ctx.loss("heading-numbering-loss",format!("此标题使用函数、不支持或不同的编号 pattern；Word 共享原生编号采用 {chosen_pattern}"),Some(key));
+            ctx.loss(
+                "heading-numbering-loss",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_heading_pattern_loss(
+                        weftext_messages::params::ErrorExportDocxHeadingPatternLoss {
+                            pattern: (chosen_pattern).to_string(),
+                        },
+                    ),
+                ),
+                Some(key),
+            );
         }
     }
     report_unassociated_native_headings(input.render, tree, &mut ctx);
@@ -266,7 +297,13 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         replace_controls(&mut doc, "", &input, &mut ctx, &mut used)?;
         for tag in input.bindings.keys() {
             if !used.contains(tag) {
-                return Err(DocxError::new(format!("模板没有绑定内容控件 tag：{tag}")));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_template_binding_missing(
+                        weftext_messages::params::ErrorExportDocxTemplateBindingMissing {
+                            tag: (tag).to_string(),
+                        },
+                    ),
+                )));
             }
         }
         if !input
@@ -276,14 +313,18 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         {
             ctx.loss(
                 "body-not-bound",
-                "模板没有绑定正文；输出仅包含明确绑定的字段与原模板内容",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_body_not_bound(),
+                ),
                 None,
             );
         }
     } else {
-        let body = doc
-            .child_mut("w:body")
-            .ok_or_else(|| DocxError::new("模板缺少 w:body"))?;
+        let body = doc.child_mut("w:body").ok_or_else(|| {
+            DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_template_body_missing(),
+            ))
+        })?;
         let sect = body.child("w:sectPr").cloned();
         body.children = ctx
             .blocks(tree, &Layout::normal(&styles, &normal), 0)?
@@ -320,12 +361,16 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
     }
     ctx.loss(
         "office-interoperability-unverified",
-        "尚未在真实 Word/WPS/LibreOffice 验证字段更新、导航、编号、字体和保存再打开",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_office_host_validation_pending(),
+        ),
         None,
     );
     ctx.loss(
         "font-target-dependency",
-        "输出保留可编辑 Unicode 和模板字体/语言；字体未嵌入，目标 Office 需要相应字体或会替换",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_fonts_not_embedded(),
+        ),
         None,
     );
     let mut numbering = numbering;
@@ -345,13 +390,16 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
     let mut losses = ctx.losses;
     review::apply(&mut package, &mut doc, reviews, &mut losses)?;
     if input.options.reject_losses && !losses.is_empty() {
-        return Err(DocxError::new(format!(
-            "已拒绝 DOCX 损失：{}",
-            losses
-                .iter()
-                .map(|l| l.code.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
+        let codes = losses
+            .iter()
+            .map(|loss| loss.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(DocxError(ExportError::from_losses(
+            weftext_messages::UiMessage::error_export_docx_losses_declined(
+                weftext_messages::params::ErrorExportDocxLossesDeclined { codes },
+            ),
+            losses,
         )));
     }
     package.set_xml("word/document.xml", &doc);
@@ -399,26 +447,31 @@ fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifac
         extension: "docx".into(),
         losses,
         summary: if input.template.is_some() {
-            "已按 Word 内容控件绑定生成可编辑 DOCX"
+            weftext_messages::UiMessage::error_export_docx_editable_content_control_output()
         } else {
-            "已按冻结 HTML 语义生成可编辑 DOCX"
-        }
-        .into(),
+            weftext_messages::UiMessage::error_export_docx_editable_frozen_html_output()
+        },
     })
 }
 fn check_tree(n: &RenderNode, depth: usize, count: &mut usize) -> Result<(), DocxError> {
     *count += 1;
     if depth > 128 || *count > 100_000 {
-        return Err(DocxError::new("DOCX 语义树超过安全预算"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_semantic_tree_exceeded(),
+        )));
     }
     if n.text.as_ref().is_some_and(|t| t.len() > 16 * 1024 * 1024) {
-        return Err(DocxError::new("DOCX 文本超出预算"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_text_budget_exceeded(),
+        )));
     }
     if n.text
         .as_ref()
         .is_some_and(|t| !t.chars().all(valid_xml_char))
     {
-        return Err(DocxError::new("显示文字包含 DOCX/XML 不能保留的控制字符"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_display_control_character_unsupported(),
+        )));
     }
     for c in &n.children {
         check_tree(c, depth + 1, count)?;
@@ -504,15 +557,21 @@ fn report_unassociated_native_headings(
         if let Some(left) = associated.get_mut(&key).filter(|v| **v > 0) {
             *left -= 1;
         } else {
-            ctx.loss("native-heading-role-unavailable","原生标题已隐藏或经自定义 show 改写，缺少可证明的最终标题角色；保留实际输出内容，未补建原生 Word 标题",h.path.as_ref().map(|p|format!("{p}:{}..{}",h.from,h.to)));
+            ctx.loss(
+                "native-heading-role-unavailable",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_heading_role_unproven(),
+                ),
+                h.path.as_ref().map(|p| format!("{p}:{}..{}", h.from, h.to)),
+            );
         }
     }
 }
 fn validate_document(doc: &Element) -> Result<(), DocxError> {
     if doc.name != "w:document" || doc.get("xmlns:w") != Some(W) || doc.child("w:body").is_none() {
-        return Err(DocxError::new(
-            "只支持标准 transitional OOXML 的 w:document 模板",
-        ));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_template_namespace_unsupported(),
+        )));
     }
     Ok(())
 }
@@ -587,17 +646,27 @@ fn replace_controls(
                     parent,
                     "w:p" | "w:hyperlink" | "w:body" | "w:tc" | "w:sdtContent"
                 ) {
-                    return Err(DocxError::new(format!("内容控件 {tag} 的结构位置暂不支持")));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_control_position_unsupported(
+                            weftext_messages::params::ErrorExportDocxControlPositionUnsupported {
+                                tag: (tag).to_string(),
+                            },
+                        ),
+                    )));
                 }
                 let first = used.insert(tag.clone());
                 if !first && matches!(binding, DocxBinding::Body | DocxBinding::Nodes { .. }) {
-                    return Err(DocxError::new(
-                        "同一结构绑定不能放入多个内容控件；请为每个独立输出位置冻结独立节点",
-                    ));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_structural_binding_repeated(
+                        ),
+                    )));
                 }
-                let content = e
-                    .child("w:sdtContent")
-                    .ok_or_else(|| DocxError::new("内容控件缺少 sdtContent"))?;
+                let content = e.child("w:sdtContent").ok_or_else(|| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_content_control_body_missing(
+                        ),
+                    ))
+                })?;
                 let layout = Layout::placeholder(content, ctx.styles, &ctx.normal)?;
                 let inline = matches!(parent, "w:p" | "w:hyperlink");
                 let title = || {
@@ -606,18 +675,23 @@ fn replace_controls(
                         .products
                         .as_ref()
                         .and_then(|p| p.title.as_deref())
-                        .ok_or_else(|| DocxError::new("冻结产品没有唯一 title；不能为模板发明标题"))
+                        .ok_or_else(|| {
+                            DocxError::new(weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_docx_unique_title_missing(
+                                ),
+                            ))
+                        })
                 };
                 let nodes = match binding {
                     DocxBinding::Body => {
                         if ctx.body_inserted {
-                            return Err(DocxError::new(
-                                "正文只能绑定一个块级内容控件；重复正文需要独立编译的出现位置与路由",
-                            ));
+                            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_docx_body_binding_repeated(),
+                            )));
                         }
                         ctx.body_inserted = true;
                         if inline {
-                            return Err(DocxError::new("正文绑定需要块级内容控件"));
+                            return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_block_body_control_required())));
                         }
                         ctx.blocks(input.render.tree.as_ref().unwrap(), &layout, 0)?
                     }
@@ -627,7 +701,7 @@ fn replace_controls(
                             if inline {
                                 if is_block(n) {
                                     return Err(DocxError::new(
-                                        "表格/段落 Query 结果需要块级内容控件",
+                                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_block_query_control_required()),
                                     ));
                                 }
                                 out.extend(ctx.inline(n, &RunStyle::default(), None)?);
@@ -677,7 +751,13 @@ fn replace_controls(
             } else {
                 ctx.loss(
                     "template-control-unbound",
-                    format!("模板内容控件 {tag} 未绑定；保留其原内容"),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_control_binding_retained(
+                            weftext_messages::params::ErrorExportDocxControlBindingRetained {
+                                tag: (tag).to_string(),
+                            },
+                        ),
+                    ),
                     Some(tag),
                 );
             }
@@ -740,7 +820,7 @@ impl Context<'_> {
                     || n.children.iter().any(numbered_equation)
             }
             if n.children.iter().any(numbered_equation) {
-                self.loss("equation-double-numbering","原生公式本体与包装题注都启用了编号；Word分别保字段，但两种原生计数规则不能合并为等价序列，请在原生源显式选择一种编号模式",Some(n.key.clone()));
+                self.loss("equation-double-numbering",weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_equation_and_caption_numbering_conflict()),Some(n.key.clone()));
             }
         }
         if let Some(id) = n.attrs.get("data-weftext-target-id") {
@@ -820,7 +900,9 @@ impl Context<'_> {
         let Some((atoms, suffix)) = parsed.filter(|_| !sequence.is_empty()) else {
             self.loss(
                 "caption-numbering-unmapped",
-                "自定义类别／函数／多级题注编号未映射为Word SEQ；保冻结文字，不能自动更新",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_custom_caption_numbering_unmapped(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![text_run(&plain, &base.properties())]);
@@ -832,7 +914,9 @@ impl Context<'_> {
         else {
             self.loss(
                 "caption-numbering-unmapped",
-                "真实计数输出与已证明的简单编号pattern不匹配；保冻结文字",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_counter_pattern_mismatch(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![text_run(&plain, &base.properties())]);
@@ -857,7 +941,9 @@ impl Context<'_> {
         } else {
             self.loss(
                 "caption-counter-unmapped",
-                "题注没有唯一单级计数状态；SEQ采用该类别连续计数，冻结编号可能变化",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_caption_counter_not_unique(),
+                ),
                 Some(n.key.clone()),
             );
         }
@@ -911,7 +997,13 @@ impl Context<'_> {
                         .and_then(|v| v.get("w:val"))
                         .is_some_and(|v| v != "continuous")
             }) {
-                self.loss("note-template-numbering-loss","模板保有自定义注释编号设置；新增注释采用真实Word部件，但编号样式／重启与原生源不保证等价",Some("word/settings.xml".into()));
+                self.loss(
+                    "note-template-numbering-loss",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_template_note_numbering_custom(),
+                    ),
+                    Some("word/settings.xml".into()),
+                );
             }
         }
         if n.attrs
@@ -923,21 +1015,27 @@ impl Context<'_> {
         {
             self.loss(
                 "note-numbering-unmapped",
-                "注释自定义编号／函数未映射为Word编号；本次采用该类型的连续十进制编号，原生源保留",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_custom_note_numbering_unmapped(),
+                ),
                 Some(n.key.clone()),
             );
         }
         if key.0 == "endnote" {
             self.loss(
                 "endnote-placement-loss",
-                "尾注输出为Word文末独立部件；原生尾注列表标题、回链布局及指定插入位置未映射",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_endnote_layout_unmapped(),
+                ),
                 Some(n.key.clone()),
             );
         }
         if self.note_depth > 0 {
             self.loss(
                 "note-nested-unmapped",
-                "注释内的嵌套注释不能安全映射；内容保留在原生源，未进入 DOCX 注释部件",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_nested_note_unmapped(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![]);
@@ -947,7 +1045,13 @@ impl Context<'_> {
             .get("data-weftext-note-definition")
             .map(String::as_str);
         if !matches!(definition, Some("true" | "false")) || !self.notes.has_definition(&key) {
-            self.loss("note-definition-unmapped","本次显示没有唯一真实定义／重复标记依据；仅保标记文字，注释正文未进入DOCX，不按首次出现猜定义或改变编号顺序",Some(n.key.clone()));
+            self.loss(
+                "note-definition-unmapped",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_note_definition_not_unique(),
+                ),
+                Some(n.key.clone()),
+            );
             return Ok(vec![text_run(&math::plain(n), &base.properties())]);
         }
         if definition == Some("false") || self.notes.emitted(&key) {
@@ -961,9 +1065,13 @@ impl Context<'_> {
         let Some(mut body) = self.notes.body(&key) else {
             self.loss(
                 "note-body-unmapped",
-                format!(
-                    "{} {} 没有唯一真实正文；注释正文未进入 DOCX，保留冻结标记文字",
-                    key.0, key.1
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_note_body_unavailable(
+                        weftext_messages::params::ErrorExportDocxNoteBodyUnavailable {
+                            kind: (key.0).to_string(),
+                            id: (key.1).to_string(),
+                        },
+                    ),
                 ),
                 Some(n.key.clone()),
             );
@@ -992,17 +1100,19 @@ impl Context<'_> {
             Element::new("w:bookmarkEnd").attr("w:id", bookmark_id),
         ])
     }
-    fn loss(&mut self, code: &str, message: impl ToString, location: Option<String>) {
-        let message = message.to_string();
+    fn loss(&mut self, code: &str, message: impl Into<ErrorDescription>, location: Option<String>) {
+        let message: ErrorDescription = message.into();
         if !self
             .losses
             .iter()
-            .any(|l| l.code == code && l.message == message && l.location == location)
+            .any(|l| l.code == code && l.description == message && l.location == location)
         {
             self.losses.push(ExportLoss {
                 code: code.into(),
-                message,
+                description: message,
                 location,
+
+                product_diagnostics: Vec::new(),
             });
         }
     }
@@ -1142,7 +1252,9 @@ impl Context<'_> {
         {
             self.loss(
                 "unsupported-layout",
-                "原生分页区域或不支持的 HTML 结构只保留可编辑说明",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_unsupported_html_description_only(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![paragraph(
@@ -1172,7 +1284,9 @@ impl Context<'_> {
         {
             self.loss(
                 "unassociated-heading",
-                "显示树中的 heading 缺少原生角色关联；保留其实际内容为普通段落，不猜作者层级",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_display_heading_role_missing(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![self.semantic_paragraph(n, layout, None)?]);
@@ -1267,7 +1381,20 @@ impl Context<'_> {
                     set_numpr(&mut ppr, 0, 0);
                 }
             } else {
-                self.loss("heading-depth-unsupported",format!("作者标题深度 {level} 超出 Word Heading 1–9；保留文字与深度，无法提供等价原生编号/outline"),Some(h.key.clone()));
+                self.loss(
+                    "heading-depth-unsupported",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_heading_depth_unsupported(
+                            weftext_messages::params::ErrorExportDocxHeadingDepthUnsupported {
+                                depth: weftext_messages::UiInteger::new(
+                                    i64::try_from(level).expect("bounded product count"),
+                                )
+                                .expect("bounded product count"),
+                            },
+                        ),
+                    ),
+                    Some(h.key.clone()),
+                );
                 ppr.remove("w:pStyle");
                 ppr.children.insert(
                     0,
@@ -1282,16 +1409,25 @@ impl Context<'_> {
                         .iter()
                         .any(|c| !math::plain(c).trim().is_empty())
                 {
-                    self.loss("run-in-leading-body-loss","同段标题之前已有正文；Word 原生段落编号位于段首，不能保留编号在前文之后的位置。前文及后文保留正文字符格式，整段仍属于 Heading",Some(h.key.clone()));
+                    self.loss(
+                        "run-in-leading-body-loss",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_run_in_heading_after_text(),
+                        ),
+                        Some(h.key.clone()),
+                    );
                 }
                 if !layout.body.0.contains_key("w:sz") || !layout.body.0.contains_key("w:rFonts") {
-                    return Err(DocxError::new(
-                        "同段标题正文无法解析模板正文的有效字体/字号；请在模板正文样式或占位段落指定字体与字号",
-                    ));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_run_in_body_font_unresolved(
+                        ),
+                    )));
                 }
                 self.loss(
                     "run-in-toc-whole-paragraph",
-                    "同段标题使用整个 Heading 段落；Word 普通目录和导航可能包含后面的正文",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_run_in_heading_whole_paragraph(),
+                    ),
                     Some(h.key.clone()),
                 );
             }
@@ -1469,7 +1605,7 @@ impl Context<'_> {
             } else {
                 self.loss(
                     "number-reference-unavailable",
-                    "原生编号引用没有唯一导出 bookmark；保留冻结文字，不能动态更新",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_number_reference_bookmark_not_unique()),
                     Some(n.key.clone()),
                 );
             }
@@ -1521,7 +1657,11 @@ impl Context<'_> {
                 } else {
                     self.loss(
                         "link-target-unavailable",
-                        format!("显示链接 {href} 没有唯一导出 bookmark"),
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_link_bookmark_unavailable(weftext_messages::params::ErrorExportDocxLinkBookmarkUnavailable {
+                                href: (href).to_string(),
+                            }),
+                        ),
                         Some(n.key.clone()),
                     );
                     return Ok(runs);
@@ -1532,7 +1672,13 @@ impl Context<'_> {
             } else {
                 self.loss(
                     "offline-link-unavailable",
-                    format!("显示链接 {href} 缺少同次编译的离线路由；保留可编辑文字"),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_link_route_unavailable(
+                            weftext_messages::params::ErrorExportDocxLinkRouteUnavailable {
+                                href: (href).to_string(),
+                            },
+                        ),
+                    ),
                     Some(n.key.clone()),
                 );
                 return Ok(runs);
@@ -1543,7 +1689,7 @@ impl Context<'_> {
         if n.kind == "frame" {
             self.loss(
                 "unsupported-layout",
-                "局部分页区域无法转换为等价可编辑 DOCX",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_pagination_region_not_editable_equivalent()),
                 Some(n.key.clone()),
             );
         }
@@ -1560,7 +1706,9 @@ impl Context<'_> {
             {
                 self.loss(
                     "nested-block-in-paragraph",
-                    "段落内嵌块结构降为可编辑文字；布局不等价",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_inline_block_flattened(),
+                    ),
                     Some(c.key.clone()),
                 );
             }
@@ -1603,7 +1751,13 @@ impl Context<'_> {
                     } else {
                         self.loss(
                             "source-style-unavailable",
-                            format!("无法映射源字体大小 {value}"),
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_docx_font_size_unmapped(
+                                    weftext_messages::params::ErrorExportDocxFontSizeUnmapped {
+                                        value: (value).to_string(),
+                                    },
+                                ),
+                            ),
                             Some(n.key.clone()),
                         );
                     }
@@ -1633,7 +1787,13 @@ impl Context<'_> {
                     } else {
                         self.loss(
                             "source-style-unavailable",
-                            format!("无法映射源颜色 {value}"),
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_docx_color_unmapped(
+                                    weftext_messages::params::ErrorExportDocxColorUnmapped {
+                                        value: (value).to_string(),
+                                    },
+                                ),
+                            ),
                             Some(n.key.clone()),
                         );
                     }
@@ -1652,7 +1812,14 @@ impl Context<'_> {
                 | "border-collapse" => {}
                 _ => self.loss(
                     "source-style-loss",
-                    format!("DOCX 暂未映射源样式 {key}: {value}"),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_style_unmapped(
+                            weftext_messages::params::ErrorExportDocxStyleUnmapped {
+                                property: (key).to_string(),
+                                value: (value).to_string(),
+                            },
+                        ),
+                    ),
                     Some(n.key.clone()),
                 ),
             }
@@ -1666,7 +1833,9 @@ impl Context<'_> {
         else {
             self.loss(
                 "image-unavailable",
-                "图片没有获权冻结的内联字节；保留说明",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_image_frozen_bytes_missing(),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![text_run(
@@ -1678,15 +1847,27 @@ impl Context<'_> {
             )]);
         };
         if encoded.len() > 12 * 1024 * 1024 {
-            return Err(DocxError::new("图片超过导出安全预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_image_bytes_exceeded(),
+            )));
         }
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(encoded)
-            .map_err(|_| DocxError::new("图片 Base64 无效"))?;
+            .map_err(|_| {
+                DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_image_base64_invalid(),
+                ))
+            })?;
         let Some((extension, width, height)) = image_dimensions(mime, &bytes) else {
             self.loss(
                 "image-format-loss",
-                format!("图片 {mime} 不支持或无法验证尺寸；保留可编辑说明"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_image_unsupported(
+                        weftext_messages::params::ErrorExportDocxImageUnsupported {
+                            mime: (mime).to_string(),
+                        },
+                    ),
+                ),
                 Some(n.key.clone()),
             );
             return Ok(vec![text_run(
@@ -1698,7 +1879,9 @@ impl Context<'_> {
             )]);
         };
         if width == 0 || height == 0 || width > 100_000 || height > 100_000 {
-            return Err(DocxError::new("图片尺寸无效或超过预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_image_dimensions_invalid(),
+            )));
         }
         let rel = self.package.media(extension, mime, bytes);
         let id = self.drawing_next;
@@ -1789,9 +1972,14 @@ impl Context<'_> {
     fn heading_number(&mut self, n: &RenderNode, level: usize) -> Result<usize, DocxError> {
         self.heading_state.resize(level, 0);
         self.heading_state.truncate(level);
-        self.heading_state[level - 1] = self.heading_state[level - 1]
-            .checked_add(1)
-            .ok_or_else(|| DocxError::new("标题计数溢出"))?;
+        self.heading_state[level - 1] =
+            self.heading_state[level - 1]
+                .checked_add(1)
+                .ok_or_else(|| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_heading_count_overflow(),
+                    ))
+                })?;
         let state = n
             .attrs
             .get("data-weftext-counter-state")
@@ -1813,7 +2001,13 @@ impl Context<'_> {
                 self.heading_state = state;
             }
         } else {
-            self.loss("heading-counter-state-unavailable","冻结标题未提供准确原生计数状态；Word 动态编号采用标准层级，不能证明保留手工 counter 更新",Some(n.key.clone()));
+            self.loss(
+                "heading-counter-state-unavailable",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_heading_counter_state_unproven(),
+                ),
+                Some(n.key.clone()),
+            );
         }
         Ok(self.heading_num)
     }
@@ -1840,14 +2034,18 @@ impl Context<'_> {
         if depth > 8 {
             self.loss(
                 "list-depth-loss",
-                "Word 原生列表最多九级；更深列表保留文字并报告层级损失",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_list_depth_exceeded(),
+                ),
                 Some(n.key.clone()),
             );
         }
         if literal {
             self.loss(
                 "list-marker-literal",
-                "此冻结列表有自定义可见标记；保留其文字，未声称标记可自动重新编号",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_custom_list_marker_preserved(),
+                ),
                 Some(n.key.clone()),
             );
         }
@@ -1921,7 +2119,9 @@ impl Context<'_> {
         let mut rows = vec![];
         table_rows(n, &mut rows);
         if rows.len() > 5000 {
-            return Err(DocxError::new("表格行数超过预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_table_rows_exceeded(),
+            )));
         }
         let mut out = Element::new("w:tbl");
         let mut pr = Element::new("w:tblPr");
@@ -1965,7 +2165,7 @@ impl Context<'_> {
                 if header && repeat {
                     self.loss(
                         "table-header-repeat-loss",
-                        "非首部连续普通表头的跨页重复属性未映射；表格内容保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_non_leading_header_repeat_unmapped()),
                         Some(row.key.clone()),
                     );
                 }
@@ -1987,7 +2187,9 @@ impl Context<'_> {
                 let span = parse_span(cell, "colspan")?;
                 let rowspan = parse_span(cell, "rowspan")?;
                 if active.range(column..column + span).next().is_some() {
-                    return Err(DocxError::new("表格跨列与跨行范围重叠"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_table_spans_overlap(),
+                    )));
                 }
                 let mut tc = Element::new("w:tc");
                 let mut props = Element::new("w:tcPr");
@@ -2026,7 +2228,9 @@ impl Context<'_> {
                 tr.push(tc);
                 column += span;
                 if column > 512 {
-                    return Err(DocxError::new("表格列数超过预算"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_table_columns_exceeded(),
+                    )));
                 }
             }
             while !active.is_empty() {
@@ -2041,7 +2245,9 @@ impl Context<'_> {
                     column += 1;
                 }
                 if column > 512 {
-                    return Err(DocxError::new("表格列数超过预算"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_table_columns_exceeded(),
+                    )));
                 }
             }
             max_columns = max_columns.max(column);
@@ -2051,7 +2257,9 @@ impl Context<'_> {
         if !active.is_empty() {
             self.loss(
                 "table-rowspan-loss",
-                "表格跨行范围超过实际行数；保留已有单元格并报告损失",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_table_row_span_out_of_bounds(),
+                ),
                 Some(n.key.clone()),
             );
         }
@@ -2131,10 +2339,16 @@ fn parse_span(n: &RenderNode, attr: &str) -> Result<usize, DocxError> {
         .get(attr)
         .map(|s| s.parse::<usize>())
         .transpose()
-        .map_err(|_| DocxError::new("无效表格跨度"))?
+        .map_err(|_| {
+            DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_table_span_invalid(),
+            ))
+        })?
         .unwrap_or(1);
     if !(1..=512).contains(&span) {
-        return Err(DocxError::new("表格跨度超出预算"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_table_span_exceeded(),
+        )));
     }
     Ok(span)
 }

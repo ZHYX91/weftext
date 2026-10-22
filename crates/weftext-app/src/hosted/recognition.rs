@@ -104,7 +104,7 @@ async fn capabilities(
 async fn fields(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Fields>,
+    RequestJson(req): RequestJson<api::Fields>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -131,7 +131,7 @@ async fn fields(
 async fn start(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Start>,
+    RequestJson(req): RequestJson<api::Start>,
 ) -> ApiResult {
     let (c, run, reply) = locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
@@ -154,7 +154,7 @@ async fn start(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::JobRequest>,
+    RequestJson(req): RequestJson<api::JobRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -168,7 +168,7 @@ async fn status(
 async fn cancel(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::JobRequest>,
+    RequestJson(req): RequestJson<api::JobRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -183,7 +183,7 @@ async fn cancel(
 async fn download(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::JobRequest>,
+    RequestJson(req): RequestJson<api::JobRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -197,7 +197,7 @@ async fn download(
 async fn preview(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Preview>,
+    RequestJson(req): RequestJson<api::Preview>,
 ) -> ApiResult {
     let id = req.job_id.clone();
     let auth2 = auth.clone();
@@ -239,7 +239,7 @@ fn safe(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Prepare>,
+    RequestJson(req): RequestJson<api::Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{
     let actor=inner.actor(&auth)?;let ctx=context(inner,&actor,&req.target,"import")?;let(c,_)=claim(inner,&actor,&req.job_id,"import")?;api::check_claim(&c,&ctx)?;library::access(inner,&actor,"schema",false)?;
@@ -247,28 +247,28 @@ async fn prepare(
     let fp=api::fingerprint(&c,&req.review,&req.operation_id)?;let evidence=api::evidence(&inner.office.recognition,&c)?;let bytes=api::original(&inner.office.recognition,&c)?;
     let request=api::intent(&ctx,&c,bytes,evidence,req.review.clone(),&req.operation_id);
     let p=inner.config.directories[&inner.config.content_import_slots[&ctx.resource].parent].clone();let q=inner.core.qualified_query_scope_at(&ctx.root,&ctx.parent,&p.reference,"live").map_err(|_|api::changed())?;let mut witnesses=vec![];Core::merge_query_scope_witness(&mut witnesses,&q.witness).map_err(|_|api::changed())?;let refs=witnesses.iter().collect::<Vec<_>>();
-    let preview=json!({"summary":"保留准确原件与来源证据，在固定空槽创建可编辑原生笔记。","fields":req.review.fields,"_recognition":api::decision(&c,&ctx)});
+    let preview=json!({"summary":UiMessage::error_api_hosted_recognition_plan_summary(),"fields":req.review.fields,"_recognition":api::decision(&c,&ctx)});
     let s=inner.core.with_actor_for_root(&ctx.scope,&ctx.root,|core|core.actor_feature_prepare_content_import(&ctx.resource,&req.operation_id,&fp,request,preview,&refs,&ctx.resource)).map_err(|_|api::changed())?;Ok(safe(inner,&actor,&ctx,s))
 }).await?))
 }
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Operation>,
+    RequestJson(req): RequestJson<api::Operation>,
 ) -> ApiResult {
     action(state, auth, req, None, false).await
 }
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Operation>,
+    RequestJson(req): RequestJson<api::Operation>,
 ) -> ApiResult {
     action(state, auth, req, None, true).await
 }
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<api::Commit>,
+    RequestJson(req): RequestJson<api::Commit>,
 ) -> ApiResult {
     action(
         state,

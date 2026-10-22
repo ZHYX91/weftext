@@ -1,6 +1,7 @@
 //! Original actor-record provenance. This is host-selected context, not a grant.
 use super::*;
 use std::io::{Seek, SeekFrom};
+use weftext_messages::UiMessage;
 
 const MAX_LIBRARY_HEADER: usize = 2048;
 const MAX_HEADER_PREFIX: usize = 4096;
@@ -61,19 +62,24 @@ pub(crate) fn read_metadata_prefix(
             if count == maximum {
                 return Err(CoreError::new(
                     "budget",
-                    "Actor library header exceeds its budget",
+                    UiMessage::error_core_hosted_library_actor_library_header_exceeds_budget(),
                 ));
             }
             count += 1;
             let mut b = [0];
-            file.read_exact(&mut b)
-                .map_err(|_| CoreError::new("privateEvidence", "Truncated actor metadata"))?;
+            file.read_exact(&mut b).map_err(|error| {
+                CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_hosted_library_truncated_actor_metadata(),
+                )
+                .caused_by(CoreError::from(error))
+            })?;
             Ok(b[0])
         };
         if next_nonspace(&mut byte)? != b'{' {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Invalid actor metadata header",
+                UiMessage::error_core_hosted_library_invalid_actor_metadata_header(),
             ));
         }
         let mut found = Vec::new();
@@ -228,7 +234,7 @@ impl ActorLibraryBinding {
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Invalid original actor library binding",
+                UiMessage::error_core_hosted_library_invalid_original_actor_library_binding(),
             ));
         }
         Ok(())
@@ -266,38 +272,49 @@ impl Core {
     ) -> Result<()> {
         let relative = crate::history::history_relative_path(path, &self.data_dir.join("actors"))
             .ok_or_else(|| {
-            CoreError::new("privateEvidence", "Actor record is outside private scope")
+            CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_hosted_library_actor_record_outside_private_scope(),
+            )
         })?;
         let parts = relative
             .components()
             .map(|part| part.as_os_str().to_str().map(str::to_owned))
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| CoreError::new("privateEvidence", "Invalid actor namespace"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_hosted_library_invalid_actor_namespace(),
+                )
+            })?;
         if !matches!(parts.len(), 3 | 4)
             || parts[1] != "operations"
             || (parts.len() == 4 && parts[2] != "outputs")
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Unknown actor record namespace",
+                UiMessage::error_core_hosted_library_unknown_actor_record_namespace(),
             ));
         }
         let name = parts.last().unwrap().strip_suffix(".json").ok_or_else(|| {
-            CoreError::new("privateEvidence", "Invalid original operation filename")
+            CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_hosted_library_invalid_original_operation_filename(),
+            )
         })?;
         valid_operation_id(name)?;
         let actor = if parts.len() == 4 {
             if bytes.len() > 4096 {
                 return Err(CoreError::new(
                     "budget",
-                    "Output claim exceeds its read budget",
+                    UiMessage::error_core_hosted_library_output_claim_exceeds_read_budget(),
                 ));
             }
             let claim: feature::OutputClaim = serde_json::from_slice(bytes)?;
             if claim.library.as_ref() != Some(binding) {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Output scope differs from its header",
+                    UiMessage::error_core_hosted_library_output_scope_differs_from_header(),
                 ));
             }
             feature::valid_fingerprint(&claim.fingerprint)?;
@@ -308,7 +325,7 @@ impl Core {
             if !matches!(record.scope, ActorInputScope::Qualified { .. }) {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "A no-input device fence has no library backup owner",
+                    UiMessage::error_core_original_scope_actor_no_input_backup_owner_absent(),
                 ));
             }
             let categories = usize::from(record.field.is_some())
@@ -325,7 +342,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Unbound actor input has a different original backup owner",
+                    UiMessage::error_core_original_scope_actor_unbound_backup_owner_differs(),
                 ));
             }
             if (record.library.as_ref() != Some(binding) && !unbound_authority)
@@ -334,7 +351,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original actor record categories or scope differ",
+                    UiMessage::error_core_hosted_library_original_actor_record_categories_or_scope_differ(),
                 ));
             }
             valid_operation_id(&record.core_operation_id)?;
@@ -350,7 +367,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "privateEvidence",
-                        "Original actor Plan and input owners differ",
+                        UiMessage::error_core_original_scope_actor_plan_input_owner_differs(),
                     ));
                 }
             }
@@ -360,7 +377,7 @@ impl Core {
         if actor.is_empty() || actor.len() > 256 || hash(actor.as_bytes()) != parts[0] {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Actor namespace hash differs from its original record",
+                UiMessage::error_core_hosted_library_actor_namespace_hash_differs_from_original_record(),
             ));
         }
         Ok(())
@@ -409,7 +426,7 @@ impl Core {
         if self.actor.is_some() || self.actor_library.is_some() {
             return Err(CoreError::new(
                 "invalidActor",
-                "Actor scopes cannot be nested",
+                UiMessage::error_core_hosted_library_actor_scopes_cannot_nested(),
             ));
         }
         let root = absolute_path(root)?;
@@ -426,7 +443,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "unadmittedLibrary",
-                "Existing library controls are not qualified",
+                UiMessage::error_core_hosted_library_existing_library_controls_not_qualified(),
             ));
         }
         let binding = ActorLibraryBinding {
@@ -465,7 +482,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "The trusted actor library differs",
+                UiMessage::error_core_hosted_library_trusted_actor_library_differs(),
             ));
         }
         Ok(Some(binding.clone()))
@@ -478,7 +495,7 @@ impl Core {
         let session = self
             .sessions
             .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         self.actor_library_for_root(&session.root)
     }
 
@@ -488,7 +505,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "The original actor library differs",
+                UiMessage::error_core_hosted_library_original_actor_library_differs(),
             ));
         }
         Ok(())
@@ -514,7 +531,7 @@ impl Core {
         if bytes.len() > maximum {
             return Err(CoreError::new(
                 "budget",
-                "Actor operation exceeds its durable read budget",
+                UiMessage::error_core_hosted_library_actor_operation_exceeds_durable_read_budget(),
             ));
         }
         Ok(bytes)
@@ -524,3 +541,28 @@ impl Core {
 #[cfg(all(test, windows))]
 #[path = "hosted_library_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod metadata_diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn truncated_header_retains_actual_io_cause_and_restores_original_cursor() {
+        let original = br#"{"library":{"root":"original""#.to_vec();
+        let mut file = std::io::Cursor::new(original.clone());
+        file.set_position(3);
+        let error = read_first_metadata(&mut file, "library").unwrap_err();
+        assert_eq!(error.code, "privateEvidence");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_core_hosted_library_truncated_actor_metadata()
+        );
+        let cause = &error.causes.as_slice()[0];
+        assert_eq!(cause.code, "io");
+        assert_eq!(cause.diagnostics.len(), 1);
+        assert_eq!(cause.diagnostics[0].origin, DiagnosticOrigin::Os);
+        assert!(!cause.diagnostics[0].text.is_empty());
+        assert_eq!(file.position(), 3);
+        assert_eq!(file.into_inner(), original);
+    }
+}

@@ -1,5 +1,6 @@
 use super::*;
 use std::collections::HashSet;
+use weftext_messages::UiMessage;
 
 const MAX_ENTRIES: usize = 5000;
 const MAX_INVENTORY_BYTES: usize = 16 * 1024 * 1024;
@@ -11,7 +12,7 @@ pub struct Inventory {
     pub workspace_id: Option<String>,
     pub status: String,
     pub entries: Vec<InventoryEntry>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CoreDescription>,
     pub complete: bool,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -32,7 +33,7 @@ pub struct InventoryEntry {
 struct Rules {
     ignored: HashSet<PathBuf>,
     unmanaged: HashSet<PathBuf>,
-    warnings: Vec<String>,
+    warnings: Vec<CoreDescription>,
 }
 impl Core {
     pub fn inventory(&self, root: impl AsRef<Path>) -> Result<Inventory> {
@@ -66,9 +67,7 @@ impl Core {
                     Ok(g) => g,
                     Err(e) => {
                         result.complete = false;
-                        result
-                            .warnings
-                            .push(format!("{}: {}", directory.display(), e.message));
+                        result.warnings.push(inventory_issue(&directory, e));
                         continue;
                     }
                 };
@@ -76,10 +75,14 @@ impl Core {
                 directory_guard.directory_entries(MAX_ENTRIES)?;
             if !enumeration_complete {
                 result.complete = false;
-                result.warnings.push(format!(
-                    "Directory enumeration capped at 5000 entries: {}",
-                    directory.display()
-                ));
+                result.warnings.push(
+                    UiMessage::inventory_directory_enumeration_capped(
+                        weftext_messages::params::InventoryDirectoryEnumerationCapped {
+                            path: display(&directory),
+                        },
+                    )
+                    .into(),
+                );
             }
             children.sort_by(|a, b| a.0.cmp(&b.0));
             for (name, attrs) in children {
@@ -88,7 +91,7 @@ impl Core {
                     result.complete = false;
                     result
                         .warnings
-                        .push("Inventory stopped at 5000 entries".into());
+                        .push(UiMessage::inventory_entries_capped().into());
                     return Ok(result);
                 }
                 let relative = path.strip_prefix(&root).unwrap().to_path_buf();
@@ -117,10 +120,14 @@ impl Core {
                     item.kind = "blocked".into();
                     item.identity_status = "unsupported".into();
                     result.complete = false;
-                    result.warnings.push(format!(
-                        "Reparse/offline object skipped: {}",
-                        path.display()
-                    ));
+                    result.warnings.push(
+                        UiMessage::inventory_blocked_object_skipped(
+                            weftext_messages::params::InventoryBlockedObjectSkipped {
+                                path: display(&path),
+                            },
+                        )
+                        .into(),
+                    );
                 } else if attrs & 0x10 != 0 {
                     item.kind = "directory".into();
                     item.identity_status = "unmanaged".into();
@@ -133,7 +140,7 @@ impl Core {
                         result.complete = false;
                         result
                             .warnings
-                            .push("Inventory source budget reached (16 MiB)".into());
+                            .push(UiMessage::inventory_source_budget_reached().into());
                     } else if self.check_pending(&path).is_err() {
                         result.complete = false;
                         item.identity_status = "recoveryPending".into();
@@ -152,7 +159,7 @@ impl Core {
                                     result.complete = false;
                                     result
                                         .warnings
-                                        .push("Inventory source budget reached (16 MiB)".into());
+                                        .push(UiMessage::inventory_source_budget_reached().into());
                                     result.entries.push(item);
                                     continue;
                                 }
@@ -201,9 +208,7 @@ impl Core {
                             }
                             Err(e) => {
                                 result.complete = false;
-                                result
-                                    .warnings
-                                    .push(format!("{}: {}", path.display(), e.message));
+                                result.warnings.push(inventory_issue(&path, e));
                             }
                         }
                     }
@@ -228,29 +233,35 @@ impl Core {
         Ok(result)
     }
     pub(crate) fn check_discovery_boundary(&self, root: &Path, parent: &Path) -> Result<()> {
-        let relative = parent
-            .strip_prefix(root)
-            .map_err(|_| CoreError::new("outsideRoot", "Target is outside the selected library"))?;
+        let relative = parent.strip_prefix(root).map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_inventory_target_outside_selected_library(),
+            )
+        })?;
         let rules = read_rules(root)?;
         if !rules.warnings.is_empty() {
             return Err(CoreError::new(
                 "unsupportedRules",
-                "The rules file cannot be completely interpreted; create is unavailable",
+                UiMessage::error_core_inventory_rules_file_cannot_completely_interpreted_create_unavailable(),
             ));
         }
         if excluded(relative, &rules.ignored) || excluded(relative, &rules.unmanaged) {
             return Err(CoreError::new(
                 "excludedBoundary",
-                "Node creation is not permitted inside ignored or explicitly unmanaged boundaries",
+                UiMessage::error_core_inventory_node_creation_not_permitted_inside_ignored_or_explicitly_unmanaged_boundaries(),
             ));
         }
         Ok(())
     }
     pub(crate) fn check_subtree_boundary(&self, root: &Path, directory: &Path) -> Result<()> {
         self.check_discovery_boundary(root, directory)?;
-        let relative = directory
-            .strip_prefix(root)
-            .map_err(|_| CoreError::new("outsideRoot", "Source is outside the library"))?;
+        let relative = directory.strip_prefix(root).map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_inventory_source_outside_library(),
+            )
+        })?;
         let rules = read_rules(root)?;
         if rules
             .ignored
@@ -260,7 +271,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "excludedBoundary",
-                "This subtree contains an ignored or explicitly unmanaged boundary",
+                UiMessage::error_core_inventory_subtree_contains_ignored_or_explicitly_unmanaged_boundary(),
             ));
         }
         Ok(())
@@ -281,8 +292,15 @@ fn parse_rules(bytes: &[u8]) -> Rules {
     // This MVP intentionally defines an exact-path subset, no .gitignore inheritance.
     let value: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
-        Err(_) => {
-            rules.warnings.push(".weftext-rules is unsupported: this MVP accepts JSON {version:1,ignored:[relative paths],unmanaged:[relative paths]}".into());
+        Err(error) => {
+            rules.warnings.push(
+                CoreError::new(
+                    "unsupportedRules",
+                    UiMessage::inventory_rules_json_required(),
+                )
+                .diagnostic(DiagnosticOrigin::Json, error.to_string())
+                .into(),
+            );
             return rules;
         }
     };
@@ -294,7 +312,7 @@ fn parse_rules(bytes: &[u8]) -> Rules {
     {
         rules
             .warnings
-            .push("Unsupported .weftext-rules format/version".into());
+            .push(UiMessage::inventory_rules_format_unsupported().into());
         return rules;
     }
     for (key, set) in [
@@ -302,12 +320,22 @@ fn parse_rules(bytes: &[u8]) -> Rules {
         ("unmanaged", &mut rules.unmanaged),
     ] {
         let Some(paths) = value[key].as_array() else {
-            rules.warnings.push(format!("Missing rules array: {key}"));
+            rules.warnings.push(
+                UiMessage::inventory_rules_array_missing(
+                    weftext_messages::params::InventoryRulesArrayMissing { array: key.into() },
+                )
+                .into(),
+            );
             continue;
         };
         for path in paths {
             let Some(text) = path.as_str() else {
-                rules.warnings.push(format!("Invalid {key} path"));
+                rules.warnings.push(
+                    UiMessage::inventory_rules_path_invalid(
+                        weftext_messages::params::InventoryRulesPathInvalid { array: key.into() },
+                    )
+                    .into(),
+                );
                 continue;
             };
             let path = PathBuf::from(text.replace('/', "\\"));
@@ -318,9 +346,14 @@ fn parse_rules(bytes: &[u8]) -> Rules {
                 || text.contains('*')
                 || text.is_empty()
             {
-                rules
-                    .warnings
-                    .push(format!("Unsupported rules path: {text}"));
+                rules.warnings.push(
+                    UiMessage::inventory_rules_path_unsupported(
+                        weftext_messages::params::InventoryRulesPathUnsupported {
+                            path: text.into(),
+                        },
+                    )
+                    .into(),
+                );
                 continue;
             }
             set.insert(path);
@@ -333,9 +366,10 @@ pub fn validate_library_rules(bytes: &[u8]) -> Result<()> {
     check_size(bytes)?;
     let rules = parse_rules(bytes);
     if !rules.warnings.is_empty() {
-        return Err(CoreError::new(
+        return Err(CoreError::from_descriptions(
             "unsupportedRules",
-            rules.warnings.join("; "),
+            UiMessage::inventory_rules_invalid(),
+            rules.warnings,
         ));
     }
     Ok(())
@@ -343,8 +377,94 @@ pub fn validate_library_rules(bytes: &[u8]) -> Result<()> {
 fn excluded(path: &Path, set: &HashSet<PathBuf>) -> bool {
     set.iter().any(|p| path.starts_with(p))
 }
+fn inventory_issue(path: &Path, error: CoreError) -> CoreDescription {
+    CoreError::new(
+        "inventoryUnavailable",
+        UiMessage::inventory_path_unavailable(weftext_messages::params::InventoryPathUnavailable {
+            path: display(path),
+        }),
+    )
+    .caused_by(error)
+    .into()
+}
 pub(crate) fn internal(path: &Path) -> bool {
     path.components()
         .next()
         .is_some_and(|c| c.as_os_str().to_string_lossy().starts_with(".weftext-"))
+}
+
+#[cfg(test)]
+mod description_tests {
+    use super::*;
+
+    #[test]
+    fn rule_failures_keep_independent_typed_descriptions() {
+        let bytes = br#"{"version":1,"ignored":[17,"","*.tmp"],"unmanaged":[true]}"#;
+        let rules = parse_rules(bytes);
+        assert_eq!(rules.warnings.len(), 4);
+        assert!(
+            rules
+                .warnings
+                .iter()
+                .all(|warning| warning.explanation.key().starts_with("inventory."))
+        );
+        let error = validate_library_rules(bytes).unwrap_err();
+        assert_eq!(error.explanation.key(), "inventory.rulesInvalid");
+        let Some(CoreErrorDetails::Aggregate { groups }) = error.details else {
+            panic!("Expected independent rule diagnostics");
+        };
+        let diagnostics = groups
+            .iter()
+            .filter_map(|group| match group {
+                ErrorDetailGroup::Product { diagnostics, .. } => Some(diagnostics),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        assert_eq!(diagnostics.len(), 4);
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(|description| description.explanation.key() == "inventory.rulesPathInvalid")
+                .count(),
+            2
+        );
+        assert_eq!(
+            diagnostics
+                .iter()
+                .filter(
+                    |description| description.explanation.key() == "inventory.rulesPathUnsupported"
+                )
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn malformed_rules_keep_original_json_diagnostic_separate() {
+        let error = validate_library_rules(b"{ malformed JSON").unwrap_err();
+        assert_eq!(error.explanation.key(), "inventory.rulesInvalid");
+        let Some(CoreErrorDetails::Aggregate { groups }) = error.details else {
+            panic!("Expected retained JSON diagnostic");
+        };
+        let descriptions = groups
+            .iter()
+            .filter_map(|group| match group {
+                ErrorDetailGroup::Product { diagnostics, .. } => Some(diagnostics),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        let malformed = descriptions
+            .iter()
+            .find(|description| description.explanation.key() == "inventory.rulesJsonRequired")
+            .unwrap();
+        assert!(
+            malformed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.origin == DiagnosticOrigin::Json
+                    && !diagnostic.text.is_empty())
+        );
+    }
 }

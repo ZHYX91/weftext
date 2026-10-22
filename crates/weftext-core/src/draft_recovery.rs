@@ -3,6 +3,7 @@
 //! can upgrade retained input into a different library's current authority.
 use super::*;
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -26,7 +27,7 @@ fn encode_draft_record(record: &impl Serialize) -> Result<Vec<u8>> {
     if bytes.len() > MAX_DRAFT_RECORD_BYTES {
         return Err(CoreError::new(
             "budget",
-            "Draft record exceeds its byte budget",
+            UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
         ));
     }
     Ok(bytes)
@@ -115,7 +116,7 @@ impl Core {
             .sessions
             .get(&request.session_id)
             .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         // Establish the retained original authority before reading author
         // bytes for the explicit continuation; a current path is not a grant.
         let scope =
@@ -205,7 +206,7 @@ impl Core {
         let session = self
             .sessions
             .get(&request.session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         if session.base_id != request.base_id {
             return Err(CoreError::new(
                 "draftFlushMismatch",
@@ -221,7 +222,7 @@ impl Core {
         if file_save_scope::read_input_scope(&mut file)? != scope {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft original input scope differs",
+                UiMessage::error_core_original_scope_draft_input_scope_differs(),
             ));
         }
         self.validate_original_input_scope(&scope)?;
@@ -229,7 +230,7 @@ impl Core {
         if before.size > MAX_DRAFT_RECORD_BYTES as u64 {
             return Err(CoreError::new(
                 "budget",
-                "Draft record exceeds its byte budget",
+                UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
             ));
         }
         let mut bytes = Vec::new();
@@ -285,7 +286,7 @@ impl Core {
         let session = self
             .sessions
             .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         let scope = self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         let Some(bytes) = self.read_draft_record(&path, &scope)? else {
@@ -295,7 +296,7 @@ impl Core {
         if draft.identity != session.stamp.identity || draft.scope != scope {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft object provenance differs",
+                UiMessage::error_core_draft_recovery_draft_object_provenance_differs(),
             ));
         }
         self.check_committed_draft_paths(
@@ -319,11 +320,10 @@ impl Core {
         session_id: &str,
         mut draft: Draft,
     ) -> Result<Draft> {
-        let session = self
-            .sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+        let session =
+            self.sessions.get(session_id).cloned().ok_or_else(|| {
+                CoreError::new("sessionMissing", UiMessage::error_reopen_source())
+            })?;
         if draft.producer_id.as_deref() != Some(&session.draft_producer_id) {
             return Err(CoreError::new("privateEvidence", "Draft producer differs"));
         }
@@ -357,7 +357,7 @@ impl Core {
     pub(crate) fn draft_session_scope(&self, session_id: &str) -> Result<QualifiedInputScope> {
         self.sessions
             .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?
             .file_scope
             .clone()
     }
@@ -375,7 +375,7 @@ impl Core {
         if retained.is_some_and(|draft| draft.scope != scope) {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Retained Draft has another original scope",
+                UiMessage::error_core_original_scope_draft_retained_scope_differs(),
             ));
         }
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
@@ -385,7 +385,7 @@ impl Core {
             if original.identity != session.stamp.identity {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Draft physical object differs",
+                    UiMessage::error_core_draft_recovery_draft_object_provenance_differs(),
                 ));
             }
             self.check_committed_draft_paths(
@@ -612,7 +612,7 @@ impl Core {
         if draft.scope != scope || &draft.identity != identity {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft original participant differs",
+                UiMessage::error_core_original_scope_draft_participant_differs(),
             ));
         }
         if !same_draft_path(&draft.path, &display(path)) {
@@ -642,7 +642,7 @@ impl Core {
 fn unproved_draft_placement() -> CoreError {
     CoreError::new(
         "identityPending",
-        "The source position has no committed Draft relocation; the original proposal is unchanged and current input must remain in the editor",
+        UiMessage::error_core_draft_recovery_source_position_has_no_committed_draft_relocation_original_proposal_unchanged_and_current_input_must_remain_in_editor(),
     )
 }
 fn same_proposal(a: &DraftAlternative, b: &DraftAlternative) -> bool {
