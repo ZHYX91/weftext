@@ -3,6 +3,7 @@ import errno
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -124,6 +125,88 @@ class HarnessDeadlineTests(unittest.TestCase):
                 rejected = self.collect_fixture(action, **expected)
                 self.assertFalse(rejected["clientExitAccepted"])
                 self.assertIn("error", rejected)
+
+    def collect_closed_peer_fixture(self, *, expect_root=False, eof=False):
+        read, write = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.close(read)
+            # Transport is real and ordinary. Root metadata is a classifier
+            # fixture, never a claim that this test changed OS credentials.
+            outcome = {"clientCredentials": {"Uid": ["0"] * 4, "Gid": ["0"] * 4},
+                       "simulatedRootCredentials": True, "actualTestUid": os.getuid(),
+                       "phase": "started reply" if eof else "launch"}
+            connection, peer = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+            peer.close()
+            exit_code = 0
+            try:
+                connection.settimeout(.3)
+                if eof:
+                    raw = connection.recv(4097)
+                    outcome["rejected"] = harness.decode_started(raw, outcome) is None
+                else:
+                    connection.sendmsg([b'{"version":1,"kind":"render","timeoutMs":1}'])
+            except OSError as error:
+                outcome.update(error=repr(error), clientErrorType=type(error).__name__, clientErrno=error.errno)
+                exit_code = 1
+            finally:
+                connection.close()
+            os.write(write, json.dumps(outcome).encode())
+            os.close(write)
+            os._exit(exit_code)
+        os.close(write)
+        result = harness.collect_client(pid, read, harness.Deadline.after(.8), .2,
+                                        expect_root_peer_rejection=expect_root)
+        self.assertTrue(result["clientReaped"], result)
+        self.assertFalse(result["forcedClientCleanup"], result)
+        self.assertFalse(result["forcedClientKill"], result)
+        with self.assertRaises(ChildProcessError):
+            os.waitpid(pid, os.WNOHANG)
+        return result
+
+    def test_closed_peer_before_send_is_only_accepted_for_explicit_root_negative(self):
+        for expect_root in [True, False]:
+            with self.subTest(expect_root=expect_root):
+                result = self.collect_closed_peer_fixture(expect_root=expect_root)
+                self.assertEqual(result["clientErrorType"], "BrokenPipeError")
+                self.assertEqual(result["clientErrno"], errno.EPIPE)
+                self.assertEqual(result["clientWaitStatus"], 256)
+                self.assertEqual(result["clientExitCode"], 1)
+                self.assertEqual(result["clientExitAccepted"], expect_root)
+                raw = json.loads(bytes.fromhex(result["rawResultHex"]))
+                self.assertEqual(raw["clientErrno"], errno.EPIPE)
+                self.assertIn("error", raw)
+                self.assertEqual(raw["actualTestUid"], os.getuid())
+                self.assertTrue(raw["simulatedRootCredentials"])
+                self.assertNotIn("started", result)
+                self.assertNotIn("receipt", result)
+
+    def test_root_negative_eof_before_started_preserves_exit_zero_and_raw(self):
+        result = self.collect_closed_peer_fixture(expect_root=True, eof=True)
+        self.assertTrue(result["rootPeerRejectionAccepted"])
+        self.assertEqual(result["clientWaitStatus"], 0)
+        self.assertEqual(result["rawStartedHex"], "")
+        self.assertTrue(result["rejected"])
+
+    def test_root_close_classifier_rejects_late_wrong_peer_and_started_cases(self):
+        report = {"clientCredentials": {"Uid": ["0"] * 4, "Gid": ["0"] * 4},
+                  "phase": "launch", "error": "synthetic reset", "clientErrorType": "ConnectionResetError",
+                  "clientErrno": errno.ECONNRESET}
+        self.assertTrue(harness.root_peer_rejection(report, 1))
+        for change, exit_code in [
+            ({"phase": "input"}, 1), ({"phase": "receipt"}, 1),
+            ({"clientCredentials": {"Uid": ["981"] * 4, "Gid": ["981"] * 4}}, 1),
+            ({"clientErrorType": "TimeoutError", "clientErrno": errno.ETIMEDOUT}, 1),
+            ({"clientErrno": errno.EACCES}, 1), ({"started": {}}, 1),
+            ({"receipt": None}, 1), ({"rawReceiptHex": ""}, 1),
+            ({"rawStartedHex": b'{"version":1}'.hex()}, 1), ({}, 23), ({}, -signal.SIGTERM),
+        ]:
+            with self.subTest(change=change, exit_code=exit_code):
+                self.assertFalse(harness.root_peer_rejection(dict(report, **change), exit_code))
+
+    def test_root_negative_expectation_cannot_be_selected_for_service_uid(self):
+        with self.assertRaisesRegex(ValueError, "explicit root negative"):
+            harness.raw_session({}, b"{}", 981, 981, expect_root_peer_rejection=True)
 
     def test_result_pipe_timeout_is_failure_and_owned_child_is_reaped(self):
         result = self.collect_fixture("silent")

@@ -133,7 +133,25 @@ class OwnedClient:
         os.close(self.pidfd)
 
 
-def collect_client(pid, result_read, deadline, reserve, *, expected_exit_code=0, expected_error=None):
+def root_peer_rejection(outcome, exit_code):
+    """Only root's negative may close before launch; never admit a started job."""
+    credentials = outcome.get("clientCredentials", {})
+    if credentials.get("Uid") != ["0"] * 4 or credentials.get("Gid") != ["0"] * 4:
+        return False
+    if any(key in outcome for key in ["started", "receipt", "rawReceiptHex"]):
+        return False
+    if outcome.get("rawStartedHex", "") != "":
+        return False
+    if exit_code == 0:
+        return (outcome.get("phase") == "started reply" and outcome.get("rejected") is True
+                and outcome.get("rawStartedHex") == "" and "error" not in outcome)
+    return (exit_code == 1 and outcome.get("phase") in ["launch", "started reply"]
+            and "error" in outcome and (outcome.get("clientErrorType"), outcome.get("clientErrno"))
+            in [("BrokenPipeError", errno.EPIPE), ("ConnectionResetError", errno.ECONNRESET)])
+
+
+def collect_client(pid, result_read, deadline, reserve, *, expected_exit_code=0, expected_error=None,
+                   expect_root_peer_rejection=False):
     """Reserve the final slice of the same case budget for exact kill/reap."""
     try:
         owned = OwnedClient(pid)
@@ -184,16 +202,20 @@ def collect_client(pid, result_read, deadline, reserve, *, expected_exit_code=0,
         if status is None:
             outcome.update(error="owned helper cleanup unknown after case deadline", cleanupUnknown=True)
         outcome["rawResultHex"] = raw.hex()
-        outcome["expectedClientExitCode"] = expected_exit_code
+        outcome["expectedClientExitCode"] = [0, 1] if expect_root_peer_rejection else expected_exit_code
         outcome["clientExitCode"] = os.waitstatus_to_exitcode(status) if status is not None else None
         accepted = status is not None and os.WIFEXITED(status) and os.WEXITSTATUS(status) == expected_exit_code
         if expected_error is not None:
             accepted = accepted and all(outcome.get(key) == value for key, value in expected_error.items())
+        if expect_root_peer_rejection:
+            accepted = (status is not None and os.WIFEXITED(status)
+                        and root_peer_rejection(outcome, outcome["clientExitCode"]))
+            outcome["rootPeerRejectionAccepted"] = accepted
         outcome["clientExitAccepted"] = accepted
         if not accepted:
             if "error" in outcome:
                 outcome["priorError"] = outcome["error"]
-            outcome["error"] = f"owned helper terminal status rejected: actual={outcome['clientExitCode']}, expected={expected_exit_code}"
+            outcome["error"] = f"owned helper terminal status rejected: actual={outcome['clientExitCode']}, expected={outcome['expectedClientExitCode']}"
         return outcome
     finally:
         os.close(result_read)
@@ -276,8 +298,12 @@ def in_directory(path, directory):
 
 
 def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit", cancel=False,
-                control=None, disconnect=False, expected_exit_code=0, expected_error=None):
+                control=None, disconnect=False, expected_exit_code=0, expected_error=None,
+                expect_root_peer_rejection=False):
     """Run the socket client in an independently dropped OS identity."""
+    if expect_root_peer_rejection:
+        require((uid, gid) == (0, 0) and expected_exit_code == 0 and expected_error is None,
+                "root peer rejection expectation belongs only to the explicit root negative")
     require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL, "owned client requires default SIGCHLD/reaping")
     deadline = Deadline.after(CASE_SECONDS)
     reserve = min(.25, CASE_SECONDS / 4)
@@ -327,7 +353,8 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
                 outcome["phase"] = "started reply"
                 connection.settimeout(io_deadline.remaining("started reply"))
                 reply = connection.recv(4097)
-            except ConnectionResetError:
+            except ConnectionResetError as error:
+                outcome.update(startedReadError=repr(error), startedReadErrno=error.errno)
                 reply = b""
             started = decode_started(reply, outcome)
             if started is None:
@@ -375,7 +402,8 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
         os._exit(exit_code)
     os.close(result_write)
     return collect_client(pid, result_read, deadline, reserve,
-                          expected_exit_code=expected_exit_code, expected_error=expected_error)
+                          expected_exit_code=expected_exit_code, expected_error=expected_error,
+                          expect_root_peer_rejection=expect_root_peer_rejection)
 
 
 def main():
@@ -501,7 +529,8 @@ def main():
             good = b'{"version":1,"kind":"render","timeoutMs":1000}'
             for fds in ["regular", "samePipe", "none", "extra"]:
                 assert test(f"fd-{fds}", good, descriptors=fds).get("rejected"), fds
-            assert test("rootPeerConfusion", good, uid=0, gid=0).get("rejected")
+            assert test("rootPeerConfusion", good, uid=0, gid=0,
+                        expect_root_peer_rejection=True).get("rootPeerRejectionAccepted")
             ordinary = test("ordinaryPeer", good, uid=1000, gid=1000, expected_exit_code=1,
                             expected_error={"clientErrorType": "PermissionError", "clientErrno": errno.EACCES, "phase": "connect"})
             assert ordinary["clientExitCode"] == 1
