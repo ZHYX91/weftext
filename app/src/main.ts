@@ -22,7 +22,7 @@ import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, sourceMoveComparisonMessage, uniqueRetainedDrafts } from "./session";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
+import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
 import { ensureOfflineFonts } from "./font-readiness";
@@ -2110,7 +2110,7 @@ async function compile(doc: LiveDocument): Promise<void> {
         const hadQueries = doc.queries.hasQueries;
         const [result, editorMap] = await Promise.all([
             api<RenderOutput>("/api/render", basis),
-            api<WritingMap>("/api/editor-map", basis),
+            api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
             doc.queries.discover(basis),
         ]);
         if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId)
@@ -2293,7 +2293,7 @@ function addDocument(opened: OpenedDocument): void {
     const mode = modes.some(m => m.id === preference) ? preference as ViewMode : "styled";
     const writing = new WritingController({
         actionAvailable: () => current === doc,
-        refreshMap: basis => api("/api/editor-map", basis),
+        refreshMap: basis => api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
         editor, basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }),
         // A temporary consumer pause cannot revoke pending literal settlement.
         // Only the reviewed placement conflict blocks new native visual actions.

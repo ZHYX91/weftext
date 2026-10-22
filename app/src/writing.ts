@@ -108,9 +108,17 @@ export function decodeWritingStructure(value: unknown): WritingStructure {
     const item = writingRecord(value, ["kind", "range", "body", "level", "levelWritable", "levelReason", "label", "language", "runIn", "table"]);
     return { kind: writingText(item.kind), range: decodeWritingRange(item.range), body: item.body === null ? null : decodeWritingRange(item.body), level: item.level === null ? null : writingInteger(item.level), levelWritable: writingBoolean(item.levelWritable), levelReason: writingReason(item.levelReason), label: item.label === null ? null : writingText(item.label), language: item.language === null ? null : writingText(item.language), runIn: writingBoolean(item.runIn), table: item.table === null ? null : decodeWritingTable(item.table) };
 }
+const writingMapFields = ["sourceHash", "syntaxValid", "literalRegions", "structures", "title", "subtitle", "bodyInsertion", "unavailableReason", "notes", "headingNumbering", "bodyBlocks"];
+/** Both HTTP map endpoints add the observed draft serial to the native map. */
+export function decodeEditorMapResponse(value: unknown, expectedSerial: number): WritingMap {
+    const item = writingRecord(value, [...writingMapFields, "serial"]);
+    if (writingInteger(item.serial) !== writingInteger(expectedSerial)) return invalidWritingWire();
+    const map = { ...item }; delete map.serial;
+    return decodeWritingMap(map);
+}
 /** Rebrand only the declared product fields; ranges, authored text and machine proof facts stay exact. */
 export function decodeWritingMap(value: unknown): WritingMap {
-    const item = writingRecord(value, ["sourceHash", "syntaxValid", "literalRegions", "structures", "title", "subtitle", "bodyInsertion", "unavailableReason", "notes", "headingNumbering", "bodyBlocks"]);
+    const item = writingRecord(value, writingMapFields);
     const role = (value: unknown): WritingRole => { const entry = writingRecord(value, ["status", "text", "range", "construct", "encoding"]); return { status: writingText(entry.status), text: entry.text === null ? null : writingText(entry.text), range: entry.range === null ? null : decodeWritingRange(entry.range), construct: entry.construct === null ? null : decodeWritingRange(entry.construct), encoding: entry.encoding === null ? null : writingText(entry.encoding) }; };
     return { sourceHash: writingText(item.sourceHash), syntaxValid: writingBoolean(item.syntaxValid), literalRegions: writingList(item.literalRegions, value => { const entry = writingRecord(value, ["range", "text", "role", "paragraphBreaks"]); return { range: decodeWritingRange(entry.range), text: writingText(entry.text), role: writingText(entry.role), paragraphBreaks: writingList(entry.paragraphBreaks, decodeWritingRange) }; }), structures: writingList(item.structures, decodeWritingStructure), title: role(item.title), subtitle: role(item.subtitle), bodyInsertion: item.bodyInsertion === null ? null : decodeWritingRange(item.bodyInsertion), unavailableReason: writingReason(item.unavailableReason), notes: decodeNotesSourceMap(item.notes), headingNumbering: decodeHeadingNumberingInspection(item.headingNumbering), bodyBlocks: writingList(item.bodyBlocks, value => { const block = writingRecord(value, ["kind", "range", "body"]); return { kind: writingText(block.kind), range: decodeWritingRange(block.range), body: decodeWritingRange(block.body) }; }) };
 }

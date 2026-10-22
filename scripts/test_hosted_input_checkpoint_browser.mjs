@@ -1,5 +1,6 @@
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
+import { personalInputSnapshot } from './_personal_input_browser.mjs';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -9,7 +10,7 @@ import assert from 'node:assert/strict';
 const { chromium } = createRequire(import.meta.url)(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]); await mkdir(out, { recursive: false });
 const sha = data => createHash('sha256').update(data).digest('hex'), pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const result = { executable: exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), harnessSha256: sha(await readFile(new URL(import.meta.url))), completed: false, cases: [], processes: [], pageErrors: [] };
+const result = { executable: exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), harnessSha256: sha(await readFile(new URL(import.meta.url))), personalInputHelperSha256: sha(await readFile(new URL('./_personal_input_browser.mjs', import.meta.url))), completed: false, cases: [], processes: [], pageErrors: [] };
 const tokens = Object.fromEntries(['alice', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let base, localToken, local, hosted, browser, activePage;
 const pendingReleases = [];
@@ -23,7 +24,7 @@ async function login(page) { await page.goto(base); if (await page.locator('#log
 async function fresh() { const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage(); activePage = page; page.on('pageerror', error => result.pageErrors.push(String(error))); page.on('dialog', dialog => dialog.accept()); await page.route('**/api/hosted/draft', route => route.abort('failed')); await login(page); return { context, page }; }
 async function source(page) { return (await page.locator('#source .cm-line').allTextContents()).join('\n'); }
 async function append(page, text) { const editor = page.locator('#source .cm-content'); await editor.click(); await editor.press('ControlOrMeta+End'); await page.keyboard.insertText(text); }
-async function records(page) { return page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('weftext-personal-input:') && key.endsWith(':state')).flatMap(([key, value]) => JSON.parse(value).records.map(record => ({ key, ...record })))); }
+async function records(page) { const snapshot = await personalInputSnapshot(page); return snapshot.audiences.flatMap(row => JSON.parse(row.metadata).records.map(record => ({ key: row.audience, ...record }))); }
 async function revoke(page) { await policy({}); await page.locator('#refresh').click(); await page.waitForFunction(() => !document.querySelector('#source .cm-content')); }
 async function reauth(page) { await policy({ shared: rights }); await login(page); }
 async function row(page, marker) { await page.getByRole('button', { name: '取回本人未上传输入', exact: true }).click(); const rows = page.locator('#personal-inputs > section'); for (let at = 0; at < await rows.count(); at++) if ((await rows.nth(at).locator('textarea').inputValue()).includes(marker)) return rows.nth(at); throw Error('Missing retained input'); }
@@ -58,7 +59,7 @@ try {
     const {context,page}=await fresh(), basis=await source(page);const role=page.getByLabel('托管库配置角色',{exact:true});
     const readRole=async value=>{await role.selectOption(value);await page.locator('#library').getByRole('button',{name:'读取托管库配置',exact:true}).click();await page.getByLabel('托管库配置完整源码',{exact:true}).waitFor();};
     await readRole('settings');const initial=await page.getByLabel('托管库配置完整源码',{exact:true}).inputValue(),old=await page.getByLabel('托管库配置完整源码',{exact:true}).elementHandle();await old.evaluate(control=>{control.setSelectionRange(control.value.length,control.value.length);control.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:''}));});await readRole('schema');await readRole('settings');const active=page.getByLabel('托管库配置完整源码',{exact:true});assert.equal(await active.inputValue(),initial);await old.evaluate(control=>{control.value+='LATE_OLD_ROLE_SECRET';control.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'LATE_OLD_ROLE_SECRET'}));control.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'LATE_OLD_ROLE_SECRET'}));});assert.equal(await active.inputValue(),initial);assert.ok(!JSON.stringify(await records(page)).includes('LATE_OLD_ROLE_SECRET'));
-    await active.press('ControlOrMeta+End');await page.keyboard.insertText('OWN_LIBRARY_SETTINGS');const retained=(await records(page)).find(record=>record.owner.kind==='library'&&record.owner.role==='settings');assert.ok(retained);const before=Object.values(await page.evaluate(()=>Object.fromEntries(Object.entries(sessionStorage).filter(([key])=>key.startsWith('weftext-personal-input:'))))).join();assert.ok(!before.includes('PRIVATE_PROTECTED_BASE'));assert.equal(await source(page),basis);result.cases.push({name:'actual library role A-to-B-to-A retires old IME terminal events and binds fresh payload to library owner',owner:retained.owner});await context.close();
+    await active.press('ControlOrMeta+End');await page.keyboard.insertText('OWN_LIBRARY_SETTINGS');const retained=(await records(page)).find(record=>record.owner.kind==='library'&&record.owner.role==='settings');assert.ok(retained);const before=JSON.stringify(await personalInputSnapshot(page));assert.ok(!before.includes('PRIVATE_PROTECTED_BASE'));assert.equal(await source(page),basis);result.cases.push({name:'actual library role A-to-B-to-A retires old IME terminal events and binds fresh payload to library owner',owner:retained.owner});await context.close();
   }
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch(error) { result.failure = String(error.stack ?? error); if (activePage && !activePage.isClosed()) result.failureUi = { status: await activePage.locator('#status').textContent().catch(() => null), source: await source(activePage).catch(() => null) }; throw error; }

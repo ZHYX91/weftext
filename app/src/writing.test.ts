@@ -1,5 +1,5 @@
 import test from "node:test";
-import { decodeWritingMap } from "./writing";
+import { decodeWritingMap, decodeEditorMapResponse } from "./writing";
 import { locale, message, UiError, uiTextValue } from "./ui-locale";
 import { descriptionUiText } from "./ui-diagnostics";
 import assert from "node:assert/strict";
@@ -22,6 +22,16 @@ function result(source: string, from: number, to: number, text: string): Writing
   const nextMap = map(next, from, from + insert.length, text);
   return { source: next, sourceHash: nextMap.sourceHash, map: nextMap, patches: [{ from: utf8Offset(source, from), to: utf8Offset(source, to), utf16From: from, utf16To: to, expected: source.slice(from, to), insert }], selection: { from: from + insert.length, to: from + insert.length } };
 }
+test("HTTP editor maps bind their exact draft serial before native-map decoding", () => {
+  const native = map("原草稿😀"), response = { ...native, serial: 7 };
+  assert.deepEqual(decodeEditorMapResponse(response, 7), native);
+  assert.throws(() => decodeEditorMapResponse(response, 8));
+  assert.throws(() => decodeEditorMapResponse({ ...response, serial: "7" }, 7));
+  assert.throws(() => decodeEditorMapResponse({ ...response, serial: Number.MAX_SAFE_INTEGER + 1 }, Number.MAX_SAFE_INTEGER + 1));
+  assert.throws(() => decodeEditorMapResponse(native, 7));
+  assert.throws(() => decodeEditorMapResponse({ ...response, unexpected: true }, 7));
+  assert.throws(() => decodeWritingMap(response));
+});
 class Buffer implements WritingBuffer {
   state: EditorState;
   generation = 0;

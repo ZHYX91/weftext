@@ -1,5 +1,6 @@
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
+import { personalInputSnapshot, abortPersonalInputWrites } from './_personal_input_browser.mjs';
 // Real embedded hosted UI regression. Pass EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -11,7 +12,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]); await mkdir(out, { recursive: false });
 const sha = value => createHash('sha256').update(value).digest('hex'), pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(await readFile(new URL(import.meta.url))), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), completed: false, cases: [], pageErrors: [], processes: [] };
+const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(await readFile(new URL(import.meta.url))), personalInputHelperSha256: sha(await readFile(new URL('./_personal_input_browser.mjs', import.meta.url))), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), completed: false, cases: [], pageErrors: [], processes: [] };
 const tokens = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let base, localToken, local, server, browser;
 async function start(args, hosted = false) {
@@ -20,7 +21,12 @@ async function start(args, hosted = false) {
   for (let i = 0; i < 300; i++) { const match = serveReady(child); if (match) { base = match.base; localToken = match.token; record.base = base; return child; } if (child.exitCode !== null) throw new Error(record.stderr); await pause(100); }
   await stop(child); throw new Error('Owned test backend startup timed out');
 }
-async function stop(child) { await stopServe(child); }
+async function stop(child) {
+  if (!child) return;
+  const record = result.processes.find(record => record.pid === child.pid);
+  record.ownerStop = await stopServe(child);
+  assert.equal(child.exitCode, 0);
+}
 async function api(route, data, actor = 'alice') {
   const response = await fetch(base + route, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + tokens[actor] } : { 'X-Weftext-Token': localToken }) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
@@ -38,7 +44,7 @@ async function freshPage() {
 }
 async function source(page) { return (await page.locator('#source .cm-line').allTextContents()).join('\n'); }
 async function append(page, text) { const editor = page.locator('#source .cm-content'); await editor.click(); await editor.press('ControlOrMeta+End'); await page.keyboard.insertText(text); }
-async function ownStorage(page) { return page.evaluate(() => Object.fromEntries(Object.entries(sessionStorage).filter(([key]) => key.startsWith('weftext-personal-input:')))); }
+async function ownStorage(page) { const snapshot = await personalInputSnapshot(page); return { audiences: JSON.stringify(snapshot.audiences), texts: JSON.stringify(snapshot.texts) }; }
 async function assertOnlyOwn(page, marker, secret) { const storage = await ownStorage(page), values = Object.values(storage).join('\n'); if (!(values.includes(marker) || values.includes(JSON.stringify(marker).slice(1, -1)))) { result.inputFailure = { storage, source: await source(page), status: await page.locator('#status').textContent() }; } assert.ok(values.includes(marker) || values.includes(JSON.stringify(marker).slice(1, -1)), 'new input must be retained'); assert.ok(!values.includes(secret), 'protected Base must never enter personal input storage'); for (const token of Object.values(tokens)) assert.ok(!values.includes(token), 'credentials must never enter personal input storage'); }
 async function revoke(page, disabled = false) {
   await policy(users => { if (disabled) users.alice.enabled = false; else users.alice.grants = {}; }); await page.locator('#refresh').click();
@@ -104,10 +110,13 @@ try {
     result.cases.push('applied native title proposal remains independently recoverable without retaining its initial field, native source or assuming a replay map'); await context.close();
   }
   {
-    const { page, context } = await freshPage(), marker = 'OWN_QUOTA_REFUSED';
-    await page.evaluate(() => { const original = Storage.prototype.setItem; Storage.prototype.setItem = function(key, value) { if (key.startsWith('weftext-personal-input:')) throw new DOMException('TEST personal input quota refusal', 'QuotaExceededError'); return original.call(this, key, value); }; });
+    const { page, context } = await freshPage(), marker = 'OWN_TRANSACTION_REFUSED';
+    const original = await personalInputSnapshot(page); await abortPersonalInputWrites(page);
     await append(page, marker); await revoke(page); await reauthorize(page); const row = await recoveryRow(page, marker); assert.ok((await row.locator('textarea').inputValue()).includes(marker));
-    await page.locator('#personal-inputs [role=alert]').filter({ hasText: /内存|写入/ }).waitFor(); result.cases.push('personal storage refusal preserves latest pure input in memory across authorization clearing and explicitly reports unpersisted state'); await context.close();
+    await page.locator('#personal-inputs [role=alert]').filter({ hasText: /内存|写入/ }).waitFor();
+    assert.ok(await page.evaluate(() => window.personalInputWriteAborts > 0));
+    assert.deepEqual(await personalInputSnapshot(page), original);
+    result.cases.push('actual IndexedDB transaction abort preserves the original committed snapshot and latest pure input in memory across authorization clearing, with explicit unpersisted status'); await context.close();
   }
   {
     const { page, context } = await freshPage(), marker = 'OWN_PENDING_ORIGINAL'; await append(page, marker);
@@ -122,6 +131,6 @@ try {
 } catch (error) { result.failure = String(error.stack ?? error); throw error; }
 finally {
   await browser?.close(); await stop(local); await stop(server); for (const process of result.processes) process.stdout = process.stdout.replace(/#token=\w+/g, '#token=[TEST credential redacted]');
-  result.closeMethod = 'Owned browser.close and exact owned child.kill; Windows process termination, not graceful-shutdown qualification';
+  result.closeMethod = 'Owned browser.close, exact typed owner-stop receipts and actual original owner exits zero';
   await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, failure: result.failure }));
 }

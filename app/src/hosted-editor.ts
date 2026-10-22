@@ -10,7 +10,7 @@ import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
 import type { AuthorInputFactory } from "./author-input";
-import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
+import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
 import { createWritingToolbar, createStructureControls, insertWritingLink } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, retireDocumentNotes, type DocumentNotesMount } from "./document-notes";
@@ -326,7 +326,7 @@ export class HostedEditor {
                         const sessionId = this.sessionId, resource = identity.resource;
                         return this.queryHost?.authorInputs?.({ kind: "body", resource, reference: this.personalReferences.get(resource) }, () => this.editor === editor && this.sessionId === sessionId && this.resource === resource && identity.resource === resource && !this.paused, undefined, () => editor.generation);
                     },
-                    refreshMap: basis => this.request("editor/map", basis),
+                    refreshMap: basis => this.request<unknown>("editor/map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
                     basis: () => ({ sessionId: this.sessionId, source: editor.source, serial: editor.generation }),
                     editable: () => this.editor === editor && !this.blocked && this.mode !== "read",
                     request: request => this.requestEdit(request), onError: this.error,
@@ -537,7 +537,7 @@ export class HostedEditor {
         const basis = { sessionId: this.sessionId, source: editor.source, serial: editor.generation }, generation = this.generation, syntaxBasis = editor.syntaxBasis();
         setUiText(this.message, uiMessage("hostedEditor.updatingDraftPreview"));
         try {
-            const [map, projection] = await Promise.all([this.request<WritingMap>("editor/map", basis), this.request<Projection>("editor/render", basis), this.fonts.ensureDefaults()]);
+            const [map, projection] = await Promise.all([this.request<unknown>("editor/map", basis).then(value => decodeEditorMapResponse(value, basis.serial)), this.request<Projection>("editor/render", basis), this.fonts.ensureDefaults()]);
             if (this.editor !== editor || this.generation !== generation || this.sessionId !== basis.sessionId || editor.source !== basis.source || editor.generation !== basis.serial)
                 return;
             const failure = projection.failure === null ? null : decodeErrorDescription(projection.failure);
