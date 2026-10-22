@@ -449,6 +449,8 @@ pub struct SavedOperationSource {
     pub source: String,
     pub definition_key: Option<String>,
     pub status: String,
+    pub root: Option<String>,
+    pub path: String,
 }
 #[derive(Clone)]
 pub(crate) struct SnapshotBinding {
@@ -1010,6 +1012,7 @@ impl Core {
         &self,
         operation_id: &str,
     ) -> Result<Option<SavedOperationSource>> {
+        self.sync_local_owner()?;
         valid_operation_id(operation_id)?;
         let Some(plan) = self.operations.get(operation_id) else {
             return Ok(None);
@@ -1020,14 +1023,20 @@ impl Core {
                 "This operation is not an original source save",
             ));
         }
+        self.validate_file_save_plan(plan)?;
         let definition_key =
             match fs::read(self.journal_path(operation_id, "definition-reservation")) {
                 Ok(bytes) => Some(serde_json::from_slice::<DefinitionReservation>(&bytes)?.key),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
                 Err(e) => return Err(e.into()),
             };
-        let committed = self.committed(operation_id);
+        let committed = self.original_commit_fact(operation_id)?;
         Ok(Some(SavedOperationSource {
+            root: match &plan.file_save.as_ref().unwrap().scope {
+                QualifiedInputScope::Library { binding } => Some(binding.root.clone()),
+                QualifiedInputScope::DeviceUnassigned => None,
+            },
+            path: plan.path.clone(),
             receipt: if committed {
                 plan.receipt.clone()
             } else {
@@ -1793,17 +1802,28 @@ impl Core {
         owner_id: &str,
         revision: &str,
     ) -> Result<Vec<u8>> {
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && (p.workspace_id.as_deref() == Some(workspace_id)
-                    || (p.kind == "save"
-                        && p.identity
-                            .as_ref()
-                            .and_then(|id| self.admitted_binding(id))
-                            .is_some_and(|birth| {
-                                birth.workspace_id == workspace_id && birth.node_id == owner_id
-                            })))
-        }) {
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            let selected = if matches!(p.kind.as_str(), "save" | "saveAs") {
+                self.validate_file_save_plan(p)
+                    .inspect_err(|error| {
+                        resource_diagnostics::error(
+                            "retained_revision.scope",
+                            &p.operation_id,
+                            error,
+                        )
+                    })
+                    .is_ok()
+                    && matches!(&p.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == workspace_id)
+            } else {
+                p.workspace_id.as_deref() == Some(workspace_id)
+            };
+            if !selected {
+                continue;
+            }
             if let Ok(bytes) = self.revision_payload(p, revision)
                 && weftext_engine::inspect_metadata(&decode(&bytes)?)
                     .id
@@ -1865,6 +1885,9 @@ impl Core {
         ))
     }
     fn revision_payload(&self, p: &journal::Plan, revision: &str) -> Result<Vec<u8>> {
+        if matches!(p.kind.as_str(), "save" | "saveAs") {
+            self.validate_file_save_plan(p)?;
+        }
         let facts = self.read_observation_facts(&p.operation_id)?;
         let fact = facts
             .iter()
@@ -2684,6 +2707,18 @@ impl Core {
             .values()
             .filter(|p| self.committed(&p.operation_id))
             .filter_map(|p| {
+                if matches!(p.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(p)
+                        .inspect_err(|error| {
+                            resource_diagnostics::error(
+                                "accepted_revision.scope",
+                                &p.operation_id,
+                                error,
+                            )
+                        })
+                        .ok()?;
+                }
+
                 let revision = self
                     .read_observation_facts(&p.operation_id)
                     .inspect_err(|error| {
@@ -6503,7 +6538,7 @@ impl Core {
         })
     }
 }
-fn intent_kind(intent: &OperationIntent) -> &'static str {
+pub(crate) fn intent_kind(intent: &OperationIntent) -> &'static str {
     match intent {
         OperationIntent::CreateLibrary { .. } => "createLibrary",
         OperationIntent::AdoptSyncExternal { .. } => "adoptSyncExternal",

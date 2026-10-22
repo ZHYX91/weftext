@@ -169,16 +169,6 @@ impl Core {
                     "Inspect and resolve the original creation plan; no second plan was created",
                 ));
             }
-            let root = absolute_path(path)?;
-            if self.workspace(&root)?.as_ref().map(|w| &w.workspace_id)
-                != plan.workspace_id.as_ref()
-                || !self.library_creation_root_matches(plan, &root)?
-            {
-                return Err(CoreError::new(
-                    "committedResultUnavailable",
-                    "The original library object or configuration is unavailable; no recreation was attempted",
-                ));
-            }
             return Ok(library_info(plan));
         }
         let root = absolute_path(path)?;
@@ -201,6 +191,71 @@ impl Core {
         // Initial install and explicit continuation use identical guarded proof.
         self.resolve_library_creation_recovery(&plan, "resumeOriginalPlan")?;
         Ok(library_info(&plan))
+    }
+
+    /// The original library receipt survives independent delivery failure.
+    /// Both its root and optional root note must still be their original
+    /// physical objects; names and copied workspace declarations are not proof.
+    pub fn reopen_local_library_creation(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<(Inventory, Option<OpenedDocument>)> {
+        self.sync_local_owner()?;
+        valid_operation_id(operation_id)?;
+        let invalid = || {
+            CoreError::new(
+                "committedResultUnavailable",
+                "The original physical library result is unavailable",
+            )
+        };
+        let plan = self
+            .operations
+            .get(operation_id)
+            .cloned()
+            .ok_or_else(invalid)?;
+        if plan.kind != "createLibrary" || !self.original_commit_fact(operation_id)? {
+            return Err(invalid());
+        }
+        let root = PathBuf::from(&plan.path);
+        if self
+            .workspace(&root)?
+            .as_ref()
+            .map(|workspace| &workspace.workspace_id)
+            != plan.workspace_id.as_ref()
+            || !self.library_creation_root_matches(&plan, &root)?
+        {
+            return Err(invalid());
+        }
+        let inventory = self.inventory(&root)?;
+        if inventory.workspace_id != plan.workspace_id {
+            return Err(invalid());
+        }
+        let root_note = library_info(&plan)
+            .root_note_path
+            .map(|path| self.reopen_local_operation_node(operation_id, &path))
+            .transpose()?;
+        Ok((inventory, root_note))
+    }
+
+    pub fn local_library_creation_info(&self, operation_id: &str) -> Result<LibraryInfo> {
+        self.sync_local_owner()?;
+        valid_operation_id(operation_id)?;
+        let plan = self.operations.get(operation_id).ok_or_else(|| {
+            CoreError::new(
+                "operationMissing",
+                "No original library creation is retained",
+            )
+        })?;
+        if plan.kind != "createLibrary"
+            || plan.transaction.is_none()
+            || !self.original_commit_fact(operation_id)?
+        {
+            return Err(CoreError::new(
+                "operationConflict",
+                "This original operation is not a committed library creation",
+            ));
+        }
+        Ok(library_info(plan))
     }
 
     /// Fence an unknown original request without allocating another identity.
@@ -661,7 +716,7 @@ fn library_info(plan: &journal::Plan) -> LibraryInfo {
         operation_id: plan.operation_id.clone(),
         root: plan.path.clone(),
         workspace_id: plan.workspace_id.clone().unwrap(),
-        status: "localMvp".into(),
+        status: "committed".into(),
         root_note_path: plan.transaction.as_ref().and_then(|t| {
             t.births()
                 .iter()

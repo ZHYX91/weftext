@@ -499,6 +499,16 @@ impl Core {
                 status: "available".into(), byte_length: Some(bytes.len()), sha256: Some(hash(&bytes)), message: "Exact retained committed source; dependencies and semantic configuration are not reconstructed".into(),
             };
             let checked = (|| -> Result<RevisionFact> {
+                if matches!(p.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(p)?;
+                    if !matches!(&p.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == birth.workspace_id)
+                    {
+                        return Err(CoreError::new(
+                            "historyUnavailable",
+                            "Original retained save belongs to another input scope",
+                        ));
+                    }
+                }
                 // A cached plan is not a replacement for a removed/unreadable
                 // retained record. Re-read and require its exact payload.
                 let retained: journal::Plan =
@@ -535,6 +545,7 @@ impl Core {
                 Err(e) => {
                     version.status = match e.code.as_str() {
                         "missing" => "missing",
+                        "unsupportedFileSaveEvidence" => "unsupported",
                         "permissionDenied" | "io" | "busy" => "unreadable",
                         _ => "invalid",
                     }
@@ -664,7 +675,10 @@ impl Core {
             .filter_map(|r| r.version.saved_at_unix_ms)
             .collect::<Vec<_>>();
         let available = records.iter().filter(|r| r.bytes.is_some()).count();
-        let protected_drafts = self.history_protected_drafts(&context.birth.identity)?;
+        let protected_drafts = self.history_protected_drafts(
+            &context.birth.identity,
+            &context.session.file_scope.clone()?,
+        )?;
         let mut warnings = Vec::new();
         if current_saved_version_id.is_none() {
             warnings.push("Current bytes are an unadmitted external observation or their saved witness is unavailable; they are not listed as a saved version".into());
@@ -717,25 +731,45 @@ impl Core {
         })
     }
 
-    fn history_protected_drafts(&self, identity: &FileIdentity) -> Result<Vec<DraftAlternative>> {
+    fn history_protected_drafts(
+        &self,
+        identity: &FileIdentity,
+        scope: &QualifiedInputScope,
+    ) -> Result<Vec<DraftAlternative>> {
         let mut drafts = Vec::new();
         let mut total = 0usize;
+        let mut records = 0usize;
         for entry in fs::read_dir(self.draft_directory("draft-history"))? {
             let path = entry?.path();
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
-            let bytes = fs::read(path)?;
-            let draft: Draft = serde_json::from_slice(&bytes)?;
-            if draft.identity.as_ref() != Some(identity) {
+            let mut file = File::open(&path)?;
+            let original_scope = file_save_scope::read_input_scope(&mut file)?;
+            self.validate_original_input_scope(&original_scope)?;
+            if original_scope != *scope {
                 continue;
             }
-            total += bytes.len();
-            if drafts.len() >= 128 || total > 16 * 1024 * 1024 {
+            let remaining = 16 * 1024 * 1024usize - total;
+            if records >= 128 || file.metadata()?.len() > remaining as u64 {
                 return Err(CoreError::new(
                     "budget",
                     "Protected draft browsing exceeds 128 records or 16 MiB",
                 ));
+            }
+            records += 1;
+            let mut bytes = Vec::new();
+            file.take(remaining as u64 + 1).read_to_end(&mut bytes)?;
+            if bytes.len() > remaining {
+                return Err(CoreError::new(
+                    "budget",
+                    "Protected draft bytes grew beyond their read budget",
+                ));
+            }
+            total += bytes.len();
+            let draft: Draft = serde_json::from_slice(&bytes)?;
+            if &draft.identity != identity || &draft.scope != scope {
+                continue;
             }
             append_draft_alternatives(&mut drafts, &draft);
         }
@@ -776,12 +810,20 @@ impl Core {
         self.retained_restore_result(plan)
     }
     fn retained_restore_result(&self, plan: &journal::Plan) -> Result<HistoryRestoreResult> {
+        self.validate_file_save_plan(plan)?;
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
                 "This operation is not a history restore",
             )
         })?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding: scope } if scope.workspace_id == binding.workspace_id)
+        {
+            return Err(CoreError::new(
+                "historyUnavailable",
+                "Original restore has another qualified input owner",
+            ));
+        }
         let retained: journal::Plan =
             serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "plan"))?)?;
         if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
@@ -797,6 +839,14 @@ impl Core {
                 self.draft_directory("draft-history")
                     .join(format!("{name}.json")),
             )?)?;
+            if draft.scope != plan.file_save.as_ref().unwrap().scope
+                || Some(&draft.identity) != plan.identity.as_ref()
+            {
+                return Err(CoreError::new(
+                    "historyUnavailable",
+                    "Protected Draft belongs to another original physical owner or input scope",
+                ));
+            }
             append_draft_alternatives(&mut protected_drafts, &draft);
         }
         Ok(HistoryRestoreResult {
@@ -1042,12 +1092,12 @@ impl Core {
                 check_size(source.as_bytes())?;
                 if dirty_buffer && !to_protect.iter().any(|d| d.source == *source) {
                     to_protect.push(Draft {
-                        library: self.draft_session_library(&request.session_id)?,
+                        scope: self.draft_session_scope(&request.session_id)?,
                         path: context.current.path.clone(),
                         base_source: current_source.clone(),
                         source: source.clone(),
                         base_known: true,
-                        identity: Some(context.birth.identity.clone()),
+                        identity: context.birth.identity.clone(),
                         alternatives: Vec::new(),
                     });
                 }

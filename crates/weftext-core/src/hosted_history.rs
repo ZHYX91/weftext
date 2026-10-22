@@ -20,6 +20,12 @@ pub struct ActorHistoryRestoreStatus {
 pub(super) struct HistoryOperation {
     original: Option<OriginalHistoryRestore>,
 }
+impl HistoryOperation {
+    pub(super) fn input_owner(&self) -> Option<&NodeRef> {
+        self.original.as_ref().map(|original| &original.owner)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OriginalHistoryRestore {
@@ -111,6 +117,7 @@ impl Core {
             ));
         }
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
@@ -163,6 +170,11 @@ impl Core {
         {
             return Err(conflict());
         }
+        self.validate_actor_file_input(record)?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == original.owner.workspace_id)
+        {
+            return Err(conflict());
+        }
         Ok(Some(plan))
     }
 
@@ -178,7 +190,7 @@ impl Core {
         };
         let plan = self.actor_history_plan(&record)?;
         let state = if let Some(plan) = plan {
-            if self.committed(&plan.operation_id) {
+            if self.original_commit_fact(&plan.operation_id)? {
                 "committed"
             } else if self.resolved(&plan.operation_id)? {
                 "resolved"
@@ -204,22 +216,23 @@ impl Core {
         }))
     }
 
-    pub fn actor_history_restore_retry(
+    pub fn actor_history_restore_for_request(
         &self,
         resource: &str,
-        operation: &str,
+        request: &HistoryRestoreRequest,
         intent_fingerprint: &str,
     ) -> Result<Option<ActorHistoryRestoreStatus>> {
         valid_fingerprint(intent_fingerprint)?;
-        let Some(record) = self.actor_history_record(resource, operation)? else {
+        let Some(record) = self.actor_history_record(resource, &request.operation_id)? else {
             return Ok(None);
         };
         if let Some(original) = record.history.as_ref().unwrap().original.as_ref()
-            && original.intent_fingerprint != intent_fingerprint
+            && (original.intent_fingerprint != intent_fingerprint
+                || serde_json::to_value(&original.request)? != serde_json::to_value(request)?)
         {
             return Err(conflict());
         }
-        self.actor_history_restore_status(resource, operation)
+        self.actor_history_restore_status(resource, &request.operation_id)
     }
 
     /// Qualify only the current configured path against the original owner. A
@@ -338,16 +351,8 @@ impl Core {
         self.actor_library_for_root(root)?;
         valid_fingerprint(intent_fingerprint)?;
         if let Some(mut status) =
-            self.actor_history_restore_retry(resource, &request.operation_id, intent_fingerprint)?
+            self.actor_history_restore_for_request(resource, &request, intent_fingerprint)?
         {
-            let record = self
-                .actor_history_record(resource, &request.operation_id)?
-                .unwrap();
-            if let Some(original) = record.history.as_ref().unwrap().original.as_ref()
-                && serde_json::to_value(&original.request)? != serde_json::to_value(&request)?
-            {
-                return Err(conflict());
-            }
             if status.status == "committed" {
                 match self.actor_history_restore_result_at(
                     resource,
@@ -388,6 +393,9 @@ impl Core {
         };
         let core_operation_id = fresh();
         let record = ActorOperation {
+            scope: ActorInputScope::Qualified {
+                scope: self.draft_session_scope(&request.session_id)?,
+            },
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -408,7 +416,7 @@ impl Core {
             }),
             owner_backup: None,
         };
-        let bytes = Self::actor_operation_bytes(&record)?;
+        let bytes = self.actor_operation_bytes(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
@@ -418,16 +426,27 @@ impl Core {
         journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("historyActorDurable")?;
-        self.restore_history_at(root, path, internal_request(&record)?)?;
+        let restored = match self.restore_history_at(root, path, internal_request(&record)?) {
+            Ok(mut result) => {
+                result.receipt.operation_id = request.operation_id.clone();
+                Some(result)
+            }
+            Err(error) => {
+                let status =
+                    self.actor_history_restore_for_request(resource, &request, intent_fingerprint)?;
+                if status
+                    .as_ref()
+                    .is_some_and(|status| status.status == "committed")
+                {
+                    return Ok(status.unwrap());
+                }
+                return Err(error);
+            }
+        };
         let mut status = self
             .actor_history_restore_status(resource, &request.operation_id)?
             .ok_or_else(conflict)?;
-        status.result = Some(self.actor_history_restore_result_at(
-            resource,
-            root,
-            path,
-            &request.operation_id,
-        )?);
+        status.result = restored;
         status.result_status = "available".into();
         Ok(status)
     }
@@ -442,6 +461,7 @@ impl Core {
         let mut record = match self.actor_history_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -462,9 +482,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_history_restore_status(resource, operation)?
             .ok_or_else(conflict)

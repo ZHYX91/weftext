@@ -1,6 +1,6 @@
 import "./history-panel.css";
 import {
-  HistoryController, historySourceDiff, historyTimeLabel,
+  HistoryController, historyOwnerKey, historySourceDiff, historyTimeLabel,
   type HistoryComparison, type HistoryContext, type HistoryRestoreBasis, type HistoryRestoreResult, type HistorySource,
 } from "./history-state";
 
@@ -11,6 +11,8 @@ export interface HistoryPanelHost {
   prepareRestore?(): Promise<void>;
   /** The source owner applies the saved base and durably preserves newer input and Undo. */
   restored(result: HistoryRestoreResult, basis: Readonly<HistoryRestoreBasis>): Promise<void>;
+  /** Explicit comparison can retire this page's delivery, never the Core fact. */
+  finishDelivery?(operationId: string, basis: Readonly<HistoryRestoreBasis>): Promise<boolean>;
   /** Keep ordinary Save from racing a pending or uncertain restore. */
   restorePending?(basis: Readonly<HistoryRestoreBasis>, pending: boolean): void;
   notify(message: string, error?: boolean): void;
@@ -58,6 +60,7 @@ class HistoryDialog {
   private restoreDialog: HTMLDialogElement | null = null;
   private acknowledging = false;
   private unacknowledged: { result: HistoryRestoreResult; basis: Readonly<HistoryRestoreBasis> } | null = null;
+  get pending(): boolean { return this.controller.operationId !== null || this.unacknowledged !== null; }
 
   constructor(private readonly host: HistoryPanelHost, context: HistoryContext) {
     this.controller = new HistoryController({
@@ -93,7 +96,7 @@ class HistoryDialog {
   }
   async open(): Promise<void> {
     if (!this.dialog.open) this.dialog.showModal();
-    if (!this.controller.list) await this.refresh();
+    if (!this.controller.list || this.host.getDocument()?.sessionId !== this.controller.note.sessionId) await this.refresh();
     else this.draw();
   }
   private report(error: unknown, prefix = ""): void {
@@ -199,6 +202,22 @@ class HistoryDialog {
       const retry = button("重试回执应用与草稿保护", () => this.acknowledge()); retry.disabled = this.acknowledging;
       this.operationHost.append(element("p", "history-warning", "Core 已保存旧版；编辑器的回执应用或草稿持久化尚未完成。请继续处理这份已保存回执。"), retry);
     }
+    const basis = this.unacknowledged?.basis ?? pending;
+    const operationId = this.unacknowledged?.result.receipt.operationId ?? this.controller.operationId;
+    if (basis && operationId && this.controller.operationState === "committed" && this.host.finishDelivery) {
+      const finish = button("比较当前稿并结束本页原回执应用", async () => {
+        if (this.acknowledging) return;
+        this.acknowledging = true; this.dialog.close();
+        try {
+          if (await this.host.finishDelivery!(operationId, basis)) {
+            this.controller.finishCommittedDelivery(); this.unacknowledged = null;
+            this.host.restorePending?.(basis, false); this.host.notify("原恢复事实继续保留；已按明确比较接纳当前稿，结束本页回执应用。");
+          }
+        } catch (error) { this.report(error); }
+        finally { this.acknowledging = false; this.drawControls(); this.drawOperation(); }
+      });
+      finish.disabled = this.controller.busy || this.acknowledging; this.operationHost.append(finish);
+    }
   }
   private async prepareRestore(): Promise<void> {
     await this.read(async () => {
@@ -245,7 +264,7 @@ class HistoryDialog {
     try {
       await this.host.restored(pending.result, pending.basis);
       this.unacknowledged = null; this.host.restorePending?.(pending.basis, false);
-      this.status.textContent = "所选旧版已作为新版本保存。受保护草稿和后来的版本继续保留。"; this.status.classList.remove("history-error");
+      this.status.textContent = `所选旧版已作为新版本保存。受保护草稿和后来的版本继续保留。${pending.result.recoveryIssue ? ` 恢复草稿更新提示：${pending.result.recoveryIssue.message}` : ""}`; this.status.classList.remove("history-error");
       this.host.notify(this.status.textContent);
       try { await this.controller.refresh(); } catch (error) { this.report(error, "新版本已保存，但保存记录刷新失败："); }
       this.draw();
@@ -277,11 +296,13 @@ class HistoryDialog {
 export class HistoryPanel {
   private readonly dialogs = new Map<string, HistoryDialog>();
   constructor(private readonly host: HistoryPanelHost) {}
+  hasPending(context: HistoryContext | null): boolean { return !!context && this.dialogs.get(historyOwnerKey(context))?.pending === true; }
   async open(): Promise<void> {
     const context = this.host.getDocument();
     if (!context?.nodeId || !context.workspaceId) { this.host.notify("请先打开一个身份已接纳的本地笔记。无法确认身份的文件须先处理，不能按同名猜测历史。", true); return; }
-    let dialog = this.dialogs.get(context.sessionId);
-    if (!dialog) { dialog = new HistoryDialog(this.host, context); this.dialogs.set(context.sessionId, dialog); }
+    const key = historyOwnerKey(context);
+    let dialog = this.dialogs.get(key);
+    if (!dialog) { dialog = new HistoryDialog(this.host, context); this.dialogs.set(key, dialog); }
     await dialog.open();
   }
   dispose(): void { for (const dialog of this.dialogs.values()) dialog.dispose(); this.dialogs.clear(); }

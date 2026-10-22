@@ -199,11 +199,14 @@ fn hosted_history_dirty_buffer_none_is_rejected_and_changed_original_request_can
     assert_eq!(f.status(&operation).status, "notCommitted");
     assert_eq!(f.restore(request.clone()).unwrap().status, "notCommitted");
     request.draft_action = "retain".into();
-    assert_eq!(f.restore(request).unwrap_err().code, "operationConflict");
+    assert_eq!(
+        f.restore(request.clone()).unwrap_err().code,
+        "operationConflict"
+    );
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c
-                .actor_history_restore_retry("Note", &operation, OTHER_FP))
+                .actor_history_restore_for_request("Note", &request, OTHER_FP))
             .unwrap_err()
             .code,
         "operationConflict"
@@ -267,10 +270,12 @@ fn hosted_history_installed_and_committed_lost_response_statuses_are_never_cance
         let operation = fresh();
         let request = f.request(&operation, Some(f.doc.source.clone() + "\nprivate buffer"));
         set_test_failpoint(point);
-        assert_eq!(
-            f.restore(request.clone()).unwrap_err().code,
-            "injectedFailure"
-        );
+        let first = f.restore(request.clone());
+        if point == "saveCommitted" {
+            assert_eq!(first.unwrap().status, "committed");
+        } else {
+            assert_eq!(first.unwrap_err().code, "injectedFailure");
+        }
         f.restart();
         let expected = if point == "saveCommitted" {
             "committed"
@@ -290,6 +295,54 @@ fn hosted_history_installed_and_committed_lost_response_statuses_are_never_cance
         assert_eq!(retry.status, expected);
         assert_eq!(retry.result.is_some(), point == "saveCommitted");
     }
+}
+
+#[test]
+fn first_hosted_restore_retains_a_postcommit_draft_warning_but_later_lookup_does_not_invent_it() {
+    let mut f = Fixture::new();
+    let operation = fresh();
+    let request = f.request(&operation, Some(f.doc.source.clone() + "\nprivate Y"));
+    set_test_failpoint("saveDraftUpdate");
+    let first = f.restore(request.clone()).unwrap();
+    assert_eq!(first.status, "committed");
+    let result = first.result.unwrap();
+    assert_eq!(result.receipt.operation_id, operation);
+    assert_eq!(result.recovery_issue.unwrap().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), f.original_source);
+    let internal = f.internal(&operation);
+    let count = f.core.operations.len();
+    for field in ["session", "base", "version", "source", "action"] {
+        let mut changed = request.clone();
+        match field {
+            "session" => changed.session_id = fresh(),
+            "base" => changed.base_id = fresh(),
+            "version" => changed.version_id = fresh(),
+            "source" => changed.draft_source = Some("different".into()),
+            _ => changed.draft_action = "none".into(),
+        }
+        assert_eq!(
+            f.core
+                .with_actor(ALICE, |core| core
+                    .actor_history_restore_for_request("Note", &changed, FP))
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+    }
+    f.restart();
+    let known = f
+        .core
+        .with_actor(ALICE, |core| {
+            core.actor_history_restore_for_request("Note", &request, FP)
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(known.status, "committed");
+    assert!(known.result.is_none());
+    let retry = f.restore(request).unwrap();
+    assert!(retry.result.unwrap().recovery_issue.is_none());
+    assert_eq!(f.internal(&operation), internal);
+    assert_eq!(f.core.operations.len(), count);
 }
 
 #[test]
@@ -330,7 +383,7 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
     assert!(
         f.core
             .with_actor(BOB, |c| c
-                .actor_history_restore_retry("Note", &operation, FP))
+                .actor_history_restore_for_request("Note", &request, FP))
             .unwrap()
             .is_none()
     );

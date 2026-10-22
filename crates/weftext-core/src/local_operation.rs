@@ -15,15 +15,16 @@ impl Core {
         };
         let workspace = binding.workspace_id.as_ref().ok_or_else(invalid)?;
         valid_operation_id(workspace)?;
-        let plan = self
-            .operations
-            .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(workspace)
-                    && self.committed(&p.operation_id)
-            })
-            .ok_or_else(invalid)?;
+        let mut original = None;
+        for plan in self.operations.values().filter(|plan| {
+            matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
+                && plan.workspace_id.as_ref() == Some(workspace)
+        }) {
+            if self.original_commit_fact(&plan.operation_id)? && original.replace(plan).is_some() {
+                return Err(invalid());
+            }
+        }
+        let plan = original.ok_or_else(invalid)?;
         if self
             .materialized_identity(&plan.operation_id, Path::new(&plan.path))?
             .as_ref()
@@ -64,6 +65,93 @@ impl Core {
     }
     /// Raw file-save fact reader. Hosted callers must first verify their actor,
     /// resource and original library binding; it needs no old live Session.
+    pub(crate) fn validate_file_save_plan(&self, plan: &journal::Plan) -> Result<()> {
+        if !matches!(plan.kind.as_str(), "save" | "saveAs") || plan.transaction.is_some() {
+            return Err(CoreError::new(
+                "operationConflict",
+                "The original operation is not a file save",
+            ));
+        }
+        let data = plan
+            .file_save
+            .as_ref()
+            .ok_or_else(file_save_scope::unsupported_scope)?;
+        if data.version != 1 {
+            return Err(file_save_scope::unsupported_scope());
+        }
+        valid_operation_id(&data.session_id)?;
+        if let Some(base) = &data.base_id {
+            valid_operation_id(base)?;
+        }
+        if (plan.kind == "save") != data.base_id.is_some() {
+            return Err(CoreError::new(
+                "invalidState",
+                "Original file-save request participants differ",
+            ));
+        }
+        if file_save_scope::fingerprint(
+            &plan.kind,
+            Path::new(&plan.path),
+            &decode(&plan.after)?,
+            data,
+            plan.history_restore.as_ref(),
+        )? != plan.fingerprint
+        {
+            return Err(CoreError::new(
+                "invalidState",
+                "Original file-save scope or request differs from its frozen fingerprint",
+            ));
+        }
+        self.validate_original_file_save_scope(&data.scope, Path::new(&plan.path))?;
+        if let Some(workspace) = &plan.workspace_id
+            && !matches!(&data.scope, QualifiedInputScope::Library { binding } if &binding.workspace_id == workspace)
+        {
+            return Err(CoreError::new(
+                "invalidState",
+                "File-save and sync publication owners differ",
+            ));
+        }
+        let invalid = || {
+            CoreError::new(
+                "invalidState",
+                "Original file-save Plan has invalid participants or receipt",
+            )
+        };
+        let receipt = plan.receipt.as_ref().ok_or_else(invalid)?;
+        if !matches!(plan.kind.as_str(), "save" | "saveAs")
+            || plan.transaction.is_some()
+            || plan.sync_setup.is_some()
+            || plan.sync_application.is_some()
+            || !plan.files.is_empty()
+            || plan.node_id.is_some()
+            || receipt.operation_id != plan.operation_id
+            || receipt.path != plan.path
+            || receipt.status != "saved"
+            || plan.after.len() > MAX_SOURCE_BYTES
+            || plan.content_revision != receipt.revision_id
+            || plan.workspace_id.as_ref()
+                != plan
+                    .sync_publication
+                    .as_ref()
+                    .map(|publication| &publication.identity.workspace_id)
+            || (plan.kind == "save"
+                && (plan.before.is_none()
+                    || plan.identity.is_none()
+                    || plan.content_revision.is_none()))
+            || (plan.kind == "saveAs"
+                && (plan.before.is_some()
+                    || plan.identity.is_some()
+                    || plan.history_restore.is_some()
+                    || plan.content_revision.is_some()))
+        {
+            return Err(invalid());
+        }
+        valid_operation_id(&receipt.base_id)?;
+        if let Some(revision) = &receipt.revision_id {
+            valid_operation_id(revision)?;
+        }
+        Ok(())
+    }
     pub(crate) fn file_save_fact(&self, id: &str) -> Result<Option<Receipt>> {
         valid_operation_id(id)?;
         let Some(plan) = self.operations.get(id) else {
@@ -75,7 +163,8 @@ impl Core {
                 "The original operation is not a file save",
             ));
         }
-        if self.committed(id) {
+        self.validate_file_save_plan(plan)?;
+        if self.original_commit_fact(id)? {
             return plan.receipt.clone().map(Some).ok_or_else(|| {
                 CoreError::new(
                     "invalidState",
@@ -98,18 +187,52 @@ impl Core {
             };
             return Ok(serde_json::json!({"operationId":id,"status":status}));
         };
+        let committed = self.original_commit_fact(id)?;
         if let Some(t) = &plan.transaction {
-            if self.committed(id) {
+            if t.request.operation_id != id
+                || t.preview.operation_id != id
+                || t.receipt.operation_id != id
+                || t.preview.plan_id != t.receipt.plan_id
+                || t.preview.kind != plan.kind
+                || operations::intent_kind(&t.request.intent) != plan.kind
+                || t.receipt.status != "committed"
+            {
+                return Err(CoreError::new(
+                    "invalidState",
+                    "Original transaction identity or kind is inconsistent",
+                ));
+            }
+            if committed {
                 return Ok(serde_json::to_value(&t.receipt)?);
             }
             return Ok(serde_json::to_value(self.operation_details(id)?)?);
         }
-        if matches!(plan.kind.as_str(), "save" | "saveAs")
-            && let Some(receipt) = self.file_save_fact(id)?
-        {
-            let mut fact = serde_json::to_value(receipt)?;
-            fact["status"] = serde_json::json!("committed");
+        if matches!(plan.kind.as_str(), "save" | "saveAs") {
+            self.validate_file_save_plan(plan)?;
+            if committed {
+                let mut fact = serde_json::to_value(plan.receipt.as_ref().unwrap())?;
+                fact["status"] = serde_json::json!("committed");
+                return Ok(fact);
+            }
+        }
+        if plan.kind == "enableSync" {
+            let mut fact = self.original_sync_setup_fact(plan)?;
+            fact["status"] = serde_json::json!(if committed {
+                "committed"
+            } else if self.resolved(id)? {
+                "resolved"
+            } else {
+                "recoveryPending"
+            });
             return Ok(fact);
+        }
+        if !matches!(plan.kind.as_str(), "save" | "saveAs")
+            && !library_creation::is_cancellation(plan)
+        {
+            return Err(CoreError::new(
+                "invalidState",
+                "Unknown original Plan kind has no qualified result contract",
+            ));
         }
         Ok(
             serde_json::json!({"operationId":id,"status":if self.resolved(id)? {"resolved"} else {"recoveryPending"}}),
@@ -124,58 +247,88 @@ impl Core {
             .ok_or_else(|| CoreError::new("notCommitted", "No committed original file save"))?;
         let plan = self.operations[id].clone();
         let source = decode(&plan.after)?;
-        let birth = plan
-            .identity
-            .as_ref()
-            .and_then(|identity| self.admitted_binding(identity));
-        let (path, root) = if let Some(birth) = &birth {
-            let root = self
-                .operations
-                .values()
-                .find(|plan| {
-                    matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
-                        && plan.workspace_id.as_ref() == Some(&birth.workspace_id)
-                        && self.committed(&plan.operation_id)
-                })
-                .map(|plan| PathBuf::from(&plan.path))
+        let identity = if plan.kind == "saveAs" {
+            self.materialized_identity(id, Path::new(&plan.path))?
                 .ok_or_else(|| {
                     CoreError::new(
                         "committedResultUnavailable",
-                        "Original library admission is unavailable",
+                        "The original Save As physical birth is unavailable",
                     )
-                })?;
-            let inventory = self.inventory(&root)?;
-            let entry = inventory
-                .entries
-                .iter()
-                .find(|entry| {
-                    entry.identity_status == "admitted"
-                        && entry.node_id.as_ref() == Some(&birth.node_id)
-                })
-                .ok_or_else(|| {
-                    CoreError::new(
-                        "committedResultUnavailable",
-                        "Original saved owner has no current admitted location",
-                    )
-                })?;
-            let qualified = self.qualified_node_at(&root, Path::new(&entry.path))?;
-            if qualified.identity != birth.identity {
-                return Err(CoreError::new(
-                    "committedResultUnavailable",
-                    "The current saved owner is a different physical object",
-                ));
-            }
-            (PathBuf::from(&entry.path), Some(root))
+                })?
         } else {
-            (PathBuf::from(&receipt.path), None)
+            plan.identity.clone().ok_or_else(|| {
+                CoreError::new("invalidState", "The original save has no physical identity")
+            })?
         };
-        let document = self.open(&path, root)?;
-        if let Some(identity) = &plan.identity
-            && self.sessions[&document.session_id].stamp.identity != *identity
-        {
+        let scope = &plan.file_save.as_ref().unwrap().scope;
+        let (path, root) = match scope {
+            QualifiedInputScope::Library { binding } => {
+                let root = PathBuf::from(
+                    self.validate_original_reservation_library(&binding.actor_binding())?,
+                );
+                let workspace = self.require_workspace(&root)?;
+                let guard = ParentGuard::acquire(&root.join(".file-result-root"))?;
+                if workspace.workspace_id != binding.workspace_id
+                    || guard.directory_identity()? != binding.root_identity
+                {
+                    return Err(CoreError::new(
+                        "committedResultUnavailable",
+                        "The original file-save library is unavailable",
+                    ));
+                }
+                let path = if let Some(birth) = self.admitted_binding(&identity) {
+                    if birth.workspace_id != binding.workspace_id {
+                        return Err(CoreError::new(
+                            "committedResultUnavailable",
+                            "Saved physical owner belongs to another original library",
+                        ));
+                    }
+                    let inventory = self.inventory(&root)?;
+                    let entries = inventory
+                        .entries
+                        .iter()
+                        .filter(|entry| {
+                            entry.identity_status == "admitted"
+                                && entry.node_id.as_ref() == Some(&birth.node_id)
+                        })
+                        .collect::<Vec<_>>();
+                    if entries.len() != 1 {
+                        return Err(CoreError::new(
+                            "committedResultUnavailable",
+                            "Original saved owner has no unique current admitted location",
+                        ));
+                    }
+                    let path = PathBuf::from(&entries[0].path);
+                    if self.qualified_node_at(&root, &path)?.identity != identity {
+                        return Err(CoreError::new(
+                            "committedResultUnavailable",
+                            "Saved owner is a different physical object",
+                        ));
+                    }
+                    path
+                } else {
+                    PathBuf::from(&receipt.path)
+                };
+                (path, Some(root))
+            }
+            QualifiedInputScope::DeviceUnassigned => (PathBuf::from(&receipt.path), None),
+        };
+        self.validate_current_file_save_scope(scope, &path)?;
+        let guard = ParentGuard::acquire(&path)?;
+        if stamp(&guard.open_file(false, false)?)?.identity != identity {
             return Err(CoreError::new(
                 "committedResultUnavailable",
                 "The saved path now names another physical object",
+            ));
+        }
+        drop(guard);
+        let document = self.open(&path, root)?;
+        let reopened = &self.sessions[&document.session_id];
+        if reopened.stamp.identity != identity || reopened.file_scope.as_ref().ok() != Some(scope) {
+            self.sessions.remove(&document.session_id);
+            return Err(CoreError::new(
+                "committedResultUnavailable",
+                "Saved physical owner or original scope changed during delivery",
             ));
         }
         Ok((source, document))
@@ -471,5 +624,55 @@ mod tests {
         })
         .unwrap();
         assert!(!core.journal_path(&id, "resolution").exists());
+    }
+    #[test]
+    fn sync_setup_status_is_its_original_decision_without_current_binding_or_library_reads() {
+        let (temp, mut core, root, _data, _doc) = fixture();
+        let id = fresh();
+        let setup = core.enable_sync(&root, &id).unwrap();
+        let fact = core.local_operation_status(&id).unwrap();
+        assert_eq!(fact["status"], "committed");
+        assert_eq!(fact["kind"], "enableSync");
+        assert_eq!(fact["replicaId"], setup.replica_id);
+        assert_eq!(
+            fact["identity"],
+            serde_json::to_value(&setup.identity).unwrap()
+        );
+        // Lose the live root entirely. Status still reports only the original
+        // immutable setup, never a guessed latest sync binding.
+        fs::rename(&root, temp.path().join("retained-library")).unwrap();
+        core.sessions.clear();
+        assert_eq!(core.local_operation_status(&id).unwrap(), fact);
+        core.operations
+            .get_mut(&id)
+            .unwrap()
+            .sync_setup
+            .as_mut()
+            .unwrap()
+            .root = "different".into();
+        assert!(core.local_operation_status(&id).is_err());
+    }
+    #[test]
+    fn unknown_kinds_and_corrupt_commit_evidence_are_errors_not_pending_or_resolved() {
+        let (_temp, mut core, _root, _data, doc) = fixture();
+        let id = fresh();
+        core.save(SaveRequest {
+            operation_id: id.clone(),
+            session_id: doc.session_id,
+            base_id: doc.base_id,
+            source: doc.source,
+        })
+        .unwrap();
+        let original = fs::read(core.journal_path(&id, "commit")).unwrap();
+        fs::write(
+            core.data_dir.join("retained-original-commit.json"),
+            &original,
+        )
+        .unwrap();
+        fs::write(core.journal_path(&id, "commit"), b"{broken").unwrap();
+        assert!(core.local_operation_status(&id).is_err());
+        fs::write(core.journal_path(&id, "commit"), original).unwrap();
+        core.operations.get_mut(&id).unwrap().kind = "unknown-kind".into();
+        assert!(core.local_operation_status(&id).is_err());
     }
 }
