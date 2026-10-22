@@ -190,6 +190,7 @@ fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
         })
         .unwrap()
         .receipt;
+    let original_record = fs::read(pair.b.draft_path(&old)).unwrap();
     pair.b.close_session(&doc.session_id).unwrap();
     drop(pair.b);
     pair.b = Core::new(&pair.bd).unwrap();
@@ -204,6 +205,19 @@ fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
     let history_before = fs::read_dir(pair.b.draft_directory("draft-history"))
         .unwrap()
         .count();
+    let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+    assert_eq!(reopened.source, doc.source);
+    assert!(reopened.recovered_draft.is_none());
+    assert!(!reopened.recovered_draft_conflict);
+    pair.b.close_session(&reopened.session_id).unwrap();
+    // The first successful rebinding retains exactly one original record.
+    // Repeated opens and subsequent saves must not grow that archive.
+    let retained: Vec<_> = fs::read_dir(pair.b.draft_directory("draft-history"))
+        .unwrap()
+        .map(|entry| fs::read(entry.unwrap().path()).unwrap())
+        .collect();
+    assert_eq!(retained.len(), history_before + 1);
+    assert!(retained.contains(&original_record));
     for _ in 0..3 {
         let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
         assert_eq!(reopened.source, doc.source);
@@ -240,7 +254,7 @@ fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
         fs::read_dir(pair.b.draft_directory("draft-history"))
             .unwrap()
             .count(),
-        history_before
+        retained.len()
     );
 }
 
