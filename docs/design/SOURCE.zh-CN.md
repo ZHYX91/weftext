@@ -184,6 +184,8 @@ Provider恰 `{id,family,implementation,data,exports,limits}`。implementation只
 
 形状先静态解码，再validator调用；Validator签名验类型不递归重新调用自身record constraints。若validation输入unbound/invalid/unavailable不得输出valid；unknown作者成员保持unbound且不加入已知读取闭包。Provider纯函数只允许本版 compareTemporal、duringDuration、containsDate、nextCivilDay、rangeOverlap、rangeDuration、periodBounds、expandRecurrence及calendar/zone primitive exports，FEATURES绑定这些准确导出，不接受任意名称动态执行。rangeDuration/duringDuration保years/months/days或exact seconds，compareTemporal按§3.1.1；开放/未知时长unavailable，不补“现在”。FEATURES.resolvePeriod先调用纯periodBounds再做获权Query/创建决议，不属于pure provider函数。
 
+`expandRecurrence` 的自产诊断使用与 UI 同源的结构化消息记录（语义 key、有类型的命名参数、原始诊断及有界因果链），不返回已渲染的产品说明字符串。显示语言只作用于呈现，不改变 CEL 返回值、发生坐标、停止位置、coverage 或预算判断。作者事件成员及真实第三方原始诊断保持原值；缺少或无效输入不因翻译获得业务资格。
+
 Provider数据闭合为none、unit-table、gregorian、calendar-table、zone-table。unit-table项只有key/dimension（此轮不自动提供换算）；gregorian含key/version/min_year/max_year。calendar-table有key/version/epoch_date/连续years，每年有year/有序months，每月number/leap/days；检查正天数、唯一(number,leap)、连贯范围、checked累计。给定epoch后按实际表转ordinal；范围外unavailable。可以导入获权非Gregorian数据pack，但不是仅填calendar文字就证明已支持农历。
 
 zone-table含key/version/from/until/initial_offset_seconds/严格递增transitions，每项at/offset_seconds；at是精确instant，offset为有界秒，校验覆盖和连续性。toCivil查实际区间；toInstant求所有落在区间内的候选，0为gap(skip)，2候选按earlier/later选择；范围外unavailable。真实IANA数据由获准loader从冻结tzdb产生该表并保来源/版本，不能把设备当前tzdb当固定来源。完整数据包在Core依赖快照中获权；synthetic测试provider只证明表机制，不冒真实历法/IANA支持。

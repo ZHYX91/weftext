@@ -3,6 +3,7 @@
 use crate::device_state::{DeviceRecordKind, evidence};
 use crate::{Core, DeviceIdentity, Result};
 use serde::{Deserialize, Serialize};
+use weftext_messages::UiMessage;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -51,7 +52,7 @@ impl Core {
                 let record = parse_record(&bytes)?;
                 if record.device_id != device.id {
                     return Err(evidence(
-                        "Desktop preferences belong to another retained device identity",
+                        UiMessage::error_core_desktop_preferences_desktop_preferences_belong_to_another_retained_device_identity(),
                     ));
                 }
                 (record.revision, record.preferences)
@@ -73,7 +74,7 @@ impl Core {
         if !device.is_current {
             return Err(crate::CoreError::new(
                 "deviceNotCurrent",
-                "Retain the foreign or unverified original device state; do not adopt or overwrite it",
+                UiMessage::error_core_retain_foreign_device_state(),
             ));
         }
         let original = self.read_device_record(DeviceRecordKind::DesktopPreferences, 16 * 1024)?;
@@ -82,7 +83,7 @@ impl Core {
                 let record = parse_record(bytes)?;
                 if record.device_id != device.id {
                     return Err(evidence(
-                        "Desktop preferences belong to another retained device identity",
+                        UiMessage::error_core_desktop_preferences_desktop_preferences_belong_to_another_retained_device_identity(),
                     ));
                 }
                 record.revision
@@ -92,12 +93,14 @@ impl Core {
         if original_revision != expected_revision {
             return Err(crate::CoreError::new(
                 "deviceStateConflict",
-                "Desktop preference revision changed; reread before applying this intent",
+                UiMessage::error_core_desktop_preference_revision_changed(),
             ));
         }
-        let revision = expected_revision
-            .checked_add(1)
-            .ok_or_else(|| evidence("Desktop preference revision exhausted"))?;
+        let revision = expected_revision.checked_add(1).ok_or_else(|| {
+            evidence(
+                UiMessage::error_core_desktop_preferences_desktop_preference_revision_exhausted(),
+            )
+        })?;
         let record = PreferencesRecord {
             schema_version: 1,
             device_id: device.id,
@@ -116,7 +119,7 @@ impl Core {
             || !readback.device.is_current
         {
             return Err(evidence(
-                "Desktop preference readback differs; retain the original mutation",
+                UiMessage::error_core_desktop_preferences_desktop_preference_readback_differs_retain_original_mutation(),
             ));
         }
         Ok(readback)
@@ -125,17 +128,22 @@ impl Core {
 
 fn parse_record(bytes: &[u8]) -> Result<PreferencesRecord> {
     if bytes.len() > 16 * 1024 {
-        return Err(evidence("Desktop preference byte budget exceeded"));
+        return Err(evidence(
+            UiMessage::error_core_desktop_preferences_desktop_preference_byte_budget_exceeded(),
+        ));
     }
     let record: PreferencesRecord = serde_json::from_slice(bytes)?;
-    let id = uuid::Uuid::parse_str(&record.device_id)
-        .map_err(|_| evidence("Invalid preference device UUID"))?;
+    let id = uuid::Uuid::parse_str(&record.device_id).map_err(|_| {
+        evidence(UiMessage::error_core_desktop_preferences_invalid_preference_device_u_u_i_d())
+    })?;
     if record.schema_version != 1
         || record.revision == 0
         || id.to_string() != record.device_id
         || id.get_version_num() != 4
     {
-        return Err(evidence("Unsupported desktop preference record"));
+        return Err(evidence(
+            UiMessage::error_core_desktop_preferences_unsupported_desktop_preference_record(),
+        ));
     }
     Ok(record)
 }

@@ -4,6 +4,7 @@
 use super::*;
 use backend::NamespaceGuard;
 use std::collections::{BTreeMap, BTreeSet};
+use weftext_messages::UiMessage;
 
 #[cfg(all(test, windows))]
 #[path = "definition_admission_tests.rs"]
@@ -275,7 +276,6 @@ pub struct OperationReceipt {
     pub status: String,
     pub path: String,
     pub node_ids: Vec<String>,
-    pub message: String,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -431,7 +431,7 @@ pub struct AdmittedSnapshot {
     pub schema: Option<SnapshotFile>,
     pub tags: Option<SnapshotFile>,
     pub complete: bool,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CoreDescription>,
     pub raw_complete: bool,
     pub raw_pending: usize,
 }
@@ -503,7 +503,7 @@ fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBind
     {
         return Err(CoreError::new(
             "staleBase",
-            "Competing read witnesses for one dependency",
+            UiMessage::error_core_operations_competing_read_witnesses_for_one_dependency(),
         ));
     }
     Ok(())
@@ -866,7 +866,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "unsupportedRole",
-                "Select an exact live canonical node source",
+                UiMessage::error_core_operations_select_exact_live_canonical_node_source(),
             ));
         }
         self.check_pending(&path)?;
@@ -879,7 +879,7 @@ impl Core {
         let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
             CoreError::new(
                 "identityPending",
-                "The selected object has no committed node admission",
+                UiMessage::error_core_operations_selected_object_has_no_committed_node_admission(),
             )
         })?;
         if birth.workspace_id != workspace.workspace_id
@@ -890,7 +890,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current declaration, workspace and object admission differ",
+                UiMessage::error_core_operations_current_declaration_workspace_and_object_admission_differ(),
             ));
         }
         self.check_history_placement(&birth, &path)?;
@@ -927,7 +927,7 @@ impl Core {
         if session.path != absolute_path(path)? {
             return Err(CoreError::new(
                 "operationConflict",
-                "The opened and configured owner paths differ",
+                UiMessage::error_core_operations_opened_and_configured_owner_paths_differ(),
             ));
         }
         let current = self.qualified_node_at(root, path)?;
@@ -936,7 +936,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "The original opened node admission is unavailable",
+                    UiMessage::error_core_operations_original_opened_node_admission_unavailable(),
                 )
             })?;
         if session.node_id.as_ref() != Some(&current.owner.node_id)
@@ -945,7 +945,8 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current object differs from the original opened owner",
+                UiMessage::error_core_operations_current_object_differs_from_original_opened_owner(
+                ),
             ));
         }
         Ok(current)
@@ -959,7 +960,7 @@ impl Core {
         let invalid = || {
             CoreError::new(
                 "resolutionUnavailable",
-                "Original source reservation cannot be qualified to this attempt and owner",
+                UiMessage::error_core_operations_original_source_reservation_cannot_qualified_to_attempt_and_owner(),
             )
         };
         let (library, original, source, owner, key) = if suffix == "definition-reservation" {
@@ -1020,7 +1021,7 @@ impl Core {
         if plan.kind != "save" || plan.transaction.is_some() {
             return Err(CoreError::new(
                 "operationConflict",
-                "This operation is not an original source save",
+                UiMessage::error_core_operations_operation_not_original_source_save(),
             ));
         }
         self.validate_file_save_plan(plan)?;
@@ -1081,7 +1082,7 @@ impl Core {
         let failure = || {
             CoreError::new(
                 "scopeChanged",
-                "Original lifecycle membership no longer has its exact captured physical objects",
+                UiMessage::error_core_operations_original_lifecycle_membership_no_longer_has_exact_captured_physical_objects(),
             )
         };
         let in_trash = |path: &Path| -> Result<bool> {
@@ -1255,7 +1256,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "The original strong operation's admitted membership changed; no replay or barrier release",
+                UiMessage::error_core_operations_original_strong_operation_s_admitted_membership_changed_no_replay_or_barrier_release(),
             ));
         }
         Ok(())
@@ -1266,7 +1267,10 @@ impl Core {
         materialized: &[(String, FileStamp)],
     ) -> Result<()> {
         let t = plan.transaction.as_ref().ok_or_else(|| {
-            CoreError::new("invalidState", "Recovery needs the original transaction")
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_operations_recovery_needs_original_transaction(),
+            )
         })?;
         let stamps = materialized.iter().cloned().collect::<BTreeMap<_, _>>();
         let relocated = t.relocated_files();
@@ -1286,7 +1290,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "recoveryUnavailable",
-                                "A recovery member stamp is missing",
+                                UiMessage::error_core_operations_recovery_member_stamp_missing(),
                             )
                         })?
                         .clone(),
@@ -1312,7 +1316,10 @@ impl Core {
             let mut actual = Vec::new();
             for birth in births {
                 let observed = stamps.get(&birth.path).ok_or_else(|| {
-                    CoreError::new("recoveryUnavailable", "A birth member is missing")
+                    CoreError::new(
+                        "recoveryUnavailable",
+                        UiMessage::error_core_operations_birth_member_missing(),
+                    )
                 })?;
                 if self
                     .materialized_identity(&plan.operation_id, Path::new(&birth.path))?
@@ -1321,7 +1328,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "A proposed new Node is not the original materialized object",
+                        UiMessage::error_core_operations_proposed_new_node_not_original_materialized_object(),
                     ));
                 }
                 actual.push(Birth {
@@ -1344,7 +1351,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Retained birth binding disagrees with the original materialized objects",
+                        UiMessage::error_core_operations_retained_birth_binding_disagrees_with_original_materialized_objects(),
                     ));
                 }
             } else if !actual.is_empty() {
@@ -1354,7 +1361,10 @@ impl Core {
         let mut resources = Vec::new();
         for (path, reference) in &t.preview.resource_map {
             let stamp = stamps.get(path).ok_or_else(|| {
-                CoreError::new("recoveryUnavailable", "A fresh resource member is missing")
+                CoreError::new(
+                    "recoveryUnavailable",
+                    UiMessage::error_core_operations_fresh_resource_member_missing(),
+                )
             })?;
             if self
                 .materialized_identity(&plan.operation_id, Path::new(path))?
@@ -1363,7 +1373,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "thirdState",
-                    "A resource is not the original materialized object",
+                    UiMessage::error_core_operations_resource_not_original_materialized_object(),
                 ));
             }
             let node_id = match &t.mutation {
@@ -1379,7 +1389,12 @@ impl Core {
                     t.updated_resource_owner(Path::new(path), plan.sync_application.as_ref())
                 }
             }
-            .ok_or_else(|| CoreError::new("invalidState", "Resource owner is missing"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_operations_resource_owner_missing(),
+                )
+            })?;
             resources.push(ResourceBirth {
                 resource_id: reference.rsplit('/').next().unwrap().into(),
                 workspace_id: plan.workspace_id.clone().unwrap(),
@@ -1402,7 +1417,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Retained resource bindings differ",
+                        UiMessage::error_core_operations_retained_resource_bindings_differ(),
                     ));
                 }
             } else {
@@ -1441,7 +1456,7 @@ impl Core {
                 if v["path"] != display(path) {
                     return Err(CoreError::new(
                         "invalidState",
-                        "Materialized object record path mismatch",
+                        UiMessage::error_core_operations_materialized_object_record_path_mismatch(),
                     ));
                 }
                 Ok(Some(serde_json::from_value(v["identity"].clone())?))
@@ -1474,7 +1489,12 @@ impl Core {
             .operations
             .get(operation_id)
             .and_then(|p| p.transaction.as_ref())
-            .ok_or_else(|| CoreError::new("operationMissing", "No frozen operation has this ID"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "operationMissing",
+                    UiMessage::error_core_operations_no_frozen_operation_has_i_d(),
+                )
+            })?;
         Ok(match &t.mutation {
             Mutation::Update { files } => files.clone(),
             Mutation::CreateTree { files, updates, .. } => {
@@ -1493,10 +1513,16 @@ impl Core {
         operation_id: &str,
     ) -> Result<Option<OperationReceipt>> {
         let p = self.operations.get(operation_id).ok_or_else(|| {
-            CoreError::new("operationMissing", "No original operation has this ID")
+            CoreError::new(
+                "operationMissing",
+                UiMessage::error_core_operations_no_original_operation_has_i_d(),
+            )
         })?;
         let t = p.transaction.as_ref().ok_or_else(|| {
-            CoreError::new("operationConflict", "This ID belongs to a legacy operation")
+            CoreError::new(
+                "operationConflict",
+                UiMessage::error_core_operations_i_d_belongs_to_legacy_operation(),
+            )
         })?;
         Ok(self.committed(operation_id).then(|| t.receipt.clone()))
     }
@@ -1513,14 +1539,18 @@ impl Core {
         let path = absolute_path(owner_path.as_ref())?;
         let current = self.managed_node(
             &root,
-            path.parent()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing source parent"))?,
+            path.parent().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_missing_source_parent(),
+                )
+            })?,
             false,
         )?;
         if current.path != display(&path) {
             return Err(CoreError::new(
                 "unsupportedRole",
-                "Definitions require canonical Node source",
+                UiMessage::error_core_operations_definitions_require_canonical_node_source(),
             ));
         }
         let owner = self.admitted_binding(&current.stamp.identity).unwrap();
@@ -1536,7 +1566,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Definition reservation already belongs to a different source basis",
+                    UiMessage::error_core_operations_definition_reservation_already_belongs_to_different_source_basis(),
                 ));
             }
             return Ok(old.key);
@@ -1573,19 +1603,26 @@ impl Core {
     ) -> Result<Option<String>> {
         let node = self.managed_node(
             root,
-            path.parent()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing owner"))?,
+            path.parent().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_operations_missing_owner(),
+                )
+            })?,
             false,
         )?;
         if node.path != display(path) {
             return Err(CoreError::new(
                 "identityConflict",
-                "Not the canonical owner",
+                UiMessage::error_core_operations_not_canonical_owner(),
             ));
         }
-        let owner = self
-            .admitted_binding(&node.stamp.identity)
-            .ok_or_else(|| CoreError::new("identityConflict", "Owner is not admitted"))?;
+        let owner = self.admitted_binding(&node.stamp.identity).ok_or_else(|| {
+            CoreError::new(
+                "identityConflict",
+                UiMessage::error_core_operations_owner_not_admitted(),
+            )
+        })?;
         let directory = self.journal_path("probe", "definition-reservation");
         let mut found = None;
         for entry in fs::read_dir(directory.parent().unwrap())? {
@@ -1606,7 +1643,7 @@ impl Core {
                 if found.is_some() {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "Ambiguous definition reservation",
+                        UiMessage::error_core_operations_ambiguous_definition_reservation(),
                     ));
                 }
                 found = Some(id.to_string());
@@ -1756,7 +1793,7 @@ impl Core {
         if current.len() != 1 {
             return Err(CoreError::new(
                 "revisionUnavailable",
-                "Current owner is missing, duplicated or unqualified",
+                UiMessage::error_core_operations_current_owner_missing_duplicated_or_unqualified(),
             ));
         }
         self.retained_source_revision(&workspace.workspace_id, owner_id, revision)
@@ -1778,7 +1815,10 @@ impl Core {
         let current = self.managed_node(
             &root,
             path.parent().ok_or_else(|| {
-                CoreError::new("revisionUnavailable", "The configured owner has no parent")
+                CoreError::new(
+                    "revisionUnavailable",
+                    UiMessage::error_core_operations_configured_owner_has_no_parent(),
+                )
             })?,
             false,
         )?;
@@ -1790,7 +1830,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "revisionUnavailable",
-                "The exact configured owner is not currently admitted",
+                UiMessage::error_core_operations_exact_configured_owner_not_currently_admitted(),
             ));
         }
         self.retained_source_revision(&workspace.workspace_id, owner_id, revision)
@@ -1852,7 +1892,7 @@ impl Core {
         }
         Err(CoreError::new(
             "revisionUnavailable",
-            "No committed retained exact source revision has this ID; latest was not substituted",
+            UiMessage::error_core_operations_no_committed_retained_exact_source_revision_has_i_d_latest_was_not_substituted(),
         ))
     }
     pub fn read_config_revision(
@@ -1881,7 +1921,7 @@ impl Core {
         }
         Err(CoreError::new(
             "revisionUnavailable",
-            "No retained exact config revision has this ID",
+            UiMessage::error_core_operations_no_retained_exact_config_revision_has_i_d(),
         ))
     }
     fn revision_payload(&self, p: &journal::Plan, revision: &str) -> Result<Vec<u8>> {
@@ -1895,7 +1935,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "revisionUnavailable",
-                    "No decision witness for this revision",
+                    UiMessage::error_core_operations_no_decision_witness_for_revision(),
                 )
             })?;
         let relocated = p
@@ -1927,7 +1967,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "revisionUnavailable",
-                    "Retained exact bytes are unavailable",
+                    UiMessage::error_core_operations_retained_exact_bytes_unavailable(),
                 )
             })
     }
@@ -1962,9 +2002,12 @@ impl Core {
     ) -> Result<Vec<ManagedResource>> {
         let root = absolute_path(root.as_ref())?;
         let path = absolute_path(node_source.as_ref())?;
-        let directory = path
-            .parent()
-            .ok_or_else(|| CoreError::new("invalidPath", "Missing Node parent"))?;
+        let directory = path.parent().ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_operations_missing_node_parent(),
+            )
+        })?;
         let in_trash = directory.strip_prefix(&root).is_ok_and(|relative| {
             relative.components().next().is_some_and(|component| {
                 component
@@ -1975,14 +2018,18 @@ impl Core {
         });
         let node = if in_trash {
             let original = capture_optional(&path)?.ok_or_else(|| {
-                CoreError::new("missingNode", "The retained canonical source is missing")
+                CoreError::new(
+                    "missingNode",
+                    UiMessage::error_core_operations_retained_canonical_source_missing(),
+                )
             })?;
             let birth = self
                 .admitted_binding(&original.stamp.identity)
                 .ok_or_else(|| {
                     CoreError::new(
                         "identityPending",
-                        "The retained source has no original admission",
+                        UiMessage::error_core_operations_retained_source_has_no_original_admission(
+                        ),
                     )
                 })?;
             let qualified = self.qualified_query_node_at(
@@ -2001,12 +2048,15 @@ impl Core {
                 .find(|witness| locator_equal(&witness.binding.path, &display(&path)))
                 .and_then(|witness| witness.binding.captured)
                 .ok_or_else(|| {
-                    CoreError::new("identityPending", "Missing original source witness")
+                    CoreError::new(
+                        "identityPending",
+                        UiMessage::error_core_operations_missing_original_source_witness(),
+                    )
                 })?;
             if current.stamp != original.stamp || current.bytes != original.bytes {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "The retained source changed during capture",
+                    UiMessage::error_core_operations_retained_source_changed_during_capture(),
                 ));
             }
             current
@@ -2026,31 +2076,43 @@ impl Core {
         if value["version"] != 1 {
             return Err(CoreError::new(
                 "resourceManifest",
-                "Unsupported resource manifest version",
+                UiMessage::error_core_operations_unsupported_resource_manifest_version(),
             ));
         }
-        let resources = value["resources"]
-            .as_array()
-            .ok_or_else(|| CoreError::new("resourceManifest", "Missing resources array"))?;
+        let resources = value["resources"].as_array().ok_or_else(|| {
+            CoreError::new(
+                "resourceManifest",
+                UiMessage::error_core_operations_missing_resources_array(),
+            )
+        })?;
         if resources.len() > 64 {
             return Err(CoreError::new(
                 "budget",
-                "At most64 registered resources per snapshot",
+                UiMessage::error_core_operations_at_most64_registered_resources_per_snapshot(),
             ));
         }
         let mut paths = Vec::new();
         let mut ids = BTreeSet::new();
         for r in resources {
-            let id = r["resourceId"]
-                .as_str()
-                .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource ID"))?;
+            let id = r["resourceId"].as_str().ok_or_else(|| {
+                CoreError::new(
+                    "resourceManifest",
+                    UiMessage::error_core_operations_missing_resource_i_d(),
+                )
+            })?;
             valid_operation_id(id)?;
             if !ids.insert(id) {
-                return Err(CoreError::new("resourceManifest", "Duplicate resource ID"));
+                return Err(CoreError::new(
+                    "resourceManifest",
+                    UiMessage::error_core_operations_duplicate_resource_i_d(),
+                ));
             }
-            let name = r["path"]
-                .as_str()
-                .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource path"))?;
+            let name = r["path"].as_str().ok_or_else(|| {
+                CoreError::new(
+                    "resourceManifest",
+                    UiMessage::error_core_operations_missing_resource_path(),
+                )
+            })?;
             paths.push(display(&resource_path(directory, name)?));
         }
         if paths.is_empty() {
@@ -2062,7 +2124,7 @@ impl Core {
         if current_manifest.bytes != manifest.bytes {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Resource manifest changed while preparing the exact cut",
+                UiMessage::error_core_operations_resource_manifest_changed_while_preparing_exact_cut(),
             ));
         }
         let mut result = Vec::new();
@@ -2071,7 +2133,7 @@ impl Core {
             let Some(bytes) = f.bytes.clone() else {
                 return Err(CoreError::new(
                     "resourceMissing",
-                    "Registered resource file is absent",
+                    UiMessage::error_core_operations_registered_resource_file_absent(),
                 ));
             };
             let capture = self.snapshots[&f.base_id].captured.as_ref().unwrap();
@@ -2120,12 +2182,15 @@ impl Core {
             }
             return Err(CoreError::new(
                 "operationConflict",
-                "This operationId belongs to a different import request",
+                UiMessage::error_core_operations_operation_id_belongs_to_different_import_request(),
             ));
         }
-        let directory = path
-            .parent()
-            .ok_or_else(|| CoreError::new("invalidPath", "Missing resource owner"))?;
+        let directory = path.parent().ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_operations_missing_resource_owner(),
+            )
+        })?;
         self.managed_node(&root, directory, false)?;
         let manifest = directory.join("weftext.resources.json");
         let target = directory.join(name);
@@ -2150,7 +2215,7 @@ impl Core {
         if root.join(".weftext-format").exists() || root.join(".weftext-workspace.json").exists() {
             return Err(CoreError::new(
                 "unadmittedLibrary",
-                "The existing library controls are incomplete or lack their original private journal",
+                UiMessage::error_core_operations_existing_library_controls_incomplete_or_lack_their_original_private_journal(),
             ));
         }
         Ok(false)
@@ -2167,7 +2232,7 @@ impl Core {
         if !path.starts_with(&root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Snapshot belongs outside the library",
+                UiMessage::error_core_operations_snapshot_belongs_outside_library(),
             ));
         }
         self.check_pending(&path)?;
@@ -2177,7 +2242,12 @@ impl Core {
         self.snapshots
             .remove(base_id)
             .map(|binding| SnapshotWitness { binding })
-            .ok_or_else(|| CoreError::new("basisRequired", "The original snapshot is unavailable"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "basisRequired",
+                    UiMessage::error_core_operations_original_snapshot_unavailable(),
+                )
+            })
     }
     /// Retain the same original read evidence for another bounded consumer.
     /// This does not observe current bytes or grant a write capability.
@@ -2186,7 +2256,12 @@ impl Core {
             .get(base_id)
             .cloned()
             .map(|binding| SnapshotWitness { binding })
-            .ok_or_else(|| CoreError::new("basisRequired", "The original snapshot is unavailable"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "basisRequired",
+                    UiMessage::error_core_operations_original_snapshot_unavailable(),
+                )
+            })
     }
     pub fn validate_snapshot_witness(
         &self,
@@ -2200,7 +2275,7 @@ impl Core {
         if crate::history::history_relative_path(&path, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Snapshot belongs outside the library",
+                UiMessage::error_core_operations_snapshot_belongs_outside_library(),
             ));
         }
         self.check_pending(&path)?;
@@ -2232,7 +2307,7 @@ impl Core {
         if original.len() > 2048 || incoming.len() > 2048 {
             return Err(CoreError::new(
                 "budget",
-                "At most 2048 original read witnesses per batch",
+                UiMessage::error_core_operations_at_most2048_original_read_witnesses_per_batch(),
             ));
         }
         let mut merged = Vec::<SnapshotWitness>::new();
@@ -2249,7 +2324,7 @@ impl Core {
             if basis.captured.is_none() && !allow_absent {
                 return Err(CoreError::new(
                     "basisRequired",
-                    "A guarded definition dependency must exist",
+                    UiMessage::error_core_operations_guarded_definition_dependency_must_exist(),
                 ));
             }
             total = total
@@ -2257,13 +2332,13 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "budget",
-                        "Guarded read dependencies exceed their byte budget",
+                        UiMessage::error_core_operations_guarded_read_dependencies_exceed_their_byte_budget(),
                     )
                 })?;
             if merged.len() == 64 || total > MAX_OPERATION_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Merged read dependencies exceed 64 files or 64 MiB",
+                    UiMessage::error_core_operations_merged_read_dependencies_exceed64_files_or64_mi_b(),
                 ));
             }
             merged.push(witness);
@@ -2287,13 +2362,13 @@ impl Core {
         if crate::history::history_relative_path(&owner, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
-                "The writer belongs outside this library",
+                UiMessage::error_core_operations_writer_belongs_outside_library(),
             ));
         }
         if witnesses.len() > 2048 {
             return Err(CoreError::new(
                 "budget",
-                "At most 2048 original read witnesses",
+                UiMessage::error_core_operations_at_most2048_original_read_witnesses(),
             ));
         }
         let owner_identity = stamp(&ParentGuard::acquire(&owner)?.open_placement_file()?)?.identity;
@@ -2305,7 +2380,7 @@ impl Core {
             if crate::history::history_relative_path(path, &root).is_none() {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "A read witness belongs outside this library",
+                    UiMessage::error_core_operations_read_witness_belongs_outside_library(),
                 ));
             }
             if let Some(original) = selected
@@ -2318,25 +2393,25 @@ impl Core {
             let captured = basis.captured.as_ref().ok_or_else(|| {
                 CoreError::new(
                     "basisRequired",
-                    "A guarded definition dependency must exist",
+                    UiMessage::error_core_operations_guarded_definition_dependency_must_exist(),
                 )
             })?;
             total = total.checked_add(captured.bytes.len()).ok_or_else(|| {
                 CoreError::new(
                     "budget",
-                    "Guarded read dependencies exceed their byte budget",
+                    UiMessage::error_core_operations_guarded_read_dependencies_exceed_their_byte_budget(),
                 )
             })?;
             if total > MAX_OPERATION_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Guarded read dependencies exceed 64 MiB",
+                    UiMessage::error_core_operations_guarded_read_dependencies_exceed64_mi_b(),
                 ));
             }
             if selected.len() == 64 {
                 return Err(CoreError::new(
                     "budget",
-                    "At most 64 unique guarded read dependencies",
+                    UiMessage::error_core_operations_at_most64_unique_guarded_read_dependencies(),
                 ));
             }
             selected.push(basis);
@@ -2355,7 +2430,7 @@ impl Core {
                 if guard.directory_identity()? != basis.parent {
                     return Err(CoreError::new(
                         "staleBase",
-                        "The guarded writer's original parent changed",
+                        UiMessage::error_core_operations_guarded_writer_s_original_parent_changed(),
                     ));
                 }
                 guards.push(guard);
@@ -2388,7 +2463,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "staleBase",
-                    "A guarded read dependency changed after validation",
+                    UiMessage::error_core_operations_guarded_read_dependency_changed_after_validation(),
                 ));
             }
             guards.push(guard);
@@ -2398,10 +2473,12 @@ impl Core {
     }
     pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
         let root = absolute_path(root.as_ref())?;
-        let b = self
-            .style_bases
-            .get(base_id)
-            .ok_or_else(|| CoreError::new("staleBase", "Style basis is unavailable"))?;
+        let b = self.style_bases.get(base_id).ok_or_else(|| {
+            CoreError::new(
+                "staleBase",
+                UiMessage::error_core_operations_style_basis_unavailable(),
+            )
+        })?;
         self.validate_style_basis(&root, b)
     }
     fn validate_style_basis(&self, root: &Path, b: &StyleBasis) -> Result<()> {
@@ -2409,7 +2486,7 @@ impl Core {
         if b.root != display(root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Style basis belongs to a different library",
+                UiMessage::error_core_operations_style_basis_belongs_to_different_library(),
             ));
         }
         if b.style.is_some() {
@@ -2430,7 +2507,8 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "staleBase",
-                    "Style environment changed after it was frozen",
+                    UiMessage::error_core_operations_style_environment_changed_after_it_was_frozen(
+                    ),
                 ));
             }
         }
@@ -2441,7 +2519,10 @@ impl Core {
             .remove(base_id)
             .map(|basis| LibraryStyleWitness { basis })
             .ok_or_else(|| {
-                CoreError::new("basisRequired", "The original style basis is unavailable")
+                CoreError::new(
+                    "basisRequired",
+                    UiMessage::error_core_operations_original_style_basis_unavailable(),
+                )
             })
     }
     pub fn validate_library_style_witness(
@@ -2477,7 +2558,10 @@ impl Core {
     }
     pub fn library_style_basis_retained_bytes(&self, base_id: &str) -> Result<usize> {
         let basis = self.style_bases.get(base_id).ok_or_else(|| {
-            CoreError::new("basisRequired", "The original style basis is unavailable")
+            CoreError::new(
+                "basisRequired",
+                UiMessage::error_core_operations_original_style_basis_unavailable(),
+            )
         })?;
         Ok(style_basis_retained_bytes(basis))
     }
@@ -2567,7 +2651,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "styleSelection",
-                "This style profile supports the exact library-style entry function only",
+                UiMessage::error_core_operations_style_profile_supports_exact_library_style_entry_function_only(),
             ));
         }
         let path = root.join("Styles").join("library-style.typ");
@@ -2579,7 +2663,7 @@ impl Core {
             let resource_id = selected.strip_prefix(&prefix).ok_or_else(|| {
                 CoreError::new(
                     "styleSelection",
-                    "Default style reference belongs to a different workspace",
+                    UiMessage::error_core_operations_default_style_reference_belongs_to_different_workspace(),
                 )
             })?;
             valid_operation_id(resource_id)?;
@@ -2601,7 +2685,10 @@ impl Core {
             let manifest = &snapshots.files[1];
             let value: serde_json::Value =
                 serde_json::from_slice(manifest.bytes.as_ref().ok_or_else(|| {
-                    CoreError::new("styleSelection", "Style resource binding is missing")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_style_resource_binding_missing(),
+                    )
                 })?)?;
             if value["version"] != 1
                 || !value["resources"].as_array().is_some_and(|a| {
@@ -2614,20 +2701,31 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "Selected resource is not bound to this exact style module",
+                    UiMessage::error_core_operations_selected_resource_not_bound_to_exact_style_module(),
                 ));
             }
             let source = decode(module.bytes.as_ref().ok_or_else(|| {
-                CoreError::new("styleSelection", "Selected module is unavailable")
+                CoreError::new(
+                    "styleSelection",
+                    UiMessage::error_core_operations_selected_module_unavailable(),
+                )
             })?)?;
             let owner_capture = self.snapshots[&snapshots.files[2].base_id]
                 .captured
                 .as_ref()
-                .ok_or_else(|| CoreError::new("styleSelection", "Style owner source is missing"))?;
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_style_owner_source_missing(),
+                    )
+                })?;
             let owner = self
                 .admitted_binding(&owner_capture.stamp.identity)
                 .ok_or_else(|| {
-                    CoreError::new("styleSelection", "Style owner source is unadmitted")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_style_owner_source_unadmitted(),
+                    )
                 })?;
             if weftext_engine::inspect_metadata(&decode(&owner_capture.bytes)?)
                 .id
@@ -2636,7 +2734,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "Style owner declaration is damaged",
+                    UiMessage::error_core_operations_style_owner_declaration_damaged(),
                 ));
             }
             let binding = self.snapshots[&module.base_id].captured.as_ref().unwrap();
@@ -2648,7 +2746,7 @@ impl Core {
             ) {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "The selected style resource object has no committed Core birth binding",
+                    UiMessage::error_core_operations_selected_style_resource_object_has_no_committed_core_birth_binding(),
                 ));
             }
             style_binding = Some(self.snapshots[&module.base_id].clone());
@@ -2793,14 +2891,19 @@ impl Core {
         let path = absolute_path(path.as_ref())?;
         let current = self.managed_node(
             &root,
-            path.parent()
-                .ok_or_else(|| CoreError::new("invalidPath", "Missing source parent"))?,
+            path.parent().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_missing_source_parent(),
+                )
+            })?,
             false,
         )?;
         if current.path != display(&path) {
             return Err(CoreError::new(
                 "unsupportedRole",
-                "Only canonical managed source has SourceRevision",
+                UiMessage::error_core_operations_only_canonical_managed_source_has_source_revision(
+                ),
             ));
         }
         self.verify_snapshot(&path, base_id, Some(&current))?;
@@ -2814,7 +2917,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This revision reservation belongs to a different source basis",
+                    UiMessage::error_core_operations_revision_reservation_belongs_to_different_source_basis(),
                 ));
             }
             return Ok(old.revision);
@@ -2842,7 +2945,8 @@ impl Core {
         let basis = self.snapshots.get(base_id).ok_or_else(|| {
             CoreError::new(
                 "basisRequired",
-                "Read an exact Core snapshot before preparing updates",
+                UiMessage::error_core_operations_read_exact_core_snapshot_before_preparing_updates(
+                ),
             )
         })?;
         self.verify_snapshot_binding(path, basis, current)
@@ -2861,7 +2965,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "staleBase",
-                "The snapshot object, bytes or parent changed after review",
+                UiMessage::error_core_operations_snapshot_object_bytes_or_parent_changed_after_review(),
             ));
         }
         Ok(())
@@ -2886,7 +2990,7 @@ impl Core {
             self.snapshots.remove(&snapshot.base_id);
             return Err(CoreError::new(
                 "rulesUnavailable",
-                "Previously committed rules are missing; no default or implicit reinstallation is available",
+                UiMessage::error_core_operations_previously_committed_rules_missing_no_default_or_implicit_reinstallation_available(),
             ));
         }
         Ok(ConfigDocument {
@@ -2925,7 +3029,7 @@ impl Core {
             }
             return Err(CoreError::new(
                 "operationConflict",
-                "This operationId belongs to different config input",
+                UiMessage::error_core_operations_operation_id_belongs_to_different_config_input(),
             ));
         }
         let current = self.read_config(&root, role)?;
@@ -2960,7 +3064,16 @@ impl Core {
         if paths.is_empty() || paths.len() > limit {
             return Err(CoreError::new(
                 "budget",
-                format!("A snapshot requires1to{limit} exact files"),
+                UiMessage::error_core_snapshot_file_count(
+                    weftext_messages::params::ErrorCoreSnapshotFileCount {
+                        limit: weftext_messages::UiInteger::try_from(limit).map_err(|_| {
+                            CoreError::new(
+                                "budget",
+                                UiMessage::error_core_snapshot_limit_unsupported(),
+                            )
+                        })?,
+                    },
+                ),
             ));
         }
         let mut guards = Vec::new();
@@ -2971,7 +3084,8 @@ impl Core {
             if !path.starts_with(&root) || !seen.insert(display(&path).to_lowercase()) {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "Snapshot paths must be unique and inside the library",
+                    UiMessage::error_core_operations_snapshot_paths_must_unique_and_inside_library(
+                    ),
                 ));
             }
             self.check_pending(&path)?;
@@ -3003,7 +3117,7 @@ impl Core {
             if total > MAX_OPERATION_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Selected snapshot exceeds64MiB; no partial snapshot published",
+                    UiMessage::error_core_operations_selected_snapshot_exceeds64_mi_b_no_partial_snapshot_published(),
                 ));
             }
             let birth = captured
@@ -3056,7 +3170,7 @@ impl Core {
             if guard.directory_identity()? != entry.identity {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "A committed Trash directory was replaced",
+                    UiMessage::error_core_operations_committed_trash_directory_was_replaced(),
                 ));
             }
             let mut captured = Vec::new();
@@ -3076,7 +3190,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "budget",
-                    "Admitted Trash scope exceeds the original transaction budget",
+                    UiMessage::error_core_operations_admitted_trash_scope_exceeds_original_transaction_budget(),
                 ));
             }
         }
@@ -3128,9 +3242,14 @@ impl Core {
                 .collect::<Vec<_>>();
             if candidates.len() != 1 {
                 complete = false;
-                warnings.push(format!(
-                    "Admitted Node{id}is missing, duplicated, excluded or pending"
-                ));
+                warnings.push(
+                    UiMessage::error_core_operations_admitted_node_unavailable(
+                        weftext_messages::params::ErrorCoreOperationsAdmittedNodeUnavailable {
+                            node_id: id.clone(),
+                        },
+                    )
+                    .into(),
+                );
                 continue;
             }
             let candidate = candidates[0];
@@ -3140,16 +3259,24 @@ impl Core {
                 .is_none_or(|f| f.stamp.identity != birth.identity)
             {
                 complete = false;
-                warnings.push(format!(
-                    "Admitted Node{id}has no matching actual source object"
-                ));
+                warnings.push(
+                    UiMessage::error_core_operations_admitted_source_object_missing(
+                        weftext_messages::params::ErrorCoreOperationsAdmittedSourceObjectMissing {
+                            node_id: id.clone(),
+                        },
+                    )
+                    .into(),
+                );
                 continue;
             }
             paths.push(candidate.path.clone());
             members.push(id.clone());
         }
         if expected.len() > MAX_OPERATION_FILES {
-            return Err(CoreError::new("budget", "Admitted set exceeds5000Nodes"));
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_operations_admitted_set_exceeds5000_nodes(),
+            ));
         }
         let schema_path = display(&root.join(ConfigRole::Schema.filename()));
         paths.push(schema_path.clone());
@@ -3189,10 +3316,12 @@ impl Core {
                 })
             {
                 complete = false;
-                warnings.push(format!(
-                    "{}lost source/admission qualification during capture",
-                    f.path
-                ));
+                warnings.push(
+                    UiMessage::error_core_operations_source_admission_changed_during_capture(weftext_messages::params::ErrorCoreOperationsSourceAdmissionChangedDuringCapture {
+                        path: f.path.clone(),
+                    })
+                    .into(),
+                );
             }
             if let Some(entry) = inventory.entries.iter_mut().find(|e| e.path == f.path) {
                 entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
@@ -3256,14 +3385,16 @@ impl Core {
         file: &SnapshotFile,
     ) -> Result<weftext_data::TagDocument> {
         let root = absolute_path(root.as_ref())?;
-        let basis = self
-            .admitted_cuts
-            .get(cut_id)
-            .ok_or_else(|| CoreError::new("staleBase", "Original admitted cut expired"))?;
+        let basis = self.admitted_cuts.get(cut_id).ok_or_else(|| {
+            CoreError::new(
+                "staleBase",
+                UiMessage::error_core_operations_original_admitted_cut_expired(),
+            )
+        })?;
         if basis.root != display(&root) || basis.tag_base.as_ref() != Some(&file.base_id) {
             return Err(CoreError::new(
                 "staleBase",
-                "Tag structure does not belong to the original admitted cut",
+                UiMessage::error_core_operations_tag_structure_does_not_belong_to_original_admitted_cut(),
             ));
         }
         let document = self.qualified_tag_document_from_snapshot(&root, file)?;
@@ -3291,10 +3422,12 @@ impl Core {
             let info = weftext_engine::inspect_metadata(&source);
             if info.id.as_deref() != Some(&birth.node_id) {
                 complete = false;
-                warnings.push(format!(
-                    "Trashed Node{}has damaged declaration",
-                    birth.node_id
-                ));
+                warnings.push(
+                    UiMessage::error_core_operations_trashed_node_declaration_damaged(weftext_messages::params::ErrorCoreOperationsTrashedNodeDeclarationDamaged {
+                        node_id: birth.node_id.clone(),
+                    })
+                    .into(),
+                );
                 continue;
             }
             if source_files
@@ -3302,10 +3435,14 @@ impl Core {
                 .is_some()
             {
                 complete = false;
-                warnings.push(format!(
-                    "Duplicate admitted trash identity{}",
-                    birth.node_id
-                ));
+                warnings.push(
+                    UiMessage::error_core_operations_trashed_node_identity_duplicate(
+                        weftext_messages::params::ErrorCoreOperationsTrashedNodeIdentityDuplicate {
+                            node_id: birth.node_id.clone(),
+                        },
+                    )
+                    .into(),
+                );
             }
             entries.push(InventoryEntry {
                 path: file.path.clone(),
@@ -3351,7 +3488,12 @@ impl Core {
                 entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
                 if f.node_id != entry.node_id {
                     complete = false;
-                    warnings.push(format!("{}changed admission during trash capture", f.path));
+                    warnings.push(
+                        UiMessage::error_core_operations_trash_admission_changed_during_capture(weftext_messages::params::ErrorCoreOperationsTrashAdmissionChangedDuringCapture {
+                            path: f.path.clone(),
+                        })
+                        .into(),
+                    );
                 }
             }
         }
@@ -3427,7 +3569,7 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "invalidScope",
-                    "Choose live or trash admitted scope",
+                    UiMessage::error_core_operations_choose_live_or_trash_admitted_scope(),
                 ));
             }
         };
@@ -3458,7 +3600,7 @@ impl Core {
             if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "A compile input changed while acquiring the shared cut",
+                    UiMessage::error_core_operations_compile_input_changed_while_acquiring_shared_cut(),
                 ));
             }
             guards.push(guard);
@@ -3470,10 +3612,12 @@ impl Core {
             .chain(snapshot.schema.iter())
             .chain(snapshot.tags.iter())
         {
-            let basis = self
-                .snapshots
-                .get(&original.base_id)
-                .ok_or_else(|| CoreError::new("staleBase", "A selected source basis expired"))?;
+            let basis = self.snapshots.get(&original.base_id).ok_or_else(|| {
+                CoreError::new(
+                    "staleBase",
+                    UiMessage::error_core_operations_selected_source_basis_expired(),
+                )
+            })?;
             let current = captured
                 .iter()
                 .find(|f| locator_equal(&f.path, &original.path));
@@ -3482,7 +3626,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Selected admitted source/schema changed before the compile cut",
+                    UiMessage::error_core_operations_selected_admitted_source_schema_changed_before_compile_cut(),
                 ));
             }
             if current.is_none() {
@@ -3491,7 +3635,7 @@ impl Core {
                 if guard.directory_identity()? != basis.parent {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "Negative schema basis changed",
+                        UiMessage::error_core_operations_negative_schema_basis_changed(),
                     ));
                 }
                 guards.push(guard);
@@ -3506,7 +3650,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Compile input membership changed",
+                    UiMessage::error_core_operations_compile_input_membership_changed(),
                 ));
             }
             guards.push(guard);
@@ -3525,13 +3669,16 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "styleSelection",
-                        "Enabled default style has no exact resource selector",
+                        UiMessage::error_core_operations_enabled_default_style_has_no_exact_resource_selector(),
                     )
                 })?;
             let resource_id = selected
                 .strip_prefix(&format!("weftext-resource://{workspace_id}/"))
                 .ok_or_else(|| {
-                    CoreError::new("styleSelection", "Style belongs to another workspace")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_style_belongs_to_another_workspace(),
+                    )
                 })?;
             if settings_value["defaultStyle"]["entryFunction"]
                 .as_str()
@@ -3539,14 +3686,17 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "Unsupported explicit style entry function",
+                    UiMessage::error_core_operations_unsupported_explicit_style_entry_function(),
                 ));
             }
             let module = captured
                 .iter()
                 .find(|f| locator_equal(&f.path, &display(&root.join("Styles/library-style.typ"))))
                 .ok_or_else(|| {
-                    CoreError::new("styleSelection", "Selected style module is unavailable")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_selected_style_module_unavailable(),
+                    )
                 })?;
             let manifest = captured
                 .iter()
@@ -3557,7 +3707,10 @@ impl Core {
                     )
                 })
                 .ok_or_else(|| {
-                    CoreError::new("styleSelection", "Selected style binding is unavailable")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_selected_style_binding_unavailable(),
+                    )
                 })?;
             let value: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
             if value["version"] != 1
@@ -3571,7 +3724,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "Selected style resource binding is ambiguous",
+                    UiMessage::error_core_operations_selected_style_resource_binding_ambiguous(),
                 ));
             }
             let owner = captured
@@ -3579,7 +3732,10 @@ impl Core {
                 .find(|f| locator_equal(&f.path, &display(&root.join("Styles/Styles.typ"))))
                 .and_then(|f| self.admitted_binding(&f.stamp.identity))
                 .ok_or_else(|| {
-                    CoreError::new("styleSelection", "Selected style owner is unavailable")
+                    CoreError::new(
+                        "styleSelection",
+                        UiMessage::error_core_operations_selected_style_owner_unavailable(),
+                    )
                 })?;
             if !self.admitted_resource(
                 resource_id,
@@ -3589,14 +3745,17 @@ impl Core {
             ) {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "Selected style is not the admitted resource object",
+                    UiMessage::error_core_operations_selected_style_not_admitted_resource_object(),
                 ));
             }
             Some(weftext_engine::StyleModule {
                 path: Path::new(&module.path)
                     .strip_prefix(root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "Selected style is outside selected library")
+                        CoreError::new(
+                            "outsideRoot",
+                            UiMessage::error_core_operations_selected_style_outside_selected_library(),
+                        )
                     })?
                     .to_string_lossy()
                     .replace('\\', "/"),
@@ -3617,7 +3776,11 @@ impl Core {
             files.insert(
                 path.strip_prefix(root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "Compile input is outside selected library")
+                        CoreError::new(
+                            "outsideRoot",
+                            UiMessage::error_core_operations_compile_input_outside_selected_library(
+                            ),
+                        )
                     })?
                     .to_string_lossy()
                     .replace('\\', "/"),
@@ -3657,7 +3820,7 @@ impl Core {
             if p.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId belongs to different canonical author intent",
+                    UiMessage::error_core_operations_operation_id_belongs_to_different_canonical_author_intent(),
                 ));
             }
             return self.operation_details(operation_id).map(Some);
@@ -3665,7 +3828,7 @@ impl Core {
         if self.resolved(operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
-                "The original operation was cancelled before preparation",
+                UiMessage::error_core_journal_original_operation_was_cancelled_before_preparation(),
             ));
         }
         Ok(None)
@@ -3772,19 +3935,20 @@ impl Core {
         let cut = self.admitted_cuts.get(cut_id).cloned().ok_or_else(|| {
             CoreError::new(
                 "cutExpired",
-                "Read a fresh admitted set snapshot before preparing",
+                UiMessage::error_core_operations_read_fresh_admitted_set_snapshot_before_preparing(
+                ),
             )
         })?;
         if cut.root != request.root || !cut.complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
-                "Strong action requires its complete admitted set cut",
+                UiMessage::error_core_operations_strong_action_requires_complete_admitted_set_cut(),
             ));
         }
         if cut.lifecycle != "live" {
             return Err(CoreError::new(
                 "readOnly",
-                "A Trash read cut cannot authorize a new generic author operation",
+                UiMessage::error_core_operations_trash_read_cut_cannot_authorize_new_generic_author_operation(),
             ));
         }
         self.prepare_internal(request, Some(cut), fingerprint, &[], &[], None, &[], None)
@@ -3807,7 +3971,7 @@ impl Core {
             if old.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId belongs to different input",
+                    UiMessage::error_core_operations_operation_id_belongs_to_different_input(),
                 ));
             }
             return self.operation_details(&request.operation_id);
@@ -3815,7 +3979,7 @@ impl Core {
         if self.resolved(&request.operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
-                "The original operation was cancelled before preparation",
+                UiMessage::error_core_journal_original_operation_was_cancelled_before_preparation(),
             ));
         }
         let root = absolute_path(Path::new(&request.root))?;
@@ -3840,10 +4004,12 @@ impl Core {
         let mut dependency_pool = Vec::new();
         let mut incoming = Vec::with_capacity(dependencies.len());
         for id in dependencies {
-            let basis =
-                self.snapshots.get(id).cloned().ok_or_else(|| {
-                    CoreError::new("staleBase", "A dependency basis is unavailable")
-                })?;
+            let basis = self.snapshots.get(id).cloned().ok_or_else(|| {
+                CoreError::new(
+                    "staleBase",
+                    UiMessage::error_core_operations_dependency_basis_unavailable(),
+                )
+            })?;
             incoming.push(SnapshotWitness { binding: basis });
         }
         Self::merge_dependency_witnesses(&mut dependency_pool, incoming, true)?;
@@ -3874,7 +4040,7 @@ impl Core {
             if !locator_within(Path::new(&basis.path), &root) {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "A dependency belongs to another library",
+                    UiMessage::error_core_operations_dependency_belongs_to_another_library(),
                 ));
             }
             self.check_pending(Path::new(&basis.path))?;
@@ -3902,12 +4068,15 @@ impl Core {
             if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Admitted set membership changed before planning",
+                    UiMessage::error_core_operations_admitted_set_membership_changed_before_planning(),
                 ));
             }
             for id in &cut.bases {
                 let basis = self.snapshots.get(id).cloned().ok_or_else(|| {
-                    CoreError::new("staleBase", "A frozen cut basis is unavailable")
+                    CoreError::new(
+                        "staleBase",
+                        UiMessage::error_core_operations_frozen_cut_basis_unavailable(),
+                    )
                 })?;
                 let current = capture_optional(Path::new(&basis.path))?;
                 self.verify_snapshot(Path::new(&basis.path), id, current.as_ref())?;
@@ -3925,7 +4094,7 @@ impl Core {
             OperationIntent::CreateLibrary { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
-                    "Library creation requires its dedicated create-only planner",
+                    UiMessage::error_core_operations_library_creation_requires_dedicated_create_only_planner(),
                 ));
             }
             OperationIntent::CloneSync { .. }
@@ -3935,7 +4104,7 @@ impl Core {
             | OperationIntent::AdoptSyncExternal { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
-                    "Replica intents require their dedicated guarded planner",
+                    UiMessage::error_core_operations_replica_intents_require_their_dedicated_guarded_planner(),
                 ));
             }
             OperationIntent::ImportDocx {
@@ -4034,9 +4203,12 @@ impl Core {
             OperationIntent::RenameNode { source, name } => {
                 valid_name(name)?;
                 let source = absolute_path(Path::new(source))?;
-                let parent = source
-                    .parent()
-                    .ok_or_else(|| CoreError::new("invalidPath", "Node has no parent"))?;
+                let parent = source.parent().ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_core_operations_node_has_no_parent(),
+                    )
+                })?;
                 self.prepare_relocation(
                     &root,
                     &source,
@@ -4142,7 +4314,7 @@ impl Core {
                 if changes.is_empty() || changes.len() > 64 {
                     return Err(CoreError::new(
                         "budget",
-                        "A bounded update requires between 1 and 64 files",
+                        UiMessage::error_core_operations_bounded_update_requires_between1_and64_files(),
                     ));
                 }
                 let mut seen = BTreeSet::new();
@@ -4151,7 +4323,7 @@ impl Core {
                     if !seen.insert(display(&path).to_lowercase()) {
                         return Err(CoreError::new(
                             "duplicatePath",
-                            "One operation cannot write the same path twice",
+                            UiMessage::error_core_operations_one_operation_cannot_write_same_path_twice(),
                         ));
                     }
                     self.validate_update(&root, &path, &c.after)?;
@@ -4177,16 +4349,19 @@ impl Core {
                     if is_canonical(&path) {
                         check_size(&c.after)?;
                     } else if c.after.len() > MAX_OPERATION_BYTES {
-                        return Err(CoreError::new("budget", "A file exceeds64MiB"));
+                        return Err(CoreError::new(
+                            "budget",
+                            UiMessage::error_core_operations_file_exceeds64_mi_b(),
+                        ));
                     }
                     let current = capture_optional(&path)?;
                     if current.as_ref().map(|f| &f.bytes) != c.before.as_ref() {
                         return Err(CoreError::new(
                             "conflict",
-                            "Exact current bytes differ from the supplied base",
+                            UiMessage::error_core_operations_exact_current_bytes_differ_from_supplied_base(),
                         ));
                     }
-                    let base_id = c.base_id.as_deref().ok_or_else(|| CoreError::new("basisRequired", "Updates require the exact Core snapshot baseId, including create-only targets"))?;
+                    let base_id = c.base_id.as_deref().ok_or_else(|| CoreError::new("basisRequired", UiMessage::error_core_operations_updates_require_exact_core_snapshot_base_id_including_create_only_targets()))?;
                     self.verify_snapshot(&path, base_id, current.as_ref())?;
                     let revision = current
                         .as_ref()
@@ -4262,7 +4437,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "operationConflict",
-                            "Copy source differs from original authorized tree",
+                            UiMessage::error_core_operations_copy_source_differs_from_original_authorized_tree(),
                         ));
                     }
                     members.extend(tree.files.clone());
@@ -4282,7 +4457,7 @@ impl Core {
                     context.push(witness.binding.captured.clone().ok_or_else(|| {
                         CoreError::new(
                             "basisRequired",
-                            "Transfer sources require original present bytes",
+                            UiMessage::error_core_operations_transfer_sources_require_original_present_bytes(),
                         )
                     })?);
                 }
@@ -4329,13 +4504,16 @@ impl Core {
                     })
                     .unwrap_or_else(|| requested_canonical.clone());
                 let source = canonical.parent().ok_or_else(|| {
-                    CoreError::new("templateSource", "Template source has no Node parent")
+                    CoreError::new(
+                        "templateSource",
+                        UiMessage::error_core_operations_template_source_has_no_node_parent(),
+                    )
                 })?;
                 let original = self.managed_node(&root, source, false)?;
                 if original.path != display(&canonical) {
                     return Err(CoreError::new(
                         "templateSource",
-                        "Templates require the exact admitted canonical source",
+                        UiMessage::error_core_operations_templates_require_exact_admitted_canonical_source(),
                     ));
                 }
                 // The original token binds the caller's exact locator spelling;
@@ -4357,7 +4535,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "operationConflict",
-                            "Template source differs from original authorized tree",
+                            UiMessage::error_core_operations_template_source_differs_from_original_authorized_tree(),
                         ));
                     }
                     originals.extend(tree.files.clone());
@@ -4369,7 +4547,10 @@ impl Core {
                 let owner = self
                     .admitted_binding(&original.stamp.identity)
                     .ok_or_else(|| {
-                        CoreError::new("templateSource", "Template owner is unadmitted")
+                        CoreError::new(
+                            "templateSource",
+                            UiMessage::error_core_operations_template_owner_unadmitted(),
+                        )
                     })?;
                 instantiated
                     .iter_mut()
@@ -4387,7 +4568,7 @@ impl Core {
                     let captured = witness.binding.captured.clone().ok_or_else(|| {
                         CoreError::new(
                             "basisRequired",
-                            "Transfer sources require original present bytes",
+                            UiMessage::error_core_operations_transfer_sources_require_original_present_bytes(),
                         )
                     })?;
                     // The template author proposal replaces only its own
@@ -4440,7 +4621,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "recursiveBackup",
-                        "Backup destination must be outside the library and private data directory",
+                        UiMessage::error_core_operations_backup_destination_must_outside_library_and_private_data_directory(),
                     ));
                 }
                 ensure_absent(&target)?;
@@ -4520,7 +4701,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "budget",
-                        "Complete backup including its manifest and directories exceeds 64 MiB or 5000 members",
+                        UiMessage::error_core_operations_complete_backup_including_manifest_and_directories_exceeds64_mi_b_or5000_members(),
                     ));
                 }
                 // Use the same pure encoder as delivery, including its 80 MiB
@@ -4539,7 +4720,7 @@ impl Core {
                 .map_err(|_| {
                     CoreError::new(
                         "budget",
-                        "Original backup is outside its complete bounded ZIP delivery profile",
+                        UiMessage::error_core_operations_original_backup_outside_complete_bounded_z_i_p_delivery_profile(),
                     )
                 })?;
                 preview.changes.extend(
@@ -4563,12 +4744,15 @@ impl Core {
             } => {
                 check_size(source.as_bytes())?;
                 let basis = self.style_bases.get(base_id).cloned().ok_or_else(|| {
-                    CoreError::new("staleBase", "Read the style again before preparing")
+                    CoreError::new(
+                        "staleBase",
+                        UiMessage::error_core_operations_read_style_again_before_preparing(),
+                    )
                 })?;
                 if basis.root != display(&root) {
                     return Err(CoreError::new(
                         "outsideRoot",
-                        "Style basis belongs to another library",
+                        UiMessage::error_core_operations_style_basis_belongs_to_another_library(),
                     ));
                 }
                 for b in [
@@ -4583,7 +4767,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "staleBase",
-                            "Style module, manifest or settings changed after review",
+                            UiMessage::error_core_operations_style_module_manifest_or_settings_changed_after_review(),
                         ));
                     }
                     if let Some(f) = current
@@ -4602,7 +4786,7 @@ impl Core {
                 if !settings.is_object() {
                     return Err(CoreError::new(
                         "invalidState",
-                        "Workspace settings must be an object",
+                        UiMessage::error_core_operations_workspace_settings_must_object(),
                     ));
                 }
                 let target = root.join("Styles");
@@ -4616,7 +4800,7 @@ impl Core {
                 if !settings["defaultStyle"].is_object() {
                     return Err(CoreError::new(
                         "styleSelection",
-                        "Unknown default style selector cannot be overwritten",
+                        UiMessage::error_core_operations_unknown_default_style_selector_cannot_overwritten(),
                     ));
                 }
                 settings["defaultStyle"]["enabled"] = (*enabled).into();
@@ -4717,17 +4901,23 @@ impl Core {
             } => {
                 valid_name(name)?;
                 if bytes.len() > MAX_OPERATION_BYTES {
-                    return Err(CoreError::new("budget", "Resource exceeds64MiB"));
+                    return Err(CoreError::new(
+                        "budget",
+                        UiMessage::error_core_operations_resource_exceeds64_mi_b(),
+                    ));
                 }
                 let node_path = absolute_path(Path::new(node))?;
-                let directory = node_path
-                    .parent()
-                    .ok_or_else(|| CoreError::new("invalidPath", "Missing resource owner"))?;
+                let directory = node_path.parent().ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_core_operations_missing_resource_owner(),
+                    )
+                })?;
                 let canonical = self.managed_node(&root, directory, false)?;
                 if Path::new(&canonical.path) != node_path {
                     return Err(CoreError::new(
                         "unsupportedRole",
-                        "Select the canonical admitted Node source",
+                        UiMessage::error_core_operations_select_canonical_admitted_node_source(),
                     ));
                 }
                 let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
@@ -4739,7 +4929,8 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "resourceConflict",
-                        "A resource cannot replace a Node control file",
+                        UiMessage::error_core_operations_resource_cannot_replace_node_control_file(
+                        ),
                     ));
                 }
                 let manifest = capture_optional(&manifest_path)?;
@@ -4750,7 +4941,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "budget",
-                        "Owned resource manifest exceeds 2 MiB",
+                        UiMessage::error_core_operations_owned_resource_manifest_exceeds2_mi_b(),
                     ));
                 }
                 if manifest.is_none() {
@@ -4759,7 +4950,10 @@ impl Core {
                 let current = capture_optional(&target)?;
                 self.verify_snapshot(&target, resource_base_id, current.as_ref())?;
                 if current.is_some() {
-                    return Err(CoreError::new("exists", "Resource import is create-only"));
+                    return Err(CoreError::new(
+                        "exists",
+                        UiMessage::error_core_operations_resource_import_create_only(),
+                    ));
                 }
                 let mut value: serde_json::Value = manifest
                     .as_ref()
@@ -4769,13 +4963,14 @@ impl Core {
                 if value["version"] != 1 || !value["resources"].is_array() {
                     return Err(CoreError::new(
                         "resourceManifest",
-                        "Unsupported resource manifest",
+                        UiMessage::error_core_operations_unsupported_resource_manifest(),
                     ));
                 }
                 if value["resources"].as_array().unwrap().len() >= 64 {
                     return Err(CoreError::new(
                         "budget",
-                        "At most 64 registered resource descriptors",
+                        UiMessage::error_core_operations_at_most64_registered_resource_descriptors(
+                        ),
                     ));
                 }
                 if value["resources"]
@@ -4786,7 +4981,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "resourceConflict",
-                        "Manifest already has this path",
+                        UiMessage::error_core_operations_manifest_already_has_path(),
                     ));
                 }
                 let resource_id = fresh();
@@ -4802,7 +4997,7 @@ impl Core {
                 if manifest_after.len() > MAX_SOURCE_BYTES {
                     return Err(CoreError::new(
                         "budget",
-                        "Owned resource manifest exceeds 2 MiB",
+                        UiMessage::error_core_operations_owned_resource_manifest_exceeds2_mi_b(),
                     ));
                 }
                 let changes = vec![
@@ -4869,7 +5064,7 @@ impl Core {
             Mutation::Compound { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
-                    "Compound must originate from its original sync planner",
+                    UiMessage::error_core_operations_compound_must_originate_from_original_sync_planner(),
                 ));
             }
             Mutation::Relocate { target, .. } | Mutation::CreateTree { target, .. } => {
@@ -4877,7 +5072,18 @@ impl Core {
             }
             Mutation::Update { files } => files[0].path.clone(),
         };
-        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id, status: "committed".into(), path: result_path.clone(), node_ids: preview.node_map.values().cloned().chain(preview.new_node_id.clone()).collect(), message: "One durable Core decision committed the frozen local operation; external tools can observe installs before this decision".into() };
+        let receipt = OperationReceipt {
+            operation_id: request.operation_id.clone(),
+            plan_id,
+            status: "committed".into(),
+            path: result_path.clone(),
+            node_ids: preview
+                .node_map
+                .values()
+                .cloned()
+                .chain(preview.new_node_id.clone())
+                .collect(),
+        };
         let mut plan = journal::Plan::file(
             request.operation_id.clone(),
             fingerprint,
@@ -4931,14 +5137,14 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "staleBase",
-                        "Competing frozen versions or locators for one physical dependency",
+                        UiMessage::error_core_operations_competing_frozen_versions_or_locators_for_one_physical_dependency(),
                     ));
                 }
                 if required_paths.contains(&file.path) {
                     if required_paths.contains(&original.path) && file.path != original.path {
                         return Err(CoreError::new(
                             "invalidIntent",
-                            "One physical writer has multiple distinct requested spellings",
+                            UiMessage::error_core_operations_one_physical_writer_has_multiple_distinct_requested_spellings(),
                         ));
                     }
                     *original = file;
@@ -4990,7 +5196,12 @@ impl Core {
             .operations
             .get(operation_id)
             .and_then(|p| p.transaction.as_ref())
-            .ok_or_else(|| CoreError::new("operationMissing", "No frozen operation has this ID"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "operationMissing",
+                    UiMessage::error_core_operations_no_frozen_operation_has_i_d(),
+                )
+            })?;
         let mut preview = p.preview.clone();
         preview.status = if self.committed(operation_id) {
             "committed"
@@ -5017,10 +5228,23 @@ impl Core {
             self.resolved(operation_id)?
         };
         let result = self.execute_operation_inner(operation_id, plan_id);
-        result.map_err(|error|{
-            if self.journal_path(operation_id,"install").exists()&&!self.committed(operation_id)&&!resolved{
-                CoreError::new("recoveryPending",format!("Operation {operation_id} began installation and is not committed. Keep the original plan and inspect recovery; underlying {}: {}",error.code,error.message))
-            }else{error}
+        result.map_err(|error| {
+            if self.journal_path(operation_id, "install").exists()
+                && !self.committed(operation_id)
+                && !resolved
+            {
+                CoreError::new(
+                    "recoveryPending",
+                    UiMessage::error_core_recovery_installation_unresolved(
+                        weftext_messages::params::ErrorCoreRecoveryInstallationUnresolved {
+                            operation_id: operation_id.into(),
+                        },
+                    ),
+                )
+                .caused_by(error)
+            } else {
+                error
+            }
         })
     }
     fn execute_operation_inner(
@@ -5028,13 +5252,17 @@ impl Core {
         operation_id: &str,
         plan_id: &str,
     ) -> Result<OperationReceipt> {
-        let plan = self
-            .operations
-            .get(operation_id)
-            .cloned()
-            .ok_or_else(|| CoreError::new("operationMissing", "Prepare the operation first"))?;
+        let plan = self.operations.get(operation_id).cloned().ok_or_else(|| {
+            CoreError::new(
+                "operationMissing",
+                UiMessage::error_core_operations_prepare_operation_first(),
+            )
+        })?;
         let t = plan.transaction.as_ref().ok_or_else(|| {
-            CoreError::new("operationConflict", "This ID belongs to a legacy operation")
+            CoreError::new(
+                "operationConflict",
+                UiMessage::error_core_operations_i_d_belongs_to_legacy_operation(),
+            )
         })?;
         if matches!(
             t.request.intent,
@@ -5049,7 +5277,7 @@ impl Core {
         if t.preview.plan_id != plan_id {
             return Err(CoreError::new(
                 "planConflict",
-                "Execute the exact reviewed frozen plan ID",
+                UiMessage::error_core_operations_execute_exact_reviewed_frozen_plan_i_d(),
             ));
         }
         if self.committed(operation_id) {
@@ -5058,7 +5286,7 @@ impl Core {
         if self.resolved(operation_id)? || self.journal_path(operation_id, "install").exists() {
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original operation may have effects; inspect it and do not execute again",
+                UiMessage::error_core_operations_original_operation_may_have_effects_inspect_it_and_do_not_execute_again(),
             ));
         }
         self.validate_operation_pending(&plan)?;
@@ -5072,7 +5300,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncReplicaExists",
-                "Another replica of this workspace was committed in this private state",
+                UiMessage::error_core_operations_another_replica_of_workspace_was_committed_in_private_state(),
             ));
         }
         if !matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
@@ -5093,7 +5321,7 @@ impl Core {
             if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Admitted set membership changed after the reviewed strong plan",
+                    UiMessage::error_core_operations_admitted_set_membership_changed_after_reviewed_strong_plan(),
                 ));
             }
         }
@@ -5110,7 +5338,7 @@ impl Core {
             if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Admitted Trash membership changed after the reviewed original plan",
+                    UiMessage::error_core_operations_admitted_trash_membership_changed_after_reviewed_original_plan(),
                 ));
             }
         }
@@ -5163,7 +5391,7 @@ impl Core {
             if guard.directory_identity()? != *parent {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "A frozen write parent was replaced",
+                    UiMessage::error_core_operations_frozen_write_parent_was_replaced(),
                 ));
             }
             guards.push(guard);
@@ -5173,7 +5401,7 @@ impl Core {
             if guard.directory_identity()? != absent.parent {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "An absent dependency's original parent was replaced",
+                    UiMessage::error_core_operations_absent_dependency_s_original_parent_was_replaced(),
                 ));
             }
             match guard.open_file(false, false) {
@@ -5181,7 +5409,7 @@ impl Core {
                 Ok(_) => {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "An original absent source/config dependency now exists",
+                        UiMessage::error_core_operations_original_absent_source_config_dependency_now_exists(),
                     ));
                 }
                 Err(e) => return Err(e),
@@ -5207,7 +5435,7 @@ impl Core {
                 if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
                     return Err(CoreError::new(
                         "conflict",
-                        "A frozen source object or its bytes changed; prepare a new operation",
+                        UiMessage::error_core_operations_frozen_source_object_or_bytes_changed_prepare_new_operation(),
                     ));
                 }
                 guards.push(guard);
@@ -5232,7 +5460,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "Frozen directory membership changed or became incomplete",
+                        UiMessage::error_core_operations_frozen_directory_membership_changed_or_became_incomplete(),
                     ));
                 }
                 guards.push(guard);
@@ -5287,7 +5515,7 @@ impl Core {
                     if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
                         return Err(CoreError::new(
                             "conflict",
-                            "A relocation prerequisite changed after review",
+                            UiMessage::error_core_operations_relocation_prerequisite_changed_after_review(),
                         ));
                     }
                     guards.push(guard);
@@ -5310,7 +5538,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "conflict",
-                            "Original relocation closure changed",
+                            UiMessage::error_core_operations_original_relocation_closure_changed(),
                         ));
                     }
                     let held = validate_relocation_tree(&mut preliminary, t, false)?;
@@ -5322,7 +5550,10 @@ impl Core {
                 if *create_trash_parent {
                     let guard = ParentGuard::acquire(target.parent().unwrap())?;
                     if guard.directory_identity()? != *target_parent_identity {
-                        return Err(CoreError::new("conflict", "Trash parent closure changed"));
+                        return Err(CoreError::new(
+                            "conflict",
+                            UiMessage::error_core_operations_trash_parent_closure_changed(),
+                        ));
                     }
                     ensure_absent(target.parent().unwrap())?;
                     self.install_record(&plan)?;
@@ -5338,7 +5569,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "conflict",
-                        "A source directory or target parent was replaced",
+                        UiMessage::error_core_operations_source_directory_or_target_parent_was_replaced(),
                     ));
                 }
                 if plan.sync_application.is_some() {
@@ -5354,13 +5585,18 @@ impl Core {
                     .files
                     .iter()
                     .find(|f| f.path == display(&source.join(old_leaf)))
-                    .ok_or_else(|| CoreError::new("invalidPlan", "Missing canonical preimage"))?;
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_missing_canonical_preimage(),
+                        )
+                    })?;
                 if stamp(&leaf)?.identity != *leaf_identity
                     || read_source(&mut leaf)? != captured.bytes
                 {
                     return Err(CoreError::new(
                         "conflict",
-                        "The canonical source changed after preview",
+                        UiMessage::error_core_operations_canonical_source_changed_after_preview(),
                     ));
                 }
                 if source == target {
@@ -5376,13 +5612,14 @@ impl Core {
                     namespace.rename_leaf(&leaf, new_leaf)?;
                 }
                 drop(leaf);
-                namespace.move_source(
-                    target
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .ok_or_else(|| CoreError::new("invalidName", "Non-UTF8 target name"))?,
-                )?;
+                namespace.move_source(target.file_name().unwrap().to_str().ok_or_else(
+                    || {
+                        CoreError::new(
+                            "invalidName",
+                            UiMessage::error_core_operations_non_u_t_f8_target_name(),
+                        )
+                    },
+                )?)?;
                 // Windows denies renaming an ancestor while its members have
                 // no-delete handles. The original namespace closure remains
                 // held across that single step; reacquire and verify members
@@ -5392,7 +5629,7 @@ impl Core {
                 if stamp(&reopened)?.identity != *leaf_identity {
                     return Err(CoreError::new(
                         "recoveryPending",
-                        "Canonical object binding changed during rename",
+                        UiMessage::error_core_operations_canonical_object_binding_changed_during_rename(),
                     ));
                 }
                 drop(reopened);
@@ -5446,7 +5683,10 @@ impl Core {
                     let mut stamps = Vec::new();
                     for (path, handle) in participant_paths.iter().zip(participants) {
                         let change = changes.iter().find(|c| &c.path == path).ok_or_else(|| {
-                            CoreError::new("invalidPlan", "Missing compound participant")
+                            CoreError::new(
+                                "invalidPlan",
+                                UiMessage::error_core_operations_missing_compound_participant(),
+                            )
                         })?;
                         if change.before.as_ref() != Some(&change.after) {
                             write_blob(handle, &change.after)?;
@@ -5454,7 +5694,7 @@ impl Core {
                         if read_blob(handle)? != change.after {
                             return Err(CoreError::new(
                                 "recoveryPending",
-                                "Compound afterimage verification failed",
+                                UiMessage::error_core_operations_compound_afterimage_verification_failed(),
                             ));
                         }
                         stamps.push((path.clone(), stamp(handle)?));
@@ -5510,7 +5750,10 @@ impl Core {
                                     plan.sync_application.as_ref(),
                                 )
                                 .ok_or_else(|| {
-                                    CoreError::new("invalidState", "Resource owner is missing")
+                                    CoreError::new(
+                                        "invalidState",
+                                        UiMessage::error_core_operations_resource_owner_missing(),
+                                    )
                                 })?,
                             identity: stamp(&file)?.identity,
                         });
@@ -5548,7 +5791,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "invalidPlan",
-                            "Existing-tree creation requires the original sync workspace",
+                            UiMessage::error_core_operations_existing_tree_creation_requires_original_sync_workspace(),
                         ));
                     }
                 } else if !matches!(
@@ -5609,7 +5852,7 @@ impl Core {
                     } else {
                         return Err(CoreError::new(
                             "invalidPlan",
-                            "Missing planned parent directory",
+                            UiMessage::error_core_operations_missing_planned_parent_directory(),
                         ));
                     };
                     self.record_materialized(
@@ -5623,7 +5866,10 @@ impl Core {
                 let mut resource_births = Vec::new();
                 for c in output {
                     let relative = Path::new(&c.path).strip_prefix(target).map_err(|_| {
-                        CoreError::new("invalidPlan", "Planned file escaped target")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_planned_file_escaped_target(),
+                        )
                     })?;
                     let mut file = if let Some(parent) =
                         dir_handles.get(relative.parent().unwrap_or_else(|| Path::new("")))
@@ -5638,7 +5884,10 @@ impl Core {
                         guards.push(parent_guard);
                         file
                     } else {
-                        return Err(CoreError::new("invalidPlan", "Missing planned file parent"));
+                        return Err(CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_missing_planned_file_parent(),
+                        ));
                     };
                     self.record_materialized(operation_id, Path::new(&c.path), &file)?;
                     write_blob(&mut file, &c.after)?;
@@ -5676,7 +5925,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A fresh resource lacks its reviewed owner",
+                                UiMessage::error_core_operations_fresh_resource_lacks_reviewed_owner(),
                             )
                         })?;
                         resource_births.push(ResourceBirth {
@@ -5693,7 +5942,12 @@ impl Core {
                         .files
                         .iter()
                         .position(|f| f.path == c.path)
-                        .ok_or_else(|| CoreError::new("invalidPlan", "Missing config preimage"))?;
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "invalidPlan",
+                                UiMessage::error_core_operations_missing_config_preimage(),
+                            )
+                        })?;
                     if c.before.as_ref() != Some(&c.after) {
                         write_blob(&mut handles[index], &c.after)?;
                     }
@@ -5755,7 +6009,7 @@ impl Core {
         self.workspace(root)?.ok_or_else(|| {
             CoreError::new(
                 "unadmittedLibrary",
-                "The library needs its original committed private identity journal",
+                UiMessage::error_core_operations_library_needs_original_committed_private_identity_journal(),
             )
         })
     }
@@ -5769,7 +6023,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Target is outside the live managed library",
+                UiMessage::error_core_operations_target_outside_live_managed_library(),
             ));
         }
         self.check_discovery_boundary(root, parent)?;
@@ -5783,20 +6037,27 @@ impl Core {
         allow_trash: bool,
     ) -> Result<CapturedFile> {
         if !directory.starts_with(root) {
-            return Err(CoreError::new("outsideRoot", "Node is outside the library"));
+            return Err(CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_operations_node_outside_library(),
+            ));
         }
         if !allow_trash {
             self.check_subtree_boundary(root, directory)?;
         }
         let name = node_name(directory)?;
         let path = directory.join(format!("{name}.typ"));
-        let file = capture_optional(&path)?
-            .ok_or_else(|| CoreError::new("missingNode", "The canonical source is missing"))?;
+        let file = capture_optional(&path)?.ok_or_else(|| {
+            CoreError::new(
+                "missingNode",
+                UiMessage::error_core_operations_canonical_source_missing(),
+            )
+        })?;
         self.check_pending(&path)?;
         let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
             CoreError::new(
                 "identityConflict",
-                "Source object has no committed admission",
+                UiMessage::error_core_operations_source_object_has_no_committed_admission(),
             )
         })?;
         let workspace = self.require_workspace(root)?;
@@ -5805,7 +6066,8 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "Canonical source declaration and admission differ",
+                UiMessage::error_core_operations_canonical_source_declaration_and_admission_differ(
+                ),
             ));
         }
         Ok(file)
@@ -5848,7 +6110,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "trashMissing",
-                            "No committed record binds this trash directory",
+                            UiMessage::error_core_operations_no_committed_record_binds_trash_directory(),
                         )
                     })?,
             )
@@ -5864,7 +6126,7 @@ impl Core {
         let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
             CoreError::new(
                 "identityConflict",
-                "Original admitted node object was replaced",
+                UiMessage::error_core_operations_original_admitted_node_object_was_replaced(),
             )
         })?;
         let workspace = self.require_workspace(root)?;
@@ -5873,7 +6135,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "Node declaration or workspace changed",
+                UiMessage::error_core_operations_node_declaration_or_workspace_changed(),
             ));
         }
         if !trash
@@ -5920,7 +6182,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "The original committed Trash directory was replaced",
+                UiMessage::error_core_operations_original_committed_trash_directory_was_replaced(),
             ));
         }
         let target_parent_identity = namespace.parent_identity()?;
@@ -5929,7 +6191,7 @@ impl Core {
         if stamp(&current)? != file.stamp || read_source(&mut current)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "Canonical object changed during planning",
+                UiMessage::error_core_operations_canonical_object_changed_during_planning(),
             ));
         }
         file.path = display(&source.join(&old_leaf));
@@ -6047,7 +6309,7 @@ impl Core {
             if members.len() == MAX_OPERATION_FILES {
                 return Err(CoreError::new(
                     "budget",
-                    "Placement member evidence exceeds its bounded operation budget",
+                    UiMessage::error_core_operations_placement_member_evidence_exceeds_bounded_operation_budget(),
                 ));
             }
             members.push(RelocationMember {
@@ -6065,7 +6327,7 @@ impl Core {
         if !path.starts_with(root) || path.components().any(|c| c.as_os_str() == ".weftext-trash") {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Updates require live files inside this library",
+                UiMessage::error_core_operations_updates_require_live_files_inside_library(),
             ));
         }
         let name = path.file_name().unwrap_or_default();
@@ -6102,7 +6364,8 @@ impl Core {
             if weftext_engine::inspect(&decode(after)?).id != before_id {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "A source update must preserve its admitted Node ID",
+                    UiMessage::error_core_operations_source_update_must_preserve_admitted_node_i_d(
+                    ),
                 ));
             }
         } else if name == "weftext.annotations.json" || name == "weftext.resources.json" {
@@ -6112,7 +6375,7 @@ impl Core {
                 capture_optional(&parent.join("weftext.resources.json"))?.ok_or_else(|| {
                     CoreError::new(
                         "unsupportedRole",
-                        "Resource updates require an existing owned resource manifest",
+                        UiMessage::error_core_operations_resource_updates_require_existing_owned_resource_manifest(),
                     )
                 })?;
             let value: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
@@ -6133,11 +6396,14 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "unsupportedRole",
-                    "The file is not registered as a Node-owned resource",
+                    UiMessage::error_core_operations_file_not_registered_as_node_owned_resource(),
                 ));
             }
             let file = capture_optional(path)?.ok_or_else(|| {
-                CoreError::new("resourceMissing", "A dependency resource is missing")
+                CoreError::new(
+                    "resourceMissing",
+                    UiMessage::error_core_operations_dependency_resource_missing(),
+                )
             })?;
             let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
             let resource_id = value["resources"]
@@ -6158,7 +6424,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "unsupportedRole",
-                    "UpdateFiles may only freeze an unchanged admitted Resource dependency",
+                    UiMessage::error_core_operations_update_files_may_only_freeze_unchanged_admitted_resource_dependency(),
                 ));
             }
         }
@@ -6184,7 +6450,7 @@ impl Core {
         } else {
             weftext_data::Schema::bundled()
         }
-        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         let inventory = match authorized_inventory {
             Some((inventory, _)) => inventory.clone(),
             None => self.inventory(root)?,
@@ -6192,7 +6458,7 @@ impl Core {
         if !inventory.complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
-                "Copy requires a complete bounded inventory observation",
+                UiMessage::error_core_operations_copy_requires_complete_bounded_inventory_observation(),
             ));
         }
         let mut nodes = Vec::new();
@@ -6207,7 +6473,7 @@ impl Core {
                 if Path::new(&item.path).starts_with(source) {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "Copy subtree has an unadmitted, duplicate or damaged Node",
+                        UiMessage::error_core_operations_copy_subtree_has_unadmitted_duplicate_or_damaged_node(),
                     ));
                 }
                 continue;
@@ -6231,14 +6497,18 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "scopeChanged",
-                            "Original authorized transfer source is absent",
+                            UiMessage::error_core_operations_original_authorized_transfer_source_absent(),
                         )
                     })?
             } else if let Some(f) = files.iter().find(|f| f.path == item.path) {
                 f.clone()
             } else {
-                capture_optional(Path::new(&item.path))?
-                    .ok_or_else(|| CoreError::new("scopeChanged", "Link target disappeared"))?
+                capture_optional(Path::new(&item.path))?.ok_or_else(|| {
+                    CoreError::new(
+                        "scopeChanged",
+                        UiMessage::error_core_operations_link_target_disappeared(),
+                    )
+                })?
             };
             let source_text = decode(&observed.bytes)?;
             let info = weftext_engine::inspect_metadata(&source_text);
@@ -6278,12 +6548,12 @@ impl Core {
                 owners.insert(item.path.clone(), owner.clone());
                 source_targets.insert(item.path.clone(), display(&after_path));
                 for slot in knowledge::definition_slots(&source_text, &owner)
-                    .map_err(|e| CoreError::new(&e.code, e.message))?
+                    .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?
                 {
                     if !self.is_definition_key_admitted(root, &owner.node_id, &slot.key)? {
                         return Err(CoreError::new(
                             "definitionUnadmitted",
-                            "An authored definition key has no committed Core allocation fact",
+                            UiMessage::error_core_operations_authored_definition_key_has_no_committed_core_allocation_fact(),
                         ));
                     }
                     definitions.insert(slot.identity, fresh());
@@ -6316,24 +6586,32 @@ impl Core {
                 let owner = owners.get(&display(&canonical)).ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
-                        "Resource manifest is not inside a copied admitted Node",
+                        UiMessage::error_core_operations_resource_manifest_not_inside_copied_admitted_node(),
                     )
                 })?;
                 let mut value: serde_json::Value = serde_json::from_slice(&file.bytes)?;
                 if value["version"] != 1 || !value["resources"].is_array() {
                     return Err(CoreError::new(
                         "resourceManifest",
-                        "Unsupported resource manifest format",
+                        UiMessage::error_core_operations_unsupported_resource_manifest_format(),
                     ));
                 }
                 for record in value["resources"].as_array_mut().unwrap() {
                     let old_id = record["resourceId"]
                         .as_str()
-                        .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource ID"))?
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "resourceManifest",
+                                UiMessage::error_core_operations_missing_resource_i_d(),
+                            )
+                        })?
                         .to_string();
                     valid_operation_id(&old_id)?;
                     let name = record["path"].as_str().ok_or_else(|| {
-                        CoreError::new("resourceManifest", "Missing resource path")
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_operations_missing_resource_path(),
+                        )
                     })?;
                     let resource_path = resource_path(path.parent().unwrap(), name)?;
                     let resource = files
@@ -6342,7 +6620,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "resourceMissing",
-                                "Copy snapshot omits a registered resource",
+                                UiMessage::error_core_operations_copy_snapshot_omits_registered_resource(),
                             )
                         })?;
                     if !self.admitted_resource(
@@ -6353,7 +6631,7 @@ impl Core {
                     ) {
                         return Err(CoreError::new(
                             "resourceUnadmitted",
-                            "Manifest UUID alone does not establish a Resource identity",
+                            UiMessage::error_core_operations_manifest_u_u_i_d_alone_does_not_establish_resource_identity(),
                         ));
                     }
                     let new_id = fresh();
@@ -6365,7 +6643,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "duplicateResource",
-                            "Duplicate resource IDs in copy snapshot",
+                            UiMessage::error_core_operations_duplicate_resource_i_ds_in_copy_snapshot(),
                         ));
                     }
                     let after_path = copy_path(source, target, &resource_path)?;
@@ -6388,12 +6666,12 @@ impl Core {
                 .is_some_and(|n| n == "weftext.annotations.json")
             {
                 let doc = knowledge::decode_annotations(&file.bytes)
-                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+                    .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
                 for record in doc.records {
                     if annotations.insert(record.annotation_id, fresh()).is_some() {
                         return Err(CoreError::new(
                             "duplicateAnnotation",
-                            "Duplicate annotation IDs in copy snapshot",
+                            UiMessage::error_core_operations_duplicate_annotation_i_ds_in_copy_snapshot(),
                         ));
                     }
                 }
@@ -6481,7 +6759,7 @@ impl Core {
             },
             allow_losses,
         })
-        .map_err(|e| CoreError::new(&e.code, e.message))?;
+        .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
         preview.losses = plan.losses;
         let mut output = plan
             .files
@@ -6513,7 +6791,12 @@ impl Core {
                 let original_path = url::Url::parse(&original.source_path)
                     .ok()
                     .and_then(|u| u.to_file_path().ok())
-                    .ok_or_else(|| CoreError::new("invalidPlan", "Invalid preserved source URL"))?;
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_invalid_preserved_source_u_r_l(),
+                        )
+                    })?;
                 let name = hash(display(&original_path).as_bytes());
                 output.push(FileChange {
                     path: display(&target.join(".weftext-copy-originals").join(name)),
@@ -6607,14 +6890,14 @@ pub(crate) fn resource_path(directory: &Path, name: &str) -> Result<PathBuf> {
     {
         return Err(CoreError::new(
             "resourcePath",
-            "Resources require a canonical relative file path",
+            UiMessage::error_core_operations_resources_require_canonical_relative_file_path(),
         ));
     }
     let path = absolute_path(&directory.join(relative))?;
     if is_canonical(&path) {
         return Err(CoreError::new(
             "resourcePath",
-            "Canonical Node source cannot be registered as a resource",
+            UiMessage::error_core_operations_canonical_node_source_cannot_registered_as_resource(),
         ));
     }
     Ok(path)
@@ -6622,12 +6905,20 @@ pub(crate) fn resource_path(directory: &Path, name: &str) -> Result<PathBuf> {
 pub(crate) fn file_url(path: &Path) -> Result<String> {
     url::Url::from_file_path(path)
         .map(|u| u.to_string())
-        .map_err(|_| CoreError::new("invalidPath", "Cannot form a canonical local file URL"))
+        .map_err(|_| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_operations_cannot_form_canonical_local_file_u_r_l(),
+            )
+        })
 }
 fn copy_path(source: &Path, target: &Path, path: &Path) -> Result<PathBuf> {
-    let relative = path
-        .strip_prefix(source)
-        .map_err(|_| CoreError::new("invalidPlan", "Copy member escaped its selected source"))?;
+    let relative = path.strip_prefix(source).map_err(|_| {
+        CoreError::new(
+            "invalidPlan",
+            UiMessage::error_core_operations_copy_member_escaped_selected_source(),
+        )
+    })?;
     if relative == Path::new(&format!("{}.typ", node_name(source)?)) {
         Ok(target.join(format!("{}.typ", node_name(target)?)))
     } else {
@@ -6640,7 +6931,10 @@ pub(crate) fn read_blob(file: &mut File) -> Result<Vec<u8>> {
     file.take(MAX_OPERATION_BYTES as u64 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > MAX_OPERATION_BYTES {
-        return Err(CoreError::new("budget", "File exceeds64MiB"));
+        return Err(CoreError::new(
+            "budget",
+            UiMessage::error_core_operations_file_exceeds64_mi_b(),
+        ));
     }
     Ok(bytes)
 }
@@ -6652,7 +6946,7 @@ pub(crate) fn write_blob(file: &mut File, bytes: &[u8]) -> Result<()> {
     if read_blob(file)? != bytes {
         return Err(CoreError::new(
             "verificationFailed",
-            "Same-handle blob readback differs; original operation retained",
+            UiMessage::error_core_operations_same_handle_blob_readback_differs_original_operation_retained(),
         ));
     }
     Ok(())
@@ -6668,7 +6962,12 @@ pub(crate) fn node_name(directory: &Path) -> Result<String> {
     let name = directory
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| CoreError::new("invalidName", "Node name must be UTF-8"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidName",
+                UiMessage::error_core_operations_node_name_must_u_t_f8(),
+            )
+        })?;
     valid_name(name)?;
     Ok(name.into())
 }
@@ -6678,7 +6977,7 @@ fn qualify_relocation_target(path: &Path, occupant: Option<&FileIdentity>) -> Re
         if guard.directory_identity()? != *expected {
             return Err(CoreError::new(
                 "conflict",
-                "The destination is not its original moving participant",
+                UiMessage::error_core_operations_destination_not_original_moving_participant(),
             ));
         }
         Ok(())
@@ -6690,7 +6989,7 @@ pub(crate) fn ensure_absent(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(_) => Err(CoreError::new(
             "exists",
-            "Create-only target is occupied; no overwrite is allowed",
+            UiMessage::error_core_operations_create_only_target_occupied_no_overwrite_allowed(),
         )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.into()),
@@ -6770,7 +7069,12 @@ fn validate_relocation_membership(
     for directory in &t.directories {
         let relative = Path::new(&directory.path)
             .strip_prefix(source)
-            .map_err(|_| CoreError::new("invalidPlan", "Directory outside relocation"))?;
+            .map_err(|_| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_operations_directory_outside_relocation(),
+                )
+            })?;
         let (identity, mut entries, complete) =
             namespace.source_directory_snapshot(relative, MAX_OPERATION_FILES)?;
         let mut expected = directory.entries.clone();
@@ -6798,7 +7102,7 @@ fn validate_relocation_membership(
                 if !entries.iter().any(|(actual, _)| actual == name) {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "A newly created relocation participant is missing",
+                        UiMessage::error_core_operations_newly_created_relocation_participant_missing(),
                     ));
                 }
                 entries.retain(|(actual, _)| actual != name);
@@ -6810,7 +7114,7 @@ fn validate_relocation_membership(
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Moved directory membership or identity differs from the frozen tree",
+                UiMessage::error_core_operations_moved_directory_membership_or_identity_differs_from_frozen_tree(),
             ));
         }
     }
@@ -6829,7 +7133,7 @@ fn validate_relocation_members(
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "A placement-only member object or parent changed; source bytes are not a move precondition",
+                UiMessage::error_core_operations_placement_only_member_object_or_parent_changed_source_bytes_not_move_precondition(),
             ));
         }
         held.push(handle);
@@ -6854,7 +7158,7 @@ fn validate_relocation_creations(
     if old_leaf != new_leaf && Path::new(source).join(new_leaf).exists() {
         return Err(CoreError::new(
             "exists",
-            "The renamed canonical filename is already occupied",
+            UiMessage::error_core_operations_renamed_canonical_filename_already_occupied(),
         ));
     }
     for change in updates.iter().filter(|c| c.before.is_none()) {
@@ -6865,7 +7169,7 @@ fn validate_relocation_creations(
                 Ok(_) => {
                     return Err(CoreError::new(
                         "exists",
-                        "Incoming created participant is already occupied",
+                        UiMessage::error_core_operations_incoming_created_participant_already_occupied(),
                     ));
                 }
             }
@@ -6896,9 +7200,12 @@ fn validate_relocation_tree(
         .iter()
         .filter(|f| Path::new(&f.path).starts_with(source))
     {
-        let relative = Path::new(&file.path)
-            .strip_prefix(source)
-            .map_err(|_| CoreError::new("invalidPlan", "File outside relocation"))?;
+        let relative = Path::new(&file.path).strip_prefix(source).map_err(|_| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_file_outside_relocation(),
+            )
+        })?;
         let relative = if after && relative == Path::new(old_leaf) {
             Path::new(new_leaf)
         } else {
@@ -6916,7 +7223,7 @@ fn validate_relocation_tree(
         if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "Moved file no longer matches its frozen identity and bytes",
+                UiMessage::error_core_operations_moved_file_no_longer_matches_frozen_identity_and_bytes(),
             ));
         }
         held.push(handle);
@@ -6935,7 +7242,7 @@ pub(crate) fn snapshot_tree(
         if dirs.len() >= MAX_OPERATION_FILES {
             return Err(CoreError::new(
                 "budget",
-                "Snapshot exceeds 5000 directories; no partial success",
+                UiMessage::error_core_operations_snapshot_exceeds5000_directories_no_partial_success(),
             ));
         }
         let guard = ParentGuard::acquire(&path.join(".snapshot-prospective"))?;
@@ -6943,7 +7250,7 @@ pub(crate) fn snapshot_tree(
         if !complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
-                "Directory exceeds the snapshot entry budget",
+                UiMessage::error_core_operations_directory_exceeds_snapshot_entry_budget(),
             ));
         }
         dirs.push(CapturedDirectory {
@@ -6958,7 +7265,7 @@ pub(crate) fn snapshot_tree(
             if attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
                 return Err(CoreError::new(
                     "unsupportedPath",
-                    "A snapshot member is reparse, offline or a cloud placeholder",
+                    UiMessage::error_core_operations_snapshot_member_reparse_offline_or_cloud_placeholder(),
                 ));
             }
             let child = path.join(name);
@@ -6966,19 +7273,23 @@ pub(crate) fn snapshot_tree(
                 if dirs.len() + queue.len() >= MAX_OPERATION_FILES {
                     return Err(CoreError::new(
                         "budget",
-                        "Captured and queued snapshot directories exceed 5000",
+                        UiMessage::error_core_operations_captured_and_queued_snapshot_directories_exceed5000(),
                     ));
                 }
                 queue.push(child);
             } else {
-                let captured = capture_optional(&child)?
-                    .ok_or_else(|| CoreError::new("scopeChanged", "Snapshot file disappeared"))?;
+                let captured = capture_optional(&child)?.ok_or_else(|| {
+                    CoreError::new(
+                        "scopeChanged",
+                        UiMessage::error_core_operations_snapshot_file_disappeared(),
+                    )
+                })?;
                 total += captured.bytes.len();
                 files.push(captured);
                 if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {
                     return Err(CoreError::new(
                         "budget",
-                        "Snapshot exceeds 64 MiB or 5000 files; no partial success",
+                        UiMessage::error_core_operations_snapshot_exceeds64_mi_b_or5000_files_no_partial_success(),
                     ));
                 }
             }
@@ -7002,7 +7313,10 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
                     n.range().start == metadata.from && n.get().cast::<ast::FuncCall>().is_some()
                 })
                 .ok_or_else(|| {
-                    CoreError::new("templateIdentity", "Exact metadata call unavailable")
+                    CoreError::new(
+                        "templateIdentity",
+                        UiMessage::error_core_operations_exact_metadata_call_unavailable(),
+                    )
                 })?;
             let call_ast = call.get().cast::<ast::FuncCall>().unwrap();
             let dict = call_ast
@@ -7016,10 +7330,16 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
                     }
                 })
                 .ok_or_else(|| {
-                    CoreError::new("templateIdentity", "Exact metadata dictionary unavailable")
+                    CoreError::new(
+                        "templateIdentity",
+                        UiMessage::error_core_operations_exact_metadata_dictionary_unavailable(),
+                    )
                 })?;
             let node = parsed.find(dict.to_untyped().span()).ok_or_else(|| {
-                CoreError::new("templateIdentity", "Exact dictionary span unavailable")
+                CoreError::new(
+                    "templateIdentity",
+                    UiMessage::error_core_operations_exact_dictionary_span_unavailable(),
+                )
             })?;
             let range = node.range();
             let mut after = source.to_string();
@@ -7031,7 +7351,7 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
             if weftext_engine::inspect_metadata(&after).id.as_deref() != Some(node_id) {
                 return Err(CoreError::new(
                     "templateIdentity",
-                    "New metadata id did not reparse",
+                    UiMessage::error_core_operations_new_metadata_id_did_not_reparse(),
                 ));
             }
             return Ok(after);
@@ -7045,7 +7365,8 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
         {
             return Err(CoreError::new(
                 "templateIdentity",
-                "Computed template identity cannot be rewritten safely",
+                UiMessage::error_core_operations_computed_template_identity_cannot_rewritten_safely(
+                ),
             ));
         }
         let mut after = source.to_string();
@@ -7053,7 +7374,7 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
         if weftext_engine::inspect_metadata(&after).id.as_deref() != Some(node_id) {
             return Err(CoreError::new(
                 "templateIdentity",
-                "Rewritten declaration is not one exact new identity",
+                UiMessage::error_core_operations_rewritten_declaration_not_one_exact_new_identity(),
             ));
         }
         Ok(after)
@@ -7064,7 +7385,72 @@ fn initialize_source(source: &str, node_id: &str) -> Result<String> {
     } else {
         Err(CoreError::new(
             "templateIdentity",
-            "Unknown or ambiguous template identity is preserved and cannot be initialized",
+            UiMessage::error_core_operations_unknown_or_ambiguous_template_identity_preserved_and_cannot_initialized(),
         ))
+    }
+}
+
+#[cfg(all(test, windows))]
+mod typed_snapshot_delivery_tests {
+    use super::*;
+
+    #[test]
+    fn missing_admitted_source_has_typed_exact_identity_and_retains_original_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        core.create_library(&root).unwrap();
+        let note = core
+            .create_note_fixture(&root, &root, "Exact author title 😀")
+            .unwrap();
+        let owner = note.node_id.clone().unwrap();
+        let original = fs::read(&note.path).unwrap();
+        let retained = temp
+            .path()
+            .join("original-source-outside-selected-library.typ");
+        fs::rename(&note.path, &retained).unwrap();
+        let cut = core.admitted_snapshot(&root).unwrap();
+        assert!(!cut.complete);
+        assert!(!cut.membership_ids.contains(&owner));
+        let warning = cut
+            .warnings
+            .iter()
+            .find(|warning| {
+                warning.explanation
+                    == UiMessage::error_core_operations_admitted_node_unavailable(
+                        weftext_messages::params::ErrorCoreOperationsAdmittedNodeUnavailable {
+                            node_id: owner.clone(),
+                        },
+                    )
+            })
+            .expect("the exact missing admitted identity is disclosed");
+        assert!(warning.diagnostics.is_empty());
+        assert!(warning.causes.as_slice().is_empty());
+        assert!(warning.details.is_none());
+        let wire = serde_json::to_value(warning).unwrap();
+        assert_eq!(wire["explanation"]["params"]["nodeId"], owner);
+        assert_eq!(wire["diagnostics"], serde_json::json!([]));
+        assert_eq!(wire["causes"], serde_json::json!([]));
+        assert!(wire.get("message").is_none());
+        assert_eq!(fs::read(&retained).unwrap(), original);
+        core.release_admitted_cut(&cut.cut_id);
+    }
+
+    #[test]
+    fn transaction_receipt_contains_only_original_facts_and_ignores_historical_extra_text() {
+        let original = br#"{"operationId":"original-operation","planId":"original-plan","status":"committed","path":"exact/original.typ","nodeIds":["original-node"],"message":"historical text is not new delivery authority"}"#;
+        let parsed: OperationReceipt = serde_json::from_slice(original).unwrap();
+        assert_eq!(parsed.operation_id, "original-operation");
+        assert_eq!(parsed.plan_id, "original-plan");
+        assert_eq!(parsed.status, "committed");
+        assert_eq!(parsed.path, "exact/original.typ");
+        assert_eq!(parsed.node_ids, vec!["original-node"]);
+        let wire = serde_json::to_value(parsed).unwrap();
+        assert_eq!(wire.as_object().unwrap().len(), 5);
+        assert!(wire.get("message").is_none());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(original).unwrap()["message"],
+            "historical text is not new delivery authority"
+        );
     }
 }

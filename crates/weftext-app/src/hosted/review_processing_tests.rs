@@ -106,7 +106,7 @@ async fn seed_scan(state: &HostedState, auth: &Auth, options: knowledge::Proofre
     let response = read(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Read {
+        crate::RequestJson(Read {
             resource: "Shared".into(),
             asset: None,
         }),
@@ -178,6 +178,7 @@ async fn seed_scan(state: &HostedState, auth: &Auth, options: knowledge::Proofre
         basis,
         intent: json!({
             "kind": "annotationProofread",
+            "annotationLocale": "zh-CN",
             "scanId": scan_id,
             "options": options,
             "findings": [finding],
@@ -190,7 +191,7 @@ async fn propose(state: &HostedState, auth: &Auth, seed: &Seed, id: &str) -> Api
     prepare(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Prepare {
+        crate::RequestJson(Prepare {
             resource: "Shared".into(),
             basis: seed.basis.clone(),
             operation_id: id.into(),
@@ -204,7 +205,7 @@ async fn status(state: &HostedState, auth: &Auth, id: &str) -> Value {
     operation(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Operation {
+        crate::RequestJson(Operation {
             resource: "Shared".into(),
             operation_id: id.into(),
         }),
@@ -218,7 +219,7 @@ async fn apply(state: &HostedState, auth: &Auth, plan: &Value) -> ApiResult {
     commit(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Commit {
+        crate::RequestJson(Commit {
             resource: "Shared".into(),
             operation_id: plan["operationId"].as_str().unwrap().into(),
             plan_id: plan["planId"].as_str().unwrap().into(),
@@ -274,7 +275,7 @@ async fn shared_origin_requires_opaque_actor_bound_settings_read_token() {
     let before = read(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Read {
+        crate::RequestJson(Read {
             resource: "Shared".into(),
             asset: None,
         }),
@@ -285,7 +286,7 @@ async fn shared_origin_requires_opaque_actor_bound_settings_read_token() {
     let denied = proofread(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Proofread {
+        crate::RequestJson(Proofread {
             resource: "Shared".into(),
             basis: before["basis"].as_str().unwrap().into(),
             options,
@@ -551,4 +552,74 @@ async fn personal_scan_without_shared_origin_does_not_require_settings_read() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn annotation_content_language_is_required_frozen_and_cannot_reuse_an_operation() {
+    let (_temp, state, auth) = fixture();
+    let before = author_files(&state);
+    let options = options(&state, &auth).await;
+    let seed = seed_scan(&state, &auth, options).await;
+    let id = uuid::Uuid::new_v4().to_string();
+    for supplied in [None, Some(json!("fr-FR")), Some(json!(7))] {
+        let mut intent = seed.intent.clone();
+        intent.as_object_mut().unwrap().remove("annotationLocale");
+        if let Some(value) = supplied {
+            intent["annotationLocale"] = value;
+        }
+        let invalid = Seed {
+            basis: seed.basis.clone(),
+            intent,
+        };
+        let error = propose(&state, &auth, &invalid, &id).await.unwrap_err();
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.explanation.key(),
+            "error.api.hostedReview.annotationLocaleRequired"
+        );
+        assert_eq!(status(&state, &auth, &id).await["status"], "notRegistered");
+        assert_eq!(author_files(&state), before);
+    }
+    let plan = propose(&state, &auth, &seed, &id).await.unwrap().0;
+    assert_eq!(plan["status"], "prepared");
+    assert_eq!(plan["preview"]["annotationLocale"], "zh-CN");
+    assert!(plan["preview"]["summary"]["key"].is_string());
+    assert_eq!(author_files(&state), before);
+    let mut changed = Seed {
+        basis: seed.basis.clone(),
+        intent: seed.intent.clone(),
+    };
+    changed.intent["annotationLocale"] = json!("en-US");
+    assert_eq!(
+        propose(&state, &auth, &changed, &id)
+            .await
+            .unwrap_err()
+            .status,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(propose(&state, &auth, &seed, &id).await.unwrap().0, plan);
+    let committed = apply(&state, &auth, &plan).await.unwrap().0;
+    assert_eq!(committed["status"], "committed");
+    let after = author_files(&state);
+    assert_eq!(after.0, before.0);
+    let annotations = knowledge::decode_annotations(after.1.as_deref().unwrap()).unwrap();
+    assert_eq!(annotations.records.len(), 1);
+    // The explicit content choice never translates an author's own rule text.
+    assert_eq!(annotations.records[0].body, "Shared dictionary 1");
+    assert_eq!(
+        annotations.records[0].unknown["proofreading"]["annotationLocale"],
+        "zh-CN"
+    );
+    assert_eq!(
+        propose(&state, &auth, &changed, &id)
+            .await
+            .unwrap_err()
+            .status,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        propose(&state, &auth, &seed, &id).await.unwrap().0["status"],
+        "committed"
+    );
+    assert_eq!(author_files(&state), after);
 }

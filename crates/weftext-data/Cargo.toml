@@ -5,6 +5,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+weftext-messages = { path = "../weftext-messages" }
 weftext-engine = { path = "../weftext-engine" }
 typst-syntax = "=0.15.1"
 serde = { version = "1", features = ["derive"] }

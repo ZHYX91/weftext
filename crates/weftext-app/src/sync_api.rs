@@ -1,11 +1,13 @@
 //! Same-owner local adapters only. Never mounted in the hosted actor router.
 use super::{ApiResult, AppState, core_call, value};
+use crate::RequestJson;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use weftext_core::sync::{ObjectKey, SyncIdentity, SyncRevalidation};
+use weftext_messages::UiMessage;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -28,7 +30,10 @@ pub(crate) fn router() -> Router<AppState> {
 struct OperationLookup {
     operation_id: String,
 }
-async fn operation(State(state): State<AppState>, Json(req): Json<OperationLookup>) -> ApiResult {
+async fn operation(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<OperationLookup>,
+) -> ApiResult {
     Ok(Json(
         core_call(&state, move |core| {
             let request = core.sync_operation_request(&req.operation_id)?;
@@ -44,7 +49,10 @@ struct CancelRequest {
     operation_id: String,
     plan_id: String,
 }
-async fn cancel(State(state): State<AppState>, Json(req): Json<CancelRequest>) -> ApiResult {
+async fn cancel(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CancelRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.cancel_prepared_sync(&req.operation_id, &req.plan_id)
@@ -97,7 +105,10 @@ struct HistoryRequest {
     after_commit: Option<String>,
     limit: Option<usize>,
 }
-async fn history(State(state): State<AppState>, Json(req): Json<HistoryRequest>) -> ApiResult {
+async fn history(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<HistoryRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.received_sync_versions(
@@ -128,14 +139,14 @@ struct RevalidationReviewRequest {
 }
 async fn revalidation_cut(
     State(state): State<AppState>,
-    Json(req): Json<AdoptionCutRequest>,
+    RequestJson(req): RequestJson<AdoptionCutRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             if core.sync_binding_info(&req.root)?.identity != req.identity {
                 return Err(weftext_core::CoreError::new(
                     "syncIdentity",
-                    "The selected replica does not match the explicit pairing identity",
+                    UiMessage::error_api_sync_pairing_identity_mismatch(),
                 ));
             }
             core.sync_revalidation_cut(&req.root, &req.objects)
@@ -145,7 +156,7 @@ async fn revalidation_cut(
 }
 async fn revalidation_review(
     State(state): State<AppState>,
-    Json(req): Json<RevalidationReviewRequest>,
+    RequestJson(req): RequestJson<RevalidationReviewRequest>,
 ) -> ApiResult {
     let captured = core_call(&state, move |core| {
         core.capture_sync_revalidation_review_for_operation(
@@ -265,7 +276,7 @@ impl std::io::Write for AdoptionJsonBudget {
 }
 async fn adoption_cut(
     State(state): State<AppState>,
-    Json(req): Json<AdoptionCutRequest>,
+    RequestJson(req): RequestJson<AdoptionCutRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
@@ -273,7 +284,7 @@ async fn adoption_cut(
             if binding.identity != req.identity {
                 return Err(weftext_core::CoreError::new(
                     "syncIdentity",
-                    "The selected replica does not match the explicit pairing identity",
+                    UiMessage::error_api_sync_pairing_identity_mismatch(),
                 ));
             }
             let cut = core.read_sync_adoption_cut(std::path::Path::new(&req.root), &req.objects)?;
@@ -290,7 +301,7 @@ async fn adoption_cut(
                 }
                 return Err(weftext_core::CoreError::new(
                     "budget",
-                    "采纳预览的完整请求超过 16 MiB；请减少本次所选对象，原文件与草稿保留",
+                    UiMessage::error_api_sync_adoption_preview_budget(),
                 ));
             }
             Ok(cut)
@@ -298,7 +309,10 @@ async fn adoption_cut(
         .await?,
     )?))
 }
-async fn binding(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+async fn binding(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| match core.sync_binding_info(req.root) {
         Ok(binding) => Ok(Some(binding)),
         Err(error) if error.code == "syncNotEnabled" => Ok(None),
@@ -307,7 +321,10 @@ async fn binding(State(state): State<AppState>, Json(req): Json<RootRequest>) ->
     .await?;
     Ok(Json(value(result)?))
 }
-async fn enable(State(state): State<AppState>, Json(req): Json<EnableRequest>) -> ApiResult {
+async fn enable(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<EnableRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.enable_sync(req.root, &req.operation_id)
@@ -315,17 +332,26 @@ async fn enable(State(state): State<AppState>, Json(req): Json<EnableRequest>) -
         .await?,
     )?))
 }
-async fn status(State(state): State<AppState>, Json(req): Json<IdentityRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<IdentityRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.sync_status(&req.identity)).await?,
     )?))
 }
-async fn publish(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+async fn publish(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.publish_sync(req.root)).await?,
     )?))
 }
-async fn receive(State(state): State<AppState>, Json(req): Json<ReceiveRequest>) -> ApiResult {
+async fn receive(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ReceiveRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.read_sync_directory(&req.identity, req.directory)
@@ -333,7 +359,10 @@ async fn receive(State(state): State<AppState>, Json(req): Json<ReceiveRequest>)
         .await?,
     )?))
 }
-async fn export(State(state): State<AppState>, Json(req): Json<ExportRequest>) -> ApiResult {
+async fn export(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ExportRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.write_sync_directory(req.root, req.directory, &req.objects)
@@ -341,7 +370,10 @@ async fn export(State(state): State<AppState>, Json(req): Json<ExportRequest>) -
         .await?,
     )?))
 }
-async fn file(State(state): State<AppState>, Json(req): Json<FileRequest>) -> ApiResult {
+async fn file(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<FileRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         let exact = core.read_received_sync_file(&req.identity, &req.object, &req.revision, &req.path)?;
         let bytes = &exact.bytes;

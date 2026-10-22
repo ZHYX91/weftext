@@ -1,6 +1,7 @@
 //! Host paths and browser handoff. These choices do not certify a file backend.
 use std::{ffi::OsString, io, path::PathBuf};
 use weftext_core::Core;
+use weftext_messages::{DiagnosticOrigin, ErrorDescription, UiMessage};
 
 pub(crate) fn default_data_dir() -> io::Result<PathBuf> {
     data_dir_from(std::env::consts::OS, |key| std::env::var_os(key))
@@ -14,14 +15,24 @@ fn data_dir_from(
         let value = environment(name).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("{name} is unavailable; specify a persistent --data-dir"),
+                ErrorDescription::new(UiMessage::error_api_host_environment_data_anchor_missing(
+                    weftext_messages::params::ErrorApiHostEnvironmentDataAnchorMissing {
+                        name: name.into(),
+                    },
+                )),
             )
         })?;
         let path = PathBuf::from(value);
         if !path.is_absolute() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("{name} must be an absolute persistent directory; specify --data-dir"),
+                ErrorDescription::new(
+                    UiMessage::error_api_host_environment_data_anchor_not_absolute(
+                        weftext_messages::params::ErrorApiHostEnvironmentDataAnchorNotAbsolute {
+                            name: name.into(),
+                        },
+                    ),
+                ),
             ));
         }
         Ok(path)
@@ -37,7 +48,9 @@ fn data_dir_from(
         }),
         _ => Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            "This host has no default persistent data directory; specify --data-dir",
+            ErrorDescription::new(
+                UiMessage::error_api_host_environment_data_directory_unsupported(),
+            ),
         )),
     }
 }
@@ -46,7 +59,9 @@ pub(crate) fn open_core(data_dir: PathBuf) -> io::Result<(Core, PathBuf)> {
     if data_dir.as_os_str().is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "--data-dir must name a persistent directory",
+            ErrorDescription::new(
+                UiMessage::error_api_host_environment_persistent_data_directory_required(),
+            ),
         ));
     }
     let data_dir = std::path::absolute(data_dir)?;
@@ -54,10 +69,9 @@ pub(crate) fn open_core(data_dir: PathBuf) -> io::Result<(Core, PathBuf)> {
     // instance from an unsupported backend without parsing diagnostic prose.
     let core = Core::new(&data_dir).map_err(io::Error::other)?;
     let data_dir = std::fs::canonicalize(&data_dir).map_err(|error| {
-        io::Error::other(format!(
-            "Cannot resolve Weftext data directory {}: {error}",
-            data_dir.display()
-        ))
+        io::Error::other(ErrorDescription::new(UiMessage::error_api_host_environment_data_directory_resolution_failed(weftext_messages::params::ErrorApiHostEnvironmentDataDirectoryResolutionFailed {
+            path: data_dir.display().to_string(),
+        })).diagnostic(DiagnosticOrigin::Os, error.to_string()))
     })?;
     Ok((core, data_dir))
 }
@@ -97,12 +111,14 @@ async fn bounded_browser_handoff(
     drop(thread);
     match tokio::time::timeout(limit, result).await {
         Ok(Ok(result)) => result,
-        Ok(Err(_)) => Err(io::Error::other(
-            "Browser handoff ended without confirmation; no retry was sent",
-        )),
+        Ok(Err(_)) => Err(io::Error::other(ErrorDescription::new(
+            UiMessage::error_api_host_environment_browser_confirmation_missing(),
+        ))),
         Err(_) => Err(io::Error::new(
             io::ErrorKind::TimedOut,
-            "Browser handoff was not confirmed before timeout; the OS call may still be in progress and no retry was sent",
+            ErrorDescription::new(
+                UiMessage::error_api_host_environment_browser_handoff_still_unconfirmed(),
+            ),
         )),
     }
 }
@@ -120,8 +136,12 @@ fn windows_browser(address: &str) -> io::Result<()> {
     // complete the handoff before it returns; this is not a GUI event loop.
     let initialized = unsafe { CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32) };
     if initialized < 0 {
-        return Err(io::Error::other(format!(
-            "Cannot initialize browser handoff (HRESULT {initialized:#x})"
+        return Err(io::Error::other(ErrorDescription::new(
+            UiMessage::error_api_host_environment_browser_initialization_failed(
+                weftext_messages::params::ErrorApiHostEnvironmentBrowserInitializationFailed {
+                    hresult: format!("{initialized:#x}"),
+                },
+            ),
         )));
     }
     struct Apartment;
@@ -155,7 +175,9 @@ fn browser_program(platform: &str) -> io::Result<&'static str> {
         "linux" => Ok("xdg-open"),
         _ => Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            "This host has no browser launcher; use --no-browser",
+            ErrorDescription::new(
+                UiMessage::error_api_host_environment_browser_launcher_unsupported(),
+            ),
         )),
     }
 }
@@ -172,13 +194,18 @@ async fn run_browser_command(mut command: tokio::process::Command) -> io::Result
         .map_err(|_| {
             io::Error::new(
                 io::ErrorKind::TimedOut,
-                "Browser handoff was not confirmed before timeout; no retry was sent",
+                ErrorDescription::new(
+                    UiMessage::error_api_host_environment_browser_handoff_timed_out(),
+                ),
             )
         })??;
     if !status.success() {
-        return Err(io::Error::other(format!(
-            "Browser launcher rejected the handoff ({status}); use --no-browser"
-        )));
+        return Err(io::Error::other(
+            ErrorDescription::new(
+                UiMessage::error_api_host_environment_browser_launcher_rejected(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, status.to_string()),
+        ));
     }
     Ok(())
 }
@@ -186,6 +213,12 @@ async fn run_browser_command(mut command: tokio::process::Command) -> io::Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn description(error: &io::Error) -> &ErrorDescription {
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<ErrorDescription>())
+            .expect("product-owned host error retains its typed description")
+    }
 
     #[test]
     fn persistent_defaults_use_the_host_location_and_preserve_windows_drafts() {
@@ -220,7 +253,10 @@ mod tests {
             for value in ["", "relative-state"] {
                 let error = data_dir_from(platform, |_| Some(value.into())).unwrap_err();
                 assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
-                assert!(error.to_string().contains("--data-dir"));
+                assert_eq!(
+                    description(&error).explanation.key(),
+                    "error.api.hostEnvironment.dataAnchorNotAbsolute"
+                );
             }
         }
         let home = std::env::current_dir().unwrap();
@@ -261,12 +297,15 @@ mod tests {
         );
         let mut rejected = tokio::process::Command::new(std::env::current_exe().unwrap());
         rejected.arg("--weftext-invalid-test-harness-option");
-        assert!(
-            run_browser_command(rejected)
-                .await
-                .unwrap_err()
-                .to_string()
-                .contains("rejected the handoff")
+        let rejected = run_browser_command(rejected).await.unwrap_err();
+        assert_eq!(
+            description(&rejected).explanation.key(),
+            "error.api.hostEnvironment.browserLauncherRejected"
+        );
+        assert_eq!(description(&rejected).diagnostics.len(), 1);
+        assert_eq!(
+            description(&rejected).diagnostics[0].origin,
+            DiagnosticOrigin::Os
         );
     }
 
@@ -299,7 +338,10 @@ mod tests {
         host.join().unwrap();
         let error = outcome.expect("stalled browser prevented host runtime shutdown");
         assert_eq!(error.kind(), io::ErrorKind::TimedOut);
-        assert!(error.to_string().contains("not confirmed"));
-        assert!(error.to_string().contains("no retry"));
+        assert_eq!(
+            description(&error).explanation.key(),
+            "error.api.hostEnvironment.browserHandoffStillUnconfirmed"
+        );
+        assert!(description(&error).diagnostics.is_empty());
     }
 }

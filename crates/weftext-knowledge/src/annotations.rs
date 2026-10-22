@@ -300,7 +300,9 @@ impl AnnotationTarget {
         } else {
             Err(KnowledgeError::new(
                 "invalidTarget",
-                "Annotation target coordinates or evidence are invalid; original JSON is retained",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_target_evidence_invalid(),
+                ),
             ))
         }
     }
@@ -458,7 +460,10 @@ pub fn validate_resource_target(target: &AnnotationTarget, facts: &ResourceFacts
     } else {
         Err(KnowledgeError::new(
             "resourceBasis",
-            "The annotation coordinate basis differs from the exact authorized resource",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_annotations_coordinate_basis_mismatch(
+                ),
+            ),
         ))
     }
 }
@@ -501,20 +506,22 @@ pub struct AnnotationDocument {
     pub original: Vec<u8>,
     pub records: Vec<AnnotationRecord>,
     value: Value,
-    target_errors: BTreeMap<String, String>,
+    target_errors: BTreeMap<String, KnowledgeError>,
 }
 pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
-    let UniqueValue(value) = serde_json::from_slice(bytes).map_err(|e| {
-        KnowledgeError::new(
-            "damagedAnnotations",
-            format!("Invalid annotation JSON; original bytes must be retained: {e}"),
-        )
+    let value = weftext_data::parse_unique_json(bytes).map_err(|error| {
+        let mut error = KnowledgeError::from_data("damagedAnnotations", error);
+        error.description.explanation =
+            weftext_messages::UiMessage::error_knowledge_annotations_invalid_json();
+        error
     })?;
     verify_json_number_preservation(bytes)?;
     if value.get("version").and_then(Value::as_u64) != Some(1) {
         return Err(KnowledgeError::new(
             "unsupportedAnnotations",
-            "Unknown annotation format; original bytes must be retained",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_annotations_format_unknown(),
+            ),
         ));
     }
     let items = value
@@ -523,7 +530,7 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
         .ok_or_else(|| {
             KnowledgeError::new(
                 "damagedAnnotations",
-                "Missing annotations array; do not initialize over these bytes",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_annotations_array_missing()),
             )
         })?;
     let mut records = vec![];
@@ -533,9 +540,10 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
         let record: AnnotationRecord = serde_json::from_value(item.clone()).map_err(|e| {
             KnowledgeError::new(
                 "unsupportedAnnotations",
-                format!(
-                    "An annotation is not safely editable; original bytes must be retained: {e}"
-                ),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_record_not_editable(),
+                )
+                .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
             )
         })?;
         if record.annotation_id.is_empty()
@@ -545,11 +553,13 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
         {
             return Err(KnowledgeError::new(
                 "damagedAnnotations",
-                "Invalid or duplicate annotation identity/state",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_identity_or_state_invalid(),
+                ),
             ));
         }
         if let Err(error) = record.target.validate() {
-            target_errors.insert(record.annotation_id.clone(), error.message);
+            target_errors.insert(record.annotation_id.clone(), error);
         }
         if record.purpose == "suggestion" && record.suggestion.is_none()
             || record
@@ -559,7 +569,9 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
         {
             return Err(KnowledgeError::new(
                 "damagedAnnotations",
-                "Invalid suggestion state",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_suggestion_state_invalid(),
+                ),
             ));
         }
         records.push(record);
@@ -572,7 +584,9 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
         {
             return Err(KnowledgeError::new(
                 "damagedAnnotations",
-                "Reply target is missing or self-referential",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_reply_target_invalid(),
+                ),
             ));
         }
         let mut seen = BTreeSet::new();
@@ -581,7 +595,9 @@ pub fn decode_annotations(bytes: &[u8]) -> Result<AnnotationDocument> {
             if !seen.insert(parent) {
                 return Err(KnowledgeError::new(
                     "damagedAnnotations",
-                    "Reply cycle; original discussion is retained",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_annotations_reply_cycle(),
+                    ),
                 ));
             }
             next = records
@@ -639,17 +655,17 @@ fn verify_json_number_preservation(bytes: &[u8]) -> Result<()> {
                     at += 1;
                 }
                 let token = std::str::from_utf8(&bytes[start..at]).map_err(|_| {
-                    KnowledgeError::new("damagedAnnotations", "Invalid JSON numeric bytes")
+                    KnowledgeError::new("damagedAnnotations", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_json_numeric_bytes_invalid()))
                 })?;
                 let number: serde_json::Number = serde_json::from_str(token).map_err(|_| {
-                    KnowledgeError::new("damagedAnnotations", "JSON number cannot be retained")
+                    KnowledgeError::new("damagedAnnotations", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_json_number_not_retainable()))
                 })?;
                 if decimal_key(token).is_none()
                     || decimal_key(token) != decimal_key(&number.to_string())
                 {
                     return Err(KnowledgeError::new(
                         "unsupportedAnnotations",
-                        "A JSON number cannot round-trip exactly; retain the original sidecar without overwriting it",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_json_number_not_exact_round_trip()),
                     ));
                 }
                 continue;
@@ -669,12 +685,26 @@ impl AnnotationDocument {
         for record in records {
             record.target.validate()?;
             value["annotations"].as_array_mut().unwrap().push(
-                serde_json::to_value(record)
-                    .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?,
+                serde_json::to_value(record).map_err(|e| {
+                    KnowledgeError::new(
+                        "encoding",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_json(),
+                        )
+                        .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+                    )
+                })?,
             );
         }
-        let bytes = serde_json::to_vec_pretty(&value)
-            .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        let bytes = serde_json::to_vec_pretty(&value).map_err(|e| {
+            KnowledgeError::new(
+                "encoding",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_json(),
+                )
+                .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+            )
+        })?;
         decode_annotations(&bytes)?;
         Ok(bytes)
     }
@@ -682,7 +712,7 @@ impl AnnotationDocument {
         if !self.records.iter().any(|record| record.annotation_id == id) {
             return Err(KnowledgeError::new(
                 "missingAnnotation",
-                "The selected annotation is not in this exact document",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_annotation_outside_document()),
             ));
         }
         let mut value = self.value.clone();
@@ -695,13 +725,20 @@ impl AnnotationDocument {
             })
             .and_then(Value::as_object_mut)
             .ok_or_else(|| {
-                KnowledgeError::new("damagedAnnotations", "The original record is not editable")
+                KnowledgeError::new("damagedAnnotations", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_original_record_not_editable()))
             })?;
         for (key, after) in edits {
             item.insert((*key).into(), after.clone());
         }
-        let bytes = serde_json::to_vec_pretty(&value)
-            .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        let bytes = serde_json::to_vec_pretty(&value).map_err(|e| {
+            KnowledgeError::new(
+                "encoding",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_json(),
+                )
+                .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+            )
+        })?;
         decode_annotations(&bytes)?;
         Ok(bytes)
     }
@@ -721,7 +758,7 @@ impl AnnotationDocument {
             .iter()
             .find(|r| r.annotation_id == id)
             .ok_or_else(|| {
-                KnowledgeError::new("missingAnnotation", "Select a stored annotation")
+                KnowledgeError::new("missingAnnotation", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_stored_annotation_required()))
             })?;
         let mut suggestion = record
             .suggestion
@@ -730,7 +767,9 @@ impl AnnotationDocument {
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "suggestionState",
-                    "Only pending suggestions can be rejected",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_annotations_reject_pending_only(),
+                    ),
                 )
             })?;
         suggestion.state = "rejected".into();
@@ -743,7 +782,10 @@ impl AnnotationDocument {
         if reply.reply_to.is_none() {
             return Err(KnowledgeError::new(
                 "replyTarget",
-                "A reply requires an explicit existing parent",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_reply_parent_required(
+                    ),
+                ),
             ));
         }
         self.create(reply)
@@ -755,7 +797,7 @@ impl AnnotationDocument {
             .iter()
             .find(|r| r.annotation_id == id)
             .ok_or_else(|| {
-                KnowledgeError::new("missingAnnotation", "Select a stored annotation")
+                KnowledgeError::new("missingAnnotation", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_stored_annotation_required()))
             })?;
         if record
             .suggestion
@@ -764,7 +806,7 @@ impl AnnotationDocument {
         {
             return Err(KnowledgeError::new(
                 "reconfirmationRequired",
-                "A pending suggestion requires a separate reconfirmed target and replacement preview",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_separate_reconfirmation_preview_required()),
             ));
         }
         let mut history = record.target_history.clone();
@@ -789,7 +831,7 @@ impl AnnotationDocument {
         let anchor = target.anchor().ok_or_else(|| {
             KnowledgeError::new(
                 "unsupportedSuggestion",
-                "Reconfirmation needs an exact authored source target",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_authored_source_target_required()),
             )
         })?;
         let record = self
@@ -797,7 +839,7 @@ impl AnnotationDocument {
             .iter()
             .find(|r| r.annotation_id == id)
             .ok_or_else(|| {
-                KnowledgeError::new("missingAnnotation", "Select the stored pending suggestion")
+                KnowledgeError::new("missingAnnotation", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_stored_pending_suggestion_required()))
             })?;
         if record
             .suggestion
@@ -806,7 +848,10 @@ impl AnnotationDocument {
         {
             return Err(KnowledgeError::new(
                 "suggestionState",
-                "Only a pending suggestion can be reconfirmed",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_reconfirm_pending_only(
+                    ),
+                ),
             ));
         }
         let suggestion = Suggestion {
@@ -844,7 +889,7 @@ pub fn source_anchor(
     if !boundaries.contains(&from) || !boundaries.contains(&to) {
         return Err(KnowledgeError::new(
             "partialGrapheme",
-            "Annotation endpoints must be whole graphemes",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_whole_grapheme_endpoints_required()),
         ));
     }
     Ok(SourceAnchor {
@@ -1023,23 +1068,40 @@ pub fn suggestion_plan(
     if document.target_errors.contains_key(id) {
         return Err(KnowledgeError::new(
             "invalidTarget",
-            "An invalid annotation target cannot qualify a suggestion",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_annotations_invalid_target_not_executable(),
+            ),
         ));
     }
     let record = document
         .records
         .iter()
         .find(|r| r.annotation_id == id)
-        .ok_or_else(|| KnowledgeError::new("missingAnnotation", "The annotation is missing"))?;
+        .ok_or_else(|| {
+            KnowledgeError::new(
+                "missingAnnotation",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_annotation_missing(),
+                ),
+            )
+        })?;
     let mut suggestion = record
         .suggestion
         .clone()
         .filter(|s| s.state == "pending")
-        .ok_or_else(|| KnowledgeError::new("suggestionState", "The suggestion is not pending"))?;
+        .ok_or_else(|| {
+            KnowledgeError::new(
+                "suggestionState",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_annotations_suggestion_not_pending(
+                    ),
+                ),
+            )
+        })?;
     let anchor = record.target.anchor().ok_or_else(|| {
         KnowledgeError::new(
             "unsupportedSuggestion",
-            "Only a verified exact authored source selection is executable",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_annotations_verified_source_selection_required()),
         )
     })?;
     if suggestion.requires_reconfirmation
@@ -1050,7 +1112,9 @@ pub fn suggestion_plan(
     {
         return Err(KnowledgeError::new(
             "staleSuggestion",
-            "The exact source basis changed; retain pending state and reconfirm",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_annotations_source_basis_changed(),
+            ),
         ));
     }
     // A replacement of literal source text is the first safe operation profile.
@@ -1065,11 +1129,13 @@ pub fn suggestion_plan(
     {
         return Err(KnowledgeError::new(
             "sourceEntry",
-            "A formatted or structural selection requires an Editor proof",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_annotations_editor_proof_required(),
+            ),
         ));
     }
     let encoded = weftext_engine::encode_literal(&suggestion.replacement)
-        .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_engine("encoding", e))?;
     let patch = SourcePatch::new(&source.source, anchor.source_range.clone(), encoded)?;
     suggestion.state = "accepted".into();
     let after = document.change(
@@ -1096,7 +1162,7 @@ pub fn suggestion_plan(
 /// Conservative read-only recovery of stored discussion in parseable JSON.
 /// Never returns a target/preimage/replacement and never qualifies execution.
 pub fn recover_discussion(bytes: &[u8]) -> Vec<AnnotationView> {
-    let Ok(UniqueValue(value)) = serde_json::from_slice(bytes) else {
+    let Ok(value) = weftext_data::parse_unique_json(bytes) else {
         return vec![];
     };
     let Some(items) = value.get("annotations").and_then(Value::as_array) else {
@@ -1135,79 +1201,4 @@ pub fn recover_discussion(bytes: &[u8]) -> Vec<AnnotationView> {
             })
         })
         .collect()
-}
-
-struct UniqueValue(Value);
-impl<'de> Deserialize<'de> for UniqueValue {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = UniqueValue;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("JSON with no duplicate members")
-            }
-            fn visit_bool<E: serde::de::Error>(
-                self,
-                v: bool,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Self::Value, E> {
-                serde_json::Number::from_f64(v)
-                    .map(|n| UniqueValue(Value::Number(n)))
-                    .ok_or_else(|| E::custom("non-finite JSON number"))
-            }
-            fn visit_str<E: serde::de::Error>(
-                self,
-                v: &str,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_string<E: serde::de::Error>(
-                self,
-                v: String,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Null))
-            }
-            fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Null))
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                self,
-                mut seq: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut values = vec![];
-                while let Some(UniqueValue(value)) = seq.next_element()? {
-                    values.push(value);
-                }
-                Ok(UniqueValue(Value::Array(values)))
-            }
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                mut map: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut values = serde_json::Map::new();
-                while let Some((key, UniqueValue(value))) =
-                    map.next_entry::<String, UniqueValue>()?
-                {
-                    if values.insert(key, value).is_some() {
-                        return Err(serde::de::Error::custom("duplicate JSON member"));
-                    }
-                }
-                Ok(UniqueValue(Value::Object(values)))
-            }
-        }
-        deserializer.deserialize_any(Visitor)
-    }
 }

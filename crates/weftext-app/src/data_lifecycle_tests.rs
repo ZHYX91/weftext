@@ -3,15 +3,15 @@
 async fn retire_query_task(state: &AppState, root: &str) -> PathBuf {
     let Json(document) = ok(capture(
         State(state.clone()),
-        Json(task_capture(
+        crate::RequestJson(task_capture(
             root,
             "Retired",
             &uuid::Uuid::new_v4().to_string(),
         )),
     )
     .await);
-    assert_eq!(document["status"],"committed");
-    let document=document["document"].clone();
+    assert_eq!(document["status"], "committed");
+    let document = document["document"].clone();
     let mut core = state.core.lock().unwrap();
     let retired = core
         .prepare_operation(CoreOperationRequest {
@@ -43,7 +43,7 @@ fn mixed_status_plan() -> weftext_data::QueryPlan {
     trash.scope.lifecycle = "trash".into();
     weftext_data::QueryPlan {
         advanced: Some(weftext_data::QueryAdvanced {
-            union_all: vec![live, trash],
+            union_all: Some(vec![live, trash]),
             ..Default::default()
         }),
         ..Default::default()
@@ -78,23 +78,24 @@ async fn mixed_lifecycle_definition_save_run_and_callee_use_both_original_read_c
     install_bundled_schema(&state, &root).await;
     let Json(live) = ok(capture(
         State(state.clone()),
-        Json(task_capture(
+        crate::RequestJson(task_capture(
             &root,
             "Live",
             &uuid::Uuid::new_v4().to_string(),
         )),
     )
     .await);
-    assert_eq!(live["status"],"committed");
-    let live=live["document"].clone();
+    assert_eq!(live["status"], "committed");
+    let live = live["document"].clone();
     let trash_path = retire_query_task(&state, &root).await;
     let trash_bytes = std::fs::read(&trash_path).unwrap();
     let mut request =
         definition_request(&live, live["source"].as_str().unwrap().into(), None, "open");
     request.plan = mixed_status_plan();
     let original_request = request.clone();
-    let Json(saved) = ok(save_definition(State(state.clone()), Json(request)).await);
-    let Json(replayed) = ok(save_definition(State(state.clone()), Json(original_request)).await);
+    let Json(saved) = ok(save_definition(State(state.clone()), crate::RequestJson(request)).await);
+    let Json(replayed) =
+        ok(save_definition(State(state.clone()), crate::RequestJson(original_request)).await);
     assert_eq!(replayed["definition"]["key"], saved["definition"]["key"]);
     let current = &saved["document"];
     let owner = format!(
@@ -107,7 +108,7 @@ async fn mixed_lifecycle_definition_save_run_and_callee_use_both_original_read_c
     };
     let Json(ran) = ok(run_definition(
         State(state.clone()),
-        Json(DefinitionRunRequest {
+        crate::RequestJson(DefinitionRunRequest {
             root: root.clone(),
             owner: owner.clone(),
             selection: selection.clone(),
@@ -118,7 +119,7 @@ async fn mixed_lifecycle_definition_save_run_and_callee_use_both_original_read_c
     assert_mixed_rows(&ran["result"]);
     let Json(called) = ok(query(
         State(state.clone()),
-        Json(QueryRequest {
+        crate::RequestJson(QueryRequest {
             root: root.clone(),
             plan: weftext_data::QueryPlan {
                 advanced: Some(weftext_data::QueryAdvanced {
@@ -148,7 +149,7 @@ async fn mixed_lifecycle_addition_cannot_replace_a_source_in_the_original_native
     let (_directory, state, root) = fixture();
     let _ = ok(capture(
         State(state.clone()),
-        Json(task_capture(
+        crate::RequestJson(task_capture(
             &root,
             "Live",
             &uuid::Uuid::new_v4().to_string(),
@@ -187,20 +188,20 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
     install_bundled_schema(&state, &root).await;
     let Json(live) = ok(capture(
         State(state.clone()),
-        Json(task_capture(
+        crate::RequestJson(task_capture(
             &root,
             "Live",
             &uuid::Uuid::new_v4().to_string(),
         )),
     )
     .await);
-    assert_eq!(live["status"],"committed");
-    let live=live["document"].clone();
+    assert_eq!(live["status"], "committed");
+    let live = live["document"].clone();
     let trash_path = retire_query_task(&state, &root).await;
     let trash_bytes = std::fs::read(&trash_path).unwrap();
     let Json(saved) = ok(save_definition(
         State(state.clone()),
-        Json(definition_request(
+        crate::RequestJson(definition_request(
             &live,
             live["source"].as_str().unwrap().into(),
             None,
@@ -238,7 +239,7 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
     });
     let Json(result) = ok(query(
         State(state.clone()),
-        Json(QueryRequest {
+        crate::RequestJson(QueryRequest {
             root: root.clone(),
             plan,
             parameters: BTreeMap::new(),
@@ -266,7 +267,7 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
     invalid_terminal.scope.lifecycle = "trash".into();
     let rejected = query(
         State(state),
-        Json(QueryRequest {
+        crate::RequestJson(QueryRequest {
             root,
             plan: invalid_terminal,
             parameters: BTreeMap::new(),
@@ -275,5 +276,8 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
     .await;
     let rejected = rejected.unwrap_err();
     assert_eq!(rejected.code, "invalid_data");
-    assert!(rejected.message.contains("Terminal producer scope belongs"));
+    assert_eq!(
+        rejected.explanation,
+        UiMessage::error_data_query_advanced_terminal_scope_must_be_in_scan_branches()
+    );
 }

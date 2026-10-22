@@ -1,6 +1,7 @@
 //! Placement of an admitted non-Node container uses the original Relocate
 //! writer. Its identity marker keeps its name and exact content revision.
 use super::*;
+use weftext_messages::UiMessage;
 
 fn validate_target_name(name: &str) -> Result<()> {
     let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
@@ -20,7 +21,7 @@ fn validate_target_name(name: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidName",
-            "Use a safe directory basename outside reserved library controls",
+            UiMessage::error_core_operations_use_safe_directory_basename_outside_reserved_library_controls(),
         ));
     }
     Ok(())
@@ -35,7 +36,7 @@ impl Core {
         if source == root {
             return Err(CoreError::new(
                 "invalidTarget",
-                "The workspace root cannot be relocated",
+                UiMessage::error_core_operations_workspace_root_cannot_relocated(),
             ));
         }
         self.owned_parent(root, source)?;
@@ -44,13 +45,13 @@ impl Core {
         if target.kind != "directory" || target.status != "managed" {
             return Err(CoreError::new(
                 "identityConflict",
-                "Relocation requires the original admitted non-Node directory",
+                UiMessage::error_core_operations_relocation_requires_original_admitted_non_node_directory(),
             ));
         }
         let reference = target.target_ref.ok_or_else(|| {
             CoreError::new(
                 "identityConflict",
-                "The directory has no qualified reference",
+                UiMessage::error_core_operations_directory_has_no_qualified_reference(),
             )
         })?;
         let (_, workspace, id) = crate::directory_identity::parse_ref(&reference)?;
@@ -59,7 +60,7 @@ impl Core {
         let captured = capture_optional(&marker)?.ok_or_else(|| {
             CoreError::new(
                 "identityConflict",
-                "The admitted directory marker is missing",
+                UiMessage::error_core_operations_admitted_directory_marker_missing(),
             )
         })?;
         let identity = ParentGuard::acquire(&marker)?.directory_identity()?;
@@ -69,7 +70,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "The directory identity binding changed",
+                UiMessage::error_core_operations_directory_identity_binding_changed(),
             ));
         }
         self.check_pending_identity(&captured.stamp.identity)?;
@@ -101,7 +102,10 @@ impl Core {
                 .file_name()
                 .and_then(|name| name.to_str())
                 .ok_or_else(|| {
-                    CoreError::new("invalidName", "The target directory needs a UTF-8 basename")
+                    CoreError::new(
+                        "invalidName",
+                        UiMessage::error_core_operations_target_directory_needs_u_t_f8_basename(),
+                    )
                 })?,
         )?;
         let (captured, expected_directory) = self.qualified_directory_marker(root, source)?;
@@ -115,7 +119,7 @@ impl Core {
         if source_identity != expected_directory {
             return Err(CoreError::new(
                 "conflict",
-                "The admitted directory changed during planning",
+                UiMessage::error_core_operations_admitted_directory_changed_during_planning(),
             ));
         }
         let target_parent_identity = namespace.parent_identity()?;
@@ -124,7 +128,8 @@ impl Core {
         if stamp(&held)? != captured.stamp || read_blob(&mut held)? != captured.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "The original directory marker changed during planning",
+                UiMessage::error_core_operations_original_directory_marker_changed_during_planning(
+                ),
             ));
         }
         preview

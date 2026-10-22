@@ -37,6 +37,7 @@ mod history;
 mod hosted;
 mod recognition;
 pub mod reminder_device_state;
+mod reminder_schedule;
 #[cfg(all(test, windows))]
 mod tag_write_guard_tests;
 pub use hosted::{
@@ -85,6 +86,8 @@ pub use history::{
     HistoryComparison, HistoryRead, HistoryRestoreRequest, HistoryRestoreResult,
     HistoryRestoreStatus, HistoryRetention, HistoryTimeline, HistoryVersion,
 };
+#[cfg(test)]
+mod error_contract_tests;
 #[cfg(all(test, windows))]
 mod recovery_tests;
 
@@ -105,6 +108,9 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
+pub use weftext_messages::{
+    DiagnosticOrigin, ErrorCauses, ErrorDescription, RawDiagnostic, UiMessage,
+};
 
 pub type Result<T> = std::result::Result<T, CoreError>;
 pub const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
@@ -114,46 +120,306 @@ pub const STORAGE_PROFILE: &str = "weftext.local-mvp.v1";
 #[serde(rename_all = "camelCase")]
 pub struct CoreError {
     pub code: String,
-    pub message: String,
+    pub explanation: UiMessage,
+    pub diagnostics: Vec<RawDiagnostic>,
+    pub causes: ErrorCauses,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<CoreErrorDetails>,
+    #[serde(skip)]
+    os_error: Option<i32>,
 }
-impl CoreError {
-    pub fn new(code: &str, message: impl Into<String>) -> Self {
+/// Independent problems stay independent of the bounded causal chain.
+/// All groups are produced from already bounded Core/data inputs, never decoded as requests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum CoreErrorDetails {
+    Aggregate { groups: Vec<ErrorDetailGroup> },
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ErrorDetailGroup {
+    SemanticEvidence {
+        gaps: Vec<sync::UnfulfilledEvidence>,
+    },
+    Data {
+        classification: weftext_data::DataErrorKind,
+        diagnostics: Vec<ErrorDescription>,
+    },
+    Product {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+        diagnostics: Vec<ErrorDescription>,
+    },
+}
+/// A computed product status or warning; recovery source remains in its original error channel.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CoreDescription {
+    pub explanation: UiMessage,
+    pub diagnostics: Vec<RawDiagnostic>,
+    pub causes: ErrorCauses,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<CoreErrorDetails>,
+}
+impl CoreDescription {
+    pub fn new(explanation: UiMessage) -> Self {
+        Self::from(ErrorDescription::new(explanation))
+    }
+    pub fn into_parts(self) -> (ErrorDescription, Option<CoreErrorDetails>) {
+        (
+            ErrorDescription {
+                explanation: self.explanation,
+                diagnostics: self.diagnostics,
+                causes: self.causes,
+            },
+            self.details,
+        )
+    }
+    pub fn into_error(self, code: &str) -> CoreError {
+        let (description, details) = self.into_parts();
+        let mut error = CoreError::new(code, description);
+        error.details = details;
+        error
+    }
+    pub fn diagnostic(mut self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
+        self.diagnostics.push(RawDiagnostic {
+            origin,
+            text: text.into(),
+        });
+        self
+    }
+}
+impl From<UiMessage> for CoreDescription {
+    fn from(explanation: UiMessage) -> Self {
+        Self::new(explanation)
+    }
+}
+impl From<ErrorDescription> for CoreDescription {
+    fn from(description: ErrorDescription) -> Self {
         Self {
-            code: code.into(),
-            message: message.into(),
-            current_source: None,
+            explanation: description.explanation,
+            diagnostics: description.diagnostics,
+            causes: description.causes,
+            details: None,
         }
     }
-    fn conflict(message: &str, source: &[u8]) -> Self {
+}
+impl From<CoreError> for CoreDescription {
+    fn from(error: CoreError) -> Self {
+        let mut groups = match error.details {
+            Some(CoreErrorDetails::Aggregate { groups }) => groups,
+            None => Vec::new(),
+        };
+        groups.push(ErrorDetailGroup::Product {
+            code: Some(error.code),
+            diagnostics: Vec::new(),
+        });
         Self {
-            code: "conflict".into(),
-            message: message.into(),
-            current_source: String::from_utf8(source.to_vec()).ok(),
+            explanation: error.explanation,
+            diagnostics: error.diagnostics,
+            causes: error.causes,
+            details: Some(CoreErrorDetails::Aggregate { groups }),
         }
+    }
+}
+impl CoreError {
+    pub fn new(code: &str, description: impl Into<ErrorDescription>) -> Self {
+        let description = description.into();
+        Self {
+            code: code.into(),
+            explanation: description.explanation,
+            diagnostics: description.diagnostics,
+            causes: description.causes,
+            current_source: None,
+            details: None,
+            os_error: None,
+        }
+    }
+    pub fn diagnostic(mut self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
+        self.diagnostics.push(RawDiagnostic {
+            origin,
+            text: text.into(),
+        });
+        self
+    }
+    fn into_description(self) -> ErrorDescription {
+        ErrorDescription {
+            explanation: self.explanation,
+            diagnostics: self.diagnostics,
+            causes: self.causes,
+        }
+    }
+    pub fn from_data(code: &str, error: weftext_data::DataError) -> Self {
+        let (classification, description, details) = error.into_parts();
+        let mut error = Self::new(code, description);
+        error.details = Some(CoreErrorDetails::Aggregate {
+            groups: vec![ErrorDetailGroup::Data {
+                classification,
+                diagnostics: details
+                    .map(weftext_data::DataErrorDetails::into_diagnostics)
+                    .unwrap_or_default(),
+            }],
+        });
+        error
+    }
+    pub fn from_export(code: &str, error: weftext_export::ExportError) -> Self {
+        let (description, diagnostics) = error.into_parts();
+        Self::from_product(code, None, description, diagnostics)
+    }
+    pub fn from_engine(code: &str, error: weftext_engine::EngineError) -> Self {
+        let (description, diagnostics) = error.into_parts();
+        Self::from_product(code, None, description, diagnostics)
+    }
+    pub fn from_native(error: weftext_export::exchange::NativeError) -> Self {
+        let code = error.code.clone();
+        let (description, diagnostics) = error.into_parts();
+        Self::from_product(&code, None, description, diagnostics)
+    }
+    pub fn from_knowledge(code: &str, error: weftext_knowledge::KnowledgeError) -> Self {
+        let source_code = error.code.clone();
+        let (description, diagnostics) = error.into_parts();
+        Self::from_product(code, Some(source_code), description, diagnostics)
+    }
+    pub fn from_product(
+        code: &str,
+        source_code: Option<String>,
+        description: ErrorDescription,
+        diagnostics: Vec<ErrorDescription>,
+    ) -> Self {
+        let mut error = Self::new(code, description);
+        if source_code.is_some() || !diagnostics.is_empty() {
+            error.details = Some(CoreErrorDetails::Aggregate {
+                groups: vec![ErrorDetailGroup::Product {
+                    code: source_code,
+                    diagnostics,
+                }],
+            });
+        }
+        error
+    }
+    pub fn from_descriptions(
+        code: &str,
+        explanation: UiMessage,
+        descriptions: Vec<CoreDescription>,
+    ) -> Self {
+        let mut error = Self::new(code, explanation);
+        let mut diagnostics = Vec::with_capacity(descriptions.len());
+        for description in descriptions {
+            let (description, details) = description.into_parts();
+            diagnostics.push(description);
+            if let Some(CoreErrorDetails::Aggregate { groups }) = details {
+                for group in groups {
+                    error.add_detail_group(group);
+                }
+            }
+        }
+        if !diagnostics.is_empty() {
+            error.add_detail_group(ErrorDetailGroup::Product {
+                code: None,
+                diagnostics,
+            });
+        }
+        error
+    }
+    pub fn add_detail_group(&mut self, group: ErrorDetailGroup) {
+        match &mut self.details {
+            Some(CoreErrorDetails::Aggregate { groups }) => groups.push(group),
+            None => {
+                self.details = Some(CoreErrorDetails::Aggregate {
+                    groups: vec![group],
+                })
+            }
+        }
+    }
+    pub fn caused_by(mut self, mut cause: CoreError) -> Self {
+        let code = cause.code.clone();
+        if self.current_source.is_none() {
+            self.current_source = cause.current_source.take();
+        }
+        let mut description = ErrorDescription::new(self.explanation.clone());
+        description.causes = std::mem::take(&mut self.causes);
+        if let Some(CoreErrorDetails::Aggregate { groups }) = cause.details.take() {
+            for group in groups {
+                self.add_detail_group(group);
+            }
+        }
+        match description.try_caused_by(code, cause.into_description()) {
+            Ok(description) => self.causes = description.causes,
+            Err(boundary) => {
+                if !boundary.outer.causes.as_slice().is_empty() {
+                    self.add_detail_group(ErrorDetailGroup::Product {
+                        code: Some(self.code.clone()),
+                        diagnostics: vec![boundary.outer],
+                    });
+                }
+                self.causes =
+                    ErrorCauses::one(boundary.code.clone(), boundary.original.explanation.clone());
+                self.add_detail_group(ErrorDetailGroup::Product {
+                    code: Some(boundary.code),
+                    diagnostics: vec![boundary.original],
+                });
+            }
+        }
+        self
+    }
+    pub(crate) fn os_error(&self) -> Option<i32> {
+        self.os_error
+    }
+    fn conflict(explanation: UiMessage, source: &[u8]) -> Self {
+        let mut error = Self::new("conflict", explanation);
+        error.current_source = String::from_utf8(source.to_vec()).ok();
+        error
     }
 }
 impl std::fmt::Display for CoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(
+            f,
+            "{}: {}",
+            self.code,
+            self.explanation
+                .render(weftext_messages::UiLocale::default())
+        )?;
+        for diagnostic in &self.diagnostics {
+            write!(f, "\n{:?}: {}", diagnostic.origin, diagnostic.text)?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for CoreError {}
 impl From<std::io::Error> for CoreError {
     fn from(value: std::io::Error) -> Self {
+        if let Some(original) = value
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<CoreError>())
+        {
+            return original.clone();
+        }
         let code = match value.kind() {
             std::io::ErrorKind::AlreadyExists => "exists",
             std::io::ErrorKind::NotFound => "missing",
             std::io::ErrorKind::PermissionDenied => "permissionDenied",
             _ => "io",
         };
-        Self::new(code, value.to_string())
+        if let Some(original) = value
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<ErrorDescription>())
+        {
+            return Self::new(code, original.clone());
+        }
+        let os_error = value.raw_os_error();
+        let mut error = Self::new(code, UiMessage::error_core_io_failure())
+            .diagnostic(DiagnosticOrigin::Os, value.to_string());
+        error.os_error = os_error;
+        error
     }
 }
 impl From<serde_json::Error> for CoreError {
     fn from(value: serde_json::Error) -> Self {
-        Self::new("invalidState", value.to_string())
+        Self::new("invalidState", UiMessage::error_core_json_failure())
+            .diagnostic(DiagnosticOrigin::Json, value.to_string())
     }
 }
 
@@ -193,7 +459,7 @@ pub struct SaveAsRequest {
     pub source: String,
     pub operation_id: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -202,7 +468,6 @@ pub struct Receipt {
     pub status: String,
     pub path: String,
     pub base_id: String,
-    pub message: String,
 }
 /// The original journal stores only Receipt. Recovery delivery is transient.
 #[derive(Debug, Clone, Serialize)]
@@ -213,12 +478,7 @@ pub struct SaveOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovery_issue: Option<RecoveryIssue>,
 }
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecoveryIssue {
-    pub code: String,
-    pub message: String,
-}
+pub type RecoveryIssue = CoreError;
 impl SaveOutcome {
     fn committed(receipt: Receipt) -> Self {
         Self {
@@ -302,11 +562,11 @@ impl Core {
         let session = self
             .sessions
             .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         if session.base_id != base_id || session.conflicting_draft.is_some() {
             return Err(CoreError::new(
                 "staleBase",
-                "The opened source basis or recovered draft is no longer qualified",
+                UiMessage::error_opened_source_basis_unqualified(),
             ));
         }
         self.check_pending(&session.path)?;
@@ -315,7 +575,7 @@ impl Core {
         if stamp(&file)? != session.stamp || read_source(&mut file)? != session.bytes {
             return Err(CoreError::new(
                 "staleBase",
-                "The actual source object or bytes changed after opening",
+                UiMessage::error_source_object_changed_after_open(),
             ));
         }
         Ok(())
@@ -379,7 +639,7 @@ impl Core {
         if !path.starts_with(&root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "The source is outside the explicitly selected project root",
+                UiMessage::error_source_outside_selected_root(),
             ));
         }
         self.actor_library_for_root(&root)?;
@@ -493,10 +753,7 @@ impl Core {
         self.check_actor_session(session_id)?;
         check_size(source.as_bytes())?;
         let session = self.sessions.get(session_id).ok_or_else(|| {
-            CoreError::new(
-                "sessionMissing",
-                "Open the file again to establish a session",
-            )
+            CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
         })?;
         let draft = Draft {
             scope: self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?,
@@ -528,18 +785,18 @@ impl Core {
         if !matches!(action, "discardRecovered" | "mergeRecovered") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose discardRecovered or mergeRecovered",
+                UiMessage::error_invalid_draft_resolution_action(),
             ));
         }
         let session = self
             .sessions
             .get(session_id)
             .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the file again"))?;
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_file()))?;
         if action == "mergeRecovered" && source.is_none() {
             return Err(CoreError::new(
                 "mergeRequired",
-                "Provide the explicitly reviewed merged source",
+                UiMessage::error_reviewed_merge_required(),
             ));
         }
         if let Some(draft) = &session.conflicting_draft {
@@ -605,10 +862,7 @@ impl Core {
             .get(&request.session_id)
             .cloned()
             .ok_or_else(|| {
-                CoreError::new(
-                    "sessionMissing",
-                    "Open the file again to establish a session",
-                )
+                CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
             })?;
         let (original_path, scope) = if let Some(plan) = self.operations.get(&request.operation_id)
         {
@@ -653,14 +907,14 @@ impl Core {
                 .conflicting_draft = Some(draft);
             return Err(CoreError::new(
                 "staleBase",
-                "This base token is no longer current; the retained proposal has an unknown old base and must be explicitly compared",
+                UiMessage::error_save_base_unknown(),
             ));
         }
         self.persist_draft(&request.session_id, &request.source)?;
         if session.conflicting_draft.is_some() {
             return Err(CoreError::new(
                 "draftConflict",
-                "The recovered draft has a different original base; explicitly compare and merge before saving",
+                UiMessage::error_recovered_draft_base_conflict(),
             ));
         }
         self.check_pending(&session.path)?;
@@ -671,7 +925,7 @@ impl Core {
         }) {
             return Err(CoreError::new(
                 "trashReadOnly",
-                "Restore the node before editing its source",
+                UiMessage::error_restore_before_source_edit(),
             ));
         }
         if let Some(expected) = &session.node_id {
@@ -679,7 +933,7 @@ impl Core {
             if metadata.id.as_ref() != Some(expected) {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "The admitted Node ID must be preserved; retain this draft and repair its declaration",
+                    UiMessage::error_admitted_node_identity_changed(),
                 ));
             }
         }
@@ -689,7 +943,7 @@ impl Core {
         let current_stamp = stamp(&file)?;
         if current_stamp != session.stamp || before != session.bytes {
             return Err(CoreError::conflict(
-                "The current file changed outside this session; the draft is retained",
+                UiMessage::error_source_changed_outside_session(),
                 &before,
             ));
         }
@@ -717,7 +971,6 @@ impl Core {
             } else {
                 fresh()
             },
-            message: "Local NTFS save committed; source/schema semantics are not certified".into(),
         });
         let content_revision = if plan.before.as_ref() == Some(&plan.after) {
             self.accepted_revision(&operations::CapturedFile {
@@ -767,8 +1020,13 @@ impl Core {
             .and_then(|()| self.persist_draft(&request.session_id, &request.source));
         #[cfg(not(all(test, windows)))]
         let draft_update = self.persist_draft(&request.session_id, &request.source);
-        let recovery_issue = draft_update.err().map(|error| RecoveryIssue {
-            code: error.code, message: "Source save committed; its separate recovery draft update is unavailable. Retain the original operation and current input.".into(),
+        let recovery_issue = draft_update.err().map(|error| {
+            let code = error.code.clone();
+            CoreError::new(
+                &code,
+                UiMessage::error_core_committed_draft_update_unavailable(),
+            )
+            .caused_by(error)
         });
         Ok(SaveOutcome {
             receipt,
@@ -784,7 +1042,9 @@ impl Core {
             .sessions
             .get(&request.session_id)
             .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source first"))?;
+            .ok_or_else(|| {
+                CoreError::new("sessionMissing", UiMessage::error_open_source_first())
+            })?;
         let path = absolute_path(Path::new(&request.path))?;
         check_typ(&path)?;
         if let Some(plan) = self.operations.get(&request.operation_id) {
@@ -805,7 +1065,7 @@ impl Core {
         if path == session.path {
             return Err(CoreError::new(
                 "exists",
-                "Save As requires a new, absent target",
+                UiMessage::error_save_as_target_must_be_absent(),
             ));
         }
         let guard = ParentGuard::acquire(&path)?;
@@ -832,7 +1092,6 @@ impl Core {
             status: "saved".into(),
             path: display(&path),
             base_id: fresh(),
-            message: "Created a new ordinary file; the original session is unchanged".into(),
         });
         self.stage(plan.clone())?;
         let mut file = match guard.open_file(true, true) {
@@ -984,7 +1243,7 @@ fn fresh() -> String {
 }
 fn default_note_source(node_id: &str, name: &str) -> Result<String> {
     let title = weftext_engine::encode_literal(name)
-        .map_err(|e| CoreError::new("invalidName", e.to_string()))?;
+        .map_err(|e| CoreError::from_engine("invalidName", e))?;
     Ok(format!(
         "#metadata((id: \"{node_id}\", types: ())) <weftext>\n\n#set document(title: [{title}])\n#title()\n\n"
     ))
@@ -1001,8 +1260,14 @@ fn instance_lock(data_dir: &Path) -> Result<File> {
         options.share_mode(0).custom_flags(0x00200000);
     }
     options.open(data_dir.join("instance.lock")).map_err(|e| {
-        if matches!(e.raw_os_error(), Some(32|33)) { CoreError::new("instanceBusy", "Another Core process is using this private data directory; close it before starting another instance") }
-        else { e.into() }
+        if matches!(e.raw_os_error(), Some(32 | 33)) {
+            CoreError::new(
+                "instanceBusy",
+                UiMessage::error_private_core_instance_busy(),
+            )
+        } else {
+            e.into()
+        }
     })
 }
 fn hash(bytes: &[u8]) -> String {
@@ -1012,18 +1277,14 @@ fn display(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 fn decode(bytes: &[u8]) -> Result<String> {
-    String::from_utf8(bytes.to_vec()).map_err(|_| {
-        CoreError::new(
-            "encoding",
-            "The source is not UTF-8; its bytes were not changed",
-        )
-    })
+    String::from_utf8(bytes.to_vec())
+        .map_err(|_| CoreError::new("encoding", UiMessage::error_source_not_utf8()))
 }
 fn check_size(bytes: &[u8]) -> Result<()> {
     if bytes.len() > MAX_SOURCE_BYTES {
         Err(CoreError::new(
             "tooLarge",
-            "This MVP accepts sources up to 2 MiB",
+            UiMessage::error_source_byte_limit(),
         ))
     } else {
         Ok(())
@@ -1045,7 +1306,7 @@ fn write_source(file: &mut File, bytes: &[u8]) -> Result<()> {
     if read_source(file)? != bytes {
         return Err(CoreError::new(
             "verificationFailed",
-            "The same-handle readback differs; operation retained for recovery",
+            UiMessage::error_source_readback_mismatch(),
         ));
     }
     Ok(())
@@ -1057,7 +1318,7 @@ fn check_typ(path: &Path) -> Result<()> {
     {
         return Err(CoreError::new(
             "unsupportedFile",
-            "Select a native .typ file",
+            UiMessage::error_native_source_file_required(),
         ));
     }
     Ok(())
@@ -1078,7 +1339,7 @@ fn valid_name(name: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidName",
-            "Use a plain Windows-compatible note name without Typst markup",
+            UiMessage::error_invalid_note_name(),
         ));
     }
     Ok(())
@@ -1087,7 +1348,7 @@ fn valid_operation_id(id: &str) -> Result<()> {
     if !Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id) {
         return Err(CoreError::new(
             "invalidOperationId",
-            "operationId must be a canonical lowercase hyphenated UUID",
+            UiMessage::error_invalid_operation_identifier(),
         ));
     }
     Ok(())
@@ -1096,7 +1357,7 @@ pub(crate) fn absolute_path(path: &Path) -> Result<PathBuf> {
     if !path.is_absolute() {
         return Err(CoreError::new(
             "invalidPath",
-            "An explicit absolute path is required",
+            UiMessage::error_absolute_path_required(),
         ));
     }
     if path
@@ -1105,13 +1366,13 @@ pub(crate) fn absolute_path(path: &Path) -> Result<PathBuf> {
     {
         return Err(CoreError::new(
             "invalidPath",
-            "Dot path components are not accepted",
+            UiMessage::error_dot_path_components_unsupported(),
         ));
     }
     if path.to_string_lossy().contains('\0') {
         return Err(CoreError::new(
             "invalidPath",
-            "NUL is not allowed in a path",
+            UiMessage::error_path_contains_nul(),
         ));
     }
     #[cfg(windows)]
@@ -1120,7 +1381,7 @@ pub(crate) fn absolute_path(path: &Path) -> Result<PathBuf> {
         if text.starts_with("\\\\") || text[2..].contains(':') {
             return Err(CoreError::new(
                 "invalidPath",
-                "UNC, device paths and alternate data streams are not supported",
+                UiMessage::error_path_namespace_unsupported(),
             ));
         }
         for component in path.components().filter_map(|c| {
@@ -1134,7 +1395,7 @@ pub(crate) fn absolute_path(path: &Path) -> Result<PathBuf> {
             if name.ends_with([' ', '.']) {
                 return Err(CoreError::new(
                     "invalidPath",
-                    "Trailing-dot and trailing-space aliases are not supported",
+                    UiMessage::error_path_alias_unsupported(),
                 ));
             }
         }

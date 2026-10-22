@@ -16,6 +16,8 @@ use std::{
     time::Duration,
 };
 use tokio::process::Command;
+use weftext_core::{CoreErrorDetails, ErrorDetailGroup};
+use weftext_messages::{DiagnosticOrigin, ErrorDescription, RawDiagnostic, UiMessage};
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(90);
@@ -37,14 +39,22 @@ pub(crate) fn scoped_location(
     user_operation_id: &str,
     purpose: &str,
 ) -> Result<ConversionLocation, LegacyError> {
-    let id = uuid::Uuid::parse_str(user_operation_id)
-        .map_err(|_| error("requestId", "旧格式转换需要规范 UUIDv4 操作标识"))?;
+    let id = uuid::Uuid::parse_str(user_operation_id).map_err(|cause| {
+        error(
+            "requestId",
+            UiMessage::error_api_legacy_office_canonical_v4_operation_required(),
+        )
+        .diagnostic(DiagnosticOrigin::Dependency, cause.to_string())
+    })?;
     if !base.is_absolute()
         || id.to_string() != user_operation_id
         || id.get_version() != Some(uuid::Version::Random)
         || !matches!(purpose, "export" | "import")
     {
-        return Err(error("conversionScope", "外部转换目录或操作作用域无效"));
+        return Err(error(
+            "conversionScope",
+            UiMessage::error_api_legacy_office_conversion_scope_invalid(),
+        ));
     }
     let scope = serde_json::json!({"schemaVersion":1,"deployment":deployment,"libraryRoot":library_root,"actor":actor,"actorEpoch":actor_epoch,"userOperationId":user_operation_id,"purpose":purpose});
     let hash = Sha256::digest(scope.to_string().as_bytes());
@@ -81,8 +91,11 @@ fn execution_path_budget(workspace: &Path, backend: &str) -> Result<(), LegacyEr
         if length > limit {
             return Err(error(
                 "executionPathTooLong",
-                format!(
-                    "Server外部转换工作路径超过当前Windows后端的{limit} UTF-16字符预算；准确原件保留，未启动外部软件。请缩短独立data-dir后显式新建操作。"
+                UiMessage::error_api_legacy_office_execution_path_budget(
+                    weftext_messages::params::ErrorApiLegacyOfficeExecutionPathBudget {
+                        limit: weftext_messages::UiInteger::new(limit as i64)
+                            .expect("a fixed backend path budget is a safe message integer"),
+                    },
                 ),
             ));
         }
@@ -127,7 +140,8 @@ pub(crate) struct DirectionCapability {
     /// This is deliberately false: discovering a software version or a filter
     /// is not a real-host content/review round-trip acceptance result.
     pub(crate) content_roundtrip_verified: bool,
-    pub(crate) reason: String,
+    #[serde(flatten)]
+    pub(crate) description: ErrorDescription,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -171,7 +185,8 @@ pub(crate) struct FeatureReport {
     pub(crate) feature: String,
     pub(crate) before: String,
     pub(crate) after: String,
-    pub(crate) message: String,
+    #[serde(flatten)]
+    pub(crate) description: ErrorDescription,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -182,7 +197,10 @@ pub(crate) struct ConversionResult {
     /// unknown result never exposes a late output as a completed artifact.
     pub(crate) status: String,
     pub(crate) code: String,
-    pub(crate) message: String,
+    #[serde(flatten)]
+    pub(crate) description: ErrorDescription,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) details: Option<CoreErrorDetails>,
     pub(crate) backend: String,
     pub(crate) backend_version: Option<String>,
     pub(crate) direction: Direction,
@@ -191,25 +209,55 @@ pub(crate) struct ConversionResult {
     pub(crate) generated: Option<Artifact>,
     pub(crate) features: Vec<FeatureReport>,
     pub(crate) workspace: PathBuf,
-    pub(crate) diagnostic: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConversionLoss {
     pub(crate) code: String,
-    pub(crate) message: String,
+    #[serde(flatten)]
+    pub(crate) description: ErrorDescription,
+    pub(crate) product_diagnostics: Vec<ErrorDescription>,
     pub(crate) location: Option<String>,
 }
 impl ConversionResult {
+    /// Our producer uses only fixed product explanations and operation-code or
+    /// fixed-budget parameters. Neither accepts paths or external tool text.
+    /// Private diagnostics remain in the original durable receipt; public
+    /// metadata preserves typed meaning without forwarding host diagnostics.
+    pub(crate) fn public_description(&self) -> ErrorDescription {
+        public_description(&self.description)
+    }
+    pub(crate) fn public_details(&self) -> Option<CoreErrorDetails> {
+        self.details.clone().map(public_details)
+    }
+    fn caused_by(&mut self, cause: LegacyError) {
+        self.description = merge_cause(self.description.clone(), &mut self.details, cause);
+    }
     pub(crate) fn losses(&self) -> Vec<ConversionLoss> {
         self.features
             .iter()
             .filter(|feature| feature.after != "preserved")
             .map(|feature| ConversionLoss {
                 code: format!("legacyOffice_{}Unverified", feature.feature),
-                message: feature.message.clone(),
+                description: feature.description.clone(),
+                product_diagnostics: vec![],
                 location: Some(feature.feature.clone()),
+            })
+            .collect()
+    }
+
+    pub(crate) fn public_losses(&self) -> Vec<ConversionLoss> {
+        self.losses()
+            .into_iter()
+            .map(|mut loss| {
+                loss.description = loss.description.without_raw_diagnostics();
+                loss.product_diagnostics = loss
+                    .product_diagnostics
+                    .into_iter()
+                    .map(ErrorDescription::without_raw_diagnostics)
+                    .collect();
+                loss
             })
             .collect()
     }
@@ -223,20 +271,36 @@ impl ConversionResult {
                 "filename": artifact.filename, "length": artifact.length, "sha256": artifact.sha256,
             })
         };
-        serde_json::json!({
+        let description = self.public_description();
+        let features = self
+            .features
+            .iter()
+            .cloned()
+            .map(|mut feature| {
+                feature.description = public_description(&feature.description);
+                feature
+            })
+            .collect::<Vec<_>>();
+        let losses = self.public_losses();
+        let mut metadata = serde_json::json!({
             "requestId": self.request_id, "status": self.status, "code": self.code,
-            "message": self.message, "backend": self.backend, "backendVersion": self.backend_version,
+            "explanation": description.explanation, "diagnostics": description.diagnostics, "causes": description.causes,
+            "backend": self.backend, "backendVersion": self.backend_version,
             "direction": self.direction, "inputFormat": input, "outputFormat": output,
             "contentType": match output { "doc" => "application/msword", "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document", _ => "application/octet-stream" },
             "stage": if self.direction.is_import() { "legacyToDocx" } else { "docxToLegacy" },
             "original": describe(&self.original),
             "intermediateDocx": self.intermediate_docx.as_ref().map(describe),
             "generated": self.generated.as_ref().map(describe),
-            "features": self.features, "losses": self.losses(),
+            "features": features, "losses": losses,
             "requiresLossConfirmation": self.status == "succeeded" && self.generated.is_some() && !self.losses().is_empty(),
             "contentRoundtripVerified": false,
             "nativeConversionRequiresSeparateReport": true,
-        })
+        });
+        if let Some(details) = self.public_details() {
+            metadata["details"] = serde_json::json!(details);
+        }
+        metadata
     }
 }
 
@@ -244,18 +308,107 @@ impl ConversionResult {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LegacyError {
     pub(crate) code: String,
-    pub(crate) message: String,
+    #[serde(flatten)]
+    pub(crate) description: ErrorDescription,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) details: Option<CoreErrorDetails>,
 }
 impl std::fmt::Display for LegacyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(f, "{}: {}", self.code, self.description)
     }
 }
 impl std::error::Error for LegacyError {}
-fn error(code: &str, message: impl Into<String>) -> LegacyError {
+impl LegacyError {
+    pub(crate) fn into_parts(self) -> (ErrorDescription, Option<CoreErrorDetails>) {
+        (self.description, self.details)
+    }
+    fn diagnostic(mut self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
+        self.description = self.description.diagnostic(origin, text);
+        self
+    }
+    fn caused_by(mut self, cause: LegacyError) -> Self {
+        self.description = merge_cause(self.description, &mut self.details, cause);
+        self
+    }
+}
+fn merge_details(target: &mut Option<CoreErrorDetails>, additional: Option<CoreErrorDetails>) {
+    if let Some(CoreErrorDetails::Aggregate { groups: additional }) = additional {
+        let CoreErrorDetails::Aggregate { groups } =
+            target.get_or_insert_with(|| CoreErrorDetails::Aggregate { groups: vec![] });
+        groups.extend(additional);
+    }
+}
+fn merge_cause(
+    outer: ErrorDescription,
+    details: &mut Option<CoreErrorDetails>,
+    cause: LegacyError,
+) -> ErrorDescription {
+    merge_details(details, cause.details);
+    match outer.try_caused_by(cause.code, cause.description) {
+        Ok(description) => description,
+        Err(boundary) => {
+            // Retain the complete overflowing original in the existing typed
+            // detail group. A shallow chain entry still identifies this cause
+            // when the outer chain has room; it never replaces the original.
+            let header = ErrorDescription::new(boundary.original.explanation.clone());
+            let with_header = match boundary.outer.try_caused_by(boundary.code.clone(), header) {
+                Ok(description) => description,
+                Err(full_outer) => full_outer.outer,
+            };
+            merge_details(
+                details,
+                Some(CoreErrorDetails::Aggregate {
+                    groups: vec![ErrorDetailGroup::Product {
+                        code: Some(boundary.code),
+                        diagnostics: vec![boundary.original],
+                    }],
+                }),
+            );
+            with_header
+        }
+    }
+}
+fn public_description(original: &ErrorDescription) -> ErrorDescription {
+    original.clone().without_raw_diagnostics()
+}
+fn public_details(details: CoreErrorDetails) -> CoreErrorDetails {
+    let CoreErrorDetails::Aggregate { groups } = details;
+    CoreErrorDetails::Aggregate {
+        groups: groups
+            .into_iter()
+            .filter_map(|group| match group {
+                ErrorDetailGroup::Product { code, diagnostics } => {
+                    Some(ErrorDetailGroup::Product {
+                        code,
+                        diagnostics: diagnostics
+                            .into_iter()
+                            .map(ErrorDescription::without_raw_diagnostics)
+                            .collect(),
+                    })
+                }
+                ErrorDetailGroup::Data {
+                    classification,
+                    diagnostics,
+                } => Some(ErrorDetailGroup::Data {
+                    classification,
+                    diagnostics: diagnostics
+                        .into_iter()
+                        .map(ErrorDescription::without_raw_diagnostics)
+                        .collect(),
+                }),
+                // Exact author-evidence locators are not authorized by the hosted
+                // converter's public receipt scope. The private original retains them.
+                ErrorDetailGroup::SemanticEvidence { .. } => None,
+            })
+            .collect(),
+    }
+}
+fn error(code: &str, description: impl Into<ErrorDescription>) -> LegacyError {
     LegacyError {
         code: code.into(),
-        message: message.into(),
+        description: description.into(),
+        details: None,
     }
 }
 
@@ -278,16 +431,38 @@ fn configured_adapter() -> Result<Option<AdapterConfig>, LegacyError> {
     };
     let path = PathBuf::from(path);
     if !path.is_absolute() {
-        return Err(error("adapterConfig", "外部适配配置必须是本机绝对路径"));
+        return Err(error(
+            "adapterConfig",
+            UiMessage::error_api_legacy_office_adapter_absolute_path_required(),
+        ));
     }
-    let meta = fs::metadata(&path).map_err(|_| error("adapterConfig", "无法读取外部适配配置"))?;
+    let meta = fs::metadata(&path).map_err(|cause| {
+        error(
+            "adapterConfig",
+            UiMessage::error_api_legacy_office_adapter_config_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     if !meta.is_file() || meta.len() > 64 * 1024 {
-        return Err(error("adapterConfig", "外部适配配置不是有界普通文件"));
+        return Err(error(
+            "adapterConfig",
+            UiMessage::error_api_legacy_office_adapter_config_file_invalid(),
+        ));
     }
-    let config: AdapterConfig = serde_json::from_slice(
-        &fs::read(path).map_err(|_| error("adapterConfig", "无法读取外部适配配置"))?,
-    )
-    .map_err(|_| error("adapterConfig", "外部适配配置格式无效"))?;
+    let config: AdapterConfig = serde_json::from_slice(&fs::read(path).map_err(|cause| {
+        error(
+            "adapterConfig",
+            UiMessage::error_api_legacy_office_adapter_config_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?)
+    .map_err(|cause| {
+        error(
+            "adapterConfig",
+            UiMessage::error_api_legacy_office_adapter_config_invalid(),
+        )
+        .diagnostic(DiagnosticOrigin::Json, cause.to_string())
+    })?;
     validate_adapter(&config)?;
     Ok(Some(config))
 }
@@ -304,7 +479,7 @@ fn validate_adapter(config: &AdapterConfig) -> Result<(), LegacyError> {
     {
         return Err(error(
             "adapterConfig",
-            "适配器须声明现存绝对程序路径、版本及输入／输出参数",
+            UiMessage::error_api_legacy_office_adapter_declaration_invalid(),
         ));
     }
     if config
@@ -315,7 +490,7 @@ fn validate_adapter(config: &AdapterConfig) -> Result<(), LegacyError> {
     {
         return Err(error(
             "adapterConfig",
-            "WPS 方向必须明确声明金山原生格式，不能借用 Microsoft Works 或更改扩展名",
+            UiMessage::error_api_legacy_office_native_wps_declaration_required(),
         ));
     }
     Ok(())
@@ -420,12 +595,12 @@ pub(crate) async fn probe() -> LegacyCapabilities {
             direction,
             available: available && doc,
             content_roundtrip_verified: false,
-            reason: if !doc {
-                "内置 LibreOffice 路线不声明金山 .wps；Works 的 .wps 不是同一格式"
+            description: if !doc {
+                UiMessage::error_api_legacy_office_libre_office_wps_unsupported()
             } else if available {
-                "可运行本机独立 profile 转换；正文／审阅保留仍须按本次结果核对"
+                UiMessage::error_api_legacy_office_independent_profile_available()
             } else {
-                "未同时探测到可运行的 LibreOffice 和 DOC／DOCX Writer 过滤器；可用 WEFTEXT_LIBREOFFICE 指定本机安装程序"
+                UiMessage::error_api_legacy_office_libre_office_filters_unavailable()
             }
             .into(),
         }
@@ -450,23 +625,24 @@ pub(crate) async fn probe() -> LegacyCapabilities {
     ]
     .into_iter()
     .map(|direction| {
-        let available = !direction.involves_native_wps() && configured
-            .as_ref()
-            .ok()
-            .and_then(|c| c.as_ref())
-            .is_some_and(|c| c.directions.contains(&direction));
+        let available = !direction.involves_native_wps()
+            && configured
+                .as_ref()
+                .ok()
+                .and_then(|c| c.as_ref())
+                .is_some_and(|c| c.directions.contains(&direction));
         DirectionCapability {
             direction,
             available,
             content_roundtrip_verified: false,
-            reason: if direction.involves_native_wps() {
-                "当前未实现可证明金山原生 .wps 的格式验证器；配置声明、WPS 已安装及改后缀均不能启用本方向".into()
+            description: if direction.involves_native_wps() {
+                UiMessage::error_api_legacy_office_native_wps_validator_unavailable().into()
             } else if available {
-                "已配置本机适配器；声明与真实生成内容须单独验收".into()
+                UiMessage::error_api_legacy_office_configured_adapter_available().into()
             } else if let Err(e) = &configured {
-                e.message.clone()
+                public_description(&e.description)
             } else {
-                "没有为此方向配置已安装的本机原生转换器".into()
+                UiMessage::error_api_legacy_office_configured_direction_unavailable().into()
             },
         }
     })
@@ -484,16 +660,20 @@ pub(crate) async fn probe() -> LegacyCapabilities {
 
 fn validate_input(bytes: &[u8], extension: &str) -> Result<(), LegacyError> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
-        return Err(error("inputSize", "旧格式交换输入须为 1 字节至 64 MiB"));
+        return Err(error(
+            "inputSize",
+            UiMessage::error_api_legacy_office_input_size_range(),
+        ));
     }
     match extension {
         "doc" if !bytes.starts_with(OLE_MAGIC) => Err(error(
             "inputFormat",
-            "DOC 输入不是支持的 Word 二进制复合文档",
+            UiMessage::error_api_legacy_office_doc_input_invalid(),
         )),
-        "docx" if !bytes.starts_with(b"PK\x03\x04") => {
-            Err(error("inputFormat", "中间输入不是 DOCX ZIP 文件"))
-        }
+        "docx" if !bytes.starts_with(b"PK\x03\x04") => Err(error(
+            "inputFormat",
+            UiMessage::error_api_legacy_office_docx_intermediate_invalid(),
+        )),
         // Unknown WPS input may be retained as exact original bytes. This is
         // size validation only; no native WPS capability follows from it.
         _ => Ok(()),
@@ -511,7 +691,7 @@ fn validate_native_wps(bytes: &[u8]) -> Result<(), LegacyError> {
     {
         return Err(error(
             "wpsRenamedDocx",
-            "WPS 输出带有 Word OOXML 主文档标记；不能把 DOCX 改后缀冒充金山原生 WPS",
+            UiMessage::error_api_legacy_office_wps_renamed_docx(),
         ));
     }
     if bytes.starts_with(OLE_MAGIC) {
@@ -529,13 +709,13 @@ fn validate_native_wps(bytes: &[u8]) -> Result<(), LegacyError> {
         }) {
             return Err(error(
                 "wpsRenamedDoc",
-                "WPS 输出实际带有 WordDocument 二进制 DOC 流；不能改后缀冒充金山原生 WPS",
+                UiMessage::error_api_legacy_office_wps_renamed_doc(),
             ));
         }
     }
     Err(error(
         "nativeWpsUnverified",
-        "当前没有可证明金山原生 WPS 的签名／格式验证器；准确字节可以保留，但本方向不提供原生格式成功交付",
+        UiMessage::error_api_legacy_office_native_wps_unverified(),
     ))
 }
 
@@ -544,10 +724,22 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), LegacyError> {
         .write(true)
         .create_new(true)
         .open(path)
-        .map_err(|_| error("preservationFailed", "无法在本次独立目录保留准确文件"))?;
+        .map_err(|cause| {
+            error(
+                "preservationFailed",
+                UiMessage::error_api_legacy_office_preservation_create_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })?;
     file.write_all(bytes)
         .and_then(|_| file.sync_all())
-        .map_err(|_| error("preservationFailed", "本次准确文件未完整写入"))
+        .map_err(|cause| {
+            error(
+                "preservationFailed",
+                UiMessage::error_api_legacy_office_preservation_write_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })
 }
 fn artifact(path: PathBuf, bytes: Vec<u8>) -> Artifact {
     Artifact {
@@ -566,38 +758,52 @@ fn feature_reports() -> Vec<FeatureReport> {
     [
         (
             "body",
-            "外部软件转换正文；未据返回码认定文字、顺序及布局无损",
+            UiMessage::error_api_legacy_office_body_preservation_unverified(),
         ),
-        ("images", "图片大小、裁剪、锚定及嵌入保留须核对本次生成物"),
+        (
+            "images",
+            UiMessage::error_api_legacy_office_image_preservation_unverified(),
+        ),
         (
             "formulas",
-            "原生公式、可编辑性与对象类型未证明；不能以外观相同代替",
+            UiMessage::error_api_legacy_office_formula_preservation_unverified(),
         ),
-        ("comments", "批注范围、作者、时间及正文保留未证明"),
+        (
+            "comments",
+            UiMessage::error_api_legacy_office_comment_preservation_unverified(),
+        ),
         (
             "replies",
-            "回复线程关系未证明；不能把普通批注数量当作回复保留",
+            UiMessage::error_api_legacy_office_reply_preservation_unverified(),
         ),
-        ("resolvedState", "批注解决状态未证明，须在原生宿主核对"),
+        (
+            "resolvedState",
+            UiMessage::error_api_legacy_office_resolved_state_unverified(),
+        ),
         (
             "revisions",
-            "适配器未调用接受／拒绝修订；外部格式对待审语义的保留未证明，原件始终可取",
+            UiMessage::error_api_legacy_office_revision_preservation_unverified(),
         ),
     ]
     .into_iter()
-    .map(|(feature, message)| FeatureReport {
+    .map(|(feature, explanation)| FeatureReport {
         feature: feature.into(),
         before: "retainedInExactOriginal".into(),
         after: "unverified".into(),
-        message: message.into(),
+        description: explanation.into(),
     })
     .collect()
 }
 
 fn prepare_profile(profile: &Path) -> Result<(), LegacyError> {
     let user = profile.join("user");
-    fs::create_dir_all(&user)
-        .map_err(|_| error("profileFailed", "无法建立本次独立 Office profile"))?;
+    fs::create_dir_all(&user).map_err(|cause| {
+        error(
+            "profileFailed",
+            UiMessage::error_api_legacy_office_profile_create_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     // The paths and properties come from LibreOffice's installed registry
     // schema. They affect only this profile, never the user's Office settings.
     write_new(&user.join("registrymodifications.xcu"), br#"<?xml version="1.0" encoding="UTF-8"?>
@@ -609,21 +815,51 @@ fn prepare_profile(profile: &Path) -> Result<(), LegacyError> {
 </oor:items>"#)
 }
 
-fn log_excerpt(path: &Path) -> String {
-    let Ok(file) = fs::File::open(path) else {
-        return String::new();
-    };
+fn log_excerpt(path: &Path) -> Result<String, LegacyError> {
+    let file = fs::File::open(path).map_err(|cause| {
+        error(
+            "conversionDiagnosticRead",
+            UiMessage::error_api_legacy_office_diagnostic_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     let mut bytes = Vec::new();
-    let _ = file.take(16 * 1024).read_to_end(&mut bytes);
-    String::from_utf8_lossy(&bytes).into()
+    file.take(16 * 1024)
+        .read_to_end(&mut bytes)
+        .map_err(|cause| {
+            error(
+                "conversionDiagnosticRead",
+                UiMessage::error_api_legacy_office_diagnostic_read_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })?;
+    match std::str::from_utf8(&bytes) {
+        Ok(text) => Ok(text.into()),
+        // A bounded view can end inside the next scalar. Retain an exact valid
+        // prefix; never replace bytes with U+FFFD and call that original text.
+        Err(cause) if cause.error_len().is_none() => {
+            Ok(std::str::from_utf8(&bytes[..cause.valid_up_to()])
+                .expect("validated UTF-8 prefix")
+                .into())
+        }
+        Err(_) => Err(error(
+            "conversionDiagnosticEncoding",
+            UiMessage::error_api_legacy_office_diagnostic_not_utf8(),
+        )),
+    }
 }
 
 fn save_receipt(result: &ConversionResult) -> Result<(), LegacyError> {
     let receipt = result.workspace.join("result.json");
     write_new(
         &receipt,
-        &serde_json::to_vec_pretty(result)
-            .map_err(|_| error("receiptFailed", "转换状态无法编码"))?,
+        &serde_json::to_vec_pretty(result).map_err(|cause| {
+            error(
+                "receiptFailed",
+                UiMessage::error_api_legacy_office_conversion_receipt_encoding_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Json, cause.to_string())
+        })?,
     )
 }
 
@@ -631,7 +867,7 @@ enum ProcessOutcome {
     Exited(bool),
     Cancelled,
     TimedOut,
-    Unknown,
+    Unknown(Vec<RawDiagnostic>),
 }
 async fn run(
     command: &mut Command,
@@ -642,11 +878,14 @@ async fn run(
     #[cfg(windows)]
     let guard = match job::guard(&child) {
         Ok(guard) => guard,
-        Err(_) => {
+        Err(cause) => {
             let _ = child.kill().await;
             // The launcher existed before Job assignment failed; do not
             // claim that no descendant could have started.
-            return Ok(ProcessOutcome::Unknown);
+            return Ok(ProcessOutcome::Unknown(vec![RawDiagnostic {
+                origin: DiagnosticOrigin::Os,
+                text: cause.to_string(),
+            }]));
         }
     };
     let deadline = tokio::time::Instant::now() + timeout;
@@ -660,18 +899,34 @@ async fn run(
         match child.try_wait() {
             Ok(Some(status)) => break ProcessOutcome::Exited(status.success()),
             Ok(None) => tokio::time::sleep(Duration::from_millis(75)).await,
-            Err(_) => break ProcessOutcome::Unknown,
+            Err(cause) => {
+                break ProcessOutcome::Unknown(vec![RawDiagnostic {
+                    origin: DiagnosticOrigin::Os,
+                    text: cause.to_string(),
+                }]);
+            }
         }
     };
     if !matches!(outcome, ProcessOutcome::Exited(_)) {
         #[cfg(windows)]
         drop(guard); // Only this owned Job and its descendants are terminated.
         let stopped = tokio::time::timeout(Duration::from_secs(5), child.kill()).await;
-        if !matches!(stopped, Ok(Ok(()))) && !matches!(child.try_wait(), Ok(Some(_))) {
-            return Ok(ProcessOutcome::Unknown);
+        if !matches!(&stopped, Ok(Ok(()))) && !matches!(child.try_wait(), Ok(Some(_))) {
+            let diagnostics = match stopped {
+                Ok(Err(cause)) => vec![RawDiagnostic {
+                    origin: DiagnosticOrigin::Os,
+                    text: cause.to_string(),
+                }],
+                Err(cause) => vec![RawDiagnostic {
+                    origin: DiagnosticOrigin::Dependency,
+                    text: cause.to_string(),
+                }],
+                Ok(Ok(())) => Vec::new(),
+            };
+            return Ok(ProcessOutcome::Unknown(diagnostics));
         }
         #[cfg(not(windows))]
-        return Ok(ProcessOutcome::Unknown); // Descendant ownership is not established on other OSes.
+        return Ok(ProcessOutcome::Unknown(Vec::new())); // Descendant ownership is not established on other OSes.
     }
     Ok(outcome)
 }
@@ -714,35 +969,48 @@ fn fingerprint(request: &ConversionRequest) -> String {
     format!("{:x}", Sha256::digest(contract.to_string().as_bytes()))
 }
 fn read_bounded<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, LegacyError> {
-    let meta = fs::symlink_metadata(path).map_err(|_| {
+    let meta = fs::symlink_metadata(path).map_err(|cause| {
         error(
             "conversionUnknown",
-            "原请求记录不完整；保留原操作且不自动重新执行",
+            UiMessage::error_api_legacy_office_original_record_incomplete(),
         )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
     })?;
     if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > 128 * 1024 {
         return Err(error(
             "conversionUnknown",
-            "原请求记录无效或超过预算；不自动重新执行",
+            UiMessage::error_api_legacy_office_original_record_invalid(),
         ));
     }
-    let bytes = fs::read(path)
-        .map_err(|_| error("conversionUnknown", "无法读取原请求记录；不自动重新执行"))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|_| error("conversionUnknown", "原请求记录未完整写入；不自动重新执行"))
+    let bytes = fs::read(path).map_err(|cause| {
+        error(
+            "conversionUnknown",
+            UiMessage::error_api_legacy_office_original_record_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
+    serde_json::from_slice(&bytes).map_err(|cause| {
+        error(
+            "conversionUnknown",
+            UiMessage::error_api_legacy_office_original_record_decode_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Json, cause.to_string())
+    })
 }
 fn restore_artifact(artifact: &mut Artifact, root: &Path) -> Result<(), LegacyError> {
-    let path = fs::canonicalize(&artifact.retained_path).map_err(|_| {
+    let path = fs::canonicalize(&artifact.retained_path).map_err(|cause| {
         error(
             "conversionUnknown",
-            "原转换工件不可读取；不重新转换或交付新内容",
+            UiMessage::error_api_legacy_office_original_artifact_unavailable(),
         )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
     })?;
-    let meta = fs::symlink_metadata(&artifact.retained_path).map_err(|_| {
+    let meta = fs::symlink_metadata(&artifact.retained_path).map_err(|cause| {
         error(
             "conversionUnknown",
-            "原转换工件不可读取；不重新转换或交付新内容",
+            UiMessage::error_api_legacy_office_original_artifact_unavailable(),
         )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
     })?;
     if !path.starts_with(root)
         || !meta.is_file()
@@ -756,16 +1024,21 @@ fn restore_artifact(artifact: &mut Artifact, root: &Path) -> Result<(), LegacyEr
     {
         return Err(error(
             "conversionUnknown",
-            "原转换工件不在原操作边界或长度已变；停止恢复且不重新转换",
+            UiMessage::error_api_legacy_office_original_artifact_boundary_changed(),
         ));
     }
-    let bytes = fs::read(&path)
-        .map_err(|_| error("conversionUnknown", "原转换工件读取失败；不重新转换"))?;
+    let bytes = fs::read(&path).map_err(|cause| {
+        error(
+            "conversionUnknown",
+            UiMessage::error_api_legacy_office_original_artifact_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     if format!("{:x}", Sha256::digest(&bytes)) != artifact.sha256 || bytes.len() != artifact.length
     {
         return Err(error(
             "conversionUnknown",
-            "原转换工件内容已变；不交付新内容且不重新转换",
+            UiMessage::error_api_legacy_office_original_artifact_changed(),
         ));
     }
     artifact.bytes = bytes;
@@ -784,8 +1057,8 @@ fn pending_once(
         request_id: request_id.into(),
         status: "unknown".into(),
         code: "conversionUnknown".into(),
-        message: "原请求已登记但没有完整完成回执；准确输入仍保留，请查询原请求，不自动重新执行"
-            .into(),
+        description: UiMessage::error_api_legacy_office_original_conversion_pending().into(),
+        details: None,
         backend: request.backend.clone(),
         backend_version: None,
         direction: request.direction,
@@ -798,7 +1071,6 @@ fn pending_once(
         generated: None,
         features: feature_reports(),
         workspace: workspace.into(),
-        diagnostic: String::new(),
     })
 }
 
@@ -837,17 +1109,34 @@ async fn convert_once_mode(
     cancel: Arc<AtomicBool>,
     allow_start: bool,
 ) -> Result<ConversionResult, LegacyError> {
-    let id = uuid::Uuid::parse_str(request_id)
-        .map_err(|_| error("requestId", "旧格式转换需要规范 UUID 操作标识"))?;
+    let id = uuid::Uuid::parse_str(request_id).map_err(|cause| {
+        error(
+            "requestId",
+            UiMessage::error_api_legacy_office_canonical_operation_required(),
+        )
+        .diagnostic(DiagnosticOrigin::Dependency, cause.to_string())
+    })?;
     if id.to_string() != request_id || id.get_version() != Some(uuid::Version::Random) {
-        return Err(error("requestId", "旧格式转换需要规范 UUIDv4 操作标识"));
+        return Err(error(
+            "requestId",
+            UiMessage::error_api_legacy_office_canonical_v4_operation_required(),
+        ));
     }
     validate_input(&request.bytes, request.direction.extensions().0)?;
     if !work_root.is_absolute() {
-        return Err(error("workRoot", "转换恢复目录须为应用拥有的绝对路径"));
+        return Err(error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_recovery_root_absolute_required(),
+        ));
     }
     if allow_start {
-        fs::create_dir_all(work_root).map_err(|_| error("workRoot", "无法建立转换恢复目录"))?;
+        fs::create_dir_all(work_root).map_err(|cause| {
+            error(
+                "workRoot",
+                UiMessage::error_api_legacy_office_recovery_root_create_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })?;
     }
     if let Ok(metadata) = fs::symlink_metadata(work_root) {
         let mut redirected = metadata.file_type().is_symlink();
@@ -857,42 +1146,61 @@ async fn convert_once_mode(
             redirected |= metadata.file_attributes() & 0x400 != 0;
         }
         if !metadata.is_dir() || redirected {
-            return Err(error("workRoot", "转换恢复目录不是独立普通目录"));
+            return Err(error(
+                "workRoot",
+                UiMessage::error_api_legacy_office_recovery_root_invalid(),
+            ));
         }
     }
-    let root = fs::canonicalize(work_root).map_err(|_| {
+    let root = fs::canonicalize(work_root).map_err(|cause| {
         error(
             if allow_start {
                 "workRoot"
             } else {
                 "conversionNotRegistered"
             },
-            "无法确认原转换恢复目录；未启动外部进程",
+            UiMessage::error_api_legacy_office_recovery_root_unavailable(),
         )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
     })?;
     let workspace = root.join(request_id);
     let fresh = if !allow_start {
-        fs::symlink_metadata(&workspace).map_err(|_| {
+        fs::symlink_metadata(&workspace).map_err(|cause| {
             error(
                 "conversionNotRegistered",
-                "原外部转换尚无可读取的操作记录；未启动外部进程",
+                UiMessage::error_api_legacy_office_original_request_not_registered(),
             )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
         })?;
         false
     } else {
         match fs::create_dir(&workspace) {
             Ok(()) => true,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
-            Err(_) => return Err(error("workRoot", "无法分配原操作的独立恢复目录")),
+            Err(cause) => {
+                return Err(error(
+                    "workRoot",
+                    UiMessage::error_api_legacy_office_operation_recovery_create_failed(),
+                )
+                .diagnostic(DiagnosticOrigin::Os, cause.to_string()));
+            }
         }
     };
-    let meta = fs::symlink_metadata(&workspace)
-        .map_err(|_| error("workRoot", "原操作恢复目录无法读取"))?;
+    let meta = fs::symlink_metadata(&workspace).map_err(|cause| {
+        error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_operation_recovery_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     if !meta.is_dir()
         || meta.file_type().is_symlink()
         || fs::canonicalize(&workspace).ok().as_ref() != Some(&workspace)
     {
-        return Err(error("workRoot", "原操作恢复目录边界发生变化"));
+        return Err(error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_operation_recovery_boundary_changed(),
+        ));
     }
     let expected = fingerprint(&request);
     if !fresh {
@@ -907,7 +1215,7 @@ async fn convert_once_mode(
         {
             return Err(error(
                 "requestIdReused",
-                "原操作标识已绑定另一份准确输入／后端／方向；拒绝覆盖或重新执行",
+                UiMessage::error_api_legacy_office_operation_input_conflict(),
             ));
         }
         let completed_path = workspace.join("completed.json");
@@ -927,26 +1235,28 @@ async fn convert_once_mode(
         {
             return Err(error(
                 "conversionUnknown",
-                "原操作回执与准确输入不一致；不自动重新执行",
+                UiMessage::error_api_legacy_office_original_receipt_input_mismatch(),
             ));
         }
-        let restored_workspace = fs::canonicalize(&completed.result.workspace).map_err(|_| {
-            error(
-                "conversionUnknown",
-                "原转换工作目录不可读取；不自动重新执行",
-            )
-        })?;
+        let restored_workspace =
+            fs::canonicalize(&completed.result.workspace).map_err(|cause| {
+                error(
+                    "conversionUnknown",
+                    UiMessage::error_api_legacy_office_original_workspace_unavailable(),
+                )
+                .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+            })?;
         if !restored_workspace.starts_with(&workspace) {
             return Err(error(
                 "conversionUnknown",
-                "原转换工作目录超出操作边界；停止恢复",
+                UiMessage::error_api_legacy_office_original_workspace_outside_boundary(),
             ));
         }
         restore_artifact(&mut completed.result.original, &workspace)?;
         if completed.result.original.bytes != request.bytes {
             return Err(error(
                 "conversionUnknown",
-                "原件与准确输入不一致；停止恢复且不重新执行",
+                UiMessage::error_api_legacy_office_original_bytes_mismatch(),
             ));
         }
         if let Some(intermediate) = &mut completed.result.intermediate_docx {
@@ -958,7 +1268,7 @@ async fn convert_once_mode(
         if (completed.result.status == "succeeded") != completed.result.generated.is_some() {
             return Err(error(
                 "conversionUnknown",
-                "原操作成功状态和准确工件不一致；停止交付",
+                UiMessage::error_api_legacy_office_original_success_artifact_mismatch(),
             ));
         }
         if completed.result.status == "succeeded" && request.direction.involves_native_wps() {
@@ -989,7 +1299,13 @@ async fn convert_once_mode(
     };
     write_new(
         &workspace.join("request.json"),
-        &serde_json::to_vec(&manifest).map_err(|_| error("receiptFailed", "原操作输入无法编码"))?,
+        &serde_json::to_vec(&manifest).map_err(|cause| {
+            error(
+                "receiptFailed",
+                UiMessage::error_api_legacy_office_original_input_encoding_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Json, cause.to_string())
+        })?,
     )?;
     write_new(
         &workspace.join("started.json"),
@@ -1002,10 +1318,14 @@ async fn convert_once_mode(
             Ok(result) => result,
             Err(e) => {
                 let mut result = pending_once(&request, request_id, &workspace)?;
-                result.message = format!(
-                    "本次转换没有完整完成回执（{}）；保留原操作且不重新执行",
-                    e.code
+                result.description = ErrorDescription::new(
+                    UiMessage::error_api_legacy_office_completion_incomplete(
+                        weftext_messages::params::ErrorApiLegacyOfficeCompletionIncomplete {
+                            code: e.code.clone(),
+                        },
+                    ),
                 );
+                result.caused_by(e);
                 result
             }
         };
@@ -1019,18 +1339,20 @@ async fn convert_once_mode(
         &serde_json::to_vec(&serde_json::json!({
             "schemaVersion": 1, "fingerprint": expected, "result": &result,
         }))
-        .map_err(|_| {
+        .map_err(|cause| {
             error(
                 "conversionUnknown",
-                "原操作完成回执无法编码；不自动重新执行",
+                UiMessage::error_api_legacy_office_completion_encoding_failed(),
             )
+            .diagnostic(DiagnosticOrigin::Json, cause.to_string())
         })?,
     )
-    .map_err(|_| {
+    .map_err(|cause| {
         error(
             "conversionUnknown",
-            "原操作完成回执没有完整持久化；不自动重新执行",
+            UiMessage::error_api_legacy_office_completion_persistence_failed(),
         )
+        .caused_by(cause)
     })?;
     Ok(result)
 }
@@ -1055,14 +1377,35 @@ async fn convert_in_new_workspace(
     let (input_ext, output_ext) = request.direction.extensions();
     validate_input(&request.bytes, input_ext)?;
     if !work_root.is_absolute() {
-        return Err(error("workRoot", "外部转换工作目录须为应用拥有的绝对路径"));
+        return Err(error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_work_root_absolute_required(),
+        ));
     }
-    fs::create_dir_all(work_root).map_err(|_| error("workRoot", "无法建立外部转换工作目录"))?;
+    fs::create_dir_all(work_root).map_err(|cause| {
+        error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_work_root_create_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     let request_id = uuid::Uuid::new_v4().to_string();
     let workspace = fs::canonicalize(work_root)
-        .map_err(|_| error("workRoot", "无法确认转换工作目录"))?
+        .map_err(|cause| {
+            error(
+                "workRoot",
+                UiMessage::error_api_legacy_office_work_root_qualification_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })?
         .join(fixed_name.unwrap_or(&request_id));
-    fs::create_dir(&workspace).map_err(|_| error("workRoot", "无法分配本次独立转换目录"))?;
+    fs::create_dir(&workspace).map_err(|cause| {
+        error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_independent_workspace_create_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     let original_path = workspace.join(format!("original.{input_ext}"));
     write_new(&original_path, &request.bytes)?;
     let original = artifact(original_path.clone(), request.bytes);
@@ -1070,7 +1413,10 @@ async fn convert_in_new_workspace(
         request_id,
         status: "unavailable".into(),
         code: "backendUnavailable".into(),
-        message: String::new(),
+        description: ErrorDescription::new(
+            UiMessage::error_api_legacy_office_detected_backend_required(),
+        ),
+        details: None,
         backend: request.backend.clone(),
         backend_version: None,
         direction: request.direction,
@@ -1083,23 +1429,30 @@ async fn convert_in_new_workspace(
         generated: None,
         features: feature_reports(),
         workspace: workspace.clone(),
-        diagnostic: String::new(),
     };
     if cancel.load(Ordering::Acquire) {
         result.status = "cancelled".into();
         result.code = "cancelledBeforeStart".into();
-        result.message = "已取消；准确原件已保留，未启动外部转换".into();
+        result.description.explanation =
+            UiMessage::error_api_legacy_office_cancelled_before_start();
         save_receipt(&result)?;
         return Ok(result);
     }
     if let Err(failure) = execution_path_budget(&workspace, &request.backend) {
         result.code = failure.code;
-        result.message = failure.message;
+        result.description = failure.description;
+        result.details = failure.details;
         save_receipt(&result)?;
         return Ok(result);
     }
     let output_dir = workspace.join("generated");
-    fs::create_dir(&output_dir).map_err(|_| error("workRoot", "无法建立独立输出目录"))?;
+    fs::create_dir(&output_dir).map_err(|cause| {
+        error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_output_directory_create_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     let output_path = output_dir.join(format!("original.{output_ext}"));
     let mut process = match request.backend.as_str() {
         "libreoffice" => {
@@ -1107,24 +1460,27 @@ async fn convert_in_new_workspace(
                 request.direction,
                 Direction::DocToDocx | Direction::DocxToDoc
             ) {
-                result.message = "LibreOffice 内置适配不支持金山 .wps；不使用 Microsoft Works 过滤器或更改扩展名".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_libre_office_native_wps_unsupported();
                 save_receipt(&result)?;
                 return Ok(result);
             }
             let Some(executable) = libreoffice() else {
-                result.message = "本机未找到 LibreOffice；普通 DOCX 功能仍可使用".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_libre_office_missing();
                 save_receipt(&result)?;
                 return Ok(result);
             };
             result.backend_version = office_version(&executable).await;
             if result.backend_version.is_none() {
-                result.message = "本机 LibreOffice 版本探测失败；没有启动转换".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_libre_office_version_unavailable();
                 save_receipt(&result)?;
                 return Ok(result);
             }
             if !writer_filters_present(&executable) {
-                result.message =
-                    "发现 LibreOffice 版本但没有确认 DOC／DOCX Writer 过滤器；此方向不可用".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_writer_filters_unavailable();
                 save_receipt(&result)?;
                 return Ok(result);
             }
@@ -1140,18 +1496,34 @@ async fn convert_in_new_workspace(
             {
                 for feature in &mut result.features {
                     match feature.feature.as_str() {
-                        "comments" => feature.message = "此版本 DOC 链路实测批注时间精度降到分钟；本次范围、作者及正文保留仍须核对".into(),
-                        "replies" => feature.message = "此版本 DOC 链路实测回复退为独立普通批注；不承诺回复线程保留，原件中的关系仍可取".into(),
-                        "resolvedState" => feature.message = "此版本 DOC 链路实测扩展批注线程部件丢失；解决状态未证明保留，须核对原件".into(),
-                        "revisions" => feature.message = "此版本 DOC 链路实测待审插入／删除及作者保留但时间精度降到分钟；适配器未调用接受／拒绝，本次其余待审语义仍须核对".into(),
+                        "comments" => feature.description =
+                            UiMessage::error_api_legacy_office_observed_comment_minute_precision()
+                                .into(),
+                        "replies" => {
+                            feature.description =
+                                UiMessage::error_api_legacy_office_observed_replies_flattened()
+                                    .into()
+                        }
+                        "resolvedState" => {
+                            feature.description =
+                                UiMessage::error_api_legacy_office_observed_resolved_state_lost()
+                                    .into()
+                        }
+                        "revisions" => feature.description =
+                            UiMessage::error_api_legacy_office_observed_revision_minute_precision()
+                                .into(),
                         _ => {}
                     }
                 }
             }
             let profile = workspace.join("profile");
             prepare_profile(&profile)?;
-            let url = url::Url::from_directory_path(&profile)
-                .map_err(|_| error("workRoot", "独立 Office profile 地址无效"))?;
+            let url = url::Url::from_directory_path(&profile).map_err(|_| {
+                error(
+                    "workRoot",
+                    UiMessage::error_api_legacy_office_profile_url_invalid(),
+                )
+            })?;
             let mut process = command(&executable);
             process
                 .arg(format!("-env:UserInstallation={url}"))
@@ -1176,20 +1548,23 @@ async fn convert_in_new_workspace(
         "configured" => {
             if request.direction.involves_native_wps() {
                 result.code = "nativeWpsUnverified".into();
-                result.message = "当前没有可证明金山原生 WPS 的格式验证器；未启动配置适配器，不能以声明或改后缀认定此方向可用".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_configured_wps_not_started();
                 save_receipt(&result)?;
                 return Ok(result);
             }
             let config = match configured_adapter() {
                 Ok(Some(config)) if config.directions.contains(&request.direction) => config,
                 Ok(_) => {
-                    result.message = "本机没有配置此方向的原生旧格式转换器".into();
+                    result.description.explanation =
+                        UiMessage::error_api_legacy_office_native_converter_not_configured();
                     save_receipt(&result)?;
                     return Ok(result);
                 }
                 Err(e) => {
                     result.code = e.code;
-                    result.message = e.message;
+                    result.description = e.description;
+                    result.details = e.details;
                     save_receipt(&result)?;
                     return Ok(result);
                 }
@@ -1210,7 +1585,8 @@ async fn convert_in_new_workspace(
         }
         _ => {
             result.code = "backendUnsupported".into();
-            result.message = "请选择已探测的外部软件后端".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_detected_backend_required();
             save_receipt(&result)?;
             return Ok(result);
         }
@@ -1220,16 +1596,25 @@ async fn convert_in_new_workspace(
         .write(true)
         .create_new(true)
         .open(&log_path)
-        .map_err(|_| error("workRoot", "无法建立本次转换日志"))?;
-    let stderr = log
-        .try_clone()
-        .map_err(|_| error("workRoot", "无法建立转换诊断输出"))?;
+        .map_err(|cause| {
+            error(
+                "workRoot",
+                UiMessage::error_api_legacy_office_conversion_log_create_failed(),
+            )
+            .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+        })?;
+    let stderr = log.try_clone().map_err(|cause| {
+        error(
+            "workRoot",
+            UiMessage::error_api_legacy_office_conversion_diagnostic_create_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     process
         .current_dir(&workspace)
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(stderr));
     let outcome = run(&mut process, &cancel, timeout).await;
-    result.diagnostic = log_excerpt(&log_path);
     let completed = match outcome {
         Ok(ProcessOutcome::Exited(true)) if !cancel.load(Ordering::Acquire) => true,
         Ok(ProcessOutcome::Cancelled) | Ok(ProcessOutcome::Exited(_))
@@ -1237,40 +1622,60 @@ async fn convert_in_new_workspace(
         {
             result.status = "cancelled".into();
             result.code = "conversionCancelled".into();
-            result.message = "已停止本次转换；原件已保留，迟到输出未作为成功产物交付".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_conversion_cancelled();
             false
         }
         Ok(ProcessOutcome::TimedOut) => {
             result.status = "failed".into();
             result.code = "conversionTimeout".into();
-            result.message = "本次独立转换超时；原件及工作目录保留，未交付未确认产物".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_conversion_timeout();
             false
         }
-        Ok(ProcessOutcome::Unknown) => {
+        Ok(ProcessOutcome::Unknown(diagnostics)) => {
             result.status = "unknown".into();
             result.code = "conversionUnknown".into();
-            result.message = "无法确认原转换进程结果；保留原请求与工作目录，不自动重新执行".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_conversion_process_unknown();
+            result.description.diagnostics.extend(diagnostics);
             false
         }
         Ok(ProcessOutcome::Exited(false)) | Ok(ProcessOutcome::Cancelled) => {
             result.status = "failed".into();
             result.code = "conversionFailed".into();
-            result.message = "外部软件未完成本次转换；准确原件已保留".into();
+            result.description.explanation = UiMessage::error_api_legacy_office_conversion_failed();
             false
         }
         Ok(ProcessOutcome::Exited(true)) => {
             result.status = "cancelled".into();
             result.code = "conversionCancelled".into();
-            result.message = "转换完成与取消请求相交；保留原件与工作目录，没有交付迟到结果".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_late_output_withheld();
             false
         }
-        Err(_) => {
+        Err(cause) => {
             result.status = "failed".into();
             result.code = "conversionStartFailed".into();
-            result.message = "无法安全启动／隔离外部转换；准确原件已保留".into();
+            result.description.explanation =
+                UiMessage::error_api_legacy_office_conversion_start_failed();
+            result.description = result
+                .description
+                .diagnostic(DiagnosticOrigin::Os, cause.to_string());
             false
         }
     };
+    match log_excerpt(&log_path) {
+        Ok(tool_diagnostic) if !tool_diagnostic.is_empty() => {
+            result.description = result
+                .description
+                .diagnostic(DiagnosticOrigin::ExternalTool, tool_diagnostic);
+        }
+        Ok(_) => {}
+        Err(cause) => {
+            result.caused_by(cause);
+        }
+    }
     // A configured tool is not allowed to replace the preserved preimage.
     // Preserve a fresh copy if it touched its input and reject its output.
     if fs::read(&original_path).ok().as_deref() != Some(result.original.bytes.as_slice()) {
@@ -1282,7 +1687,8 @@ async fn convert_in_new_workspace(
         }
         result.status = "failed".into();
         result.code = "converterChangedInput".into();
-        result.message = "外部转换器改写了输入副本；准确原件已另行保留，本次输出没有交付".into();
+        result.description.explanation =
+            UiMessage::error_api_legacy_office_converter_changed_input();
         save_receipt(&result)?;
         return Ok(result);
     }
@@ -1296,12 +1702,16 @@ async fn convert_in_new_workspace(
                 result.generated = Some(generated);
                 result.status = "succeeded".into();
                 result.code = "generatedWithUnverifiedLosses".into();
-                result.message = "已生成并冻结准确文件；逐项损失尚未证明，确认后才可继续导入／交付。原件与中间 DOCX 已保留".into();
+                result.description.explanation =
+                    UiMessage::error_api_legacy_office_generated_with_unverified_losses();
             }
             Err(e) => {
                 result.status = "failed".into();
                 result.code = e.code;
-                result.message = e.message;
+                let prior_diagnostics = std::mem::take(&mut result.description.diagnostics);
+                result.description = e.description;
+                result.details = e.details;
+                result.description.diagnostics.extend(prior_diagnostics);
             }
         }
     }
@@ -1310,39 +1720,59 @@ async fn convert_in_new_workspace(
 }
 
 fn read_generated(path: &Path, extension: &str, workspace: &Path) -> Result<Vec<u8>, LegacyError> {
-    let meta = fs::symlink_metadata(path).map_err(|_| {
+    let meta = fs::symlink_metadata(path).map_err(|cause| {
         error(
             "outputMissing",
-            "外部程序没有产生本次预期文件；未把返回码当作成功",
+            UiMessage::error_api_legacy_office_output_missing(),
         )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
     })?;
     if !meta.is_file()
         || meta.file_type().is_symlink()
         || meta.len() == 0
         || meta.len() > MAX_BYTES as u64
     {
-        return Err(error("outputInvalid", "本次输出不是有界普通文件；未交付"));
+        return Err(error(
+            "outputInvalid",
+            UiMessage::error_api_legacy_office_output_file_invalid(),
+        ));
     }
-    let resolved = fs::canonicalize(path)
-        .map_err(|_| error("outputInvalid", "无法确认本次输出的独立目录边界"))?;
-    let workspace = fs::canonicalize(workspace)
-        .map_err(|_| error("outputInvalid", "本次转换工作目录无法确认"))?;
+    let resolved = fs::canonicalize(path).map_err(|cause| {
+        error(
+            "outputInvalid",
+            UiMessage::error_api_legacy_office_output_boundary_unavailable(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
+    let workspace = fs::canonicalize(workspace).map_err(|cause| {
+        error(
+            "outputInvalid",
+            UiMessage::error_api_legacy_office_output_workspace_unavailable(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     if !resolved.starts_with(&workspace) {
         return Err(error(
             "outputInvalid",
-            "本次输出超出原操作的独立工作目录；未交付",
+            UiMessage::error_api_legacy_office_output_outside_workspace(),
         ));
     }
-    let bytes = fs::read(path)
-        .map_err(|_| error("outputReadFailed", "无法冻结本次准确输出；工作目录仍保留"))?;
+    let bytes = fs::read(path).map_err(|cause| {
+        error(
+            "outputReadFailed",
+            UiMessage::error_api_legacy_office_output_read_failed(),
+        )
+        .diagnostic(DiagnosticOrigin::Os, cause.to_string())
+    })?;
     if extension == "wps" {
         validate_native_wps(&bytes)?;
     }
-    validate_input(&bytes, extension).map_err(|_| {
+    validate_input(&bytes, extension).map_err(|cause| {
         error(
             "outputFormat",
-            "本次输出内容与声明格式不一致；不能仅改扩展名",
+            UiMessage::error_api_legacy_office_output_format_mismatch(),
         )
+        .caused_by(cause)
     })?;
     Ok(bytes)
 }
@@ -1395,6 +1825,182 @@ mod job {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tool_diagnostic_view_retains_exact_utf8_prefix_and_preserves_non_utf8_originals() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("converter.log");
+        let text = "external tool 原件😀\r\n";
+        fs::write(&path, text.as_bytes()).unwrap();
+        assert_eq!(log_excerpt(&path).unwrap(), text);
+        let clipped = "x".repeat(16 * 1024 - 2) + "😀";
+        fs::write(&path, clipped.as_bytes()).unwrap();
+        assert_eq!(log_excerpt(&path).unwrap(), "x".repeat(16 * 1024 - 2));
+        assert_eq!(fs::read(&path).unwrap(), clipped.as_bytes());
+        fs::write(&path, [0xff, 0xfe, 0x01]).unwrap();
+        let error = log_excerpt(&path).unwrap_err();
+        assert_eq!(error.code, "conversionDiagnosticEncoding");
+        assert_eq!(
+            error.description.explanation.key(),
+            "error.api.legacyOffice.diagnosticNotUtf8"
+        );
+        assert_eq!(fs::read(&path).unwrap(), [0xff, 0xfe, 0x01]);
+    }
+
+    #[tokio::test]
+    async fn typed_conversion_receipt_keeps_original_diagnostics_but_public_metadata_never_delivers_them()
+     {
+        let temp = tempfile::tempdir().unwrap();
+        let mut result = convert(
+            ConversionRequest {
+                backend: "unsupported-owned-test-backend".into(),
+                direction: Direction::DocxToDoc,
+                bytes: b"PK\x03\x04owned original".to_vec(),
+            },
+            temp.path(),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap();
+        let original = result.original.bytes.clone();
+        result.description =
+            ErrorDescription::new(UiMessage::error_api_legacy_office_completion_incomplete(
+                weftext_messages::params::ErrorApiLegacyOfficeCompletionIncomplete {
+                    code: "outputMissing".into(),
+                },
+            ))
+            .diagnostic(
+                DiagnosticOrigin::ExternalTool,
+                "D:/private/tool/output unmodified 原始😀",
+            );
+        result.caused_by(error(
+            "outputMissing",
+            ErrorDescription::new(UiMessage::error_api_legacy_office_output_missing()).diagnostic(
+                DiagnosticOrigin::Os,
+                "private Windows diagnostic (os error 2)",
+            ),
+        ));
+        result.features[0].description = result.features[0]
+            .description
+            .clone()
+            .diagnostic(DiagnosticOrigin::ExternalTool, "private feature diagnostic");
+        let durable_bytes = serde_json::to_vec(&result).unwrap();
+        let restored: ConversionResult = serde_json::from_slice(&durable_bytes).unwrap();
+        assert_eq!(restored.description, result.description);
+        assert_eq!(
+            restored.features[0].description,
+            result.features[0].description
+        );
+        let public = restored.metadata();
+        assert!(public["message"].is_null());
+        assert!(public["reason"].is_null());
+        assert!(public["diagnostic"].is_null());
+        assert_eq!(public["diagnostics"], serde_json::json!([]));
+        assert_eq!(
+            public["explanation"]["key"],
+            "error.api.legacyOffice.completionIncomplete"
+        );
+        assert_eq!(public["causes"][0]["code"], "outputMissing");
+        assert_eq!(public["causes"][0]["diagnostics"], serde_json::json!([]));
+        assert_eq!(public["features"][0]["diagnostics"], serde_json::json!([]));
+        assert_eq!(public["losses"][0]["diagnostics"], serde_json::json!([]));
+        assert!(!public.to_string().contains("private"));
+        assert_eq!(
+            restored.public_description().explanation,
+            result.description.explanation
+        );
+        assert_eq!(fs::read(&result.original.retained_path).unwrap(), original);
+    }
+
+    #[test]
+    fn full_cause_boundary_preserves_original_chain_and_all_parallel_details() {
+        let mut original =
+            ErrorDescription::new(UiMessage::error_api_legacy_office_output_missing())
+                .diagnostic(DiagnosticOrigin::ExternalTool, "private original tool text");
+        for index in 0..weftext_messages::ErrorCauses::MAX {
+            original = original
+                .try_caused_by(
+                    format!("original-{index}"),
+                    ErrorDescription::new(UiMessage::error_api_legacy_office_output_missing())
+                        .diagnostic(DiagnosticOrigin::Os, format!("private cause {index}")),
+                )
+                .unwrap();
+        }
+        let parallel = (0..48)
+            .map(|index| {
+                ErrorDescription::new(UiMessage::error_api_legacy_office_output_missing())
+                    .diagnostic(
+                        DiagnosticOrigin::Dependency,
+                        format!("private parallel {index}"),
+                    )
+            })
+            .collect::<Vec<_>>();
+        let original_json = serde_json::to_value(&original).unwrap();
+        let parallel_json = serde_json::to_value(&parallel).unwrap();
+        let cause = LegacyError {
+            code: "originalFailure".into(),
+            description: original,
+            details: Some(CoreErrorDetails::Aggregate {
+                groups: vec![ErrorDetailGroup::Data {
+                    classification: weftext_data::DataErrorKind::Invalid,
+                    diagnostics: parallel,
+                }],
+            }),
+        };
+        let combined = error(
+            "receiptFailed",
+            UiMessage::error_api_legacy_office_output_missing(),
+        )
+        .caused_by(cause);
+        assert_eq!(combined.description.causes.as_slice().len(), 1);
+        assert_eq!(
+            combined.description.causes.as_slice()[0].code,
+            "originalFailure"
+        );
+        let retained = serde_json::to_vec(&combined).unwrap();
+        let details: CoreErrorDetails = serde_json::from_value(
+            serde_json::to_value(combined.details.clone().unwrap()).unwrap(),
+        )
+        .unwrap();
+        let CoreErrorDetails::Aggregate { groups } = &details;
+        assert_eq!(groups.len(), 2);
+        let ErrorDetailGroup::Data {
+            classification,
+            diagnostics,
+        } = &groups[0]
+        else {
+            panic!("complete original Data group required")
+        };
+        assert!(matches!(
+            classification,
+            weftext_data::DataErrorKind::Invalid
+        ));
+        assert_eq!(serde_json::to_value(diagnostics).unwrap(), parallel_json);
+        let ErrorDetailGroup::Product { code, diagnostics } = &groups[1] else {
+            panic!("overflow retains the original typed cause")
+        };
+        assert_eq!(code.as_deref(), Some("originalFailure"));
+        assert_eq!(
+            serde_json::to_value(&diagnostics[0]).unwrap(),
+            original_json
+        );
+        let public = public_details(details);
+        let text = serde_json::to_string(&public).unwrap();
+        assert!(!text.contains("private"));
+        let CoreErrorDetails::Aggregate { groups } = public;
+        let ErrorDetailGroup::Data { diagnostics, .. } = &groups[0] else {
+            unreachable!()
+        };
+        assert_eq!(diagnostics.len(), 48);
+        let ErrorDetailGroup::Product { diagnostics, .. } = &groups[1] else {
+            unreachable!()
+        };
+        assert_eq!(
+            diagnostics[0].causes.as_slice().len(),
+            weftext_messages::ErrorCauses::MAX
+        );
+        assert_eq!(serde_json::to_vec(&combined).unwrap(), retained);
+    }
 
     #[test]
     fn flat_scoped_ids_preserve_actor_epoch_library_purpose_and_original_operation_isolation() {
@@ -1609,7 +2215,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result.status, "unavailable");
-        assert!(result.message.contains("Microsoft Works"));
+        assert_eq!(
+            result.description.explanation.key(),
+            "error.api.legacyOffice.libreOfficeNativeWpsUnsupported"
+        );
         assert_eq!(result.original.bytes, b"exact native wps original");
         assert!(result.generated.is_none());
     }
@@ -1666,8 +2275,10 @@ mod tests {
                 .iter()
                 .find(|f| f.feature == "revisions")
                 .unwrap()
-                .message
-                .contains("未调用接受／拒绝")
+                .description
+                .explanation
+                .key()
+                == "error.api.legacyOffice.revisionPreservationUnverified"
         );
     }
 

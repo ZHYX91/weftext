@@ -1,6 +1,7 @@
 //! Original journal facts and device-local cancellation. No second receipt store.
 use super::*;
 use journal::{AttemptFence, ResolutionRecord};
+use weftext_messages::UiMessage;
 
 impl Core {
     pub(crate) fn validate_original_reservation_library(
@@ -10,7 +11,7 @@ impl Core {
         let invalid = || {
             CoreError::new(
                 "resolutionUnavailable",
-                "Reservation has no original committed library identity",
+                UiMessage::error_core_local_operation_reservation_has_no_original_committed_library_identity(),
             )
         };
         let workspace = binding.workspace_id.as_ref().ok_or_else(invalid)?;
@@ -49,7 +50,7 @@ impl Core {
             }
             _ => Err(CoreError::new(
                 "resolutionUnavailable",
-                "Unknown pre-Plan evidence cannot prove absence of author effects",
+                UiMessage::error_core_local_operation_unknown_pre_plan_evidence_cannot_prove_absence_of_author_effects(),
             )),
         }
     }
@@ -58,7 +59,7 @@ impl Core {
         if !self.committed(id) && self.resolved(id)? {
             return Err(CoreError::new(
                 "operationCancelled",
-                "This original attempt is durably terminated; no effects were retried",
+                UiMessage::error_core_local_operation_original_attempt_durably_terminated_no_effects_were_retried(),
             ));
         }
         Ok(())
@@ -69,7 +70,7 @@ impl Core {
         if !matches!(plan.kind.as_str(), "save" | "saveAs") || plan.transaction.is_some() {
             return Err(CoreError::new(
                 "operationConflict",
-                "The original operation is not a file save",
+                UiMessage::error_core_original_scope_save_original_not_file_save(),
             ));
         }
         let data = plan
@@ -86,7 +87,7 @@ impl Core {
         if (plan.kind == "save") != data.base_id.is_some() {
             return Err(CoreError::new(
                 "invalidState",
-                "Original file-save request participants differ",
+                UiMessage::error_core_original_scope_save_request_participants_differ(),
             ));
         }
         if file_save_scope::fingerprint(
@@ -99,7 +100,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "invalidState",
-                "Original file-save scope or request differs from its frozen fingerprint",
+                UiMessage::error_core_original_scope_save_frozen_fingerprint_differs(),
             ));
         }
         self.validate_original_file_save_scope(&data.scope, Path::new(&plan.path))?;
@@ -108,13 +109,13 @@ impl Core {
         {
             return Err(CoreError::new(
                 "invalidState",
-                "File-save and sync publication owners differ",
+                UiMessage::error_core_original_scope_save_sync_owner_differs(),
             ));
         }
         let invalid = || {
             CoreError::new(
                 "invalidState",
-                "Original file-save Plan has invalid participants or receipt",
+                UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid(),
             )
         };
         let receipt = plan.receipt.as_ref().ok_or_else(invalid)?;
@@ -160,7 +161,7 @@ impl Core {
         if !matches!(plan.kind.as_str(), "save" | "saveAs") || plan.transaction.is_some() {
             return Err(CoreError::new(
                 "operationConflict",
-                "The original operation is not a file save",
+                UiMessage::error_core_local_operation_original_operation_not_file_save(),
             ));
         }
         self.validate_file_save_plan(plan)?;
@@ -168,7 +169,7 @@ impl Core {
             return plan.receipt.clone().map(Some).ok_or_else(|| {
                 CoreError::new(
                     "invalidState",
-                    "Committed file save has no original receipt",
+                    UiMessage::error_core_local_operation_committed_file_save_has_no_original_receipt(),
                 )
             });
         }
@@ -199,7 +200,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "invalidState",
-                    "Original transaction identity or kind is inconsistent",
+                    UiMessage::error_core_original_scope_operation_transaction_identity_or_kind_differs(),
                 ));
             }
             if committed {
@@ -231,7 +232,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "invalidState",
-                "Unknown original Plan kind has no qualified result contract",
+                UiMessage::error_core_original_scope_operation_plan_result_contract_unsupported(),
             ));
         }
         Ok(
@@ -242,9 +243,12 @@ impl Core {
     /// the old Session. Stable original admission qualifies a moved owner.
     pub fn reopen_local_save(&mut self, id: &str) -> Result<(String, OpenedDocument)> {
         self.sync_local_owner()?;
-        let receipt = self
-            .file_save_fact(id)?
-            .ok_or_else(|| CoreError::new("notCommitted", "No committed original file save"))?;
+        let receipt = self.file_save_fact(id)?.ok_or_else(|| {
+            CoreError::new(
+                "notCommitted",
+                UiMessage::error_core_local_operation_no_committed_original_file_save(),
+            )
+        })?;
         let plan = self.operations[id].clone();
         let source = decode(&plan.after)?;
         let identity = if plan.kind == "saveAs" {
@@ -252,12 +256,15 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "committedResultUnavailable",
-                        "The original Save As physical birth is unavailable",
+                        UiMessage::error_core_original_scope_save_save_as_birth_unavailable(),
                     )
                 })?
         } else {
             plan.identity.clone().ok_or_else(|| {
-                CoreError::new("invalidState", "The original save has no physical identity")
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_original_scope_save_physical_identity_missing(),
+                )
             })?
         };
         let scope = &plan.file_save.as_ref().unwrap().scope;
@@ -273,14 +280,14 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "committedResultUnavailable",
-                        "The original file-save library is unavailable",
+                        UiMessage::error_core_original_scope_save_original_library_unavailable(),
                     ));
                 }
                 let path = if let Some(birth) = self.admitted_binding(&identity) {
                     if birth.workspace_id != binding.workspace_id {
                         return Err(CoreError::new(
                             "committedResultUnavailable",
-                            "Saved physical owner belongs to another original library",
+                            UiMessage::error_core_original_scope_save_physical_owner_library_differs(),
                         ));
                     }
                     let inventory = self.inventory(&root)?;
@@ -295,14 +302,15 @@ impl Core {
                     if entries.len() != 1 {
                         return Err(CoreError::new(
                             "committedResultUnavailable",
-                            "Original saved owner has no unique current admitted location",
+                            UiMessage::error_core_original_scope_save_admitted_location_not_unique(
+                            ),
                         ));
                     }
                     let path = PathBuf::from(&entries[0].path);
                     if self.qualified_node_at(&root, &path)?.identity != identity {
                         return Err(CoreError::new(
                             "committedResultUnavailable",
-                            "Saved owner is a different physical object",
+                            UiMessage::error_core_original_scope_save_physical_object_differs(),
                         ));
                     }
                     path
@@ -318,7 +326,8 @@ impl Core {
         if stamp(&guard.open_file(false, false)?)?.identity != identity {
             return Err(CoreError::new(
                 "committedResultUnavailable",
-                "The saved path now names another physical object",
+                UiMessage::error_core_local_operation_saved_path_now_names_another_physical_object(
+                ),
             ));
         }
         drop(guard);
@@ -328,7 +337,7 @@ impl Core {
             self.sessions.remove(&document.session_id);
             return Err(CoreError::new(
                 "committedResultUnavailable",
-                "Saved physical owner or original scope changed during delivery",
+                UiMessage::error_core_original_scope_save_delivery_owner_or_scope_changed(),
             ));
         }
         Ok((source, document))
@@ -343,7 +352,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "No original transaction root is retained",
+                    UiMessage::error_core_local_operation_no_original_transaction_root_retained(),
                 )
             })
     }
@@ -364,9 +373,7 @@ impl Core {
         let record = ResolutionRecord {
             operation_id: id.into(),
             action: "cancelPrepared".into(),
-            message:
-                "The missing original attempt is durably fenced; no author effects were created"
-                    .into(),
+            historical_message: None,
             attempt: Some(AttemptFence {
                 request_kind: request_kind.into(),
                 wire_digest: wire_digest.into(),
@@ -549,6 +556,36 @@ mod tests {
         );
         assert!(!core.journal_path(&id, "resolution").exists());
     }
+    #[test]
+    fn new_attempt_fence_has_no_prose_and_historical_decision_bytes_stay_exact() {
+        let (_temp, mut core, _root, _data, _doc) = fixture();
+        let id = fresh();
+        let status = core
+            .settle_local_attempt(&id, "operation", &hash(b"exact original wire"))
+            .unwrap();
+        assert_eq!(status["status"], "resolved");
+        let fence_bytes = fs::read(core.journal_path(&id, "resolution")).unwrap();
+        let fence: serde_json::Value = serde_json::from_slice(&fence_bytes).unwrap();
+        assert!(!fence.as_object().unwrap().contains_key("message"));
+        assert_eq!(fence["attempt"]["wireDigest"], hash(b"exact original wire"));
+        let original_id = fresh();
+        let original = format!(
+            "{{\n  \"operationId\":\"{original_id}\",\n  \"action\":\"cancelPrepared\",\n  \"message\":\"Original retained prose\"\n}}\n"
+        );
+        let path = core.journal_path(&original_id, "resolution");
+        fs::write(&path, original.as_bytes()).unwrap();
+        assert_eq!(
+            core.local_operation_status(&original_id).unwrap()["status"],
+            "resolved"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original.as_bytes());
+        let record = journal::decode_resolution(&original_id, original.as_bytes()).unwrap();
+        assert_eq!(
+            record.historical_message.as_deref(),
+            Some("Original retained prose")
+        );
+    }
+
     #[test]
     fn strict_decision_reader_rejects_invalid_identity_action_duplicates_and_budget() {
         let id = fresh();

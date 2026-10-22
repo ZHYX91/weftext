@@ -27,7 +27,7 @@ pub struct DocxReview {
     /// Some only for explicitly selected, validated pending tracked changes.
     pub replacement: Option<String>,
     #[serde(default)]
-    pub downgrade_reason: Option<String>,
+    pub downgrade_reason: Option<weftext_messages::ErrorDescription>,
     #[serde(default)]
     pub empty_body_point: bool,
 }
@@ -102,11 +102,17 @@ fn rewrite_math(e: &mut Element, next: &mut usize, located: &[Located]) {
     }
     e.children = out;
 }
-fn loss(out: &mut Vec<ExportLoss>, id: &str, message: &str) {
+fn loss(
+    out: &mut Vec<ExportLoss>,
+    id: &str,
+    message: impl Into<weftext_messages::ErrorDescription>,
+) {
     out.push(ExportLoss {
         code: "word-review-unmapped".into(),
-        message: message.into(),
+        description: message.into(),
         location: Some(id.into()),
+
+        product_diagnostics: Vec::new(),
     });
 }
 type TextRunSource = (usize, usize, String, String);
@@ -275,7 +281,9 @@ pub(super) fn apply(
         return Ok(());
     }
     if reviews.len() > 2000 {
-        return Err(DocxError::new("批注输出超过 2000 条预算"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_review_comment_budget_exceeded(),
+        )));
     }
     let mut settings = package
         .xml("word/settings.xml")?
@@ -295,11 +303,12 @@ pub(super) fn apply(
         if prior.is_some() {
             losses.push(ExportLoss {
                 code: "word-review-compatibility".into(),
-                message:
-                    "为保留可处理的批注讨论，审阅副本升级为 Word 2013 兼容模式；旧模板版式可能变化"
-                        .into(),
+                description:
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_review_review_compatibility_upgraded()),
                 location: Some("word/settings.xml".into()),
-            });
+
+product_diagnostics: Vec::new(),
+});
         }
         compat.children.retain(|e| {
             e.element()
@@ -351,7 +360,9 @@ pub(super) fn apply(
         .max(existing_max(doc, "w:ins", "w:id"))
         .max(existing_max(doc, "w:del", "w:id"));
     if maximum > 2_000_000_000 {
-        return Err(DocxError::new("Word 审阅标识超出支持范围"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_review_review_id_out_of_range(),
+        )));
     }
     let mut next = maximum + 1;
     let mut runs = vec![];
@@ -385,7 +396,7 @@ pub(super) fn apply(
     math_targets(doc, &mut 0, &mut vec![], &mut mathematics);
     for review in reviews.iter().filter(|r| r.parent.is_none()) {
         if let Some(reason) = &review.downgrade_reason {
-            loss(losses, &review.id, reason);
+            loss(losses, &review.id, reason.clone());
         }
         let exact_math: Vec<_> = review
             .range
@@ -408,7 +419,7 @@ pub(super) fn apply(
                 loss(
                     losses,
                     &value.id,
-                    "数学目标仅输出准确讨论；数学结构不是可执行的普通文字修订",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_review_math_revision_discussion_only()),
                 );
             }
             located.push(Located {
@@ -488,7 +499,10 @@ pub(super) fn apply(
             loss(
                 losses,
                 &review.id,
-                "批注目标不能唯一映射到本次输出正文；原批注保留，本工件未附着该批注",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_review_comment_target_not_unique(
+                    ),
+                ),
             );
             continue;
         };
@@ -510,7 +524,7 @@ pub(super) fn apply(
             loss(
                 losses,
                 &review.id,
-                "重叠修订不能安全同时输出；此项仅作为普通批注",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_review_overlapping_revision_comment_only()),
             );
             review.replacement = None;
         }
@@ -562,7 +576,9 @@ pub(super) fn apply(
                 loss(
                     losses,
                     &r.id,
-                    "回复的父批注未能导出；讨论仍保留在原批注文件",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_review_reply_parent_not_exported(),
+                    ),
                 );
             }
             break;

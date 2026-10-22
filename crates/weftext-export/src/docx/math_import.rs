@@ -24,7 +24,9 @@ pub(in crate::docx) fn import_equation(
     source_offset: usize,
 ) -> Result<ImportedEquation, DocxError> {
     if !matches!(equation.name.as_str(), "m:oMath" | "m:oMathPara") {
-        return Err(DocxError::new("公式入口不是 Office Math 对象"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_math_office_math_object_required(),
+        )));
     }
     let display = equation.name == "m:oMathPara";
     let mut b = Builder {
@@ -46,7 +48,9 @@ pub(in crate::docx) fn import_equation(
     b.node(equation, 0)?;
     b.out.source.push_str(if display { " $" } else { "$" });
     if b.out.positions.is_empty() {
-        return Err(DocxError::new("空公式未作为可编辑公式导入；原件保留"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_math_empty_equation_preserved(),
+        )));
     }
     // A valid Word comment may begin/end outside this mathematical object.
     // The document importer reconciles both sides; only local duplicates are
@@ -66,14 +70,18 @@ struct Builder {
 impl Builder {
     fn decoration(&mut self, value: &str) -> Result<(), DocxError> {
         if self.out.source.len() + value.len() > 1_048_576 {
-            return Err(DocxError::new("单个公式超过 1 MiB 转换预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_equation_bytes_exceeded(),
+            )));
         }
         self.out.source.push_str(value);
         Ok(())
     }
     fn append(&mut self, value: &str) -> Result<(), DocxError> {
         if self.out.source.len() + value.len() > 1_048_576 {
-            return Err(DocxError::new("单个公式超过 1 MiB 转换预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_equation_bytes_exceeded(),
+            )));
         }
         if !value.trim().is_empty() {
             let at = self.offset + self.out.source.len();
@@ -95,7 +103,11 @@ impl Builder {
                 }
                 Xml::Text(s) if s.trim().is_empty() => {}
                 Xml::Comment(_) => {}
-                _ => return Err(DocxError::new("Office Math 含未归属数学 run 的文字")),
+                _ => {
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_math_text_outside_math_run(),
+                    )));
+                }
             }
         }
         Ok(())
@@ -110,18 +122,26 @@ impl Builder {
         if matches.len() == 1 {
             Ok(matches[0])
         } else {
-            Err(DocxError::new(format!(
-                "{} 的 {name} 参数缺失或重复",
-                e.name
+            Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_required_argument_missing(
+                    weftext_messages::params::ErrorExportDocxMathRequiredArgumentMissing {
+                        element: (e.name).to_string(),
+                        argument: (name).to_string(),
+                    },
+                ),
             )))
         }
     }
     fn check_children(&self, e: &Element, allowed: &[&str]) -> Result<(), DocxError> {
         for c in e.children.iter().filter_map(Xml::element) {
             if !allowed.contains(&c.name.as_str()) {
-                return Err(DocxError::new(format!(
-                    "数学结构 {} 的子项 {} 暂不支持",
-                    e.name, c.name
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_math_child_unsupported(
+                        weftext_messages::params::ErrorExportDocxMathChildUnsupported {
+                            element: (e.name).to_string(),
+                            child: (c.name).to_string(),
+                        },
+                    ),
                 )));
             }
         }
@@ -136,7 +156,9 @@ impl Builder {
     fn node(&mut self, e: &Element, depth: usize) -> Result<(), DocxError> {
         self.count += 1;
         if depth > 64 || self.count > 20_000 {
-            return Err(DocxError::new("公式结构超过深度／节点转换预算"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_equation_structure_exceeded(),
+            )));
         }
         match e.name.as_str() {
             "m:oMathPara" => {
@@ -156,7 +178,7 @@ impl Builder {
                     .filter(|c| c.name == "m:oMath")
                     .count();
                 if formula_count != 1 {
-                    return Err(DocxError::new("一个公式段中的多个独立数学对象暂不合并"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_multiple_math_objects_not_merged())));
                 }
                 self.sequence(e, depth, &["m:oMathParaPr"])
             }
@@ -166,7 +188,7 @@ impl Builder {
             "w:commentRangeStart" => {
                 let id = e
                     .get("w:id")
-                    .ok_or_else(|| DocxError::new("数学批注起点缺少标识"))?
+                    .ok_or_else(|| DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_comment_start_id_missing())))?
                     .to_owned();
                 let at = self.offset + self.out.source.len();
                 let index = self.out.starts.len();
@@ -180,7 +202,11 @@ impl Builder {
             "w:commentRangeEnd" => {
                 let id = e
                     .get("w:id")
-                    .ok_or_else(|| DocxError::new("数学批注终点缺少标识"))?
+                    .ok_or_else(|| {
+                        DocxError::new(weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_math_comment_end_id_missing(),
+                        ))
+                    })?
                     .to_owned();
                 let at = self.last_content_end;
                 if let Some(index) = self.open.remove(&id)
@@ -203,13 +229,13 @@ impl Builder {
                 // containers, text and unknown properties must not disappear.
                 self.check_children(e, &["w:rPr"])?;
                 if e.children.iter().filter_map(Xml::element).count() > 1 {
-                    return Err(DocxError::new("数学控制字形属性重复"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_control_run_properties_duplicate())));
                 }
                 if e.children
                     .iter()
                     .any(|c| matches!(c, Xml::Text(s) if !s.trim().is_empty()))
                 {
-                    return Err(DocxError::new("数学控制字形属性包含正文"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_control_run_properties_contain_text())));
                 }
                 if let Some(pr) = e.child("w:rPr") {
                     self.check_children(
@@ -239,7 +265,7 @@ impl Builder {
                         Xml::Text(s) => !s.trim().is_empty(),
                         Xml::Comment(_) => false,
                     }) {
-                        return Err(DocxError::new("数学控制字形属性包含未知嵌套内容"));
+                        return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_control_run_properties_unknown_nesting())));
                     }
                 }
                 Ok(())
@@ -253,9 +279,9 @@ impl Builder {
                         .iter()
                         .any(|c| matches!(c, Xml::Text(s) if !s.trim().is_empty()))
                 {
-                    return Err(DocxError::new(
-                        "公式内的普通 Word 文字 run 未作为数学内容导入",
-                    ));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_math_ordinary_word_run_not_math(),
+                    )));
                 }
                 Ok(())
             }
@@ -263,9 +289,9 @@ impl Builder {
             "m:f" => {
                 self.check_children(e, &["m:fPr", "m:num", "m:den"])?;
                 if Self::property(e, "m:fPr", "m:type").is_some_and(|v| v != "bar") {
-                    return Err(DocxError::new(
-                        "无横线／线性／斜线分数版式暂不支持；原件保留",
-                    ));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_math_fraction_layout_unsupported(),
+                    )));
                 }
                 self.append("frac(")?;
                 self.argument(e, "m:num", depth)?;
@@ -329,7 +355,13 @@ impl Builder {
                 self.check_children(e, &["m:naryPr", "m:sub", "m:sup", "m:e"])?;
                 let ch = Self::property(e, "m:naryPr", "m:chr").unwrap_or("∫");
                 if !matches!(ch, "∫" | "∬" | "∭" | "∮" | "∑" | "∏" | "⋃" | "⋂") {
-                    return Err(DocxError::new(format!("n 元运算符 {ch} 暂不支持")));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_math_operator_unsupported(
+                            weftext_messages::params::ErrorExportDocxMathOperatorUnsupported {
+                                operator: (ch).to_string(),
+                            },
+                        ),
+                    )));
                 }
                 self.scalar(ch, "", "")?;
                 for (name, hide, marker) in
@@ -348,9 +380,12 @@ impl Builder {
                 self.append(" ")?;
                 self.argument(e, "m:e", depth)
             }
-            _ => Err(DocxError::new(format!(
-                "数学结构 {} 尚不能转换为原生可编辑公式；原件保留",
-                e.name
+            _ => Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_structure_unmapped(
+                    weftext_messages::params::ErrorExportDocxMathStructureUnmapped {
+                        element: (e.name).to_string(),
+                    },
+                ),
             ))),
         }
     }
@@ -361,7 +396,7 @@ impl Builder {
         if let Some(pr) = e.child("m:rPr") {
             self.check_children(pr, &["m:sty", "m:scr", "m:nor", "m:lit", "m:brk", "m:aln"])?;
             if pr.child("m:brk").is_some() || pr.child("m:aln").is_some() {
-                return Err(DocxError::new("数学 run 的手动换行／对齐控制暂不支持"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_manual_break_or_alignment_unsupported())));
             }
         }
         let normal = e
@@ -377,10 +412,24 @@ impl Builder {
             "double-struck" => "bb",
             "sans-serif" => "sans",
             "monospace" => "mono",
-            _ => return Err(DocxError::new(format!("数学字体族 {script} 暂不支持"))),
+            _ => {
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_math_font_family_unsupported(
+                        weftext_messages::params::ErrorExportDocxMathFontFamilyUnsupported {
+                            family: (script).to_string(),
+                        },
+                    ),
+                )));
+            }
         };
         if !matches!(style, "p" | "b" | "i" | "bi") {
-            return Err(DocxError::new(format!("数学字形 {style} 暂不支持")));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_font_style_unsupported(
+                    weftext_messages::params::ErrorExportDocxMathFontStyleUnsupported {
+                        style: (style).to_string(),
+                    },
+                ),
+            )));
         }
         for t in e
             .children
@@ -389,13 +438,15 @@ impl Builder {
             .filter(|c| c.name == "m:t")
         {
             if t.children.iter().any(|c| matches!(c, Xml::Element(_))) {
-                return Err(DocxError::new("数学文字含未知嵌套结构"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_math_math_text_unknown_nesting(),
+                )));
             }
             let value = t.text();
             let mut characters = value.chars().peekable();
             while let Some(c) = characters.next() {
                 if c.is_control() {
-                    return Err(DocxError::new("数学文字含不支持的控制字符"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_math_math_text_control_character_unsupported())));
                 }
                 let decoration = if normal {
                     "upright"
@@ -450,7 +501,7 @@ impl Builder {
         } else {
             weftext_data::NativeValue::Text(value.into())
                 .to_typst()
-                .map_err(|e| DocxError::new(e.to_string()))?
+                .map_err(|e| DocxError::from_data(e))?
         };
         if !family.is_empty() {
             self.decoration(family)?;
@@ -494,7 +545,9 @@ impl Builder {
             .filter(|c| c.name == "m:mr")
             .collect();
         if rows.is_empty() || rows.len() > 100 {
-            return Err(DocxError::new("矩阵行数不在 1–100 支持范围"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_matrix_rows_out_of_range(),
+            )));
         }
         let mut width = None;
         self.append(if cases {
@@ -506,7 +559,9 @@ impl Builder {
             self.check_children(row, &["m:e"])?;
             let cells: Vec<_> = row.children.iter().filter_map(Xml::element).collect();
             if cells.is_empty() || cells.len() > 100 || width.is_some_and(|n| n != cells.len()) {
-                return Err(DocxError::new("矩阵为空、列数过多或各行宽度不一致"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_math_matrix_shape_invalid(),
+                )));
             }
             width = Some(cells.len());
             if r > 0 {
@@ -547,7 +602,9 @@ impl Builder {
             || separator.chars().count() > 1
             || arguments.is_empty()
         {
-            return Err(DocxError::new("分隔符公式含未支持的括号／多字符分隔符"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_math_delimiter_unsupported(),
+            )));
         }
         self.append("lr(")?;
         self.append(&escaped_delimiter(begin))?;

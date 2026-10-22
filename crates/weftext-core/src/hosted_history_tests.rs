@@ -126,6 +126,13 @@ fn hosted_history_restore_new_save_keeps_later_history_and_all_own_drafts_withou
     let status = f.restore(request.clone()).unwrap();
     assert_eq!(status.status, "committed");
     assert_eq!(status.result_status, "available");
+    assert!(status.result_error.is_none());
+    assert!(
+        serde_json::to_value(&status)
+            .unwrap()
+            .get("resultError")
+            .is_none()
+    );
     let result = status.result.unwrap();
     assert_eq!(result.source, f.original_source);
     assert_eq!(result.receipt.operation_id, operation);
@@ -475,6 +482,16 @@ fn hosted_history_current_qualification_and_result_refuse_replacement_and_remapp
     assert_eq!(retry.status, "committed");
     assert_eq!(retry.result_status, "unavailable");
     assert!(retry.result.is_none());
+    let error = retry.result_error.as_ref().unwrap();
+    assert_eq!(error.code, "identityPending");
+    assert!(error.explanation.key().starts_with("error.core."));
+    let wire = serde_json::to_value(&retry).unwrap();
+    assert_eq!(wire["status"], "committed");
+    assert_eq!(wire["resultError"]["code"], "identityPending");
+    assert!(wire["resultError"].get("message").is_none());
+    assert!(wire["resultError"]["explanation"].is_object());
+    assert!(wire["resultError"]["diagnostics"].is_array());
+    assert!(wire["resultError"]["causes"].is_array());
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c
@@ -845,7 +862,7 @@ fn hosted_history_restore_preserves_original_saved_definition_admission_without_
                         &weftext_data::QueryPlan::default(),
                         &schema,
                     )
-                    .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))
+                    .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))
                 },
             )
         })

@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 fn schema() -> Schema {
     Schema::bundled().unwrap()
 }
@@ -66,21 +68,31 @@ fn official_native_decoder_preserves_order_duplicates_and_exact_values() {
 #[test]
 fn native_budget_keeps_deep_static_source_unavailable_and_writer_bounded() {
     let expression = format!("{}1{}", "(".repeat(70), ")".repeat(70));
-    assert!(
-        decode_native_expression(&expression)
-            .unwrap_err()
-            .0
-            .contains("budget")
+    assert_data_error(
+        &decode_native_expression(&expression).unwrap_err(),
+        DataErrorKind::NativeBudget,
+        UiMessage::error_data_native_decoder_traversal_budget(),
     );
     let projection = project(&source(&format!(", priority: {expression}")), &schema());
+    assert!(projection.budget_exhausted);
     assert!(
-        matches!(&projection.fields.iter().find(|f| f.key == "priority").unwrap().cell, Cell::Unavailable { reason } if reason.contains("budget"))
+        projection
+            .fields
+            .iter()
+            .find(|f| f.key == "priority")
+            .unwrap()
+            .cell
+            .is_native_budget()
     );
     let mut value = NativeValue::Int("1".into());
     for _ in 0..70 {
         value = NativeValue::Array(vec![value]);
     }
-    assert!(value.to_typst().unwrap_err().0.contains("budget"));
+    assert_data_error(
+        &value.to_typst().unwrap_err(),
+        DataErrorKind::Budget,
+        UiMessage::error_data_native_native_value_traversal_budget_exceeded(),
+    );
     assert!(
         !schema()
             .validate(
@@ -93,7 +105,11 @@ fn native_budget_keeps_deep_static_source_unavailable_and_writer_bounded() {
             .is_empty()
     );
     let large = NativeValue::Array(vec![NativeValue::None; 100_001]);
-    assert!(large.to_typst().unwrap_err().0.contains("budget"));
+    assert_data_error(
+        &large.to_typst().unwrap_err(),
+        DataErrorKind::Budget,
+        UiMessage::error_data_native_native_value_byte_or_node_budget_exceeded(),
+    );
 }
 #[test]
 fn exact_writer_compiles_in_real_typst() {

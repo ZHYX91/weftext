@@ -9,7 +9,7 @@ fn encode_draft_record(record: &impl Serialize) -> Result<Vec<u8>> {
     if bytes.len() > MAX_DRAFT_RECORD_BYTES {
         return Err(CoreError::new(
             "budget",
-            "Draft record exceeds its byte budget",
+            UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
         ));
     }
     Ok(bytes)
@@ -26,7 +26,7 @@ impl Core {
     pub(crate) fn draft_session_scope(&self, session_id: &str) -> Result<QualifiedInputScope> {
         self.sessions
             .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?
             .file_scope
             .clone()
     }
@@ -43,7 +43,7 @@ impl Core {
         if retained.is_some_and(|draft| draft.scope != scope) {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Retained Draft has another original scope",
+                UiMessage::error_core_original_scope_draft_retained_scope_differs(),
             ));
         }
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
@@ -52,7 +52,7 @@ impl Core {
             if original.identity != session.stamp.identity {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Draft physical object differs",
+                    UiMessage::error_core_draft_recovery_draft_object_provenance_differs(),
                 ));
             }
             self.check_committed_draft_paths(
@@ -243,14 +243,14 @@ impl Core {
         if file_save_scope::read_input_scope(&mut file)? != *scope {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft original input scope differs",
+                UiMessage::error_core_original_scope_draft_input_scope_differs(),
             ));
         }
         self.validate_original_input_scope(scope)?;
         if file.metadata()?.len() > MAX_DRAFT_RECORD_BYTES as u64 {
             return Err(CoreError::new(
                 "budget",
-                "Draft record exceeds its byte budget",
+                UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
             ));
         }
         let mut bytes = Vec::new();
@@ -259,7 +259,7 @@ impl Core {
         if bytes.len() > MAX_DRAFT_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
-                "Draft record exceeds its byte budget",
+                UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
             ));
         }
         Ok(Some(bytes))
@@ -303,7 +303,7 @@ impl Core {
         if draft.scope != scope || &draft.identity != identity {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft original participant differs",
+                UiMessage::error_core_original_scope_draft_participant_differs(),
             ));
         }
         if !same_draft_path(&draft.path, &display(path)) {
@@ -333,7 +333,7 @@ impl Core {
 fn unproved_draft_placement() -> CoreError {
     CoreError::new(
         "identityPending",
-        "The source position has no committed Draft relocation; the original proposal is unchanged and current input must remain in the editor",
+        UiMessage::error_core_draft_recovery_source_position_has_no_committed_draft_relocation_original_proposal_unchanged_and_current_input_must_remain_in_editor(),
     )
 }
 fn same_draft_path(a: &str, b: &str) -> bool {

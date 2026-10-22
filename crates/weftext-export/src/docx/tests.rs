@@ -812,7 +812,9 @@ fn standard_controls_are_inspected_and_invalid_mapping_is_rejected() {
             options: DocxOptions::default()
         })
         .unwrap_err()
-        .0
+        .description
+        .explanation
+        .render(weftext_messages::UiLocale::EnUs)
         .contains("missing")
     );
     let bindings = BTreeMap::from([("project".into(), DocxBinding::Body)]);
@@ -919,18 +921,25 @@ fn failed_compile_wrong_target_and_declined_losses_cannot_generate_bytes() {
         .is_err()
     );
     out.products.as_mut().unwrap().target = "html".into();
-    assert!(
-        export_docx(DocxInput {
-            render: &out,
-            template: None,
-            bindings: &BTreeMap::new(),
-            options: DocxOptions {
-                reject_losses: true,
-                preserve_source_styles: false
-            }
-        })
-        .is_err()
-    );
+    let expected = artifact(&out).losses;
+    assert!(!expected.is_empty());
+    let error = export_docx(DocxInput {
+        render: &out,
+        template: None,
+        bindings: &BTreeMap::new(),
+        options: DocxOptions {
+            reject_losses: true,
+            preserve_source_styles: false,
+        },
+    })
+    .unwrap_err();
+    assert_eq!(error.product_diagnostics.len(), expected.len());
+    for (report, loss) in error.product_diagnostics.iter().zip(expected) {
+        let cause = &report.causes.as_slice()[0];
+        assert_eq!(cause.code, loss.code);
+        assert_eq!(cause.explanation, loss.description.explanation);
+        assert_eq!(cause.diagnostics, loss.description.diagnostics);
+    }
 }
 
 #[test]

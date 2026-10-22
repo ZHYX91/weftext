@@ -13,6 +13,7 @@ use crate::{
     QualifiedResource, SnapshotWitness,
 };
 use weftext_knowledge::{AnnotationTarget, NodeRef};
+use weftext_messages::UiMessage;
 
 /// These are original opaque Core qualifications, never client booleans.
 pub(crate) enum ObjectQualification<'a> {
@@ -45,9 +46,9 @@ pub(crate) struct SuppliedEvidenceCut<'a> {
     pub planned: Option<&'a crate::journal::Plan>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum EvidenceGap {
+pub enum EvidenceGap {
     OriginalQualification,
     PlannedObjectMaterialization,
     PlannedResourceMaterialization,
@@ -59,7 +60,9 @@ pub(crate) enum EvidenceGap {
     CompiledElementOrigin,
     ExactInvocationInputs,
 }
-pub(crate) struct UnfulfilledEvidence {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UnfulfilledEvidence {
     pub obligation: RequiredSemanticEvidence,
     pub gap: EvidenceGap,
 }
@@ -139,7 +142,7 @@ impl EvidenceCapture {
         if !self.unfulfilled.is_empty() {
             return Err(error(
                 "syncEvidenceRequired",
-                "Exact semantic evidence remains unfulfilled",
+                UiMessage::error_core_sync_exact_semantic_evidence_remains_unfulfilled(),
             ));
         }
         Ok(EvidenceReadSet {
@@ -153,13 +156,13 @@ impl EvidenceCapture {
         })
     }
 }
-fn error(code: &str, message: &str) -> CoreError {
+fn error(code: &str, message: UiMessage) -> CoreError {
     CoreError::new(code, message)
 }
 fn mismatch() -> CoreError {
     error(
         "syncEvidenceChanged",
-        "Original evidence does not match the reviewed installed cut",
+        UiMessage::error_core_sync_original_evidence_does_not_match_reviewed_installed_cut(),
     )
 }
 fn same_locator(a: &Path, b: &Path) -> bool {
@@ -438,7 +441,7 @@ impl Capture<'_, '_> {
         {
             return Err(error(
                 "syncEvidenceChanged",
-                "Installed file revision lacks its original observation or replica initialization binding",
+                UiMessage::error_core_sync_installed_file_revision_lacks_original_observation_or_replica_initialization_binding(),
             ));
         }
         Ok(Some(witness.clone()))
@@ -913,13 +916,13 @@ impl Capture<'_, '_> {
         let definitions = weftext_knowledge::definition_slots(&source, owner).map_err(|_| {
             error(
                 "definitionUnavailable",
-                "Exact admitted definition control is unavailable",
+                UiMessage::error_core_sync_exact_admitted_definition_control_unavailable(),
             )
         })?;
         if definitions.iter().filter(|d| d.key == key).count() != 1 {
             return Err(error(
                 "definitionUnavailable",
-                "Exact selected source lacks its admitted definition key",
+                UiMessage::error_core_sync_exact_selected_source_lacks_admitted_definition_key(),
             ));
         }
         Ok(None)
@@ -956,7 +959,7 @@ impl Capture<'_, '_> {
         {
             return Err(error(
                 "rulesUnavailable",
-                "Previously committed rules are missing; absence is not a legacy default",
+                UiMessage::error_core_sync_previously_committed_rules_missing_absence_not_legacy_default(),
             ));
         }
         let path = self.cut.root.join(relative);
@@ -987,7 +990,7 @@ impl Capture<'_, '_> {
         let document = weftext_knowledge::decode_annotations(bytes).map_err(|_| {
             error(
                 "annotationUnavailable",
-                "Exact annotation input is malformed",
+                UiMessage::error_core_sync_exact_annotation_input_malformed(),
             )
         })?;
         for record in &document.records {
@@ -1142,7 +1145,7 @@ impl Capture<'_, '_> {
         .map_err(|_| {
             error(
                 "queryInvocationUnavailable",
-                "Actual Query lifecycles are unavailable",
+                UiMessage::error_core_sync_actual_query_lifecycles_unavailable(),
             )
         })?;
         let snapshots = self
@@ -1176,13 +1179,14 @@ impl Capture<'_, '_> {
             {
                 return Err(error(
                     "queryInvocationUnavailable",
-                    "Actual Query requires its complete original admitted cut",
+                    UiMessage::error_core_sync_actual_query_requires_complete_original_admitted_cut(
+                    ),
                 ));
             }
             let Some(original) = self.core.admitted_cuts.get(&snapshot.cut_id) else {
                 return Err(error(
                     "cutExpired",
-                    "The original admitted Query cut is no longer retained",
+                    UiMessage::error_core_sync_original_admitted_query_cut_no_longer_retained(),
                 ));
             };
             if original.lifecycle != lifecycle {
@@ -1317,12 +1321,17 @@ impl Capture<'_, '_> {
                 .map_err(|_| {
                     error(
                         "queryInvocationUnavailable",
-                        "Actual Query products are unavailable",
+                        UiMessage::error_core_sync_actual_query_products_unavailable(),
                     )
                 })?;
         let mut context = invocation.context.clone();
         for scope in weftext_data::required_query_scopes(&invocation.plan, &context.definitions)
-            .map_err(|_| error("queryScopeUnavailable", "Actual Query scope is unavailable"))?
+            .map_err(|_| {
+                error(
+                    "queryScopeUnavailable",
+                    UiMessage::error_core_sync_actual_query_scope_unavailable(),
+                )
+            })?
         {
             let (kind, workspace, id) = crate::directory_identity::parse_ref(&scope)?;
             if workspace != self.cut.graph.workspace_id {
@@ -1390,7 +1399,7 @@ pub(crate) fn validate_native_invocations(
                 let product = products.get(&key).ok_or_else(|| {
                     error(
                         "queryInvocationUnavailable",
-                        "An exact native note product is missing",
+                        UiMessage::error_core_sync_exact_native_note_product_missing(),
                     )
                 })?;
                 note.products = Some(product.clone());
@@ -1414,7 +1423,7 @@ fn execute_invocation(
     .map_err(|_| {
         error(
             "queryInvocationUnavailable",
-            "The exact actual Query/provider invocation is invalid",
+            UiMessage::error_core_sync_exact_actual_query_provider_invocation_invalid(),
         )
     })?;
     let native_cells_unavailable =
@@ -1422,7 +1431,7 @@ fn execute_invocation(
             .map_err(|_| {
                 error(
                     "queryInvocationUnavailable",
-                    "The actual native product demand is invalid",
+                    UiMessage::error_core_sync_actual_native_product_demand_invalid(),
                 )
             })?
             .is_empty()
@@ -1437,7 +1446,7 @@ fn execute_invocation(
     if result.coverage != "complete" || !result.diagnostics.is_empty() || native_cells_unavailable {
         return Err(error(
             "queryInvocationUnavailable",
-            "The exact actual Query/provider invocation is incomplete",
+            UiMessage::error_core_sync_exact_actual_query_provider_invocation_incomplete(),
         ));
     }
     Ok(QueryValidationTrace {

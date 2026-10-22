@@ -1,11 +1,105 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
+pub use weftext_messages::{DiagnosticOrigin, ErrorDescription, RawDiagnostic, UiMessage};
 
 #[derive(Debug, Clone)]
-pub struct EngineError(pub String);
+pub enum EngineError {
+    Product {
+        description: ErrorDescription,
+        product_diagnostics: Vec<ErrorDescription>,
+    },
+    DisplayTreeBudget {
+        product_diagnostics: Vec<ErrorDescription>,
+    },
+}
+impl EngineError {
+    pub fn new(message: impl Into<ErrorDescription>) -> Self {
+        Self::Product {
+            description: message.into(),
+            product_diagnostics: vec![],
+        }
+    }
+    pub fn diagnostic(self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
+        match self {
+            Self::Product {
+                description,
+                product_diagnostics,
+            } => Self::Product {
+                description: description.diagnostic(origin, text),
+                product_diagnostics,
+            },
+            Self::DisplayTreeBudget {
+                mut product_diagnostics,
+            } => {
+                product_diagnostics.push(
+                    ErrorDescription::new(UiMessage::engine_render_display_tree_budget())
+                        .diagnostic(origin, text),
+                );
+                Self::DisplayTreeBudget {
+                    product_diagnostics,
+                }
+            }
+        }
+    }
+    pub fn with_product_diagnostics(self, diagnostics: Vec<ErrorDescription>) -> Self {
+        match self {
+            Self::Product {
+                description,
+                mut product_diagnostics,
+            } => {
+                product_diagnostics.extend(diagnostics);
+                Self::Product {
+                    description,
+                    product_diagnostics,
+                }
+            }
+            Self::DisplayTreeBudget {
+                mut product_diagnostics,
+            } => {
+                product_diagnostics.extend(diagnostics);
+                Self::DisplayTreeBudget {
+                    product_diagnostics,
+                }
+            }
+        }
+    }
+    pub fn description(&self) -> ErrorDescription {
+        match self {
+            Self::Product { description, .. } => description.clone(),
+            Self::DisplayTreeBudget { .. } => UiMessage::engine_render_display_tree_budget().into(),
+        }
+    }
+    pub fn into_parts(self) -> (ErrorDescription, Vec<ErrorDescription>) {
+        match self {
+            Self::Product {
+                description,
+                product_diagnostics,
+            } => (description, product_diagnostics),
+            Self::DisplayTreeBudget {
+                product_diagnostics,
+            } => (
+                UiMessage::engine_render_display_tree_budget().into(),
+                product_diagnostics,
+            ),
+        }
+    }
+}
 impl fmt::Display for EngineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        self.description().fmt(f)?;
+        let product_diagnostics = match self {
+            Self::Product {
+                product_diagnostics,
+                ..
+            }
+            | Self::DisplayTreeBudget {
+                product_diagnostics,
+            } => product_diagnostics,
+        };
+        for diagnostic in product_diagnostics {
+            write!(f, "\n{diagnostic}")?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for EngineError {}
@@ -35,11 +129,67 @@ pub struct Origin {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Diagnostic {
     pub severity: String,
-    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<UiMessage>,
+    pub diagnostics: Vec<RawDiagnostic>,
     pub origin: Option<Origin>,
+}
+
+#[cfg(test)]
+mod error_contract_tests {
+    use super::*;
+
+    #[test]
+    fn display_tree_budget_is_a_typed_failure_with_bilingual_explanation() {
+        let error = EngineError::DisplayTreeBudget {
+            product_diagnostics: vec![],
+        };
+        assert!(matches!(error, EngineError::DisplayTreeBudget { .. }));
+        let (description, diagnostics) = error.into_parts();
+        assert!(diagnostics.is_empty());
+        assert_eq!(
+            description.explanation.key(),
+            "engine.render.displayTreeBudget"
+        );
+        assert!(description.diagnostics.is_empty());
+        let wire = serde_json::to_value(&description).unwrap();
+        assert_eq!(wire["explanation"]["params"], serde_json::json!({}));
+        assert_ne!(
+            description
+                .explanation
+                .render(weftext_messages::UiLocale::ZhCn),
+            description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs),
+        );
+    }
+
+    #[test]
+    fn original_typst_diagnostic_and_author_range_round_trip_without_product_relabeling() {
+        let wire = serde_json::json!({
+            "severity": "error",
+            "diagnostics": [{"origin":"typst", "text":"unknown variable: 作者原名 <x>"}],
+            "origin": {
+                "path":"author.typ", "from":3,"to":9,"utf16From":3,"utf16To":5,
+                "raw":"作者", "syntaxKind":"Diagnostic", "isMain":true
+            }
+        });
+        let diagnostic: Diagnostic = serde_json::from_value(wire.clone()).unwrap();
+        assert!(diagnostic.explanation.is_none());
+        assert_eq!(serde_json::to_value(diagnostic).unwrap(), wire);
+        let mut missing = wire.clone();
+        missing.as_object_mut().unwrap().remove("diagnostics");
+        assert!(serde_json::from_value::<Diagnostic>(missing).is_err());
+        let mut wrong_origin = wire.clone();
+        wrong_origin["diagnostics"][0]["origin"] = "product".into();
+        assert!(serde_json::from_value::<Diagnostic>(wrong_origin).is_err());
+        let mut unknown_field = wire;
+        unknown_field["message"] = "old product text".into();
+        assert!(serde_json::from_value::<Diagnostic>(unknown_field).is_err());
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +309,7 @@ pub struct SourceInfo {
     pub syntax_tokens: Vec<SyntaxToken>,
     pub body_insertion: Option<SourceRange>,
     pub writer_status: String,
+    pub writer_reason: Option<ErrorDescription>,
     #[serde(default)]
     pub notes: crate::NotesSourceMap,
 }

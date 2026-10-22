@@ -176,7 +176,9 @@ pub(super) struct Styles {
 impl Styles {
     pub fn new(xml: Element, theme: Option<Element>) -> Result<Self, DocxError> {
         if xml.name != "w:styles" {
-            return Err(DocxError::new("模板样式须使用标准 w 命名空间前缀"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_styles_word_namespace_prefix_required(),
+            )));
         }
         let normal = xml
             .children
@@ -222,10 +224,14 @@ impl Styles {
         seen: &mut BTreeSet<String>,
     ) -> Result<(), DocxError> {
         if !seen.insert(id.into()) {
-            return Err(DocxError::new("模板样式继承存在循环"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_styles_style_inheritance_cycle(),
+            )));
         }
         if seen.len() > 64 {
-            return Err(DocxError::new("模板样式继承过深"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_styles_style_inheritance_too_deep(),
+            )));
         }
         if let Some(e) = self.style(id) {
             if let Some(base) = e.child("w:basedOn").and_then(|e| e.get("w:val")) {

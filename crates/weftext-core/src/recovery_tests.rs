@@ -972,3 +972,77 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
         Some("retained original proposal")
     );
 }
+
+#[test]
+fn recovery_descriptions_preserve_original_plan_and_author_participants() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let (preview, sidecar, _) = pair_plan(&mut core, &root, &note, true);
+    let plan_path = core.journal_path(&preview.operation_id, "plan");
+    let original_plan = fs::read(&plan_path).unwrap();
+    let original_source = fs::read(&note.path).unwrap();
+    let original_sidecar = fs::read(&sidecar).unwrap();
+    let recovery = core.inspect_recovery(&preview.operation_id).unwrap();
+    assert_eq!(
+        recovery.description.explanation.key(),
+        "recovery.frozenPlanRetained"
+    );
+    let wire = serde_json::to_value(&recovery).unwrap();
+    assert!(wire.get("message").is_none());
+    assert!(wire["description"]["explanation"].is_object());
+    assert!(wire["members"].as_array().unwrap().iter().all(|member| {
+        member.get("message").is_none()
+            && member
+                .get("description")
+                .is_none_or(|description| description["explanation"].is_object())
+    }));
+    assert_eq!(fs::read(&plan_path).unwrap(), original_plan);
+    assert_eq!(fs::read(&note.path).unwrap(), original_source);
+    assert_eq!(fs::read(&sidecar).unwrap(), original_sidecar);
+}
+
+#[test]
+fn resolution_stops_writing_display_prose_and_preserves_historical_original_bytes() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let (preview, _, _) = pair_plan(&mut core, &root, &note, true);
+    core.resolve_recovery(&preview.operation_id, "keepCurrent")
+        .unwrap();
+    let resolution_path = core.journal_path(&preview.operation_id, "resolution");
+    let mut historical: serde_json::Value =
+        serde_json::from_slice(&fs::read(&resolution_path).unwrap()).unwrap();
+    assert!(historical.get("message").is_none());
+    // This is retained display prose in the original format, not a new fact
+    // or an instruction from which recovery authority may be inferred.
+    historical["message"] = "historical original 原始摘要 {literal}".into();
+    let original_bytes = serde_json::to_vec(&historical).unwrap();
+    private_replace(&resolution_path, &original_bytes).unwrap();
+    let record = journal::decode_resolution(&preview.operation_id, &original_bytes).unwrap();
+    assert_eq!(
+        record.historical_message.as_deref(),
+        Some("historical original 原始摘要 {literal}")
+    );
+    let recovery = core.inspect_recovery(&preview.operation_id).unwrap();
+    assert_eq!(recovery.status, "resolved");
+    assert_eq!(
+        recovery.description.explanation.key(),
+        "recovery.frozenPlanRetained"
+    );
+    assert!(
+        !serde_json::to_string(&recovery)
+            .unwrap()
+            .contains("historical original")
+    );
+    core.resolve_recovery(&preview.operation_id, "keepCurrent")
+        .unwrap();
+    assert_eq!(fs::read(&resolution_path).unwrap(), original_bytes);
+    assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
+}

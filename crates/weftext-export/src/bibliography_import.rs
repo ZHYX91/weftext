@@ -15,9 +15,9 @@ pub fn parse_bibliography_format(format: &str) -> Result<BibliographyFormat> {
         "bibtex" | "bib" => Ok(BibliographyFormat::Bibtex),
         "cslJson" | "csl-json" | "csl" => Ok(BibliographyFormat::CslJson),
         "ris" => Ok(BibliographyFormat::Ris),
-        _ => Err(ExportError(
-            "Unsupported bibliography format; choose BibTeX, CSL JSON or RIS".into(),
-        )),
+        _ => Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_format_unsupported(),
+        ))),
     }
 }
 
@@ -33,41 +33,45 @@ pub fn build_bibliography_native_package(
     operation_id: &str,
 ) -> Result<NativePackage> {
     if !weftext_data::uuid_v4(operation_id) {
-        return Err(ExportError(
-            "Bibliography import requires a canonical v4 operation ID".into(),
+        return Err(ExportError::new(
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_canonical_operation_uuid_required()),
         ));
     }
     let format = parse_bibliography_format(format)?;
     let proposal = import_bibliography(format, bytes)?;
     if proposal.records.is_empty() {
-        return Err(ExportError("Bibliography has no importable records".into()));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_importable_records_missing(),
+        )));
     }
     if proposal.records.len().saturating_mul(3).saturating_add(2) > MAX_PACKAGE_FILES {
-        return Err(ExportError("Bibliography import exceeds the bounded atomic file count; split the original upload into explicit groups".into()));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_atomic_file_count_exceeded(),
+        )));
     }
     if proposal
         .records
         .iter()
         .any(|record| !record.conflicts.is_empty())
     {
-        return Err(ExportError("Bibliography fields conflict with the preserved exact publication extension; choose the conflicting values before creating notes".into()));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_exact_publication_fields_conflict())));
     }
     let schema = Schema::from_author_json(destination_schema_author_json)
-        .map_err(|e| ExportError(e.to_string()))?;
+        .map_err(|e| ExportError::from_data(e))?;
     if !schema
         .types
         .iter()
         .any(|kind| kind.id == "library/paper" && kind.requires.iter().any(|r| r == "library/work"))
     {
-        return Err(ExportError(
-            "Destination schema has no installed library/paper requiring library/work".into(),
-        ));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_paper_work_type_unavailable(),
+        )));
     }
     let publication_field = schema
         .fields
         .iter()
         .find(|field| field.id == "library/publication")
-        .ok_or_else(|| ExportError("Destination publication field is unavailable".into()))?;
+        .ok_or_else(|| ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_publication_field_unavailable())))?;
     let workspace = provisional_id(operation_id, "workspace");
     let mut package = NativePackage {
         manifest: NativeManifest {
@@ -87,7 +91,9 @@ pub fn build_bibliography_native_package(
                         .clone()
                         .unwrap_or_else(|| "bibliography".into()),
                     code: loss.code.clone(),
-                    detail: loss.message.clone(),
+                    description: loss.description.clone(),
+
+                    product_diagnostics: loss.product_diagnostics.clone(),
                 })
                 .collect(),
         },
@@ -118,30 +124,42 @@ pub fn build_bibliography_native_package(
                 })
             })
         {
-            return Err(ExportError(format!(
-                "Record {} has a malformed DOI; repair the retained original before import",
-                ordinal + 1
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_import_malformed_doi(
+                    weftext_messages::params::ErrorExportBibliographyImportMalformedDoi {
+                        record: weftext_messages::UiInteger::new(
+                            i64::try_from(ordinal + 1).expect("bounded product count"),
+                        )
+                        .expect("bounded product count"),
+                    },
+                ),
             )));
         }
         let validation = schema.validate(&publication_field.shape, &publication);
         if !validation.is_valid() {
-            return Err(ExportError(format!(
-                "Record {} cannot enter the installed publication shape: {} {}",
-                ordinal + 1,
-                validation.diagnostics.join("; "),
-                validation.unavailable.join("; ")
-            )));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_import_publication_shape_invalid(weftext_messages::params::ErrorExportBibliographyImportPublicationShapeInvalid {
+                    record: weftext_messages::UiInteger::new(
+                        i64::try_from(ordinal + 1).expect("bounded product count"),
+                    )
+                    .expect("bounded product count"),
+                }),
+            ))
+            .with_diagnostics(
+                validation
+                    .diagnostics
+                    .into_iter()
+                    .chain(validation.unavailable)
+                    .collect(),
+            ));
         }
         // Unknown schema members are preserved author bytes; only proved typed
         // reference slots require explicit mapping before a new-note import.
         let mut authored = metadata(&node_id, &publication_field.key, &publication)?;
         let closure = weftext_data::typed_ref_closure(&authored, &schema)
-            .map_err(|e| ExportError(e.to_string()))?;
+            .map_err(|e| ExportError::from_data(e))?;
         if !closure.complete || !closure.slots.is_empty() {
-            return Err(ExportError(format!(
-                "Record {} contains typed Node/Resource references whose import mapping is unavailable; retained originals need an explicit mapping choice",
-                ordinal + 1
-            )));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_reference_mapping_unavailable(weftext_messages::params::ErrorExportBibliographyImportReferenceMappingUnavailable { record: weftext_messages::UiInteger::new(i64::try_from(ordinal + 1).expect("bounded product count")).expect("bounded product count") }))));
         }
         let mut resource_metadata = vec![];
         let mut registered = vec![];
@@ -190,7 +208,7 @@ pub fn build_bibliography_native_package(
         };
         if let Some(resources) = members.iter_mut().find(|member| member.key == "resources") {
             let NativeValue::Array(existing) = &mut resources.value else {
-                return Err(ExportError("Publication resource list is invalid".into()));
+                return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_publication_resources_invalid())));
             };
             existing.extend(publication_resources);
         } else {
@@ -210,12 +228,23 @@ pub fn build_bibliography_native_package(
             },
         );
         if !validation.is_valid() {
-            return Err(ExportError(format!(
-                "Record {} cannot become a typed paper Work: {} {}",
-                ordinal + 1,
-                validation.diagnostics.join("; "),
-                validation.unavailable.join("; ")
-            )));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_import_paper_work_invalid(
+                    weftext_messages::params::ErrorExportBibliographyImportPaperWorkInvalid {
+                        record: weftext_messages::UiInteger::new(
+                            i64::try_from(ordinal + 1).expect("bounded product count"),
+                        )
+                        .expect("bounded product count"),
+                    },
+                ),
+            ))
+            .with_diagnostics(
+                validation
+                    .diagnostics
+                    .into_iter()
+                    .chain(validation.unavailable)
+                    .collect(),
+            ));
         }
         let projection = weftext_data::project(&authored, &schema);
         if projection.qualification != "qualified"
@@ -228,13 +257,13 @@ pub fn build_bibliography_native_package(
                 .iter()
                 .any(|t| t == "library/paper")
         {
-            return Err(ExportError(
-                "Imported source does not qualify as the installed paper Work".into(),
+            return Err(ExportError::new(
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_imported_paper_work_unqualified()),
             ));
         }
         // The displayed title derives from the formal publication field once.
         let field_key = weftext_engine::encode_string(&publication_field.key)
-            .map_err(|e| ExportError(e.to_string()))?;
+            .map_err(|e| ExportError::from_engine(e))?;
         authored.push_str(&format!("\n#context {{\n  let publication = query(label(\"weftext\")).first().value.at({field_key})\n  if \"title\" in publication {{ title(publication.title) }}\n}}\n"));
         insert(
             &mut package,
@@ -253,7 +282,7 @@ pub fn build_bibliography_native_package(
             None,
         )?;
     }
-    validate_native_package(&package).map_err(|e| ExportError(e.to_string()))?;
+    validate_native_package(&package).map_err(|e| ExportError::from_native(e))?;
     Ok(package)
 }
 
@@ -274,7 +303,7 @@ fn metadata(node_id: &str, field_key: &str, publication: &NativeValue) -> Result
     ]);
     Ok(format!(
         "#metadata({}) <weftext>\n",
-        record.to_typst().map_err(|e| ExportError(e.to_string()))?
+        record.to_typst().map_err(ExportError::from_data)?
     ))
 }
 
@@ -304,9 +333,9 @@ fn insert(
     }
     entry.resource_id = resource.map(str::to_owned);
     if package.files.contains_key(&path) {
-        return Err(ExportError(
-            "Bibliography proposal resource path collision".into(),
-        ));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_resource_path_collision(),
+        )));
     }
     package.manifest.entries.insert(path.clone(), entry);
     package.files.insert(path, bytes);

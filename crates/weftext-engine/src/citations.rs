@@ -1,6 +1,8 @@
 //! Conservative native citation declarations and authored cite slots. Ref syntax
 //! (`@key`) deliberately remains unclassified until an official compile resolves it.
-use crate::{EngineError, SourceRange, certify_metadata_declaration, standard_binding_available};
+use crate::{
+    EngineError, SourceRange, UiMessage, certify_metadata_declaration, standard_binding_available,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use typst_syntax::{
@@ -54,8 +56,8 @@ pub fn inspect_citation_declaration(
     source: &str,
 ) -> Result<Option<CitationDeclaration>, EngineError> {
     if source.len() > 8 * 1024 * 1024 {
-        return Err(EngineError(
-            "citation-budget: owner exceeds citation parser budget".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_owner_budget(),
         ));
     }
     let parsed = Source::detached(source);
@@ -72,9 +74,8 @@ pub fn inspect_citation_declaration(
         return Ok(None);
     }
     let unavailable = || {
-        EngineError(
-            "citation-declaration: unique direct static standard metadata declaration required"
-                .into(),
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_declaration_required(),
         )
     };
     let range =
@@ -121,8 +122,8 @@ pub fn inspect_citation_declaration(
     let mut keys = BTreeSet::new();
     for item in array.items() {
         if entries.len() >= 4096 {
-            return Err(EngineError(
-                "citation-budget: too many declared entries".into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_entry_budget(),
             ));
         }
         let ast::ArrayItem::Pos(expr) = item else {
@@ -147,13 +148,13 @@ pub fn inspect_citation_declaration(
         let key = literal("key").ok_or_else(unavailable)?;
         let work = literal("work").ok_or_else(unavailable)?;
         if !valid_citation_key(&key) || !keys.insert(key.clone()) {
-            return Err(EngineError(
-                "citation-key: invalid or duplicate exact citation key".into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_key_invalid(),
             ));
         }
         if !valid_node_ref(&work) {
-            return Err(EngineError(
-                "citation-work: complete stable Work NodeRef required".into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_work_required(),
             ));
         }
         let work_expr = fields
@@ -311,7 +312,7 @@ pub struct NativeCitationControl {
     pub style: Option<String>,
     pub style_explicit: bool,
     pub editable: bool,
-    pub reason: Option<String>,
+    pub reason: Option<weftext_messages::ErrorDescription>,
 }
 
 /// Source labels are candidates, never proof that a target was executed or has
@@ -345,7 +346,7 @@ pub struct NativeCitationEditor {
     pub targets: Vec<NativeCrossReferenceTarget>,
     pub cross_references: Vec<NativeCrossReferenceControl>,
     pub rename_available: bool,
-    pub rename_reason: Option<String>,
+    pub rename_reason: Option<weftext_messages::ErrorDescription>,
 }
 
 fn walk_nodes<'a>(node: &LinkedNode<'a>, visit: &mut impl FnMut(&LinkedNode<'a>)) {
@@ -488,12 +489,15 @@ fn citation_control(source: &str, node: &LinkedNode<'_>, binding: bool) -> Nativ
         style: None,
         style_explicit: false,
         editable: binding,
-        reason: (!binding).then(|| "unverified-cite-binding".into()),
+        reason: (!binding).then(|| {
+            weftext_messages::UiMessage::error_engine_reason_citation_binding_unverified().into()
+        }),
     };
     let mut names = BTreeSet::new();
     if !unique_authored_slot(source, node) {
         control.editable = false;
-        control.reason = Some("generated-or-reused-citation-source".into());
+        control.reason =
+            Some(UiMessage::error_engine_citations_source_generated_or_reused().into());
     }
     if !valid_citation_key(&control.key) || args.is_empty() {
         control.editable = false;
@@ -530,7 +534,7 @@ fn citation_control(source: &str, node: &LinkedNode<'_>, binding: bool) -> Nativ
         }
     }
     if !control.editable && control.reason.is_none() {
-        control.reason = Some("dynamic-or-nonliteral-citation-options".into());
+        control.reason = Some(UiMessage::error_engine_citations_options_dynamic().into());
     }
     control
 }
@@ -541,8 +545,9 @@ fn citation_control(source: &str, node: &LinkedNode<'_>, binding: bool) -> Nativ
 fn complete_reference_source(source: &str) -> Result<(), EngineError> {
     let parsed = Source::detached(source);
     if source.len() > 8 * 1024 * 1024 || !parsed.root().errors_and_warnings().0.is_empty() {
-        return Err(EngineError(
-            "citation-rename: syntax or source budget unavailable".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_rename_source_unavailable(
+            ),
         ));
     }
     let allowed = [
@@ -655,7 +660,10 @@ fn complete_reference_source(source: &str) -> Result<(), EngineError> {
     if safe && bibliography_count <= 1 && application_bibliography {
         Ok(())
     } else {
-        Err(EngineError("citation-rename: dynamic, generated or external reference coverage is incomplete; source preserved".into()))
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_rename_coverage_incomplete(
+            ),
+        ))
     }
 }
 
@@ -731,7 +739,7 @@ pub fn inspect_native_citation_editor(source: &str) -> NativeCitationEditor {
     let declaration = inspect_citation_declaration(source);
     let (bindings, declaration_reason) = match declaration {
         Ok(value) => (value.map(|d| d.entries).unwrap_or_default(), None),
-        Err(error) => (vec![], Some(error.0)),
+        Err(error) => (vec![], Some(error.description())),
     };
     let mut editor = NativeCitationEditor {
         source_hash: crate::source_hash(source),
@@ -743,7 +751,8 @@ pub fn inspect_native_citation_editor(source: &str) -> NativeCitationEditor {
         rename_reason: None,
     };
     if source.len() > 8 * 1024 * 1024 {
-        editor.rename_reason = Some("citation-budget".into());
+        editor.rename_reason =
+            Some(weftext_messages::UiMessage::error_engine_reason_citation_budget().into());
         return editor;
     }
     let parsed = Source::detached(source);
@@ -846,15 +855,20 @@ pub fn inspect_native_citation_editor(source: &str) -> NativeCitationEditor {
     for target in &mut editor.targets {
         target.unique = counts[&target.label] == 1;
     }
-    editor.rename_reason =
-        declaration_reason.or_else(|| complete_reference_source(source).err().map(|e| e.0));
+    editor.rename_reason = declaration_reason.or_else(|| {
+        complete_reference_source(source)
+            .err()
+            .map(|error| error.description())
+    });
     editor.rename_available = editor.rename_reason.is_none();
     editor
 }
 
 fn check_citation_basis(source: &str, hash: &str) -> Result<(), EngineError> {
     if crate::source_hash(source) != hash {
-        return Err(EngineError("stale-citation-source".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_source_stale(),
+        ));
     }
     if source.len() > 8 * 1024 * 1024
         || !Source::detached(source)
@@ -863,8 +877,8 @@ fn check_citation_basis(source: &str, hash: &str) -> Result<(), EngineError> {
             .0
             .is_empty()
     {
-        return Err(EngineError(
-            "citation-edit: valid source within budget required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_edit_source_required(),
         ));
     }
     Ok(())
@@ -904,8 +918,9 @@ fn finish_citations(
 
 fn check_insertion(source: &str, at: usize) -> Result<(), EngineError> {
     if at > source.len() || !source.is_char_boundary(at) {
-        return Err(EngineError(
-            "citation-insertion: invalid byte boundary".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_insertion_boundary_invalid(
+            ),
         ));
     }
     let map = crate::inspect_editor(source);
@@ -929,8 +944,9 @@ fn check_insertion(source: &str, at: usize) -> Result<(), EngineError> {
     if eligible && plain {
         Ok(())
     } else {
-        Err(EngineError(
-            "citation-insertion: unique plain markup writer required".into(),
+        Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_insertion_writer_required(
+            ),
         ))
     }
 }
@@ -947,15 +963,18 @@ fn citation_argument_patches(
             found = Some(node.clone());
         }
     });
-    let node = found
-        .ok_or_else(|| EngineError("citation-target: stale or unavailable source slot".into()))?;
+    let node = found.ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_target_unavailable(),
+        )
+    })?;
     let control = citation_control(source, &node, citation_binding_available(source, "cite"));
     if range.raw != control.range.raw
         || call_name(node.get().cast::<ast::FuncCall>().unwrap()) != Some("cite")
         || !control.editable
     {
-        return Err(EngineError(
-            "citation-target: static standard citation required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_target_static_required(),
         ));
     }
     let call = node.get().cast::<ast::FuncCall>().unwrap();
@@ -979,9 +998,7 @@ fn citation_argument_patches(
         let args_node = parsed.find(call.args().to_untyped().span()).unwrap();
         let args = args_node.range();
         if source.as_bytes().get(args.end - 1) != Some(&b')') {
-            return Err(EngineError(
-                "citation-target: trailing content arguments unavailable".into(),
-            ));
+            return Err(EngineError::new(weftext_messages::UiMessage::error_engine_citations_citation_trailing_arguments_unavailable()));
         }
         let trailing_comma = args_node
             .children()
@@ -1033,11 +1050,17 @@ pub fn update_native_citation_options(
         .citations
         .into_iter()
         .find(|c| c.range.from == range.from)
-        .ok_or_else(|| EngineError("citation-readback-failed".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_readback_failed(),
+            )
+        })?;
     if form.is_some_and(|form| control.form != Some(form))
         || supplement.is_some_and(|text| control.supplement.as_deref() != Some(text))
     {
-        return Err(EngineError("citation-readback-failed".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_readback_failed(),
+        ));
     }
     Ok(output)
 }
@@ -1099,8 +1122,8 @@ pub fn suggest_native_citation_key(
     chosen_key: Option<&str>,
 ) -> Result<String, EngineError> {
     if !valid_node_ref(work) {
-        return Err(EngineError(
-            "citation-work: complete stable Work NodeRef required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_work_required(),
         ));
     }
     inspect_citation_declaration(source)?;
@@ -1108,35 +1131,34 @@ pub fn suggest_native_citation_key(
     let aliases: Vec<_> = editor.bindings.iter().filter(|e| e.work == work).collect();
     if let Some(key) = chosen_key {
         if !valid_citation_key(key) {
-            return Err(EngineError("citation-key: ASCII key required".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_ascii_key_required(),
+            ));
         }
         if let Some(entry) = editor.bindings.iter().find(|e| e.key == key) {
             return if entry.work == work {
                 if editor.targets.iter().any(|t| t.label == key) {
-                    Err(EngineError(
-                        "citation-key: existing Work alias conflicts with a document label".into(),
-                    ))
+                    Err(EngineError::new(weftext_messages::UiMessage::error_engine_citations_citation_alias_label_conflict()))
                 } else {
                     Ok(key.into())
                 }
             } else {
-                Err(EngineError(
-                    "citation-key: key already binds another Work".into(),
+                Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_citations_citation_key_other_work(),
                 ))
             };
         }
         if !aliases.is_empty() {
-            return Err(EngineError(
-                "citation-key: choose one of the existing Work aliases".into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_existing_alias_required(),
             ));
         }
         if editor.targets.iter().any(|t| t.label == key)
             || editor.citations.iter().any(|c| c.key == key)
             || editor.cross_references.iter().any(|r| r.label == key)
         {
-            return Err(EngineError(
-                "citation-key: conflicts with an existing unbound reference or document label"
-                    .into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_key_unbound_conflict(),
             ));
         }
         return Ok(key.into());
@@ -1144,8 +1166,8 @@ pub fn suggest_native_citation_key(
     match aliases.as_slice() {
         [entry] => {
             return if editor.targets.iter().any(|t| t.label == entry.key) {
-                Err(EngineError(
-                    "citation-key: existing Work alias conflicts with a document label".into(),
+                Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_citations_citation_alias_label_conflict(),
                 ))
             } else {
                 Ok(entry.key.clone())
@@ -1153,14 +1175,15 @@ pub fn suggest_native_citation_key(
         }
         [] => {}
         _ => {
-            return Err(EngineError(
-                "citation-key: multiple existing aliases require a choice".into(),
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_citation_alias_choice_required(
+                ),
             ));
         }
     }
     if !valid_citation_key(suggested_key) {
-        return Err(EngineError(
-            "citation-key: invalid suggestion; choose an ASCII key explicitly".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_suggestion_invalid(),
         ));
     }
     let occupied = |key: &str| {
@@ -1178,8 +1201,8 @@ pub fn suggest_native_citation_key(
             return Ok(key);
         }
     }
-    Err(EngineError(
-        "citation-key: suggestion budget exhausted".into(),
+    Err(EngineError::new(
+        weftext_messages::UiMessage::error_engine_citations_citation_suggestion_budget(),
     ))
 }
 
@@ -1198,9 +1221,13 @@ pub fn insert_native_citation(
     check_insertion(source, at)?;
     for name in ["cite", "metadata", "bibliography"] {
         if !citation_binding_available(source, name) {
-            return Err(EngineError(format!(
-                "citation-insertion: unverified {name} binding"
-            )));
+            return Err(EngineError::new(
+                UiMessage::error_engine_citations_insertion_binding_unverified(
+                    weftext_messages::params::ErrorEngineCitationsInsertionBindingUnverified {
+                        binding: name.into(),
+                    },
+                ),
+            ));
         }
     }
     let declaration = inspect_citation_declaration(source)?;
@@ -1227,7 +1254,9 @@ pub fn insert_native_citation(
                 }
             });
             let array = array_range.ok_or_else(|| {
-                EngineError("citation-declaration: entries array unavailable".into())
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_citations_citation_entries_unavailable(),
+                )
             })?;
             patches.push(patch(
                 source,
@@ -1257,9 +1286,8 @@ pub fn insert_native_citation(
         }
     });
     if bibliographies.len() > 1 || bibliographies.first() == Some(&false) {
-        return Err(EngineError(
-            "citation-insertion: external or ambiguous bibliography ownership; source preserved"
-                .into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_owner_ambiguous(),
         ));
     }
     let citation = format!(
@@ -1283,14 +1311,20 @@ pub fn insert_native_citation(
     }
     let mut output = finish_citations(source, patches)?;
     if crate::inspect_metadata(&output.source).id != crate::inspect_metadata(source).id {
-        return Err(EngineError(
-            "citation-insertion: document identity would change; source preserved".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_document_identity_changed(
+            ),
         ));
     }
-    let after = inspect_citation_declaration(&output.source)?
-        .ok_or_else(|| EngineError("citation-readback-failed".into()))?;
+    let after = inspect_citation_declaration(&output.source)?.ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_readback_failed(),
+        )
+    })?;
     if !after.entries.iter().any(|e| e.key == key && e.work == work) {
-        return Err(EngineError("citation-readback-failed".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_readback_failed(),
+        ));
     }
     let caret = output.source[..citation_end].encode_utf16().count();
     output.selection = crate::EditSelection {
@@ -1309,18 +1343,19 @@ pub fn rename_native_citation_key(
     check_citation_basis(source, expected_hash)?;
     complete_reference_source(source)?;
     if !valid_citation_key(new) || old == new {
-        return Err(EngineError(
-            "citation-key: distinct valid new key required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_distinct_key_required(),
         ));
     }
-    let declaration = inspect_citation_declaration(source)?
-        .ok_or_else(|| EngineError("citation-key: binding declaration required".into()))?;
+    let declaration = inspect_citation_declaration(source)?.ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_binding_required(),
+        )
+    })?;
     if !declaration.entries.iter().any(|e| e.key == old)
         || declaration.entries.iter().any(|e| e.key == new)
     {
-        return Err(EngineError(
-            "citation-key: missing source key or occupied destination".into(),
-        ));
+        return Err(EngineError::new(weftext_messages::UiMessage::error_engine_citations_citation_key_source_or_destination_invalid()));
     }
     let editor = inspect_native_citation_editor(source);
     if editor
@@ -1330,7 +1365,9 @@ pub fn rename_native_citation_key(
         || editor.citations.iter().any(|c| c.key == new)
         || editor.cross_references.iter().any(|r| r.label == new)
     {
-        return Err(EngineError("citation-key: document-label collision".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_document_label_collision(),
+        ));
     }
     let parsed = Source::detached(source);
     let mut patches = vec![];
@@ -1388,7 +1425,9 @@ pub fn rename_native_citation_key(
     let output = finish_citations(source, patches)?;
     let after = inspect_citation_declaration(&output.source)?.unwrap();
     if after.entries.iter().any(|e| e.key == old) || !after.entries.iter().any(|e| e.key == new) {
-        return Err(EngineError("citation-rename-readback-failed".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_citation_rename_readback_failed(),
+        ));
     }
     Ok(output)
 }
@@ -1403,16 +1442,17 @@ pub fn insert_native_cross_reference(
     check_citation_basis(source, expected_hash)?;
     check_insertion(source, at)?;
     if !citation_binding_available(source, "ref") {
-        return Err(EngineError(
-            "cross-reference: unverified ref binding".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_binding_unverified(
+            ),
         ));
     }
     let editor = inspect_native_citation_editor(source);
     if !editor.targets.iter().any(|t| t.label == label && t.unique)
         || editor.bindings.iter().any(|e| e.key == label)
     {
-        return Err(EngineError(
-            "cross-reference: unique document label without a citation collision required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_unique_label_required(),
         ));
     }
     let insert = if page {
@@ -1442,8 +1482,8 @@ pub fn rename_native_label(
             .next()
             .is_some_and(|n| n.cast::<ast::Label>().is_some_and(|l| l.get() == new))
     {
-        return Err(EngineError(
-            "cross-reference: distinct native label required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_distinct_label_required(),
         ));
     }
     let editor = inspect_native_citation_editor(source);
@@ -1462,7 +1502,9 @@ pub fn rename_native_label(
             .iter()
             .any(|r| r.kind == "unclassified" && r.label == old)
     {
-        return Err(EngineError("cross-reference: new label cannot be represented by existing @ reference markers without changing semantics".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_marker_semantics_changed(),
+        ));
     }
     if !editor.targets.iter().any(|t| t.label == old && t.unique)
         || editor.targets.iter().any(|t| t.label == new)
@@ -1473,8 +1515,8 @@ pub fn rename_native_label(
             .any(|c| c.key == old || c.key == new)
         || editor.cross_references.iter().any(|r| r.label == new)
     {
-        return Err(EngineError(
-            "cross-reference: missing, duplicate or colliding label".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_label_invalid(),
         ));
     }
     let parsed = Source::detached(source);
@@ -1525,8 +1567,8 @@ pub fn insert_native_cross_reference_with_label(
     check_citation_basis(source, expected_hash)?;
     check_insertion(source, at)?;
     if !valid_native_label(label) || !citation_binding_available(source, "ref") {
-        return Err(EngineError(
-            "cross-reference: valid label and standard ref binding required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_label_binding_required(),
         ));
     }
     let editor = inspect_native_citation_editor(source);
@@ -1535,8 +1577,8 @@ pub fn insert_native_cross_reference_with_label(
         || editor.cross_references.iter().any(|r| r.label == label)
         || editor.citations.iter().any(|c| c.key == label)
     {
-        return Err(EngineError(
-            "cross-reference: destination label is already used".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_destination_used(),
         ));
     }
     let parsed = Source::detached(source);
@@ -1548,14 +1590,17 @@ pub fn insert_native_cross_reference_with_label(
             found = Some(node.clone());
         }
     });
-    let node =
-        found.ok_or_else(|| EngineError("cross-reference: stale target source slot".into()))?;
+    let node = found.ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_source_stale(),
+        )
+    })?;
     if node
         .parent()
         .is_none_or(|p| p.kind() != SyntaxKind::Markup || p.parent().is_some())
     {
-        return Err(EngineError(
-            "cross-reference: direct main-source target required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_main_source_required(),
         ));
     }
     let supported = matches!(node.kind(), SyntaxKind::Heading | SyntaxKind::Equation)
@@ -1564,9 +1609,9 @@ pub fn insert_native_cross_reference_with_label(
                 && citation_binding_available(source, call_name(call).unwrap())
         });
     if !supported {
-        return Err(EngineError(
-            "cross-reference: supported heading, figure, table or equation source slot required"
-                .into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_target_unsupported(
+            ),
         ));
     }
     let mut has_label = false;
@@ -1585,13 +1630,14 @@ pub fn insert_native_cross_reference_with_label(
         .as_ref()
         .is_some_and(|n| n.get().cast::<ast::Label>().is_some());
     if has_label {
-        return Err(EngineError(
-            "cross-reference: target already has an author label; reuse it explicitly".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_author_label_exists(
+            ),
         ));
     }
     if at > target.from && at < target.to {
-        return Err(EngineError(
-            "cross-reference: reference insertion cannot rewrite its target body".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_target_rewrite_rejected(),
         ));
     }
     let label_insert = format!(" <{label}>");
@@ -1618,7 +1664,9 @@ pub fn insert_native_cross_reference_with_label(
         .iter()
         .any(|t| t.label == label && t.unique)
     {
-        return Err(EngineError("cross-reference: label readback failed".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_readback_failed(),
+        ));
     }
     let caret = output.source[..caret].encode_utf16().count();
     output.selection = crate::EditSelection {
@@ -1638,8 +1686,8 @@ pub fn insert_native_link(
     check_citation_basis(source, expected_hash)?;
     check_insertion(source, at)?;
     if !citation_binding_available(source, "link") {
-        return Err(EngineError(
-            "native-link: standard link binding required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_binding_required(),
         ));
     }
     let insert = format!(
@@ -1660,16 +1708,16 @@ pub fn insert_native_cross_link(
     check_citation_basis(source, expected_hash)?;
     check_insertion(source, at)?;
     if !citation_binding_available(source, "link") {
-        return Err(EngineError(
-            "cross-reference: standard link binding required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_link_binding_required(),
         ));
     }
     let editor = inspect_native_citation_editor(source);
     if !editor.targets.iter().any(|t| t.label == label && t.unique)
         || editor.bindings.iter().any(|e| e.key == label)
     {
-        return Err(EngineError(
-            "cross-reference: unique document label without a citation collision required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_cross_reference_unique_label_required(),
         ));
     }
     let insert = format!("#link(<{label}>)[#{}]", crate::encode_string(text)?);
@@ -1687,8 +1735,8 @@ pub fn update_native_link_text(
 ) -> Result<crate::EditOutput, EngineError> {
     check_citation_basis(source, expected_hash)?;
     if !citation_binding_available(source, "link") {
-        return Err(EngineError(
-            "native-link: standard link binding required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_binding_required(),
         ));
     }
     let parsed = Source::detached(source);
@@ -1700,20 +1748,34 @@ pub fn update_native_link_text(
             found = Some(node.clone());
         }
     });
-    let node = found.ok_or_else(|| EngineError("native-link: stale link source slot".into()))?;
+    let node = found.ok_or_else(|| {
+        EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_source_stale(),
+        )
+    })?;
     let call = node
         .get()
         .cast::<ast::FuncCall>()
         .filter(|c| call_name(*c) == Some("link"))
-        .ok_or_else(|| EngineError("native-link: direct standard link required".into()))?;
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_citations_native_link_direct_required(),
+            )
+        })?;
     let args: Vec<_> = call.args().items().collect();
     let Some(ast::Arg::Pos(target)) = args.first() else {
-        return Err(EngineError("native-link: static target required".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_static_target_required(
+            ),
+        ));
     };
     if target.to_untyped().cast::<ast::Str>().is_none()
         && target.to_untyped().cast::<ast::Label>().is_none()
     {
-        return Err(EngineError("native-link: static target required".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_static_target_required(
+            ),
+        ));
     }
     let mut bodies = vec![];
     let mut positional = 0usize;
@@ -1728,25 +1790,25 @@ pub fn update_native_link_text(
             ast::Arg::Named(named) if named.name().get() == "body" => bodies.push(named.expr()),
             ast::Arg::Named(_) => {}
             _ => {
-                return Err(EngineError(
-                    "native-link: spread arguments are unavailable".into(),
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_citations_native_link_spread_unsupported(),
                 ));
             }
         }
     }
     let [body] = bodies.as_slice() else {
-        return Err(EngineError(
-            "native-link: one explicit plain body required".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_plain_body_required(),
         ));
     };
     if plain_supplement(*body).is_none() {
-        return Err(EngineError(
-            "native-link: formatted or generated body preserved; edit its source".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_formatted_body_preserved(),
         ));
     }
     if !unique_authored_slot(source, &node) {
-        return Err(EngineError(
-            "native-link: generated or reused writer unavailable".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_citations_native_link_writer_unavailable(),
         ));
     }
     let range = parsed.find(body.to_untyped().span()).unwrap().range();

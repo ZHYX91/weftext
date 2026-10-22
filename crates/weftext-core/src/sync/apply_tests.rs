@@ -2632,7 +2632,8 @@ fn compound_move_rejects_one_resource_identity_claimed_by_distinct_owners() {
     .unwrap();
     let error = p.b.prepare_operation(apply(&p)).unwrap_err();
     assert!(
-        error.message.contains("duplicated across owners"),
+        (error.explanation)
+            .eq(&UiMessage::error_core_sync_compound_resource_owner_identity_duplicate()),
         "{error:?}"
     );
     assert!(p.br.join("Note/Note.typ").exists());

@@ -4372,6 +4372,7 @@ dependencies = [
  "image",
  "include_dir",
  "lopdf",
+ "mime",
  "mime_guess",
  "reqwest",
  "serde",
@@ -4387,6 +4388,7 @@ dependencies = [
  "weftext-engine",
  "weftext-export",
  "weftext-knowledge",
+ "weftext-messages",
  "windows-sys 0.61.2",
 ]
 
@@ -4406,6 +4408,7 @@ dependencies = [
  "weftext-engine",
  "weftext-export",
  "weftext-knowledge",
+ "weftext-messages",
 ]
 
 [[package]]
@@ -4424,6 +4427,7 @@ dependencies = [
  "typst-syntax",
  "uuid",
  "weftext-engine",
+ "weftext-messages",
 ]
 
 [[package]]
@@ -4442,6 +4446,7 @@ dependencies = [
  "typst-layout",
  "typst-pdf",
  "typst-syntax",
+ "weftext-messages",
 ]
 
 [[package]]
@@ -4472,6 +4477,7 @@ dependencies = [
  "uuid",
  "weftext-data",
  "weftext-engine",
+ "weftext-messages",
  "zip",
 ]
 
@@ -4488,6 +4494,7 @@ dependencies = [
  "uuid",
  "weftext-data",
  "weftext-engine",
+ "weftext-messages",
 ]
 
 [[package]]

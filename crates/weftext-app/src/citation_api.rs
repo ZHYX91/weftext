@@ -6,6 +6,7 @@ use weftext_core::{AdmittedCompileSnapshot, CoreError};
 use weftext_export::bibliography::{
     BibliographyFormat, BibliographyProjection, CitationWork, FrozenWork, project_bibliography,
 };
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +30,7 @@ pub(crate) fn freeze_citations(
     owner_path: &Path,
 ) -> Result<Option<FrozenCitations>, CoreError> {
     let Some(declaration) = weftext_engine::inspect_citation_declaration(owner_source)
-        .map_err(|e| CoreError::new("citationDeclarationUnavailable", e.to_string()))?
+        .map_err(|error| CoreError::from_engine("citationDeclarationUnavailable", error))?
     else {
         return Ok(None);
     };
@@ -41,7 +42,7 @@ pub(crate) fn freeze_citations(
     {
         return Err(CoreError::new(
             "citationOwnerUnavailable",
-            "Citation owner path contains parent traversal",
+            UiMessage::error_api_citation_citation_owner_traversal(),
         ));
     }
     let owner_path = if owner_path.is_absolute() {
@@ -52,7 +53,7 @@ pub(crate) fn freeze_citations(
     let relative = owner_path.strip_prefix(root).map_err(|_| {
         CoreError::new(
             "citationOwnerUnavailable",
-            "Citation owner is outside the frozen library",
+            UiMessage::error_api_citation_citation_owner_outside_library(),
         )
     })?;
     let virtual_path = relative
@@ -70,13 +71,13 @@ pub(crate) fn freeze_citations(
     {
         return Err(CoreError::new(
             "citationResourceCollision",
-            "An authored file or directory occupies weftext.citations.bib; generated data cannot replace it",
+            UiMessage::error_api_citation_generated_bibliography_occupied(),
         ));
     }
     let workspace = inventory.workspace_id.as_deref().ok_or_else(|| {
         CoreError::new(
             "citationWorkUnavailable",
-            "A managed library identity is required to resolve citation Works",
+            UiMessage::error_api_citation_citation_workspace_required(),
         )
     })?;
     let owner = captured
@@ -87,7 +88,7 @@ pub(crate) fn freeze_citations(
         .ok_or_else(|| {
             CoreError::new(
                 "citationOwnerUnavailable",
-                "Citation owner is not in the admitted source cut",
+                UiMessage::error_api_citation_citation_owner_outside_cut(),
             )
         })?;
     if owner
@@ -97,26 +98,30 @@ pub(crate) fn freeze_citations(
     {
         return Err(CoreError::new(
             "citationOwnerUnavailable",
-            "Draft source no longer has its admitted owner identity",
+            UiMessage::error_api_citation_citation_draft_identity_changed(),
         ));
     }
     let schema_file = captured.snapshot.schema.as_ref().ok_or_else(|| {
         CoreError::new(
             "citationSchemaUnavailable",
-            "Frozen schema role is unavailable",
+            UiMessage::error_api_citation_citation_schema_role_unavailable(),
         )
     })?;
     let (schema, schema_generation) = super::data_api::knowledge_schema_from_snapshot(schema_file)
-        .map_err(|e| CoreError::new("citationSchemaUnavailable", e.message))?;
+        .map_err(|mut error| {
+            error.code = "citationSchemaUnavailable".into();
+            error
+        })?;
     let mut works = vec![];
     for entry in &declaration.entries {
         let prefix = format!("weftext-node://{workspace}/");
         let node = entry.work.strip_prefix(&prefix).ok_or_else(|| {
             CoreError::new(
                 "citationWorkUnavailable",
-                format!(
-                    "{}: Work belongs to a library outside this authorized cut",
-                    entry.key
+                UiMessage::error_api_citation_work_outside_authorized_cut(
+                    weftext_messages::params::ErrorApiCitationWorkOutsideAuthorizedCut {
+                        key: entry.key.clone(),
+                    },
                 ),
             )
         })?;
@@ -128,16 +133,21 @@ pub(crate) fn freeze_citations(
         let [target] = targets.as_slice() else {
             return Err(CoreError::new(
                 "citationWorkUnavailable",
-                format!(
-                    "{}: missing, inaccessible or ambiguous stable Work",
-                    entry.key
+                UiMessage::error_api_citation_stable_work_unavailable(
+                    weftext_messages::params::ErrorApiCitationStableWorkUnavailable {
+                        key: entry.key.clone(),
+                    },
                 ),
             ));
         };
         if target.kind != "node" || target.identity_status != "admitted" {
             return Err(CoreError::new(
                 "citationWorkUnavailable",
-                format!("{}: target is not an admitted live Work", entry.key),
+                UiMessage::error_api_citation_live_work_unadmitted(
+                    weftext_messages::params::ErrorApiCitationLiveWorkUnadmitted {
+                        key: entry.key.clone(),
+                    },
+                ),
             ));
         }
         let files = captured
@@ -149,7 +159,11 @@ pub(crate) fn freeze_citations(
         let [file] = files.as_slice() else {
             return Err(CoreError::new(
                 "citationWorkUnavailable",
-                format!("{}: exact Work bytes are not in this cut", entry.key),
+                UiMessage::error_api_citation_exact_work_outside_cut(
+                    weftext_messages::params::ErrorApiCitationExactWorkOutsideCut {
+                        key: entry.key.clone(),
+                    },
+                ),
             ));
         };
         let source = if Path::new(&file.path) == owner_path {
@@ -158,13 +172,21 @@ pub(crate) fn freeze_citations(
             let bytes = file.bytes.as_deref().ok_or_else(|| {
                 CoreError::new(
                     "citationWorkUnavailable",
-                    format!("{}: Work bytes were unavailable", entry.key),
+                    UiMessage::error_api_citation_work_bytes_unavailable(
+                        weftext_messages::params::ErrorApiCitationWorkBytesUnavailable {
+                            key: entry.key.clone(),
+                        },
+                    ),
                 )
             })?;
             std::str::from_utf8(bytes).map_err(|_| {
                 CoreError::new(
                     "citationWorkUnavailable",
-                    format!("{}: Work source is not UTF-8", entry.key),
+                    UiMessage::error_api_citation_work_source_encoding(
+                        weftext_messages::params::ErrorApiCitationWorkSourceEncoding {
+                            key: entry.key.clone(),
+                        },
+                    ),
                 )
             })?
         };
@@ -178,9 +200,10 @@ pub(crate) fn freeze_citations(
         {
             return Err(CoreError::new(
                 "citationWorkType",
-                format!(
-                    "{}: target does not qualify as installed library/work in this cut",
-                    entry.key
+                UiMessage::error_api_citation_installed_work_type_unavailable(
+                    weftext_messages::params::ErrorApiCitationInstalledWorkTypeUnavailable {
+                        key: entry.key.clone(),
+                    },
                 ),
             ));
         }
@@ -193,9 +216,10 @@ pub(crate) fn freeze_citations(
             .ok_or_else(|| {
                 CoreError::new(
                     "citationPublicationUnavailable",
-                    format!(
-                        "{}: typed publication field is absent, invalid or unavailable",
-                        entry.key
+                    UiMessage::error_api_citation_publication_field_unavailable(
+                        weftext_messages::params::ErrorApiCitationPublicationFieldUnavailable {
+                            key: entry.key.clone(),
+                        },
                     ),
                 )
             })?;
@@ -213,8 +237,16 @@ pub(crate) fn freeze_citations(
             },
         });
     }
-    let bibliography = project_bibliography(&works, BibliographyFormat::Bibtex)
-        .map_err(|e| CoreError::new("citationBibliographyUnavailable", e.to_string()))?;
+    let bibliography =
+        project_bibliography(&works, BibliographyFormat::Bibtex).map_err(|error| {
+            let (description, diagnostics) = error.into_parts();
+            CoreError::from_product(
+                "citationBibliographyUnavailable",
+                None,
+                description,
+                diagnostics,
+            )
+        })?;
     let frozen = FrozenCitations {
         cut_id: captured.snapshot.cut_id.clone(),
         owner_source_hash: weftext_engine::source_hash(owner_source),
@@ -754,5 +786,38 @@ mod tests {
                 .code,
             "citationWorkType"
         );
+    }
+    #[test]
+    fn typed_work_errors_preserve_the_exact_authored_citation_key() {
+        let (mut snapshot, source, path) = fixture();
+        snapshot.snapshot.files.pop();
+        let before = snapshot.files.clone();
+        let error = freeze_citations(&mut snapshot, &source, &path).unwrap_err();
+        assert_eq!(error.code, "citationWorkUnavailable");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_api_citation_exact_work_outside_cut(
+                weftext_messages::params::ErrorApiCitationExactWorkOutsideCut {
+                    key: "actualKey".into(),
+                }
+            )
+        );
+        assert!(error.diagnostics.is_empty());
+        assert_eq!(snapshot.files, before);
+
+        let (mut snapshot, source, path) = fixture();
+        snapshot.snapshot.files.last_mut().unwrap().bytes = Some(vec![0xff]);
+        let before = snapshot.files.clone();
+        let error = freeze_citations(&mut snapshot, &source, &path).unwrap_err();
+        assert_eq!(error.code, "citationWorkUnavailable");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_api_citation_work_source_encoding(
+                weftext_messages::params::ErrorApiCitationWorkSourceEncoding {
+                    key: "actualKey".into(),
+                }
+            )
+        );
+        assert_eq!(snapshot.files, before);
     }
 }

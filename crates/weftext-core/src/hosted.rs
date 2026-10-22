@@ -3,6 +3,7 @@
 //! configured resources before calling it, and again before disclosing results.
 use super::*;
 use std::collections::BTreeMap;
+use weftext_messages::UiMessage;
 #[path = "hosted_library.rs"]
 mod library;
 pub(crate) use library::{
@@ -181,7 +182,7 @@ pub(crate) fn read_actor_input_header(
     let value = read_first_metadata(file, "scope")?.ok_or_else(|| {
         CoreError::new(
             "unsupportedInputScope",
-            "Actor proposal has no supported original input scope; original bytes remain unchanged",
+            UiMessage::error_core_original_scope_actor_unsupported_original_scope(),
         )
     })?;
     let scope: ActorInputScope = serde_json::from_slice(&value)?;
@@ -263,7 +264,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "schemaBasisChanged",
-                "Installed schema witness unavailable",
+                UiMessage::error_core_hosted_installed_schema_witness_unavailable(),
             ));
         }
         action(self)
@@ -277,7 +278,7 @@ impl Core {
         if actor.is_empty() || actor.len() > 256 || self.actor.is_some() {
             return Err(CoreError::new(
                 "invalidActor",
-                "A non-nested authenticated actor scope is required",
+                UiMessage::error_core_hosted_non_nested_authenticated_actor_scope_required(),
             ));
         }
         let root = self.data_dir.join("actors").join(hash(actor.as_bytes()));
@@ -329,7 +330,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "sessionMissing",
-                "Open the source in the current actor session",
+                UiMessage::error_core_hosted_open_source_in_current_actor_session(),
             ));
         }
         self.actor_library_for_session(session_id)?;
@@ -353,7 +354,10 @@ impl Core {
     }
     pub fn store_hosted_policy(&self, bytes: &[u8]) -> Result<()> {
         if bytes.len() > MAX_SOURCE_BYTES {
-            return Err(CoreError::new("budget", "Policy exceeds 2 MiB"));
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_hosted_policy_exceeds2_mi_b(),
+            ));
         }
         private_replace(&self.data_dir.join("hosted-policy.json"), bytes)
     }
@@ -377,7 +381,7 @@ impl Core {
                 if self.operations.contains_key(&record.core_operation_id) {
                     return Err(CoreError::new(
                         "privateEvidence",
-                        "A no-input actor fence references an actual Core Plan",
+                        UiMessage::error_core_original_scope_actor_no_input_references_plan(),
                     ));
                 }
                 self.validate_unregistered_fence_namespace(&record.core_operation_id)?;
@@ -392,7 +396,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "privateEvidence",
-                        "A library author proposal requires its original qualified library owner",
+                        UiMessage::error_core_original_scope_actor_qualified_library_required(),
                     ));
                 }
                 self.validate_original_input_scope(scope)?;
@@ -412,7 +416,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "privateEvidence",
-                            "Typed actor proposal and original input owners differ",
+                            UiMessage::error_core_original_scope_actor_proposal_owner_differs(),
                         ));
                     }
                 }
@@ -422,7 +426,8 @@ impl Core {
                         if &plan.file_save.as_ref().unwrap().scope != scope {
                             return Err(CoreError::new(
                                 "operationConflict",
-                                "Actor input and original file-save Plan scopes differ",
+                                UiMessage::error_core_original_scope_actor_file_save_scope_differs(
+                                ),
                             ));
                         }
                     } else if let Some(workspace) = &plan.workspace_id
@@ -430,7 +435,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "privateEvidence",
-                            "Actor input and original transaction owners differ",
+                            UiMessage::error_core_original_scope_actor_transaction_owner_differs(),
                         ));
                     }
                 }
@@ -465,7 +470,7 @@ impl Core {
                 if !empty {
                     return Err(CoreError::new(
                         "unsupportedInputScope",
-                        "Only an actual empty cancelled actor fence can have no input scope",
+                        UiMessage::error_core_original_scope_actor_no_input_requires_empty_cancelled_fence(),
                     ));
                 }
             }
@@ -477,14 +482,14 @@ impl Core {
         if bytes.len() > 4096 {
             return Err(CoreError::new(
                 "budget",
-                "No-input actor fence exceeds its metadata budget",
+                UiMessage::error_core_original_scope_actor_no_input_metadata_budget(),
             ));
         }
         let record: ActorOperation = serde_json::from_slice(bytes)?;
         if record.scope != ActorInputScope::NoInput {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Actor fence scope changed",
+                UiMessage::error_core_original_scope_actor_fence_scope_changed(),
             ));
         }
         self.validate_actor_input_record(&record)?;
@@ -494,14 +499,19 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "privateEvidence",
-                    "Actor fence is outside its private namespace",
+                    UiMessage::error_core_original_scope_actor_fence_outside_namespace(),
                 )
             })?;
         let parts = relative
             .components()
             .map(|part| part.as_os_str().to_str())
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| CoreError::new("privateEvidence", "Invalid actor fence namespace"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_original_scope_actor_fence_namespace_invalid(),
+                )
+            })?;
         if parts.len() != 3
             || parts[0] != hash(record.actor.as_bytes())
             || parts[1] != "operations"
@@ -510,12 +520,15 @@ impl Core {
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Actor fence namespace differs",
+                UiMessage::error_core_original_scope_actor_fence_namespace_differs(),
             ));
         }
-        let leaf = parts[2]
-            .strip_suffix(".json")
-            .ok_or_else(|| CoreError::new("privateEvidence", "Invalid actor fence leaf"))?;
+        let leaf = parts[2].strip_suffix(".json").ok_or_else(|| {
+            CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_original_scope_actor_fence_leaf_invalid(),
+            )
+        })?;
         valid_operation_id(leaf)?;
         Ok(())
     }
@@ -526,7 +539,7 @@ impl Core {
             }
             return Err(CoreError::new(
                 "unsupportedInputScope",
-                "Original author input has no qualified owner",
+                UiMessage::error_core_original_scope_actor_original_owner_unqualified(),
             ));
         };
         scope.validate()?;
@@ -535,7 +548,7 @@ impl Core {
             if &plan.file_save.as_ref().unwrap().scope != scope {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Actor input and original file-save Plan scopes differ",
+                    UiMessage::error_core_original_scope_actor_file_save_scope_differs(),
                 ));
             }
         }
@@ -546,7 +559,7 @@ impl Core {
         if self.actor.is_none() {
             return Err(CoreError::new(
                 "invalidActor",
-                "Authenticated actor required",
+                UiMessage::error_core_hosted_authenticated_actor_required(),
             ));
         }
         Ok(self
@@ -571,13 +584,13 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "This operation belongs to a feature or definition proposal",
+                UiMessage::error_core_hosted_operation_belongs_to_feature_or_definition_proposal(),
             ));
         }
         if self.actor.as_ref() != Some(&record.actor) {
             return Err(CoreError::new(
                 "invalidActor",
-                "Operation belongs to a different actor",
+                UiMessage::error_core_hosted_operation_belongs_to_different_actor(),
             ));
         }
         if self
@@ -587,7 +600,8 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "The scoped source save references a different operation kind",
+                UiMessage::error_core_hosted_scoped_source_save_references_different_operation_kind(
+                ),
             ));
         }
         self.validate_actor_file_input(&record)?;
@@ -640,7 +654,7 @@ impl Core {
         if record.resource != resource || self.actor.as_ref() != Some(&record.actor) {
             return Err(CoreError::new(
                 "operationConflict",
-                "Operation resource or actor differs",
+                UiMessage::error_core_hosted_operation_resource_or_actor_differs(),
             ));
         }
         if let Some(status) = self.actor_save_status(operation)?
@@ -650,8 +664,12 @@ impl Core {
         }
         record.cancelled = true;
         private_replace(&path, &self.actor_operation_bytes(&record)?)?;
-        self.actor_save_status(operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing settled record"))
+        self.actor_save_status(operation)?.ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_hosted_missing_settled_record(),
+            )
+        })
     }
     pub fn actor_save(
         &mut self,
@@ -693,19 +711,19 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "The original actor save differs",
+                        UiMessage::error_core_hosted_original_actor_save_differs(),
                     ));
                 }
                 if record.cancelled {
                     return Err(CoreError::new(
                         "operationCancelled",
-                        "The original request was durably cancelled; use an explicitly new proposal",
+                        UiMessage::error_core_hosted_original_request_was_durably_cancelled_use_explicitly_new_proposal(),
                     ));
                 }
                 if record.fingerprint != fingerprint {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "This operation already names a different proposal",
+                        UiMessage::error_core_hosted_operation_already_names_different_proposal(),
                     ));
                 }
                 if let Some(status) = self.actor_save_status(&request.operation_id)?
@@ -725,7 +743,7 @@ impl Core {
                         root.ok_or_else(|| {
                             CoreError::new(
                                 "basisRequired",
-                                "The definition owner library is required",
+                                UiMessage::error_core_hosted_definition_owner_library_required(),
                             )
                         })?,
                         &request,
@@ -766,7 +784,10 @@ impl Core {
         let mut status = self
             .actor_save_status(&request.operation_id)?
             .ok_or_else(|| {
-                CoreError::new("invalidState", "The original operation record is missing")
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_original_operation_record_missing(),
+                )
             })?;
         status.recovery_issue = outcome.recovery_issue;
         Ok(status)
@@ -793,11 +814,17 @@ impl Core {
             .filter(|f| f.field_id == field_id)
             .filter(|_| record.resource == resource)
             .ok_or_else(|| {
-                CoreError::new("operationConflict", "Operation field or resource differs")
+                CoreError::new(
+                    "operationConflict",
+                    UiMessage::error_core_hosted_operation_field_or_resource_differs(),
+                )
             })?;
-        let status = self
-            .actor_save_status(operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original operation"))?;
+        let status = self.actor_save_status(operation)?.ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_hosted_missing_original_operation(),
+            )
+        })?;
         Ok(Some(ActorFieldStatus {
             operation_id: operation.into(),
             resource: resource.into(),
@@ -822,7 +849,7 @@ impl Core {
             if !record.cancelled && record.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The original field intent differs",
+                    UiMessage::error_core_hosted_original_field_intent_differs(),
                 ));
             }
         }
@@ -843,7 +870,10 @@ impl Core {
         check_size(request.source.as_bytes())?;
         check_size(&serde_json::to_vec(&cell)?)?;
         if field_id.is_empty() || field_id.len() > 256 || fingerprint.len() != 64 {
-            return Err(CoreError::new("invalidField", "Invalid field intent"));
+            return Err(CoreError::new(
+                "invalidField",
+                UiMessage::error_core_hosted_invalid_field_intent(),
+            ));
         }
         let path = self.actor_record(&request.operation_id)?;
         match fs::read(&path) {
@@ -854,12 +884,15 @@ impl Core {
                 let status = self
                     .actor_field_status(resource, field_id, &request.operation_id)?
                     .ok_or_else(|| {
-                        CoreError::new("invalidState", "Missing original field operation")
+                        CoreError::new(
+                            "invalidState",
+                            UiMessage::error_core_hosted_missing_original_field_operation(),
+                        )
                     })?;
                 if !record.cancelled && record.fingerprint != fingerprint {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "The original field intent differs",
+                        UiMessage::error_core_hosted_original_field_intent_differs(),
                     ));
                 }
                 return Ok(status);
@@ -897,7 +930,12 @@ impl Core {
         })?;
         let mut status = self
             .actor_field_status(resource, field_id, &request.operation_id)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original field operation"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_missing_original_field_operation(),
+                )
+            })?;
         status.recovery_issue = outcome.recovery_issue;
         Ok(status)
     }
@@ -938,7 +976,12 @@ impl Core {
             self.actor_settle(resource, operation)?;
         }
         self.actor_field_status(resource, field_id, operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing settled field operation"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_missing_settled_field_operation(),
+                )
+            })
     }
 
     /// Explicit allowlisted file set; no ambient tree enumeration or fallback.
@@ -946,7 +989,10 @@ impl Core {
     pub fn hosted_files(&self, root: &Path, paths: &[String]) -> Result<BTreeMap<String, Vec<u8>>> {
         let root = absolute_path(root)?;
         if paths.len() > 64 {
-            return Err(CoreError::new("budget", "At most 64 explicit inputs"));
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_hosted_at_most64_explicit_inputs(),
+            ));
         }
         let mut guards = Vec::new();
         let mut handles = Vec::new();
@@ -959,7 +1005,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "Explicit inputs must be relative child paths",
+                    UiMessage::error_core_hosted_explicit_inputs_must_relative_child_paths(),
                 ));
             }
             let path = root.join(relative_path);
@@ -976,7 +1022,10 @@ impl Core {
             let bytes = operations::read_blob(&mut file)?;
             total += bytes.len();
             if total > 32 * 1024 * 1024 {
-                return Err(CoreError::new("budget", "Hosted snapshot exceeds 32 MiB"));
+                return Err(CoreError::new(
+                    "budget",
+                    UiMessage::error_core_hosted_hosted_snapshot_exceeds32_mi_b(),
+                ));
             }
             files.insert(relative.clone(), bytes);
         }

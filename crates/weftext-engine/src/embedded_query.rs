@@ -14,7 +14,7 @@ pub struct EmbeddedQuerySource {
     pub label: String,
     pub call_from: usize,
     pub range: SourceRange,
-    pub reason: Option<String>,
+    pub reason: Option<weftext_messages::ErrorDescription>,
 }
 
 pub fn embedded_query_sources(source: &str) -> Vec<EmbeddedQuerySource> {
@@ -79,11 +79,11 @@ pub fn embedded_query_sources(source: &str) -> Vec<EmbeddedQuerySource> {
                 range.writable = certified;
                 let reason = (!certified).then(|| {
                     if !syntax_valid {
-                        "源码语法暂不完整；保留原文，修复后重新定位。"
+                        weftext_messages::UiMessage::error_engine_embedded_query_syntax_incomplete()
                     } else {
-                        "此 Query 不是唯一、直接且已证明绑定的本地声明；保留原文，仅提供只读结果。"
+                        weftext_messages::UiMessage::error_engine_embedded_query_declaration_uncertified()
                     }
-                    .to_string()
+                    .into()
                 });
                 out.push(EmbeddedQuerySource {
                     id: format!("{hash}:{from}:{to}"),

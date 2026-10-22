@@ -92,7 +92,7 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "ownerBackupChanged",
-        "原备份计划、库或授权已变化；请核对原请求。",
+        UiMessage::error_api_hosted_owner_backup_backup_basis_changed(),
     )
 }
 fn core_error(_: CoreError) -> ApiError {
@@ -100,14 +100,16 @@ fn core_error(_: CoreError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "ownerBackupUnavailable",
-        "完整恢复资料无法一致捕获或原操作未完成；原资料和原请求保留，未声明备份完整。",
+        UiMessage::error_api_hosted_owner_backup_backup_result_unqualified(),
     )
 }
 fn check_id(id: &str) -> Result<(), ApiError> {
     if weftext_data::uuid_v4(id) {
         Ok(())
     } else {
-        Err(ApiError::bad("备份请求标识无效"))
+        Err(ApiError::bad(
+            UiMessage::error_api_hosted_owner_backup_backup_request_id_invalid(),
+        ))
     }
 }
 fn config_hash(inner: &HostedInner) -> Result<String, ApiError> {
@@ -196,7 +198,7 @@ fn safe_status(
         });
     Ok(
         json!({"requestId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|commit_allowed),"commitAllowed":commit_allowed,
-        "summary":if same { Some("完整恢复资料备份包含所选库的原始文件、忽略项、回收内容、各人的私有草稿与原操作记录；不提供自动跨设备恢复。") } else { None },
+        "summary":if same { Some(UiMessage::error_api_hosted_owner_backup_recovery_materials_summary()) } else { None },
         "artifact":artifact.map(|a|json!({"digest":a.digest,"length":a.bytes.len(),"filename":"weftext-recovery-backup.zip","contentType":"application/zip"})),
         "deliveryUnavailable":status.status=="committed" && artifact.is_none(),"automaticRestore":false}),
     )
@@ -215,7 +217,7 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         check_id(&req.request_id)?;
@@ -238,7 +240,7 @@ async fn prepare(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -257,7 +259,7 @@ async fn status(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -287,7 +289,7 @@ async fn commit(
                 return Err(ApiError::new(
                     StatusCode::TOO_MANY_REQUESTS,
                     "ownerBackupBudget",
-                    "备份交付缓存已满；请先下载并关闭已有工件，再提交原计划。",
+                    UiMessage::error_api_hosted_owner_backup_backup_delivery_cache_capacity(),
                 ));
             }
             let root = inner.config.root.clone();
@@ -313,7 +315,7 @@ async fn commit(
                     .map_err(|_| {
                         CoreError::new(
                             "backupArtifact",
-                            "The original backup delivery cannot be encoded",
+                            UiMessage::error_api_hosted_owner_backup_backup_delivery_encoding_failed(),
                         )
                     })
                 })
@@ -344,7 +346,7 @@ async fn commit(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -367,7 +369,7 @@ async fn settle(
 async fn download(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Download>,
+    RequestJson(req): RequestJson<Download>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         check_id(&req.request_id)?;let actor=inner.actor(&auth)?;access(inner,&actor,true,true)?;expire_revoked(inner);
@@ -376,7 +378,7 @@ async fn download(
         let view=safe_status(inner,&actor,status)?;
         if view["artifact"]["digest"].as_str()!=Some(req.digest.as_str()) {return Err(unavailable());}
         let artifact=inner.owner_backup.jobs.get(&(actor,req.request_id.clone())).ok_or_else(unavailable)?;
-        if req.offset>artifact.bytes.len() {return Err(ApiError::bad("备份下载偏移无效"));}
+        if req.offset>artifact.bytes.len() {return Err(ApiError::bad(UiMessage::error_api_hosted_owner_backup_backup_download_offset_invalid()));}
         let end=req.offset.saturating_add(64*1024).min(artifact.bytes.len());
         Ok(json!({"requestId":req.request_id,"digest":artifact.digest,"offset":req.offset,"nextOffset":end,"length":artifact.bytes.len(),"done":end==artifact.bytes.len(),"base64":base64::engine::general_purpose::STANDARD.encode(&artifact.bytes[req.offset..end])}))
     }).await?))
@@ -384,7 +386,7 @@ async fn download(
 async fn close(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<RequestId>,
+    RequestJson(req): RequestJson<RequestId>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         check_id(&req.request_id)?;let actor=inner.actor(&auth)?;access(inner,&actor,false,false)?;

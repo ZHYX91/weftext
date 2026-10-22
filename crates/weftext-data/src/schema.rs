@@ -1,4 +1,4 @@
-use crate::{DataError, ExactDecimal, NativeValue, Result};
+use crate::{DataError, ErrorDescription, ExactDecimal, NativeValue, Result, UiMessage};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -179,8 +179,8 @@ pub struct Schema {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Validation {
-    pub diagnostics: Vec<String>,
-    pub unavailable: Vec<String>,
+    pub diagnostics: Vec<ErrorDescription>,
+    pub unavailable: Vec<ErrorDescription>,
     pub unbound: Vec<String>,
 }
 impl Validation {
@@ -279,12 +279,11 @@ const SCALARS: &[&str] = &[
 impl Schema {
     pub fn from_author_json(bytes: &str) -> Result<Self> {
         if bytes.len() > 8 * 1024 * 1024 {
-            return Err(DataError(
-                "Schema configuration exceeds installation byte budget".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_schema_schema_installation_byte_budget_exceeded(),
             ));
         }
-        let value: UniqueJson = serde_json::from_str(bytes)?;
-        let schema: Self = serde_json::from_value(value.0)?;
+        let schema: Self = serde_json::from_value(parse_unique_json(bytes.as_bytes())?)?;
         schema.check_installation()?;
         Ok(schema)
     }
@@ -312,20 +311,40 @@ impl Schema {
         for token in tokens {
             if let Some(id) = self.type_id(token) {
                 if result.contains(id) {
-                    check.diagnostics.push(format!("Duplicate type {token}"));
+                    check.diagnostics.push(
+                        weftext_messages::UiMessage::error_data_schema_duplicate_type(
+                            weftext_messages::params::ErrorDataSchemaDuplicateType {
+                                type_token: (token).to_string(),
+                            },
+                        )
+                        .into(),
+                    );
                 }
                 self.add_type(id, &mut result);
             } else {
-                check.unavailable.push(format!("Unknown type {token}"));
+                check.unavailable.push(
+                    weftext_messages::UiMessage::error_data_schema_unknown_type(
+                        weftext_messages::params::ErrorDataSchemaUnknownType {
+                            type_token: (token).to_string(),
+                        },
+                    )
+                    .into(),
+                );
             }
         }
         for id in &result {
             let t = self.types.iter().find(|t| &t.id == id).unwrap();
             for c in &t.conflicts {
                 if result.contains(c) {
-                    check
-                        .diagnostics
-                        .push(format!("Conflicting types {id} and {c}"));
+                    check.diagnostics.push(
+                        weftext_messages::UiMessage::error_data_schema_types_conflict(
+                            weftext_messages::params::ErrorDataSchemaTypesConflict {
+                                type_id: (id).to_string(),
+                                conflicting_type_id: (c).to_string(),
+                            },
+                        )
+                        .into(),
+                    );
                 }
             }
         }
@@ -361,7 +380,7 @@ impl Schema {
     pub fn validate(&self, shape: &Shape, value: &NativeValue) -> Validation {
         if let Err(error) = crate::native::check_native_budget(value) {
             let mut unavailable = Validation::valid();
-            unavailable.unavailable.push(error.0);
+            unavailable.unavailable.extend(error.into_diagnostics());
             return unavailable;
         }
         self.validate_at(shape, value, "$")
@@ -379,7 +398,15 @@ impl Schema {
         match shape {
             Shape::Scalar { semantic } => {
                 if !scalar_valid(semantic, value) {
-                    out.diagnostics.push(format!("{path}: expected {semantic}"));
+                    out.diagnostics.push(
+                        weftext_messages::UiMessage::error_data_schema_value_semantic_mismatch(
+                            weftext_messages::params::ErrorDataSchemaValueSemanticMismatch {
+                                value_path: (path).to_string(),
+                                semantic: (semantic).to_string(),
+                            },
+                        )
+                        .into(),
+                    );
                 }
             }
             Shape::Enum { values, open } => {
@@ -387,19 +414,33 @@ impl Schema {
                     .text()
                     .is_none_or(|v| !*open && !values.iter().any(|s| s == v))
                 {
-                    out.diagnostics.push(format!("{path}: unknown enum value"));
+                    out.diagnostics.push(
+                        weftext_messages::UiMessage::error_data_schema_unknown_enum_value(
+                            weftext_messages::params::ErrorDataSchemaUnknownEnumValue {
+                                value_path: (path).to_string(),
+                            },
+                        )
+                        .into(),
+                    );
                 }
             }
             Shape::List { items, min, max } => match value.array() {
                 Some(a) => {
                     if a.len() < *min || max.is_some_and(|m| a.len() > m) {
-                        out.diagnostics.push(format!("{path}: list cardinality"));
+                        out.diagnostics.push(weftext_messages::UiMessage::error_data_schema_list_cardinality_mismatch(weftext_messages::params::ErrorDataSchemaListCardinalityMismatch {value_path: (path).to_string()}).into());
                     }
                     for (i, v) in a.iter().enumerate() {
                         out.merge(self.validate_at(items, v, &format!("{path}[{i}]")));
                     }
                 }
-                None => out.diagnostics.push(format!("{path}: expected array")),
+                None => out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_schema_array_expected(
+                        weftext_messages::params::ErrorDataSchemaArrayExpected {
+                            value_path: (path).to_string(),
+                        },
+                    )
+                    .into(),
+                ),
             },
             Shape::Record {
                 members,
@@ -411,7 +452,7 @@ impl Schema {
                         match value.member(k) {
                             None if m.required => out
                                 .diagnostics
-                                .push(format!("{path}.{k}: required member absent")),
+                                .push(weftext_messages::UiMessage::error_data_schema_required_record_member_absent(weftext_messages::params::ErrorDataSchemaRequiredRecordMemberAbsent {value_path: (path).to_string(), member_key: (k).to_string()}).into()),
                             Some(NativeValue::None) if m.nullable => {}
                             Some(v) => {
                                 out.merge(self.validate_at(&m.shape, v, &format!("{path}.{k}")))
@@ -423,7 +464,7 @@ impl Schema {
                         if !members.contains_key(&m.key) {
                             if unknown == "reject" {
                                 out.diagnostics
-                                    .push(format!("{path}.{}: unknown member", m.key));
+                                    .push(weftext_messages::UiMessage::error_data_schema_unknown_record_member(weftext_messages::params::ErrorDataSchemaUnknownRecordMember {value_path: (path).to_string(), member_key: (m.key).to_string()}).into());
                             } else {
                                 out.unbound.push(format!("{path}.{}", m.key));
                             }
@@ -435,14 +476,31 @@ impl Schema {
                         }
                     }
                 }
-                None => out.diagnostics.push(format!("{path}: expected record")),
+                None => out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_schema_record_expected(
+                        weftext_messages::params::ErrorDataSchemaRecordExpected {
+                            value_path: (path).to_string(),
+                        },
+                    )
+                    .into(),
+                ),
             },
             Shape::Union {
                 variants,
                 discriminator,
             } => match self.union_variant(variants, discriminator.as_ref(), value) {
                 Ok(v) => out.merge(self.validate_at(v, value, path)),
-                Err(e) => out.diagnostics.push(format!("{path}: {}", e.0)),
+                Err(error) => {
+                    out.diagnostics.push(
+                        UiMessage::error_data_schema_union_value_invalid_at_path(
+                            weftext_messages::params::ErrorDataSchemaUnionValueInvalidAtPath {
+                                path: path.into(),
+                            },
+                        )
+                        .into(),
+                    );
+                    out.diagnostics.extend(error.into_diagnostics());
+                }
             },
             Shape::Use { .. } => unreachable!(),
         }
@@ -463,18 +521,21 @@ impl Schema {
                     .map(|(i, _)| i)
                     .collect();
                 if matches.len() != 1 {
-                    return Err(DataError("Union requires exactly one branch member".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_union_requires_exactly_one_branch_member()));
                 }
                 matches[0]
             }
             Some(Discriminator::Tag { key }) => {
-                let tag = v
-                    .member(key)
-                    .and_then(NativeValue::text)
-                    .ok_or_else(|| DataError("Missing union tag".into()))?;
+                let tag = v.member(key).and_then(NativeValue::text).ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_union_tag_missing(),
+                    )
+                })?;
                 let found:Vec<_>=variants.iter().enumerate().filter(|(_,s)|match self.resolve(s){Shape::Record{members,..}=>matches!(self.resolve(&members[key].shape),Shape::Enum{values,..}if values.iter().any(|x|x==tag)),_=>false}).map(|(i,_)|i).collect();
                 if found.len() != 1 {
-                    return Err(DataError("Ambiguous union tag".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_union_tag_ambiguous(),
+                    ));
                 }
                 found[0]
             }
@@ -497,14 +558,18 @@ impl Schema {
                     .map(|(i, _)| i)
                     .collect();
                 if found.len() != 1 {
-                    return Err(DataError("Ambiguous union native domain".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_union_native_domain_ambiguous(),
+                    ));
                 }
                 found[0]
             }
         };
-        variants
-            .get(index)
-            .ok_or_else(|| DataError("Invalid union discriminator".into()))
+        variants.get(index).ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_schema_invalid_union_discriminator(),
+            )
+        })
     }
     fn native_domain(&self, shape: &Shape) -> &str {
         match self.resolve(shape) {
@@ -527,7 +592,9 @@ impl Schema {
     }
     fn check_installation(&self) -> Result<()> {
         if self.version != 1 {
-            return Err(DataError("Unsupported schema version".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_unsupported_schema_version(),
+            ));
         }
         unique(self.fields.iter().map(|f| f.id.as_str()), "field id")?;
         unique(self.fields.iter().map(|f| f.key.as_str()), "field key")?;
@@ -541,7 +608,9 @@ impl Schema {
         )?;
         for (k, v) in &self.aliases {
             if k.is_empty() || !self.types.iter().any(|t| t.id == *v) {
-                return Err(DataError("Unresolved type alias".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_type_alias_unresolved(),
+                ));
             }
         }
         for (name, s) in &self.definitions {
@@ -549,13 +618,16 @@ impl Schema {
         }
         for f in &self.fields {
             if matches!(f.key.as_str(), "id" | "types") || f.key.starts_with("weftext-") {
-                return Err(DataError("Reserved field key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_field_key_reserved(),
+                ));
             }
             self.check_shape(&f.shape, &mut vec![])?;
-            let default = f
-                .default
-                .as_ref()
-                .ok_or_else(|| DataError("Every Field needs an explicit default policy".into()))?;
+            let default = f.default.as_ref().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_field_default_policy_required(),
+                )
+            })?;
             match default.get("kind").and_then(Value::as_str) {
                 Some("absent") => exact_members(default, &["kind"])?,
                 Some("native") => {
@@ -563,33 +635,42 @@ impl Schema {
                     let native = crate::decode_native_expression(
                         default["source"]
                             .as_str()
-                            .ok_or_else(|| DataError("Native default requires source".into()))?,
+                            .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_native_default_source_required()))?,
                     )?;
                     let check = self.validate(&f.shape, &native);
                     if !check.is_valid() && !(f.nullable && matches!(native, NativeValue::None)) {
-                        return Err(DataError(
-                            "Invalid/unavailable native creation default".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_schema_native_creation_default_invalid_or_unavailable(),
                         ));
                     }
                 }
-                _ => return Err(DataError("Unknown Field default policy".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_unknown_field_default_policy(
+                        ),
+                    ));
+                }
             }
         }
         for t in &self.types {
             self.check_type(t, &mut vec![])?;
             for f in &t.fields {
                 if self.field(&f.id).is_none() {
-                    return Err(DataError("Unresolved type field".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_type_field_unresolved(),
+                    ));
                 }
             }
             for c in &t.conflicts {
-                let other = self
-                    .types
-                    .iter()
-                    .find(|x| &x.id == c)
-                    .ok_or_else(|| DataError("Missing conflicting type".into()))?;
+                let other = self.types.iter().find(|x| &x.id == c).ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_conflicting_type_missing(),
+                    )
+                })?;
                 if !other.conflicts.contains(&t.id) {
-                    return Err(DataError("Asymmetric type conflict".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_type_conflict_asymmetric(),
+                    ));
                 }
             }
             for c in &t.constraints {
@@ -603,8 +684,8 @@ impl Schema {
                             .iter()
                             .any(|(f, _)| f.id == *id)
                         {
-                            return Err(DataError(
-                                "Type validator reads a Field outside its requires closure".into(),
+                            return Err(DataError::new(
+                                weftext_messages::UiMessage::error_data_schema_type_validator_reads_outside_requires_closure(),
                             ));
                         }
                     }
@@ -613,10 +694,14 @@ impl Schema {
         }
         for p in &self.providers {
             let Some((abi, _)) = builtin_operations(&p.implementation.id) else {
-                return Err(DataError("Unknown builtin implementation".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_unknown_builtin_implementation(),
+                ));
             };
             if p.implementation.kind != "builtin" || p.implementation.abi != abi {
-                return Err(DataError("Builtin ABI mismatch".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_builtin_abi_mismatch(),
+                ));
             }
             if p.limits.max_steps == 0
                 || p.limits.max_steps > 10_000_000
@@ -624,7 +709,9 @@ impl Schema {
                 || p.limits.max_bytes > 64 * 1024 * 1024
                 || p.limits.max_expansion > 100_000
             {
-                return Err(DataError("Invalid provider budget".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_invalid_provider_budget(),
+                ));
             }
             self.check_provider_data(p)?;
         }
@@ -633,8 +720,8 @@ impl Schema {
         for p in &self.providers {
             if p.implementation.id == "weftext.temporal.rules.v2" {
                 if temporal {
-                    return Err(DataError(
-                        "Duplicate public temporal Query function registrations".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_duplicate_public_temporal_functions(),
                     ));
                 }
                 temporal = true;
@@ -646,8 +733,8 @@ impl Schema {
             };
             if !provider_bases.insert((family, p.data["key"].as_str(), p.data["version"].as_str()))
             {
-                return Err(DataError(
-                    "Duplicate provider key/version within family".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_duplicate_provider_key_version_in_family(),
                 ));
             }
         }
@@ -656,7 +743,11 @@ impl Schema {
                 .providers
                 .iter()
                 .find(|p| p.id == v.provider)
-                .ok_or_else(|| DataError("Missing validator provider".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_validator_provider_missing(),
+                    )
+                })?;
             if !builtin_operations(&p.implementation.id)
                 .unwrap()
                 .1
@@ -668,7 +759,10 @@ impl Schema {
                         v.operation
                     )
             {
-                return Err(DataError("Unregistered validator operation".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_validator_operation_unregistered(
+                    ),
+                ));
             }
             let registered = match p.implementation.id.as_str() {
                 "weftext.core.rules.v1" => [
@@ -696,8 +790,8 @@ impl Schema {
                 _ => false,
             };
             if !registered {
-                return Err(DataError(
-                    "Operation is not a registered validation signature".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_validation_signature_unregistered(),
                 ));
             }
         }
@@ -706,20 +800,30 @@ impl Schema {
                 .types
                 .iter()
                 .find(|t| t.id == r.source_type)
-                .ok_or_else(|| DataError("Missing relation source type".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_relation_source_type_missing(
+                        ),
+                    )
+                })?;
             if !t.fields.iter().any(|f| f.id == r.field) {
-                return Err(DataError(
-                    "Relation field is not owned by source type".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_relation_field_not_owned_by_source_type(),
                 ));
             }
             let shape = &self
                 .field(&r.field)
-                .ok_or_else(|| DataError("Missing relation field".into()))?
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_relation_field_missing(),
+                    )
+                })?
                 .shape;
             let (has_ref, maximum) = self.relation_path_info(shape, &r.target_path)?;
             if !has_ref || r.target_domain != "node_ref" || maximum != r.max_assertions {
-                return Err(DataError(
-                    "Relation path/domain/cardinality disagrees with its installed shape".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_relation_shape_contract_mismatch(
+                    ),
                 ));
             }
             if !matches!(r.direction.as_str(), "directed" | "symmetric")
@@ -729,8 +833,8 @@ impl Schema {
                 || r.delete != "retain_explicit_cleanup"
                 || (r.direction == "symmetric" && r.inverse.is_some())
             {
-                return Err(DataError(
-                    "Unregistered relation policy or directed symmetric inverse".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_relation_policy_or_symmetric_inverse_invalid(),
                 ));
             }
             match r.target_types["kind"].as_str() {
@@ -738,7 +842,7 @@ impl Schema {
                 Some("any_of") => {
                     exact_members(&r.target_types, &["kind", "ids"])?;
                     let ids = r.target_types["ids"].as_array().ok_or_else(|| {
-                        DataError("Relation target domain requires type IDs".into())
+                        DataError::new(weftext_messages::UiMessage::error_data_schema_relation_target_type_ids_required())
                     })?;
                     if ids.is_empty()
                         || ids.iter().any(|v| {
@@ -746,10 +850,14 @@ impl Schema {
                                 .is_none_or(|id| !self.types.iter().any(|t| t.id == id))
                         })
                     {
-                        return Err(DataError("Unresolved relation target type".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_relation_target_type_unresolved()));
                     }
                 }
-                _ => return Err(DataError("Unknown relation target policy".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_unknown_relation_target_policy(),
+                    ));
+                }
             }
         }
         unique(
@@ -761,12 +869,17 @@ impl Schema {
                 .providers
                 .iter()
                 .find(|v| v.id == p.calendar)
-                .ok_or_else(|| DataError("Missing series calendar provider".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_series_calendar_provider_missing()))?;
             let zone = self
                 .providers
                 .iter()
                 .find(|v| v.id == p.zone)
-                .ok_or_else(|| DataError("Missing series zone provider".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_series_zone_provider_missing(
+                        ),
+                    )
+                })?;
             if zone.implementation.id != "weftext.zone.table.v1"
                 || !matches!(
                     (calendar.implementation.id.as_str(), p.rule.as_str()),
@@ -774,7 +887,7 @@ impl Schema {
                         | ("weftext.calendar.table.v2", "table-ordinal-v1")
                 )
             {
-                return Err(DataError("Unsupported series rule/provider family".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_unsupported_series_rule_or_provider_family()));
             }
             unique(p.kinds.iter().map(String::as_str), "period kind")?;
             if p.kinds.is_empty()
@@ -783,7 +896,9 @@ impl Schema {
                     .any(|k| !matches!(k.as_str(), "day" | "week" | "month" | "quarter" | "year"))
                 || !matches!(p.multiplicity.as_str(), "unique" | "many")
             {
-                return Err(DataError("Unknown series kinds/multiplicity".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_unknown_series_kinds_or_multiplicity(),
+                ));
             }
             match p.scope["kind"].as_str() {
                 Some("library") => exact_members(&p.scope, &["kind"])?,
@@ -793,28 +908,39 @@ impl Schema {
                         .as_str()
                         .is_some_and(|s| scalar_valid("node_ref", &NativeValue::Text(s.into())))
                     {
-                        return Err(DataError("Invalid series subtree root".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_schema_invalid_series_subtree_root(),
+                        ));
                     }
                 }
-                _ => return Err(DataError("Unknown series scope".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_unknown_series_scope(),
+                    ));
+                }
             }
         }
         Ok(())
     }
     fn check_type(&self, t: &Type, stack: &mut Vec<String>) -> Result<()> {
         if stack.len() > 64 {
-            return Err(DataError("Type requires depth budget exceeded".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_schema_type_requires_depth_budget_exceeded(
+                ),
+            ));
         }
         if stack.contains(&t.id) {
-            return Err(DataError("Type requires cycle".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_type_requires_cycle(),
+            ));
         }
         stack.push(t.id.clone());
         for id in &t.requires {
-            let t = self
-                .types
-                .iter()
-                .find(|t| &t.id == id)
-                .ok_or_else(|| DataError("Missing required type".into()))?;
+            let t = self.types.iter().find(|t| &t.id == id).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_required_type_missing(),
+                )
+            })?;
             self.check_type(t, stack)?;
         }
         stack.pop();
@@ -822,36 +948,49 @@ impl Schema {
     }
     fn check_shape<'a>(&'a self, s: &'a Shape, stack: &mut Vec<&'a str>) -> Result<()> {
         if stack.len() > 64 {
-            return Err(DataError("Shape use depth budget exceeded".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_schema_shape_use_depth_budget_exceeded(),
+            ));
         }
         match s {
             Shape::Use { name } => {
                 if stack.contains(&name.as_str()) {
-                    return Err(DataError("Cyclic shape use".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_shape_use_cycle(),
+                    ));
                 }
                 stack.push(name);
                 self.check_shape(
-                    self.definitions
-                        .get(name)
-                        .ok_or_else(|| DataError("Missing definition".into()))?,
+                    self.definitions.get(name).ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_schema_shape_definition_missing(
+                            ),
+                        )
+                    })?,
                     stack,
                 )?;
                 stack.pop();
             }
             Shape::Scalar { semantic } => {
                 if !SCALARS.contains(&semantic.as_str()) {
-                    return Err(DataError("Unknown scalar codec".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_unknown_scalar_codec(),
+                    ));
                 }
             }
             Shape::Enum { values, .. } => {
                 unique(values.iter().map(String::as_str), "enum")?;
                 if values.is_empty() {
-                    return Err(DataError("Empty enum".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_enum_empty(),
+                    ));
                 }
             }
             Shape::List { items, min, max } => {
                 if max.is_some_and(|v| v < *min) {
-                    return Err(DataError("Invalid list cardinality".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_invalid_list_cardinality(),
+                    ));
                 }
                 self.check_shape(items, stack)?;
             }
@@ -861,7 +1000,9 @@ impl Schema {
                 constraints,
             } => {
                 if !matches!(unknown.as_str(), "preserve" | "reject") {
-                    return Err(DataError("Unknown record policy".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_unknown_record_policy(),
+                    ));
                 }
                 for m in members.values() {
                     self.check_shape(&m.shape, stack)?;
@@ -872,8 +1013,8 @@ impl Schema {
                         match selector {
                             Selector::Local { path } => self.check_path(s, path)?,
                             _ => {
-                                return Err(DataError(
-                                    "Record validators can read only their local Shape".into(),
+                                return Err(DataError::new(
+                                    weftext_messages::UiMessage::error_data_schema_record_validator_reads_outside_local_shape(),
                                 ));
                             }
                         }
@@ -885,7 +1026,9 @@ impl Schema {
                 discriminator,
             } => {
                 if variants.len() < 2 {
-                    return Err(DataError("Union needs variants".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_union_variants_required(),
+                    ));
                 }
                 for s in variants {
                     self.check_shape(s, stack)?;
@@ -899,8 +1042,8 @@ impl Schema {
                     match discriminator.as_ref().unwrap() {
                         Discriminator::Member { keys } => {
                             if keys.len() != variants.len() {
-                                return Err(DataError(
-                                    "Member discriminator/variant count mismatch".into(),
+                                return Err(DataError::new(
+                                    weftext_messages::UiMessage::error_data_schema_member_discriminator_variant_count_mismatch(),
                                 ));
                             }
                             unique(
@@ -909,13 +1052,13 @@ impl Schema {
                             )?;
                             for (key, variant) in keys.iter().zip(variants) {
                                 let Shape::Record { members, .. } = self.resolve(variant) else {
-                                    return Err(DataError(
-                                        "Member discriminator requires record variants".into(),
+                                    return Err(DataError::new(
+                                        weftext_messages::UiMessage::error_data_schema_member_discriminator_requires_record_variants(),
                                     ));
                                 };
                                 if !members.get(key).is_some_and(|m| m.required) {
-                                    return Err(DataError(
-                                        "Union branch discriminator must be required".into(),
+                                    return Err(DataError::new(
+                                        weftext_messages::UiMessage::error_data_schema_union_branch_discriminator_must_be_required(),
                                     ));
                                 }
                             }
@@ -924,22 +1067,22 @@ impl Schema {
                             let mut tags = BTreeSet::new();
                             for variant in variants {
                                 let Shape::Record { members, .. } = self.resolve(variant) else {
-                                    return Err(DataError("Tagged union requires records".into()));
+                                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_tagged_union_requires_records()));
                                 };
                                 let member =
                                     members.get(key).filter(|m| m.required).ok_or_else(|| {
-                                        DataError("Union tag must be a required member".into())
+                                        DataError::new(weftext_messages::UiMessage::error_data_schema_union_tag_must_be_required_member())
                                     })?;
                                 let Shape::Enum {
                                     values,
                                     open: false,
                                 } = self.resolve(&member.shape)
                                 else {
-                                    return Err(DataError("Union tags require fixed enums".into()));
+                                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_union_tags_require_fixed_enums()));
                                 };
                                 if values.len() != 1 || !tags.insert(&values[0]) {
-                                    return Err(DataError(
-                                        "Union tags overlap or are not fixed".into(),
+                                    return Err(DataError::new(
+                                        weftext_messages::UiMessage::error_data_schema_union_tags_overlap_or_not_fixed(),
                                     ));
                                 }
                             }
@@ -953,17 +1096,17 @@ impl Schema {
                                 || *present >= variants.len()
                                 || *absent >= variants.len()
                             {
-                                return Err(DataError("Malformed record-presence variants".into()));
+                                return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_record_presence_variants_malformed()));
                             }
                             let Shape::Record { members, .. } = self.resolve(&variants[*present])
                             else {
-                                return Err(DataError("Presence branch must be record".into()));
+                                return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_presence_branch_requires_record()));
                             };
                             if !members.get(key).is_some_and(|m| m.required)
                                 || !matches!(self.resolve(&variants[*absent]),Shape::Record{members,..}if !members.contains_key(key))
                             {
-                                return Err(DataError(
-                                    "Record-presence discriminator overlaps".into(),
+                                return Err(DataError::new(
+                                    weftext_messages::UiMessage::error_data_schema_record_presence_discriminator_overlaps(),
                                 ));
                             }
                         }
@@ -978,7 +1121,11 @@ impl Schema {
             .validators
             .iter()
             .find(|v| v.id == c.validator)
-            .ok_or_else(|| DataError("Unknown constraint validator".into()))?;
+            .ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_unknown_constraint_validator(),
+                )
+            })?;
         let slots: &[&str] = match v.operation.as_str() {
             "custom-code" => &["code", "custom"],
             "owned-resources" => &["owner", "values", "metadata"],
@@ -989,7 +1136,9 @@ impl Schema {
         if c.inputs.keys().map(String::as_str).collect::<BTreeSet<_>>()
             != slots.iter().copied().collect()
         {
-            return Err(DataError("Validator input slots mismatch".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_validator_input_slots_mismatch(),
+            ));
         }
         let params: &[&str] = match v.operation.as_str() {
             "int-range" => &["min", "max", "exclude"],
@@ -1002,7 +1151,9 @@ impl Schema {
             p.keys().map(String::as_str).collect::<BTreeSet<_>>()
                 != params.iter().copied().collect()
         }) {
-            return Err(DataError("Validator parameters mismatch".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_validator_parameters_mismatch(),
+            ));
         }
         let valid_parameters = match v.operation.as_str() {
             "int-range" => {
@@ -1028,8 +1179,8 @@ impl Schema {
             _ => true,
         };
         if !valid_parameters {
-            return Err(DataError(
-                "Validator parameter types/ranges mismatch".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_validator_parameter_types_or_ranges_mismatch(),
             ));
         }
         for s in c.inputs.values() {
@@ -1037,12 +1188,12 @@ impl Schema {
                 Selector::Context { name }
                     if !matches!(name.as_str(), "owner" | "resource_metadata") =>
                 {
-                    return Err(DataError("Unknown validator context".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_unknown_validator_context()));
                 }
                 Selector::Field { id, path } => self.check_path(
                     &self
                         .field(id)
-                        .ok_or_else(|| DataError("Unresolved constraint field".into()))?
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_constraint_field_unresolved()))?
                         .shape,
                     path,
                 )?,
@@ -1060,7 +1211,7 @@ impl Schema {
             (Shape::Record { members, .. }, SchemaPath::Member { key }) => self.check_path(
                 &members
                     .get(key)
-                    .ok_or_else(|| DataError("Unresolved schema member path".into()))?
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_schema_member_path_unresolved()))?
                     .shape,
                 &path[1..],
             ),
@@ -1069,10 +1220,10 @@ impl Schema {
                 if supported {
                     Ok(())
                 } else {
-                    Err(DataError("Unresolved union path".into()))
+                    Err(DataError::new(weftext_messages::UiMessage::error_data_schema_union_path_unresolved()))
                 }
             }
-            _ => Err(DataError("Schema path type mismatch".into())),
+            _ => Err(DataError::new(weftext_messages::UiMessage::error_data_schema_schema_path_type_mismatch())),
         }
     }
     fn relation_path_info(
@@ -1106,20 +1257,20 @@ impl Schema {
                     // assertion without inventing an endpoint for its text.
                     Ok((false, Some(1)))
                 } else {
-                    Err(DataError("Unresolved relation assertion path".into()))
+                    Err(DataError::new(weftext_messages::UiMessage::error_data_schema_relation_assertion_path_unresolved()))
                 }
             }
-            _ => Err(DataError(
-                "Relation path must reach an exact node_ref slot".into(),
+            _ => Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_relation_path_requires_exact_node_ref_slot(),
             )),
         }
     }
     fn check_provider_data(&self, p: &Provider) -> Result<()> {
-        let kind = p
-            .data
-            .get("kind")
-            .and_then(Value::as_str)
-            .ok_or_else(|| DataError("Provider data missing kind".into()))?;
+        let kind = p.data.get("kind").and_then(Value::as_str).ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_schema_provider_data_kind_missing(),
+            )
+        })?;
         let want = match p.implementation.id.as_str() {
             "weftext.core.rules.v1" | "weftext.temporal.rules.v2" => "none",
             "weftext.units.rules.v1" => "unit-table",
@@ -1129,7 +1280,9 @@ impl Schema {
             _ => "",
         };
         if kind != want {
-            return Err(DataError("Provider data kind mismatch".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_provider_data_kind_mismatch(),
+            ));
         }
         let keys: &[&str] = match kind {
             "none" => &["kind"],
@@ -1145,7 +1298,11 @@ impl Schema {
                 "initial_offset_seconds",
                 "transitions",
             ],
-            _ => return Err(DataError("Unknown provider data".into())),
+            _ => {
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_unknown_provider_data(),
+                ));
+            }
         };
         exact_members(&p.data, keys)?;
         if kind == "gregorian"
@@ -1154,12 +1311,16 @@ impl Schema {
                 .zip(p.data["max_year"].as_i64())
                 .is_none_or(|(a, b)| a < 1 || b > 9999 || a > b)
         {
-            return Err(DataError("Invalid Gregorian coverage".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_invalid_gregorian_coverage(),
+            ));
         }
         if kind == "unit-table" {
-            let units = p.data["units"]
-                .as_array()
-                .ok_or_else(|| DataError("Unit table requires units".into()))?;
+            let units = p.data["units"].as_array().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_unit_table_units_required(),
+                )
+            })?;
             let mut seen = BTreeSet::new();
             for unit in units {
                 exact_members(unit, &["key", "dimension"])?;
@@ -1168,7 +1329,7 @@ impl Schema {
                     .is_some_and(|key| !key.is_empty() && seen.insert(key))
                     || !unit["dimension"].as_str().is_some_and(|d| !d.is_empty())
                 {
-                    return Err(DataError("Invalid/duplicate unit definition".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_unit_definition_invalid_or_duplicate()));
                 }
             }
         }
@@ -1177,61 +1338,62 @@ impl Schema {
                 .iter()
                 .any(|k| p.data[*k].as_str().is_none_or(str::is_empty))
         {
-            return Err(DataError(
-                "Provider key/version must be nonempty exact strings".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_provider_key_version_requires_exact_nonempty_strings(),
             ));
         }
         if kind == "calendar-table" {
             let epoch = p.data["epoch_date"]
                 .as_str()
                 .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                .ok_or_else(|| DataError("Calendar table needs real epoch date".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_epoch_date_required()))?;
             let years = p.data["years"]
                 .as_array()
                 .filter(|a| !a.is_empty())
-                .ok_or_else(|| DataError("Calendar table needs finite years".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_finite_years_required()))?;
             let mut previous = None;
             let mut days = 0i64;
             for year in years {
                 exact_members(year, &["year", "months"])?;
                 let y = year["year"]
                     .as_i64()
-                    .ok_or_else(|| DataError("Calendar table year must be int".into()))?;
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_year_requires_integer()))?;
                 if previous.is_some_and(|v: i64| v.checked_add(1) != Some(y)) {
-                    return Err(DataError("Calendar table years must be consecutive".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_years_must_be_consecutive()));
                 }
                 previous = Some(y);
                 let months = year["months"]
                     .as_array()
                     .filter(|a| !a.is_empty())
-                    .ok_or_else(|| DataError("Calendar year needs ordered months".into()))?;
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_year_ordered_months_required()))?;
                 let mut seen = BTreeSet::new();
                 for month in months {
                     exact_members(month, &["number", "leap", "days"])?;
                     let number = month["number"]
                         .as_i64()
                         .filter(|n| *n > 0)
-                        .ok_or_else(|| DataError("Month number must be positive".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_month_number_must_be_positive()))?;
                     let leap = month["leap"]
                         .as_bool()
-                        .ok_or_else(|| DataError("Month leap must be bool".into()))?;
-                    let length = month["days"]
-                        .as_i64()
-                        .filter(|n| *n > 0)
-                        .ok_or_else(|| DataError("Month days must be positive".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_month_leap_flag_requires_boolean()))?;
+                    let length = month["days"].as_i64().filter(|n| *n > 0).ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_schema_month_days_must_be_positive(),
+                        )
+                    })?;
                     if !seen.insert((number, leap)) {
-                        return Err(DataError("Duplicate table month number/leap".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_duplicate_table_month_number_and_leap()));
                     }
                     days = days
                         .checked_add(length)
-                        .ok_or_else(|| DataError("Calendar table cumulative overflow".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_cumulative_overflow()))?;
                 }
             }
             if epoch
                 .checked_add_days(chrono::Days::new(days as u64))
                 .is_none()
             {
-                return Err(DataError("Calendar table epoch/coverage overflow".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_schema_calendar_table_epoch_coverage_overflow()));
             }
         }
         if kind == "zone-table" {
@@ -1239,37 +1401,51 @@ impl Schema {
                 .as_str()
                 .map(crate::ExactInstant::parse)
                 .transpose()?
-                .ok_or_else(|| DataError("Zone coverage from required".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_zone_coverage_start_required(
+                        ),
+                    )
+                })?;
             let until = p.data["until"]
                 .as_str()
                 .map(crate::ExactInstant::parse)
                 .transpose()?
-                .ok_or_else(|| DataError("Zone coverage until required".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_zone_coverage_end_required(),
+                    )
+                })?;
             if !from.compare(&until).is_lt() {
-                return Err(DataError("Zone coverage must be ordered".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_zone_coverage_must_be_ordered(),
+                ));
             }
             let valid_offset =
                 |v: &Value| v.as_i64().is_some_and(|n| (-86400..=86400).contains(&n));
             if !valid_offset(&p.data["initial_offset_seconds"]) {
-                return Err(DataError("Invalid initial zone offset".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_invalid_initial_zone_offset(),
+                ));
             }
             let mut previous = from;
-            for t in p.data["transitions"]
-                .as_array()
-                .ok_or_else(|| DataError("Zone transitions required".into()))?
-            {
+            for t in p.data["transitions"].as_array().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_schema_zone_transitions_required(),
+                )
+            })? {
                 exact_members(t, &["at", "offset_seconds"])?;
                 let at = t["at"]
                     .as_str()
                     .map(crate::ExactInstant::parse)
                     .transpose()?
-                    .ok_or_else(|| DataError("Zone transition instant required".into()))?;
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_schema_zone_transition_instant_required()))?;
                 if !previous.compare(&at).is_lt()
                     || !at.compare(&until).is_lt()
                     || !valid_offset(&t["offset_seconds"])
                 {
-                    return Err(DataError(
-                        "Zone transitions must be ordered, covered and bounded".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_schema_zone_transitions_order_coverage_or_bounds_invalid(),
                     ));
                 }
                 previous = at;
@@ -1280,7 +1456,8 @@ impl Schema {
     fn validate_constraint(&self, c: &Constraint, local: &NativeValue) -> Validation {
         let mut out = Validation::valid();
         let Some(v) = self.validators.iter().find(|v| v.id == c.validator) else {
-            out.unavailable.push("missing-validator".into());
+            out.unavailable
+                .push(weftext_messages::UiMessage::error_data_schema_validator_missing().into());
             return out;
         };
         let get = |slot: &str| -> Option<&NativeValue> {
@@ -1289,8 +1466,16 @@ impl Schema {
                 _ => None,
             }
         };
-        let bad = |out: &mut Validation, msg: &str| {
-            out.diagnostics.push(format!("{}: {msg}", c.validator))
+        let bad = |out: &mut Validation, explanation: UiMessage| {
+            out.diagnostics.push(
+                UiMessage::error_data_schema_validator_rejected(
+                    weftext_messages::params::ErrorDataSchemaValidatorRejected {
+                        validator: c.validator.clone(),
+                    },
+                )
+                .into(),
+            );
+            out.diagnostics.push(explanation.into());
         };
         match v.operation.as_str() {
             "int-range" => {
@@ -1307,7 +1492,10 @@ impl Schema {
                             .as_array()
                             .is_some_and(|a| a.iter().any(|x| x.as_i64() == n))
                     {
-                        bad(&mut out, "integer out of range");
+                        bad(
+                            &mut out,
+                            weftext_messages::UiMessage::error_data_schema_integer_out_of_range(),
+                        );
                     }
                 }
             }
@@ -1326,10 +1514,16 @@ impl Schema {
                     match values {
                         [Ok(n), Ok(min), Ok(max)] => {
                             if n.compare(&min).is_lt() || n.compare(&max).is_gt() {
-                                bad(&mut out, "decimal out of range");
+                                bad(
+                                    &mut out,
+                                    weftext_messages::UiMessage::error_data_schema_decimal_out_of_range(),
+                                );
                             }
                         }
-                        _ => bad(&mut out, "invalid exact decimal"),
+                        _ => bad(
+                            &mut out,
+                            weftext_messages::UiMessage::error_data_schema_invalid_exact_decimal(),
+                        ),
                     }
                 }
             }
@@ -1339,7 +1533,10 @@ impl Schema {
                         .and_then(NativeValue::text)
                         .is_none_or(str::is_empty)
                 {
-                    bad(&mut out, "custom code requires custom text");
+                    bad(
+                        &mut out,
+                        weftext_messages::UiMessage::error_data_schema_custom_code_requires_custom_text(),
+                    );
                 }
             }
             "month-day" => {
@@ -1356,7 +1553,10 @@ impl Schema {
                         || !(1..=31).contains(&d)
                         || NaiveDate::from_ymd_opt(2000, m as u32, d as u32).is_none()
                     {
-                        bad(&mut out, "invalid month-day");
+                        bad(
+                            &mut out,
+                            weftext_messages::UiMessage::error_data_schema_invalid_month_day(),
+                        );
                     }
                 }
             }
@@ -1386,7 +1586,9 @@ impl Schema {
                         .and_then(|p| p.data["units"].as_array())
                         .and_then(|a| a.iter().find(|u| u["key"].as_str() == unit));
                     if found.is_none() {
-                        out.unavailable.push("unknown-unit".into());
+                        out.unavailable.push(
+                            weftext_messages::UiMessage::error_data_schema_unknown_unit().into(),
+                        );
                     }
                     if v.operation == "measurement" {
                         let expected = match value.member("kind").and_then(NativeValue::text) {
@@ -1395,7 +1597,7 @@ impl Schema {
                             _ => "",
                         };
                         if found.is_some_and(|u| u["dimension"].as_str() != Some(expected)) {
-                            bad(&mut out, "measurement unit dimension mismatch");
+                            bad(&mut out, weftext_messages::UiMessage::error_data_schema_measurement_unit_dimension_mismatch());
                         }
                     }
                     if let Some(p) = quantity.member("precision")
@@ -1403,7 +1605,10 @@ impl Schema {
                         && ExactDecimal::parse(s)
                             .is_ok_and(|n| n.compare(&ExactDecimal::parse("0").unwrap()).is_lt())
                     {
-                        bad(&mut out, "negative precision");
+                        bad(
+                            &mut out,
+                            weftext_messages::UiMessage::error_data_schema_negative_precision(),
+                        );
                     }
                 }
             }
@@ -1424,8 +1629,11 @@ impl Schema {
             }
             "owned-resources" | "event" | "task-reminder" => out
                 .unavailable
-                .push("required Core field/context snapshot is not supplied".into()),
-            _ => out.unavailable.push("operation unavailable".into()),
+                .push(weftext_messages::UiMessage::error_data_schema_required_core_field_or_context_snapshot_missing().into()),
+            _ => out.unavailable.push(
+                weftext_messages::UiMessage::error_data_schema_validation_operation_unavailable()
+                    .into(),
+            ),
         }
         out
     }
@@ -1433,7 +1641,14 @@ impl Schema {
 fn validation_cell(cell: crate::Cell, out: &mut Validation) {
     match cell {
         crate::Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(diagnostics),
-        crate::Cell::Unavailable { reason } => out.unavailable.push(reason),
+        crate::Cell::Unavailable {
+            reason,
+            diagnostics,
+            ..
+        } => {
+            out.unavailable.push(reason);
+            out.unavailable.extend(diagnostics);
+        }
         _ => {}
     }
 }
@@ -1441,8 +1656,9 @@ fn exact_members(value: &Value, keys: &[&str]) -> Result<()> {
     if value.as_object().is_none_or(|o| {
         o.keys().map(String::as_str).collect::<BTreeSet<_>>() != keys.iter().copied().collect()
     }) {
-        return Err(DataError(
-            "Unknown/missing configuration data members".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_schema_configuration_members_unknown_or_missing(
+            ),
         ));
     }
     Ok(())
@@ -1451,7 +1667,13 @@ fn unique<'a>(values: impl Iterator<Item = &'a str>, kind: &str) -> Result<()> {
     let mut seen = BTreeSet::new();
     for v in values {
         if v.is_empty() || !seen.insert(v) {
-            return Err(DataError(format!("Duplicate/empty {kind}")));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_identifier_duplicate_or_empty(
+                    weftext_messages::params::ErrorDataSchemaIdentifierDuplicateOrEmpty {
+                        identifier_kind: (kind).to_string(),
+                    },
+                ),
+            ));
         }
     }
     Ok(())
@@ -1573,13 +1795,17 @@ pub fn compare_native(a: &NativeValue, b: &NativeValue) -> Result<std::cmp::Orde
             .ok()
             .zip(b.parse::<i64>().ok())
             .map(|(a, b)| a.cmp(&b))
-            .ok_or_else(|| DataError("invalid int".into()))?,
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_schema_invalid_integer())
+            })?,
         (Float(a), Float(b)) => a
             .parse::<f64>()
             .ok()
             .zip(b.parse::<f64>().ok())
             .and_then(|(a, b)| a.partial_cmp(&b))
-            .ok_or_else(|| DataError("invalid float".into()))?,
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_schema_invalid_float())
+            })?,
         (Decimal(a), Decimal(b)) => ExactDecimal::parse(a)?.compare(&ExactDecimal::parse(b)?),
         (Date(a), Date(b)) | (Time(a), Time(b)) | (LocalDatetime(a), LocalDatetime(b)) => a.cmp(b),
         (Duration(a), Duration(b)) => a
@@ -1587,16 +1813,50 @@ pub fn compare_native(a: &NativeValue, b: &NativeValue) -> Result<std::cmp::Orde
             .ok()
             .zip(b.parse::<i64>().ok())
             .map(|(a, b)| a.cmp(&b))
-            .ok_or_else(|| DataError("invalid duration".into()))?,
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_schema_invalid_duration())
+            })?,
         _ => {
-            return Err(DataError(
-                "Values require explicit same-type comparator".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_schema_explicit_same_type_comparator_required(),
             ));
         }
     };
     Ok(order)
 }
-struct UniqueJson(Value);
+/// Parse a bounded-by-the-caller JSON input once, with explicit owned validation
+/// facts. Object order and serde_json's i64/u64/finite-f64 number model remain
+/// unchanged; callers retain original bytes for exact author provenance.
+pub fn parse_unique_json(bytes: &[u8]) -> Result<Value> {
+    let parsed: UniqueJson = serde_json::from_slice(bytes)?;
+    if let Some(issue) = parsed.issue {
+        return Err(match issue {
+            UniqueJsonIssue::DuplicateKey { key } => {
+                DataError::new(UiMessage::error_data_schema_json_key_duplicate(
+                    weftext_messages::params::ErrorDataSchemaJsonKeyDuplicate { key },
+                ))
+            }
+            UniqueJsonIssue::NonfiniteNumber => {
+                DataError::new(UiMessage::error_data_schema_json_number_nonfinite())
+            }
+        });
+    }
+    Ok(parsed.value)
+}
+
+struct UniqueJson {
+    value: Value,
+    issue: Option<UniqueJsonIssue>,
+}
+enum UniqueJsonIssue {
+    DuplicateKey { key: String },
+    NonfiniteNumber,
+}
+impl UniqueJson {
+    fn plain(value: Value) -> Self {
+        Self { value, issue: None }
+    }
+}
 impl<'de> Deserialize<'de> for UniqueJson {
     fn deserialize<D: Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
         struct V;
@@ -1610,56 +1870,73 @@ impl<'de> Deserialize<'de> for UniqueJson {
                 mut m: M,
             ) -> std::result::Result<Self::Value, M::Error> {
                 let mut out = serde_json::Map::new();
+                let mut issue = None;
                 while let Some((k, v)) = m.next_entry::<String, UniqueJson>()? {
-                    if out.insert(k, v.0).is_some() {
-                        return Err(serde::de::Error::custom("Duplicate JSON key"));
+                    if issue.is_none() {
+                        issue = v.issue;
                     }
+                    if out.contains_key(&k) && issue.is_none() {
+                        issue = Some(UniqueJsonIssue::DuplicateKey { key: k.clone() });
+                    }
+                    out.insert(k, v.value);
                 }
-                Ok(UniqueJson(Value::Object(out)))
+                Ok(UniqueJson {
+                    value: Value::Object(out),
+                    issue,
+                })
             }
             fn visit_seq<S: SeqAccess<'de>>(
                 self,
                 mut s: S,
             ) -> std::result::Result<Self::Value, S::Error> {
                 let mut a = vec![];
+                let mut issue = None;
                 while let Some(v) = s.next_element::<UniqueJson>()? {
-                    a.push(v.0);
+                    if issue.is_none() {
+                        issue = v.issue;
+                    }
+                    a.push(v.value);
                 }
-                Ok(UniqueJson(Value::Array(a)))
+                Ok(UniqueJson {
+                    value: Value::Array(a),
+                    issue,
+                })
             }
             fn visit_bool<E: serde::de::Error>(
                 self,
                 v: bool,
             ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(v.into()))
+                Ok(UniqueJson::plain(v.into()))
             }
             fn visit_str<E: serde::de::Error>(
                 self,
                 v: &str,
             ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(v.into()))
+                Ok(UniqueJson::plain(v.into()))
             }
             fn visit_string<E: serde::de::Error>(
                 self,
                 v: String,
             ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(v.into()))
+                Ok(UniqueJson::plain(v.into()))
             }
             fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(v.into()))
+                Ok(UniqueJson::plain(v.into()))
             }
             fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(v.into()))
+                Ok(UniqueJson::plain(v.into()))
             }
             fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(
-                    serde_json::Number::from_f64(v)
-                        .ok_or_else(|| E::custom("nonfinite JSON"))?
-                        .into(),
-                ))
+                Ok(match serde_json::Number::from_f64(v) {
+                    Some(value) => UniqueJson::plain(value.into()),
+                    None => UniqueJson {
+                        value: Value::Null,
+                        issue: Some(UniqueJsonIssue::NonfiniteNumber),
+                    },
+                })
             }
             fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(Value::Null))
+                Ok(UniqueJson::plain(Value::Null))
             }
         }
         d.deserialize_any(V)

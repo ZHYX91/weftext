@@ -6,6 +6,7 @@ use weftext_core::{
     ActorFeatureStatus, FileChange, OperationIntent, OperationRequest, SnapshotFile,
 };
 use weftext_knowledge as knowledge;
+use weftext_messages::UiLocale;
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES: usize = 4 * 1024 * 1024;
@@ -252,14 +253,14 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "reviewBasisChanged",
-        "批注、原文或检查依据已变化，请保留输入并重新读取核对。",
+        UiMessage::error_api_hosted_review_review_basis_changed(),
     )
 }
 fn core_error(_: CoreError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "reviewOperation",
-        "原批注操作未完成或依据已变化；请核对原操作结果，输入保持保留。",
+        UiMessage::error_api_hosted_review_review_operation_unresolved(),
     )
 }
 fn knowledge_error(error: knowledge::KnowledgeError) -> ApiError {
@@ -267,13 +268,32 @@ fn knowledge_error(error: knowledge::KnowledgeError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         &error.code,
-        "当前批注或目标不能安全执行此操作；原记录与输入仍保留。",
+        UiMessage::error_api_hosted_review_review_target_unsupported(),
     )
 }
-fn text<'a>(input: &'a Value, key: &str) -> Result<&'a str, ApiError> {
-    input[key]
+/// Only accepting findings materializes product labels into a new authored
+/// annotation. The independent language choice is part of the frozen intent;
+/// changing interface language does not rewrite this body or an earlier Plan.
+fn proofreading_annotation_locale(intent: &Value) -> Result<UiLocale, ApiError> {
+    intent["annotationLocale"]
         .as_str()
-        .ok_or_else(|| ApiError::bad(format!("缺少 {key}")))
+        .and_then(|locale| locale.parse().ok())
+        .ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_hosted_review_annotation_locale_required())
+        })
+}
+fn proofread_annotation_body(message: &knowledge::ProofreadMessage, locale: UiLocale) -> String {
+    match message {
+        knowledge::ProofreadMessage::Product { explanation } => explanation.render(locale),
+        knowledge::ProofreadMessage::Author { author_message } => author_message.clone(),
+    }
+}
+fn text<'a>(input: &'a Value, key: &str) -> Result<&'a str, ApiError> {
+    input[key].as_str().ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_hosted_required_field_missing(
+            weftext_messages::params::ErrorApiHostedRequiredFieldMissing { field: key.into() },
+        ))
+    })
 }
 fn access(inner: &HostedInner, actor: &str, resource: &str) -> Result<Rights, ApiError> {
     let rights = inner.grant(actor, resource)?;
@@ -327,7 +347,11 @@ fn needs(kind: &str) -> Result<Needs, ApiError> {
             n.target = true;
             n.proofread = true;
         }
-        _ => return Err(ApiError::bad("未知托管批注操作")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_review_unknown_review_operation(),
+            ));
+        }
     }
     Ok(n)
 }
@@ -401,7 +425,7 @@ fn media_target(
         .is_some_and(|r| r.as_str() != Some(configured.reference.as_str()))
     {
         return Err(ApiError::bad(
-            "所选 asset 与原稳定资源引用不一致；未改写目标",
+            UiMessage::error_api_hosted_review_annotation_asset_mismatch(),
         ));
     }
     m.validate(inner, actor)?;
@@ -526,7 +550,9 @@ fn capture(
         if let Some(file) = &source {
             let _ = inner.core.take_snapshot_witness(&file.base_id);
         }
-        return Err(ApiError::bad("批注或原文超过本次读取预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_review_review_read_budget(),
+        ));
     }
     Ok(Basis {
         actor: actor.into(),
@@ -683,12 +709,12 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?; let rights = access(inner, &actor, &req.resource)?; expire_revoked(inner);
         if let Some(asset)=&req.asset {let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource{return Err(unavailable());}}
-        if inner.review.bases.len() >= 128 || inner.review.bases.values().filter(|b|b.actor==actor).count() >= 32 { return Err(ApiError::bad("批注依据已达上限，请稍后重新读取")); }
+        if inner.review.bases.len() >= 128 || inner.review.bases.values().filter(|b|b.actor==actor).count() >= 32 { return Err(ApiError::bad(UiMessage::error_api_hosted_review_review_basis_capacity())); }
         let live=inner.file(&req.resource)?.lifecycle=="live";
         let mut b = capture(inner, &actor, &req.resource, live && (rights.read || (req.asset.is_none() && rights.annotations.target)))?;
         let cleanup=snapshot_ids(&b).collect::<Vec<_>>();
@@ -704,7 +730,7 @@ async fn read(
             }
         }
         let total = inner.review.bytes();
-        if total.saturating_add(b.bytes()) > MAX_BYTES { return Err(ApiError::bad("批注依据缓存已达预算，请稍后重新读取")); }
+        if total.saturating_add(b.bytes()) > MAX_BYTES { return Err(ApiError::bad(UiMessage::error_api_hosted_review_review_basis_cache_budget())); }
         inner.core.validate_snapshot(&inner.config.root, &b.annotations.path, &b.annotations.base_id).map_err(|_|changed())?;
         if let Some(source) = &b.source { inner.core.validate_snapshot(&inner.config.root, &source.path, &source.base_id).map_err(|_|changed())?; }
         let doc = document(&b);
@@ -722,7 +748,7 @@ async fn read(
                 // Salvage only discussion; damaged/unknown targets cannot be written.
                 let recovered = knowledge::recover_discussion(b.annotations.bytes.as_deref().unwrap_or_default());
                 response["annotations"] = json!(recovered.into_iter().map(|v|json!({"id":v.annotation_id,"annotationId":v.annotation_id,"body":v.body,"purpose":v.purpose,"reviewState":v.review_state,"suggestionState":v.suggestion_state,"author":v.attribution,"createdAt":v.created_at,"verified":false,"targetResolution":"unavailable","replies":[]})).collect::<Vec<_>>());
-                response["warning"] = json!("批注记录受损或格式尚不支持；原文件保留，讨论仅供只读核对。");
+                response["warning"] = json!(ErrorDescription::new(UiMessage::error_api_hosted_review_annotation_document_read_only()));
             },
         }
         if response["basis"].is_null() {for id in &cleanup {let _=inner.core.take_snapshot_witness(id);}}
@@ -752,7 +778,7 @@ fn existing(
 async fn proofread(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Proofread>,
+    RequestJson(req): RequestJson<Proofread>,
 ) -> ApiResult {
     let check = auth.clone();
     let resource = req.resource.clone();
@@ -808,17 +834,21 @@ async fn proofread(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "reviewPreviewUnavailable",
-            "当前获权正文未能编译，校对未完成。",
+            UiMessage::error_api_hosted_review_proofread_compile_unavailable(),
         ));
     }
-    let tree: weftext_engine::RenderNode = serde_json::from_value(output["tree"].clone())
-        .map_err(|_| ApiError::bad("当前编译缺少准确正文树"))?;
+    let tree: weftext_engine::RenderNode =
+        serde_json::from_value(output["tree"].clone()).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_hosted_review_exact_body_tree_required())
+        })?;
     let source = b.node.as_ref().unwrap().source.clone();
     let options = req.options.clone();
     let result =
         tokio::task::spawn_blocking(move || knowledge::proofread(&tree, &source, &options))
             .await
-            .map_err(|_| ApiError::internal("校对未完成"))?
+            .map_err(|_| {
+                ApiError::internal(UiMessage::error_api_hosted_review_proofread_incomplete())
+            })?
             .map_err(knowledge_error)?;
     Ok(Json(
         locked(&state, move |inner| {
@@ -858,7 +888,9 @@ async fn proofread(
                     .count()
                     >= 8
             {
-                return Err(ApiError::bad("校对结果缓存已达上限，请稍后重新检查"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_review_proofread_result_capacity(),
+                ));
             }
             let doc = document(&b)?;
             let node = b.node.as_ref().unwrap();
@@ -894,7 +926,9 @@ async fn proofread(
                 expires: Instant::now() + TTL,
             };
             if inner.review.bytes().saturating_add(scan.bytes()) > MAX_BYTES {
-                return Err(ApiError::bad("校对依据缓存已达预算，请稍后重新检查"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_review_proofread_basis_budget(),
+                ));
             }
             inner.review.scans.insert(id, scan);
             Ok(response)
@@ -911,13 +945,17 @@ fn utf16_byte(source: &str, offset: usize) -> Result<usize, ApiError> {
         }
         units += ch.len_utf16();
         if units > offset {
-            return Err(ApiError::bad("选区分割了 UTF-16 字符"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_review_selection_splits_utf16(),
+            ));
         }
     }
     if units == offset {
         Ok(source.len())
     } else {
-        Err(ApiError::bad("选区超出当前已保存正文"))
+        Err(ApiError::bad(
+            UiMessage::error_api_hosted_review_selection_outside_saved_body(),
+        ))
     }
 }
 fn target(
@@ -935,25 +973,33 @@ fn target(
                 input[key]
                     .as_u64()
                     .and_then(|v| usize::try_from(v).ok())
-                    .ok_or_else(|| ApiError::bad("需要准确 UTF-16 选区"))
+                    .ok_or_else(|| {
+                        ApiError::bad(
+                            UiMessage::error_api_hosted_review_exact_utf16_selection_required(),
+                        )
+                    })
             };
             let from = utf16_byte(&node.source, offset("from")?)?;
             let to = utf16_byte(&node.source, offset("to")?)?;
             let point = matches!(input["kind"].as_str(), Some("source_point" | "sourcePoint"));
             if (!point && from >= to) || (point && from != to) {
-                return Err(ApiError::bad("范围需要非空选区，插入点需要相同起止位置"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_review_selection_range_invalid(),
+                ));
             }
             let range =
                 knowledge::ExactRange::new(&node.source, from, to).map_err(knowledge_error)?;
             if point && !knowledge::writable_suggestion_range(&node.source, &range) {
-                return Err(ApiError::bad("插入点需要准确可写的普通正文位置"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_review_writable_body_insertion_required(),
+                ));
             }
             let anchor =
                 knowledge::source_anchor(node, from, to, range.raw).map_err(knowledge_error)?;
             Ok(knowledge::AnnotationTarget::SourceRange { anchor })
         }
         _ => Err(ApiError::bad(
-            "当前托管批注支持准确源范围、源插入点及整篇笔记",
+            UiMessage::error_api_hosted_review_review_target_kind_unsupported(),
         )),
     }
 }
@@ -1039,9 +1085,16 @@ fn safe_status(
             .as_ref()
             .is_some_and(|d| library::authorize_execution(inner, actor, &d.execution).is_ok());
     let mut preview = json!({});
-    for key in ["kind", "summary", "annotationId", "count", "body"]
-        .into_iter()
-        .filter(|_| deliver)
+    for key in [
+        "kind",
+        "summary",
+        "annotationId",
+        "count",
+        "body",
+        "annotationLocale",
+    ]
+    .into_iter()
+    .filter(|_| deliver)
     {
         if let Some(v) = original.get(key) {
             preview[key] = v.clone();
@@ -1080,12 +1133,13 @@ fn safe_status(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(mut req): Json<Prepare>,
+    RequestJson(mut req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?; let rights=access(inner,&actor,&req.resource)?;
         if let Some(object)=req.intent.as_object_mut() { for key in ["attribution","author","createdAt"] {object.remove(key);} }
         let kind=text(&req.intent,"kind")?.to_owned(); let mut needs=needs(&kind)?;
+        if kind=="annotationProofread" {proofreading_annotation_locale(&req.intent)?;}
         let media_selected=is_media_target(&req.intent["target"]);
         if media_selected && matches!(kind.as_str(),"annotationCreate"|"annotationReattach") {needs.source_read=false;}
         authorize(&rights,&needs)?;
@@ -1098,31 +1152,31 @@ async fn prepare(
         let fingerprint=digest(&serde_json::to_vec(&canonical).map_err(|_|changed())?); let actor_scope=scope(inner,&actor);
         if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
         let b=basis(inner,&actor,&req.resource,&req.basis,needs.source_read)?; let doc=document(&b)?;
-        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut processing_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
+        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut processing_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":UiMessage::error_api_hosted_review_save_selected_annotation_changes()});
         let annotation_id=req.intent["annotationId"].as_str(); if let Some(id)=annotation_id {preview["annotationId"]=json!(id);}
         let after=match kind.as_str() {
             "annotationCreate" => {
-                let purpose=req.intent["purpose"].as_str().unwrap_or("comment"); if !matches!(purpose,"comment"|"mark"|"suggestion") {return Err(ApiError::bad("未知批注目的"));}
+                let purpose=req.intent["purpose"].as_str().unwrap_or("comment"); if !matches!(purpose,"comment"|"mark"|"suggestion") {return Err(ApiError::bad(UiMessage::error_api_hosted_review_unknown_review_purpose()));}
                 let target=if media_selected {
-                    if purpose=="suggestion" {return Err(ApiError::bad("媒体目标可评论或标记；文字替换建议需要准确作者源范围"));}
+                    if purpose=="suggestion" {return Err(ApiError::bad(UiMessage::error_api_hosted_review_media_suggestion_unsupported()));}
                     let (target,decision,pool)=media_target(inner,&actor,&b,&req.intent["target"])?;
                     witnesses=pool;media_decision=Some(decision);target
                 }else{target(&req.intent["target"],b.node.as_ref().ok_or_else(changed)?)?};
-                let replacement=if purpose=="suggestion" { if target.anchor().is_none(){return Err(ApiError::bad("文字建议需要准确原文范围或插入点"));} Some(text(&req.intent,"replacement")?.to_owned()) } else {None};
+                let replacement=if purpose=="suggestion" { if target.anchor().is_none(){return Err(ApiError::bad(UiMessage::error_api_hosted_review_text_suggestion_range_required()));} Some(text(&req.intent,"replacement")?.to_owned()) } else {None};
                 let body=text(&req.intent,"body")?.to_owned(); preview["body"]=json!(body); if let Some(r)=&replacement {preview["replacement"]=json!(r);}
                 let new=record(&actor,target,body,purpose.into(),replacement); preview["annotationId"]=json!(new.annotation_id); doc.create(new).map_err(knowledge_error)?
             },
             "annotationReply" => {
-                let id=text(&req.intent,"annotationId")?; let parent=doc.records.iter().find(|r|r.annotation_id==id).ok_or_else(||ApiError::bad("所选原讨论不存在"))?;
+                let id=text(&req.intent,"annotationId")?; let parent=doc.records.iter().find(|r|r.annotation_id==id).ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_review_original_discussion_missing()))?;
                 let body=text(&req.intent,"body")?.to_owned(); preview["body"]=json!(body);
                 let mut new=record(&actor,parent.target.clone(),body,"comment".into(),None); new.reply_to=Some(id.into()); doc.reply(new).map_err(knowledge_error)?
             },
-            "annotationResolve" => doc.resolve(text(&req.intent,"annotationId")?,req.intent["resolved"].as_bool().ok_or_else(||ApiError::bad("需要明确讨论状态"))?).map_err(knowledge_error)?,
+            "annotationResolve" => doc.resolve(text(&req.intent,"annotationId")?,req.intent["resolved"].as_bool().ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_review_explicit_discussion_state_required()))?).map_err(knowledge_error)?,
             "annotationReject" => doc.reject(text(&req.intent,"annotationId")?).map_err(knowledge_error)?,
             "annotationReattach" => {
                 let id=text(&req.intent,"annotationId")?;
                 let target=if media_selected {
-                    if doc.records.iter().find(|r|r.annotation_id==id).is_some_and(|r|r.suggestion.is_some()) {return Err(ApiError::bad("已有文字建议不能重新附着到媒体目标"));}
+                    if doc.records.iter().find(|r|r.annotation_id==id).is_some_and(|r|r.suggestion.is_some()) {return Err(ApiError::bad(UiMessage::error_api_hosted_review_text_suggestion_media_reattach_unsupported()));}
                     let (target,decision,pool)=media_target(inner,&actor,&b,&req.intent["target"])?;
                     witnesses=pool;media_decision=Some(decision);target
                 }else{target(&req.intent["target"],b.node.as_ref().ok_or_else(changed)?)?};
@@ -1134,13 +1188,15 @@ async fn prepare(
             },
             "annotationAccept" => {
                 let plan=knowledge::suggestion_plan(&doc,&b.annotations.path,text(&req.intent,"annotationId")?,b.node.as_ref().unwrap()).map_err(knowledge_error)?;
-                preview["summary"]=json!("将所选建议的准确正文变更与 accepted 状态一并保存");
+                preview["summary"]=json!(UiMessage::error_api_hosted_review_save_accepted_suggestion_together());
                 preview["source"]=json!({"before":b.node.as_ref().unwrap().source,"after":plan.source_patch.after});
                 changes.push(change(b.source.as_ref().unwrap(),plan.source_patch.after.as_bytes().to_vec()));
                 plan.files.into_iter().find(|f|f.path==b.annotations.path).ok_or_else(changed)?.after
             },
             "annotationProofread" => {
-                let options:knowledge::ProofreadOptions=serde_json::from_value(req.intent["options"].clone()).map_err(|_|ApiError::bad("校对选项无效"))?;
+                let annotation_locale=proofreading_annotation_locale(&req.intent)?;
+                preview["annotationLocale"]=json!(annotation_locale);
+                let options:knowledge::ProofreadOptions=serde_json::from_value(req.intent["options"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_review_proofread_options_invalid()))?;
                 let hash=digest(&serde_json::to_vec(&options).map_err(|_|changed())?);
                 let scan_id=text(&req.intent,"scanId")?;
                 let scan=inner.review.scans.get(scan_id).filter(|s|s.actor==actor&&s.epoch==b.epoch&&s.resource==req.resource&&s.basis==req.basis&&s.options_hash==hash&&s.expires>Instant::now()).cloned().ok_or_else(changed)?;
@@ -1155,26 +1211,26 @@ async fn prepare(
                     processing_decision=Some(profile.authority.clone());
                 }
                 for f in &scan.dependencies {inner.core.validate_snapshot(&inner.config.root,&f.path,&f.base_id).map_err(|_|changed())?;if Some(&f.path)!=b.source.as_ref().map(|s|&s.path) { dependencies.push(f.base_id.clone()); }}
-                let ids:BTreeSet<String>=serde_json::from_value(req.intent["findings"].clone()).map_err(|_|ApiError::bad("请选择准确原校对结果"))?;
-                if ids.is_empty()||ids.len()>200||ids.iter().any(|id|!scan.result.findings.iter().any(|f|&f.id==id)) {return Err(ApiError::bad("每批请选择原检查中的 1 至 200 条结果"));}
+                let ids:BTreeSet<String>=serde_json::from_value(req.intent["findings"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_review_exact_proofread_results_required()))?;
+                if ids.is_empty()||ids.len()>200||ids.iter().any(|id|!scan.result.findings.iter().any(|f|&f.id==id)) {return Err(ApiError::bad(UiMessage::error_api_hosted_review_proofread_selection_count()));}
                 let node=b.node.as_ref().unwrap(); let mut records=vec![];
                 for finding in scan.result.findings.iter().filter(|f|ids.contains(&f.id)) {
                     if existing(&doc,finding,node) {continue;}
-                    let range=finding.source_range.as_ref().ok_or_else(||ApiError::bad("所选校对结果没有准确作者源位置，保持只读"))?;
+                    let range=finding.source_range.as_ref().ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_review_proofread_source_range_unavailable()))?;
                     let target=knowledge::AnnotationTarget::SourceRange {anchor:knowledge::source_anchor(node,range.from,range.to,finding.excerpt.clone()).map_err(knowledge_error)?};
                     let executable=finding.executable&&knowledge::writable_suggestion_range(&node.source,range);
                     // Discussion-only readers receive the rule message, never an
                     // automatically copied target excerpt or replacement in body.
-                    let mut r=record(&actor,target,finding.message.clone(),if executable{"suggestion"}else{"comment"}.into(),if executable{finding.replacement.clone()}else{None});
+                    let mut r=record(&actor,target,proofread_annotation_body(&finding.message,annotation_locale),if executable{"suggestion"}else{"comment"}.into(),if executable{finding.replacement.clone()}else{None});
                     r.labels=vec!["proofreading".into(),finding.category.clone()];
                     if req.intent["ignore"]==true {r.review_state="resolved".into();if let Some(s)=&mut r.suggestion {s.state="rejected".into();}}
-                    r.unknown.insert("proofreading".into(),json!({"ruleId":finding.rule_id,"ruleVersion":finding.rule_version,"category":finding.category,"ignored":req.intent["ignore"]==true}));records.push(r);
+                    r.unknown.insert("proofreading".into(),json!({"ruleId":finding.rule_id,"ruleVersion":finding.rule_version,"category":finding.category,"ignored":req.intent["ignore"]==true,"annotationLocale":annotation_locale}));records.push(r);
                 }
-                preview["count"]=json!(records.len());preview["summary"]=json!("批量保存本次已核验的校对批注；已有出现项不重复创建");doc.create_many(records).map_err(knowledge_error)?
+                preview["count"]=json!(records.len());preview["summary"]=json!(UiMessage::error_api_hosted_review_save_verified_proofread_annotations());doc.create_many(records).map_err(knowledge_error)?
             },
             _=>unreachable!(),
         };
-        if after.len()>MAX_DOCUMENT_BYTES {return Err(ApiError::bad("批注变更超过本次保存预算"));}
+        if after.len()>MAX_DOCUMENT_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_review_review_save_budget()));}
         if needs.source_read&&kind!="annotationAccept" {dependencies.push(b.source.as_ref().unwrap().base_id.clone());}
         changes.push(change(&b.annotations,after));
         preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution,media:media_decision,processing:processing_decision})?;
@@ -1186,7 +1242,7 @@ async fn prepare(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let rights=access(inner,&actor,&req.resource)?;
@@ -1197,7 +1253,7 @@ async fn operation(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1271,7 +1327,7 @@ async fn commit(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1290,6 +1346,61 @@ async fn settle(
     ))
 }
 
+#[cfg(test)]
+mod typed_review_tests {
+    use super::*;
+
+    #[test]
+    fn proofreading_materialization_requires_independent_explicit_content_language() {
+        for intent in [
+            json!({}),
+            json!({"annotationLocale":null}),
+            json!({"annotationLocale":"fr-FR"}),
+            json!({"annotationLocale":7}),
+        ] {
+            let error = proofreading_annotation_locale(&intent).unwrap_err();
+            assert_eq!(error.status, StatusCode::BAD_REQUEST);
+            assert_eq!(error.code, "invalid_request");
+            assert_eq!(
+                error.explanation.key(),
+                "error.api.hostedReview.annotationLocaleRequired"
+            );
+        }
+        let zh = json!({"kind":"annotationProofread","annotationLocale":"zh-CN"});
+        let en = json!({"kind":"annotationProofread","annotationLocale":"en-US"});
+        assert_eq!(proofreading_annotation_locale(&zh).unwrap(), UiLocale::ZhCn);
+        assert_eq!(proofreading_annotation_locale(&en).unwrap(), UiLocale::EnUs);
+        // The language is retained in the same exact original intent fingerprint.
+        assert_ne!(
+            digest(&serde_json::to_vec(&zh).unwrap()),
+            digest(&serde_json::to_vec(&en).unwrap())
+        );
+    }
+
+    #[test]
+    fn proofreading_product_body_uses_selected_content_language_and_author_rule_is_exact() {
+        let product = knowledge::ProofreadMessage::Product {
+            explanation: UiMessage::error_api_hosted_review_review_basis_changed(),
+        };
+        let zh = proofread_annotation_body(&product, UiLocale::ZhCn);
+        let en = proofread_annotation_body(&product, UiLocale::EnUs);
+        assert_ne!(zh, en);
+        assert!(!zh.is_empty());
+        assert!(!en.is_empty());
+        let author = knowledge::ProofreadMessage::Author {
+            author_message: "Exact author rule 原文😀\r\n".into(),
+        };
+        assert_eq!(
+            proofread_annotation_body(&author, UiLocale::ZhCn),
+            "Exact author rule 原文😀\r\n"
+        );
+        assert_eq!(
+            proofread_annotation_body(&author, UiLocale::EnUs),
+            "Exact author rule 原文😀\r\n"
+        );
+    }
+}
+
 #[cfg(all(test, windows))]
 #[path = "review_processing_tests.rs"]
 mod processing_tests;
@@ -1301,7 +1412,7 @@ mod media_tests {
         read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 resource: "Shared".into(),
                 asset: Some("Diagram".into()),
             }),
@@ -1317,7 +1428,7 @@ mod media_tests {
         prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 resource: "Shared".into(),
                 basis: basis.into(),
                 operation_id: uuid::Uuid::new_v4().to_string(),
@@ -1350,7 +1461,7 @@ mod media_tests {
         let done = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 resource: "Shared".into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
@@ -1394,7 +1505,7 @@ mod media_tests {
                 prepare(
                     State(state.clone()),
                     Extension(auth.clone()),
-                    Json(Prepare {
+                    crate::RequestJson(Prepare {
                         resource: "Shared".into(),
                         basis: before["basis"].as_str().unwrap().into(),
                         operation_id: id.clone(),
@@ -1408,7 +1519,7 @@ mod media_tests {
                 operation(
                     State(state.clone()),
                     Extension(auth.clone()),
-                    Json(Operation {
+                    crate::RequestJson(Operation {
                         resource: "Shared".into(),
                         operation_id: id
                     })
@@ -1442,7 +1553,7 @@ mod media_tests {
         let _ = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 resource: "Shared".into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
@@ -1459,7 +1570,7 @@ mod media_tests {
         let discussion = read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 resource: "Shared".into(),
                 asset: None,
             }),

@@ -167,19 +167,16 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "libraryBasisChanged",
-        "库配置、样式或原授权依据已变化；请保留输入并核对原操作。",
+        UiMessage::error_api_hosted_library_library_basis_changed(),
     )
 }
 fn core_error(error: CoreError) -> ApiError {
-    let message = match error.code.as_str() {
-        "operationConflict" => "同一原操作编号不能用于另一角色或不同输入。",
-        "rulesUnavailable" => {
-            "已提交的库规则文件缺失，不能用缺省值重新安装；请由库所有者核对原操作恢复。"
-        }
-        "basisRequired" => "原库配置依据不可用，请重新读取并保留输入。",
-        _ => "原库配置操作未完成或依据已变化；输入保持保留，请核对原操作。",
-    };
-    ApiError::new(StatusCode::CONFLICT, &error.code, message)
+    // Exact configuration diagnostics may contain private server paths.
+    ApiError::new(
+        StatusCode::CONFLICT,
+        &error.code,
+        UiMessage::error_api_hosted_library_original_operation_unavailable(),
+    )
 }
 fn rights<'a>(inner: &'a HostedInner, actor: &str) -> Result<&'a Rights, ApiError> {
     inner
@@ -293,7 +290,7 @@ fn retain(inner: &mut HostedInner, basis: Basis) -> Result<String, ApiError> {
     {
         release(inner, basis.document);
         return Err(ApiError::bad(
-            "库配置读取依据已达有界容量，请稍后重新读取；输入仍保留",
+            UiMessage::error_api_hosted_library_library_basis_capacity(),
         ));
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -510,14 +507,14 @@ fn status(
 
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;let r=rights(inner,&actor)?;
-        let roles=ROLES.iter().filter_map(|role|r.role(role).filter(|g|g.read).map(|g|json!({"role":role,"title":match *role {"schema"=>"Schema","settings"=>"库设置","rules"=>"库规则",_=>"库样式"},"read":g.read,"write":g.write}))).collect::<Vec<_>>();
+        let roles=ROLES.iter().filter_map(|role|r.role(role).filter(|g|g.read).map(|g|json!({"role":role,"title":match *role {"schema"=>UiMessage::error_api_hosted_library_schema_role_title(),"settings"=>UiMessage::error_api_hosted_library_settings_role_title(),"rules"=>UiMessage::error_api_hosted_library_rules_role_title(),_=>UiMessage::error_api_hosted_library_style_role_title()},"read":g.read,"write":g.write}))).collect::<Vec<_>>();
         let order_parents=if r.reorder_nodes {inner.config.directories.values().filter(|directory|navigation_registry::authorize_order_parent_read(inner,&actor,&directory.reference).is_ok()).map(|directory|json!({"reference":directory.reference,"title":directory.title})).collect::<Vec<_>>()}else{vec![]};
         Ok(json!({"roles":roles,"styleUse":r.style_use,"reorderNodes":r.reorder_nodes,"orderParents":order_parents}))}).await?))
 }
 async fn order_read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<OrderRead>,
+    RequestJson(req): RequestJson<OrderRead>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;access(inner,&actor,"settings",true)?;
@@ -532,14 +529,14 @@ async fn order_read(
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;access(inner,&actor,&req.role,false)?;prune(inner);let config_hash=config_hash(inner)?;
         let (document,source,mut result)=if req.role=="style" {
             let doc=inner.core.read_library_style(&inner.config.root).map_err(core_error)?;
             let inspect=weftext_engine::inspect_library_style(&doc.source);
             let controls=inspect.controls.iter().map(|c|json!({"key":c.key,"label":c.label,"kind":"text","value":c.value,"editable":c.editable,"reason":c.reason})).collect::<Vec<_>>();
-            let result=json!({"role":req.role,"source":doc.source,"installed":doc.installed,"enabled":doc.enabled,"controls":controls,"warnings":if inspect.syntax_valid {vec![]} else {vec!["样式源码存在语法错误；请保留原文修复。"]}});
+            let result=json!({"role":req.role,"source":doc.source,"installed":doc.installed,"enabled":doc.enabled,"controls":controls,"warnings":if inspect.syntax_valid {Vec::<ErrorDescription>::new()} else {vec![ErrorDescription::from(UiMessage::error_api_hosted_library_style_syntax_warning())]}});
             let source=doc.source.clone();(Document::Style(doc),source,result)
         } else {
             let doc=inner.core.read_config(&inner.config.root,config_role(&req.role)?).map_err(core_error)?;
@@ -558,7 +555,7 @@ pub(super) async fn test_processing_profile(state: &HostedState, auth: &Auth) ->
     read(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(Read {
+        crate::RequestJson(Read {
             role: "settings".into(),
         }),
     )
@@ -573,16 +570,18 @@ pub(super) fn test_expire_processing_profiles(inner: &mut HostedInner) {
 }
 fn validate_config(role: &str, before: &str, after: &str) -> Result<bool, ApiError> {
     if after.len() > MAX_SOURCE {
-        return Err(ApiError::bad("配置或样式源码上限为 2 MiB；输入仍保留"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_library_configuration_source_budget(),
+        ));
     }
     if role == "schema" {
         weftext_data::Schema::from_author_json(after)
-            .map_err(|_| ApiError::bad("Schema 格式或约束无效；输入仍保留"))?;
+            .map_err(|_| ApiError::bad(UiMessage::error_api_hosted_library_schema_invalid()))?;
         return Ok(false);
     }
     if role == "rules" {
         weftext_core::validate_library_rules(after.as_bytes()).map_err(|_| {
-            ApiError::bad("库规则格式无效；请使用 version:1、ignored 和 unmanaged 原生路径列表")
+            ApiError::bad(UiMessage::error_api_hosted_library_library_rules_invalid())
         })?;
         return Ok(false);
     }
@@ -590,7 +589,11 @@ fn validate_config(role: &str, before: &str, after: &str) -> Result<bool, ApiErr
         serde_json::from_str::<Value>(s)
             .ok()
             .filter(|v| v.is_object() && v["version"] == 1)
-            .ok_or_else(|| ApiError::bad("库设置须为原生 version:1 JSON 对象"))
+            .ok_or_else(|| {
+                ApiError::bad(
+                    UiMessage::error_api_hosted_library_library_settings_object_required(),
+                )
+            })
     };
     let after = parse(after)?;
     let before = parse(before)?;
@@ -600,25 +603,25 @@ fn validate_config(role: &str, before: &str, after: &str) -> Result<bool, ApiErr
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;access(inner,&actor,&req.role,true)?;
         let fingerprint=digest(&serde_json::to_vec(&req).map_err(|_|changed())?);let actor_scope=scope(inner,&actor);let resource=resource(&req.role);
         if let Some(old)=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|c|c.actor_feature_retry(&resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return status(inner,&actor,&req.role,old);}
         prune(inner);let basis=inner.library.bases.get(&req.basis).filter(|b|b.actor==actor && b.role==req.role && b.epoch==inner.actor_generation(&actor) && b.config_hash==config_hash(inner).unwrap_or_default()).cloned().ok_or_else(changed)?;
-        if req.source.is_some() && req.changes.is_some() {return Err(ApiError::bad("源码和控件修改须分别准备"));}
+        if req.source.is_some() && req.changes.is_some() {return Err(ApiError::bad(UiMessage::error_api_hosted_library_separate_source_and_control_proposals()));}
         let root=inner.config.root.clone();
         let (after,enabled,intent,style_write)=match &basis.document {
             Document::Style(doc)=>{
                 inner.core.validate_library_style(&root,&doc.base_id).map_err(core_error)?;
-                let after=match &req.source {Some(s)=>s.clone(),None=>weftext_engine::apply_library_style_changes(&basis.source,&weftext_engine::source_hash(&basis.source),&req.changes.clone().unwrap_or_default()).map_err(|_|ApiError::bad("样式控件不能无损修改此原生表达式；请保留源码"))?.source};
-                if after.len()>MAX_SOURCE || !weftext_engine::inspect_library_style(&after).syntax_valid {return Err(ApiError::bad("样式源码超出预算或语法无效；输入保持保留"));}
+                let after=match &req.source {Some(s)=>s.clone(),None=>weftext_engine::apply_library_style_changes(&basis.source,&weftext_engine::source_hash(&basis.source),&req.changes.clone().unwrap_or_default()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_library_style_control_edit_unsupported()))?.source};
+                if after.len()>MAX_SOURCE || !weftext_engine::inspect_library_style(&after).syntax_valid {return Err(ApiError::bad(UiMessage::error_api_hosted_library_style_source_invalid()));}
                 let enabled=req.enabled.unwrap_or(doc.enabled);let intent=OperationIntent::ConfigureStyle {base_id:doc.base_id.clone(),source:after.clone(),enabled};(after,Some(enabled),intent,false)
             },
             Document::Config(doc)=>{
-                if req.changes.is_some() || req.enabled.is_some() {return Err(ApiError::bad("此配置角色只接受原始 JSON 源码"));}
+                if req.changes.is_some() || req.enabled.is_some() {return Err(ApiError::bad(UiMessage::error_api_hosted_library_configuration_raw_json_required()));}
                 inner.core.validate_snapshot(&root,&doc.path,&doc.base_id).map_err(core_error)?;
-                let after=req.source.clone().ok_or_else(||ApiError::bad("缺少配置源码"))?;let extra=validate_config(&req.role,&basis.source,&after)?;
+                let after=req.source.clone().ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_library_configuration_source_required()))?;let extra=validate_config(&req.role,&basis.source,&after)?;
                 if extra {access(inner,&actor,"style",true)?;}
                 let intent=OperationIntent::UpdateFiles {changes:vec![FileChange {path:doc.path.clone(),base_id:Some(doc.base_id.clone()),before:doc.bytes.clone(),after:after.as_bytes().to_vec()}]};(after,None,intent,extra)
             }
@@ -626,10 +629,10 @@ async fn prepare(
         let order_parents=if req.role=="settings" {authorize_reorder(inner,&actor,&basis.source,&after)?}else{BTreeSet::new()};
         let reorder_nodes=!order_parents.is_empty();
         let decision=Decision {actor_epoch:inner.actor_generation(&actor),config_hash:config_hash(inner)?,workspace:workspace(inner)?,expires_at:now()+TTL.as_secs(),style_write,reorder_nodes,order_parents};
-        let mut preview=json!({"beforeSource":basis.source,"afterSource":after,"summary":"按原准确依据应用此库配置；不会改写正文或个人草稿。","_library":decision});
+        let mut preview=json!({"beforeSource":basis.source,"afterSource":after,"summary":UiMessage::error_api_hosted_library_configuration_plan_summary(),"_library":decision});
         if let Some(enabled)=enabled {preview["enabled"]=enabled.into();}
         // Core's durable preview budget applies before creating an original ID.
-        if serde_json::to_vec(&preview).map_err(|_|changed())?.len()>MAX_SOURCE {return Err(ApiError::bad("本次前后源码预览超出 2 MiB 原操作预算；输入仍保留"));}
+        if serde_json::to_vec(&preview).map_err(|_|changed())?.len()>MAX_SOURCE {return Err(ApiError::bad(UiMessage::error_api_hosted_library_configuration_preview_budget()));}
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent};
         let old=inner.core.with_actor_for_root(&actor_scope, &inner.config.root,|c|c.actor_feature_prepare(&resource,&req.operation_id,&fingerprint,request,preview,&[])).map_err(core_error)?;
         status(inner,&actor,&req.role,old)
@@ -638,7 +641,7 @@ async fn prepare(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {let actor=inner.actor(&auth)?;access(inner,&actor,&req.role,false)?;
         let old=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|c|c.actor_feature_status(&resource(&req.role),&req.operation_id)).map_err(core_error)?;
@@ -648,7 +651,7 @@ async fn operation(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -683,7 +686,7 @@ async fn commit(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -809,7 +812,9 @@ impl Environment {
         citations::merge_authority(inner, &mut self.authority.citations, &captured.authority)?;
         self.bytes = self.bytes.saturating_add(captured.retained_bytes());
         if self.bytes > MAX_CACHE {
-            return Err(ApiError::bad("编译环境与原文献输入超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_library_compile_bibliography_budget(),
+            ));
         }
         self.citation_sets.push(captured);
         Ok(())
@@ -847,7 +852,9 @@ impl Environment {
         self.authority.input_binding = inputs::binding_hash(inner, &self.authority.inputs)?;
         self.bytes = self.bytes.saturating_add(captured.retained_bytes());
         if self.bytes > MAX_CACHE {
-            return Err(ApiError::bad("编译环境与原输入依据超出 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_library_compile_original_basis_budget(),
+            ));
         }
         self.input_sets.push(captured);
         Ok(())
@@ -869,7 +876,7 @@ impl Environment {
             .saturating_add(self.retained_bytes());
         if files.len() > 64 || bytes > MAX_CACHE {
             return Err(ApiError::bad(
-                "本次编译环境与正文输入合计超出 32 MiB 或 64 个输入的预算",
+                UiMessage::error_api_hosted_library_compile_body_input_budget(),
             ));
         }
         Ok(())
@@ -966,7 +973,9 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
             StyleEvidence::Enabled(w) => w.retained_bytes(),
         };
         if bytes > MAX_CACHE {
-            return Err(ApiError::bad("编译环境超出 32 MiB 输入预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_library_compile_environment_budget(),
+            ));
         }
         return Ok(Environment {
             authority: ExecutionAuthority {
@@ -1031,7 +1040,9 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
         let (path, content, _) = captured.entry(id)?.ok_or_else(changed)?;
         bytes = bytes.saturating_add(content.len().div_ceil(3) * 4);
         if bytes > MAX_CACHE {
-            return Err(ApiError::bad("编译环境超出 32 MiB 输入预算；输入仍保留"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_library_compile_environment_input_retained(),
+            ));
         }
         files.insert(
             path.to_owned(),
@@ -1039,7 +1050,9 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
         );
     }
     if bytes > MAX_CACHE {
-        return Err(ApiError::bad("编译环境超出 32 MiB 输入预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_library_compile_environment_budget(),
+        ));
     }
     Ok(Environment {
         authority: ExecutionAuthority {
@@ -1143,11 +1156,38 @@ mod tests {
         (temp, state, auth)
     }
     #[cfg(windows)]
+    #[tokio::test]
+    async fn role_catalog_has_typed_product_titles_and_keeps_permission_filtering() {
+        let (_temp, state, auth) = fixture();
+        let delivered = catalog(State(state.clone()), Extension(auth.clone()))
+            .await
+            .unwrap()
+            .0;
+        let rows = delivered["roles"].as_array().unwrap();
+        assert_eq!(rows.len(), 4);
+        for row in rows {
+            let title: UiMessage = serde_json::from_value(row["title"].clone()).unwrap();
+            assert!(title.key().starts_with("error.api.hostedLibrary."));
+            assert!(!title.render(weftext_messages::UiLocale::ZhCn).is_empty());
+            assert!(!title.render(weftext_messages::UiLocale::EnUs).is_empty());
+            assert_eq!(row["read"], true);
+            assert_eq!(row["write"], true);
+        }
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.policy.users.get_mut("alice").unwrap().library = Rights::default();
+        }
+        let revoked = catalog(State(state), Extension(auth)).await.unwrap().0;
+        assert!(revoked["roles"].as_array().unwrap().is_empty());
+        assert!(!revoked.to_string().contains("private"));
+    }
+
+    #[cfg(windows)]
     async fn read_role(state: &HostedState, auth: &Auth, role: &str) -> Value {
         read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read { role: role.into() }),
+            crate::RequestJson(Read { role: role.into() }),
         )
         .await
         .unwrap()
@@ -1184,7 +1224,7 @@ mod tests {
             prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(cloned())
+                crate::RequestJson(cloned())
             )
             .await
             .unwrap_err()
@@ -1205,7 +1245,7 @@ mod tests {
             prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(cloned())
+                crate::RequestJson(cloned())
             )
             .await
             .unwrap_err()
@@ -1216,7 +1256,7 @@ mod tests {
             order_read(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(OrderRead {
+                crate::RequestJson(OrderRead {
                     parent_ref: reference.clone()
                 })
             )
@@ -1242,7 +1282,7 @@ mod tests {
         let members = order_read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(OrderRead {
+            crate::RequestJson(OrderRead {
                 parent_ref: reference.clone(),
             }),
         )
@@ -1254,7 +1294,7 @@ mod tests {
         let prepared = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(cloned()),
+            crate::RequestJson(cloned()),
         )
         .await
         .unwrap()
@@ -1267,7 +1307,7 @@ mod tests {
         let original = operation(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 role: "settings".into(),
                 operation_id: request.operation_id.clone(),
             }),
@@ -1292,7 +1332,7 @@ mod tests {
             commit(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Commit {
+                crate::RequestJson(Commit {
                     role: "settings".into(),
                     operation_id: request.operation_id,
                     plan_id: prepared["planId"].as_str().unwrap().into()
@@ -1323,10 +1363,14 @@ mod tests {
         };
         let again = serde_json::from_value(serde_json::to_value(&req).unwrap()).unwrap();
         (
-            prepare(State(state.clone()), Extension(auth.clone()), Json(again))
-                .await
-                .unwrap()
-                .0,
+            prepare(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(again),
+            )
+            .await
+            .unwrap()
+            .0,
             req,
         )
     }
@@ -1336,7 +1380,7 @@ mod tests {
         let receipt = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 role: "style".into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
@@ -1368,7 +1412,9 @@ mod tests {
         let repeated = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(serde_json::from_value(serde_json::to_value(&request).unwrap()).unwrap()),
+            crate::RequestJson(
+                serde_json::from_value(serde_json::to_value(&request).unwrap()).unwrap(),
+            ),
         )
         .await
         .unwrap()
@@ -1408,15 +1454,19 @@ mod tests {
             host,
             render_gate,
         };
-        let repeated = prepare(State(state.clone()), Extension(auth.clone()), Json(request))
-            .await
-            .unwrap()
-            .0;
+        let repeated = prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(request),
+        )
+        .await
+        .unwrap()
+        .0;
         assert_eq!(repeated["planId"], plan["planId"]);
         let done = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 role: "settings".into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
@@ -1445,7 +1495,7 @@ mod tests {
         let cancelled = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 role: late.role.clone(),
                 operation_id: late.operation_id.clone(),
             }),
@@ -1455,7 +1505,7 @@ mod tests {
         .0;
         assert_eq!(cancelled["status"], "cancelled");
         assert_eq!(
-            prepare(State(state), Extension(auth), Json(late))
+            prepare(State(state), Extension(auth), crate::RequestJson(late))
                 .await
                 .unwrap()
                 .0["status"],
@@ -1477,7 +1527,7 @@ mod tests {
         let wrong = operation(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 role: "rules".into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
             }),
@@ -1500,7 +1550,7 @@ mod tests {
         let denied = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 role: "settings".into(),
                 basis: basis["basis"].as_str().unwrap().into(),
                 operation_id: uuid::Uuid::new_v4().to_string(),
@@ -1604,7 +1654,7 @@ mod tests {
         let hidden = read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 role: "schema".into(),
             }),
         )
@@ -1613,7 +1663,7 @@ mod tests {
         let missing = read(
             State(state),
             Extension(auth),
-            Json(Read {
+            crate::RequestJson(Read {
                 role: "not-configured".into(),
             }),
         )
@@ -1621,6 +1671,8 @@ mod tests {
         .unwrap_err();
         assert_eq!(hidden.status, missing.status);
         assert_eq!(hidden.code, missing.code);
-        assert_eq!(hidden.message, missing.message);
+        assert_eq!(hidden.explanation, missing.explanation);
+        assert_eq!(hidden.diagnostics, missing.diagnostics);
+        assert_eq!(hidden.causes, missing.causes);
     }
 }

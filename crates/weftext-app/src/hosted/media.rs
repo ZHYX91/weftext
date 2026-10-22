@@ -234,14 +234,14 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "resourceVersion",
-        "资源身份、准确版本或配置已变化；请保留批注输入并重新读取，不会替换为新版。",
+        UiMessage::error_api_hosted_media_resource_basis_changed(),
     )
 }
 fn gone() -> ApiError {
     ApiError::new(
         StatusCode::GONE,
         "mediaExpired",
-        "此准确资源交付已失效；请重新获权读取，未续取新版。",
+        UiMessage::error_api_hosted_media_resource_delivery_expired(),
     )
 }
 pub(super) fn binding_hash(
@@ -359,7 +359,9 @@ fn profile(
         return Err(changed());
     }
     if resource.witness.retained_bytes() > MAX_BYTES {
-        return Err(ApiError::bad("资源及其准确依据超过 32 MiB 交付预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_media_resource_delivery_budget(),
+        ));
     }
     let config = resolve_asset(inner, actor, asset)?;
     let (metadata, content_type) = crate::media_api::inspect_media(resource.bytes());
@@ -377,7 +379,9 @@ fn profile(
             .len(),
     ) > MAX_BYTES
     {
-        return Err(ApiError::bad("资源及其准确依据超过 32 MiB 交付预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_media_resource_delivery_budget(),
+        ));
     }
     Ok((descriptor, metadata))
 }
@@ -433,7 +437,9 @@ pub(super) fn context(
         .saturating_add(collection.as_ref().map_or(0, |c| c.retained_bytes()))
         > MAX_BYTES
     {
-        return Err(ApiError::bad("资源目标依据超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_media_resource_target_basis_budget(),
+        ));
     }
     let (descriptor, metadata) = profile(inner, actor, asset, &resource)?;
     validate_original(inner, actor, asset, &resource)?;
@@ -445,7 +451,9 @@ pub(super) fn context(
         collection,
     };
     if context.retained_bytes() > MAX_BYTES {
-        return Err(ApiError::bad("资源目标依据超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_media_resource_target_basis_budget(),
+        ));
     }
     context.validate(inner, actor)?;
     Ok(context)
@@ -486,7 +494,9 @@ fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
             .map_err(|_| changed())?
             .len();
     if bytes > MAX_BYTES {
-        return Err(ApiError::bad("资源及其准确依据超过 32 MiB 交付预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_media_resource_delivery_budget(),
+        ));
     }
     let mut retained = inner
         .media
@@ -519,7 +529,9 @@ fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
         || retained.values().sum::<usize>().saturating_add(bytes) > MAX_BYTES
     {
         let Some((id, _)) = candidates.first().cloned() else {
-            return Err(ApiError::bad("资源交付缓存已达预算；原交付保持保留"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_media_resource_delivery_cache_budget(),
+            ));
         };
         candidates.remove(0);
         retained.remove(&id);
@@ -555,7 +567,7 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         for asset in assets {
             let config=resolve_asset(inner,&actor,&asset);
             let ready=context(inner,&actor,&asset,None).and_then(|context| {
-                if bytes.saturating_add(context.retained_bytes())>MAX_BYTES {return Err(ApiError::bad("资源目录超过 32 MiB 读取预算"));}
+                if bytes.saturating_add(context.retained_bytes())>MAX_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_catalog_budget()));}
                 bytes+=context.retained_bytes();context.validate(inner,&actor)?;Ok(context.descriptor)
             });
             let row=match ready {Ok(row)=>row,Err(_)=>{complete=false;
@@ -612,14 +624,14 @@ async fn prepare_delivery(
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     prepare_delivery(state, auth, req, Purpose::View).await
 }
 async fn prepare_download(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     prepare_delivery(state, auth, req, Purpose::Download).await
 }
@@ -631,7 +643,7 @@ async fn deliver(state: HostedState, auth: Auth, req: ChunkRequest, purpose: Pur
         if t.epoch!=inner.actor_generation(&actor) || binding_hash(inner,&BTreeSet::from([t.asset.clone()]))?!=t.binding {return Err(gone());}
         validate_original(inner,&actor,&t.asset,&t.resource).map_err(|_|gone())?;
         if let Some(c)=&t.collection {inner.core.validate_resource_collection_witness(&inner.config.root,&c.witness).map_err(|_|gone())?;}
-        let original=t.resource.bytes();if req.offset>original.len(){return Err(ApiError::bad("偏移超出原资源"));}
+        let original=t.resource.bytes();if req.offset>original.len(){return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_offset_invalid()));}
         let end=req.offset.saturating_add(CHUNK).min(original.len());let bytes=&original[req.offset..end];
         Ok(json!({"ticket":req.ticket,"purpose":purpose,"bytesBase64":base64::engine::general_purpose::STANDARD.encode(bytes),"offset":req.offset,"length":bytes.len(),"total":original.len(),"sha256":t.resource.content_hash,"done":end==original.len()}))
     }).await?))
@@ -639,26 +651,26 @@ async fn deliver(state: HostedState, auth: Auth, req: ChunkRequest, purpose: Pur
 async fn view_chunk(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<ChunkRequest>,
+    RequestJson(req): RequestJson<ChunkRequest>,
 ) -> ApiResult {
     deliver(state, auth, req, Purpose::View).await
 }
 async fn download_chunk(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<ChunkRequest>,
+    RequestJson(req): RequestJson<ChunkRequest>,
 ) -> ApiResult {
     deliver(state, auth, req, Purpose::Download).await
 }
 async fn resolve(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Resolve>,
+    RequestJson(req): RequestJson<Resolve>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;
         let base=req.reference.split_once('#').map_or(req.reference.as_str(),|(base,_)|base);
-        if req.reference.len()>2048 || split_reference(base).is_none(){return Err(ApiError::bad("请使用完整的稳定资源引用"));}
+        if req.reference.len()>2048 || split_reference(base).is_none(){return Err(ApiError::bad(UiMessage::error_api_hosted_media_stable_resource_reference_required()));}
         let mut candidates=inner.config.resources.iter().filter(|(id,r)|r.reference==base && input_access(inner,&actor,id,false).is_ok()).map(|(id,_)|id.clone()).collect::<BTreeSet<_>>();
         let mut bytes=0usize;
         let mut configured_collections=inner.config.resource_collections.clone();
@@ -667,7 +679,7 @@ async fn resolve(
             if c.expected_owner.as_ref().is_some_and(|owner|owner.workspace_id!=split_reference(base).unwrap().0) || resource_collections::input_access(inner,&actor,id,false).is_err(){continue;}
             if let Ok(captured)=resource_collections::capture(inner,&actor,id) {
                 bytes=bytes.saturating_add(captured.retained_bytes());
-                if bytes>MAX_BYTES {return Err(ApiError::bad("资源解析准确依据超过 32 MiB 预算"));}
+                if bytes>MAX_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_resolution_budget()));}
                 if let Some(e)=captured.entries.iter().find(|e|e.resource_ref==base) {candidates.insert(format!("{id}/{}",e.resource_ref.rsplit('/').next().unwrap()));}
             }
         }
@@ -679,7 +691,7 @@ async fn resolve(
             match context(inner,&actor,&candidate,req.revision.as_deref()) {
                 Ok(candidate)=>{
                     bytes=bytes.saturating_add(candidate.retained_bytes());
-                    if bytes>MAX_BYTES {return Err(ApiError::bad("资源解析准确依据超过 32 MiB 预算"));}
+                    if bytes>MAX_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_resolution_budget()));}
                     if let Some(previous)=&selected {
                         if previous.resource.owner!=candidate.resource.owner || previous.resource.resource_ref!=candidate.resource.resource_ref
                             || previous.resource.revision!=candidate.resource.revision || previous.resource.content_hash!=candidate.resource.content_hash
@@ -725,7 +737,9 @@ pub(super) mod tests {
     #[test]
     fn whole_resource_does_not_invent_media_geometry() {
         let metadata = crate::media_api::ResourceMetadata::Unsupported {
-            message: "原件保留".into(),
+            description: ErrorDescription::new(
+                UiMessage::error_api_hosted_media_original_retained(),
+            ),
         };
         let target = crate::knowledge_api::target_from_resource_metadata(
             &json!({"kind":"whole_resource"}),
@@ -853,7 +867,7 @@ pub(super) mod tests {
         let selected = resolve(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Resolve {
+            crate::RequestJson(Resolve {
                 reference,
                 revision: Some(revision.clone()),
             }),
@@ -867,7 +881,7 @@ pub(super) mod tests {
             prepare_download(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Read {
+                crate::RequestJson(Read {
                     asset: "Diagram".into(),
                     revision: revision.clone()
                 })
@@ -880,7 +894,7 @@ pub(super) mod tests {
         let allowed = prepare_download(
             State(state.clone()),
             Extension(auth),
-            Json(Read { asset, revision }),
+            crate::RequestJson(Read { asset, revision }),
         )
         .await
         .unwrap()
@@ -896,7 +910,7 @@ pub(super) mod tests {
         let delivered = read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read { asset, revision }),
+            crate::RequestJson(Read { asset, revision }),
         )
         .await
         .unwrap()
@@ -922,7 +936,7 @@ pub(super) mod tests {
             view_chunk(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(ChunkRequest { ticket, offset: 0 })
+                crate::RequestJson(ChunkRequest { ticket, offset: 0 })
             )
             .await
             .unwrap_err()
@@ -951,7 +965,7 @@ pub(super) mod tests {
         read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 asset: "Diagram".into(),
                 revision: revision.into(),
             }),
@@ -980,7 +994,7 @@ pub(super) mod tests {
         let denied = prepare_download(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 asset: "Diagram".into(),
                 revision: revision.clone(),
             }),
@@ -993,7 +1007,7 @@ pub(super) mod tests {
             download_chunk(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(ChunkRequest {
+                crate::RequestJson(ChunkRequest {
                     ticket: ticket.clone(),
                     offset: 0
                 })
@@ -1006,7 +1020,7 @@ pub(super) mod tests {
         let chunk = view_chunk(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(ChunkRequest {
+            crate::RequestJson(ChunkRequest {
                 ticket: ticket.clone(),
                 offset: 0,
             }),
@@ -1026,7 +1040,7 @@ pub(super) mod tests {
             view_chunk(
                 State(state),
                 Extension(bob),
-                Json(ChunkRequest { ticket, offset: 0 })
+                crate::RequestJson(ChunkRequest { ticket, offset: 0 })
             )
             .await
             .unwrap_err()
@@ -1081,7 +1095,7 @@ pub(super) mod tests {
             view_chunk(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(ChunkRequest { ticket, offset: 0 })
+                crate::RequestJson(ChunkRequest { ticket, offset: 0 })
             )
             .await
             .unwrap_err()
@@ -1110,7 +1124,7 @@ pub(super) mod tests {
             view_chunk(
                 State(state),
                 Extension(auth),
-                Json(ChunkRequest { ticket, offset: 0 })
+                crate::RequestJson(ChunkRequest { ticket, offset: 0 })
             )
             .await
             .unwrap_err()
@@ -1128,7 +1142,7 @@ pub(super) mod tests {
         let descriptor = resolve(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Resolve {
+            crate::RequestJson(Resolve {
                 reference: reference.clone(),
                 revision: Some(revision),
             }),
@@ -1143,7 +1157,7 @@ pub(super) mod tests {
             Extension(Auth {
                 digest: digest(b"bob"),
             }),
-            Json(Resolve {
+            crate::RequestJson(Resolve {
                 reference,
                 revision: None,
             }),
@@ -1153,7 +1167,7 @@ pub(super) mod tests {
         let missing = resolve(
             State(state),
             Extension(auth),
-            Json(Resolve {
+            crate::RequestJson(Resolve {
                 reference: format!(
                     "weftext-resource://{}/{}",
                     uuid::Uuid::new_v4(),
@@ -1166,6 +1180,8 @@ pub(super) mod tests {
         .unwrap_err();
         assert_eq!(hidden.status, missing.status);
         assert_eq!(hidden.code, missing.code);
-        assert_eq!(hidden.message, missing.message);
+        assert_eq!(hidden.explanation, missing.explanation);
+        assert_eq!(hidden.diagnostics, missing.diagnostics);
+        assert_eq!(hidden.causes, missing.causes);
     }
 }

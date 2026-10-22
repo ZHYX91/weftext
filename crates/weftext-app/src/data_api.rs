@@ -12,6 +12,7 @@ use std::{
 };
 use weftext_core::{ConfigRole, OperationIntent, OperationRequest as CoreOperationRequest};
 use weftext_data::{NativeValue, Schema, ValuePath};
+use weftext_messages::UiMessage;
 
 const BUNDLED_SCHEMA_SOURCE: &str =
     include_str!("../../../docs/design/examples/schema.authoring.json");
@@ -233,7 +234,12 @@ fn schema_source(core: &mut Core, root: &Path) -> Result<SchemaSource, CoreError
                 .as_ref()
                 .map(|bytes| String::from_utf8(bytes.clone()))
                 .transpose()
-                .map_err(|_| CoreError::new("invalidSchema", "Schema configuration must be UTF-8"))?
+                .map_err(|_| {
+                    CoreError::new(
+                        "invalidSchema",
+                        UiMessage::error_api_data_schema_configuration_encoding(),
+                    )
+                })?
                 .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
             Ok(SchemaSource {
                 source,
@@ -264,7 +270,7 @@ fn schema_source(core: &mut Core, root: &Path) -> Result<SchemaSource, CoreError
 fn resolved_schema(core: &mut Core, root: &Path) -> Result<(SchemaSource, Schema), CoreError> {
     let config = schema_source(core, root)?;
     let schema = Schema::from_author_json(&config.source)
-        .map_err(|error| CoreError::new("invalidSchema", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidSchema", error))?;
     Ok((config, schema))
 }
 
@@ -283,15 +289,21 @@ pub(crate) async fn knowledge_schema(
 
 pub(crate) fn knowledge_schema_from_snapshot(
     snapshot: &weftext_core::SnapshotFile,
-) -> Result<(Schema, String), ApiError> {
+) -> Result<(Schema, String), CoreError> {
     let source = snapshot
         .bytes
         .as_ref()
         .map(|bytes| String::from_utf8(bytes.clone()))
         .transpose()
-        .map_err(|_| ApiError::bad("Frozen schema configuration must be UTF-8"))?
+        .map_err(|_| {
+            CoreError::new(
+                "invalid_request",
+                UiMessage::error_api_export_conversion_frozen_schema_encoding(),
+            )
+        })?
         .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
-    let schema = Schema::from_author_json(&source).map_err(data_error)?;
+    let schema = Schema::from_author_json(&source)
+        .map_err(|error| CoreError::from_data("invalid_data", error))?;
     let generation = format!(
         "{}:{}",
         snapshot.revision.as_deref().unwrap_or("observed"),
@@ -301,7 +313,7 @@ pub(crate) fn knowledge_schema_from_snapshot(
 }
 
 fn data_error(error: weftext_data::DataError) -> ApiError {
-    ApiError::new(StatusCode::BAD_REQUEST, "invalid_data", error.to_string())
+    ApiError::from_data(StatusCode::BAD_REQUEST, "invalid_data", error)
 }
 
 async fn schema_still_current(
@@ -320,7 +332,7 @@ async fn schema_still_current(
         {
             return Err(CoreError::new(
                 "configConflict",
-                "The schema changed while evaluating this proposal; refresh the form",
+                UiMessage::error_api_data_schema_changed_during_evaluation(),
             ));
         }
         Ok(())
@@ -328,19 +340,35 @@ async fn schema_still_current(
     .await
 }
 
-async fn schema(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+fn schema_parse_error(config: &SchemaSource, failure: weftext_data::DataError) -> ApiError {
+    let cause = data_error(failure);
+    let mut error = cause.clone();
+    error.code = "invalid_schema".into();
+    error.details = Some(Box::new(ApiErrorDetails::SchemaSource {
+        source: config.source.clone(),
+        role_ref: config.role_ref.clone(),
+        revision: config.revision.clone(),
+        cause: Box::new(cause),
+    }));
+    error
+}
+
+fn original_operation_error(mut error: ApiError, fact: Value) -> ApiError {
+    let cause = Box::new(error.clone());
+    error.details = Some(Box::new(ApiErrorDetails::OriginalOperation { fact, cause }));
+    error
+}
+
+async fn schema(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     let config = core_call(&state, move |core| {
         schema_source(core, Path::new(&req.root))
     })
     .await?;
-    let resolved = Schema::from_author_json(&config.source).map_err(|error| {
-        let mut error = data_error(error);
-        error.code = "invalid_schema".into();
-        error.details = Some(Box::new(
-            json!({"source":config.source,"roleRef":config.role_ref,"revision":config.revision}),
-        ));
-        error
-    })?;
+    let resolved = Schema::from_author_json(&config.source)
+        .map_err(|error| schema_parse_error(&config, error))?;
     Ok(Json(
         json!({"schema":resolved,"source":config.source,"roleRef":config.role_ref,
         "revision":config.revision,"builtinDefault":config.before.is_none(),"canInstall":config.can_install}),
@@ -349,10 +377,12 @@ async fn schema(State(state): State<AppState>, Json(req): Json<RootRequest>) -> 
 
 async fn prepare_schema(
     State(state): State<AppState>,
-    Json(req): Json<SchemaPrepare>,
+    RequestJson(req): RequestJson<SchemaPrepare>,
 ) -> ApiResult {
     if req.source.len() > weftext_core::MAX_SOURCE_BYTES {
-        return Err(ApiError::bad("Schema configuration exceeds 2 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_data_schema_configuration_budget(),
+        ));
     }
     Schema::from_author_json(&req.source).map_err(data_error)?;
     let preview = core_call(&state, move |core| {
@@ -360,13 +390,13 @@ async fn prepare_schema(
         if !current.can_install {
             return Err(CoreError::new(
                 "unadmittedLibrary",
-                "Create or open the original managed library before installing schema",
+                UiMessage::error_api_data_managed_library_before_schema(),
             ));
         }
         if current.source != req.before_source || current.revision != req.before_revision {
             return Err(CoreError::new(
                 "configConflict",
-                "The exact schema base changed; refresh before preparing another operation",
+                UiMessage::error_api_data_exact_schema_base_changed(),
             ));
         }
         core.prepare_config_save(
@@ -383,7 +413,7 @@ async fn prepare_schema(
 
 async fn install_schema(
     State(state): State<AppState>,
-    Json(req): Json<SchemaInstall>,
+    RequestJson(req): RequestJson<SchemaInstall>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
@@ -393,7 +423,7 @@ async fn install_schema(
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This is not a schema installation plan",
+                    UiMessage::error_api_data_schema_installation_plan_required(),
                 ));
             }
             core.execute_operation(&req.operation_id, &req.plan_id)
@@ -402,7 +432,10 @@ async fn install_schema(
     )?))
 }
 
-async fn project(State(state): State<AppState>, Json(req): Json<ProjectionRequest>) -> ApiResult {
+async fn project(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ProjectionRequest>,
+) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -422,7 +455,7 @@ async fn project(State(state): State<AppState>, Json(req): Json<ProjectionReques
     let mut projection =
         tokio::task::spawn_blocking(move || weftext_data::project(&source, &resolved))
             .await
-            .map_err(|_| ApiError::internal("Data projection did not complete"))?;
+            .map_err(|_| ApiError::internal(UiMessage::error_api_data_projection_incomplete()))?;
     if read_only {
         for field in &mut projection.fields {
             field.writable = false;
@@ -441,7 +474,10 @@ async fn project(State(state): State<AppState>, Json(req): Json<ProjectionReques
         "schemaHash":weftext_engine::source_hash(&config.source),"readOnly":read_only})))
 }
 
-async fn edit(State(state): State<AppState>, Json(req): Json<FieldEdit>) -> ApiResult {
+async fn edit(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<FieldEdit>,
+) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -459,12 +495,12 @@ async fn edit(State(state): State<AppState>, Json(req): Json<FieldEdit>) -> ApiR
     let field_id = resolved
         .field(&req.key)
         .map(|field| field.id.clone())
-        .ok_or_else(|| ApiError::bad("The selected field is not installed"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_data_selected_field_not_installed()))?;
     let patch = tokio::task::spawn_blocking(move || {
         weftext_data::patch_field(&source, &resolved, &req.key, &req.path, &req.value)
     })
     .await
-    .map_err(|_| ApiError::internal("Data edit did not complete"))?
+    .map_err(|_| ApiError::internal(UiMessage::error_api_data_data_edit_incomplete()))?
     .map_err(data_error)?;
     check_relation_proposal(
         &state,
@@ -486,7 +522,10 @@ async fn edit(State(state): State<AppState>, Json(req): Json<FieldEdit>) -> ApiR
     patch_response(patch, req.serial, &req.source)
 }
 
-async fn types(State(state): State<AppState>, Json(req): Json<TypeEdit>) -> ApiResult {
+async fn types(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<TypeEdit>,
+) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
         &req.session_id,
@@ -505,7 +544,7 @@ async fn types(State(state): State<AppState>, Json(req): Json<TypeEdit>) -> ApiR
         weftext_data::patch_types(&source, &resolved, &req.types)
     })
     .await
-    .map_err(|_| ApiError::internal("Type edit did not complete"))?
+    .map_err(|_| ApiError::internal(UiMessage::error_api_data_type_edit_incomplete()))?
     .map_err(data_error)?;
     check_relation_proposal(
         &state,
@@ -532,15 +571,15 @@ pub(crate) fn patch_response(
     serial: u64,
     before: &str,
 ) -> ApiResult {
-    let prefix = before
-        .get(..patch.from)
-        .ok_or_else(|| ApiError::internal("Invalid source patch boundary"))?;
-    let end = before
-        .get(..patch.to)
-        .ok_or_else(|| ApiError::internal("Invalid source patch boundary"))?;
-    let expected = before
-        .get(patch.from..patch.to)
-        .ok_or_else(|| ApiError::internal("Invalid source patch range"))?;
+    let prefix = before.get(..patch.from).ok_or_else(|| {
+        ApiError::internal(UiMessage::error_api_data_source_patch_boundary_invalid())
+    })?;
+    let end = before.get(..patch.to).ok_or_else(|| {
+        ApiError::internal(UiMessage::error_api_data_source_patch_boundary_invalid())
+    })?;
+    let expected = before.get(patch.from..patch.to).ok_or_else(|| {
+        ApiError::internal(UiMessage::error_api_data_source_patch_range_invalid())
+    })?;
     let from = prefix.encode_utf16().count();
     let to = end.encode_utf16().count();
     Ok(Json(
@@ -558,7 +597,7 @@ pub(crate) fn deny_trash_writer(path: &Path) -> Result<(), ApiError> {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "trashReadOnly",
-            "回收站中的笔记只读；请先通过 Core 恢复笔记",
+            UiMessage::error_api_data_trash_read_only(),
         ));
     }
     Ok(())
@@ -645,13 +684,15 @@ async fn check_relation_proposal(
                 ),
             };
             if !check.is_valid() {
-                return Err(CoreError::new(
+                return Err(CoreError::from_product(
                     "invalidRelation",
-                    format!(
-                        "{}{}",
-                        check.diagnostics.join("; "),
-                        check.unavailable.join("; ")
-                    ),
+                    None,
+                    UiMessage::error_api_data_proposal_validation_failed().into(),
+                    check
+                        .diagnostics
+                        .into_iter()
+                        .chain(check.unavailable)
+                        .collect(),
                 ));
             }
             let mut context = weftext_data::ValidationContext::default();
@@ -685,13 +726,15 @@ async fn check_relation_proposal(
                 None => weftext_data::validate_note(&after, &schema, &context),
             };
             if !validation.is_valid() {
-                return Err(CoreError::new(
+                return Err(CoreError::from_product(
                     "invalidData",
-                    format!(
-                        "{}{}",
-                        validation.diagnostics.join("; "),
-                        validation.unavailable.join("; ")
-                    ),
+                    None,
+                    UiMessage::error_api_data_proposal_validation_failed().into(),
+                    validation
+                        .diagnostics
+                        .into_iter()
+                        .chain(validation.unavailable)
+                        .collect(),
                 ));
             }
             Ok(())
@@ -708,14 +751,19 @@ fn capture_template(
 ) -> Result<String, weftext_data::DataError> {
     let mut seen = BTreeSet::new();
     for key in req.fields.keys() {
-        let field = resolved
-            .field(key)
-            .ok_or_else(|| weftext_data::DataError(format!("Unknown capture field {key}")))?;
+        let field = resolved.field(key).ok_or_else(|| {
+            weftext_data::DataError::new(UiMessage::error_api_data_capture_field_unknown(
+                weftext_messages::params::ErrorApiDataCaptureFieldUnknown { field: key.clone() },
+            ))
+        })?;
         if !seen.insert(&field.id) {
-            return Err(weftext_data::DataError(format!(
-                "One capture supplies {} twice using id and key",
-                field.id
-            )));
+            return Err(weftext_data::DataError::new(
+                UiMessage::error_api_data_capture_field_supplied_twice(
+                    weftext_messages::params::ErrorApiDataCaptureFieldSuppliedTwice {
+                        field: field.id.clone(),
+                    },
+                ),
+            ));
         }
     }
     let body = capture_body(req)?;
@@ -726,8 +774,7 @@ fn capture_body(req: &CaptureRequest) -> Result<String, weftext_data::DataError>
     Ok(match &req.title {
         Some(title) => format!(
             "\n#set document(title: [{}])\n#title()\n\n{}",
-            weftext_engine::encode_literal(title)
-                .map_err(|error| weftext_data::DataError(error.to_string()))?,
+            weftext_engine::encode_literal(title).map_err(weftext_data::DataError::from)?,
             req.body
         ),
         None => req.body.clone(),
@@ -738,7 +785,10 @@ type CreationCommit = (
     weftext_core::OperationPreview,
     weftext_core::OperationReceipt,
 );
-async fn capture(State(state): State<AppState>, Json(req): Json<CaptureRequest>) -> ApiResult {
+async fn capture(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CaptureRequest>,
+) -> ApiResult {
     let (preview, receipt) = core_call(&state, move |core| capture_document(core, &req)).await?;
     crate::knowledge_api::operation_output(&state, preview, receipt, None)
         .await
@@ -777,7 +827,7 @@ fn capture_from_frozen_inner(
     intent: &Value,
 ) -> Result<CreationCommit, CoreError> {
     let source = capture_template(req, &frozen.schema)
-        .map_err(|error| CoreError::new("invalidData", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidData", error))?;
     let request = CoreOperationRequest {
         operation_id: req.operation_id.clone(),
         root: frozen.root.clone(),
@@ -792,10 +842,10 @@ fn capture_from_frozen_inner(
             "00000000-0000-4000-8000-000000000000",
             &req.types,
             &req.fields,
-            &capture_body(req).map_err(|error| CoreError::new("invalidData", error.to_string()))?,
+            &capture_body(req).map_err(|error| CoreError::from_data("invalidData", error))?,
             &frozen.schema,
         )
-        .map_err(|error| CoreError::new("invalidData", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidData", error))?;
         let targets = relation_targets(&frozen.input.notes, &frozen.schema);
         let workspace = frozen.versions[0]["roleRef"]
             .as_str()
@@ -804,7 +854,7 @@ fn capture_from_frozen_inner(
             .ok_or_else(|| {
                 CoreError::new(
                     "unadmittedLibrary",
-                    "The proposed relation owner has no admitted workspace",
+                    UiMessage::error_api_data_relation_owner_workspace_missing(),
                 )
             })?;
         let new_owner = format!("weftext-node://{workspace}/00000000-0000-4000-8000-000000000000");
@@ -818,13 +868,15 @@ fn capture_from_frozen_inner(
             frozen.input.coverage == "complete",
         );
         if !check.is_valid() {
-            return Err(CoreError::new(
+            return Err(CoreError::from_product(
                 "invalidRelation",
-                format!(
-                    "{}{}",
-                    check.diagnostics.join("; "),
-                    check.unavailable.join("; ")
-                ),
+                None,
+                UiMessage::error_api_data_proposal_validation_failed().into(),
+                check
+                    .diagnostics
+                    .into_iter()
+                    .chain(check.unavailable)
+                    .collect(),
             ));
         }
         let context = weftext_data::ValidationContext {
@@ -834,13 +886,15 @@ fn capture_from_frozen_inner(
         };
         let note_validation = weftext_data::validate_note(&proposed, &frozen.schema, &context);
         if !note_validation.is_valid() {
-            return Err(CoreError::new(
+            return Err(CoreError::from_product(
                 "invalidData",
-                format!(
-                    "{}{}",
-                    note_validation.diagnostics.join("; "),
-                    note_validation.unavailable.join("; ")
-                ),
+                None,
+                UiMessage::error_api_data_proposal_validation_failed().into(),
+                note_validation
+                    .diagnostics
+                    .into_iter()
+                    .chain(note_validation.unavailable)
+                    .collect(),
             ));
         }
         let projection = weftext_data::project(&proposed, &frozen.schema);
@@ -852,26 +906,26 @@ fn capture_from_frozen_inner(
         {
             let (plan, policy) = period_plan(frozen, period)?;
             let matched = weftext_data::execute_query(&frozen.input, &plan, &frozen.schema)
-                .map_err(|error| CoreError::new("invalidPeriod", error.to_string()))?;
+                .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
             if let Some(directory) = &plan.scope.directory
                 && !Path::new(&req.parent).starts_with(directory)
             {
                 return Err(CoreError::new(
                     "periodScope",
-                    "The creation parent is outside the configured period scope",
+                    UiMessage::error_api_data_period_creation_outside_scope(),
                 ));
             }
             if policy.multiplicity == "unique" {
                 if matched.coverage != "complete" {
                     return Err(CoreError::new(
                         "coverageIncomplete",
-                        "Unique period creation needs the complete admitted policy scope",
+                        UiMessage::error_api_data_period_complete_scope_required(),
                     ));
                 }
                 if !matched.rows.is_empty() {
                     return Err(CoreError::new(
                         "periodConflict",
-                        "A period note already exists for this unique series/key/scope",
+                        UiMessage::error_api_data_period_already_exists(),
                     ));
                 }
             }
@@ -895,7 +949,7 @@ fn period_value(
         .ok_or_else(|| {
             CoreError::new(
                 "periodPolicyUnavailable",
-                "The requested period series has no installed policy",
+                UiMessage::error_api_data_period_policy_missing(),
             )
         })?;
     let calendar = schema
@@ -905,7 +959,7 @@ fn period_value(
         .ok_or_else(|| {
             CoreError::new(
                 "periodProviderUnavailable",
-                "The exact calendar provider is unavailable",
+                UiMessage::error_api_data_calendar_provider_unavailable(),
             )
         })?;
     let zone = schema
@@ -915,14 +969,14 @@ fn period_value(
         .ok_or_else(|| {
             CoreError::new(
                 "periodProviderUnavailable",
-                "The exact zone provider is unavailable",
+                UiMessage::error_api_data_zone_provider_unavailable(),
             )
         })?;
     let provider_text = |data: &Value, field: &str| {
         data[field].as_str().map(str::to_owned).ok_or_else(|| {
             CoreError::new(
                 "periodProviderUnavailable",
-                "Period provider has no exact key/version",
+                UiMessage::error_api_data_period_provider_identity_missing(),
             )
         })
     };
@@ -949,7 +1003,7 @@ fn period_value(
             .collect(),
     );
     weftext_data::period_bounds(&period, schema)
-        .map_err(|error| CoreError::new("invalidPeriod", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
     Ok(period)
 }
 
@@ -961,7 +1015,10 @@ fn period_plan(
         .member("series_key")
         .and_then(NativeValue::text)
         .ok_or_else(|| {
-            CoreError::new("invalidPeriod", "Period series key is not a static string")
+            CoreError::new(
+                "invalidPeriod",
+                UiMessage::error_api_data_period_series_key_not_static(),
+            )
         })?;
     let policy = frozen
         .schema
@@ -971,14 +1028,14 @@ fn period_plan(
         .ok_or_else(|| {
             CoreError::new(
                 "periodPolicyUnavailable",
-                "The exact series policy is unavailable",
+                UiMessage::error_api_data_series_policy_unavailable(),
             )
         })?
         .clone();
     if !matches!(policy.multiplicity.as_str(), "unique" | "many") {
         return Err(CoreError::new(
             "invalidPeriodPolicy",
-            "Unknown period multiplicity",
+            UiMessage::error_api_data_period_multiplicity_unknown(),
         ));
     }
     let mut scope = weftext_data::QueryScope {
@@ -992,7 +1049,7 @@ fn period_plan(
             let target = policy.scope["root"].as_str().ok_or_else(|| {
                 CoreError::new(
                     "periodScopeUnavailable",
-                    "Period subtree root is unavailable",
+                    UiMessage::error_api_data_period_subtree_unavailable(),
                 )
             })?;
             let node = frozen
@@ -1003,14 +1060,17 @@ fn period_plan(
                 .ok_or_else(|| {
                     CoreError::new(
                         "periodScopeUnavailable",
-                        "Period subtree root is not in this admitted snapshot",
+                        UiMessage::error_api_data_period_subtree_outside_cut(),
                     )
                 })?;
             scope.directory = Some(
                 Path::new(&node.path)
                     .parent()
                     .ok_or_else(|| {
-                        CoreError::new("periodScopeUnavailable", "Subtree source has no parent")
+                        CoreError::new(
+                            "periodScopeUnavailable",
+                            UiMessage::error_api_data_subtree_parent_missing(),
+                        )
                     })?
                     .to_string_lossy()
                     .to_string(),
@@ -1019,14 +1079,16 @@ fn period_plan(
         _ => {
             return Err(CoreError::new(
                 "periodScopeUnavailable",
-                "The central period policy scope is unsupported",
+                UiMessage::error_api_data_period_policy_scope_unsupported(),
             ));
         }
     }
-    let field = frozen
-        .schema
-        .field("calendar/period")
-        .ok_or_else(|| CoreError::new("periodUnavailable", "The period Field is not installed"))?;
+    let field = frozen.schema.field("calendar/period").ok_or_else(|| {
+        CoreError::new(
+            "periodUnavailable",
+            UiMessage::error_api_data_period_field_missing(),
+        )
+    })?;
     let expression = format!("field({})", serde_json::to_string(&field.id)?);
     let identity = [
         "series_key",
@@ -1047,7 +1109,7 @@ fn period_plan(
                 .ok_or_else(|| {
                     CoreError::new(
                         "invalidPeriod",
-                        "Complete static period identity is required",
+                        UiMessage::error_api_data_static_period_identity_required(),
                     )
                 })?;
             Ok(format!(
@@ -1074,24 +1136,24 @@ fn period_plan(
 
 async fn resolve_period(
     State(state): State<AppState>,
-    Json(req): Json<PeriodRequest>,
+    RequestJson(req): RequestJson<PeriodRequest>,
 ) -> ApiResult {
     let output = core_call(&state, move |core| {
         let frozen = query_snapshot(core,&req.root,weftext_data::QueryPlan::default())?;
         with_temporary_frozen_query(core, frozen, |_core, frozen| {
         let value = period_value(&frozen.schema,&req.series_key,&req.kind,&req.key)?;
         let period = weftext_data::period_step(&value,req.steps,&frozen.schema)
-            .map_err(|error| CoreError::new("invalidPeriod",error.to_string()))?;
+            .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
         let bounds = weftext_data::period_bounds(&period,&frozen.schema)
-            .map_err(|error| CoreError::new("invalidPeriod",error.to_string()))?;
+            .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
         let (plan,policy) = period_plan(frozen,&period)?;
         let mut result = weftext_data::execute_query(&frozen.input,&plan,&frozen.schema)
-            .map_err(|error| CoreError::new("invalidQuery",error.to_string()))?;
+            .map_err(|error| CoreError::from_data("invalidQuery", error))?;
         result.diagnostics.append(&mut frozen.diagnostics);
         let can_create = result.coverage == "complete" && (policy.multiplicity == "many" || result.rows.is_empty());
         Ok(json!({"period":period,"bounds":bounds,"policy":policy,"matches":result.rows,"coverage":result.coverage,
             "canCreate":can_create,"cutId":result.cut_id,"diagnostics":result.diagnostics,"snapshotMode":"admittedFrozen",
-            "snapshotLabel":"已纳管笔记快照","rawScope":{"complete":frozen.raw_complete,"pendingCount":frozen.raw_pending}}))
+            "snapshotLabel":UiMessage::error_api_data_admitted_snapshot_label(),"rawScope":{"complete":frozen.raw_complete,"pendingCount":frozen.raw_pending}}))
         })
     }).await?;
     Ok(Json(output))
@@ -1099,7 +1161,7 @@ async fn resolve_period(
 
 async fn create_period(
     State(state): State<AppState>,
-    Json(req): Json<PeriodCreateRequest>,
+    RequestJson(req): RequestJson<PeriodCreateRequest>,
 ) -> ApiResult {
     let (preview, receipt) = core_call(&state, move |core| {
         let intent = json!({"kind":"period", "request":serde_json::to_value(&req)?});
@@ -1135,13 +1197,13 @@ pub(crate) fn resolve_entity(
     if !inventory.complete {
         return Err(CoreError::new(
             "coverageIncomplete",
-            "Current inventory cannot prove a unique live identity",
+            UiMessage::error_api_data_unique_live_identity_unproved(),
         ));
     }
     let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
         CoreError::new(
             "unadmittedLibrary",
-            "Stable node addresses need the original managed library",
+            UiMessage::error_api_data_stable_node_library_required(),
         )
     })?;
     let mut matches = inventory.entries.iter().filter(|entry| {
@@ -1154,19 +1216,22 @@ pub(crate) fn resolve_entity(
     let entry = matches.next().ok_or_else(|| {
         CoreError::new(
             "nodeUnavailable",
-            "The stable node is unavailable in this live library",
+            UiMessage::error_api_data_stable_node_unavailable(),
         )
     })?;
     if matches.next().is_some() {
         return Err(CoreError::new(
             "identityConflict",
-            "The stable node identity is not unique",
+            UiMessage::error_api_data_stable_node_ambiguous(),
         ));
     }
     Ok(entry.clone())
 }
 
-async fn resolve(State(state): State<AppState>, Json(req): Json<ResolveRequest>) -> ApiResult {
+async fn resolve(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ResolveRequest>,
+) -> ApiResult {
     if req
         .lifecycle
         .as_deref()
@@ -1175,7 +1240,7 @@ async fn resolve(State(state): State<AppState>, Json(req): Json<ResolveRequest>)
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "trashSnapshotRequired",
-            "Use the read-only open route with the exact trash row revision",
+            UiMessage::error_api_data_trash_read_only_route_required(),
         ));
     }
     let (inventory, entry) = core_call(&state, move |core| {
@@ -1204,13 +1269,16 @@ pub(crate) fn open_live_entity(
     {
         return Err(CoreError::new(
             "identityConflict",
-            "The resolved source changed identity before opening; no other document was selected",
+            UiMessage::error_api_data_resolved_source_identity_changed(),
         ));
     }
     Ok(document)
 }
 
-async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveRequest>) -> ApiResult {
+async fn open_entity(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ResolveRequest>,
+) -> ApiResult {
     let document = core_call(&state, move |core| {
         if req.lifecycle.as_deref() == Some("trash") {
             let revision = req
@@ -1220,7 +1288,7 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                 .ok_or_else(|| {
                     CoreError::new(
                         "trashSnapshotRequired",
-                        "Read-only trash opening needs the exact frozen row revision",
+                        UiMessage::error_api_data_exact_trash_row_required(),
                     )
                 })?;
             let captured = core.trash_admitted_snapshot(&req.root)?;
@@ -1229,13 +1297,13 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                 if !captured.complete {
                     return Err(CoreError::new(
                         "coverageIncomplete",
-                        "The current owned trash set cannot prove a unique identity",
+                        UiMessage::error_api_data_unique_trash_identity_unproved(),
                     ));
                 }
                 let workspace = captured.inventory.workspace_id.as_deref().ok_or_else(|| {
                     CoreError::new(
                         "unadmittedLibrary",
-                        "Trash opening needs the original library",
+                        UiMessage::error_api_data_trash_original_library_required(),
                     )
                 })?;
                 let mut files = captured.files.iter().filter(|file| {
@@ -1246,13 +1314,13 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                 let file = files.next().ok_or_else(|| {
                     CoreError::new(
                         "nodeUnavailable",
-                        "The exact node is absent from the owned trash set",
+                        UiMessage::error_api_data_trash_node_absent(),
                     )
                 })?;
                 if files.next().is_some() {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "The owned trash node identity is ambiguous",
+                        UiMessage::error_api_data_trash_node_ambiguous(),
                     ));
                 }
                 if let Some(base) = revision.strip_prefix("observed-source:") {
@@ -1260,11 +1328,14 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                 } else if file.revision.as_deref() != Some(revision) {
                     return Err(CoreError::new(
                         "staleBase",
-                        "The trash row source changed since the query",
+                        UiMessage::error_api_data_trash_row_changed(),
                     ));
                 }
                 let expected_source = file.bytes.as_deref().ok_or_else(|| {
-                    CoreError::new("sourceUnavailable", "The trash source is unavailable")
+                    CoreError::new(
+                        "sourceUnavailable",
+                        UiMessage::error_api_data_trash_source_unavailable(),
+                    )
                 })?;
                 let document =
                     core.open(&file.path, Some(PathBuf::from(&captured.inventory.root)))?;
@@ -1276,7 +1347,7 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
                 {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "The exact trash source changed before opening",
+                        UiMessage::error_api_data_exact_trash_source_changed(),
                     ));
                 }
                 if let Some(base) = revision.strip_prefix("observed-source:") {
@@ -1294,7 +1365,7 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
         {
             return Err(CoreError::new(
                 "invalidLifecycle",
-                "Unsupported node lifecycle",
+                UiMessage::error_api_data_lifecycle_unsupported(),
             ));
         }
         open_live_entity(core, &req.root, &req.entity_key)
@@ -1308,7 +1379,10 @@ async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveReque
     Ok(Json(document))
 }
 
-async fn references(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+async fn references(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     let output = core_call(&state,move|core| {
         let frozen = query_snapshot(core,&req.root,weftext_data::QueryPlan::default())?;
         with_temporary_frozen_query(core, frozen, |_core, frozen| {
@@ -1318,10 +1392,23 @@ async fn references(State(state): State<AppState>, Json(req): Json<RootRequest>)
                 "labelBasis":"filenameFallback","types":projection.types,"resolvedTypes":projection.resolved_types,"revision":note.revision})
         }).collect::<Vec<_>>();
         Ok(json!({"nodes":nodes,"complete":frozen.input.coverage == "complete","diagnostics":frozen.diagnostics,
-            "snapshotLabel":"已纳管笔记快照","tagsEndpoint":"/api/navigation/tags"}))
+            "snapshotLabel":UiMessage::error_api_data_admitted_snapshot_label(),"tagsEndpoint":"/api/navigation/tags"}))
         })
     }).await?;
     Ok(Json(output))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryEngineDiagnostics {
+    entity_key: String,
+    diagnostics: Vec<weftext_engine::Diagnostic>,
+}
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryProductError {
+    entity_key: String,
+    error: ApiError,
 }
 
 struct FrozenQuery {
@@ -1330,7 +1417,9 @@ struct FrozenQuery {
     schema: Schema,
     plan: weftext_data::QueryPlan,
     versions: Vec<Value>,
-    diagnostics: Vec<String>,
+    diagnostics: Vec<weftext_core::CoreDescription>,
+    engine_diagnostics: Vec<QueryEngineDiagnostics>,
+    product_errors: Vec<QueryProductError>,
     raw_complete: bool,
     raw_pending: usize,
     membership_ids: Vec<String>,
@@ -1391,7 +1480,7 @@ fn query_render_snapshot(
 ) -> Result<FrozenQuery, CoreError> {
     let render = plan.advanced.is_some()
         || !weftext_data::query_products(&plan, &[])
-            .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?
+            .map_err(|error| CoreError::from_data("invalidQuery", error))?
             .is_empty();
     query_snapshot_impl(core, root, plan, baseline, render)
 }
@@ -1416,13 +1505,13 @@ fn query_snapshot_impl(
             if target.status != "managed" || !matches!(target.kind.as_str(), "directory" | "node") {
                 return Err(CoreError::new(
                     "queryScopeUnavailable",
-                    "The stable scope is unavailable in the original library",
+                    UiMessage::error_api_data_stable_scope_unavailable(),
                 ));
             }
             let path = target.path.ok_or_else(|| {
                 CoreError::new(
                     "queryScopeUnavailable",
-                    "The stable scope has no current path",
+                    UiMessage::error_api_data_stable_scope_path_missing(),
                 )
             })?;
             Ok((reference.clone(), path))
@@ -1454,7 +1543,7 @@ fn query_snapshot_impl(
             if target.status != "managed" || target.path.as_ref() != Some(expected_path) {
                 return Err(CoreError::new(
                     "queryScopeUnavailable",
-                    "The stable scope changed during capture; refresh its identity before querying",
+                    UiMessage::error_api_data_stable_scope_changed(),
                 ));
             }
             plan.scope.directory = Some(expected_path.clone());
@@ -1462,7 +1551,7 @@ fn query_snapshot_impl(
         let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
             CoreError::new(
                 "unadmittedLibrary",
-                "Structured Query needs the original managed library",
+                UiMessage::error_api_data_structured_query_library_required(),
             )
         })?;
         let mut scope_directories = BTreeSet::from([inventory.root.clone()]);
@@ -1484,7 +1573,7 @@ fn query_snapshot_impl(
             {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "Query directory cannot contain parent traversal",
+                    UiMessage::error_api_data_query_directory_traversal(),
                 ));
             }
             let selected = if supplied.is_absolute() {
@@ -1510,7 +1599,7 @@ fn query_snapshot_impl(
                     .ok_or_else(|| {
                         CoreError::new(
                             "queryScopeUnavailable",
-                            "The requested directory is not available in this inventory",
+                            UiMessage::error_api_data_query_directory_unavailable(),
                         )
                     })?
             };
@@ -1520,16 +1609,27 @@ fn query_snapshot_impl(
             Some(baseline) => baseline,
             None => {
                 let schema_file = captured.schema.ok_or_else(|| {
-                    CoreError::new("schemaUnavailable", "Core did not freeze the schema role")
+                    CoreError::new(
+                        "schemaUnavailable",
+                        UiMessage::error_api_data_frozen_schema_role_missing(),
+                    )
                 })?;
-                let (schema, _) = knowledge_schema_from_snapshot(&schema_file)
-                    .map_err(|error| CoreError::new("invalidSchema", error.message))?;
+                let (schema, _) =
+                    knowledge_schema_from_snapshot(&schema_file).map_err(|mut error| {
+                        error.code = "invalidSchema".into();
+                        error
+                    })?;
                 let source = schema_file
                     .bytes
                     .as_ref()
                     .map(|bytes| String::from_utf8(bytes.clone()))
                     .transpose()
-                    .map_err(|_| CoreError::new("invalidSchema", "Frozen schema must be UTF-8"))?
+                    .map_err(|_| {
+                        CoreError::new(
+                            "invalidSchema",
+                            UiMessage::error_api_data_frozen_schema_encoding(),
+                        )
+                    })?
                     .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
                 (
                     SchemaSource {
@@ -1560,13 +1660,13 @@ fn query_snapshot_impl(
         "builtinDefault":config.before.is_none()}),
         ];
         let mut diagnostics = captured.warnings;
-        diagnostics.push("已纳管笔记快照以 Core 私有准入集合为范围，同时冻结源码与模式配置；完整计数属于该冻结范围。未经准入的外部文件单独显示，结果未取得持续订阅的当前性。".into());
+        diagnostics.push(UiMessage::error_api_data_frozen_admitted_scope().into());
         if inventory
             .entries
             .iter()
             .any(|entry| entry.kind == "node" && entry.identity_status != "admitted")
         {
-            diagnostics.push("未准入或身份有冲突的源码不提供结构化查询身份。".into());
+            diagnostics.push(UiMessage::error_api_data_query_identity_unavailable().into());
         }
         let mut notes = Vec::new();
         for file in captured.files {
@@ -1577,24 +1677,24 @@ fn query_snapshot_impl(
             else {
                 return Err(CoreError::new(
                     "invalidState",
-                    "Snapshot returned an unexpected source path",
+                    UiMessage::error_api_data_unexpected_snapshot_source(),
                 ));
             };
             if file.node_id != entry.node_id {
                 complete = false;
-                diagnostics.push("读取期间文件身份发生变化；相关行未发布。".into());
+                diagnostics.push(UiMessage::error_api_data_snapshot_identity_changed().into());
                 continue;
             }
             let Some(bytes) = file.bytes else {
                 complete = false;
-                diagnostics.push("读取期间源码已不可用；相关行未发布。".into());
+                diagnostics.push(UiMessage::error_api_data_snapshot_source_unavailable().into());
                 continue;
             };
             let source = match String::from_utf8(bytes) {
                 Ok(source) => source,
                 Err(_) => {
                     complete = false;
-                    diagnostics.push("非 UTF-8 源码无法投影。".into());
+                    diagnostics.push(UiMessage::error_api_data_snapshot_source_encoding().into());
                     continue;
                 }
             };
@@ -1602,14 +1702,19 @@ fn query_snapshot_impl(
             let projection = weftext_data::project(&source, &schema);
             if projection.id.as_deref() != Some(expected) {
                 complete = false;
-                diagnostics.push("观察到的源码不再符合准入身份；相关行未发布。".into());
+                diagnostics.push(UiMessage::error_api_data_snapshot_identity_unqualified().into());
                 continue;
             }
             let entity_key = format!("weftext-node://{workspace}/{expected}");
             if entry.source.as_ref() != Some(&source) {
-                diagnostics.push(format!(
-                    "{entity_key}：目录观察与逐文件快照之间源码已变化。"
-                ));
+                diagnostics.push(
+                    UiMessage::error_api_data_observed_source_changed(
+                        weftext_messages::params::ErrorApiDataObservedSourceChanged {
+                            entity_key: entity_key.clone(),
+                        },
+                    )
+                    .into(),
+                );
             }
             versions.push(json!({"entityKey":entity_key,"path":file.path,"baseId":file.base_id,
                 "revision":file.revision,"currentness":file.currentness,"sourceHash":weftext_engine::source_hash(&source)}));
@@ -1645,6 +1750,8 @@ fn query_snapshot_impl(
             plan,
             versions,
             diagnostics,
+            engine_diagnostics: Vec::new(),
+            product_errors: Vec::new(),
             raw_complete,
             raw_pending,
             membership_ids,
@@ -1663,7 +1770,10 @@ fn query_snapshot_impl(
     result
 }
 
-async fn query(State(state): State<AppState>, Json(req): Json<QueryRequest>) -> ApiResult {
+async fn query(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<QueryRequest>,
+) -> ApiResult {
     let frozen = core_call(&state, move |core| {
         let mut frozen = query_render_snapshot(core, &req.root, req.plan, None)?;
         freeze_query_definitions(core, &mut frozen, req.parameters)?;
@@ -1709,7 +1819,7 @@ fn freeze_query_definitions_with_draft_inner(
     for _ in 0..64 {
         let dependencies =
             weftext_data::definition_dependencies(&frozen.plan, &context.definitions)
-                .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
+                .map_err(|error| CoreError::from_data("invalidQuery", error))?;
         let mut progress = false;
         for dependency in dependencies {
             let token = format!(
@@ -1743,7 +1853,7 @@ fn freeze_query_definitions_with_draft_inner(
                 .ok_or_else(|| {
                     CoreError::new(
                         "definitionUnavailable",
-                        "A called owner is unavailable in this exact admitted snapshot",
+                        UiMessage::error_api_data_called_owner_unavailable(),
                     )
                 })?;
             let owner_id = weftext_data::project(&note.source, &frozen.schema)
@@ -1751,7 +1861,7 @@ fn freeze_query_definitions_with_draft_inner(
                 .ok_or_else(|| {
                     CoreError::new(
                         "definitionUnavailable",
-                        "Called owner has no qualified source identity",
+                        UiMessage::error_api_data_called_owner_identity_missing(),
                     )
                 })?;
             let key = match &dependency.selection {
@@ -1768,7 +1878,7 @@ fn freeze_query_definitions_with_draft_inner(
             {
                 return Err(CoreError::new(
                     "definitionUnavailable",
-                    "A called definition key has no original Core admission",
+                    UiMessage::error_api_data_called_definition_unadmitted(),
                 ));
             }
             let index = match context
@@ -1813,7 +1923,7 @@ fn freeze_query_definitions_with_draft_inner(
                 let source = String::from_utf8(bytes).map_err(|_| {
                     CoreError::new(
                         "definitionUnavailable",
-                        "Pinned definition source is not UTF-8",
+                        UiMessage::error_api_data_pinned_definition_encoding(),
                     )
                 })?;
                 context.definitions[index]
@@ -1828,7 +1938,7 @@ fn freeze_query_definitions_with_draft_inner(
                 &dependency.selection,
                 &context.definitions[index].history,
             )
-            .map_err(|error| CoreError::new("definitionUnavailable", error.to_string()))?;
+            .map_err(|error| CoreError::from_data("definitionUnavailable", error))?;
             let role = frozen
                 .versions
                 .first()
@@ -1836,7 +1946,7 @@ fn freeze_query_definitions_with_draft_inner(
             if role != Some(definition.binding.schema.as_str()) {
                 return Err(CoreError::new(
                     "schemaUnavailable",
-                    "Called definition schema belongs to another authority",
+                    UiMessage::error_api_data_called_schema_authority_mismatch(),
                 ));
             }
             if !context.schemas.iter().any(|schema| {
@@ -1849,10 +1959,13 @@ fn freeze_query_definitions_with_draft_inner(
                     &definition.binding.revision,
                 )?;
                 let source = String::from_utf8(bytes).map_err(|_| {
-                    CoreError::new("schemaUnavailable", "Called definition schema is not UTF-8")
+                    CoreError::new(
+                        "schemaUnavailable",
+                        UiMessage::error_api_data_called_schema_encoding(),
+                    )
                 })?;
                 let projection = Schema::from_author_json(&source)
-                    .map_err(|error| CoreError::new("invalidSchema", error.to_string()))?;
+                    .map_err(|error| CoreError::from_data("invalidSchema", error))?;
                 context.schemas.push(weftext_data::FrozenDefinitionSchema {
                     schema: definition.binding.schema.clone(),
                     revision: definition.binding.revision.clone(),
@@ -1872,7 +1985,7 @@ fn freeze_query_definitions_with_draft_inner(
                 .ok_or_else(|| {
                     CoreError::new(
                         "definitionUnavailable",
-                        "Selected definition revision is unavailable",
+                        UiMessage::error_api_data_selected_definition_unavailable(),
                     )
                 })?;
             frozen.versions.push(json!({"role":"definition","owner":dependency.owner,"key":definition.key,"selection":dependency.selection,
@@ -1883,7 +1996,7 @@ fn freeze_query_definitions_with_draft_inner(
             qualify_query_context(core, frozen, &mut context)?;
             let demands =
                 weftext_data::query_read_requirements(&frozen.plan, &frozen.schema, &context)
-                    .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
+                    .map_err(|error| CoreError::from_data("invalidQuery", error))?;
             if demands.tag_structure {
                 if !frozen
                     .scope_cuts
@@ -1892,17 +2005,20 @@ fn freeze_query_definitions_with_draft_inner(
                 {
                     return Err(CoreError::new(
                         "tagsUnavailable",
-                        "Every selected lifecycle requires its original Tags capture",
+                        UiMessage::error_api_data_lifecycle_tags_capture_required(),
                     ));
                 }
                 let tags = frozen.tags.get(&frozen.input.cut_id).ok_or_else(|| {
-                    CoreError::new("tagsUnavailable", "Core did not freeze the tag structure")
+                    CoreError::new(
+                        "tagsUnavailable",
+                        UiMessage::error_api_data_frozen_tags_missing(),
+                    )
                 })?;
                 for (cut, selected) in &frozen.tags {
                     if selected.bytes != tags.bytes || selected.revision != tags.revision {
                         return Err(CoreError::new(
                             "tagsUnavailable",
-                            "Lifecycle inputs do not share the frozen tag structure",
+                            UiMessage::error_api_data_lifecycle_tags_mismatch(),
                         ));
                     }
                     core.bind_admitted_tag_structure(&frozen.root, cut, selected)?;
@@ -1915,12 +2031,15 @@ fn freeze_query_definitions_with_draft_inner(
                     .and_then(|role| role.strip_prefix("weftext-config://"))
                     .and_then(|role| role.strip_suffix("/schema"))
                     .ok_or_else(|| {
-                        CoreError::new("tagsUnavailable", "Frozen tag workspace unavailable")
+                        CoreError::new(
+                            "tagsUnavailable",
+                            UiMessage::error_api_data_frozen_tag_workspace_missing(),
+                        )
                     })?
                     .to_owned();
                 context.tag_structure = Some(
                     weftext_data::FrozenTagStructure::new(workspace, document)
-                        .map_err(|error| CoreError::new("tagsUnavailable", error.to_string()))?,
+                        .map_err(|error| CoreError::from_data("tagsUnavailable", error))?,
                 );
                 frozen.versions.push(json!({"role":"tags","path":tags.path,"revision":tags.revision,"baseId":tags.base_id}));
             }
@@ -1930,7 +2049,7 @@ fn freeze_query_definitions_with_draft_inner(
     }
     Err(CoreError::new(
         "queryBudget",
-        "Definition call closure exceeded the bounded expansion depth",
+        UiMessage::error_api_data_definition_closure_depth_budget(),
     ))
 }
 
@@ -1940,14 +2059,14 @@ fn qualify_query_context(
     context: &mut weftext_data::FrozenAdvancedInput,
 ) -> Result<(), CoreError> {
     let lifecycles = weftext_data::required_query_lifecycles(&frozen.plan, &context.definitions)
-        .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidQuery", error))?;
     for lifecycle in lifecycles {
         if !frozen.scope_cuts.contains_key(&lifecycle) {
             extend_query_lifecycle(core, frozen, lifecycle)?;
         }
     }
     let scopes = weftext_data::required_query_scopes(&frozen.plan, &context.definitions)
-        .map_err(|error| CoreError::new("invalidQuery", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("invalidQuery", error))?;
     for scope in scopes {
         let selected = if scope.starts_with("weftext-directory://")
             || scope.starts_with("weftext-node://")
@@ -1956,13 +2075,13 @@ fn qualify_query_context(
             if target.status != "managed" || !matches!(target.kind.as_str(), "directory" | "node") {
                 return Err(CoreError::new(
                     "queryScopeUnavailable",
-                    "A nested stable scope is unavailable",
+                    UiMessage::error_api_data_nested_scope_unavailable(),
                 ));
             }
             target.path.ok_or_else(|| {
                 CoreError::new(
                     "queryScopeUnavailable",
-                    "A nested scope has no current path",
+                    UiMessage::error_api_data_nested_scope_path_missing(),
                 )
             })?
         } else {
@@ -1973,7 +2092,7 @@ fn qualify_query_context(
             {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "Query scope cannot contain parent traversal",
+                    UiMessage::error_api_data_query_scope_traversal(),
                 ));
             }
             if supplied.is_absolute() {
@@ -1991,7 +2110,7 @@ fn qualify_query_context(
             .ok_or_else(|| {
                 CoreError::new(
                     "queryScopeUnavailable",
-                    "A nested scope is absent from this exact inventory",
+                    UiMessage::error_api_data_nested_scope_outside_inventory(),
                 )
             })?;
         context.scope_bindings.insert(scope, selected.clone());
@@ -2027,7 +2146,7 @@ fn extend_query_lifecycle(
         {
             return Err(CoreError::new(
                 "queryScopeUnavailable",
-                "The lifecycle capture does not share the original library/schema baseline",
+                UiMessage::error_api_data_lifecycle_baseline_mismatch(),
             ));
         }
         let count = frozen
@@ -2045,7 +2164,7 @@ fn extend_query_lifecycle(
         if count > 5_000 || bytes > 64 * 1024 * 1024 {
             return Err(CoreError::new(
                 "queryBudget",
-                "The combined lifecycle snapshot exceeds 5000 notes / 64 MiB",
+                UiMessage::error_api_data_combined_lifecycle_budget(),
             ));
         }
         let owners = frozen
@@ -2064,21 +2183,24 @@ fn extend_query_lifecycle(
             if owners.contains(note.entity_key.as_str()) || paths.contains(note.path.as_str()) {
                 return Err(CoreError::new(
                     "queryScopeUnavailable",
-                    "A Node appears in competing original lifecycle captures",
+                    UiMessage::error_api_data_competing_lifecycle_node(),
                 ));
             }
             if let Some(files) = &frozen.render_files {
                 let relative = Path::new(&note.path)
                     .strip_prefix(&frozen.root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "A lifecycle source escaped its library")
+                        CoreError::new(
+                            "outsideRoot",
+                            UiMessage::error_api_data_lifecycle_source_outside_library(),
+                        )
                     })?
                     .to_string_lossy()
                     .replace('\\', "/");
                 if files.get(&relative).map(Vec::as_slice) != Some(note.source.as_bytes()) {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "A required lifecycle source differs from the original native World",
+                        UiMessage::error_api_data_lifecycle_source_world_mismatch(),
                     ));
                 }
             }
@@ -2091,6 +2213,8 @@ fn extend_query_lifecycle(
         frozen.input.notes.extend(extra.input.notes);
         frozen.versions.extend(extra.versions.into_iter().skip(1));
         frozen.diagnostics.extend(extra.diagnostics);
+        frozen.engine_diagnostics.extend(extra.engine_diagnostics);
+        frozen.product_errors.extend(extra.product_errors);
         frozen.scope_directories.extend(extra.scope_directories);
         frozen.raw_complete &= extra.raw_complete;
         frozen.raw_pending = frozen.raw_pending.saturating_add(extra.raw_pending);
@@ -2105,9 +2229,15 @@ fn extend_query_lifecycle(
     result
 }
 
-fn unavailable_products(identity: String, reason: &str) -> weftext_data::NoteProducts {
+fn unavailable_products(
+    identity: String,
+    kind: weftext_data::DataErrorKind,
+    reason: UiMessage,
+) -> weftext_data::NoteProducts {
     let unavailable = || weftext_data::Cell::Unavailable {
-        reason: reason.into(),
+        kind,
+        reason: reason.clone().into(),
+        diagnostics: Vec::new(),
     };
     weftext_data::NoteProducts {
         compile_identity: identity,
@@ -2158,7 +2288,8 @@ async fn qualify_query_products(
         let products = if index >= 32 || remaining.is_zero() {
             unavailable_products(
                 identity,
-                "The bounded native product compilation budget was exhausted",
+                weftext_data::DataErrorKind::NativeBudget,
+                UiMessage::error_api_data_native_product_budget(),
             )
         } else if let Some(files) = &frozen.render_files {
             let request = weftext_engine::FrozenRenderRequest {
@@ -2180,35 +2311,51 @@ async fn qualify_query_products(
                         }
                         _ => unavailable_products(
                             identity,
-                            "The successful worker did not publish qualified native HTML products",
+                            weftext_data::DataErrorKind::Unavailable,
+                            UiMessage::error_api_data_native_products_unqualified(),
                         ),
                     }
                 }
                 Ok(Ok(output)) => {
-                    frozen.diagnostics.push(format!(
-                        "{}：原生 HTML 编译失败，相关产品不可用（{}）。",
-                        note.entity_key, output["diagnostics"]
-                    ));
-                    unavailable_products(identity, "The frozen native HTML compile failed")
-                }
-                Ok(Err(error)) => {
-                    frozen
-                        .diagnostics
-                        .push(format!("{}：{}", note.entity_key, error.message));
+                    let diagnostics = serde_json::from_value::<Vec<weftext_engine::Diagnostic>>(
+                        output["diagnostics"].clone(),
+                    )
+                    .map_err(|error| {
+                        ApiError::internal(UiMessage::error_api_data_native_diagnostics_invalid())
+                            .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
+                    })?;
+                    frozen.engine_diagnostics.push(QueryEngineDiagnostics {
+                        entity_key: note.entity_key.clone(),
+                        diagnostics,
+                    });
                     unavailable_products(
                         identity,
-                        "The isolated frozen native product worker was unavailable",
+                        weftext_data::DataErrorKind::Unavailable,
+                        UiMessage::error_api_data_native_compile_failed(),
+                    )
+                }
+                Ok(Err(error)) => {
+                    frozen.product_errors.push(QueryProductError {
+                        entity_key: note.entity_key.clone(),
+                        error,
+                    });
+                    unavailable_products(
+                        identity,
+                        weftext_data::DataErrorKind::Unavailable,
+                        UiMessage::error_api_data_native_worker_unavailable(),
                     )
                 }
                 Err(_) => unavailable_products(
                     identity,
-                    "The bounded native product compilation deadline was exhausted",
+                    weftext_data::DataErrorKind::NativeBudget,
+                    UiMessage::error_api_data_native_product_deadline(),
                 ),
             }
         } else {
             unavailable_products(
                 identity,
-                "The exact same-cut native environment is unavailable",
+                weftext_data::DataErrorKind::Unavailable,
+                UiMessage::error_api_data_native_environment_unavailable(),
             )
         };
         let partial = demands.iter().any(|demand| {
@@ -2225,14 +2372,30 @@ async fn qualify_query_products(
         });
         if partial {
             frozen.input.coverage = "partial".into();
-            frozen.diagnostics.push(format!(
-                "{}：所需的最终原生产品未完全取得，查询覆盖标记为部分。",
-                note.entity_key
-            ));
+            frozen.diagnostics.push(
+                UiMessage::error_api_data_native_product_coverage_partial(
+                    weftext_messages::params::ErrorApiDataNativeProductCoveragePartial {
+                        entity_key: note.entity_key.clone(),
+                    },
+                )
+                .into(),
+            );
         }
         note.products = Some(products);
     }
     Ok(demands)
+}
+
+fn publish_query_diagnostics(
+    output: &mut Value,
+    diagnostics: Vec<weftext_core::CoreDescription>,
+    engine_diagnostics: Vec<QueryEngineDiagnostics>,
+    product_errors: Vec<QueryProductError>,
+) -> Result<(), ApiError> {
+    output["diagnostics"] = value(diagnostics)?;
+    output["engineDiagnostics"] = value(engine_diagnostics)?;
+    output["productErrors"] = value(product_errors)?;
+    Ok(())
 }
 
 async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value, ApiError> {
@@ -2280,6 +2443,8 @@ async fn evaluate_frozen_inner(
         .collect::<BTreeMap<_, _>>();
     let versions = frozen.versions;
     let diagnostics = frozen.diagnostics;
+    let engine_diagnostics = frozen.engine_diagnostics;
+    let product_errors = frozen.product_errors;
     let raw_complete = frozen.raw_complete;
     let raw_pending = frozen.raw_pending;
     let membership_ids = frozen.membership_ids;
@@ -2288,9 +2453,14 @@ async fn evaluate_frozen_inner(
         weftext_data::execute_query(&frozen.input, &frozen.plan, &frozen.schema)
     })
     .await
-    .map_err(|_| ApiError::internal("Query evaluation did not complete"))?
+    .map_err(|_| ApiError::internal(UiMessage::error_api_data_query_evaluation_incomplete()))?
     .map_err(data_error)?;
-    result.diagnostics.extend(diagnostics);
+    let diagnostics: Vec<weftext_core::CoreDescription> = result
+        .diagnostics
+        .drain(..)
+        .map(weftext_core::CoreDescription::from)
+        .chain(diagnostics)
+        .collect();
     export_columns.retain(|name| result.terminal_schema.contains_key(name));
     for name in result.terminal_schema.keys() {
         if !export_columns.contains(name) {
@@ -2298,6 +2468,7 @@ async fn evaluate_frozen_inner(
         }
     }
     let mut output = value(result)?;
+    publish_query_diagnostics(&mut output, diagnostics, engine_diagnostics, product_errors)?;
     output["columns"] = json!(export_columns);
     if let Some(rows) = output["rows"].as_array_mut() {
         for row in rows {
@@ -2311,7 +2482,7 @@ async fn evaluate_frozen_inner(
         }
     }
     output["snapshotMode"] = json!("admittedFrozen");
-    output["snapshotLabel"] = json!("已纳管笔记快照");
+    output["snapshotLabel"] = json!(UiMessage::error_api_data_admitted_snapshot_label());
     output["externalPending"] = json!(!raw_complete || raw_pending > 0);
     output["rawScope"] = json!({"complete":raw_complete,"pendingCount":raw_pending});
     output["membershipIds"] = json!(membership_ids);
@@ -2343,27 +2514,31 @@ fn owner_source(core: &mut Core, root: &str, owner: &str) -> Result<OwnerSource,
     let file = snapshot.files.pop().ok_or_else(|| {
         CoreError::new(
             "sourceUnavailable",
-            "Definition owner source is unavailable",
+            UiMessage::error_api_data_definition_owner_unavailable(),
         )
     })?;
     if file.node_id != entry.node_id {
         return Err(CoreError::new(
             "identityConflict",
-            "Definition owner changed identity during reading",
+            UiMessage::error_api_data_definition_owner_identity_changed(),
         ));
     }
     let source = file.bytes.as_ref().ok_or_else(|| {
         CoreError::new(
             "sourceUnavailable",
-            "Definition owner source is unavailable",
+            UiMessage::error_api_data_definition_owner_unavailable(),
         )
     })?;
-    let source = String::from_utf8(source.clone())
-        .map_err(|_| CoreError::new("sourceUnavailable", "Definition owner is not UTF-8"))?;
+    let source = String::from_utf8(source.clone()).map_err(|_| {
+        CoreError::new(
+            "sourceUnavailable",
+            UiMessage::error_api_data_definition_owner_encoding(),
+        )
+    })?;
     if weftext_engine::inspect_metadata(&source).id != entry.node_id {
         return Err(CoreError::new(
             "identityConflict",
-            "Definition owner source no longer has its admitted identity",
+            UiMessage::error_api_data_definition_owner_unadmitted(),
         ));
     }
     Ok(OwnerSource {
@@ -2375,17 +2550,17 @@ fn owner_source(core: &mut Core, root: &str, owner: &str) -> Result<OwnerSource,
 
 async fn definitions(
     State(state): State<AppState>,
-    Json(req): Json<DefinitionsRequest>,
+    RequestJson(req): RequestJson<DefinitionsRequest>,
 ) -> ApiResult {
     let output = core_call(&state, move |core| {
         let current = owner_source(core, &req.root, &req.owner)?;
         let candidates = weftext_data::saved_queries(&current.source)
-            .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?;
+            .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?;
         let mut admitted = Vec::new(); let mut unavailable = Vec::new();
         for candidate in candidates {
             if core.is_definition_key_admitted(&req.root, current.entry.node_id.as_deref().unwrap(), &candidate.key)? {
                 admitted.push(candidate);
-            } else { unavailable.push(json!({"key":candidate.key,"label":candidate.label,"reason":"definition key is not admitted by Core"})); }
+            } else { unavailable.push(json!({"key":candidate.key,"label":candidate.label,"reason":weftext_messages::ErrorDescription::new(UiMessage::error_api_data_definition_key_unadmitted_reason())})); }
         }
         Ok(json!({"definitions":admitted,"ownerRevision":current.file.revision,"owner":req.owner,
             "ownerBaseId":current.file.base_id,"unavailable":unavailable,"snapshotMode":"perFileObserved"}))
@@ -2403,7 +2578,7 @@ struct DefinitionPendingRequest {
 
 async fn pending_definition(
     State(state): State<AppState>,
-    Json(req): Json<DefinitionPendingRequest>,
+    RequestJson(req): RequestJson<DefinitionPendingRequest>,
 ) -> ApiResult {
     writing_api::observe_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
     let loc = location(&state, &req.session_id)?;
@@ -2434,7 +2609,7 @@ async fn pending_definition(
 
 async fn draft_definition(
     State(state): State<AppState>,
-    Json(req): Json<DefinitionSaveRequest>,
+    RequestJson(req): RequestJson<DefinitionSaveRequest>,
 ) -> ApiResult {
     writing_api::observe_snapshot(
         &state,
@@ -2452,7 +2627,7 @@ async fn draft_definition(
         if req.key.is_some() {
             return Err(CoreError::new(
                 "invalidQueryDefinition",
-                "This action creates one new draft definition",
+                UiMessage::error_api_data_new_draft_definition_required(),
             ));
         }
         let inventory = core.inventory(&loc.root)?;
@@ -2462,12 +2637,20 @@ async fn draft_definition(
             .find(|entry| {
                 entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted"
             })
-            .ok_or_else(|| CoreError::new("identityConflict", "Not the admitted owner"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityConflict",
+                    UiMessage::error_api_data_admitted_owner_required(),
+                )
+            })?;
         if weftext_engine::inspect_metadata(&req.source).id != entry.node_id {
-            return Err(CoreError::new("identityConflict", "Draft owner changed"));
+            return Err(CoreError::new(
+                "identityConflict",
+                UiMessage::error_api_data_draft_owner_changed(),
+            ));
         }
         for definition in weftext_data::saved_queries(&req.source)
-            .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?
+            .map_err(|e| CoreError::from_data("invalidQueryDefinition", e))?
         {
             if !core.is_definition_key_admitted(
                 &loc.root,
@@ -2476,7 +2659,7 @@ async fn draft_definition(
             )? {
                 return Err(CoreError::new(
                     "definitionUnavailable",
-                    "Please save the existing new definition first",
+                    UiMessage::error_api_data_existing_definition_must_be_saved(),
                 ));
             }
         }
@@ -2486,7 +2669,7 @@ async fn draft_definition(
             revision: config.revision.clone().ok_or_else(|| {
                 CoreError::new(
                     "schemaRevisionRequired",
-                    "Explicitly install a schema before inserting Query",
+                    UiMessage::error_api_data_explicit_schema_before_query(),
                 )
             })?,
             language: "weftext.query.cel.v1".into(),
@@ -2512,7 +2695,7 @@ async fn draft_definition(
             &schema,
             &context,
         )
-        .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("invalidQueryDefinition", e))?;
         writing_api::check_snapshot(
             &check,
             &req.session_id,
@@ -2520,7 +2703,7 @@ async fn draft_definition(
             req.serial,
             req.source_hash.as_deref(),
         )
-        .map_err(|e| CoreError::new(&e.code, e.message))?;
+        .map_err(|e| e.into_core(e.code()))?;
         Ok((patch, key))
     })
     .await?;
@@ -2532,7 +2715,7 @@ async fn draft_definition(
 
 async fn save_definition(
     State(state): State<AppState>,
-    Json(req): Json<DefinitionSaveRequest>,
+    RequestJson(req): RequestJson<DefinitionSaveRequest>,
 ) -> ApiResult {
     let replay_request = req.clone();
     let replay = core_call(&state, move |core| {
@@ -2549,12 +2732,10 @@ async fn save_definition(
             let fact = core_call(&state, move |core| core.local_operation_status(&id)).await?;
             if fact["status"] == "committed" {
                 if error.code == "operationConflict" {
-                    let mut error = error;
-                    error.details = Some(Box::new(json!({"originalOperation":fact})));
-                    return Err(error);
+                    return Err(original_operation_error(error, fact));
                 }
                 let mut output = fact;
-                output["documentError"] = json!({"code":error.code,"message":error.message});
+                output["documentError"] = value(error)?;
                 return Ok(Json(output));
             }
             return Err(error);
@@ -2573,45 +2754,117 @@ async fn save_definition(
     let serial = req.serial;
     let write = core_call(&state, move |core| {
         let inventory = core.inventory(&loc.root)?;
-        let entry = inventory.entries.iter().find(|entry| entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted")
-            .ok_or_else(|| CoreError::new("identityConflict", "Save definitions only in the currently admitted owner note"))?;
+        let entry = inventory
+            .entries
+            .iter()
+            .find(|entry| {
+                entry.path == loc.path.to_string_lossy() && entry.identity_status == "admitted"
+            })
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityConflict",
+                    UiMessage::error_api_data_current_definition_owner_required(),
+                )
+            })?;
         let node_id = entry.node_id.as_deref().unwrap().to_string();
         if weftext_engine::inspect_metadata(&req.source).id.as_deref() != Some(&node_id) {
-            return Err(CoreError::new("identityConflict", "The draft must retain the current owner identity"));
+            return Err(CoreError::new(
+                "identityConflict",
+                UiMessage::error_api_data_draft_owner_identity_required(),
+            ));
         }
         let (config, resolved) = resolved_schema(core, &loc.root)?;
-        let schema_revision = config.revision.clone().ok_or_else(|| CoreError::new("schemaRevisionRequired", "Explicitly install a schema before saving a Query baseline; observed or bundled schema has no admitted revision"))?;
-        let binding = weftext_data::SavedQueryBinding { schema: config.role_ref.clone().unwrap(),
-            revision: schema_revision, language: "weftext.query.cel.v1".into() };
-        let mut current = core.read_snapshot(&loc.root, &[loc.path.to_string_lossy().to_string()])?;
-        let current = current.files.pop().ok_or_else(|| CoreError::new("sourceUnavailable", "Owner snapshot is unavailable"))?;
+        let schema_revision = config.revision.clone().ok_or_else(|| {
+            CoreError::new(
+                "schemaRevisionRequired",
+                UiMessage::error_api_data_explicit_schema_baseline_required(),
+            )
+        })?;
+        let binding = weftext_data::SavedQueryBinding {
+            schema: config.role_ref.clone().unwrap(),
+            revision: schema_revision,
+            language: "weftext.query.cel.v1".into(),
+        };
+        let mut current =
+            core.read_snapshot(&loc.root, &[loc.path.to_string_lossy().to_string()])?;
+        let current = current.files.pop().ok_or_else(|| {
+            CoreError::new(
+                "sourceUnavailable",
+                UiMessage::error_api_data_owner_snapshot_unavailable(),
+            )
+        })?;
         let key = match &req.key {
             Some(key) if core.is_definition_key_admitted(&loc.root, &node_id, key)? => key.clone(),
-            Some(_) => return Err(CoreError::new("definitionUnavailable", "This owner has no admitted definition key")),
-            None => core.reserve_definition_key(&loc.root, &loc.path, &current.base_id, &req.operation_id)?,
+            Some(_) => {
+                return Err(CoreError::new(
+                    "definitionUnavailable",
+                    UiMessage::error_api_data_definition_key_unadmitted(),
+                ));
+            }
+            None => core.reserve_definition_key(
+                &loc.root,
+                &loc.path,
+                &current.base_id,
+                &req.operation_id,
+            )?,
         };
-        let definition_context = query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
-        let definition_context = with_temporary_frozen_query(core, definition_context, |core, context| {
-            freeze_query_definitions(core, context, BTreeMap::new())?;
-            Ok(context.input.advanced.take().unwrap_or_default())
-        })?;
-        let patch = weftext_data::upsert_saved_query_with_context(&req.source, req.key.as_deref(), &key, &req.label, &binding, &req.plan, &resolved, &definition_context)
-            .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?;
+        let definition_context =
+            query_snapshot(core, &loc.root.to_string_lossy(), req.plan.clone())?;
+        let definition_context =
+            with_temporary_frozen_query(core, definition_context, |core, context| {
+                freeze_query_definitions(core, context, BTreeMap::new())?;
+                Ok(context.input.advanced.take().unwrap_or_default())
+            })?;
+        let patch = weftext_data::upsert_saved_query_with_context(
+            &req.source,
+            req.key.as_deref(),
+            &key,
+            &req.label,
+            &binding,
+            &req.plan,
+            &resolved,
+            &definition_context,
+        )
+        .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?;
         let next_config = schema_source(core, &loc.root)?;
         if next_config.source != config.source || next_config.revision != config.revision {
-            return Err(CoreError::new("configConflict", "Schema changed while preparing the definition"));
+            return Err(CoreError::new(
+                "configConflict",
+                UiMessage::error_api_data_definition_schema_changed(),
+            ));
         }
-        writing_api::check_snapshot(&final_check, &req.session_id, &req.source, req.serial, req.source_hash.as_deref())
-            .map_err(|error| CoreError::new(&error.code, error.message))?;
+        writing_api::check_snapshot(
+            &final_check,
+            &req.session_id,
+            &req.source,
+            req.serial,
+            req.source_hash.as_deref(),
+        )
+        .map_err(|error| error.into_core(error.code()))?;
         // Projection is validated before commit. The live open is delivery.
         let definition = weftext_data::saved_queries(&patch.source)
-            .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?.into_iter()
-            .find(|definition| definition.key == key).ok_or_else(|| CoreError::new("definitionUnavailable", "Prepared definition could not be projected"))?;
-        let outcome = core.save(SaveRequest { session_id: req.session_id, base_id: req.base_id,
-            source: patch.source.clone(), operation_id: req.operation_id })?;
-        let document = core.open(&loc.path, Some(loc.root.clone()));
+            .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
+            .into_iter()
+            .find(|definition| definition.key == key)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "definitionUnavailable",
+                    UiMessage::error_api_data_definition_projection_unavailable(),
+                )
+            })?;
+        let operation_id = req.operation_id.clone();
+        let outcome = core.save(SaveRequest {
+            session_id: req.session_id,
+            base_id: req.base_id,
+            source: patch.source.clone(),
+            operation_id: req.operation_id,
+        })?;
+        let document = core
+            .reopen_local_save(&operation_id)
+            .map(|(_, document)| document);
         Ok((document, definition, outcome, patch))
-    }).await?;
+    })
+    .await?;
     definition_write_response(&state, write, serial, &before_source)
 }
 
@@ -2637,7 +2890,7 @@ fn replay_saved_definition(
     {
         return Err(CoreError::new(
             "operationConflict",
-            "The original source basis does not match this retry",
+            UiMessage::error_api_data_original_source_basis_mismatch(),
         ));
     }
     // Original author identity is checked before any optional schema/result
@@ -2652,7 +2905,7 @@ fn replay_saved_definition(
         .ok_or_else(|| {
             CoreError::new(
                 "recoveryPending",
-                "The original definition source save is not committed",
+                UiMessage::error_api_data_original_definition_not_committed(),
             )
         })?;
     let key = req
@@ -2662,24 +2915,24 @@ fn replay_saved_definition(
         .ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This save did not allocate or name a Query definition",
+                UiMessage::error_api_data_original_definition_key_missing(),
             )
         })?;
     let definition = weftext_data::saved_queries(&original.source)
-        .map_err(|error| CoreError::new("operationConflict", error.to_string()))?
+        .map_err(|error| CoreError::from_data("operationConflict", error))?
         .into_iter()
         .find(|definition| &definition.key == key)
         .ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "The original save has no matching definition",
+                UiMessage::error_api_data_original_definition_missing(),
             )
         })?;
     let bytes = core.read_config_revision(
         original.root.as_ref().ok_or_else(|| {
             CoreError::new(
                 "committedResultUnavailable",
-                "Original definition library admission is unavailable",
+                UiMessage::error_api_data_committed_library_unavailable(),
             )
         })?,
         ConfigRole::Schema,
@@ -2688,11 +2941,11 @@ fn replay_saved_definition(
     let source = String::from_utf8(bytes).map_err(|_| {
         CoreError::new(
             "schemaUnavailable",
-            "The original saved schema is not UTF-8",
+            UiMessage::error_api_data_original_schema_encoding(),
         )
     })?;
     let schema = Schema::from_author_json(&source)
-        .map_err(|error| CoreError::new("schemaUnavailable", error.to_string()))?;
+        .map_err(|error| CoreError::from_data("schemaUnavailable", error))?;
     let patch = weftext_data::upsert_saved_query_replay(
         &req.source,
         req.key.as_deref(),
@@ -2702,11 +2955,11 @@ fn replay_saved_definition(
         &req.plan,
         &schema,
     )
-    .map_err(|error| CoreError::new("operationConflict", error.to_string()))?;
+    .map_err(|error| CoreError::from_data("operationConflict", error))?;
     if patch.source != original.source {
         return Err(CoreError::new(
             "operationConflict",
-            "This retry does not reconstruct the exact original committed source",
+            UiMessage::error_api_data_original_committed_source_mismatch(),
         ));
     }
     let document = core
@@ -2746,7 +2999,7 @@ fn definition_write_response(
         Ok(())
     })();
     if let Err(error) = delivered {
-        output["documentError"] = json!({"code":error.code,"message":error.message});
+        output["documentError"] = value(error)?;
     }
     Ok(Json(output))
 }
@@ -2766,7 +3019,10 @@ fn freeze_embedded_query(
 ) -> Result<FrozenQuery, CoreError> {
     let inventory = core.inventory(root)?;
     let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
-        CoreError::new("queryUnavailable", "普通 Typst 文件未取得资料库 Query 权限")
+        CoreError::new(
+            "queryUnavailable",
+            UiMessage::error_api_data_ordinary_query_permission_missing(),
+        )
     })?;
     let owner = inventory
         .entries
@@ -2779,40 +3035,46 @@ fn freeze_embedded_query(
         .ok_or_else(|| {
             CoreError::new(
                 "queryUnavailable",
-                "此文件不是原资料库已纳管的笔记；Query 不可用",
+                UiMessage::error_api_data_query_owner_unadmitted(),
             )
         })?;
-    let node = owner
-        .node_id
-        .as_deref()
-        .ok_or_else(|| CoreError::new("queryUnavailable", "Query owner identity is unavailable"))?;
+    let node = owner.node_id.as_deref().ok_or_else(|| {
+        CoreError::new(
+            "queryUnavailable",
+            UiMessage::error_api_data_query_owner_identity_unavailable(),
+        )
+    })?;
     let owner_ref = format!("weftext-node://{workspace}/{node}");
     let current_config = core.read_config(root, ConfigRole::Schema)?;
     if current_config.role_ref != binding.schema {
         return Err(CoreError::new(
             "schemaUnavailable",
-            "Query schema belongs to a different configuration authority",
+            UiMessage::error_api_data_query_schema_authority_mismatch(),
         ));
     }
     let bytes = core.read_config_revision(root, ConfigRole::Schema, &binding.revision)?;
-    let baseline_source = String::from_utf8(bytes.clone())
-        .map_err(|_| CoreError::new("schemaUnavailable", "Retained Query schema is not UTF-8"))?;
+    let baseline_source = String::from_utf8(bytes.clone()).map_err(|_| {
+        CoreError::new(
+            "schemaUnavailable",
+            UiMessage::error_api_data_retained_query_schema_encoding(),
+        )
+    })?;
     let baseline = Schema::from_author_json(&baseline_source)
-        .map_err(|e| CoreError::new("invalidSchema", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("invalidSchema", e))?;
     let (_, current_schema) = resolved_schema(core, Path::new(root))?;
     let projection = weftext_data::project(source, &baseline);
     if projection.qualification != "qualified" || projection.id.as_deref() != Some(node) {
         return Err(CoreError::new(
             "queryUnavailable",
-            "Draft does not retain its original admitted owner identity",
+            UiMessage::error_api_data_original_draft_identity_required(),
         ));
     }
     if !weftext_data::baseline_contract_compatible(&baseline, &current_schema)
-        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?
+        .map_err(|e| CoreError::from_data("schemaUnavailable", e))?
     {
         return Err(CoreError::new(
             "schemaMigrationUnavailable",
-            "Saved Query baseline requires an explicit migration",
+            UiMessage::error_api_data_query_baseline_migration_required(),
         ));
     }
     let config = SchemaSource {
@@ -2864,7 +3126,7 @@ pub(crate) async fn validate_embedded_query_plan(
                 &frozen.schema,
                 frozen.input.advanced.as_ref().unwrap(),
             )
-            .map_err(|e| CoreError::new("invalidQuery", e.to_string()))
+            .map_err(|e| CoreError::from_data("invalidQuery", e))
         })
     })
     .await
@@ -2872,7 +3134,7 @@ pub(crate) async fn validate_embedded_query_plan(
 
 async fn run_definition(
     State(state): State<AppState>,
-    Json(req): Json<DefinitionRunRequest>,
+    RequestJson(req): RequestJson<DefinitionRunRequest>,
 ) -> ApiResult {
     let (frozen, definition, revision, mode, owner_revision, changed) =
         core_call(&state, move |core| {
@@ -2890,7 +3152,7 @@ async fn run_definition(
                     let source = String::from_utf8(bytes).map_err(|_| {
                         CoreError::new(
                             "definitionUnavailable",
-                            "Retained definition source is not UTF-8",
+                            UiMessage::error_api_data_retained_definition_encoding(),
                         )
                     })?;
                     (key, Some(revision.clone()), "pinned", source)
@@ -2899,24 +3161,24 @@ async fn run_definition(
             if !core.is_definition_key_admitted(&req.root, node_id, key)? {
                 return Err(CoreError::new(
                     "definitionUnavailable",
-                    "Definition key has no original Core admission",
+                    UiMessage::error_api_data_definition_key_admission_missing(),
                 ));
             }
             let definition = weftext_data::saved_queries(&source)
-                .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?
+                .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
                 .into_iter()
                 .find(|definition| &definition.key == key)
                 .ok_or_else(|| {
                     CoreError::new(
                         "definitionUnavailable",
-                        "Definition key is absent at the exact selected source revision",
+                        UiMessage::error_api_data_definition_key_at_revision_missing(),
                     )
                 })?;
             let current_config = core.read_config(&req.root, ConfigRole::Schema)?;
             if current_config.role_ref != definition.binding.schema {
                 return Err(CoreError::new(
                     "schemaUnavailable",
-                    "Saved Query schema belongs to a different configuration authority",
+                    UiMessage::error_api_data_saved_query_schema_authority_mismatch(),
                 ));
             }
             let bytes = core.read_config_revision(
@@ -2925,14 +3187,21 @@ async fn run_definition(
                 &definition.binding.revision,
             )?;
             let baseline_source = String::from_utf8(bytes.clone()).map_err(|_| {
-                CoreError::new("schemaUnavailable", "Retained Query schema is not UTF-8")
+                CoreError::new(
+                    "schemaUnavailable",
+                    UiMessage::error_api_data_retained_query_schema_encoding(),
+                )
             })?;
             let baseline = Schema::from_author_json(&baseline_source)
-                .map_err(|error| CoreError::new("invalidSchema", error.to_string()))?;
-            let (_,current_schema) = resolved_schema(core,Path::new(&req.root))?;
-            if !weftext_data::baseline_contract_compatible(&baseline,&current_schema)
-                .map_err(|error|CoreError::new("schemaUnavailable",error.to_string()))? {
-                return Err(CoreError::new("schemaMigrationUnavailable","Saved Query baseline contracts differ from the current schema; an explicit migration is required"));
+                .map_err(|error| CoreError::from_data("invalidSchema", error))?;
+            let (_, current_schema) = resolved_schema(core, Path::new(&req.root))?;
+            if !weftext_data::baseline_contract_compatible(&baseline, &current_schema)
+                .map_err(|error| CoreError::from_data("schemaUnavailable", error))?
+            {
+                return Err(CoreError::new(
+                    "schemaMigrationUnavailable",
+                    UiMessage::error_api_data_saved_query_contracts_changed(),
+                ));
             }
             let baseline_config = SchemaSource {
                 source: baseline_source,
@@ -2980,8 +3249,149 @@ async fn run_definition(
 mod tests {
     use super::*;
 
+    #[test]
+    fn data_bridge_keeps_semantic_kind_and_all_parallel_diagnostics() {
+        let reason = weftext_messages::ErrorDescription::new(
+            UiMessage::error_api_data_native_product_budget(),
+        );
+        let parallel = vec![reason.clone(); 48];
+        let failure = data_error(
+            weftext_data::DataError::native_budget(reason).with_diagnostics(parallel.clone()),
+        );
+        assert_eq!(failure.status, StatusCode::BAD_REQUEST);
+        assert_eq!(failure.code, "invalid_data");
+        let Some(ApiErrorDetails::Core { error }) = failure.details.as_deref() else {
+            panic!("complete Core failure was lost")
+        };
+        let Some(weftext_core::CoreErrorDetails::Aggregate { groups }) = &error.details else {
+            panic!("parallel diagnostics were lost")
+        };
+        let Some(weftext_core::ErrorDetailGroup::Data {
+            classification,
+            diagnostics,
+        }) = groups.first()
+        else {
+            panic!("semantic data classification was lost")
+        };
+        assert_eq!(*classification, weftext_data::DataErrorKind::NativeBudget);
+        assert_eq!(
+            serde_json::to_value(diagnostics).unwrap(),
+            serde_json::to_value(parallel).unwrap()
+        );
+        assert!(failure.causes.as_slice().is_empty());
+    }
+
+    #[test]
+    fn query_diagnostics_keep_entities_original_ranges_and_more_than_cause_budget() {
+        let raw = json!({"severity":"error","diagnostics":[{"origin":"typst","text":"unknown variable: 作者 <x>"}],
+            "origin":{"path":"作者.typ","from":3,"to":9,"utf16From":3,"utf16To":5,"raw":"作者","syntaxKind":"Diagnostic","isMain":true}});
+        let engine: weftext_engine::Diagnostic = serde_json::from_value(raw.clone()).unwrap();
+        let description = weftext_messages::ErrorDescription::new(
+            UiMessage::error_api_data_native_compile_failed(),
+        );
+        let mut original = CoreError::from_product(
+            "original_failure",
+            Some("native_kind".into()),
+            description.clone(),
+            vec![description.clone(); 48],
+        );
+        original.current_source = Some("等待期间输入 Y 😀".into());
+        let error = ApiError::from(original);
+        let expected = value(&error).unwrap();
+        let engines = (0..48)
+            .map(|index| QueryEngineDiagnostics {
+                entity_key: format!("entity-{index}"),
+                diagnostics: vec![engine.clone(); 48],
+            })
+            .collect();
+        let products = (0..48)
+            .map(|index| QueryProductError {
+                entity_key: format!("entity-{index}"),
+                error: error.clone(),
+            })
+            .collect();
+        let mut output = json!({"coverage":"partial","limited":true,"aggregateExact":false});
+        publish_query_diagnostics(&mut output, vec![description.into(); 48], engines, products)
+            .unwrap();
+        assert_eq!(output["diagnostics"].as_array().unwrap().len(), 48);
+        assert_eq!(output["engineDiagnostics"].as_array().unwrap().len(), 48);
+        assert_eq!(output["productErrors"].as_array().unwrap().len(), 48);
+        for index in 0..48 {
+            assert_eq!(
+                output["engineDiagnostics"][index]["entityKey"],
+                format!("entity-{index}")
+            );
+            assert_eq!(
+                output["engineDiagnostics"][index]["diagnostics"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                48
+            );
+            assert_eq!(output["engineDiagnostics"][index]["diagnostics"][47], raw);
+            assert_eq!(output["productErrors"][index]["error"], expected);
+        }
+        assert_eq!(output["coverage"], "partial");
+        assert_eq!(output["limited"], true);
+        assert_eq!(output["aggregateExact"], false);
+    }
+
+    #[test]
+    fn schema_and_original_fact_wrappers_preserve_complete_error_bodies() {
+        let description = weftext_messages::ErrorDescription::new(
+            UiMessage::error_api_data_proposal_validation_failed(),
+        );
+        let config = SchemaSource {
+            source: "exact malformed author schema".into(),
+            before: None,
+            role_ref: None,
+            revision: Some("original-revision".into()),
+            can_install: false,
+            base_id: None,
+        };
+        let source = weftext_data::DataError::native_budget(description.clone())
+            .with_diagnostics(vec![description.clone(); 48]);
+        let expected = value(data_error(source.clone())).unwrap();
+        let wrapped = schema_parse_error(&config, source);
+        assert_eq!(wrapped.status, StatusCode::BAD_REQUEST);
+        assert_eq!(wrapped.code, "invalid_schema");
+        let Some(ApiErrorDetails::SchemaSource {
+            source,
+            role_ref,
+            revision,
+            cause,
+        }) = wrapped.details.as_deref()
+        else {
+            panic!("schema facts missing")
+        };
+        assert_eq!(source, &config.source);
+        assert_eq!(role_ref, &None);
+        assert_eq!(revision, &config.revision);
+        assert_eq!(value(cause).unwrap(), expected);
+        let mut original = CoreError::from_data(
+            "operationConflict",
+            weftext_data::DataError::coverage(description.clone())
+                .with_diagnostics(vec![description; 48]),
+        );
+        original.current_source = Some("unsaved Y 😀".into());
+        let original = ApiError::from(original);
+        let original_wire = value(&original).unwrap();
+        let fact = json!({"operationId":"ad6f2976-8381-4163-8f6c-1ec3711eb2df","status":"committed","path":"original.typ","baseId":"original-base"});
+        let wrapped = original_operation_error(original, fact.clone());
+        let Some(ApiErrorDetails::OriginalOperation {
+            fact: retained,
+            cause,
+        }) = wrapped.details.as_deref()
+        else {
+            panic!("original operation fact missing")
+        };
+        assert_eq!(retained, &fact);
+        assert_eq!(value(cause).unwrap(), original_wire);
+        assert_eq!(wrapped.code, "operationConflict");
+    }
+
     fn ok<T>(result: Result<T, ApiError>) -> T {
-        result.unwrap_or_else(|error| panic!("{}: {}", error.code, error.message))
+        result.unwrap_or_else(|error| panic!("{error:?}"))
     }
 
     #[test]
@@ -3128,7 +3538,7 @@ mod tests {
                 if fail {
                     Err(CoreError::new(
                         "invalidQuery",
-                        "Rejected temporary validation",
+                        UiMessage::error_api_data_temporary_validation_rejected(),
                     ))
                 } else {
                     Ok(())
@@ -3241,7 +3651,7 @@ mod tests {
         std::fs::write(&path, &source).unwrap();
         let Json(rows) = ok(query(
             State(state.clone()),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 parameters: BTreeMap::new(),
                 plan: weftext_data::QueryPlan {
@@ -3260,7 +3670,7 @@ mod tests {
         assert!(state.core.lock().unwrap().snapshot_witness(base).is_ok());
         let Json(opened) = ok(open_entity(
             State(state.clone()),
-            Json(ResolveRequest {
+            crate::RequestJson(ResolveRequest {
                 root,
                 entity_key: row["entityKey"].as_str().unwrap().into(),
                 lifecycle: Some("trash".into()),
@@ -3324,14 +3734,12 @@ mod tests {
         };
         let mut request = definition_request(&document, original.clone(), None, "open");
         request.plan = plan.clone();
-        let error = save_definition(State(state.clone()), Json(request))
+        let error = save_definition(State(state.clone()), crate::RequestJson(request))
             .await
             .unwrap_err();
-        assert!(
-            error.message.contains("Tag root unavailable"),
-            "{}: {}",
-            error.code,
-            error.message
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_data_query_tag_root_unavailable_in_frozen_qualified_tree()
         );
         assert_eq!(
             std::fs::read_to_string(document["path"].as_str().unwrap()).unwrap(),
@@ -3340,7 +3748,7 @@ mod tests {
         let mut request = definition_request(&document, original, None, "open");
         request.plan = plan;
         request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)"));
-        let Json(saved) = ok(save_definition(State(state), Json(request)).await);
+        let Json(saved) = ok(save_definition(State(state), crate::RequestJson(request)).await);
         assert!(saved["definitionRevision"].is_string());
     }
 
@@ -3583,14 +3991,14 @@ mod tests {
         let operation = uuid::Uuid::new_v4().to_string();
         let Json(first) = ok(capture(
             State(state.clone()),
-            Json(task_capture(&root, "Native", &operation)),
+            crate::RequestJson(task_capture(&root, "Native", &operation)),
         )
         .await);
         assert_eq!(first["status"], "committed");
         let first = first["document"].clone();
         let Json(retry) = ok(capture(
             State(state.clone()),
-            Json(task_capture(&root, "Native", &operation)),
+            crate::RequestJson(task_capture(&root, "Native", &operation)),
         )
         .await);
         assert_eq!(retry["status"], "committed");
@@ -3635,7 +4043,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Edit",
                 &uuid::Uuid::new_v4().to_string(),
@@ -3656,7 +4064,7 @@ mod tests {
             path: vec![],
             value: NativeValue::Text("done".into()),
         };
-        let Json(proposal) = ok(edit(State(state.clone()), Json(request)).await);
+        let Json(proposal) = ok(edit(State(state.clone()), crate::RequestJson(request)).await);
         let patch = &proposal["patches"][0];
         let from = patch["byteFrom"].as_u64().unwrap() as usize;
         let to = patch["byteTo"].as_u64().unwrap() as usize;
@@ -3669,7 +4077,7 @@ mod tests {
         assert!(patch["from"].as_u64().unwrap() < patch["byteFrom"].as_u64().unwrap());
         let result = edit(
             State(state.clone()),
-            Json(FieldEdit {
+            crate::RequestJson(FieldEdit {
                 session_id: session,
                 source,
                 serial: 1,
@@ -3693,7 +4101,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(initial) = ok(schema(
             State(state.clone()),
-            Json(RootRequest { root: root.clone() }),
+            crate::RequestJson(RootRequest { root: root.clone() }),
         )
         .await);
         assert_eq!(initial["builtinDefault"], true);
@@ -3703,7 +4111,7 @@ mod tests {
         let new_source = serde_json::to_string(&edited).unwrap();
         let Json(preview) = ok(prepare_schema(
             State(state.clone()),
-            Json(SchemaPrepare {
+            crate::RequestJson(SchemaPrepare {
                 root: root.clone(),
                 source: new_source.clone(),
                 before_source: initial["source"].as_str().unwrap().into(),
@@ -3714,7 +4122,7 @@ mod tests {
         .await);
         let _ = ok(install_schema(
             State(state.clone()),
-            Json(SchemaInstall {
+            crate::RequestJson(SchemaInstall {
                 operation_id: preview["operationId"].as_str().unwrap().into(),
                 plan_id: preview["planId"].as_str().unwrap().into(),
             }),
@@ -3722,7 +4130,7 @@ mod tests {
         .await);
         let Json(installed) = ok(schema(
             State(state.clone()),
-            Json(RootRequest { root: root.clone() }),
+            crate::RequestJson(RootRequest { root: root.clone() }),
         )
         .await);
         assert_eq!(installed["source"], new_source);
@@ -3730,7 +4138,7 @@ mod tests {
         let next_source = format!("{new_source}\n");
         let Json(next) = ok(prepare_schema(
             State(state.clone()),
-            Json(SchemaPrepare {
+            crate::RequestJson(SchemaPrepare {
                 root: root.clone(),
                 source: next_source,
                 before_source: new_source.clone(),
@@ -3747,7 +4155,7 @@ mod tests {
         .unwrap();
         let result = install_schema(
             State(state),
-            Json(SchemaInstall {
+            crate::RequestJson(SchemaInstall {
                 operation_id: next["operationId"].as_str().unwrap().into(),
                 plan_id: next["planId"].as_str().unwrap().into(),
             }),
@@ -3762,7 +4170,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Before",
                 &uuid::Uuid::new_v4().to_string(),
@@ -3779,7 +4187,7 @@ mod tests {
         let plan: weftext_data::QueryPlan = serde_json::from_value(json!({"scope":{"directory":entity,"descendants":true},"types":["task"],"where":"status == 'open'","select":[{"name":"status","expr":"status"}]})).unwrap();
         let Json(rows) = ok(query(
             State(state.clone()),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 plan,
@@ -3813,7 +4221,7 @@ mod tests {
         .await);
         let Json(target) = ok(resolve(
             State(state.clone()),
-            Json(ResolveRequest {
+            crate::RequestJson(ResolveRequest {
                 root: root.clone(),
                 entity_key: entity.clone(),
                 ..Default::default()
@@ -3835,7 +4243,7 @@ mod tests {
         }];
         let Json(renamed_rows) = ok(query(
             State(state.clone()),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 plan,
                 ..Default::default()
@@ -3846,7 +4254,7 @@ mod tests {
         assert_eq!(renamed_rows["rows"][0]["path"], target["path"]);
         let Json(opened) = ok(open_entity(
             State(state.clone()),
-            Json(ResolveRequest {
+            crate::RequestJson(ResolveRequest {
                 root: root.clone(),
                 entity_key: entity,
                 ..Default::default()
@@ -3862,7 +4270,7 @@ mod tests {
         ));
         let result = query(
             State(state),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 root,
                 plan: unavailable,
                 ..Default::default()
@@ -3876,13 +4284,13 @@ mod tests {
     async fn install_bundled_schema(state: &AppState, root: &str) {
         let Json(initial) = ok(schema(
             State(state.clone()),
-            Json(RootRequest { root: root.into() }),
+            crate::RequestJson(RootRequest { root: root.into() }),
         )
         .await);
         let source = initial["source"].as_str().unwrap().to_string();
         let Json(preview) = ok(prepare_schema(
             State(state.clone()),
-            Json(SchemaPrepare {
+            crate::RequestJson(SchemaPrepare {
                 root: root.into(),
                 source: source.clone(),
                 before_source: source,
@@ -3893,7 +4301,7 @@ mod tests {
         .await);
         let _ = ok(install_schema(
             State(state.clone()),
-            Json(SchemaInstall {
+            crate::RequestJson(SchemaInstall {
                 operation_id: preview["operationId"].as_str().unwrap().into(),
                 plan_id: preview["planId"].as_str().unwrap().into(),
             }),
@@ -3938,7 +4346,7 @@ mod tests {
         install_bundled_schema(&state, &root).await;
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Embedded",
                 &uuid::Uuid::new_v4().to_string(),
@@ -3949,7 +4357,7 @@ mod tests {
         let document = document["document"].clone();
         let Json(saved) = ok(save_definition(
             State(state.clone()),
-            Json(definition_request(
+            crate::RequestJson(definition_request(
                 &document,
                 document["source"].as_str().unwrap().into(),
                 None,
@@ -4036,7 +4444,7 @@ mod tests {
         install_bundled_schema(&state, &root).await;
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Saved",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4056,7 +4464,7 @@ mod tests {
         );
         let Json(first) = ok(save_definition(
             State(state.clone()),
-            Json(definition_request(&document, dirty_source, None, "open")),
+            crate::RequestJson(definition_request(&document, dirty_source, None, "open")),
         )
         .await);
         assert!(
@@ -4070,7 +4478,7 @@ mod tests {
         let first_document = &first["document"];
         let Json(second) = ok(save_definition(
             State(state.clone()),
-            Json(definition_request(
+            crate::RequestJson(definition_request(
                 first_document,
                 first_document["source"].as_str().unwrap().into(),
                 Some(key.clone()),
@@ -4081,7 +4489,7 @@ mod tests {
         assert_ne!(second["definitionRevision"], old_revision);
         let Json(current) = ok(run_definition(
             State(state.clone()),
-            Json(DefinitionRunRequest {
+            crate::RequestJson(DefinitionRunRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 owner: owner.clone(),
@@ -4092,7 +4500,7 @@ mod tests {
         assert!(current["result"]["rows"].as_array().unwrap().is_empty());
         let Json(pinned) = ok(run_definition(
             State(state.clone()),
-            Json(DefinitionRunRequest {
+            crate::RequestJson(DefinitionRunRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 owner: owner.clone(),
@@ -4125,7 +4533,7 @@ mod tests {
         ok(core_call(&state, move |core| core.save(save)).await);
         let Json(after_data_change) = ok(run_definition(
             State(state.clone()),
-            Json(DefinitionRunRequest {
+            crate::RequestJson(DefinitionRunRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 owner: owner.clone(),
@@ -4144,7 +4552,7 @@ mod tests {
         );
         let missing = run_definition(
             State(state),
-            Json(DefinitionRunRequest {
+            crate::RequestJson(DefinitionRunRequest {
                 parameters: BTreeMap::new(),
                 root,
                 owner,
@@ -4164,7 +4572,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(empty) = ok(query(
             State(state.clone()),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 plan: status_plan("done"),
@@ -4179,7 +4587,7 @@ mod tests {
         std::fs::write(external.join("External.typ"),format!("#metadata((id: \"{}\", types: (\"task\",), status: \"done\")) <weftext>\n外部未准入笔记\n",uuid::Uuid::new_v4())).unwrap();
         let Json(raw) = ok(query(
             State(state),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root,
                 plan: status_plan("done"),
@@ -4199,7 +4607,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(initial) = ok(resolve_period(
             State(state.clone()),
-            Json(PeriodRequest {
+            crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
                 kind: "week".into(),
@@ -4231,13 +4639,14 @@ mod tests {
             body: "周记正文\n".into(),
             operation_id: operation.clone(),
         };
-        let Json(created) = ok(create_period(State(state.clone()), Json(make())).await);
+        let Json(created) =
+            ok(create_period(State(state.clone()), crate::RequestJson(make())).await);
         assert_eq!(created["status"], "committed");
         let created = created["document"].clone();
         let schema_path = Path::new(&root).join(".weftext-schema.json");
         let original_schema = std::fs::read(&schema_path).ok();
         std::fs::write(&schema_path, b"invalid current schema").unwrap();
-        let Json(retry) = ok(create_period(State(state.clone()), Json(make())).await);
+        let Json(retry) = ok(create_period(State(state.clone()), crate::RequestJson(make())).await);
         match original_schema {
             Some(bytes) => std::fs::write(&schema_path, bytes).unwrap(),
             None => std::fs::remove_file(&schema_path).unwrap(),
@@ -4248,7 +4657,7 @@ mod tests {
         assert_eq!(created["nodeId"], retry["nodeId"]);
         let Json(found) = ok(resolve_period(
             State(state.clone()),
-            Json(PeriodRequest {
+            crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
                 kind: "week".into(),
@@ -4261,7 +4670,7 @@ mod tests {
         assert_eq!(found["canCreate"], false);
         let duplicate = capture(
             State(state.clone()),
-            Json(CaptureRequest {
+            crate::RequestJson(CaptureRequest {
                 root: root.clone(),
                 parent: root.clone(),
                 name: "Duplicate".into(),
@@ -4280,7 +4689,7 @@ mod tests {
         assert!(!Path::new(&root).join("Duplicate").exists());
         let Json(next) = ok(resolve_period(
             State(state.clone()),
-            Json(PeriodRequest {
+            crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
                 kind: "week".into(),
@@ -4296,7 +4705,7 @@ mod tests {
         );
         let invalid = resolve_period(
             State(state),
-            Json(PeriodRequest {
+            crate::RequestJson(PeriodRequest {
                 root,
                 series_key: "work-log".into(),
                 kind: "week".into(),
@@ -4314,7 +4723,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Trash",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4344,7 +4753,7 @@ mod tests {
         plan.scope.lifecycle = "trash".into();
         let Json(rows) = ok(query(
             State(state.clone()),
-            Json(QueryRequest {
+            crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
                 plan,
@@ -4356,7 +4765,7 @@ mod tests {
         assert_eq!(rows["rows"][0]["readOnly"], true);
         let Json(opened) = ok(open_entity(
             State(state.clone()),
-            Json(ResolveRequest {
+            crate::RequestJson(ResolveRequest {
                 root: root.clone(),
                 entity_key: rows["rows"][0]["entityKey"].as_str().unwrap().into(),
                 lifecycle: Some("trash".into()),
@@ -4370,7 +4779,7 @@ mod tests {
         let session = opened["sessionId"].as_str().unwrap().to_string();
         let Json(projection) = ok(project(
             State(state.clone()),
-            Json(ProjectionRequest {
+            crate::RequestJson(ProjectionRequest {
                 session_id: session.clone(),
                 source: source.clone(),
                 serial: 1,
@@ -4388,7 +4797,7 @@ mod tests {
         );
         let failed = edit(
             State(state),
-            Json(FieldEdit {
+            crate::RequestJson(FieldEdit {
                 session_id: session,
                 source,
                 serial: 1,
@@ -4408,7 +4817,7 @@ mod tests {
         let (_directory, state, root) = fixture();
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Race",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4435,7 +4844,7 @@ mod tests {
             core.open(path, Some(PathBuf::from(opened_root)))
         })
         .await))
-        .unwrap_or_else(|error| panic!("{}", error.message));
+        .unwrap_or_else(|error| panic!("{error:?}"));
         assert_eq!(reopened["source"], external);
         assert!(!document_matches_committed_source(&reopened, &committed));
         let owner = document["nodeId"].as_str().unwrap().to_string();
@@ -4461,7 +4870,7 @@ mod tests {
         install_bundled_schema(&state, &root).await;
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Retry",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4476,27 +4885,25 @@ mod tests {
             None,
             "open",
         );
-        let Json(first) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        let Json(first) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(request.clone())).await);
         let later_draft = format!(
             "{}\nlater unsaved input\n",
             first["committedSource"].as_str().unwrap()
         );
-        ok(writing_api::observe_snapshot(
-            &state,
-            &request.session_id,
-            &later_draft,
-            2,
-            None,
-        ));
+        ok(
+            writing_api::observe_snapshot(&state, &request.session_id, &later_draft, 2, None)
+                .map_err(ApiError::from),
+        );
         let Json(current_schema) = ok(schema(
             State(state.clone()),
-            Json(RootRequest { root: root.clone() }),
+            crate::RequestJson(RootRequest { root: root.clone() }),
         )
         .await);
         let changed_schema = format!("{}\n ", current_schema["source"].as_str().unwrap());
         let Json(preview) = ok(prepare_schema(
             State(state.clone()),
-            Json(SchemaPrepare {
+            crate::RequestJson(SchemaPrepare {
                 root: root.clone(),
                 source: changed_schema,
                 before_source: current_schema["source"].as_str().unwrap().into(),
@@ -4507,29 +4914,27 @@ mod tests {
         .await);
         let _ = ok(install_schema(
             State(state.clone()),
-            Json(SchemaInstall {
+            crate::RequestJson(SchemaInstall {
                 operation_id: preview["operationId"].as_str().unwrap().into(),
                 plan_id: preview["planId"].as_str().unwrap().into(),
             }),
         )
         .await);
-        let Json(replayed) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        let Json(replayed) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(request.clone())).await);
         assert_eq!(replayed["definitionRevision"], first["definitionRevision"]);
         assert_eq!(replayed["definition"]["key"], first["definition"]["key"]);
         assert_eq!(replayed["committedSource"], first["committedSource"]);
-        ok(writing_api::check_snapshot(
-            &state,
-            &request.session_id,
-            &later_draft,
-            2,
-            None,
-        ));
+        ok(
+            writing_api::check_snapshot(&state, &request.session_id, &later_draft, 2, None)
+                .map_err(ApiError::from),
+        );
         let definitions =
             weftext_data::saved_queries(replayed["committedSource"].as_str().unwrap()).unwrap();
         assert_eq!(definitions.len(), 1);
         let mut changed = request;
         changed.label = "different input".into();
-        let rejected = save_definition(State(state), Json(changed)).await;
+        let rejected = save_definition(State(state), crate::RequestJson(changed)).await;
         assert_eq!(rejected.err().unwrap().code, "operationConflict");
     }
 
@@ -4540,7 +4945,7 @@ mod tests {
         install_bundled_schema(&state, &root).await;
         let Json(document) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Scoped",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4561,7 +4966,8 @@ mod tests {
             "open",
         );
         request.plan.scope.directory = Some(owner.clone());
-        let Json(saved) = ok(save_definition(State(state.clone()), Json(request)).await);
+        let Json(saved) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(request)).await);
         assert_eq!(saved["definition"]["plan"]["scope"]["directory"], owner);
         let source_directory = Path::new(saved["document"]["path"].as_str().unwrap())
             .parent()
@@ -4583,7 +4989,7 @@ mod tests {
         .await);
         let Json(result) = ok(run_definition(
             State(state),
-            Json(DefinitionRunRequest {
+            crate::RequestJson(DefinitionRunRequest {
                 root,
                 owner,
                 selection: weftext_data::DefinitionSelection::Pinned {
@@ -4613,7 +5019,7 @@ mod tests {
         let id = uuid::Uuid::new_v4().to_string();
         let Json(first) = ok(capture(
             State(state.clone()),
-            Json(task_capture(&root, "Original", &id)),
+            crate::RequestJson(task_capture(&root, "Original", &id)),
         )
         .await);
         assert_eq!(first["status"], "committed");
@@ -4624,7 +5030,7 @@ mod tests {
         .unwrap();
         let Json(retry) = ok(capture(
             State(state.clone()),
-            Json(task_capture(&root, "Original", &id)),
+            crate::RequestJson(task_capture(&root, "Original", &id)),
         )
         .await);
         assert_eq!(retry["operationId"], id);
@@ -4632,7 +5038,7 @@ mod tests {
         assert_eq!(retry["document"]["nodeId"], first["document"]["nodeId"]);
         let changed = task_capture(&root, "Changed", &id);
         assert_eq!(
-            capture(State(state), Json(changed))
+            capture(State(state), crate::RequestJson(changed))
                 .await
                 .err()
                 .unwrap()
@@ -4653,22 +5059,36 @@ mod tests {
             Ok((core.operation_details(&operation)?, receipt))
         })
         .await
-        .map_err(|e| e.message)
         .unwrap();
         let original = PathBuf::from(&receipt.path);
         let retained = PathBuf::from(&root).join("retained-original");
         std::fs::rename(&original, &retained).unwrap();
         let output = crate::knowledge_api::operation_output(&state, preview, receipt, None)
             .await
-            .map_err(|e| e.message)
             .unwrap();
         assert_eq!(output["status"], "committed");
         assert_eq!(output["operationId"], id);
         assert!(output["documentError"]["code"].is_string());
+        assert!(output["documentError"].get("message").is_none());
+        serde_json::from_value::<UiMessage>(output["documentError"]["explanation"].clone())
+            .unwrap();
+        serde_json::from_value::<Vec<weftext_messages::RawDiagnostic>>(
+            output["documentError"]["diagnostics"].clone(),
+        )
+        .unwrap();
+        serde_json::from_value::<weftext_messages::ErrorCauses>(
+            output["documentError"]["causes"].clone(),
+        )
+        .unwrap();
+        assert_eq!(output["documentError"]["details"]["kind"], "core");
+        assert_eq!(
+            output["documentError"]["details"]["code"],
+            output["documentError"]["code"]
+        );
         assert!(output["document"].is_null());
         let retry = crate::create_note(
             State(state.clone()),
-            Json(crate::CreateNote {
+            crate::RequestJson(crate::CreateNote {
                 root: root.clone(),
                 parent: root,
                 name: "Committed".into(),
@@ -4676,7 +5096,6 @@ mod tests {
             }),
         )
         .await
-        .map_err(|e| e.message)
         .unwrap()
         .0;
         assert_eq!(retry["status"], "committed");
@@ -4686,12 +5105,81 @@ mod tests {
     }
     #[cfg(windows)]
     #[tokio::test]
+    async fn file_save_delivery_keeps_typed_failure_and_original_fact_until_physical_owner_returns()
+    {
+        let (directory, state, _root) = fixture();
+        let path = directory.path().join("ordinary.typ");
+        let retained = directory.path().join("original-retained.typ");
+        let substitute = directory.path().join("substitute-retained.typ");
+        std::fs::write(&path, "original B").unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let fact = core_call(&state, {
+            let path = path.clone();
+            let id = id.clone();
+            move |core| {
+                let document = core.open(&path, None)?;
+                core.save(SaveRequest {
+                    session_id: document.session_id.clone(),
+                    base_id: document.base_id,
+                    source: "committed S 😀".into(),
+                    operation_id: id.clone(),
+                })?;
+                core.close_session(&document.session_id)?;
+                core.local_operation_status(&id)
+            }
+        })
+        .await
+        .unwrap();
+        let plan = directory
+            .path()
+            .join("state/journal")
+            .join(format!("{id}.plan.json"));
+        let commit = directory
+            .path()
+            .join("state/journal")
+            .join(format!("{id}.commit.json"));
+        let plan_bytes = std::fs::read(&plan).unwrap();
+        let commit_bytes = std::fs::read(&commit).unwrap();
+        let source_bytes = std::fs::read(&path).unwrap();
+        std::fs::rename(&path, &retained).unwrap();
+        std::fs::write(&path, &source_bytes).unwrap();
+        let unavailable =
+            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone()).await;
+        assert_eq!(unavailable["status"], "committed");
+        assert_eq!(unavailable["operationId"], id);
+        assert_eq!(unavailable["baseId"], fact["baseId"]);
+        assert!(unavailable["document"].is_null());
+        let error = &unavailable["documentError"];
+        assert_eq!(error["code"], "committedResultUnavailable");
+        assert!(error.get("message").is_none());
+        serde_json::from_value::<UiMessage>(error["explanation"].clone()).unwrap();
+        assert!(error["diagnostics"].is_array());
+        assert!(error["causes"].is_array());
+        assert_eq!(error["details"]["kind"], "core");
+        assert_eq!(error["details"]["code"], error["code"]);
+        std::fs::rename(&path, &substitute).unwrap();
+        std::fs::rename(&retained, &path).unwrap();
+        let delivered =
+            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone()).await;
+        assert_eq!(delivered["status"], "committed");
+        assert_eq!(delivered["operationId"], id);
+        assert_eq!(delivered["baseId"], fact["baseId"]);
+        assert!(delivered.get("documentError").is_none());
+        assert_eq!(delivered["document"]["source"], "committed S 😀");
+        assert_eq!(delivered["documentSourceMatchesCommit"], true);
+        assert_eq!(std::fs::read(&path).unwrap(), source_bytes);
+        assert_eq!(std::fs::read(&substitute).unwrap(), source_bytes);
+        assert_eq!(std::fs::read(&plan).unwrap(), plan_bytes);
+        assert_eq!(std::fs::read(&commit).unwrap(), commit_bytes);
+    }
+    #[cfg(windows)]
+    #[tokio::test]
     async fn rejected_definition_reservation_can_be_fenced_and_a_new_label_saved() {
         let (_directory, state, root) = fixture();
         install_bundled_schema(&state, &root).await;
         let Json(created) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "Definitions",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4701,7 +5189,7 @@ mod tests {
         let document = &created["document"];
         let Json(saved) = ok(save_definition(
             State(state.clone()),
-            Json(definition_request(
+            crate::RequestJson(definition_request(
                 document,
                 document["source"].as_str().unwrap().into(),
                 None,
@@ -4718,7 +5206,7 @@ mod tests {
         );
         let id = bad.operation_id.clone();
         assert!(
-            save_definition(State(state.clone()), Json(bad))
+            save_definition(State(state.clone()), crate::RequestJson(bad))
                 .await
                 .is_err()
         );
@@ -4727,7 +5215,6 @@ mod tests {
             move |core| core.settle_local_attempt(&id, "save", &"a".repeat(64))
         })
         .await
-        .map_err(|e| e.message)
         .unwrap();
         assert_eq!(settled["status"], "resolved");
         let mut next = definition_request(
@@ -4737,7 +5224,7 @@ mod tests {
             "open",
         );
         next.label = "weftext-query-distinct".into();
-        let Json(saved) = ok(save_definition(State(state.clone()), Json(next)).await);
+        let Json(saved) = ok(save_definition(State(state.clone()), crate::RequestJson(next)).await);
         assert_eq!(saved["status"], "committed");
         let destination = Path::new(&root)
             .parent()
@@ -4755,7 +5242,6 @@ mod tests {
             Ok(())
         })
         .await
-        .map_err(|e| e.message)
         .unwrap();
     }
     #[cfg(windows)]
@@ -4765,7 +5251,7 @@ mod tests {
         install_bundled_schema(&state, &root).await;
         let Json(created) = ok(capture(
             State(state.clone()),
-            Json(task_capture(
+            crate::RequestJson(task_capture(
                 &root,
                 "DefinitionReplay",
                 &uuid::Uuid::new_v4().to_string(),
@@ -4779,7 +5265,8 @@ mod tests {
             None,
             "open",
         );
-        let Json(first) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        let Json(first) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(request.clone())).await);
         let plan_path = directory
             .path()
             .join("state/journal")
@@ -4790,10 +5277,10 @@ mod tests {
         let session = request.session_id.clone();
         core_call(&state, move |core| core.close_session(&session))
             .await
-            .map_err(|error| error.message)
             .unwrap();
         state.locations.lock().unwrap().clear();
-        let Json(replayed) = ok(save_definition(State(state.clone()), Json(request.clone())).await);
+        let Json(replayed) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(request.clone())).await);
         assert_eq!(replayed["baseId"], first["baseId"]);
         assert_eq!(replayed["committedSource"], first["committedSource"]);
         assert_ne!(replayed["document"]["sessionId"], request.session_id);
@@ -4804,11 +5291,21 @@ mod tests {
                 "base" => changed.base_id = uuid::Uuid::new_v4().to_string(),
                 _ => changed.source.push('Y'),
             }
-            let error = save_definition(State(state.clone()), Json(changed))
+            let error = save_definition(State(state.clone()), crate::RequestJson(changed))
                 .await
                 .err()
                 .unwrap();
             assert_eq!(error.code, "operationConflict");
+            let error = value(error).unwrap();
+            assert!(error.get("message").is_none());
+            assert_eq!(error["details"]["kind"], "originalOperation");
+            assert_eq!(
+                error["details"]["fact"]["operationId"],
+                request.operation_id
+            );
+            assert_eq!(error["details"]["fact"]["baseId"], first["baseId"]);
+            assert_eq!(error["details"]["cause"]["code"], "operationConflict");
+            assert_eq!(error["details"]["cause"]["details"]["kind"], "core");
         }
         assert_eq!(std::fs::read(&plan_path).unwrap(), committed_plan);
         assert_eq!(std::fs::read(&path).unwrap(), committed_source);

@@ -1,6 +1,6 @@
 //! Bounded plain-text table interchange. These helpers never interpret Typst or HTML.
 
-use crate::EngineError;
+use crate::{EngineError, UiMessage};
 
 const MAX_INPUT_BYTES: usize = 1_048_576;
 const MAX_CELLS: usize = 100_000;
@@ -21,10 +21,14 @@ enum FieldState {
 /// rows are rejected before the caller changes the author's source.
 pub(super) fn parse_tsv(text: &str) -> Result<Vec<Vec<String>>, EngineError> {
     if text.len() > MAX_INPUT_BYTES {
-        return Err(EngineError("表格剪贴板超过 1 MiB 输入预算".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_table_clipboard_table_clipboard_byte_budget(),
+        ));
     }
     if text.contains('\0') {
-        return Err(EngineError("表格剪贴板包含不支持的 NUL 字符".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_table_clipboard_table_clipboard_nul_unsupported(),
+        ));
     }
 
     let mut chars = text.chars().peekable();
@@ -70,7 +74,7 @@ pub(super) fn parse_tsv(text: &str) -> Result<Vec<Vec<String>>, EngineError> {
                 ended_record = false;
             }
             _ if state == FieldState::Closed || ch == '"' => {
-                return Err(EngineError("表格剪贴板的引号字段格式无效".into()));
+                return Err(EngineError::new(weftext_messages::UiMessage::error_engine_table_clipboard_table_clipboard_quotes_invalid()));
             }
             _ => {
                 field.push(ch);
@@ -80,7 +84,9 @@ pub(super) fn parse_tsv(text: &str) -> Result<Vec<Vec<String>>, EngineError> {
         }
     }
     if state == FieldState::Quoted {
-        return Err(EngineError("表格剪贴板包含未结束的引号字段".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_table_clipboard_table_clipboard_quote_unterminated(),
+        ));
     }
     if !ended_record {
         push_field(&mut row, &mut field, &mut cells)?;
@@ -95,7 +101,9 @@ fn push_field(
     cells: &mut usize,
 ) -> Result<(), EngineError> {
     if *cells >= MAX_CELLS {
-        return Err(EngineError("表格剪贴板超过 100,000 单元格预算".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_table_clipboard_table_clipboard_cell_budget(),
+        ));
     }
     row.push(std::mem::take(field));
     *cells += 1;
@@ -106,10 +114,14 @@ fn push_row(rows: &mut Vec<Vec<String>>, row: &mut Vec<String>) -> Result<(), En
     if let Some(first) = rows.first()
         && first.len() != row.len()
     {
-        return Err(EngineError(format!(
-            "表格剪贴板第 {} 行列数不一致，须为完整矩形",
-            rows.len() + 1
-        )));
+        return Err(EngineError::new(
+            UiMessage::error_engine_table_clipboard_row_not_rectangular(
+                weftext_messages::params::ErrorEngineTableClipboardRowNotRectangular {
+                    row: weftext_messages::UiInteger::new((rows.len() + 1) as i64)
+                        .expect("clipboard row count is bounded by the cell budget"),
+                },
+            ),
+        ));
     }
     rows.push(std::mem::take(row));
     Ok(())

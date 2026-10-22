@@ -16,6 +16,7 @@ use crate::{
         change,
     },
 };
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,7 +47,7 @@ impl Core {
         if objects.is_empty() || objects.len() > MAX_CHANGES {
             return Err(CoreError::new(
                 "budget",
-                "Select a finite nonempty installed object cut",
+                UiMessage::error_core_sync_select_finite_nonempty_installed_object_cut(),
             ));
         }
         let root = absolute_path(root)?;
@@ -65,7 +66,7 @@ impl Core {
             let original = local.get(object).ok_or_else(|| {
                 CoreError::new(
                     "syncBasisChanged",
-                    "Selected object is not installed in this replica",
+                    UiMessage::error_core_sync_selected_object_not_installed_in_replica(),
                 )
             })?;
             expected_installed.push(Dependency {
@@ -74,7 +75,10 @@ impl Core {
             });
             for relative in original.state.files.keys() {
                 if paths.len() == MAX_FILES {
-                    return Err(CoreError::new("budget", "Adoption cut exceeds 5000 files"));
+                    return Err(CoreError::new(
+                        "budget",
+                        UiMessage::error_core_sync_adoption_cut_exceeds5000_files(),
+                    ));
                 }
                 paths.push(display(&Path::new(&original.directory).join(relative)));
                 originals.push((object.clone(), relative.clone()));
@@ -101,13 +105,17 @@ impl Core {
                 };
                 total += captured.bytes.len();
                 if total > MAX_BLOB_BYTES {
-                    return Err(CoreError::new("budget", "Adoption cut exceeds 64 MiB"));
+                    return Err(CoreError::new(
+                        "budget",
+                        UiMessage::error_core_sync_adoption_cut_exceeds64_mi_b(),
+                    ));
                 }
                 let stamp = &physical[&original.state.file_revisions[&relative]];
                 if captured.stamp.identity != stamp.identity {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "The selected installed leaf was physically replaced",
+                        UiMessage::error_core_sync_selected_installed_leaf_was_physically_replaced(
+                        ),
                     ));
                 }
                 if captured.stamp != *stamp
@@ -124,7 +132,7 @@ impl Core {
             if changes.is_empty() && removed_members.is_empty() {
                 return Err(CoreError::new(
                     "noChange",
-                    "The selected installed objects have no observed external change",
+                    UiMessage::error_core_sync_selected_installed_objects_have_no_observed_external_change(),
                 ));
             }
             Ok(SyncAdoptionCut {
@@ -166,7 +174,8 @@ impl Core {
             if old.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The original operation names different observed content",
+                    UiMessage::error_core_sync_original_operation_names_different_observed_content(
+                    ),
                 ));
             }
             return self.operation_details(&request.operation_id);
@@ -195,7 +204,9 @@ impl Core {
             removed_members,
         } = &request.intent
         else {
-            return Err(invalid("Expected explicit external adoption intent"));
+            return Err(invalid(
+                UiMessage::error_core_sync_explicit_external_adoption_intent_required(),
+            ));
         };
         if changes.is_empty() && removed_members.is_empty()
             || changes.len().saturating_add(removed_members.len()) > MAX_FILES
@@ -205,7 +216,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Adoption requires a finite nonempty observed cut",
+                UiMessage::error_core_sync_adoption_requires_finite_nonempty_observed_cut(),
             ));
         }
         if changes
@@ -214,7 +225,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "basisRequired",
-                "Adopt only the exact current bytes with their original observed snapshot basis",
+                UiMessage::error_core_sync_adopt_only_exact_current_bytes_with_their_original_observed_snapshot_basis(),
             ));
         }
         let root = absolute_path(Path::new(&request.root))?;
@@ -222,7 +233,7 @@ impl Core {
         let setup = self.sync_setup_for(&root)?;
         if &setup.identity != identity || workspace.workspace_id != identity.workspace_id {
             return Err(invalid(
-                "Selected library belongs to another replica family",
+                UiMessage::error_core_sync_selected_library_replica_family_mismatch(),
             ));
         }
         let replica_id = setup.replica_id.clone();
@@ -233,7 +244,7 @@ impl Core {
             let installed = local.get(&dependency.object).ok_or_else(|| {
                 CoreError::new(
                     "syncBasisChanged",
-                    "A selected installed object is unavailable",
+                    UiMessage::error_core_sync_selected_installed_object_unavailable(),
                 )
             })?;
             if dependency.revisions != BTreeSet::from([installed.revision.clone()])
@@ -243,7 +254,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "syncBasisChanged",
-                    "Review each exact installed object version once before adopting",
+                    UiMessage::error_core_sync_review_each_exact_installed_object_version_once_before_adopting(),
                 ));
             }
         }
@@ -262,11 +273,13 @@ impl Core {
             let selected = selected.ok_or_else(|| {
                 CoreError::new(
                     "syncAdoptionScope",
-                    "Only a leaf already belonging to a selected installed object can be adopted",
+                    UiMessage::error_core_sync_only_leaf_already_belonging_to_selected_installed_object_can_adopted(),
                 )
             })?;
             if requested.insert(display(&selected), input).is_some() {
-                return Err(invalid("One observed leaf has multiple adoption proposals"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_observed_leaf_adoption_duplicate(),
+                ));
             }
         }
         let mut requested_removed = BTreeMap::<String, &SyncRemovedMember>::new();
@@ -274,13 +287,13 @@ impl Core {
             let path = absolute_path(Path::new(&input.path))?;
             let selected = before.values().flat_map(|object| object.state.files.keys().map(move |relative| Path::new(&object.directory).join(relative)))
                 .find(|selected| same_path(selected, &path))
-                .ok_or_else(|| CoreError::new("syncAdoptionScope", "Only an originally installed member in the explicit cut can be observed as removed"))?;
+                .ok_or_else(|| CoreError::new("syncAdoptionScope", UiMessage::error_core_sync_only_originally_installed_member_in_explicit_cut_can_observed_as_removed()))?;
             let selected = display(&selected);
             if requested.contains_key(&selected)
                 || requested_removed.insert(selected, input).is_some()
             {
                 return Err(invalid(
-                    "One installed member cannot have duplicate, aliased or competing adoption observations",
+                    UiMessage::error_core_sync_competing_adoption_observations(),
                 ));
             }
         }
@@ -316,7 +329,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "syncDependencyRequired",
-                    "Include the installed placement parent in the reviewed adoption cut",
+                    UiMessage::error_core_sync_include_installed_placement_parent_in_reviewed_adoption_cut(),
                 ));
             }
             for (relative, digest) in &original.state.files {
@@ -324,7 +337,7 @@ impl Core {
                 if member_count > MAX_FILES {
                     return Err(CoreError::new(
                         "budget",
-                        "The complete adoption member cut exceeds 5000 slots",
+                        UiMessage::error_core_sync_complete_adoption_member_cut_exceeds5000_slots(),
                     ));
                 }
                 let path = Path::new(&original.directory).join(relative);
@@ -335,7 +348,7 @@ impl Core {
                     if captured.is_some() {
                         return Err(CoreError::new(
                             "staleBase",
-                            "A removed-member observation requires its original negative snapshot",
+                            UiMessage::error_core_sync_removed_member_observation_requires_original_negative_snapshot(),
                         ));
                     }
                     self.validate_removed_resource_observation(
@@ -355,12 +368,12 @@ impl Core {
                         .push(change(&path, "adoptExternalRemoval", 0));
                     continue;
                 }
-                let captured = captured.ok_or_else(|| CoreError::new("syncExternalChange", "A missing installed member must have its explicit original removedMembers observation"))?;
+                let captured = captured.ok_or_else(|| CoreError::new("syncExternalChange", UiMessage::error_core_sync_missing_installed_member_must_have_explicit_original_removed_members_observation()))?;
                 total += captured.bytes.len();
                 if total > MAX_BLOB_BYTES || files.len() == MAX_FILES {
                     return Err(CoreError::new(
                         "budget",
-                        "The complete adoption input cut exceeds 64 MiB/5000 files",
+                        UiMessage::error_core_sync_complete_adoption_input_cut_exceeds64_mi_b5000_files(),
                     ));
                 }
                 if let Some(input) = requested.get(&display(&path)) {
@@ -372,7 +385,8 @@ impl Core {
                     if input.before.as_ref() != Some(&captured.bytes) {
                         return Err(CoreError::new(
                             "staleBase",
-                            "Observed adoption bytes changed after review",
+                            UiMessage::error_core_sync_observed_adoption_bytes_changed_after_review(
+                            ),
                         ));
                     }
                     let revision = fresh();
@@ -399,7 +413,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "An unselected object member differs from its installed version",
+                        UiMessage::error_core_sync_unselected_object_member_differs_from_installed_version(),
                     ));
                 }
                 if physical[&original.state.file_revisions[relative]].identity
@@ -407,7 +421,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "Installed leaf no longer has its retained original physical binding",
+                        UiMessage::error_core_sync_installed_leaf_no_longer_has_retained_original_physical_binding(),
                     ));
                 }
                 files.push(captured);
@@ -452,7 +466,7 @@ impl Core {
                     ) {
                         return Err(CoreError::new(
                             "identityConflict",
-                            "An adopted resource is not its original owner-bound physical object",
+                            UiMessage::error_core_sync_adopted_resource_not_original_owner_bound_physical_object(),
                         ));
                     }
                 }
@@ -466,7 +480,7 @@ impl Core {
                 if !self.directory_admitted(&identity.workspace_id, id, &parent)? {
                     return Err(CoreError::new(
                         "identityConflict",
-                        "The adopted directory lacks its original physical admission",
+                        UiMessage::error_core_sync_adopted_directory_lacks_original_physical_admission(),
                     ));
                 }
             }
@@ -486,13 +500,14 @@ impl Core {
             ".weftext-mvp-commit.json",
         ] {
             let path = root.join(name);
-            let captured = capture_optional(&path)?
-                .ok_or_else(|| invalid("Original workspace control is unavailable"))?;
+            let captured = capture_optional(&path)?.ok_or_else(|| {
+                invalid(UiMessage::error_core_sync_original_workspace_control_unavailable())
+            })?;
             total += captured.bytes.len();
             if total > MAX_BLOB_BYTES || files.len() == MAX_FILES {
                 return Err(CoreError::new(
                     "budget",
-                    "Adoption proof exceeds the complete input budget",
+                    UiMessage::error_core_sync_adoption_proof_exceeds_complete_input_budget(),
                 ));
             }
             files.push(captured);
@@ -542,8 +557,11 @@ impl Core {
             ));
         }
         let receipt = OperationReceipt {
-            operation_id: request.operation_id.clone(), plan_id: preview.plan_id.clone(), status: "committed".into(), path: display(&root),
-            node_ids: preview.node_map.keys().cloned().collect(), message: "The exact observed external content was explicitly adopted as a new portable version".into(),
+            operation_id: request.operation_id.clone(),
+            plan_id: preview.plan_id.clone(),
+            status: "committed".into(),
+            path: display(&root),
+            node_ids: preview.node_map.keys().cloned().collect(),
         };
         let mut plan = Plan::file(
             request.operation_id.clone(),
@@ -604,7 +622,7 @@ impl Core {
         let failure = || {
             CoreError::new(
                 "syncExternalChange",
-                "Only an original registered resource removed from the exact observed owner manifest can be adopted as absent",
+                UiMessage::error_core_sync_only_original_registered_resource_removed_from_exact_observed_owner_manifest_can_adopted_as_absent(),
             )
         };
         let ObjectKey::Node(owner) = &original.object else {
@@ -616,7 +634,7 @@ impl Core {
         if !self.admitted_resource(id, &identity.workspace_id, owner, &stamp.identity) {
             return Err(CoreError::new(
                 "identityConflict",
-                "The removed resource lacks its original owner-bound physical admission",
+                UiMessage::error_core_sync_removed_resource_lacks_original_owner_bound_physical_admission(),
             ));
         }
         let source_path =
@@ -629,7 +647,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "The removed resource's canonical owner was replaced",
+                UiMessage::error_core_sync_removed_resource_s_canonical_owner_was_replaced(),
             ));
         }
         self.qualified_query_node_at(
@@ -653,7 +671,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "The removed resource's original manifest was replaced",
+                UiMessage::error_core_sync_removed_resource_s_original_manifest_was_replaced(),
             ));
         }
         let document: serde_json::Value = serde_json::from_slice(&manifest.bytes)?;
@@ -718,7 +736,7 @@ impl Core {
                 }) {
                     return Err(CoreError::new(
                         "identityUnavailable",
-                        "Installed revision has ambiguous physical evidence",
+                        UiMessage::error_core_sync_installed_revision_has_ambiguous_physical_evidence(),
                     ));
                 }
                 if selected
@@ -750,7 +768,8 @@ impl Core {
                     if stamp.identity != physical.stamp.identity {
                         return Err(CoreError::new(
                             "identityUnavailable",
-                            "Initial replica physical evidence is ambiguous",
+                            UiMessage::error_core_sync_initial_replica_physical_evidence_ambiguous(
+                            ),
                         ));
                     }
                 } else {
@@ -761,7 +780,7 @@ impl Core {
         if !wanted.iter().all(|r| selected.contains_key(r)) {
             return Err(CoreError::new(
                 "identityUnavailable",
-                "This legacy installed leaf has no retained original physical evidence; current paths cannot reconstruct it",
+                UiMessage::error_core_sync_legacy_installed_leaf_has_no_retained_original_physical_evidence_current_paths_cannot_reconstruct_it(),
             ));
         }
         Ok(selected
@@ -797,13 +816,13 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "syncDependencyRequired",
-                    "Include the installed Schema in the reviewed adoption cut",
+                    UiMessage::error_core_sync_include_installed_schema_in_reviewed_adoption_cut(),
                 ));
             }
             self.adoption_absent_config(root, &schema_path, absent_dependencies)?;
             weftext_data::Schema::bundled()
         }
-        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         if self
             .sync_local_state(self.sync_setup_for(root)?)?
             .0
@@ -812,7 +831,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncDependencyRequired",
-                "Include the installed Rules in the reviewed adoption cut",
+                UiMessage::error_core_sync_include_installed_rules_in_reviewed_adoption_cut(),
             ));
         }
         if !before.contains_key(&ObjectKey::Rules) {
@@ -820,7 +839,7 @@ impl Core {
             if self.query_rules_ever_committed(root)? {
                 return Err(CoreError::new(
                     "rulesUnavailable",
-                    "Previously committed Rules are unavailable",
+                    UiMessage::error_core_sync_previously_committed_rules_unavailable(),
                 ));
             }
             self.adoption_absent_config(root, &rules, absent_dependencies)?;
@@ -848,11 +867,11 @@ impl Core {
                 node_id,
             };
             let citations = weftext_engine::citation_work_slots(&source)
-                .map_err(|e| CoreError::new("syncSemanticDecisionRequired", e.to_string()))?;
+                .map_err(|e| CoreError::from_engine("syncSemanticDecisionRequired", e))?;
             let saved = weftext_knowledge::saved_query_reference_slots(&source, &schema, &node)
-                .map_err(|e| CoreError::new("syncSemanticDecisionRequired", e.to_string()))?;
+                .map_err(|e| CoreError::from_knowledge("syncSemanticDecisionRequired", e))?;
             let definitions = weftext_knowledge::definition_slots(&source, &node)
-                .map_err(|e| CoreError::new("syncSemanticDecisionRequired", e.to_string()))?;
+                .map_err(|e| CoreError::from_knowledge("syncSemanticDecisionRequired", e))?;
             if !citations.is_empty()
                 || !saved.typed_refs.is_empty()
                 || !saved.definition_references.is_empty()
@@ -873,35 +892,36 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "invalidTypedSource",
-                    "The observed author declaration is not valid under the reviewed Schema",
+                    UiMessage::error_core_sync_observed_author_declaration_not_valid_under_reviewed_schema(),
                 ));
             }
             // Adoption preserves opaque author bytes. Only declared Shapes
             // assert references; unbound members are not copy/rewrite slots.
             let refs = weftext_data::declared_typed_ref_closure(&source, &schema)
-                .map_err(|e| CoreError::new("invalidTypedSource", e.to_string()))?;
+                .map_err(|e| CoreError::from_data("invalidTypedSource", e))?;
             if !refs.complete {
                 return Err(CoreError::new(
                     "invalidTypedSource",
-                    "The observed typed reference closure is incomplete",
+                    UiMessage::error_core_sync_observed_typed_reference_closure_incomplete(),
                 ));
             }
             for slot in refs.slots {
-                let (kind, target_workspace, id) =
-                    if let Some(rest) = slot.target.strip_prefix("weftext-resource://") {
-                        let (workspace, id) = rest.split_once('/').ok_or_else(|| {
-                            invalid("Resource reference lacks its exact identity")
-                        })?;
-                        uuid(workspace)?;
-                        uuid(id)?;
-                        ("resource", workspace, id)
-                    } else {
-                        crate::directory_identity::parse_ref(&slot.target)?
-                    };
+                let (kind, target_workspace, id) = if let Some(rest) =
+                    slot.target.strip_prefix("weftext-resource://")
+                {
+                    let (workspace, id) = rest.split_once('/').ok_or_else(|| {
+                        invalid(UiMessage::error_core_sync_resource_reference_identity_missing())
+                    })?;
+                    uuid(workspace)?;
+                    uuid(id)?;
+                    ("resource", workspace, id)
+                } else {
+                    crate::directory_identity::parse_ref(&slot.target)?
+                };
                 if target_workspace != workspace {
                     return Err(CoreError::new(
                         "syncDependencyRequired",
-                        "A typed reference requires an explicit qualified dependency in this workspace",
+                        UiMessage::error_core_sync_typed_reference_requires_explicit_qualified_dependency_in_workspace(),
                     ));
                 }
                 let selected = match kind {
@@ -942,7 +962,7 @@ impl Core {
                 if !selected {
                     return Err(CoreError::new(
                         "syncDependencyRequired",
-                        "Include every actual typed target in the exact reviewed adoption cut",
+                        UiMessage::error_core_sync_include_every_actual_typed_target_in_exact_reviewed_adoption_cut(),
                     ));
                 }
             }
@@ -959,7 +979,7 @@ impl Core {
         if capture_optional(path)?.is_some() {
             return Err(CoreError::new(
                 "syncDependencyRequired",
-                "An actual configuration outside the installed cut must be explicitly handled before adopting this source",
+                UiMessage::error_core_sync_actual_configuration_outside_installed_cut_must_explicitly_handled_before_adopting_source(),
             ));
         }
         self.require_workspace(root)?;

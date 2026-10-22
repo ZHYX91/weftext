@@ -3,6 +3,7 @@
 use super::*;
 use operations::{CapturedFile, Mutation, SnapshotBinding};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub struct QualifiedQueryScope {
     pub target_ref: String,
@@ -83,7 +84,7 @@ impl Core {
         if workspace_id != workspace.workspace_id || !matches!(kind, "node" | "directory") {
             return Err(CoreError::new(
                 "identityPending",
-                "Scope reference and admitted workspace differ",
+                UiMessage::error_core_query_scope_scope_reference_and_admitted_workspace_differ(),
             ));
         }
         self.check_pending(&path)?;
@@ -93,7 +94,10 @@ impl Core {
         let root_coordinate =
             ParentGuard::acquire(&root.join(".query-root-prospective"))?.directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
-            CoreError::new("outsideRoot", "Scope is outside the selected physical root")
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_query_scope_scope_outside_selected_physical_root(),
+            )
         })?;
         self.query_lifecycle_boundary(&root, &coordinate, lifecycle)?;
         let mut dependencies = if kind == "node" {
@@ -119,7 +123,7 @@ impl Core {
                             if source.replace(path.join(leaf)).is_some() {
                                 return Err(CoreError::new(
                                     "identityPending",
-                                    "Ambiguous admitted scope placement",
+                                    UiMessage::error_core_query_scope_ambiguous_admitted_scope_placement(),
                                 ));
                             }
                         }
@@ -129,7 +133,7 @@ impl Core {
             let source = source.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "No original node placement proves the selected scope",
+                    UiMessage::error_core_query_scope_no_original_node_placement_proves_selected_scope(),
                 )
             })?;
             let owner = weftext_knowledge::NodeRef {
@@ -145,7 +149,7 @@ impl Core {
             let captured = identity_file.binding.captured.as_ref().ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "An admitted directory marker is required",
+                    UiMessage::error_core_query_scope_admitted_directory_marker_required(),
                 )
             })?;
             crate::directory_identity::validate_directory_marker(&captured.bytes)?;
@@ -153,7 +157,7 @@ impl Core {
             if value["directoryId"] != id || identity_file.binding.parent != directory_identity {
                 return Err(CoreError::new(
                     "identityPending",
-                    "Directory marker and expected physical object differ",
+                    UiMessage::error_core_query_scope_directory_marker_and_expected_physical_object_differ(),
                 ));
             }
             let places = self.query_directory_placements(workspace_id, id, &directory_identity)?;
@@ -165,7 +169,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityPending",
-                    "No committed directory placement proves this exact object",
+                    UiMessage::error_core_query_scope_no_committed_directory_placement_proves_exact_object(),
                 ));
             }
             let mut proofs = vec![identity_file];
@@ -205,7 +209,7 @@ impl Core {
         if workspace.workspace_id != expected.workspace_id {
             return Err(CoreError::new(
                 "identityPending",
-                "Node reference belongs to another workspace",
+                UiMessage::error_core_query_scope_node_reference_belongs_to_another_workspace(),
             ));
         }
         self.check_pending(&path)?;
@@ -219,7 +223,7 @@ impl Core {
         let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
             CoreError::new(
                 "identityPending",
-                "The selected source has no original physical admission",
+                UiMessage::error_core_query_scope_selected_source_has_no_original_physical_admission(),
             )
         })?;
         if birth.workspace_id != expected.workspace_id
@@ -231,7 +235,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current owner declaration and original admission differ",
+                UiMessage::error_core_query_scope_current_owner_declaration_and_original_admission_differ(),
             ));
         }
         let root_coordinate =
@@ -239,7 +243,7 @@ impl Core {
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new(
                 "outsideRoot",
-                "Source is outside the selected physical root",
+                UiMessage::error_core_query_scope_source_outside_selected_physical_root(),
             )
         })?;
         let places = self.node_placement_paths(&birth)?;
@@ -251,7 +255,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "No committed node placement proves this exact object",
+                UiMessage::error_core_query_scope_no_committed_node_placement_proves_exact_object(),
             ));
         }
         let captured = CapturedFile {
@@ -297,7 +301,7 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Scope witness belongs to another root",
+                UiMessage::error_core_query_scope_scope_witness_belongs_to_another_root(),
             ));
         }
         self.query_validate_dependencies(root, &witness.dependencies)?;
@@ -310,7 +314,7 @@ impl Core {
         if qualified.witness.directory != witness.directory {
             return Err(CoreError::new(
                 "staleBase",
-                "The selected scope object changed",
+                UiMessage::error_core_query_scope_selected_scope_object_changed(),
             ));
         }
         Ok(())
@@ -323,7 +327,7 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Node witness belongs to another root",
+                UiMessage::error_core_query_scope_node_witness_belongs_to_another_root(),
             ));
         }
         self.query_validate_dependencies(root, &witness.dependencies)?;
@@ -336,7 +340,7 @@ impl Core {
         if qualified.witness.identity != witness.identity {
             return Err(CoreError::new(
                 "staleBase",
-                "The selected source object changed",
+                UiMessage::error_core_query_scope_selected_source_object_changed(),
             ));
         }
         Ok(())
@@ -421,7 +425,7 @@ impl Core {
         if rules.binding.captured.is_none() && self.query_rules_ever_committed(root)? {
             return Err(CoreError::new(
                 "rulesUnavailable",
-                "Previously committed library rules are missing; absence is not a legacy default",
+                UiMessage::error_core_query_scope_previously_committed_library_rules_missing_absence_not_legacy_default(),
             ));
         }
         let mut controls = vec![rules];
@@ -483,7 +487,7 @@ impl Core {
         if !matches!(lifecycle, "live" | "trash") {
             return Err(CoreError::new(
                 "invalidLifecycle",
-                "Choose live or trash explicitly",
+                UiMessage::error_core_query_scope_choose_live_or_trash_explicitly(),
             ));
         }
         let root_guard = ParentGuard::acquire(&root.join(".query-root-prospective"))?;
@@ -491,7 +495,7 @@ impl Core {
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new(
                 "outsideRoot",
-                "The selected physical object is outside the library",
+                UiMessage::error_core_query_scope_selected_physical_object_outside_library(),
             )
         })?;
         let trash = relative.components().next().is_some_and(|c| {
@@ -502,7 +506,7 @@ impl Core {
         if trash != (lifecycle == "trash") {
             return Err(CoreError::new(
                 "lifecycleMismatch",
-                "The selected object is in another lifecycle",
+                UiMessage::error_core_query_scope_selected_object_in_another_lifecycle(),
             ));
         }
         self.check_discovery_boundary(root, &root.join(relative))?;
@@ -511,7 +515,7 @@ impl Core {
             if parts.components().count() != 2 {
                 return Err(CoreError::new(
                     "identityPending",
-                    "Select an exact retained trash tree, not the trash container",
+                    UiMessage::error_core_query_scope_select_exact_retained_trash_tree_not_trash_container(),
                 ));
             }
             let tree = root.join(&parts);
@@ -525,7 +529,7 @@ impl Core {
             if !owned {
                 return Err(CoreError::new(
                     "identityPending",
-                    "The trash tree lacks its original committed physical placement",
+                    UiMessage::error_core_query_scope_trash_tree_lacks_original_committed_physical_placement(),
                 ));
             }
         }

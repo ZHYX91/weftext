@@ -1,5 +1,5 @@
 use crate::{
-    EditOutput, EngineError, SourceRange,
+    EditOutput, EngineError, SourceRange, UiMessage,
     editor::{finish, source_range},
     source_hash,
 };
@@ -29,11 +29,11 @@ pub const DEFAULT_LIBRARY_STYLE: &str = include_str!("../resources/default-style
 #[serde(rename_all = "camelCase")]
 pub struct StyleControl {
     pub key: String,
-    pub label: String,
+    pub label: UiMessage,
     pub kind: String,
     pub value: String,
     pub editable: bool,
-    pub reason: Option<String>,
+    pub reason: Option<weftext_messages::ErrorDescription>,
     pub range: Option<SourceRange>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,14 +43,18 @@ pub struct StyleInspection {
     pub syntax_valid: bool,
     pub controls: Vec<StyleControl>,
 }
-const SLOTS: [(&str, &str); 7] = [
-    ("text.font", "正文字体（原生参数）"),
-    ("text.size", "正文字号（pt）"),
-    ("text.lang", "文档排版语言（原生 text.lang）"),
-    ("text.region", "文档排版地区（原生 text.region）"),
-    ("raw.font", "代码字体（原生参数）"),
-    ("para.leading", "段落行距（em）"),
-    ("table.stroke", "表格线宽（pt）"),
+type StyleLabelFactory = fn() -> UiMessage;
+const SLOTS: [(&str, StyleLabelFactory); 7] = [
+    ("text.font", UiMessage::engine_style_label_body_font),
+    ("text.size", UiMessage::engine_style_label_body_size),
+    ("text.lang", UiMessage::engine_style_label_layout_language),
+    ("text.region", UiMessage::engine_style_label_layout_region),
+    ("raw.font", UiMessage::engine_style_label_code_font),
+    (
+        "para.leading",
+        UiMessage::engine_style_label_paragraph_leading,
+    ),
+    ("table.stroke", UiMessage::engine_style_label_table_stroke),
 ];
 
 pub fn inspect_library_style(source: &str) -> StyleInspection {
@@ -185,21 +189,21 @@ pub fn inspect_library_style(source: &str) -> StyleInspection {
                     .is_some_and(|r| slot_value_valid(key, &r.raw));
             StyleControl {
                 key: (*key).into(),
-                label: (*label).into(),
+                label: label(),
                 kind: "expression".into(),
                 value: range.as_ref().map(|r| r.raw.clone()).unwrap_or_default(),
                 editable,
                 reason: (!editable).then(|| {
                     if !syntax_valid {
-                        "syntax-invalid"
+                        weftext_messages::UiMessage::error_engine_reason_syntax_invalid()
                     } else if entries != 1 {
-                        "missing-or-ambiguous-entry"
+                        weftext_messages::UiMessage::error_engine_reason_entry_ambiguous()
                     } else if !binding {
-                        "unverified-standard-binding"
+                        weftext_messages::UiMessage::error_engine_reason_standard_binding_unverified()
                     } else if range.is_none() {
-                        "missing-or-ambiguous-slot"
+                        weftext_messages::UiMessage::error_engine_reason_slot_ambiguous()
                     } else {
-                        "computed-or-unsupported-value"
+                        weftext_messages::UiMessage::error_engine_reason_value_computed_or_unsupported()
                     }
                     .into()
                 }),
@@ -252,7 +256,9 @@ pub fn apply_library_style_changes(
     changes: &BTreeMap<String, String>,
 ) -> Result<EditOutput, EngineError> {
     if source_hash(source) != expected_hash {
-        return Err(EngineError("stale-style-source".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_style_style_source_stale(),
+        ));
     }
     let inspection = inspect_library_style(source);
     let mut patches = vec![];
@@ -261,9 +267,21 @@ pub fn apply_library_style_changes(
             .controls
             .iter()
             .find(|c| &c.key == key && c.editable)
-            .ok_or_else(|| EngineError(format!("样式参数不可无损编辑：{key}")))?;
+            .ok_or_else(|| {
+                EngineError::new(UiMessage::error_engine_style_parameter_not_lossless(
+                    weftext_messages::params::ErrorEngineStyleParameterNotLossless {
+                        parameter: key.into(),
+                    },
+                ))
+            })?;
         if !slot_value_valid(key, value) {
-            return Err(EngineError(format!("非法原生样式参数：{key}")));
+            return Err(EngineError::new(
+                UiMessage::error_engine_style_parameter_invalid(
+                    weftext_messages::params::ErrorEngineStyleParameterInvalid {
+                        parameter: key.into(),
+                    },
+                ),
+            ));
         }
         let range = control.range.as_ref().unwrap();
         patches.push(crate::SourcePatch {

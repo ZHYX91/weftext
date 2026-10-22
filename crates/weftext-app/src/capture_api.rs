@@ -149,7 +149,7 @@ struct Flush {
     last_mutation_id: String,
 }
 
-async fn create(State(state): State<AppState>, Json(req): Json<Create>) -> ApiResult {
+async fn create(State(state): State<AppState>, RequestJson(req): RequestJson<Create>) -> ApiResult {
     let draft = core_call(&state, move |core| match req.target {
         Some(target) => core.create_targeted_capture_draft(
             &req.draft_id,
@@ -164,17 +164,20 @@ async fn create(State(state): State<AppState>, Json(req): Json<Create>) -> ApiRe
     .await?;
     Ok(Json(value(draft)?))
 }
-async fn read(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResult {
+async fn read(State(state): State<AppState>, RequestJson(req): RequestJson<Read>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.read_capture_draft(&req.draft_id)).await?,
     )?))
 }
-async fn storage(State(state): State<AppState>, Json(_req): Json<Empty>) -> ApiResult {
+async fn storage(
+    State(state): State<AppState>,
+    RequestJson(_req): RequestJson<Empty>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.capture_storage_status()).await?,
     )?))
 }
-async fn resolve(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResult {
+async fn resolve(State(state): State<AppState>, RequestJson(req): RequestJson<Read>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.resolve_capture_target(&req.draft_id)
@@ -182,12 +185,12 @@ async fn resolve(State(state): State<AppState>, Json(req): Json<Read>) -> ApiRes
         .await?,
     )?))
 }
-async fn list(State(state): State<AppState>, Json(_req): Json<Empty>) -> ApiResult {
+async fn list(State(state): State<AppState>, RequestJson(_req): RequestJson<Empty>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.list_capture_drafts()).await?,
     )?))
 }
-async fn input(State(state): State<AppState>, Json(req): Json<Input>) -> ApiResult {
+async fn input(State(state): State<AppState>, RequestJson(req): RequestJson<Input>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.update_capture_input(
@@ -200,7 +203,7 @@ async fn input(State(state): State<AppState>, Json(req): Json<Input>) -> ApiResu
         .await?,
     )?))
 }
-async fn target(State(state): State<AppState>, Json(req): Json<Target>) -> ApiResult {
+async fn target(State(state): State<AppState>, RequestJson(req): RequestJson<Target>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.select_capture_target(
@@ -215,7 +218,7 @@ async fn target(State(state): State<AppState>, Json(req): Json<Target>) -> ApiRe
         .await?,
     )?))
 }
-async fn freeze(State(state): State<AppState>, Json(req): Json<Freeze>) -> ApiResult {
+async fn freeze(State(state): State<AppState>, RequestJson(req): RequestJson<Freeze>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.freeze_capture_submission(
@@ -228,7 +231,10 @@ async fn freeze(State(state): State<AppState>, Json(req): Json<Freeze>) -> ApiRe
         .await?,
     )?))
 }
-async fn mutation(State(state): State<AppState>, Json(req): Json<Mutation>) -> ApiResult {
+async fn mutation(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<Mutation>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.capture_mutation_status(&req.draft_id, &req.mutation_id, &req.command.into())
@@ -236,7 +242,7 @@ async fn mutation(State(state): State<AppState>, Json(req): Json<Mutation>) -> A
         .await?,
     )?))
 }
-async fn flush(State(state): State<AppState>, Json(req): Json<Flush>) -> ApiResult {
+async fn flush(State(state): State<AppState>, RequestJson(req): RequestJson<Flush>) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.capture_flush_receipt(

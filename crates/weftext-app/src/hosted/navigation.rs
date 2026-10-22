@@ -44,7 +44,8 @@ struct ParsedReference {
     reference: String,
 }
 fn decode_fragment(raw: &str) -> Result<String, ApiError> {
-    let invalid = || ApiError::bad("稳定链接片段须为非空的合法 UTF-8 标签；请检查百分号编码");
+    let invalid =
+        || ApiError::bad(UiMessage::error_api_hosted_navigation_stable_fragment_invalid());
     if raw.is_empty()
         || raw.len() > 3072
         || raw.chars().any(|c| c.is_control() || c.is_whitespace())
@@ -80,7 +81,9 @@ fn parse_reference(reference: Reference) -> Result<ParsedReference, ApiError> {
         }
         Reference::Uri(uri) => {
             if uri.len() > 4096 {
-                return Err(ApiError::bad("稳定链接超出长度预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_navigation_stable_link_length_budget(),
+                ));
             }
             let (identity, raw) = uri
                 .split_once('#')
@@ -88,13 +91,19 @@ fn parse_reference(reference: Reference) -> Result<ParsedReference, ApiError> {
                     (identity, Some(fragment))
                 });
             if raw.is_some_and(|raw| raw.contains('#')) {
-                return Err(ApiError::bad("稳定链接只允许一个片段分隔符"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_navigation_stable_link_fragment_count(),
+                ));
             }
             let label = raw.map(decode_fragment).transpose()?;
             let (workspace, node) = identity
                 .strip_prefix("weftext-node://")
                 .and_then(|tail| tail.split_once('/'))
-                .ok_or_else(|| ApiError::bad("请使用完整的稳定笔记引用"))?;
+                .ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_navigation_stable_note_reference_required(),
+                    )
+                })?;
             (
                 NodeRef {
                     workspace_id: workspace.into(),
@@ -106,7 +115,9 @@ fn parse_reference(reference: Reference) -> Result<ParsedReference, ApiError> {
         }
     };
     if !valid_uuid(&node.workspace_id) || !valid_uuid(&node.node_id) {
-        return Err(ApiError::bad("请使用完整的稳定笔记引用"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_navigation_stable_note_reference_required(),
+        ));
     }
     Ok(ParsedReference {
         node,
@@ -155,7 +166,7 @@ fn final_owner(
 async fn reference(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Session>,
+    RequestJson(req): RequestJson<Session>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&auth, &req.session_id)?;
@@ -173,7 +184,7 @@ async fn reference(
 async fn resolve(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Resolve>,
+    RequestJson(req): RequestJson<Resolve>,
 ) -> ApiResult {
     let target = parse_reference(req.reference)?;
     let check = auth.clone();
@@ -270,11 +281,13 @@ fn prepare_compile(
                 .saturating_add(environment.retained_bytes())
                 .saturating_add(
                     serde_json::to_vec(&worker)
-                        .map_err(|_| ApiError::bad("标签编译输入不可用"))?
+                        .map_err(|_| ApiError::bad(UiMessage::error_api_hosted_navigation_label_compile_input_unavailable()))?
                         .len(),
                 );
             if bytes > 32 * 1024 * 1024 {
-                return Err(ApiError::bad("标签编译及原始依据超出 32 MiB 预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_navigation_label_compile_basis_budget(),
+                ));
             }
             (Some(worker), dependencies, Some(environment))
         }
@@ -379,12 +392,12 @@ fn compiled_location(
 async fn fragment(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Fragment>,
+    RequestJson(req): RequestJson<Fragment>,
 ) -> ApiResult {
     let parsed = parse_reference(Reference::Uri(req.reference.clone()))?;
-    let label = parsed
-        .label
-        .ok_or_else(|| ApiError::bad("此定位请求须带一个明确标签片段"))?;
+    let label = parsed.label.ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_hosted_navigation_explicit_label_fragment_required())
+    })?;
     let check = auth.clone();
     let captured = req.clone();
     let mut compile = locked(&state, move |inner| {
@@ -789,7 +802,7 @@ mod tests {
         let Json(captured) = reference(
             State(state.clone()),
             Extension(reader.clone()),
-            Json(Session {
+            crate::RequestJson(Session {
                 session_id: reader_doc["sessionId"].as_str().unwrap().into(),
             }),
         )
@@ -800,7 +813,7 @@ mod tests {
         let Json(resolved) = resolve(
             State(state.clone()),
             Extension(reader),
-            Json(Resolve {
+            crate::RequestJson(Resolve {
                 reference: Reference::Uri(captured["reference"].as_str().unwrap().into()),
             }),
         )
@@ -831,14 +844,20 @@ mod tests {
             let error = resolve(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Resolve {
+                crate::RequestJson(Resolve {
                     reference: Reference::Node(node),
                 }),
             )
             .await
             .unwrap_err();
             assert_eq!(error.status, StatusCode::NOT_FOUND);
-            let current = (error.status, error.code, error.message);
+            let current = (
+                error.status,
+                error.code,
+                error.explanation,
+                error.diagnostics,
+                error.causes,
+            );
             assert_eq!(refusal.get_or_insert(current.clone()), &current);
         }
         // Even a locked configured hidden source cannot obstruct capture of the
@@ -846,7 +865,7 @@ mod tests {
         let _ = reference(
             State(state),
             Extension(auth),
-            Json(Session {
+            crate::RequestJson(Session {
                 session_id: doc["sessionId"].as_str().unwrap().into(),
             }),
         )
@@ -861,7 +880,7 @@ mod tests {
         let Json(captured) = reference(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Session {
+            crate::RequestJson(Session {
                 session_id: doc["sessionId"].as_str().unwrap().into(),
             }),
         )
@@ -884,7 +903,7 @@ mod tests {
             resolve(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Resolve {
+                crate::RequestJson(Resolve {
                     reference: Reference::Uri(captured["reference"].as_str().unwrap().into())
                 })
             )
@@ -906,7 +925,7 @@ mod tests {
             reference(
                 State(state),
                 Extension(auth),
-                Json(Session {
+                crate::RequestJson(Session {
                     session_id: doc["sessionId"].as_str().unwrap().into()
                 })
             )

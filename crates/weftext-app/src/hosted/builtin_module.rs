@@ -72,14 +72,14 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "endnoteModuleChanged",
-        "尾注模块的原归属、集合、准确资源或授权依据已变化；原件与原操作保留，未改正文。",
+        UiMessage::error_api_hosted_builtin_module_original_module_basis_changed(),
     )
 }
 fn absent() -> ApiError {
     ApiError::new(
         StatusCode::NOT_FOUND,
         "endnoteModuleUnavailable",
-        "当前没有本篇获权的尾注模块集合或执行依赖；须由所有者配置资源读取、导入和编译输入。",
+        UiMessage::error_api_hosted_builtin_module_module_dependency_unavailable(),
     )
 }
 fn owner_uri(owner: &NodeRef) -> String {
@@ -297,7 +297,7 @@ fn qualified_module(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "endnoteModuleConflict",
-            "本篇同名模块已有不同内容；原资源保留，未覆盖或交付其它资源字节。",
+            UiMessage::error_api_hosted_builtin_module_module_name_conflict(),
         ));
     }
     media::validate_original(inner, &selected.actor, &asset, &resource)?;
@@ -342,7 +342,7 @@ fn original_status(
 async fn catalog(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Catalog>,
+    RequestJson(req): RequestJson<Catalog>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let selected = select(inner, &auth, &req.session_id, req.identity.as_ref())?;
@@ -354,7 +354,7 @@ async fn catalog(
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -371,7 +371,7 @@ async fn read(
 async fn authorized(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Read>,
+    RequestJson(req): RequestJson<Read>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -390,13 +390,13 @@ async fn authorized(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
             let selected = select(inner, &auth, &req.session_id, Some(&req.identity))?;
             validate_distribution(&req.module).map_err(|_| {
-                ApiError::bad("仅可安装当前产品随附的准确尾注模块；未采用替代字节或版本")
+                ApiError::bad(UiMessage::error_api_hosted_builtin_module_bundled_module_required())
             })?;
             let old = original_status(inner, &selected, &req.operation_id)?;
             if old["status"] == "notRegistered" {
@@ -424,7 +424,7 @@ async fn prepare(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -449,7 +449,7 @@ async fn commit(
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -463,7 +463,7 @@ async fn status(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -541,7 +541,7 @@ mod tests {
         catalog(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Catalog {
+            crate::RequestJson(Catalog {
                 session_id: session.into(),
                 identity: None,
             }),
@@ -562,7 +562,7 @@ mod tests {
         prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 session_id: session.into(),
                 operation_id: operation_id.into(),
                 identity: identity_from(catalog),
@@ -642,7 +642,7 @@ mod tests {
         let current = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 session_id: session.clone(),
                 operation_id: id.clone(),
                 identity: identity_from(&catalog),
@@ -665,7 +665,7 @@ mod tests {
             commit(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Commit {
+                crate::RequestJson(Commit {
                     session_id: session.clone(),
                     operation_id: id.clone(),
                     identity: identity_from(&catalog),
@@ -733,7 +733,7 @@ mod tests {
             prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Prepare {
+                crate::RequestJson(Prepare {
                     session_id: session.clone(),
                     operation_id: id.clone(),
                     identity: identity_from(&catalog),
@@ -757,7 +757,7 @@ mod tests {
         let saved = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 session_id: session.clone(),
                 operation_id: id.clone(),
                 identity: identity_from(&catalog),
@@ -770,7 +770,7 @@ mod tests {
         let committed = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 session_id: session.clone(),
                 operation_id: id.clone(),
                 identity: identity_from(&catalog),
@@ -788,7 +788,7 @@ mod tests {
         let output = read(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Read {
+            crate::RequestJson(Read {
                 session_id: session.clone(),
                 identity: identity_from(&after),
                 resource_ref: reference.into(),
@@ -802,7 +802,7 @@ mod tests {
             authorized(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Read {
+                crate::RequestJson(Read {
                     session_id: session.clone(),
                     identity: identity_from(&after),
                     resource_ref: reference.into()
@@ -842,7 +842,7 @@ mod tests {
             authorized(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Read {
+                crate::RequestJson(Read {
                     session_id: session,
                     identity: identity_from(&readonly),
                     resource_ref: reference.into()
@@ -862,7 +862,7 @@ mod tests {
         let settled = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 session_id: session.clone(),
                 operation_id: settled_id.clone(),
                 identity: identity_from(&catalog),
@@ -895,7 +895,7 @@ mod tests {
             read(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Read {
+                crate::RequestJson(Read {
                     session_id: session.clone(),
                     identity: identity_from(&current),
                     resource_ref: reference.into()
@@ -946,7 +946,7 @@ mod tests {
             status(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Operation {
+                crate::RequestJson(Operation {
                     session_id: session.clone(),
                     operation_id: id.clone(),
                     identity: identity_from(&catalog)
@@ -961,7 +961,7 @@ mod tests {
             settle(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Operation {
+                crate::RequestJson(Operation {
                     session_id: session.clone(),
                     operation_id: id.clone(),
                     identity: identity_from(&catalog)
@@ -976,7 +976,7 @@ mod tests {
             commit(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Commit {
+                crate::RequestJson(Commit {
                     session_id: session,
                     operation_id: id.clone(),
                     identity: identity_from(&catalog),
@@ -1016,7 +1016,7 @@ mod tests {
             let committed = commit(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Commit {
+                crate::RequestJson(Commit {
                     session_id: session,
                     operation_id: id.clone(),
                     plan_id: plan_id.clone(),
@@ -1085,7 +1085,7 @@ mod tests {
                 status(
                     State(state.clone()),
                     Extension(auth.clone()),
-                    Json(Operation {
+                    crate::RequestJson(Operation {
                         session_id: new_session.clone(),
                         operation_id: id.clone(),
                         identity: identity_from(&current),
@@ -1095,7 +1095,7 @@ mod tests {
                 commit(
                     State(state.clone()),
                     Extension(auth.clone()),
-                    Json(Commit {
+                    crate::RequestJson(Commit {
                         session_id: new_session,
                         operation_id: id,
                         plan_id,
@@ -1162,7 +1162,7 @@ mod tests {
             status(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Operation {
+                crate::RequestJson(Operation {
                     session_id: fresh_target,
                     operation_id: id.clone(),
                     identity: identity_from(&current),
@@ -1188,7 +1188,7 @@ mod tests {
         let recovered = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 session_id: fresh_original,
                 operation_id: id,
                 identity: identity_from(&restored),

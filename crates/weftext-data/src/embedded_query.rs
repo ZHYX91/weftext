@@ -12,13 +12,17 @@ use typst_syntax::{
 pub fn arrange_embedded_query(source: &str, id: &str, action: &str) -> Result<FieldPatch> {
     let target = embedded_query(source, id)?;
     if !target.writable {
-        return Err(DataError("Query has no unique native writer".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_native_writer_not_unique(),
+        ));
     }
     if action == "remove" {
         return replace_embedded_query_source(source, id, "");
     }
     if action != "up" && action != "down" {
-        return Err(DataError("Unknown Query arrangement".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_unknown_query_arrangement(),
+        ));
     }
     let mut queries = embedded_queries(source);
     queries.sort_by_key(|q| q.source.range.from);
@@ -28,9 +32,16 @@ pub fn arrange_embedded_query(source: &str, id: &str, action: &str) -> Result<Fi
     } else {
         queries.get(index + 1)
     }
-    .ok_or_else(|| DataError("No adjacent Query in that direction".into()))?;
+    .ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_adjacent_query_absent(),
+        )
+    })?;
     if !other.writable {
-        return Err(DataError("Adjacent Query has no unique writer".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_adjacent_query_writer_not_unique(
+            ),
+        ));
     }
     let (first, last) = if target.source.range.from < other.source.range.from {
         (&target.source.range, &other.source.range)
@@ -39,8 +50,9 @@ pub fn arrange_embedded_query(source: &str, id: &str, action: &str) -> Result<Fi
     };
     let separator = &source[first.to..last.from];
     if !separator.chars().all(char::is_whitespace) {
-        return Err(DataError(
-            "Intervening author content is a Query movement barrier; source retained".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_author_content_blocks_query_move(
+            ),
         ));
     }
     let text = format!("{}{}{}", last.raw, separator, first.raw);
@@ -66,14 +78,27 @@ pub struct EmbeddedQueryOccurrence {
     pub plan: Option<QueryPlan>,
     pub binding: Option<SavedQueryBinding>,
     pub call: Option<QueryCall>,
-    pub control_reason: Option<String>,
+    pub control_kind: Option<DataErrorKind>,
+    pub control_reason: Option<ErrorDescription>,
+    pub control_diagnostics: Vec<ErrorDescription>,
+}
+
+fn control_error(error: DataError) -> (DataErrorKind, ErrorDescription, Vec<ErrorDescription>) {
+    let (kind, description, details) = error.into_parts();
+    (
+        kind,
+        description,
+        details
+            .map(DataErrorDetails::into_diagnostics)
+            .unwrap_or_default(),
+    )
 }
 
 fn decode(source: &weftext_engine::EmbeddedQuerySource) -> Result<SavedQuery> {
     let definitions = saved_queries(&source.range.raw)?;
     let [definition] = definitions.as_slice() else {
-        return Err(DataError(
-            "Query occurrence is not one direct definition".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_occurrence_not_direct_definition(),
         ));
     };
     Ok(definition.clone())
@@ -116,7 +141,7 @@ fn supported_builder(plan: &QueryPlan) -> bool {
         && plan.advanced.as_ref().is_none_or(|a| {
             a.call.is_some()
                 && a.parameters.is_empty()
-                && a.union_all.is_empty()
+                && a.union_all.is_none()
                 && a.distinct.is_none()
                 && a.related.is_none()
         })
@@ -138,25 +163,27 @@ pub fn embedded_queries(source: &str) -> Vec<EmbeddedQueryOccurrence> {
             if duplicate {
                 source.range.writable = false;
                 source.reason =
-                    Some("Query key 在原文中重复，无法取得唯一的定义写入目标；原文已保留。".into());
+                    Some(weftext_messages::UiMessage::error_data_embedded_query_duplicate_query_key_blocks_writer().into());
             }
-            let definition = decode(&source);
             let writable = source.range.writable;
-            let control_reason = definition
-                .as_ref()
-                .err()
-                .map(ToString::to_string)
-                .or_else(|| {
-                    definition.as_ref().ok().and_then(|d| {
-                        (!supported_builder(&d.plan)).then(|| {
-                            "构建器不能完整表示此原生查询；保留原文，请使用明确的源码入口。"
-                                .to_string()
-                        })
-                    })
-                });
+            let (definition, control_kind, control_reason, control_diagnostics) =
+                match decode(&source) {
+                    Ok(definition) => {
+                        let unsupported = !supported_builder(&definition.plan);
+                        (
+                            Some(definition),
+                            unsupported.then_some(DataErrorKind::Unavailable),
+                            unsupported.then(|| UiMessage::embedded_query_builder_unsupported().into()),
+                            vec![],
+                        )
+                    }
+                    Err(error) => {
+                        let (kind, reason, diagnostics) = control_error(error);
+                        (None, Some(kind), Some(reason), diagnostics)
+                    }
+                };
             let builder_supported = writable && control_reason.is_none();
-            let runnable = writable && definition.is_ok();
-            let definition = definition.ok();
+            let runnable = writable && definition.is_some();
             let call = definition
                 .as_ref()
                 .and_then(|d| d.plan.advanced.as_ref())
@@ -170,7 +197,9 @@ pub fn embedded_queries(source: &str) -> Vec<EmbeddedQueryOccurrence> {
                 plan: definition.as_ref().map(|d| d.plan.clone()),
                 binding: definition.map(|d| d.binding),
                 call,
+                control_kind,
                 control_reason,
+                control_diagnostics,
                 source,
             }
         })
@@ -181,7 +210,11 @@ pub fn embedded_query(source: &str, id: &str) -> Result<EmbeddedQueryOccurrence>
     embedded_queries(source)
         .into_iter()
         .find(|o| o.source.id == id)
-        .ok_or_else(|| DataError("Source basis expired: exact Query occurrence is absent".into()))
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_embedded_query_query_occurrence_basis_expired(),
+            )
+        })
 }
 
 /// Replace only one current proved source range. Arbitrary source proposals may
@@ -193,8 +226,9 @@ pub fn replace_embedded_query_source(
 ) -> Result<FieldPatch> {
     let occurrence = embedded_query(source, id)?;
     if !occurrence.writable {
-        return Err(DataError(
-            "Query source writer is unavailable; original source retained".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_embedded_query_query_source_writer_unavailable(
+            ),
         ));
     }
     let range = occurrence.source.range;
@@ -205,8 +239,8 @@ pub fn replace_embedded_query_source(
         &source[range.to..]
     );
     if edited.len() > crate::native::NATIVE_MAX_BYTES {
-        return Err(DataError(
-            "Query source proposal exceeds source budget".into(),
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_embedded_query_query_source_proposal_exceeds_budget(),
         ));
     }
     Ok(FieldPatch {
@@ -222,7 +256,9 @@ pub fn replace_embedded_query_source(
 pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Result<FieldPatch> {
     let occurrence = embedded_query(source, id)?;
     if !occurrence.builder_supported || !supported_builder(plan) {
-        return Err(DataError("Query cannot completely round-trip through the basic builder; original source retained".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_cannot_round_trip_basic_builder(),
+        ));
     }
     let original = occurrence.plan.as_ref().unwrap();
     let before = serde_json::to_value(original)?;
@@ -237,15 +273,23 @@ pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Res
                 .find(c.to_untyped().span())
                 .is_some_and(|n| n.range().start == occurrence.source.call_from)
         })
-        .ok_or_else(|| DataError("Query carrier no longer has its exact AST location".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_embedded_query_query_carrier_ast_location_lost(),
+            )
+        })?;
     let args: Vec<_> = call.args().items().collect();
     let [ast::Arg::Pos(expr)] = args.as_slice() else {
-        return Err(DataError("Query carrier argument is ambiguous".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_carrier_argument_ambiguous(
+            ),
+        ));
     };
-    let dict = expr
-        .to_untyped()
-        .cast::<ast::Dict>()
-        .ok_or_else(|| DataError("Query carrier is computed".into()))?;
+    let dict = expr.to_untyped().cast::<ast::Dict>().ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_carrier_computed(),
+        )
+    })?;
     let node = crate::native::decode_node(expr.to_untyped(), &parsed);
     let mut changes: Vec<(usize, usize, String)> = vec![];
     let mut additions = vec![];
@@ -274,7 +318,7 @@ pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Res
                     || n.children().any(|c| comments(&c, from, to))
             }
             if slot.value.is_none() || comments(&value, slot.range.from, slot.range.to) {
-                return Err(DataError("Changed Query value contains source the builder cannot preserve; original retained".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_embedded_query_query_builder_cannot_preserve_changed_value_source()));
             }
             changes.push((slot.range.from, slot.range.to, encoded));
         } else if !after.get(key).is_none_or(serde_json::Value::is_null) {
@@ -308,10 +352,10 @@ pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Res
             o.key == occurrence.key && o.source.label == occurrence.source.label && o.writable
         })
         .and_then(|o| o.plan.as_ref())
-        .ok_or_else(|| DataError("Builder proposal failed native AST readback".into()))?;
+        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_embedded_query_query_builder_native_readback_failed()))?;
     if serde_json::to_value(readback)? != after {
-        return Err(DataError(
-            "Builder proposal did not preserve the requested Query plan".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_embedded_query_query_builder_plan_readback_mismatch(),
         ));
     }
     let target = occurrence.source.range;
@@ -323,4 +367,94 @@ pub fn edit_embedded_query_plan(source: &str, id: &str, plan: &QueryPlan) -> Res
         text: replacement,
         source: edited,
     })
+}
+
+#[cfg(test)]
+mod control_error_tests {
+    use super::*;
+
+    fn query(extra: &str) -> String {
+        format!(
+            "#metadata((kind: \"weftext.query\", key: \"f8597b15-6b7f-4a6a-9b52-c2732730fe41\", binding: (schema: \"weftext-config://58c47256-bfce-4d29-a037-b83a3a644fb0/schema\", revision: \"8a81e35f-ad48-4c12-af4f-3d2607102fa9\", language: \"weftext.query.cel.v1\"), scope: (library: \"current\", lifecycle: \"live\"), types: (\"task\",), /* 作者原文😀 */ where: \"status == 'open'\", select: ((name: \"task\", expr: \"self\"),), {extra})) <weftext-query-one>"
+        )
+    }
+
+    #[test]
+    fn actual_embedded_queries_keep_builder_and_decode_facts_separate_from_explanations() {
+        let ordinary = query("");
+        let supported = embedded_queries(&ordinary).remove(0);
+        assert!(supported.writable && supported.builder_supported && supported.runnable);
+        assert!(supported.control_kind.is_none());
+        assert!(supported.control_reason.is_none());
+        assert!(supported.control_diagnostics.is_empty());
+        let wire = serde_json::to_value(&supported).unwrap();
+        assert_eq!(wire.get("controlKind"), Some(&serde_json::Value::Null));
+        assert_eq!(wire.get("controlReason"), Some(&serde_json::Value::Null));
+        assert_eq!(wire["controlDiagnostics"], serde_json::json!([]));
+
+        let advanced = query("advanced: (distinct: ((name: \"task\", expr: \"self\"),)),");
+        let unsupported = embedded_queries(&advanced).remove(0);
+        assert!(unsupported.writable && unsupported.runnable);
+        assert!(!unsupported.builder_supported);
+        assert_eq!(unsupported.control_kind, Some(DataErrorKind::Unavailable));
+        assert_eq!(
+            unsupported.control_reason.as_ref().unwrap().explanation,
+            UiMessage::embedded_query_builder_unsupported()
+        );
+        assert!(unsupported.control_diagnostics.is_empty());
+        assert_eq!(unsupported.source.range.raw, advanced);
+
+        let computed = ordinary.replace("where: \"status == 'open'\"", "where: str(1 + 1)");
+        let invalid = embedded_queries(&computed).remove(0);
+        assert!(invalid.writable);
+        assert!(!invalid.runnable && !invalid.builder_supported);
+        assert_eq!(invalid.control_kind, Some(DataErrorKind::Invalid));
+        assert_eq!(
+            invalid.control_reason.as_ref().unwrap().explanation,
+            UiMessage::error_data_query_saved_query_computed()
+        );
+        assert_eq!(invalid.source.range.raw, computed);
+        let wire = serde_json::to_value(&invalid).unwrap();
+        let reason = invalid.control_reason.as_ref().unwrap();
+        let _ = reason.explanation.render(weftext_messages::UiLocale::ZhCn);
+        let _ = reason.explanation.render(weftext_messages::UiLocale::EnUs);
+        assert_eq!(serde_json::to_value(&invalid).unwrap(), wire);
+    }
+
+    #[test]
+    fn actual_control_error_bridge_preserves_machine_kind_raw_and_96_parallel_descriptions() {
+        let primary = UiMessage::error_data_query_saved_query_computed();
+        let parallel = (0..96)
+            .map(|index| {
+                ErrorDescription::new(UiMessage::error_data_query_saved_query_key_computed())
+                    .diagnostic(
+                        DiagnosticOrigin::Dependency,
+                        format!("original parser {index} 原文😀"),
+                    )
+            })
+            .collect::<Vec<_>>();
+        for actual_kind in [DataErrorKind::Invalid, DataErrorKind::NativeBudget] {
+            let error = DataError::with_kind(actual_kind, primary.clone())
+                .diagnostic(
+                    DiagnosticOrigin::Dependency,
+                    "original primary parser 原文😀",
+                )
+                .with_diagnostics(parallel.clone());
+            let (kind, description, diagnostics) = control_error(error);
+            assert_eq!(kind, actual_kind);
+            assert_eq!(description.explanation, primary);
+            assert_eq!(
+                description.diagnostics[0].text,
+                "original primary parser 原文😀"
+            );
+            assert!(description.causes.as_slice().is_empty());
+            assert_eq!(diagnostics, parallel);
+            let wire = serde_json::to_value(&diagnostics).unwrap();
+            assert_eq!(wire.as_array().unwrap().len(), 96);
+            assert_eq!(
+                serde_json::from_value::<Vec<ErrorDescription>>(wire).unwrap(),
+                parallel
+            );
+        }
+    }
 }

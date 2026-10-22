@@ -1,4 +1,5 @@
 //! Authenticated, profile-local presentation settings; no author mutation or OS startup effect.
+use crate::RequestJson;
 use crate::{ApiResult, AppState, core_call, value};
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
@@ -23,7 +24,10 @@ struct Update {
     preferences: ClientPreferences,
 }
 
-async fn update(State(state): State<AppState>, Json(request): Json<Update>) -> ApiResult {
+async fn update(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<Update>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.update_client_preferences(request.expected_revision, request.preferences)

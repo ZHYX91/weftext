@@ -141,10 +141,10 @@ fn zero_rows_literals_negation_and_unvisited_union_validate_all_roots() {
     let union = QueryPlan {
         take: Some(0),
         advanced: Some(QueryAdvanced {
-            union_all: vec![
+            union_all: Some(vec![
                 plan("true".into()),
                 plan(format!("tagInSubtree({}, {})", literal(1), literal(99))),
-            ],
+            ]),
             ..Default::default()
         }),
         ..Default::default()

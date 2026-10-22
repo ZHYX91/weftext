@@ -6,6 +6,7 @@ use crate::{Core, CoreError, FileIdentity, ParentGuard, Result, fresh, hash};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use weftext_messages::UiMessage;
 
 pub(crate) const DEVICE_STATE_ROOT: &str = "device-state";
 const MAX_RECORD_BYTES: usize = 16 * 1024 * 1024;
@@ -23,7 +24,11 @@ fn test_failpoint(point: &str) -> Result<()> {
             active.set(None);
             Err(CoreError::new(
                 "injectedFailure",
-                format!("Interrupted device record at {point}"),
+                UiMessage::error_device_record_interrupted(
+                    weftext_messages::params::ErrorDeviceRecordInterrupted {
+                        point: point.into(),
+                    },
+                ),
             ))
         } else {
             Ok(())
@@ -105,11 +110,11 @@ impl Core {
         }
         let namespace = self
             .device_namespace(true)?
-            .ok_or_else(|| evidence("Device namespace is unavailable"))?;
+            .ok_or_else(|| evidence(UiMessage::error_device_namespace_unavailable()))?;
         let (originals, complete) = namespace.directory_entries(MAX_NAMESPACE_MEMBERS)?;
         if !complete || !originals.is_empty() {
             return Err(evidence(
-                "Device identity is missing while original device records remain; do not allocate a replacement",
+                UiMessage::error_device_identity_missing_with_records(),
             ));
         }
         let id = fresh();
@@ -138,10 +143,9 @@ impl Core {
                 is_current: false,
             });
         };
-        let binding: Binding = serde_json::from_slice(&plaintext)
-            .map_err(|_| evidence("Device binding plaintext is not a strict record"))?;
+        let binding = decode_binding(&plaintext)?;
         if binding.schema_version != 1 || binding.id != record.id {
-            return Err(evidence("Device identity and sealed binding differ"));
+            return Err(evidence(UiMessage::error_device_binding_identity_mismatch()));
         }
         Ok(DeviceIdentity {
             id: record.id,
@@ -168,14 +172,16 @@ impl Core {
         let limit = max_bytes.min(kind.max_bytes());
         let before = crate::backend::stamp(&file)?;
         if before.size > limit as u64 {
-            return Err(evidence("Device record byte budget exceeded"));
+            return Err(evidence(UiMessage::error_device_record_byte_limit()));
         }
         let mut bytes = Vec::new();
         Read::by_ref(&mut file)
             .take(limit as u64 + 1)
             .read_to_end(&mut bytes)?;
         if bytes.len() > limit || crate::backend::stamp(&file)? != before {
-            return Err(evidence("Device record changed during the bounded read"));
+            return Err(evidence(
+                UiMessage::error_device_record_changed_during_read(),
+            ));
         }
         let digest = hash(&bytes);
         Ok(Some((bytes, digest)))
@@ -191,7 +197,7 @@ impl Core {
         bytes: &[u8],
     ) -> Result<String> {
         if bytes.len() > kind.max_bytes() {
-            return Err(evidence("Device record byte budget exceeded"));
+            return Err(evidence(UiMessage::error_device_record_byte_limit()));
         }
         match kind {
             DeviceRecordKind::Identity => {
@@ -203,7 +209,9 @@ impl Core {
             DeviceRecordKind::Reminders => {
                 crate::reminder_device_state::validate_reminder_device_record(bytes)?
             }
-            DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes)?,
+            DeviceRecordKind::ClientPreferences => {
+                crate::client_preferences::validate_record(bytes)?
+            }
         }
         if let Some(expected) = expected_digest
             && (expected.len() != 64
@@ -211,16 +219,16 @@ impl Core {
                     .bytes()
                     .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
         {
-            return Err(evidence("A canonical SHA256 CAS digest is required"));
+            return Err(evidence(UiMessage::error_device_cas_digest_required()));
         }
         let _namespace = self
             .device_namespace(true)?
-            .ok_or_else(|| evidence("Device namespace is unavailable"))?;
+            .ok_or_else(|| evidence(UiMessage::error_device_namespace_unavailable()))?;
         let original = self.read_device_record(kind, MAX_RECORD_BYTES)?;
         if original.as_ref().map(|(_, digest)| digest.as_str()) != expected_digest {
             return Err(CoreError::new(
                 "deviceStateConflict",
-                "Device state changed; retain the original mutation and reread",
+                UiMessage::error_device_state_conflict(),
             ));
         }
         let path = self.device_record_path(kind);
@@ -243,11 +251,9 @@ impl Core {
         test_failpoint("afterPublish")?;
         let actual = self
             .read_device_record(kind, MAX_RECORD_BYTES)?
-            .ok_or_else(|| evidence("Published device record readback is missing"))?;
+            .ok_or_else(|| evidence(UiMessage::error_device_readback_missing()))?;
         if actual.0 != bytes {
-            return Err(evidence(
-                "Published device record readback differs; outcome is unknown",
-            ));
+            return Err(evidence(UiMessage::error_device_readback_unknown()));
         }
         Ok(actual.1)
     }
@@ -273,20 +279,28 @@ impl Core {
         };
         let (entries, complete) = guard.directory_entries(MAX_NAMESPACE_MEMBERS)?;
         if !complete {
-            return Err(evidence("Device namespace member budget exceeded"));
+            return Err(evidence(UiMessage::error_device_namespace_member_limit()));
         }
         for (name, attributes) in entries {
             let name = name
                 .to_str()
-                .ok_or_else(|| evidence("Non-Unicode device record name"))?;
+                .ok_or_else(|| evidence(UiMessage::error_device_record_name_not_unicode()))?;
             if attributes & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0
                 || device_member_kind(name).is_none()
             {
-                return Err(evidence("Unknown or unsupported device namespace member"));
+                return Err(evidence(
+                    UiMessage::error_device_namespace_member_unsupported(),
+                ));
             }
         }
         Ok(Some(guard))
     }
+}
+
+fn decode_binding(plaintext: &[u8]) -> Result<Binding> {
+    serde_json::from_slice(plaintext).map_err(|error| {
+        evidence(UiMessage::error_device_binding_record_invalid()).caused_by(CoreError::from(error))
+    })
 }
 
 /// The closed grammar includes only canonical leaves and our original staged
@@ -306,11 +320,11 @@ pub(crate) fn device_member_kind(name: &str) -> Option<DeviceRecordKind> {
 
 fn validate_identity_record(bytes: &[u8]) -> Result<IdentityRecord> {
     if bytes.len() > 64 * 1024 {
-        return Err(evidence("Device identity byte budget exceeded"));
+        return Err(evidence(UiMessage::error_device_identity_byte_limit()));
     }
     let record: IdentityRecord = serde_json::from_slice(bytes)?;
-    let id =
-        uuid::Uuid::parse_str(&record.id).map_err(|_| evidence("Invalid device identity UUID"))?;
+    let id = uuid::Uuid::parse_str(&record.id)
+        .map_err(|_| evidence(UiMessage::error_device_identity_uuid_invalid()))?;
     if record.schema_version != 1
         || id.to_string() != record.id
         || id.get_version_num() != 4
@@ -318,7 +332,9 @@ fn validate_identity_record(bytes: &[u8]) -> Result<IdentityRecord> {
         || record.sealed_binding.is_empty()
         || record.sealed_binding.len() > 16 * 1024
     {
-        return Err(evidence("Unsupported device identity record"));
+        return Err(evidence(
+            UiMessage::error_device_identity_record_unsupported(),
+        ));
     }
     Ok(record)
 }
@@ -331,17 +347,14 @@ pub(crate) fn validate_backup_record(kind: DeviceRecordKind, bytes: &[u8]) -> Re
         DeviceRecordKind::DesktopPreferences => crate::desktop_preferences::validate_record(bytes),
         DeviceRecordKind::Reminders => {
             crate::reminder_device_state::validate_reminder_device_record(bytes).map_err(|error| {
-                evidence(&format!(
-                    "Invalid task reminder device record: {}",
-                    error.message
-                ))
+                evidence(UiMessage::error_device_reminder_record_invalid()).caused_by(error)
             })
         }
         DeviceRecordKind::ClientPreferences => crate::client_preferences::validate_record(bytes),
     }
 }
 
-pub(crate) fn evidence(message: &str) -> CoreError {
+pub(crate) fn evidence(message: UiMessage) -> CoreError {
     CoreError::new("deviceStateEvidence", message)
 }
 
@@ -355,7 +368,7 @@ mod platform {
     fn unsupported() -> CoreError {
         CoreError::new(
             "unsupportedPlatform",
-            "Device binding requires the qualified Windows backend",
+            UiMessage::error_device_binding_platform_unsupported(),
         )
     }
     pub(super) fn current_user_sid() -> Result<String> {
@@ -392,5 +405,35 @@ mod tests {
         ] {
             assert!(device_member_kind(name).is_none(), "{name}");
         }
+    }
+
+    #[test]
+    fn binding_json_failure_keeps_typed_context_and_original_parser_diagnostic() {
+        let plaintext = br#"{"schemaVersion":1,"id":"retained-original", "userSid":"PRIVATE-SID" "profile":{}}"#;
+        let original = serde_json::from_slice::<Binding>(plaintext)
+            .err()
+            .unwrap()
+            .to_string();
+        let error = decode_binding(plaintext).err().unwrap();
+        assert_eq!(error.code, "deviceStateEvidence");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_device_binding_record_invalid()
+        );
+        let causes = error.causes.as_slice();
+        assert_eq!(causes.len(), 1);
+        assert_eq!(causes[0].code, "invalidState");
+        assert_eq!(causes[0].explanation, UiMessage::error_core_json_failure());
+        assert_eq!(causes[0].diagnostics.len(), 1);
+        assert_eq!(
+            causes[0].diagnostics[0].origin,
+            crate::DiagnosticOrigin::Json
+        );
+        assert_eq!(causes[0].diagnostics[0].text, original);
+        assert!(
+            !serde_json::to_string(&error)
+                .unwrap()
+                .contains("PRIVATE-SID")
+        );
     }
 }

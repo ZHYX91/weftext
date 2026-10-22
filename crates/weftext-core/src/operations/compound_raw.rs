@@ -2,6 +2,7 @@
 //! from the original committed records, never from a new name or file contents.
 use super::*;
 use std::ffi::OsString;
+use weftext_messages::UiMessage;
 
 pub(super) struct Budget {
     used: usize,
@@ -47,7 +48,7 @@ impl Budget {
             .ok_or_else(|| {
                 CoreError::new(
                     "coverageIncomplete",
-                    "Compound metadata members exceed 5000",
+                    UiMessage::error_core_operations_compound_metadata_members_exceed5000(),
                 )
             })?;
         Ok(())
@@ -115,7 +116,7 @@ impl Budget {
 fn changed_member() -> CoreError {
     CoreError::new(
         "scopeChanged",
-        "A newly admitted member changed the original moving tree",
+        UiMessage::error_core_operations_newly_admitted_member_changed_original_moving_tree(),
     )
 }
 
@@ -135,7 +136,7 @@ pub(super) fn validate_additions(
         if attributes & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
             return Err(CoreError::new(
                 "unsupportedPath",
-                "An extra companion is reparse, offline or a cloud placeholder",
+                UiMessage::error_core_operations_extra_companion_reparse_offline_or_cloud_placeholder(),
             ));
         }
         let relative = parent.join(name);
@@ -146,7 +147,7 @@ pub(super) fn validate_additions(
             if !complete {
                 return Err(CoreError::new(
                     "coverageIncomplete",
-                    "Compound metadata members exceed 5000",
+                    UiMessage::error_core_operations_compound_metadata_members_exceed5000(),
                 ));
             }
             budget.reserve(entries.len())?;

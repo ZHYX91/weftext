@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 fn unavailable() -> DataError {
-    DataError("Query provider unavailable".into())
+    DataError::unavailable(
+        weftext_messages::UiMessage::error_data_query_providers_query_provider_unavailable(),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -495,8 +497,8 @@ impl ProviderTrace {
     }
     pub(crate) fn record(&self, dependencies: &SemanticDependencies) -> Result<()> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         let mut all = self.state.lock().map_err(|_| unavailable())?;
@@ -540,16 +542,16 @@ impl ProviderTrace {
         {
             self.failed.store(true, Ordering::Relaxed);
             all.clear();
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         Ok(())
     }
     pub(crate) fn finish(&self) -> Result<QueryProviderDependencies> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         Ok(QueryProviderDependencies {
@@ -919,6 +921,7 @@ fn provider_requirements(
             return Err(unavailable());
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         let mut values = StaticValues::default();
         let mut req =
             state
@@ -1053,7 +1056,7 @@ fn provider_requirements(
                 .insert(id, series_policy_fingerprint(&p)?);
         }
         state.requirements.insert(baseline.clone(), req);
-        for branch in &a.union_all {
+        for branch in a.union_branches() {
             visit(
                 branch,
                 schema,

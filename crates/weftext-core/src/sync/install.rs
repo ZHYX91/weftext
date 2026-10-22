@@ -10,6 +10,7 @@ use crate::{
     journal::Plan,
     operations::{FileChange, FrozenOperation, Mutation, NewBirth, change, ensure_absent},
 };
+use weftext_messages::UiMessage;
 
 #[path = "clone_layout.rs"]
 mod layout;
@@ -26,13 +27,15 @@ impl Core {
             if old.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Replica operation already names different input",
+                    UiMessage::error_core_sync_replica_operation_already_names_different_input(),
                 ));
             }
             return self.operation_details(&request.operation_id);
         }
         let OperationIntent::CloneSync { identity, objects } = &request.intent else {
-            return Err(invalid("Expected replica creation intent"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_creation_intent_required(),
+            ));
         };
         let root = absolute_path(Path::new(&request.root))?;
         if root.starts_with(&self.data_dir)
@@ -48,7 +51,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncTargetOverlap",
-                "Create a replica outside private state and existing libraries",
+                UiMessage::error_core_sync_create_replica_outside_private_state_and_existing_libraries(),
             ));
         }
         if self
@@ -58,7 +61,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncReplicaExists",
-                "Each Core state owns one replica of a workspace; use independent private state",
+                UiMessage::error_core_sync_each_core_state_owns_one_replica_of_workspace_use_independent_private_state(),
             ));
         }
         self.check_sync_setup_pending(&identity.workspace_id)?;
@@ -83,7 +86,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "syncIncomplete",
-                    "Selected content has an incomplete received transaction; hydrate it before creating this replica",
+                    UiMessage::error_core_sync_selected_content_has_incomplete_received_transaction_hydrate_it_before_creating_replica(),
                 ));
             }
         }
@@ -92,7 +95,7 @@ impl Core {
             if object.versions.len() != 1 {
                 return Err(CoreError::new(
                     "syncConflict",
-                    "Choose or merge every conflicting object in this selected transaction closure",
+                    UiMessage::error_core_sync_choose_or_merge_every_conflicting_object_in_selected_transaction_closure(),
                 ));
             }
             let version = object.versions.into_iter().next().unwrap();
@@ -124,23 +127,22 @@ impl Core {
                 && !occupied_directories.insert(display(directory).to_lowercase())
             {
                 return Err(invalid(
-                    "Two content objects claim the same receiver directory",
+                    UiMessage::error_core_sync_receiver_directory_owner_conflict(),
                 ));
             }
             let state = &version.state;
             if let ObjectKey::Node(id) = key {
                 let source = format!("{}.typ", state.name);
-                let blob = state
-                    .files
-                    .get(&source)
-                    .ok_or_else(|| invalid("Node has no canonical source"))?;
-                let bytes = graph
-                    .blob(blob)
-                    .ok_or_else(|| invalid("Canonical source blob is unavailable"))?;
+                let blob = state.files.get(&source).ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_node_canonical_source_missing())
+                })?;
+                let bytes = graph.blob(blob).ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_canonical_source_blob_unavailable())
+                })?;
                 crate::check_size(bytes)?;
                 if weftext_engine::inspect(&crate::decode(bytes)?).id.as_ref() != Some(id) {
                     return Err(invalid(
-                        "Portable Node identity differs from the actual author declaration",
+                        UiMessage::error_core_sync_portable_node_declaration_mismatch(),
                     ));
                 }
                 births.push(NewBirth {
@@ -155,17 +157,17 @@ impl Core {
                         .as_array()
                         .filter(|_| manifest["version"] == 1)
                         .ok_or_else(|| {
-                            invalid("Resource manifest is unavailable or unsupported")
+                            invalid(UiMessage::error_core_sync_resource_manifest_unavailable())
                         })?;
                     let mut paths = BTreeSet::new();
                     for resource in resources {
-                        let id = resource["resourceId"]
-                            .as_str()
-                            .ok_or_else(|| invalid("Resource identity is missing"))?;
+                        let id = resource["resourceId"].as_str().ok_or_else(|| {
+                            invalid(UiMessage::error_core_sync_resource_identity_missing())
+                        })?;
                         uuid(id)?;
-                        let path = resource["path"]
-                            .as_str()
-                            .ok_or_else(|| invalid("Resource path is missing"))?;
+                        let path = resource["path"].as_str().ok_or_else(|| {
+                            invalid(UiMessage::error_core_sync_resource_path_missing())
+                        })?;
                         super::relative(path)?;
                         if !resource_ids.insert(id.to_owned())
                             || !paths.insert(path.to_lowercase())
@@ -179,7 +181,7 @@ impl Core {
                             )
                         {
                             return Err(invalid(
-                                "Duplicate, missing or invalid owned resource binding",
+                                UiMessage::error_core_sync_owned_resource_binding_incomplete(),
                             ));
                         }
                         preview.resource_map.insert(
@@ -190,9 +192,9 @@ impl Core {
                 }
             }
             for (relative, blob) in &state.files {
-                let bytes = graph
-                    .blob(blob)
-                    .ok_or_else(|| invalid("Selected file blob is missing"))?;
+                let bytes = graph.blob(blob).ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_selected_file_blob_missing())
+                })?;
                 if matches!(key, ObjectKey::Tags) {
                     crate::directory_identity::validate_sync_tags(bytes)?;
                 }
@@ -225,7 +227,7 @@ impl Core {
                     let value: serde_json::Value = serde_json::from_slice(bytes)?;
                     if value["directoryId"] != *id {
                         return Err(invalid(
-                            "Directory marker identity differs from its content role",
+                            UiMessage::error_core_sync_directory_marker_role_mismatch(),
                         ));
                     }
                 }
@@ -234,18 +236,16 @@ impl Core {
                     .insert(lower, (path.clone(), bytes.to_vec()))
                     .is_some()
                 {
-                    return Err(invalid("Receiver files overlap"));
+                    return Err(invalid(UiMessage::error_core_sync_receiver_files_overlap()));
                 }
                 let mut parent = path.parent().unwrap();
                 while parent != root {
-                    directories.insert(display(
-                        parent
-                            .strip_prefix(&root)
-                            .map_err(|_| invalid("Receiver path escaped its root"))?,
-                    ));
-                    parent = parent
-                        .parent()
-                        .ok_or_else(|| invalid("Receiver path escaped its root"))?;
+                    directories.insert(display(parent.strip_prefix(&root).map_err(|_| {
+                        invalid(UiMessage::error_core_sync_receiver_path_outside_root())
+                    })?));
+                    parent = parent.parent().ok_or_else(|| {
+                        invalid(UiMessage::error_core_sync_receiver_path_outside_root())
+                    })?;
                 }
             }
             initial.push(LocalObject {
@@ -281,7 +281,9 @@ impl Core {
                 .insert(display(&path).to_lowercase(), (path, bytes))
                 .is_some()
             {
-                return Err(invalid("Content cannot replace receiver control files"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_receiver_control_replacement_forbidden(),
+                ));
             }
         }
         if output.len() > MAX_FILES
@@ -289,7 +291,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Replica creation exceeds 64 MiB or 5000 files",
+                UiMessage::error_core_sync_replica_creation_exceeds64_mi_b_or5000_files(),
             ));
         }
         let files: Vec<_> = output
@@ -308,8 +310,13 @@ impl Core {
                 }
             })
             .collect();
-        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id, status: "committed".into(), path: display(&root), node_ids: preview.node_map.keys().cloned().collect(),
-            message: "Selected content and its full received dependency/transaction closure installed as an independent partial replica".into() };
+        let receipt = OperationReceipt {
+            operation_id: request.operation_id.clone(),
+            plan_id,
+            status: "committed".into(),
+            path: display(&root),
+            node_ids: preview.node_map.keys().cloned().collect(),
+        };
         let mut plan = Plan::file(
             request.operation_id.clone(),
             fingerprint,

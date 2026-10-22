@@ -11,11 +11,12 @@ use weftext_export::exchange::{
     write_native_package,
 };
 use weftext_knowledge as knowledge;
+use weftext_messages::UiMessage;
 mod native_export;
 pub use native_export::{NativeExport, NativeExportWitness};
 
 fn native_error(error: weftext_export::exchange::NativeError) -> CoreError {
-    CoreError::new(&error.code, error.message)
+    CoreError::from_native(error)
 }
 #[cfg(test)]
 thread_local! {
@@ -37,7 +38,7 @@ fn validate_native_navigation_roles(package: &NativePackage) -> Result<()> {
     }) {
         return Err(CoreError::new(
             "nativeControlConflict",
-            "A native Resource or Style cannot occupy the reserved directory marker name; retain the original package and explicitly rename that resource before importing",
+            UiMessage::error_core_exchange_native_resource_or_style_cannot_occupy_reserved_directory_marker_name_retain_original_package_and_explicitly_rename_resource_before_importing(),
         ));
     }
     Ok(())
@@ -49,7 +50,7 @@ fn relative(root: &Path, path: &str) -> Result<String> {
         .map_err(|_| {
             CoreError::new(
                 "outsideRoot",
-                "Native member is outside its selected library",
+                UiMessage::error_core_exchange_native_member_outside_selected_library(),
             )
         })
 }
@@ -64,7 +65,7 @@ fn put(
     {
         return Err(CoreError::new(
             "packagePath",
-            "Native selection has a duplicate member",
+            UiMessage::error_core_exchange_native_selection_has_duplicate_member(),
         ));
     }
     Ok(())
@@ -156,14 +157,14 @@ impl Core {
                 &preview.operation_id,
             ),
         }
-        .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
+        .map_err(|e| CoreError::from_export("docxImport", e))?;
         weftext_export::docx::retain_docx_import_originals(
             &mut package,
             &preview.operation_id,
             originals,
             conversion_losses,
         )
-        .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
+        .map_err(|e| CoreError::from_export("docxImport", e))?;
         let mut mutation = self.plan_content_import(
             root,
             parent,
@@ -190,7 +191,10 @@ impl Core {
             {
                 let mut data: serde_json::Value = serde_json::from_slice(&file.after)?;
                 for record in data["annotations"].as_array_mut().ok_or_else(|| {
-                    CoreError::new("docxAnnotations", "Missing annotation records")
+                    CoreError::new(
+                        "docxAnnotations",
+                        UiMessage::error_core_exchange_missing_annotation_records(),
+                    )
                 })? {
                     if record["suggestion"].is_null() || record.get("copyTargetState").is_some() {
                         continue;
@@ -217,7 +221,7 @@ impl Core {
                     change.bytes = file.after.len();
                 }
                 knowledge::decode_annotations(&file.after)
-                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+                    .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
             }
         }
         Ok(mutation)
@@ -275,7 +279,7 @@ impl Core {
             &schema,
             &preview.operation_id,
         )
-        .map_err(|e| CoreError::new("bibliographyImport", e.to_string()))?;
+        .map_err(|e| CoreError::from_export("bibliographyImport", e))?;
         // The producer retains the actual uploaded bibliography and per-record
         // mappings as owned resources; there is no invented original native ZIP.
         self.plan_content_import(
@@ -320,12 +324,12 @@ impl Core {
             let document: weftext_data::TagDocument = serde_json::from_slice(bytes)?;
             document
                 .forest()
-                .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+                .map_err(|e| CoreError::from_data("tagRegistry", e))?;
             if !document.tags.is_empty() {
                 let fingerprint = tag_import_fingerprint.ok_or_else(|| {
                     CoreError::new(
                         "tagImport",
-                        "Only the original native import may allocate portable tag identities",
+                        UiMessage::error_core_exchange_only_original_native_import_may_allocate_portable_tag_identities(),
                     )
                 })?;
                 let (file, mappings) = self.prepare_import_tag_changes(
@@ -336,7 +340,10 @@ impl Core {
                     fingerprint,
                 )?;
                 let basis = self.snapshots[file.base_id.as_ref().ok_or_else(|| {
-                    CoreError::new("tagImport", "Tag import lacks its original registry basis")
+                    CoreError::new(
+                        "tagImport",
+                        UiMessage::error_core_exchange_tag_import_lacks_original_registry_basis(),
+                    )
                 })?]
                 .clone();
                 if let Some(captured) = basis.captured {
@@ -360,17 +367,17 @@ impl Core {
         let source_schema = weftext_data::Schema::from_author_json(&decode(
             &package.files[&package.manifest.schema_path],
         )?)
-        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         let config = self.read_config(root, ConfigRole::Schema)?;
         let destination_schema = match &config.bytes {
             Some(bytes) => weftext_data::Schema::from_author_json(&decode(bytes)?),
             None => weftext_data::Schema::bundled(),
         }
-        .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         if serde_json::to_value(&source_schema)? != serde_json::to_value(&destination_schema)? {
             return Err(CoreError::new(
                 "schemaMappingRequired",
-                "The package's permanent schema IDs/shapes differ; explicit schema mapping is required before importing author sources",
+                UiMessage::error_core_exchange_package_s_permanent_schema_i_ds_shapes_differ_explicit_schema_mapping_required_before_importing_author_sources(),
             ));
         }
         let source_schema_ref =
@@ -384,14 +391,14 @@ impl Core {
                 continue;
             }
             for definition in weftext_data::saved_queries(&decode(&package.files[path])?)
-                .map_err(|e| CoreError::new("schemaMappingRequired", e.to_string()))?
+                .map_err(|e| CoreError::from_data("schemaMappingRequired", e))?
             {
                 if definition.binding.schema != source_schema_ref
                     || source_schema_revision != Some(&definition.binding.revision)
                 {
                     return Err(CoreError::new(
                         "schemaMappingRequired",
-                        "The package does not retain the exact schema revision bound by a saved Query; export its actual basis before importing",
+                        UiMessage::error_core_exchange_package_does_not_retain_exact_schema_revision_bound_by_saved_query_export_actual_basis_before_importing(),
                     ));
                 }
                 query_bindings.insert((definition.binding.schema, definition.binding.revision));
@@ -404,7 +411,7 @@ impl Core {
                 (Some(_), None) => {
                     return Err(CoreError::new(
                         "schemaUnavailable",
-                        "The target schema requires explicit original Core acceptance before importing saved Queries",
+                        UiMessage::error_core_exchange_target_schema_requires_explicit_original_core_acceptance_before_importing_saved_queries(),
                     ));
                 }
                 (None, _) => {
@@ -472,7 +479,7 @@ impl Core {
             if inspected.id.as_deref() != Some(owner.node_id.as_str()) {
                 return Err(CoreError::new(
                     "packageIdentity",
-                    "The manifest identity does not match the exact native root metadata",
+                    UiMessage::error_core_exchange_manifest_identity_does_not_match_exact_native_root_metadata(),
                 ));
             }
             let after_path = target.join(path);
@@ -496,7 +503,7 @@ impl Core {
                     }
                 }
                 Err(_) if allow_losses => {}
-                Err(e) => return Err(CoreError::new(&e.code, e.message)),
+                Err(e) => return Err(CoreError::from_knowledge(&e.code.clone(), e)),
             }
             nodes.push(knowledge::NodeSnapshot {
                 owner: owner.clone(),
@@ -536,7 +543,7 @@ impl Core {
             }
             if entry.role == Role::Annotations {
                 let document = knowledge::decode_annotations(&package.files[path])
-                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+                    .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
                 for record in document.records {
                     if annotation_map
                         .insert(record.annotation_id, fresh())
@@ -544,7 +551,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "duplicateAnnotation",
-                            "Native package has duplicate annotation identities",
+                            UiMessage::error_core_exchange_native_package_has_duplicate_annotation_identities(),
                         ));
                     }
                 }
@@ -559,13 +566,13 @@ impl Core {
             if value["version"] != 1 || !value["resources"].is_array() {
                 return Err(CoreError::new(
                     "resourceManifest",
-                    "Unsupported native resource manifest",
+                    UiMessage::error_core_exchange_unsupported_native_resource_manifest(),
                 ));
             }
             if value["resources"].as_array().unwrap().len() > 64 {
                 return Err(CoreError::new(
                     "budget",
-                    "Native Node resource registration exceeds the current 64-resource bound",
+                    UiMessage::error_core_exchange_native_node_resource_registration_exceeds_current64_resource_bound(),
                 ));
             }
             let owner_path = path
@@ -580,18 +587,24 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "packageOwner",
-                    "Resource manifest does not belong to its exact canonical source",
+                    UiMessage::error_core_exchange_resource_manifest_does_not_belong_to_exact_canonical_source(),
                 ));
             }
             for resource in value["resources"].as_array_mut().unwrap() {
                 let id = resource["resourceId"]
                     .as_str()
                     .ok_or_else(|| {
-                        CoreError::new("resourceManifest", "Missing native resource identity")
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_exchange_missing_native_resource_identity(),
+                        )
                     })?
                     .to_string();
                 let relative_path = resource["path"].as_str().ok_or_else(|| {
-                    CoreError::new("resourceManifest", "Missing native resource path")
+                    CoreError::new(
+                        "resourceManifest",
+                        UiMessage::error_core_exchange_missing_native_resource_path(),
+                    )
                 })?;
                 validate_member_path(relative_path).map_err(native_error)?;
                 let resource_path = format!("{owner_path}/{relative_path}");
@@ -603,7 +616,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "resourceMissing",
-                                "Native manifest omits a registered resource",
+                                UiMessage::error_core_exchange_native_manifest_omits_registered_resource(),
                             )
                         })?;
                 if !matches!(resource_entry.role, Role::Resource | Role::Style)
@@ -613,7 +626,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "packageResource",
-                        "Registered native resource binding is inconsistent",
+                        UiMessage::error_core_exchange_registered_native_resource_binding_inconsistent(),
                     ));
                 }
                 let old_ref = format!(
@@ -630,7 +643,7 @@ impl Core {
         if declared_resources.len() != resources.len() {
             return Err(CoreError::new(
                 "packageResource",
-                "Every native resource must have one exact owned manifest registration",
+                UiMessage::error_core_exchange_every_native_resource_must_have_one_exact_owned_manifest_registration(),
             ));
         }
         let mut transfer = Vec::new();
@@ -718,7 +731,7 @@ impl Core {
             },
             allow_losses,
         })
-        .map_err(|e| CoreError::new(&e.code, e.message))?;
+        .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
         preview.losses = copy.losses;
         preview.losses.extend(
             package
@@ -728,20 +741,25 @@ impl Core {
                 .map(|loss| knowledge::Loss {
                     path: loss.path,
                     code: loss.code,
-                    detail: loss.detail,
+                    description: loss.description,
+                    product_diagnostics: loss.product_diagnostics,
                 }),
         );
         for (path, entry) in &package.manifest.entries {
             if entry.role == Role::GeneratedBibliography {
                 preview.losses.push(knowledge::Loss {
-                    path: path.clone(), code: "generatedBibliographyNotInstalled".into(),
-                    detail: "The derived bibliography remains only in the retained original ZIP and is absent from the installed author tree. Regenerate it from the remapped, currently authorized Work data before compiling offline citations".into(),
+                    path: path.clone(),
+                    code: "generatedBibliographyNotInstalled".into(),
+                    description:
+                        UiMessage::loss_core_native_import_generated_bibliography_retained().into(),
+                    product_diagnostics: Vec::new(),
                 });
             }
             if matches!(entry.role, Role::Resource | Role::Style) && path.ends_with(".typ") {
                 preview.losses.push(knowledge::Loss {
                     path: path.clone(), code: "resourceModuleContextPreserved".into(),
-                    detail: "The Typst resource module is retained byte-for-byte. Application identities and root-relative dependencies inside resource modules are not rewritten; review its relocated context before use".into(),
+                    description: UiMessage::loss_core_native_import_resource_module_context_retained().into(),
+                    product_diagnostics: Vec::new(),
                 });
             }
         }
@@ -752,15 +770,18 @@ impl Core {
             .any(|entry| entry.role == Role::Settings)
         {
             preview.losses.push(knowledge::Loss {
-                path: ".weftext-settings.json".into(), code: "settingsNotApplied".into(),
-                detail: "Original settings and style selection remain in the preserved package; the destination library's settings remain authoritative. Imported style modules are owned resources, without automatic default-style activation".into(),
+                path: ".weftext-settings.json".into(),
+                code: "settingsNotApplied".into(),
+                description: UiMessage::loss_core_native_import_settings_retained().into(),
+                product_diagnostics: Vec::new(),
             });
         }
         if !allow_losses && !preview.losses.is_empty() {
             return Err(CoreError::new(
                 "copyLoss",
-                "Review the native import losses and explicitly choose allowLosses",
-            ));
+                UiMessage::error_core_exchange_review_native_import_losses_and_explicitly_choose_allow_losses(),
+            ).caused_by(CoreError::from_knowledge("copyLoss",
+                knowledge::KnowledgeError::from_losses("copyLoss", preview.losses.clone()))));
         }
         let mut output = copy
             .files
@@ -817,9 +838,12 @@ impl Core {
         }
         let mut directories = BTreeSet::new();
         for file in &output {
-            let relative = Path::new(&file.path)
-                .strip_prefix(&target)
-                .map_err(|_| CoreError::new("invalidPlan", "Native target escaped its new tree"))?;
+            let relative = Path::new(&file.path).strip_prefix(&target).map_err(|_| {
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_exchange_native_target_escaped_new_tree(),
+                )
+            })?;
             let mut parent = relative.parent();
             while let Some(path) = parent.filter(|p| !p.as_os_str().is_empty()) {
                 directories.insert(display(path));
@@ -836,7 +860,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Native outputs plus retained original exceed the Core operation budget",
+                UiMessage::error_core_exchange_native_outputs_plus_retained_original_exceed_core_operation_budget(),
             ));
         }
         // Every portable output, including navigation markers and the retained

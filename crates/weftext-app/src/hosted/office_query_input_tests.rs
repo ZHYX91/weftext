@@ -102,16 +102,20 @@ async fn frozen_query_output_rejects_unbound_source_and_draft_inputs_without_cla
             .extend(extra.as_object().unwrap().clone());
         let invalid: Prepare = serde_json::from_value(value).unwrap();
         let request_id = invalid.request_id.clone();
-        let error = prepare(State(state.clone()), Extension(auth.clone()), Json(invalid))
-            .await
-            .unwrap_err();
+        let error = prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(invalid),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.status, StatusCode::BAD_REQUEST);
         assert_eq!(error.code, "invalid_request");
         output_is_unclaimed(&state, "alice", &request_id);
         let Json(status) = status(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(RequestId { request_id }),
+            crate::RequestJson(RequestId { request_id }),
         )
         .await
         .unwrap();
@@ -128,7 +132,7 @@ async fn frozen_query_output_rejects_unbound_source_and_draft_inputs_without_cla
         Extension(Auth {
             digest: digest(b"bob"),
         }),
-        Json(other),
+        crate::RequestJson(other),
     )
     .await
     .unwrap_err();
@@ -139,7 +143,7 @@ async fn frozen_query_output_rejects_unbound_source_and_draft_inputs_without_cla
     let Json(prepared) = prepare(
         State(state.clone()),
         Extension(auth),
-        Json(original.clone()),
+        crate::RequestJson(original.clone()),
     )
     .await
     .unwrap();
@@ -174,7 +178,7 @@ async fn explicit_field_source_still_requires_independent_source_and_field_read(
     let error = prepare(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(req.clone()),
+        crate::RequestJson(req.clone()),
     )
     .await
     .unwrap_err();
@@ -195,7 +199,7 @@ async fn explicit_field_source_still_requires_independent_source_and_field_read(
     let Json(prepared) = prepare(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(req.clone()),
+        crate::RequestJson(req.clone()),
     )
     .await
     .unwrap();
@@ -215,9 +219,13 @@ async fn explicit_field_source_still_requires_independent_source_and_field_read(
     }
     req.request_id = uuid::Uuid::new_v4().to_string();
     let rejected_id = req.request_id.clone();
-    let error = prepare(State(state.clone()), Extension(auth), Json(req))
-        .await
-        .unwrap_err();
+    let error = prepare(
+        State(state.clone()),
+        Extension(auth),
+        crate::RequestJson(req),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(error.status, StatusCode::NOT_FOUND);
     output_is_unclaimed(&state, "alice", &rejected_id);
 }

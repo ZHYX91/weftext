@@ -31,7 +31,10 @@ pub fn retain_docx_import_originals(
 ) -> crate::Result<()> {
     if !weftext_data::uuid_v4(operation_id) || originals.len() > 4 || conversion_losses.len() > 4096
     {
-        return Err(ExportError("旧格式原件数量／操作标识／损失清单无效".into()));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_legacy_original_metadata_invalid(
+            ),
+        )));
     }
     let mut next = package.clone();
     let owner = next
@@ -39,21 +42,31 @@ pub fn retain_docx_import_originals(
         .entries
         .get("document/document.typ")
         .and_then(|e| e.node_id.clone())
-        .ok_or_else(|| ExportError("导入包缺少文档owner".into()))?;
+        .ok_or_else(|| {
+            ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_import_owner_missing(),
+            ))
+        })?;
     let manifest_path = "document/weftext.resources.json";
-    let mut resources: Value = serde_json::from_slice(
-        next.files
-            .get(manifest_path)
-            .ok_or_else(|| ExportError("导入包缺少资源manifest".into()))?,
-    )?;
-    let entries = resources["resources"]
-        .as_array_mut()
-        .ok_or_else(|| ExportError("导入包资源manifest无效".into()))?;
+    let mut resources: Value =
+        serde_json::from_slice(next.files.get(manifest_path).ok_or_else(|| {
+            ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_import_resource_manifest_missing(),
+            ))
+        })?)?;
+    let entries = resources["resources"].as_array_mut().ok_or_else(|| {
+        ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_import_resource_manifest_invalid(
+            ),
+        ))
+    })?;
     let mut total = 0usize;
     for (index, asset) in originals.iter().enumerate() {
-        total = total
-            .checked_add(asset.bytes.len())
-            .ok_or_else(|| ExportError("旧格式原件预算溢出".into()))?;
+        total = total.checked_add(asset.bytes.len()).ok_or_else(|| {
+            ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_legacy_original_budget_overflow(),
+            ))
+        })?;
         if asset.filename.is_empty()
             || asset.filename.len() > 255
             || asset
@@ -67,9 +80,9 @@ pub fn retain_docx_import_originals(
             || asset.bytes.len() > 16 * 1024 * 1024
             || total > 32 * 1024 * 1024
         {
-            return Err(ExportError(
-                "旧格式原件名称／媒体类型／大小超出安全范围".into(),
-            ));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_legacy_original_unsafe(),
+            )));
         }
         let ext = asset
             .filename
@@ -78,12 +91,14 @@ pub fn retain_docx_import_originals(
             .unwrap_or("")
             .to_ascii_lowercase();
         if !matches!(ext.as_str(), "doc" | "wps" | "docx" | "rtf" | "odt") {
-            return Err(ExportError("旧格式原件后缀不受支持".into()));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_legacy_original_extension_unsupported())));
         }
         let name = format!("original-input-{}.{}", index + 1, ext);
         let path = format!("document/{name}");
         if next.files.contains_key(&path) {
-            return Err(ExportError("旧格式原件资源槽已存在".into()));
+            return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_legacy_original_resource_occupied(),
+            )));
         }
         let resource = id(
             operation_id,
@@ -102,14 +117,22 @@ pub fn retain_docx_import_originals(
         next.manifest.losses.push(NativeLoss {
             path,
             code: "original-conversion-input-retained".into(),
-            detail: format!(
-                "原始输入 {} ({}) 的准确字节保留；不以中间DOCX代替原件",
-                asset.filename, asset.mime
+            description: weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_original_bytes_retained(
+                    weftext_messages::params::ErrorExportDocxImportOriginalBytesRetained {
+                        filename: (asset.filename).to_string(),
+                        mime: (asset.mime).to_string(),
+                    },
+                ),
             ),
+
+            product_diagnostics: Vec::new(),
         });
     }
     if entries.len() > 64 {
-        return Err(ExportError("导入资源数量超过64项".into()));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_import_resource_count_exceeded(),
+        )));
     }
     let bytes = serde_json::to_vec_pretty(&resources)?;
     let mut entry = NativeEntry::new(Role::ResourceManifest, &bytes);
@@ -117,7 +140,7 @@ pub fn retain_docx_import_originals(
     next.files.insert(manifest_path.into(), bytes);
     next.manifest.entries.insert(manifest_path.into(), entry);
     next.manifest.losses.extend_from_slice(conversion_losses);
-    validate_native_package(&next).map_err(|e| ExportError(e.to_string()))?;
+    validate_native_package(&next).map_err(|e| ExportError::from_native(e))?;
     *package = next;
     Ok(())
 }
@@ -126,12 +149,19 @@ fn quoted(s: &str) -> String {
         .to_typst()
         .unwrap()
 }
-fn loss(out: &mut Vec<NativeLoss>, code: &str, detail: impl Into<String>) {
-    out.push(NativeLoss {
-        path: "word/document.xml".into(),
-        code: code.into(),
-        detail: detail.into(),
-    });
+fn loss(
+    out: &mut Vec<NativeLoss>,
+    code: &str,
+    detail: impl Into<weftext_messages::ErrorDescription>,
+) {
+    loss_error(out, code, ExportError::new(detail));
+}
+fn loss_error(out: &mut Vec<NativeLoss>, code: &str, error: ExportError) {
+    out.push(NativeLoss::from_error(
+        "word/document.xml".into(),
+        code.into(),
+        error,
+    ));
 }
 fn text(e: &Element) -> String {
     let mut out = String::new();
@@ -179,7 +209,14 @@ impl WordLanguage {
             loss(
                 losses,
                 "word-language-invalid",
-                format!("Word语言槽 {slot}={tag} 不能安全映射；准确原件保留"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_language_slot_unmapped(
+                        weftext_messages::params::ErrorExportDocxImportLanguageSlotUnmapped {
+                            slot: (slot).to_string(),
+                            tag: (tag).to_string(),
+                        },
+                    ),
+                ),
             );
             return None;
         }
@@ -192,7 +229,7 @@ impl WordLanguage {
                     loss(
                         losses,
                         "word-language-subtag",
-                        format!("语言标记 {tag} 含多个地区子标记，不能证明唯一语言意图；原件保留"),
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_language_region_ambiguous(weftext_messages::params::ErrorExportDocxImportLanguageRegionAmbiguous { tag: (tag).to_string() })),
                     );
                 }
                 region = Some(token.to_ascii_uppercase());
@@ -200,7 +237,11 @@ impl WordLanguage {
                 loss(
                     losses,
                     "word-language-subtag",
-                    format!("语言标记 {tag} 的文字体系／扩展子标记未映射；原件保留"),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_language_subtags_unmapped(weftext_messages::params::ErrorExportDocxImportLanguageSubtagsUnmapped {
+                            tag: (tag).to_string(),
+                        }),
+                    ),
                 );
             }
         }
@@ -256,28 +297,31 @@ impl WordLanguage {
             loss(
                 losses,
                 "word-language-script",
-                format!(
-                    "字符 {} 的语言脚本槽尚未可靠映射；文字与准确原件保留，未猜测语言",
-                    unknown
-                        .iter()
-                        .map(|c| format!("U+{:04X}", *c as u32))
-                        .collect::<Vec<_>>()
-                        .join("、")
-                ),
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_character_language_slot_unknown(weftext_messages::params::ErrorExportDocxImportCharacterLanguageSlotUnknown { characters: (unknown.iter().map(|c| format!("U+{:04X}", *c as u32)).collect::<Vec<_>>().join(", ")).to_string() })),
             );
         }
         for slot in missing {
             loss(
                 losses,
                 "word-language-missing",
-                format!("已确认脚本所需 {slot} 语言槽没有继承值；未借通用语言猜测，准确原件保留"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_language_slot_missing(
+                        weftext_messages::params::ErrorExportDocxImportLanguageSlotMissing {
+                            slot: (slot).to_string(),
+                        },
+                    ),
+                ),
             );
         }
         for property in &self.unsupported {
             loss(
                 losses,
                 "word-language-property",
-                format!("Word语言属性 {property} 未映射；准确原件保留"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_language_property_unmapped(weftext_messages::params::ErrorExportDocxImportLanguagePropertyUnmapped {
+                        property: (property).to_string(),
+                    }),
+                ),
             );
         }
         for slot in ["w:eastAsia", "w:bidi"] {
@@ -290,8 +334,13 @@ impl WordLanguage {
                 loss(
                     losses,
                     "word-language-specialized",
-                    format!(
-                        "{slot}={value} 未被本run中已确认脚本的文字使用；该设置仅保留在准确原件"
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_language_slot_unused(
+                            weftext_messages::params::ErrorExportDocxImportLanguageSlotUnused {
+                                slot: (slot).to_string(),
+                                value: (value).to_string(),
+                            },
+                        ),
                     ),
                 );
             }
@@ -428,7 +477,9 @@ impl LanguageStyles {
                 loss(
                     losses,
                     "word-heading-style",
-                    "标题层级属性或段落样式继承不唯一／无效／循环／缺失；正文保留，未猜测标题层级，准确原件保留",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_heading_level_unproven(),
+                    ),
                 );
                 None
             }
@@ -455,14 +506,21 @@ impl LanguageStyles {
                 continue;
             };
             if result.styles.len() >= 4096 {
-                return Err(DocxError::new("Word语言样式超过4096项预算"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_language_styles_exceeded(
+                    ),
+                )));
             }
             if result.styles.insert(id.into(), style.clone()).is_some() {
                 result.duplicates.insert(id.into());
                 loss(
                     losses,
                     "word-language-style",
-                    format!("语言样式 {id} 标识重复；不能猜测继承，准确原件保留"),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_language_style_duplicate(weftext_messages::params::ErrorExportDocxImportLanguageStyleDuplicate {
+                            style: (id).to_string(),
+                        }),
+                    ),
                 );
             }
             if matches!(style.get("w:default"), Some("1" | "true" | "on")) {
@@ -475,7 +533,7 @@ impl LanguageStyles {
                     loss(
                         losses,
                         "word-language-style",
-                        "Word有多个默认样式；默认语言继承不唯一，准确原件保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_multiple_default_styles()),
                     );
                     *slot = Some(String::new());
                 } else {
@@ -500,7 +558,7 @@ impl LanguageStyles {
                 loss(
                     losses,
                     "word-language-style",
-                    format!("语言样式 {current} 的继承循环／重复／过深；未猜测该链，准确原件保留"),
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_language_inheritance_invalid(weftext_messages::params::ErrorExportDocxImportLanguageInheritanceInvalid { style: (current).to_string() })),
                 );
                 return;
             }
@@ -512,7 +570,7 @@ impl LanguageStyles {
                 loss(
                     losses,
                     "word-language-style",
-                    format!("语言样式 {current} 缺失或类型不匹配；未猜测该链，准确原件保留"),
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_language_style_unavailable(weftext_messages::params::ErrorExportDocxImportLanguageStyleUnavailable { style: (current).to_string() })),
                 );
                 return;
             };
@@ -591,7 +649,7 @@ impl Builder<'_> {
             loss(
                 &mut self.losses,
                 "word-note-id",
-                "重复注释引用没有有效ID；原件保留",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_repeated_note_reference_id_invalid()),
             );
             return Ok(());
         };
@@ -599,7 +657,9 @@ impl Builder<'_> {
             loss(
                 &mut self.losses,
                 "word-note-body-missing",
-                "重复注释引用缺少唯一真实正文；正文未进入新文档，原件保留",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_repeated_note_body_not_unique(),
+                ),
             );
             return Ok(());
         }
@@ -625,7 +685,9 @@ impl Builder<'_> {
             loss(
                 &mut self.losses,
                 "word-note-id",
-                "正文注释标记没有有效正整数ID；注释正文未转换，准确原件保留",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_note_marker_id_invalid(),
+                ),
             );
             return Ok(());
         };
@@ -644,7 +706,14 @@ impl Builder<'_> {
             loss(
                 &mut self.losses,
                 "word-note-body-missing",
-                format!("{kind} ID {id} 缺失或不唯一；注释正文未进入新文档，原件保留"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_note_identity_unavailable(
+                        weftext_messages::params::ErrorExportDocxImportNoteIdentityUnavailable {
+                            kind: (kind).to_string(),
+                            id: (id).to_string(),
+                        },
+                    ),
+                ),
             );
             return Ok(());
         };
@@ -681,7 +750,7 @@ impl Builder<'_> {
             loss(
                 &mut child.losses,
                 "word-note-review-unmapped",
-                "注释部件中的批注／修订没有跨部件准确映射；保原件与讨论，未挂回主文档同文；待插入未接受、待删除保基线",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_note_review_cross_part_mapping_unavailable()),
             );
         }
         for item in &mut child.losses {
@@ -705,7 +774,7 @@ impl Builder<'_> {
         for c in s.chars() {
             let start = self.source.len();
             let encoded = weftext_engine::encode_literal(&c.to_string())
-                .map_err(|e| DocxError::new(e.to_string()))?;
+                .map_err(|e| DocxError::from_engine(e))?;
             self.source.push_str(&encoded);
             self.positions.push((start, self.source.len()));
             self.visible.push(c);
@@ -879,7 +948,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-heading-numbering",
-                        "原生标题层级与正文保留；Word标题编号方案／起始／排除规则未完整反向映射，准确原件保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_heading_numbering_not_fully_mapped()),
                     );
                 }
             } else if pr.child("w:numPr").is_some_and(|numbering| {
@@ -890,14 +959,14 @@ impl Builder<'_> {
                 loss(
                     &mut self.losses,
                     "word-list-numbering",
-                    "列表内容保留为原生列表；原编号格式、层级及起始值未完整映射",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_list_numbering_not_fully_mapped()),
                 );
             }
             if pr.child("w:pPrChange").is_some() {
                 loss(
                     &mut self.losses,
                     "word-format-revision",
-                    "段落格式修订保留在原件；本次未作为可执行文字建议导入",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_paragraph_format_revision_preserved()),
                 );
             }
         }
@@ -974,7 +1043,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-insertion-boundary",
-                        "待审插入点位于原生包装语法之间，且紧邻文字的语言／格式或结构不能证明等价；建议仅保留于原件并需重新确认",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_insertion_wrapper_boundary_unproven()),
                     );
                 }
             }
@@ -995,7 +1064,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-comment-range",
-                        "重复批注起点无法唯一映射；保留原件",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_comment_start_duplicate()),
                     );
                     self.invalid_ranges.insert(id.into());
                 }
@@ -1015,7 +1084,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-note-custom-mark",
-                        "自定义注释标记未映射；采用独立连续编号，准确原件保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_custom_note_marker_unmapped()),
                     );
                 }
                 if let Some(id) = e.get("w:id") {
@@ -1052,7 +1121,7 @@ impl Builder<'_> {
                         loss(
                             &mut self.losses,
                             "word-note-reference-unmapped",
-                            "NOTEREF 域没有唯一真实注释标记书签；不凭缓存数字猜归属，原件保留",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_note_reference_bookmark_not_unique()),
                         );
                         for c in e.children.iter().filter_map(Xml::element) {
                             self.inline(c)?;
@@ -1084,9 +1153,9 @@ impl Builder<'_> {
                             .first()
                             .is_some_and(|s| s.eq_ignore_ascii_case("SEQ"))
                         {
-                            "SEQ 题注域存在，但尚无已确认对象配对；本次仅保可见内容，自动编号与对象绑定未进入新文档，原件保留"
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_caption_pairing_unconfirmed())
                         } else {
-                            "域仅保可见结果，未求值活动域或承诺自动更新"
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_field_visible_result_only())
                         },
                     );
                     for c in e.children.iter().filter_map(Xml::element) {
@@ -1128,14 +1197,16 @@ impl Builder<'_> {
                     }
                     Err(reason) => {
                         self.mapping_gap();
-                        loss(
-                            &mut self.losses,
-                            "word-math-unmapped",
-                            format!(
-                                "{}；原公式仅保留于 original.docx，未进入新原生正文",
-                                reason.0
-                            ),
-                        );
+                        loss_error(&mut self.losses, "word-math-unmapped", {
+                            let (description, details) = reason.0.into_parts();
+                            ExportError::with_cause(
+                                weftext_messages::UiMessage::error_export_docx_import_math_unmapped(
+                                ),
+                                "wordMathUnmapped",
+                                description,
+                                details,
+                            )
+                        });
                     }
                 }
             }
@@ -1153,21 +1224,21 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-structural-revision",
-                        "待审文字修订横跨不同语言包装；普通文字与批注逐字位置保留，但源码替换的语法／语言意图未证明安全，修订保原件并需重新确认",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_revision_crosses_language_wrappers()),
                     );
                 }
                 if !textual {
                     loss(
                         &mut self.losses,
                         "word-structural-revision",
-                        "公式／图片／注释／域等结构修订未作为可执行文字建议导入；修订前基线与准确原件保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_structural_revision_not_executable()),
                     );
                 }
                 if nested.len() != 1 || self.revision_depth != 0 {
                     loss(
                         &mut self.losses,
                         "word-nested-revision",
-                        "嵌套修订未获得自动应用资格，原件保留",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_nested_revision_not_auto_applicable()),
                     );
                 }
                 self.revision_depth += 1;
@@ -1218,7 +1289,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-format-revision",
-                        "字符格式修订保留在原件，未转换为文字修改建议",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_character_format_revision_preserved()),
                     );
                 }
                 if bold {
@@ -1276,7 +1347,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-link",
-                        "链接目标无法安全映射，保留可见文字与原件",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_link_target_unsafe_mapping()),
                     );
                     for c in e.children.iter().filter_map(Xml::element) {
                         self.inline(c)?;
@@ -1317,7 +1388,7 @@ impl Builder<'_> {
                             loss(
                                 &mut self.losses,
                                 "word-image-format",
-                                "图片格式不在首轮支持范围，原件保留",
+                                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_image_format_unsupported()),
                             );
                             continue;
                         }
@@ -1327,13 +1398,13 @@ impl Builder<'_> {
                         loss(
                             &mut self.losses,
                             "word-image-layout",
-                            "图片资源保留，Word 浮动位置、裁切和尺寸未完整映射",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_image_layout_not_fully_mapped()),
                         );
                     } else {
                         loss(
                             &mut self.losses,
                             "word-image-missing",
-                            "图片关系不可读取，原件保留",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_image_relationship_unreadable()),
                         );
                     }
                 }
@@ -1343,7 +1414,7 @@ impl Builder<'_> {
                 loss(
                     &mut self.losses,
                     "word-field",
-                    "保留域的可见结果；动态域和更新语义保留在原件",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_dynamic_field_semantics_preserved()),
                 );
             }
             "w:bookmarkStart" | "w:bookmarkEnd" | "w:proofErr" | "w:lastRenderedPageBreak" => {}
@@ -1351,7 +1422,11 @@ impl Builder<'_> {
                 loss(
                     &mut self.losses,
                     "word-element",
-                    format!("未完整支持 {}，保留可读取文字及原件", e.name),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_element_partly_supported(weftext_messages::params::ErrorExportDocxImportElementPartlySupported {
+                            element: (e.name).to_string(),
+                        }),
+                    ),
                 );
                 for c in e.children.iter().filter_map(Xml::element) {
                     self.inline(c)?;
@@ -1373,7 +1448,7 @@ impl Builder<'_> {
                     self.source.push_str(&format!("\n\n#figure(kind: {kind}, numbering: \"1\", caption: figure.caption(position: {})[",c.get("position").unwrap_or("bottom")));
                     self.source.push_str(
                         &weftext_engine::encode_literal(c.get("caption").unwrap_or(""))
-                            .map_err(|e| DocxError::new(e.to_string()))?,
+                            .map_err(|e| DocxError::from_engine(e))?,
                     );
                     self.source.push_str("], [");
                     self.blocks(c)?;
@@ -1384,7 +1459,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-caption-confirmed",
-                        "按冻结预览中的显式配对创建原生题注及编号；所选题注文字保留，原Word题注富格式和自定义SEQ选项未完整映射",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_caption_pairing_applied_with_format_loss()),
                     );
                 }
                 "w:p" => self.paragraph(c, false)?,
@@ -1454,7 +1529,7 @@ impl Builder<'_> {
                                 loss(
                                     &mut self.losses,
                                     "word-table-header",
-                                    "非首部连续普通行的Word表头重复属性未转换；内容与准确原件保留",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_non_leading_repeated_header_unmapped()),
                                 );
                             }
                         }
@@ -1486,7 +1561,7 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-table-layout",
-                        "普通表格文字与单元格顺序保留；合并、列宽、边框及复杂嵌套结构未完整映射",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_table_structure_not_fully_mapped()),
                     );
                 }
                 "w:sectPr" => {}
@@ -1494,7 +1569,11 @@ impl Builder<'_> {
                     loss(
                         &mut self.losses,
                         "word-block",
-                        format!("块 {} 未完整映射，保留可读取段落与原件", c.name),
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_docx_import_block_partly_mapped(weftext_messages::params::ErrorExportDocxImportBlockPartlyMapped {
+                                element: (c.name).to_string(),
+                            }),
+                        ),
                     );
                     self.blocks(c)?;
                 }
@@ -1555,7 +1634,11 @@ pub fn analyze_docx_import(bytes: &[u8]) -> crate::Result<DocxImportAnalysis> {
     let doc = package
         .xml("word/document.xml")
         .map_err(ExportError::from)?
-        .ok_or_else(|| ExportError("缺少 Word 正文".into()))?;
+        .ok_or_else(|| {
+            ExportError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_body_missing(),
+            ))
+        })?;
     Ok(notes::analyze(bytes, &notes::normalize_fields(&doc)))
 }
 fn build(
@@ -1565,13 +1648,17 @@ fn build(
     options: &DocxImportOptions,
 ) -> Result<NativePackage, DocxError> {
     if !weftext_data::uuid_v4(op) {
-        return Err(DocxError::new("Word 导入需要有效操作标识"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_operation_id_required(),
+        )));
     }
-    weftext_data::Schema::from_author_json(schema).map_err(|e| DocxError::new(e.to_string()))?;
+    weftext_data::Schema::from_author_json(schema).map_err(|e| DocxError::from_data(e))?;
     let package = Package::load(Some(bytes))?;
-    let doc = package
-        .xml("word/document.xml")?
-        .ok_or_else(|| DocxError::new("缺少 Word 正文"))?;
+    let doc = package.xml("word/document.xml")?.ok_or_else(|| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_body_missing(),
+        ))
+    })?;
     let doc = notes::normalize_fields(&doc);
     let body = notes::paired_body(bytes, &doc, options)?;
     let workspace = id(op, "workspace");
@@ -1620,9 +1707,13 @@ fn build(
         loss(
             &mut b.losses,
             "word-note-unreferenced",
-            format!(
-                "{} ID {} 没有正文引用；注释正文未进入新文档，原件保留",
-                key.0, key.1
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_import_note_reference_missing(
+                    weftext_messages::params::ErrorExportDocxImportNoteReferenceMissing {
+                        kind: (key.0).to_string(),
+                        id: (key.1).to_string(),
+                    },
+                ),
             ),
         );
     }
@@ -1631,9 +1722,9 @@ fn build(
     }
     let editor = weftext_engine::inspect_editor(&b.source);
     if !editor.syntax_valid {
-        return Err(DocxError::new(
-            "转换结果未通过原生语法校验，保留上传原件且不创建笔记",
-        ));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_native_syntax_validation_failed(),
+        )));
     }
     if b.revisions.iter().any(|r| r.empty_body_candidate) {
         let blocks: Vec<_> = body
@@ -1663,7 +1754,7 @@ fn build(
                 loss(
                     &mut b.losses,
                     "word-insertion-boundary",
-                    "待审插入没有紧邻的等价文字，且完整文档不能独立证明唯一空正文插入点；建议保留于原件并需重新确认",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_import_empty_body_insertion_unproven()),
                 );
             }
         }
@@ -1685,14 +1776,18 @@ fn build(
             .filter_map(Xml::element)
             .filter(|e| e.name == "w:comment")
         {
-            let key = c
-                .get("w:id")
-                .ok_or_else(|| DocxError::new("批注缺少标识，不能准确映射"))?;
+            let key = c.get("w:id").ok_or_else(|| {
+                DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_comment_id_missing(),
+                ))
+            })?;
             if comment_ids
                 .insert(key.to_owned(), id(op, &format!("comment:{key}")))
                 .is_some()
             {
-                return Err(DocxError::new("重复 Word 批注标识，不能猜测归属"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_comment_id_duplicate(),
+                )));
             }
             if let Some(pid) = c
                 .children
@@ -1702,7 +1797,9 @@ fn build(
                 .and_then(|p| p.get("w14:paraId"))
                 && metadata.insert(pid.to_owned(), key.to_owned()).is_some()
             {
-                return Err(DocxError::new("重复 Word 批注段落标识，不能猜测回复归属"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_comment_paragraph_id_duplicate(),
+                )));
             }
         }
     }
@@ -1825,7 +1922,16 @@ fn build(
                 rich |= items.iter().any(|item| !item.children.is_empty());
             }
             if rich {
-                review_content_losses.push(NativeLoss{path:comments_path.clone(),code:"word-comment-content-loss".into(),detail:format!("批注 {key} 的可读取段落文字保留；其富格式／列表／链接／图片／公式等内容没有全部进入批注正文，准确原件保留")});
+                review_content_losses.push(NativeLoss {
+                    path: comments_path.clone(),
+                    code: "word-comment-content-loss".into(),
+                    description: weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_import_comment_rich_content_loss(weftext_messages::params::ErrorExportDocxImportCommentRichContentLoss {
+                            id: (key).to_string(),
+                        }),
+                    ),
+                    product_diagnostics: Vec::new(),
+                });
             }
             let excerpt = range
                 .map(|(from, to)| b.source[from..to].to_owned())
@@ -1872,9 +1978,12 @@ fn build(
             loss(
                 &mut losses,
                 "word-comment-unlocated",
-                format!(
-                    "批注 {} 保留在原件资料上，未能准确定位到新正文",
-                    a["wordImport"]["originalId"]
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_import_comment_target_unmapped(
+                        weftext_messages::params::ErrorExportDocxImportCommentTargetUnmapped {
+                            id: (a["wordImport"]["originalId"]).to_string(),
+                        },
+                    ),
                 ),
             );
         }
@@ -1882,7 +1991,10 @@ fn build(
     loss(
         &mut losses,
         "word-layout",
-        "正文以原生可编辑结构导入；Word 页眉页脚、分页、主题字体及复杂排版保留在原件，不承诺版式等价",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_import_editable_body_with_layout_limits(
+            ),
+        ),
     );
     let mut native = NativePackage {
         manifest: NativeManifest {
@@ -1972,7 +2084,7 @@ fn build(
         None,
         None,
     );
-    validate_native_package(&native).map_err(|e| DocxError::new(e.to_string()))?;
+    validate_native_package(&native).map_err(|e| DocxError::from_native(e))?;
     Ok(native)
 }
 
@@ -2228,13 +2340,13 @@ mod tests {
                 .iter()
                 .any(|l| l.code == "word-language-style")
         );
-        assert!(
-            imported
-                .manifest
-                .losses
-                .iter()
-                .any(|l| l.code == "word-language-specialized" && l.detail.contains("ja-JP"))
-        );
+        assert!(imported.manifest.losses.iter().any(|l| {
+            l.code == "word-language-specialized"
+                && l.description
+                    .explanation
+                    .render(weftext_messages::UiLocale::ZhCn)
+                    .contains("ja-JP")
+        }));
         let dir = tempfile::TempDir::new().unwrap();
         let engine = weftext_engine::Engine::new_with_system_fonts(false).unwrap();
         let output = engine
@@ -2315,11 +2427,13 @@ mod tests {
         assert!(source.contains("#text(lang: \"en\", region: \"GB\")[ A\u{0301} ]"));
         assert!(source.contains("#text(lang: \"he\", region: \"IL\")[קְ]"));
         assert!(source.ends_with("]क"), "{source}");
-        assert!(
-            losses
-                .iter()
-                .any(|l| l.code == "word-language-script" && l.detail.contains("U+0915"))
-        );
+        assert!(losses.iter().any(|l| {
+            l.code == "word-language-script"
+                && l.description
+                    .explanation
+                    .render(weftext_messages::UiLocale::ZhCn)
+                    .contains("U+0915")
+        }));
         assert!(losses.iter().any(|l| l.code == "word-language-property"));
         let mut losses = vec![];
         let neutral = language.segments(" 123😀", &mut losses);
@@ -2388,13 +2502,13 @@ mod tests {
                 assert_eq!(revision["target"]["anchor"]["sourceRange"]["raw"], "甲乙");
             }
         }
-        assert!(
-            imported
-                .manifest
-                .losses
-                .iter()
-                .any(|l| l.code == "word-structural-revision" && l.detail.contains("不同语言包装"))
-        );
+        assert!(imported.manifest.losses.iter().any(|l| {
+            l.code == "word-structural-revision"
+                && l.description
+                    .explanation
+                    .render(weftext_messages::UiLocale::ZhCn)
+                    .contains("不同语言包装")
+        }));
         assert!(!source.contains("C文"));
         assert!(!source.contains("新增"));
     }

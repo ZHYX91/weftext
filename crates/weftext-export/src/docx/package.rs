@@ -21,16 +21,39 @@ impl Package {
         let mut parts = BTreeMap::new();
         if let Some(bytes) = bytes {
             if bytes.len() > 32 * 1024 * 1024 {
-                return Err(DocxError::new("模板压缩包超过 32 MiB"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_package_archive_bytes_exceeded(),
+                )));
             }
-            let mut zip =
-                ZipArchive::new(Cursor::new(bytes)).map_err(|e| DocxError::new(e.to_string()))?;
+            let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(|e| {
+                DocxError::new(
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_archive(),
+                    )
+                    .diagnostic(
+                        weftext_messages::DiagnosticOrigin::Dependency,
+                        e.to_string(),
+                    ),
+                )
+            })?;
             if zip.len() > 1024 {
-                return Err(DocxError::new("模板部件过多"));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_package_part_count_exceeded(),
+                )));
             }
             let mut total = 0u64;
             for i in 0..zip.len() {
-                let f = zip.by_index(i).map_err(|e| DocxError::new(e.to_string()))?;
+                let f = zip.by_index(i).map_err(|e| {
+                    DocxError::new(
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_archive(),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?;
                 let name = f.name().to_owned();
                 if f.is_dir() {
                     continue;
@@ -40,16 +63,24 @@ impl Package {
                     || name.split('/').any(|p| p == ".." || p.is_empty())
                     || name.contains(':')
                 {
-                    return Err(DocxError::new("模板含不安全部件路径"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_part_path_unsafe(),
+                    )));
                 }
                 if f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
-                    return Err(DocxError::new("模板不能包含符号链接"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_symbolic_link_forbidden(),
+                    )));
                 }
-                total = total
-                    .checked_add(f.size())
-                    .ok_or_else(|| DocxError::new("模板预算溢出"))?;
+                total = total.checked_add(f.size()).ok_or_else(|| {
+                    DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_budget_overflow(),
+                    ))
+                })?;
                 if f.size() > 16 * 1024 * 1024 || total > 64 * 1024 * 1024 {
-                    return Err(DocxError::new("模板解压后超过安全预算"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_expanded_bytes_exceeded(),
+                    )));
                 }
                 let lower = name.to_ascii_lowercase();
                 if lower.contains("vba")
@@ -58,18 +89,33 @@ impl Package {
                     || lower.starts_with("_xmlsignatures/")
                 {
                     return Err(DocxError::new(
-                        "不支持包含宏、ActiveX、嵌入程序或签名的模板",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_package_active_content_unsupported()),
                     ));
                 }
                 let mut data = vec![];
                 f.take(16 * 1024 * 1024 + 1)
                     .read_to_end(&mut data)
-                    .map_err(|e| DocxError::new(e.to_string()))?;
+                    .map_err(|e| {
+                        DocxError::new(
+                            weftext_messages::ErrorDescription::new(
+                                weftext_messages::UiMessage::error_export_io(),
+                            )
+                            .diagnostic(
+                                weftext_messages::DiagnosticOrigin::Dependency,
+                                e.to_string(),
+                            ),
+                        )
+                    })?;
                 if data.len() as u64 > 16 * 1024 * 1024 {
-                    return Err(DocxError::new("模板部件超出解压预算"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_part_expansion_exceeded(),
+                    )));
                 }
                 if parts.insert(name, data).is_some() {
-                    return Err(DocxError::new("模板包含重复部件路径"));
+                    return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_docx_package_part_path_duplicate(
+                        ),
+                    )));
                 }
             }
         } else {
@@ -86,7 +132,13 @@ impl Package {
         }
         for required in ["[Content_Types].xml", "word/document.xml", "_rels/.rels"] {
             if !parts.contains_key(required) {
-                return Err(DocxError::new(format!("模板缺少 {required}")));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_template_part_missing(
+                        weftext_messages::params::ErrorExportDocxTemplatePartMissing {
+                            part: (required).to_string(),
+                        },
+                    ),
+                )));
             }
         }
         for (name, bytes) in &parts {
@@ -106,12 +158,12 @@ impl Package {
                             .iter()
                             .any(|e| unsafe_field(e.get("w:instr").unwrap_or("")))
                     {
-                        return Err(DocxError::new("模板包含会读取外部内容或执行命令的字段"));
+                        return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_package_active_field_forbidden())));
                     }
                     let mut chunks = vec![];
                     root.descendants("w:altChunk", &mut chunks);
                     if !chunks.is_empty() {
-                        return Err(DocxError::new("模板含不支持的 altChunk 内容"));
+                        return Err(DocxError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_docx_package_alt_chunk_unsupported())));
                     }
                 }
             }
@@ -122,22 +174,26 @@ impl Package {
                 && e.get("Target")
                     .is_some_and(|t| matches!(t, "word/document.xml" | "/word/document.xml"))
         }) {
-            return Err(DocxError::new(
-                "只支持以 word/document.xml 为主文档的 DOCX 模板",
-            ));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_main_document_path_unsupported(),
+            )));
         }
         let types = xml::parse(parts.get("[Content_Types].xml").unwrap())?;
         if types.name != "Types"
             || types.get("xmlns")
                 != Some("http://schemas.openxmlformats.org/package/2006/content-types")
         {
-            return Err(DocxError::new("无效 OOXML 内容类型部件"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_content_types_invalid(),
+            )));
         }
         if types.children.iter().filter_map(Xml::element).any(|e| {
             e.get("ContentType")
                 .is_some_and(|t| t.to_ascii_lowercase().contains("macroenabled"))
         }) {
-            return Err(DocxError::new("不支持启用宏的模板"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_macro_enabled_unsupported(),
+            )));
         }
         let rels = if let Some(b) = parts.get("word/_rels/document.xml.rels") {
             xml::parse(b)?
@@ -164,24 +220,32 @@ impl Package {
             .filter(|e| e.get("Type") == Some(kind))
             .collect();
         if relations.len() > 1 {
-            return Err(DocxError::new("批注部件关系不唯一"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_comment_relationship_not_unique(),
+            )));
         }
         let Some(rel) = relations.first() else {
             return Ok(fallback.into());
         };
         if rel.get("TargetMode") == Some("External") {
-            return Err(DocxError::new("批注部件不能指向外部"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_external_comment_part_forbidden(),
+            )));
         }
-        let target = rel
-            .get("Target")
-            .ok_or_else(|| DocxError::new("批注部件缺少目标"))?;
+        let target = rel.get("Target").ok_or_else(|| {
+            DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_comment_target_missing(),
+            ))
+        })?;
         let path = if target.starts_with('/') {
             target.trim_start_matches('/').to_owned()
         } else {
             format!("word/{target}")
         };
         if !self.parts.contains_key(&path) {
-            return Err(DocxError::new("批注关系指向缺失部件"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_comment_part_missing(),
+            )));
         }
         Ok(path)
     }
@@ -281,14 +345,40 @@ impl Package {
         let options =
             SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         for (name, data) in self.parts {
-            zip.start_file(name, options)
-                .map_err(|e| DocxError::new(e.to_string()))?;
-            zip.write_all(&data)
-                .map_err(|e| DocxError::new(e.to_string()))?;
+            zip.start_file(name, options).map_err(|e| {
+                DocxError::new(
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_archive(),
+                    )
+                    .diagnostic(
+                        weftext_messages::DiagnosticOrigin::Dependency,
+                        e.to_string(),
+                    ),
+                )
+            })?;
+            zip.write_all(&data).map_err(|e| {
+                DocxError::new(
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_io(),
+                    )
+                    .diagnostic(
+                        weftext_messages::DiagnosticOrigin::Dependency,
+                        e.to_string(),
+                    ),
+                )
+            })?;
         }
-        zip.finish()
-            .map(|c| c.into_inner())
-            .map_err(|e| DocxError::new(e.to_string()))
+        zip.finish().map(|c| c.into_inner()).map_err(|e| {
+            DocxError::new(
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_archive(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })
     }
 }
 fn part_rels_path(part: &str) -> Result<String, DocxError> {
@@ -296,11 +386,15 @@ fn part_rels_path(part: &str) -> Result<String, DocxError> {
         || part.contains(':')
         || part.split('/').any(|v| v.is_empty() || v == "..")
     {
-        return Err(DocxError::new("无效 OOXML 部件路径"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_package_part_path_invalid(),
+        )));
     }
-    let (dir, file) = part
-        .rsplit_once('/')
-        .ok_or_else(|| DocxError::new("部件缺少目录"))?;
+    let (dir, file) = part.rsplit_once('/').ok_or_else(|| {
+        DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_package_part_directory_missing(),
+        ))
+    })?;
     Ok(format!("{dir}/_rels/{file}.rels"))
 }
 fn unsafe_field(s: &str) -> bool {
@@ -316,7 +410,10 @@ fn validate_rels(root: &Element) -> Result<(), DocxError> {
     if root.name != "Relationships"
         || root.get("xmlns") != Some("http://schemas.openxmlformats.org/package/2006/relationships")
     {
-        return Err(DocxError::new("模板关系必须使用标准 OOXML 命名空间"));
+        return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_docx_package_relationship_namespace_required(
+            ),
+        )));
     }
     for e in root.children.iter().filter_map(Xml::element) {
         if e.get("TargetMode")
@@ -327,15 +424,18 @@ fn validate_rels(root: &Element) -> Result<(), DocxError> {
                 .is_some_and(|v| v == format!("{REL}hyperlink"))
                 || !e.get("Target").is_some_and(super::external_url)
             {
-                return Err(DocxError::new(
-                    "模板不能含外部资源关系；普通 http/https/mailto/tel 超链接可保留",
-                ));
+                return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_docx_package_external_resource_forbidden(),
+                )));
             }
         } else if e
             .get("Target")
             .is_some_and(|v| v.contains('\\') || v.contains(':') || v.starts_with("//"))
         {
-            return Err(DocxError::new("模板含不安全资源关系"));
+            return Err(DocxError::new(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_docx_package_resource_relationship_unsafe(
+                ),
+            )));
         }
     }
     Ok(())

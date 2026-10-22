@@ -41,7 +41,9 @@ pub use types::*;
 /// This is deliberately conservative; it does not normalize the user's text.
 pub fn encode_literal(text: &str) -> Result<String, EngineError> {
     if text.len() > 1_048_576 || text.contains('\0') {
-        return Err(EngineError("文字过长或含不支持的 NUL 字符".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_lib_literal_text_invalid(),
+        ));
     }
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {

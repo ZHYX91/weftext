@@ -1046,8 +1046,8 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
         .unwrap_err();
     assert_eq!(error.code, "scopeChanged", "{error:?}");
     assert_eq!(
-        error.message,
-        "A newly admitted member changed the original moving tree"
+        error.explanation,
+        UiMessage::error_core_operations_newly_admitted_member_changed_original_moving_tree()
     );
     assert_eq!(actual_tree(&pair.br), created);
     pair.reject_every_effect(&preview);
@@ -1084,7 +1084,10 @@ fn compound_exchange_late_raw_metadata_budget_is_shared_across_original_roots() 
         .execute_operation(&preview.operation_id, &preview.plan_id)
         .unwrap_err();
     assert_eq!(error.code, "coverageIncomplete", "{error:?}");
-    assert_eq!(error.message, "Compound metadata members exceed 5000");
+    assert_eq!(
+        error.explanation,
+        UiMessage::error_core_operations_compound_metadata_members_exceed5000()
+    );
     assert!(
         !pair
             .b
@@ -1224,7 +1227,11 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{error:?}");
     assert!(
-        error.message.contains("underlying permissionDenied:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "permissionDenied"),
         "{error:?}"
     );
     let install = pair.b.journal_path(&preview.operation_id, "install");
@@ -1282,7 +1289,11 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{error:?}");
     assert!(
-        error.message.contains("Underlying permissionDenied:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "permissionDenied"),
         "{error:?}"
     );
     assert_eq!(metadata_tree(&pair.br), expected);
@@ -1341,7 +1352,11 @@ fn compound_exchange_interrupted_original_cut_rejects_late_received_head_without
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending");
     assert!(
-        error.message.contains("underlying testInterrupted:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{error:?}"
     );
     pair.restart();
@@ -1420,7 +1435,11 @@ fn interrupt_placement(pair: &mut Pair, preview: &crate::OperationPreview, point
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{point}: {error:?}");
     assert!(
-        error.message.contains("underlying testInterrupted:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{point}: {error:?}"
     );
     assert!(

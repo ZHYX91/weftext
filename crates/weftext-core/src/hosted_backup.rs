@@ -1,6 +1,7 @@
 //! Closed owner recovery backup, around the original BackupLibrary Plan.
 use super::*;
 use operations::Mutation;
+use weftext_messages::UiMessage;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -45,7 +46,7 @@ impl Core {
         if bytes.len() > MAX_SOURCE_BYTES + 4096 {
             return Err(CoreError::new(
                 "budget",
-                "Owner backup record exceeds its budget",
+                UiMessage::error_core_hosted_backup_owner_backup_record_exceeds_budget(),
             ));
         }
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
@@ -79,7 +80,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "libraryScopeRequired",
-                    "Owner backup requires a trusted admitted library scope",
+                    UiMessage::error_core_hosted_backup_owner_backup_requires_trusted_admitted_library_scope(),
                 )
             })?;
         let root = self
@@ -152,7 +153,7 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "invalidState",
-                    "Unknown original backup state",
+                    UiMessage::error_core_hosted_backup_unknown_original_backup_state(),
                 ));
             }
         };
@@ -317,7 +318,7 @@ impl Core {
         if status.status != "committed" {
             return Err(CoreError::new(
                 "artifactUnavailable",
-                "The original backup is not committed",
+                UiMessage::error_core_hosted_backup_original_backup_not_committed(),
             ));
         }
         self.owner_backup_artifact_from_plan(resource, operation)
@@ -337,7 +338,7 @@ impl Core {
         if status.status != "prepared" || status.plan_id.as_deref() != Some(plan_id) {
             return Err(CoreError::new(
                 "artifactUnavailable",
-                "The exact original backup is not prepared",
+                UiMessage::error_core_hosted_backup_exact_original_backup_not_prepared(),
             ));
         }
         self.owner_backup_artifact_from_plan(resource, operation)
@@ -394,7 +395,7 @@ impl Core {
         if manifest != 1 || bytes > 64 * 1024 * 1024 {
             return Err(CoreError::new(
                 "budget",
-                "Original backup artifact exceeds its budget",
+                UiMessage::error_core_hosted_backup_original_backup_artifact_exceeds_budget(),
             ));
         }
         let mut names = Vec::new();
@@ -437,7 +438,7 @@ impl Core {
         if output.len() + names.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
-                "Original backup members exceed their budget",
+                UiMessage::error_core_hosted_backup_original_backup_members_exceed_their_budget(),
             ));
         }
         Ok(OwnerBackupArtifact {

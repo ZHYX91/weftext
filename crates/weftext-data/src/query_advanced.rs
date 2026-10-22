@@ -19,9 +19,12 @@ pub use definition_preflight::{
 pub struct QueryAdvanced {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parameters: Vec<QueryParameter>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[serde(deserialize_with = "nonempty_union")]
-    pub union_all: Vec<QueryPlan>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "declared_union"
+    )]
+    pub union_all: Option<Vec<QueryPlan>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub distinct: Option<Vec<QueryColumn>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -47,16 +50,28 @@ pub struct QueryRelated {
     #[serde(default = "forward")]
     pub direction: String,
 }
-fn nonempty_union<'de, D: serde::Deserializer<'de>>(
+// A present null remains a normal serde sequence-type error; only an absent
+// field is None. An explicit empty vector survives to typed product preflight.
+fn declared_union<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> std::result::Result<Vec<QueryPlan>, D::Error> {
-    let plans = Vec::<QueryPlan>::deserialize(deserializer)?;
-    if plans.is_empty() {
-        return Err(serde::de::Error::custom(
-            "unionAll requires at least one producer",
-        ));
+) -> std::result::Result<Option<Vec<QueryPlan>>, D::Error> {
+    Vec::<QueryPlan>::deserialize(deserializer).map(Some)
+}
+impl QueryAdvanced {
+    pub fn union_branches(&self) -> &[QueryPlan] {
+        self.union_all.as_deref().unwrap_or_default()
     }
-    Ok(plans)
+    pub fn union_branches_mut(&mut self) -> &mut [QueryPlan] {
+        self.union_all.as_deref_mut().unwrap_or_default()
+    }
+    pub(crate) fn validate_union(&self) -> Result<()> {
+        if self.union_all.as_ref().is_some_and(Vec::is_empty) {
+            return Err(DataError::new(
+                UiMessage::error_data_query_advanced_union_requires_producer(),
+            ));
+        }
+        Ok(())
+    }
 }
 fn forward() -> String {
     "forward".into()
@@ -115,8 +130,8 @@ fn selected<'a>(
 ) -> Result<(&'a DefinitionRevision, SavedQuery)> {
     let owners: Vec<_> = owners.iter().filter(|o| o.owner == call.owner).collect();
     if owners.len() != 1 {
-        return Err(DataError(
-            "definition_unavailable: owner history missing/ambiguous".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_query_advanced_definition_owner_history_missing_or_ambiguous(),
         ));
     }
     let history = &owners[0].history;
@@ -128,8 +143,8 @@ fn selected<'a>(
         })
         .collect();
     if revisions.len() != 1 {
-        return Err(DataError(
-            "definition_unavailable: exact revision missing/ambiguous".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_query_advanced_definition_revision_missing_or_ambiguous(),
         ));
     }
     Ok((revisions[0], select_definition(&call.selection, history)?))
@@ -153,21 +168,24 @@ pub fn definition_dependencies(
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError(
-                "definition-call expansion budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_definition_call_expansion_budget_exhausted(),
             ));
         }
         let Some(a) = &plan.advanced else {
             return Ok(());
         };
-        if usize::from(!a.union_all.is_empty())
+        a.validate_union()?;
+        if usize::from(a.union_all.is_some())
             + usize::from(a.related.is_some())
             + usize::from(a.call.is_some())
             > 1
         {
-            return Err(DataError("Query requires one producer node".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_query_requires_one_producer_node(),
+            ));
         }
-        for child in &a.union_all {
+        for child in a.union_branches() {
             visit(child, owners, stack, seen, out, nodes, depth + 1)?;
         }
         if let Some(r) = &a.related {
@@ -193,7 +211,9 @@ pub fn definition_dependencies(
                 let (revision, definition) = selected(call, owners)?;
                 let identity = format!("{}:{}:{}", call.owner, revision.revision, definition.key);
                 if stack.contains(&identity) {
-                    return Err(DataError("definition-call cycle".into()));
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_definition_call_cycle(),
+                    ));
                 }
                 stack.push(identity);
                 visit(&definition.plan, owners, stack, seen, out, nodes, depth + 1)?;
@@ -245,8 +265,8 @@ fn parameter_bindings(
             || reserved.contains_key(&p.name)
             || shapes.contains_key(&p.name)
         {
-            return Err(DataError(
-                "Parameter name collides or is not a CEL identifier".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_parameter_name_collides_or_invalid_identifier(),
             ));
         }
         // Reuse the installed native Shape validator, without pretending this
@@ -258,7 +278,13 @@ fn parameter_bindings(
         }
         let value = values.get(&p.name).or(p.default.as_ref());
         if required && value.is_none() {
-            return Err(DataError(format!("Missing required parameter {}", p.name)));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_required_parameter_missing(
+                    weftext_messages::params::ErrorDataQueryAdvancedRequiredParameterMissing {
+                        parameter_name: (p.name).to_string(),
+                    },
+                ),
+            ));
         }
         if let Some(value) = value {
             validate_parameter(schema, p, value)?;
@@ -274,7 +300,9 @@ fn parameter_bindings(
         shapes.insert(p.name.clone(), p.shape.clone());
     }
     if values.keys().any(|k| !shapes.contains_key(k)) {
-        return Err(DataError("Unknown Query parameter".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_unknown_query_parameter(),
+        ));
     }
     Ok((cells, shapes))
 }
@@ -321,17 +349,20 @@ fn validate_plan_static(
     ) -> Result<QueryResult> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Query plan expansion budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_query_plan_expansion_budget_exhausted()));
         }
         let (parameters, shapes) = parameter_bindings(plan, schema, &BTreeMap::new(), false)?;
         let mut remaining = QueryBudget::default().max_steps;
         let a = plan.advanced.clone().unwrap_or_default();
-        if usize::from(!a.union_all.is_empty())
+        a.validate_union()?;
+        if usize::from(a.union_all.is_some())
             + usize::from(a.related.is_some())
             + usize::from(a.call.is_some())
             > 1
         {
-            return Err(DataError("Query requires one producer node".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_query_requires_one_producer_node(),
+            ));
         }
         if let Some(call) = &a.call {
             require_terminal_scope(plan)?;
@@ -354,13 +385,13 @@ fn validate_plan_static(
                     let p = target
                         .iter()
                         .find(|p| &p.name == name)
-                        .ok_or_else(|| DataError("Unknown callee parameter".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_advanced_unknown_callee_parameter()))?;
                     let compiled = compile(e, schema, &vars)?;
                     if !(p.nullable && compiled.ty == scalar("none"))
                         && !compatible(&compiled.ty, &shape_type(baseline, &p.shape))
                     {
-                        return Err(DataError(
-                            "Saved-call argument type violates callee parameter shape".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_advanced_saved_call_argument_shape_mismatch(),
                         ));
                     }
                 }
@@ -368,7 +399,7 @@ fn validate_plan_static(
                     .iter()
                     .any(|p| !call.arguments.contains_key(&p.name) && p.default.is_none())
                 {
-                    return Err(DataError("Missing required callee parameter".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_required_callee_parameter_missing()));
                 }
                 let result = visit(
                     input,
@@ -397,8 +428,8 @@ fn validate_plan_static(
                 || plan.group.is_some()
                 || a.distinct.is_some()
             {
-                return Err(DataError(
-                    "Saved-call terminal edits require exact definition context validation".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_saved_call_terminal_edit_needs_definition_validation(),
                 ));
             }
             let leaf = QueryPlan {
@@ -419,16 +450,16 @@ fn validate_plan_static(
                 &BTreeMap::new(),
             );
         }
-        if !a.union_all.is_empty() {
+        if a.union_all.is_some() {
             require_terminal_scope(plan)?;
             let mut first = None;
-            for branch in &a.union_all {
+            for branch in a.union_branches() {
                 let result = visit(input, branch, schema, context, nodes, depth + 1)?;
                 if first.as_ref().is_some_and(|first: &QueryResult| {
                     first.terminal_schema != result.terminal_schema
                 }) {
-                    return Err(DataError(
-                        "union_all requires identical declared terminal types/columns".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_union_all_terminal_types_or_columns_mismatch(),
                     ));
                 }
                 first = Some(result);
@@ -449,7 +480,9 @@ fn validate_plan_static(
             if !schema.relations.iter().any(|r| r.id == related.relation)
                 || !matches!(related.direction.as_str(), "forward" | "inverse")
             {
-                return Err(DataError("Unknown relation/direction".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_unknown_relation_or_direction(),
+                ));
             }
             visit(input, &related.from, schema, context, nodes, depth + 1)?;
         }
@@ -509,14 +542,15 @@ pub fn required_query_lifecycles(
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Query scope expansion budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_query_scope_expansion_budget_exhausted()));
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         if let Some(call) = &a.call {
             let (_, definition) = selected(call, owners)?;
             visit(&definition.plan, owners, out, nodes, depth + 1)?;
-        } else if !a.union_all.is_empty() {
-            for p in &a.union_all {
+        } else if a.union_all.is_some() {
+            for p in a.union_branches() {
                 visit(p, owners, out, nodes, depth + 1)?;
             }
         } else {
@@ -526,7 +560,9 @@ pub fn required_query_lifecycles(
                 &plan.scope.lifecycle
             };
             if !matches!(lifecycle, "live" | "trash") {
-                return Err(DataError("Unsupported lifecycle scope".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_unsupported_lifecycle_scope(),
+                ));
             }
             out.insert(lifecycle.to_string());
             if let Some(related) = &a.related {
@@ -554,14 +590,15 @@ pub fn required_query_scopes(
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Query scope expansion budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_query_scope_expansion_budget_exhausted()));
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         if let Some(call) = &a.call {
             let (_, definition) = selected(call, owners)?;
             visit(&definition.plan, owners, out, nodes, depth + 1)?;
-        } else if !a.union_all.is_empty() {
-            for p in &a.union_all {
+        } else if a.union_all.is_some() {
+            for p in a.union_branches() {
                 visit(p, owners, out, nodes, depth + 1)?;
             }
         } else {
@@ -616,9 +653,14 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
             Ok(())
         }
         if source.len() > 16384 {
-            return Err(DataError("CEL source exceeds profile budget".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_cel_source_budget_exceeded(),
+            ));
         }
-        let program = Program::compile(source).map_err(|e| DataError(e.to_string()))?;
+        let program = Program::compile(source).map_err(|error| {
+            DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
         walk(program.expression(), &BTreeSet::new(), out)
     }
     fn visit(
@@ -630,10 +672,11 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Query product expansion budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_query_product_expansion_budget_exhausted()));
         }
         let a = plan.advanced.clone().unwrap_or_default();
-        if plan.select.is_empty() && a.union_all.is_empty() && a.call.is_none() {
+        a.validate_union()?;
+        if plan.select.is_empty() && a.union_all.is_none() && a.call.is_none() {
             out.insert("title".into());
         }
         for e in plan
@@ -660,7 +703,7 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
                 expression(&k.expr, out)?;
             }
         }
-        for p in &a.union_all {
+        for p in a.union_branches() {
             visit(p, owners, out, nodes, depth + 1)?;
         }
         if let Some(r) = &a.related {
@@ -701,7 +744,7 @@ pub fn query_output_columns(
         depth: usize,
     ) -> Result<Vec<String>> {
         if depth > MAX_CALL_DEPTH {
-            return Err(DataError("Query column expansion budget".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_query_column_expansion_budget_exceeded()));
         }
         if let Some(group) = &plan.group {
             return Ok(group
@@ -715,11 +758,12 @@ pub fn query_output_columns(
             return Ok(plan.select.iter().map(|c| c.name.clone()).collect());
         }
         if let Some(a) = &plan.advanced {
+            a.validate_union()?;
             if let Some(call) = &a.call {
                 let (_, definition) = selected(call, owners)?;
                 return visit(&definition.plan, owners, depth + 1);
             }
-            if let Some(branch) = a.union_all.first() {
+            if let Some(branch) = a.union_branches().first() {
                 return visit(branch, owners, depth + 1);
             }
         }
@@ -762,12 +806,12 @@ pub fn query_read_requirements(
                         .args
                         .first()
                         .and_then(literal_text)
-                        .ok_or_else(|| DataError("Literal FieldId required".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_advanced_literal_field_id_required()))?;
                     if c.args.len() != 1
                         || c.target.is_some()
                         || !schema.fields.iter().any(|f| f.id == id)
                     {
-                        return Err(DataError("Unknown canonical FieldId".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_unknown_canonical_field_id()));
                     }
                     out.fields.insert(id);
                 }
@@ -797,9 +841,14 @@ pub fn query_read_requirements(
             Ok(())
         }
         if source.len() > 16384 {
-            return Err(DataError("CEL source exceeds profile budget".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_cel_source_budget_exceeded(),
+            ));
         }
-        let program = Program::compile(source).map_err(|e| DataError(e.to_string()))?;
+        let program = Program::compile(source).map_err(|error| {
+            DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
         walk(program.expression(), schema, bound, out)
     }
     fn visit(
@@ -812,17 +861,20 @@ pub fn query_read_requirements(
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Query read closure budget".into()));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_query_read_closure_budget_exceeded(),
+            ));
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         let mut bound = a
             .parameters
             .iter()
             .map(|p| p.name.clone())
             .collect::<BTreeSet<_>>();
-        let terminal = !a.union_all.is_empty() || a.call.is_some();
+        let terminal = a.union_all.is_some() || a.call.is_some();
         if terminal {
-            if let Some(branch) = a.union_all.first() {
+            if let Some(branch) = a.union_branches().first() {
                 bound.extend(query_output_columns(branch, &context.definitions)?);
             }
             if let Some(call) = &a.call {
@@ -880,12 +932,16 @@ pub fn query_read_requirements(
             out.types.insert(
                 schema
                     .type_id(t)
-                    .ok_or_else(|| DataError("Unknown Query type".into()))?
+                    .ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_query_advanced_unknown_query_type(),
+                        )
+                    })?
                     .into(),
             );
             out.products.insert("types".into());
         }
-        for child in &a.union_all {
+        for child in a.union_branches() {
             visit(child, schema, context, out, nodes, depth + 1)?;
         }
         if let Some(r) = &a.related {
@@ -893,7 +949,12 @@ pub fn query_read_requirements(
                 .relations
                 .iter()
                 .find(|d| d.id == r.relation)
-                .ok_or_else(|| DataError("Unknown RelationId".into()))?;
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_unknown_relation_id(
+                        ),
+                    )
+                })?;
             out.relations.insert(relation.id.clone());
             out.fields.insert(relation.field.clone());
             out.types.insert(relation.source_type.clone());
@@ -915,7 +976,7 @@ pub fn query_read_requirements(
                     s.schema == definition.binding.schema
                         && s.revision == definition.binding.revision
                 })
-                .ok_or_else(|| DataError("Missing exact definition baseline".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_advanced_exact_definition_baseline_missing()))?;
             visit(
                 &definition.plan,
                 &baseline.projection,
@@ -941,10 +1002,13 @@ fn validate_parameter(
         return Ok(());
     }
     if !schema.validate(&parameter.shape, value).is_valid() {
-        return Err(DataError(format!(
-            "Parameter {} violates its declared shape",
-            parameter.name
-        )));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_parameter_shape_mismatch(
+                weftext_messages::params::ErrorDataQueryAdvancedParameterShapeMismatch {
+                    parameter_name: (parameter.name).to_string(),
+                },
+            ),
+        ));
     }
     Ok(())
 }
@@ -984,7 +1048,7 @@ fn check_tag_structure(
     ) -> Result<bool> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Tag structure closure budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_tag_structure_closure_budget_exhausted()));
         }
         fn ast_needs(ast: &IdedExpr) -> Result<bool> {
             if matches!(&ast.expr, Expr::Call(c) if c.func_name == "tagInSubtree") {
@@ -999,6 +1063,7 @@ fn check_tag_structure(
             Ok(found)
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         let mut found = false;
         for source in plan
             .r#where
@@ -1021,15 +1086,20 @@ fn check_tag_structure(
             )
         {
             if source.len() > 16384 {
-                return Err(DataError("CEL source exceeds profile budget".into()));
+                return Err(DataError::budget(
+                    weftext_messages::UiMessage::error_data_query_advanced_cel_source_budget_exceeded(),
+                ));
             }
             found |= ast_needs(
                 Program::compile(source)
-                    .map_err(|e| DataError(e.to_string()))?
+                    .map_err(|error| {
+                        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+                            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+                    })?
                     .expression(),
             )?;
         }
-        for child in &a.union_all {
+        for child in a.union_branches() {
             found |= needs(child, owners, depth + 1, nodes)?;
         }
         if let Some(r) = &a.related {
@@ -1046,7 +1116,7 @@ fn check_tag_structure(
     let tags = context
         .tag_structure
         .as_ref()
-        .ok_or_else(|| DataError("Frozen qualified tag structure unavailable".into()))?;
+        .ok_or_else(|| DataError::unavailable(weftext_messages::UiMessage::error_data_query_advanced_frozen_qualified_tag_structure_unavailable()))?;
     fn roots(
         ast: &IdedExpr,
         parameters: &BTreeMap<String, Cell>,
@@ -1058,7 +1128,9 @@ fn check_tag_structure(
             && call.func_name == "tagInSubtree"
         {
             if call.target.is_some() || call.args.len() != 2 {
-                return Err(DataError("tagInSubtree arity".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_tag_in_subtree_arity_mismatch(),
+                ));
             }
             let reference = match &call.args[1].expr {
                 Expr::Call(root)
@@ -1074,15 +1146,14 @@ fn check_tag_structure(
                         value: NativeValue::Text(s),
                     }) => Some(s.clone()),
                     _ => {
-                        return Err(DataError(
-                            "tagInSubtree root requires a frozen typed parameter".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_advanced_tag_root_requires_frozen_typed_parameter(),
                         ));
                     }
                 },
                 _ => {
-                    return Err(DataError(
-                        "tagInSubtree root requires a frozen typed parameter or literal TagRef"
-                            .into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_tag_root_requires_frozen_parameter_or_literal(),
                     ));
                 }
             };
@@ -1121,7 +1192,7 @@ fn check_tag_structure(
     ) -> Result<()> {
         *nodes += 1;
         if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
-            return Err(DataError("Tag structure closure budget exhausted".into()));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_query_advanced_tag_structure_closure_budget_exhausted()));
         }
         let (mut parameters, shapes) =
             parameter_bindings(plan, schema, values, require_parameters)?;
@@ -1131,6 +1202,7 @@ fn check_tag_structure(
             }
         }
         let advanced = plan.advanced.clone().unwrap_or_default();
+        advanced.validate_union()?;
         for expression in plan
             .r#where
             .iter()
@@ -1153,9 +1225,14 @@ fn check_tag_structure(
             )
         {
             if expression.len() > 16384 {
-                return Err(DataError("CEL source exceeds profile budget".into()));
+                return Err(DataError::budget(
+                    weftext_messages::UiMessage::error_data_query_advanced_cel_source_budget_exceeded(),
+                ));
             }
-            let program = Program::compile(expression).map_err(|e| DataError(e.to_string()))?;
+            let program = Program::compile(expression).map_err(|error| {
+                DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
             roots(
                 program.expression(),
                 &parameters,
@@ -1169,7 +1246,7 @@ fn check_tag_structure(
             .filter(|(_, cell)| matches!(cell, Cell::Absent))
             .map(|(name, _)| name.clone())
             .collect::<BTreeSet<_>>();
-        for child in &advanced.union_all {
+        for child in advanced.union_branches() {
             visit(
                 child,
                 schema,
@@ -1219,7 +1296,7 @@ fn check_tag_structure(
                 let value = match cell {
                     Cell::Value { value } => value,
                     Cell::Null => NativeValue::None,
-                    _ => return Err(DataError("Saved-call argument is undecided".into())),
+                    _ => return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_saved_call_argument_undecided())),
                 };
                 arguments.insert(name.clone(), value);
             }
@@ -1272,14 +1349,14 @@ fn exact_definition_schema<'a>(
         })
         .collect::<Vec<_>>();
     if matches.len() != 1 {
-        return Err(DataError(
-            "definition_unavailable: exact schema baseline missing/ambiguous".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_query_advanced_definition_schema_baseline_missing_or_ambiguous(),
         ));
     }
     let baseline = &matches[0].projection;
     if !baseline_contract_compatible(baseline, current)? {
-        return Err(DataError(
-            "definition_unavailable: schema compatibility requires an explicit migration".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_query_advanced_definition_schema_requires_explicit_migration(),
         ));
     }
     Ok(baseline)
@@ -1308,7 +1385,11 @@ pub(crate) fn execute_advanced_query_traced(
         .iter()
         .flat_map(|o| &o.history)
         .try_fold(0usize, |bytes, r| bytes.checked_add(r.source.len()))
-        .ok_or_else(|| DataError("host-budget-exhausted".into()))?
+        .ok_or_else(|| {
+            DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted(),
+            )
+        })?
         .saturating_add(
             context
                 .tag_structure
@@ -1316,7 +1397,9 @@ pub(crate) fn execute_advanced_query_traced(
                 .map_or(0, FrozenTagStructure::retained_bytes),
         );
     if definition_bytes > limits.max_source_bytes {
-        return Err(DataError("host-budget-exhausted".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted(),
+        ));
     }
     definition_dependencies(plan, &context.definitions)?;
     prepare_tag_structure(plan, schema, context)?;
@@ -1353,8 +1436,8 @@ impl Runner<'_> {
     ) -> Result<QueryResult> {
         self.nodes += 1;
         if depth > MAX_CALL_DEPTH || self.nodes > MAX_PLAN_NODES {
-            return Err(DataError(
-                "definition-call expansion budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_advanced_definition_call_expansion_budget_exhausted(),
             ));
         }
         let trace = self.trace.as_ref().map(|t| t.at(baseline_key.clone()));
@@ -1369,11 +1452,14 @@ impl Runner<'_> {
         }
         let (parameters, shapes) = bind_parameters(plan, schema, values)?;
         let advanced = plan.advanced.clone().unwrap_or_default();
-        let producer_count = usize::from(!advanced.union_all.is_empty())
+        advanced.validate_union()?;
+        let producer_count = usize::from(advanced.union_all.is_some())
             + usize::from(advanced.related.is_some())
             + usize::from(advanced.call.is_some());
         if producer_count > 1 {
-            return Err(DataError("Query requires one producer node".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_query_requires_one_producer_node(),
+            ));
         }
         if let Some(call) = &advanced.call {
             let (_, definition) = selected(call, &self.context.definitions)?;
@@ -1401,7 +1487,7 @@ impl Runner<'_> {
                 let value = match cell {
                     Cell::Value { value } => value,
                     Cell::Null => NativeValue::None,
-                    _ => return Err(DataError("Saved-call argument is undecided".into())),
+                    _ => return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_saved_call_argument_undecided())),
                 };
                 args.insert(name.clone(), value);
             }
@@ -1428,10 +1514,10 @@ impl Runner<'_> {
                 self.context.tag_structure.as_ref(),
             );
         }
-        if !advanced.union_all.is_empty() {
+        if advanced.union_all.is_some() {
             require_terminal_scope(plan)?;
             let mut result: Option<QueryResult> = None;
-            for (ordinal, branch) in advanced.union_all.iter().enumerate() {
+            for (ordinal, branch) in advanced.union_branches().iter().enumerate() {
                 let supplied = parameter_subset(branch, &parameters);
                 let mut child =
                     self.run(branch, schema, &supplied, depth + 1, baseline_key.clone())?;
@@ -1440,8 +1526,8 @@ impl Runner<'_> {
                 }
                 if let Some(result) = &mut result {
                     if result.terminal_schema != child.terminal_schema {
-                        return Err(DataError(
-                            "union_all requires identical declared terminal types/columns".into(),
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_query_advanced_union_all_terminal_types_or_columns_mismatch(),
                         ));
                     }
                     result.rows.extend(child.rows);
@@ -1453,7 +1539,7 @@ impl Runner<'_> {
                     result.limited |= child.limited;
                     if result.rows.len() > self.limits.max_rows {
                         result.rows.truncate(self.limits.max_rows);
-                        mark_partial(result, "host-budget-exhausted");
+                        mark_partial(result, weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted().into());
                         break;
                     }
                 } else {
@@ -1586,8 +1672,8 @@ impl Runner<'_> {
             if let Some(path) = self.context.scope_bindings.get(directory) {
                 resolved.scope.directory = Some(path.clone());
             } else if directory.starts_with("weftext-") && directory.contains("://") {
-                return Err(DataError(
-                    "scope_unavailable: exact frozen directory binding missing".into(),
+                return Err(DataError::unavailable(
+                    weftext_messages::UiMessage::error_data_query_advanced_frozen_directory_binding_missing(),
                 ));
             }
         }
@@ -1651,13 +1737,18 @@ fn require_terminal_scope(plan: &QueryPlan) -> Result<()> {
         || !plan.scope.descendants
         || !plan.types.is_empty()
     {
-        return Err(DataError(
-            "Terminal producer scope belongs in its scan branches".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_terminal_scope_must_be_in_scan_branches(),
         ));
     }
     Ok(())
 }
-fn mark_partial(result: &mut QueryResult, reason: &str) {
+fn mark_partial_error(result: &mut QueryResult, error: DataError) {
+    result.coverage = "partial".into();
+    result.aggregate_exact = false;
+    result.diagnostics.extend(error.into_diagnostics());
+}
+fn mark_partial(result: &mut QueryResult, reason: ErrorDescription) {
     result.coverage = "partial".into();
     result.aggregate_exact = false;
     result.diagnostics.push(reason.into());
@@ -1671,17 +1762,21 @@ fn related_notes(
     remaining: &mut u64,
     max_source_bytes: usize,
     metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
-) -> Result<(Vec<FrozenNote>, Vec<String>, usize)> {
+) -> Result<(Vec<FrozenNote>, Vec<ErrorDescription>, usize)> {
     if !matches!(related.direction.as_str(), "forward" | "inverse") {
-        return Err(DataError(
-            "related direction requires forward/inverse".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_related_direction_invalid(),
         ));
     }
     let relation = schema
         .relations
         .iter()
         .find(|r| r.id == related.relation)
-        .ok_or_else(|| DataError("Unknown registered RelationId".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_unknown_registered_relation_id(),
+            )
+        })?;
     let mut seeds = BTreeSet::new();
     for row in &origin.rows {
         let identity = row.entity_key.as_deref().or_else(|| {
@@ -1696,7 +1791,7 @@ fn related_notes(
         });
         seeds.insert(
             identity
-                .ok_or_else(|| DataError("related requires declared node identities".into()))?
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_query_advanced_related_requires_declared_node_identities()))?
                 .to_string(),
         );
     }
@@ -1741,14 +1836,17 @@ fn related_notes(
         }
         let note_bytes = query_note_bytes(note, metadata)?;
         if *remaining == 0 || consumed.saturating_add(note_bytes) > max_source_bytes {
-            gaps.push("host-budget-exhausted".into());
+            gaps.push(
+                weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted()
+                    .into(),
+            );
             break;
         }
         *remaining -= 1;
         consumed += note_bytes;
         let p = query_projection(note, schema, metadata);
         if p.qualification != "qualified" {
-            gaps.push("related source projection unavailable".into());
+            gaps.push(weftext_messages::UiMessage::error_data_query_advanced_related_source_projection_unavailable().into());
             continue;
         }
         if !p.resolved_types.contains(&relation.source_type) {
@@ -1765,7 +1863,7 @@ fn related_notes(
                 refs(value, &relation.target_path, &mut endpoints);
                 for endpoint in endpoints {
                     if *remaining == 0 {
-                        gaps.push("host-budget-exhausted".into());
+                        gaps.push(weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted().into());
                         break 'scan;
                     }
                     *remaining -= 1;
@@ -1777,7 +1875,7 @@ fn related_notes(
                             if *remaining == 0
                                 || consumed.saturating_add(target_bytes) > max_source_bytes
                             {
-                                gaps.push("host-budget-exhausted".into());
+                                gaps.push(weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted().into());
                                 break 'scan;
                             }
                             *remaining -= 1;
@@ -1798,7 +1896,7 @@ fn related_notes(
                         targets.insert(endpoint.to_string(), qualified);
                     }
                     if !targets[endpoint] {
-                        gaps.push("related endpoint qualification unavailable".into());
+                        gaps.push(weftext_messages::UiMessage::error_data_query_advanced_related_endpoint_qualification_unavailable().into());
                         continue;
                     }
                     if (related.direction == "inverse" || relation.direction == "symmetric")
@@ -1813,9 +1911,11 @@ fn related_notes(
                     }
                 }
             }
-            Some(Cell::Invalid { .. } | Cell::Unavailable { .. }) => {
-                gaps.push("related assertion undecided".into())
-            }
+            Some(Cell::Invalid { .. } | Cell::Unavailable { .. }) => gaps.push(
+                weftext_messages::UiMessage::error_data_query_advanced_related_assertion_undecided(
+                )
+                .into(),
+            ),
             _ => {}
         }
     }
@@ -1826,10 +1926,16 @@ fn related_notes(
         .cloned()
         .collect::<Vec<_>>();
     if notes.len() != wanted.len() {
-        gaps.push("related endpoint unavailable".into());
+        gaps.push(
+            weftext_messages::UiMessage::error_data_query_advanced_related_endpoint_unavailable()
+                .into(),
+        );
     }
     if origin.coverage == "partial" || input.coverage == "partial" {
-        gaps.push("related scan coverage partial".into());
+        gaps.push(
+            weftext_messages::UiMessage::error_data_query_advanced_related_scan_coverage_partial()
+                .into(),
+        );
     }
     Ok((notes, gaps, consumed))
 }
@@ -1848,7 +1954,7 @@ fn terminal_env(
             .insert(name.clone(), shape_type(schema, shape))
             .is_some()
         {
-            return Err(DataError("Parameter collides with terminal column".into()));
+            return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_parameter_collides_with_terminal_column()));
         }
     }
     let mut env = query_env_traced(schema, trace)?;
@@ -1916,12 +2022,12 @@ fn sort_terminal(
             .iter()
             .map(|o| {
                 if !matches!(o.nulls.as_str(), "first" | "last") {
-                    return Err(DataError("Sort nulls must be first/last".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_sort_null_placement_invalid()));
                 }
                 let c = compile(&o.expr, schema, &vars)?;
                 if !orderable(&c.ty) {
-                    return Err(DataError(
-                        "Sort needs one declared scalar comparator".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_sort_requires_declared_scalar_comparator(),
                     ));
                 }
                 Ok(c)
@@ -1946,12 +2052,16 @@ fn sort_terminal(
                         .iter()
                         .any(|c| matches!(c, Cell::Invalid { .. } | Cell::Unavailable { .. }))
                     {
-                        mark_partial(result, "sort input undecided");
+                        mark_partial(result, weftext_messages::UiMessage::error_data_query_advanced_sort_input_undecided().into());
                     }
                     sorted.push((row, keys));
                 }
                 Err(_) => {
-                    mark_partial(result, "host-budget-exhausted");
+                    mark_partial(
+                        result,
+                        weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted()
+                            .into(),
+                    );
                     break;
                 }
             }
@@ -1976,17 +2086,26 @@ fn sort_terminal(
     {
         mark_partial(
             result,
-            "native-decoder traversal budget exhausted in consumed field",
+            weftext_messages::UiMessage::error_data_query_advanced_consumed_field_decoder_budget_exhausted().into(),
         );
     }
     if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
-        mark_partial(result, "tag structure input unavailable");
+        mark_partial(
+            result,
+            weftext_messages::UiMessage::error_data_query_advanced_tag_structure_input_unavailable(
+            )
+            .into(),
+        );
     }
     if env
         .provider_partial
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        mark_partial(result, "temporal expansion partial");
+        mark_partial(
+            result,
+            weftext_messages::UiMessage::error_data_query_advanced_temporal_expansion_partial()
+                .into(),
+        );
     }
     Ok(())
 }
@@ -2008,8 +2127,8 @@ fn distinct_terminal(
         return Ok(result);
     };
     if keys.is_empty() {
-        return Err(DataError(
-            "distinct requires explicit typed equality keys".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_distinct_requires_typed_equality_keys(),
         ));
     }
     let (vars, env) = terminal_env(&result, schema, parameters, shapes, trace, tags)?;
@@ -2033,7 +2152,11 @@ fn distinct_terminal(
         let values = match values {
             Ok(v) => v,
             Err(_) => {
-                mark_partial(&mut result, "host-budget-exhausted");
+                mark_partial(
+                    &mut result,
+                    weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted()
+                        .into(),
+                );
                 break;
             }
         };
@@ -2041,13 +2164,17 @@ fn distinct_terminal(
             .iter()
             .any(|c| matches!(c, Cell::Invalid { .. } | Cell::Unavailable { .. }))
         {
-            mark_partial(&mut result, "distinct key undecided");
+            mark_partial(
+                &mut result,
+                weftext_messages::UiMessage::error_data_query_advanced_distinct_key_undecided()
+                    .into(),
+            );
             continue;
         }
         let key = match canonical_cells(&values, &compiled) {
             Ok(k) => k,
             Err(e) => {
-                mark_partial(&mut result, &e.0);
+                mark_partial_error(&mut result, e);
                 continue;
             }
         };
@@ -2102,17 +2229,26 @@ fn distinct_terminal(
     {
         mark_partial(
             &mut result,
-            "native-decoder traversal budget exhausted in consumed field",
+            weftext_messages::UiMessage::error_data_query_advanced_consumed_field_decoder_budget_exhausted().into(),
         );
     }
     if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
-        mark_partial(&mut result, "tag structure input unavailable");
+        mark_partial(
+            &mut result,
+            weftext_messages::UiMessage::error_data_query_advanced_tag_structure_input_unavailable(
+            )
+            .into(),
+        );
     }
     if env
         .provider_partial
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        mark_partial(&mut result, "temporal expansion partial");
+        mark_partial(
+            &mut result,
+            weftext_messages::UiMessage::error_data_query_advanced_temporal_expansion_partial()
+                .into(),
+        );
     }
     result.total_known = result.rows.len();
     if let Some(t) = take {
@@ -2141,13 +2277,13 @@ fn transform(
         .as_ref()
         .map(|u| {
             if vars.contains_key(&u.binding) {
-                return Err(DataError(
-                    "Unnest binding collides with terminal column".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_unnest_binding_collides_with_terminal_column(),
                 ));
             }
             let c = compile(&u.array, schema, &vars)?;
             let QType::List(item) = &c.ty else {
-                return Err(DataError("Unnest requires array".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_unnest_requires_array()));
             };
             vars.insert(u.binding.clone(), *item.clone());
             Ok(c)
@@ -2159,7 +2295,9 @@ fn transform(
         .map(|p| compile(p, schema, &vars))
         .transpose()?;
     if predicate.as_ref().is_some_and(|p| p.ty != scalar("bool")) {
-        return Err(DataError("where must return bool".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_query_advanced_where_requires_boolean_result(),
+        ));
     }
     let columns = plan
         .select
@@ -2173,12 +2311,12 @@ fn transform(
             .iter()
             .map(|o| {
                 if !matches!(o.nulls.as_str(), "first" | "last") {
-                    return Err(DataError("Sort nulls must be first/last".into()));
+                    return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_sort_null_placement_invalid()));
                 }
                 let c = compile(&o.expr, schema, &vars)?;
                 if !orderable(&c.ty) {
-                    return Err(DataError(
-                        "Sort needs one declared scalar comparator".into(),
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_query_advanced_sort_requires_declared_scalar_comparator(),
                     ));
                 }
                 Ok(c)
@@ -2192,11 +2330,11 @@ fn transform(
             .map(|k| compile(&k.expr, schema, &vars))
             .collect::<Result<Vec<_>>>()?;
         let aggs=group.aggregates.iter().map(|a|{
-            if !matches!(a.op.as_str(),"count"|"sum"|"min"|"max"){return Err(DataError("Unknown aggregate".into()));}
-            if a.op=="count"{if a.expr.is_some(){return Err(DataError("count takes no expression".into()));}Ok(None)}else{
-                let c=compile(a.expr.as_deref().ok_or_else(||DataError("Aggregate expression required".into()))?,schema,&vars)?;
-                if a.op=="sum"&&!matches!(&c.ty,QType::Scalar(s)if matches!(s.as_str(),"int"|"decimal"|"exact_decimal")){return Err(DataError("sum needs int or exact decimal".into()));}
-                if matches!(a.op.as_str(),"min"|"max")&&!orderable(&c.ty){return Err(DataError("min/max need an explicit scalar comparator".into()));}
+            if !matches!(a.op.as_str(),"count"|"sum"|"min"|"max"){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_unknown_aggregate()));}
+            if a.op=="count"{if a.expr.is_some(){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_count_rejects_expression()));}Ok(None)}else{
+                let c=compile(a.expr.as_deref().ok_or_else(||DataError::new(weftext_messages::UiMessage::error_data_query_advanced_aggregate_expression_required()))?,schema,&vars)?;
+                if a.op=="sum"&&!matches!(&c.ty,QType::Scalar(s)if matches!(s.as_str(),"int"|"decimal"|"exact_decimal")){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_sum_requires_integer_or_exact_decimal()));}
+                if matches!(a.op.as_str(),"min"|"max")&&!orderable(&c.ty){return Err(DataError::new(weftext_messages::UiMessage::error_data_query_advanced_min_max_requires_scalar_comparator()));}
                 Ok(Some(c))
             }
         }).collect::<Result<Vec<_>>>()?;
@@ -2208,7 +2346,9 @@ fn transform(
             .chain(group.aggregates.iter().map(|a| &a.name))
         {
             if name.is_empty() || !names.insert(name) {
-                return Err(DataError("Duplicate group column".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_query_advanced_duplicate_group_column(),
+                ));
             }
         }
         (keys, aggs)
@@ -2218,7 +2358,10 @@ fn transform(
     let mut names = BTreeSet::new();
     for c in &plan.select {
         if c.name.is_empty() || !names.insert(&c.name) {
-            return Err(DataError("Duplicate projection column".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_duplicate_projection_column(
+                ),
+            ));
         }
     }
     let mut rows = vec![];
@@ -2251,7 +2394,11 @@ fn transform(
                     })
                     .collect(),
                 _ => {
-                    mark_partial(&mut result, "unnest input undecided");
+                    mark_partial(
+                        &mut result,
+                        weftext_messages::UiMessage::error_data_query_advanced_unnest_input_undecided()
+                            .into(),
+                    );
                     continue;
                 }
             }
@@ -2260,7 +2407,11 @@ fn transform(
         };
         for (key, cells) in expanded {
             if rows.len() >= limits.max_rows {
-                mark_partial(&mut result, "host-budget-exhausted");
+                mark_partial(
+                    &mut result,
+                    weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted()
+                        .into(),
+                );
                 break 'input;
             }
             if let Some(p) = &predicate {
@@ -2272,7 +2423,11 @@ fn transform(
                         value: NativeValue::Bool(false),
                     }) => continue,
                     _ => {
-                        mark_partial(&mut result, "filter undecided");
+                        mark_partial(
+                            &mut result,
+                            weftext_messages::UiMessage::error_data_query_advanced_filter_undecided()
+                                .into(),
+                        );
                         continue;
                     }
                 }
@@ -2300,7 +2455,11 @@ fn transform(
             let (values, order, keys, aggs) = match (values, order, keys, aggs) {
                 (Ok(v), Ok(o), Ok(k), Ok(a)) => (v, o, k, a),
                 _ => {
-                    mark_partial(&mut result, "host-budget-exhausted");
+                    mark_partial(
+                        &mut result,
+                        weftext_messages::UiMessage::error_data_query_advanced_host_budget_exhausted()
+                            .into(),
+                    );
                     break 'input;
                 }
             };
@@ -2308,7 +2467,11 @@ fn transform(
                 .iter()
                 .any(|c| matches!(c, Cell::Invalid { .. } | Cell::Unavailable { .. }))
             {
-                mark_partial(&mut result, "sort input undecided");
+                mark_partial(
+                    &mut result,
+                    weftext_messages::UiMessage::error_data_query_advanced_sort_input_undecided()
+                        .into(),
+                );
             }
             let mut output = row.clone();
             output.key = key;
@@ -2345,13 +2508,17 @@ fn transform(
                 .iter()
                 .any(|k| matches!(k, Cell::Invalid { .. } | Cell::Unavailable { .. }))
             {
-                mark_partial(&mut result, "group key undecided");
+                mark_partial(
+                    &mut result,
+                    weftext_messages::UiMessage::error_data_query_advanced_group_key_undecided()
+                        .into(),
+                );
                 continue;
             }
             let key = match canonical_cells(&keys, &group_keys) {
                 Ok(k) => k,
                 Err(e) => {
-                    mark_partial(&mut result, &e.0);
+                    mark_partial_error(&mut result, e);
                     continue;
                 }
             };
@@ -2377,7 +2544,7 @@ fn transform(
                     let vals = values.iter().map(|r| r[i].as_ref()).collect::<Vec<_>>();
                     let cell = aggregate_cell(&a.op, &vals, aggregates[i].as_ref().map(|c| &c.ty));
                     if matches!(cell, Cell::Invalid { .. } | Cell::Unavailable { .. }) {
-                        mark_partial(&mut result, "aggregate input undecided");
+                        mark_partial(&mut result, weftext_messages::UiMessage::error_data_query_advanced_aggregate_input_undecided().into());
                     }
                     cells.insert(a.name.clone(), cell);
                 }
@@ -2421,17 +2588,26 @@ fn transform(
     {
         mark_partial(
             &mut result,
-            "native-decoder traversal budget exhausted in consumed field",
+            weftext_messages::UiMessage::error_data_query_advanced_consumed_field_decoder_budget_exhausted().into(),
         );
     }
     if env.tag_partial.load(std::sync::atomic::Ordering::Relaxed) {
-        mark_partial(&mut result, "tag structure input unavailable");
+        mark_partial(
+            &mut result,
+            weftext_messages::UiMessage::error_data_query_advanced_tag_structure_input_unavailable(
+            )
+            .into(),
+        );
     }
     if env
         .provider_partial
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        mark_partial(&mut result, "temporal expansion partial");
+        mark_partial(
+            &mut result,
+            weftext_messages::UiMessage::error_data_query_advanced_temporal_expansion_partial()
+                .into(),
+        );
     }
     if plan.group.is_some() {
         sort_terminal(
@@ -2492,11 +2668,10 @@ pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> 
             NativeValue::Bool(b) => (*b).into(),
             NativeValue::Int(s) => s
                 .parse::<i64>()
-                .map_err(|_| DataError("Invalid saved integer".into()))?
+                .map_err(|_| DataError::new(weftext_messages::UiMessage::error_data_query_advanced_invalid_saved_integer()))?
                 .into(),
-            _ => return Err(DataError(
-                "Saved Query structure needs native scalar values except typed parameter defaults"
-                    .into(),
+            _ => return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_query_advanced_saved_query_requires_native_scalars(),
             )),
         })
     }

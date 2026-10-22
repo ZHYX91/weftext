@@ -87,7 +87,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Action::RenderWorker => crate::worker_main().or_else(|error| {
             crate::write_render_worker_failure(error, &mut std::io::stdout().lock())
         }),
-        Action::NotesWorker => crate::notes_worker_main(),
+        Action::NotesWorker => crate::notes_worker_main().or_else(|error| {
+            crate::write_render_worker_failure(error, &mut std::io::stdout().lock())
+        }),
         Action::Hosted { data_dir, config } => {
             let (core, data_dir) = host_environment::open_core(data_dir)?;
             crate::hosted::serve(core, config, data_dir.join("legacy-office")).await

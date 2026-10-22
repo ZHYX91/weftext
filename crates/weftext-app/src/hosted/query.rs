@@ -12,7 +12,7 @@ fn budget_exceeded() -> ApiError {
     ApiError::new(
         StatusCode::BAD_REQUEST,
         "queryBudget",
-        "查询的累计冻结输入或原生产物超过 32 MiB 预算，请缩小范围后明确重新执行。",
+        UiMessage::error_api_hosted_query_query_frozen_input_budget(),
     )
 }
 pub(super) fn charge_bytes(used: &mut usize, bytes: usize) -> Result<(), ApiError> {
@@ -36,8 +36,11 @@ fn snapshot_capture_bytes(witnesses: &[(String, SnapshotWitness)]) -> Result<usi
 struct BudgetWriter<'a>(&'a mut usize);
 impl std::io::Write for BudgetWriter<'_> {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        charge_bytes(self.0, bytes.len())
-            .map_err(|_| std::io::Error::other("query byte budget exceeded"))?;
+        charge_bytes(self.0, bytes.len()).map_err(|_| {
+            std::io::Error::other(ErrorDescription::new(
+                UiMessage::error_api_hosted_query_query_frozen_input_budget(),
+            ))
+        })?;
         Ok(bytes.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
@@ -252,11 +255,11 @@ pub(super) fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "queryUnavailable",
-        "查询的准确定义、版本或获权依据已变化，请保留输入并明确重新执行。",
+        UiMessage::error_api_hosted_query_query_definition_basis_changed(),
     )
 }
 pub(super) fn invalid() -> ApiError {
-    ApiError::bad("查询不可用：请检查获权字段、参数、表达式及预算")
+    ApiError::bad(UiMessage::error_api_hosted_query_query_unavailable())
 }
 fn source(file: &SnapshotFile) -> Result<String, ApiError> {
     if file.kind != "managed"
@@ -446,7 +449,7 @@ fn provider_catalog(inner: &mut HostedInner, actor: &str) -> Value {
 async fn definitions(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Definitions>,
+    RequestJson(req): RequestJson<Definitions>,
 ) -> ApiResult {
     locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
@@ -462,7 +465,7 @@ async fn definitions(
 async fn run(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<QueryRequest>,
+    RequestJson(req): RequestJson<QueryRequest>,
 ) -> ApiResult {
     Ok(Json(execute(&state, &auth, req).await?))
 }
@@ -1389,7 +1392,7 @@ pub(super) fn validate_definition(
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "basisRequired",
-                    "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者显式安装后重试。",
+                    UiMessage::error_api_hosted_query_existing_rules_required(),
                 ));
             }
             Core::merge_snapshot_witnesses(&mut scope_snapshots, vec![witness])
@@ -2072,6 +2075,22 @@ fn capture(
     }
     Err(invalid())
 }
+fn unavailable_product(explanation: UiMessage) -> weftext_data::Cell {
+    weftext_data::Cell::Unavailable {
+        kind: weftext_data::DataErrorKind::Unavailable,
+        reason: explanation.into(),
+        diagnostics: Vec::new(),
+    }
+}
+/// This hosted projection has never exposed dependency text or private paths.
+/// Keep a bounded-scope explanation for each actual result diagnostic without
+/// treating product descriptions as raw compiler output or dropping the list.
+fn public_query_diagnostics(diagnostics: Vec<ErrorDescription>) -> Vec<ErrorDescription> {
+    diagnostics
+        .into_iter()
+        .map(|_| UiMessage::error_api_hosted_query_projected_result_unresolved().into())
+        .collect()
+}
 async fn execute_captured(
     state: &HostedState,
     auth: &Auth,
@@ -2111,15 +2130,15 @@ async fn execute_captured(
             let mut products = products.unwrap_or_else(|| weftext_data::NoteProducts {
                 compile_identity: captured.input.cut_id.clone(),
                 target: "html".into(),
-                title: weftext_data::Cell::Unavailable {
-                    reason: "native-product-unavailable".into(),
-                },
-                body: weftext_data::Cell::Unavailable {
-                    reason: "native-product-unavailable".into(),
-                },
-                headings: weftext_data::Cell::Unavailable {
-                    reason: "native-product-unavailable".into(),
-                },
+                title: unavailable_product(
+                    UiMessage::error_api_hosted_query_native_product_unavailable(),
+                ),
+                body: unavailable_product(
+                    UiMessage::error_api_hosted_query_native_product_unavailable(),
+                ),
+                headings: unavailable_product(
+                    UiMessage::error_api_hosted_query_native_product_unavailable(),
+                ),
             });
             for (name, cell) in [
                 ("title", &mut products.title),
@@ -2127,9 +2146,9 @@ async fn execute_captured(
                 ("headings", &mut products.headings),
             ] {
                 if !captured.products.contains(name) {
-                    *cell = weftext_data::Cell::Unavailable {
-                        reason: "product-not-authorized".into(),
-                    };
+                    *cell = unavailable_product(
+                        UiMessage::error_api_hosted_query_product_not_selected(),
+                    );
                 }
             }
             charge_serialized(&mut execution_bytes, &products)?;
@@ -2175,7 +2194,7 @@ async fn execute_captured(
         if let Some(environment)=&captured.environment {environment.recheck(inner,&actor)?;}
         if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
-        result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();
+        result.diagnostics=public_query_diagnostics(result.diagnostics);
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
         for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.file(&resource)?.lifecycle=="live"&&inner.file(&resource)?.editable&&inner.rights(&actor,&resource).is_ok());}}
         let tag_witness = if captured.authority.tag_structure {Some(captured.witnesses.iter().find(|(path, _)| Path::new(path) == inner.config.root.join(".weftext-tags.json")).ok_or_else(changed)?.clone())} else {None};
@@ -2271,6 +2290,68 @@ pub(super) async fn validate_embedded(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hosted_query_diagnostics_keep_parallel_cardinality_without_private_payloads() {
+        let diagnostics = (0..40)
+            .map(|index| {
+                ErrorDescription::new(
+                    UiMessage::error_api_hosted_query_native_product_unavailable(),
+                )
+                .diagnostic(
+                    DiagnosticOrigin::Typst,
+                    format!("D:/private/{index}.typ: original diagnostic"),
+                )
+                .try_caused_by(
+                    "privateCause",
+                    ErrorDescription::new(UiMessage::error_api_hosted_required_field_missing(
+                        weftext_messages::params::ErrorApiHostedRequiredFieldMissing {
+                            field: "private.field".into(),
+                        },
+                    ))
+                    .diagnostic(DiagnosticOrigin::Os, "D:/private/dependency"),
+                )
+                .unwrap()
+            })
+            .collect();
+        let public = public_query_diagnostics(diagnostics);
+        assert_eq!(public.len(), 40);
+        for description in &public {
+            assert_eq!(
+                description.explanation.key(),
+                "error.api.hostedQuery.projectedResultUnresolved"
+            );
+            assert!(description.diagnostics.is_empty());
+            assert!(description.causes.as_slice().is_empty());
+        }
+        let wire = serde_json::to_string(&public).unwrap();
+        assert!(!wire.contains("private"));
+        assert_eq!(
+            serde_json::from_str::<Vec<ErrorDescription>>(&wire)
+                .unwrap()
+                .len(),
+            40
+        );
+    }
+
+    #[test]
+    fn unavailable_native_products_have_a_typed_state_without_fabricated_diagnostics() {
+        for explanation in [
+            UiMessage::error_api_hosted_query_native_product_unavailable(),
+            UiMessage::error_api_hosted_query_product_not_selected(),
+        ] {
+            let cell = unavailable_product(explanation);
+            let wire = serde_json::to_value(&cell).unwrap();
+            assert_eq!(wire["state"], "unavailable");
+            assert_eq!(wire["kind"], "unavailable");
+            assert_eq!(wire["diagnostics"], json!([]));
+            assert_eq!(wire["reason"]["diagnostics"], json!([]));
+            assert_eq!(wire["reason"]["causes"], json!([]));
+            assert!(wire["reason"]["explanation"].is_object());
+            assert!(wire["reason"]["message"].is_null());
+            serde_json::from_value::<weftext_data::Cell>(wire).unwrap();
+        }
+    }
 
     fn input() -> weftext_data::FrozenQueryInput {
         weftext_data::FrozenQueryInput {

@@ -35,11 +35,11 @@ fn deliver(args: &Args, locale: UiLocale, value: Value, exit: u8) -> Result<u8, 
     bytes.push(b'\n');
     if args.format == OutputFormat::Human {
         let message = if exit == 0 {
-            UiMessage::CliComplete {}
+            UiMessage::cli_complete()
         } else {
-            UiMessage::CliError {
+            UiMessage::cli_error(weftext_messages::params::CliError {
                 code: "ownerExit".into(),
-            }
+            })
         };
         let mut text = message.render(locale).into_bytes();
         text.push(b'\n');

@@ -2,6 +2,7 @@
 //! records only. It is neither a working tree nor a copied Core private state.
 use super::*;
 use crate::{Core, Path, absolute_path, backend::ParentGuard, display};
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,7 +102,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncTargetOverlap",
-                "Transport must be outside this Core's private state and working libraries",
+                UiMessage::error_core_sync_transport_must_outside_core_s_private_state_and_working_libraries(),
             ));
         }
         Ok(directory)
@@ -129,7 +130,7 @@ fn transport_guards(
             serde_json::from_slice(&store::read_record(&path.join("identity.json"), 1024)?)?;
         if &stored != identity {
             return Err(invalid(
-                "Transport directory belongs to another paired family",
+                UiMessage::error_core_sync_transport_paired_family_mismatch(),
             ));
         }
     }
@@ -141,7 +142,9 @@ fn transport_guards(
             })
         })
     {
-        return Err(invalid("Transport directory contains unrelated entries"));
+        return Err(invalid(
+            UiMessage::error_core_sync_transport_unrelated_entries(),
+        ));
     }
     for name in ["blobs", "manifests"] {
         let directory = path.join(name);

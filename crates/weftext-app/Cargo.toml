@@ -9,6 +9,7 @@ name = "weftext"
 path = "src/main.rs"
 
 [dependencies]
+weftext-messages = { path = "../weftext-messages" }
 weftext-core = { path = "../weftext-core" }
 weftext-engine = { path = "../weftext-engine" }
 weftext-data = { path = "../weftext-data" }
@@ -19,6 +20,7 @@ axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true }
+mime = "0.3.17"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive"] }
 include_dir = "0.7"

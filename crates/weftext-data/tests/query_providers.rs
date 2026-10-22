@@ -1,6 +1,8 @@
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 
 const WS: &str = "58c47256-bfce-4d29-a037-b83a3a644fb0";
 const KEY: &str = "eb8ee74a-330c-45d2-bb8b-82a6d5210e43";
@@ -235,20 +237,20 @@ fn provider_static_known_missing_versions_and_series_do_not_become_dynamic_admis
         "compareTemporal({}, date('2026-01-01'))",
         PRIVATE.replace("\"v1\"", "\"missing\"")
     ));
-    assert_eq!(
-        query_provider_requirements(&missing, &schema, &FrozenAdvancedInput::default())
-            .unwrap_err()
-            .0,
-        "Query provider unavailable"
+    assert_data_error(
+        &query_provider_requirements(&missing, &schema, &FrozenAdvancedInput::default())
+            .unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_providers_query_provider_unavailable(),
     );
     let period = plan(
         "periodBounds({'series_key':'missing','kind':'day','calendar':'gregorian','calendar_version':'proleptic-gregorian.v1','zone':'UTC','zone_version':'fixed-utc.v1','rule':'iso8601','key':'2026-01-01'})",
     );
-    assert_eq!(
-        query_provider_requirements(&period, &schema, &FrozenAdvancedInput::default())
-            .unwrap_err()
-            .0,
-        "Query provider unavailable"
+    assert_data_error(
+        &query_provider_requirements(&period, &schema, &FrozenAdvancedInput::default())
+            .unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_providers_query_provider_unavailable(),
     );
 }
 
@@ -293,6 +295,7 @@ fn provider_empty_scope_hidden_missing_and_masked_failure_are_indistinguishable(
     selected.providers.retain(|p| p.id == rule(&schema));
     selected.validators.clear();
     selected.series_policies.clear();
+    let mut unavailable_results = Vec::new();
     for name in ["secretcal", "unknown"] {
         let expression = format!(
             "compareTemporal({}, date('2026-01-01')) == 0 || true",
@@ -304,11 +307,14 @@ fn provider_empty_scope_hidden_missing_and_masked_failure_are_indistinguishable(
                 .unwrap()
                 .remove(0);
         let restricted = projection(&selected, &access(&req), &req);
-        assert_eq!(
-            run(&empty(FrozenAdvancedInput::default()), &p, &restricted)
-                .unwrap_err()
-                .0,
-            "Query provider unavailable"
+        let error = run(&empty(FrozenAdvancedInput::default()), &p, &restricted).unwrap_err();
+        assert_data_error(
+            &error,
+            DataErrorKind::Unavailable,
+            UiMessage::error_data_query_provider_unavailable(),
+        );
+        unavailable_results.push(
+            serde_json::to_value((error.kind(), error.description(), error.details())).unwrap(),
         );
         // The original local evaluator keeps its pre-existing empty-domain behavior.
         assert_eq!(
@@ -318,6 +324,7 @@ fn provider_empty_scope_hidden_missing_and_masked_failure_are_indistinguishable(
             "complete"
         );
     }
+    assert_eq!(unavailable_results[0], unavailable_results[1]);
 }
 
 #[test]
@@ -334,7 +341,7 @@ fn provider_empty_terminal_sort_and_distinct_stages_preflight_their_real_express
     for stage in ["transform", "sort", "distinct"] {
         let mut p = plan("status");
         p.advanced = Some(QueryAdvanced {
-            union_all: vec![plan("status"), plan("status")],
+            union_all: Some(vec![plan("status"), plan("status")]),
             ..Default::default()
         });
         if stage == "transform" {
@@ -503,11 +510,10 @@ fn provider_current_and_pinned_callees_keep_exact_original_baseline_and_compatib
             .find(|p| p.id == "calendars/private")
             .unwrap()
             .data["version"] = json!("v2");
-        assert!(
-            run(&empty(frozen), &p, &changed)
-                .unwrap_err()
-                .0
-                .contains("explicit migration")
+        assert_data_error(
+            &run(&empty(frozen), &p, &changed).unwrap_err(),
+            DataErrorKind::Unavailable,
+            UiMessage::error_data_query_advanced_definition_schema_requires_explicit_migration(),
         );
     }
 }
@@ -589,11 +595,10 @@ fn provider_preflight_lexical_shadowing_does_not_execute_an_outer_parameter_as_a
     let (result, _) = run(&empty(FrozenAdvancedInput::default()), &p, &restricted).unwrap();
     assert_eq!(result.coverage, "complete");
     p.select[0].expr = "[p].map(item, compareTemporal(item, date('2026-01-01'))).size()".into();
-    assert_eq!(
-        run(&empty(FrozenAdvancedInput::default()), &p, &restricted)
-            .unwrap_err()
-            .0,
-        "Query provider unavailable"
+    assert_data_error(
+        &run(&empty(FrozenAdvancedInput::default()), &p, &restricted).unwrap_err(),
+        DataErrorKind::Unavailable,
+        UiMessage::error_data_query_provider_unavailable(),
     );
 }
 
@@ -615,7 +620,11 @@ fn provider_row_free_preflight_uses_the_original_execution_step_budget() {
         &BTreeMap::new(),
     )
     .unwrap_err();
-    assert_eq!(error.0, "host-budget-exhausted");
+    assert_data_error(
+        &error,
+        DataErrorKind::Budget,
+        UiMessage::error_data_query_host_budget_exhausted(),
+    );
 }
 
 #[test]

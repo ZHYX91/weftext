@@ -3,6 +3,7 @@
 use super::*;
 use operations::{CapturedFile, Mutation, SnapshotBinding, resource_path};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub struct ResourceCollectionEntry {
     pub resource_ref: String,
@@ -161,7 +162,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "resourceOwner",
-                        "Original imported source admission is ambiguous",
+                        UiMessage::error_core_resource_collection_original_imported_source_admission_ambiguous(),
                     ));
                 }
             }
@@ -169,7 +170,7 @@ impl Core {
         let expected = expected.ok_or_else(|| {
             CoreError::new(
                 "resourceOwner",
-                "This exact slot has no committed original DOCX source producer",
+                UiMessage::error_core_resource_collection_exact_slot_has_no_committed_original_d_o_c_x_source_producer(),
             )
         })?;
         self.qualified_query_node_at(&root, &source_path, &expected, "live")
@@ -211,7 +212,7 @@ impl Core {
             );
             CoreError::new(
                 "resourceOwner",
-                "The original resource owner is unavailable",
+                UiMessage::error_core_resource_collection_original_resource_owner_unavailable(),
             )
         })?;
         if birth.workspace_id != expected_owner.workspace_id
@@ -224,7 +225,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "resourceOwner",
-                "The selected resource owner changed",
+                UiMessage::error_core_resource_collection_selected_resource_owner_changed(),
             ));
         }
         let directory = owner_path.parent().unwrap();
@@ -247,7 +248,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "staleBase",
-                "The resource owner's actual directory changed",
+                UiMessage::error_core_resource_resource_owner_s_actual_directory_changed(),
             ));
         }
         let (captured, entries, unrecognized_entries, revision) = match guard
@@ -289,7 +290,7 @@ impl Core {
                     );
                     CoreError::new(
                         "resourceManifestUnavailable",
-                        "Collection membership requires a currently accepted exact manifest",
+                        UiMessage::error_core_resource_collection_collection_membership_requires_currently_accepted_exact_manifest(),
                     )
                 })?;
                 let document: serde_json::Value = serde_json::from_slice(&captured.bytes)
@@ -304,12 +305,16 @@ impl Core {
                     .as_array()
                     .filter(|_| document["version"] == 1)
                     .ok_or_else(|| {
-                        CoreError::new("resourceManifest", "Unsupported owned resource manifest")
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_resource_unsupported_owned_resource_manifest(),
+                        )
                     })?;
                 if records.len() > 64 {
                     return Err(CoreError::new(
                         "budget",
-                        "At most 64 registered resource descriptors",
+                        UiMessage::error_core_operations_at_most64_registered_resource_descriptors(
+                        ),
                     ));
                 }
                 let mut entries = Vec::new();
@@ -488,7 +493,7 @@ impl Core {
             let sequence = self.history_commit_time(plan)?.1.ok_or_else(|| {
                 CoreError::new(
                     "resourceManifestUnavailable",
-                    "Original collection placement ordering is unavailable",
+                    UiMessage::error_core_resource_collection_original_collection_placement_ordering_unavailable(),
                 )
             })?;
             let places = self
@@ -496,7 +501,7 @@ impl Core {
                 .map_err(|_| {
                     CoreError::new(
                         "resourceManifestUnavailable",
-                        "Original collection placement evidence is unavailable",
+                        UiMessage::error_core_resource_collection_original_collection_placement_evidence_unavailable(),
                     )
                 })?;
             if manifests.iter().any(|path| {
@@ -511,7 +516,7 @@ impl Core {
             }) {
                 return Err(CoreError::new(
                     "resourceManifestUnavailable",
-                    "The original committed resource manifest is missing; it cannot be reinitialized",
+                    UiMessage::error_core_resource_collection_original_committed_resource_manifest_missing_it_cannot_reinitialized(),
                 ));
             }
         }
@@ -543,7 +548,7 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
-                        "Original import owner evidence is unavailable",
+                        UiMessage::error_core_resource_collection_original_import_owner_evidence_unavailable(),
                     )
                 })?;
             let birth = self
@@ -551,7 +556,7 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
-                        "Original import owner admission is unavailable",
+                        UiMessage::error_core_resource_collection_original_import_owner_admission_unavailable(),
                     )
                 })?;
             self.require_resource_collection_uninitialized(&birth)?;
@@ -579,7 +584,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "outsideRoot",
-                "Collection evidence belongs to another configured root",
+                UiMessage::error_core_resource_collection_collection_evidence_belongs_to_another_configured_root(),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner_witness)
@@ -607,7 +612,7 @@ impl Core {
                 );
                 return Err(CoreError::new(
                     "resourceVersion",
-                    "The original collection revision qualification changed",
+                    UiMessage::error_core_resource_collection_original_collection_revision_qualification_changed(),
                 ));
             }
         } else {
@@ -634,7 +639,7 @@ impl Core {
             pool.clear();
             return Err(CoreError::new(
                 "basisRequired",
-                "An uninitialized collection cannot supply a guarded positive Plan dependency",
+                UiMessage::error_core_resource_collection_uninitialized_collection_cannot_supply_guarded_positive_plan_dependency(),
             ));
         }
         Self::merge_query_node_witness(pool, &witness.owner_witness)?;

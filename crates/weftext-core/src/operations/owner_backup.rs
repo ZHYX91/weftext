@@ -5,6 +5,7 @@ use crate::capture_draft::{self, CaptureLibrary};
 use crate::hosted::{ActorLibraryBinding, ActorLibraryHeader, read_actor_library_header};
 use crate::journal::Plan;
 use std::io::{Seek, SeekFrom};
+use weftext_messages::UiMessage;
 
 const BAD_ATTRIBUTES: u32 = 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000;
 const MAX_ROUTING_MEMBERS: usize = 5000;
@@ -84,7 +85,7 @@ fn selected_library_scope(
     {
         return Err(CoreError::new(
             "scopeChanged",
-            "Original private library identity differs from this backup",
+            UiMessage::error_core_original_scope_backup_library_identity_differs(),
         ));
     }
     if scope.workspace_id.is_some() && expected.workspace_id.is_some() {
@@ -93,7 +94,7 @@ fn selected_library_scope(
     if scope.root.eq_ignore_ascii_case(&expected.root) {
         return Err(CoreError::new(
             "scopeChanged",
-            "Unqualified original library scope differs from this backup",
+            UiMessage::error_core_original_scope_backup_unqualified_scope_differs(),
         ));
     }
     Ok(false)
@@ -121,7 +122,8 @@ fn selected_input_scope(
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Original private logical and physical library identities contradict this backup",
+                    UiMessage::error_core_original_scope_backup_logical_physical_identity_conflict(
+                    ),
                 ));
             }
             Ok(false)
@@ -290,7 +292,7 @@ impl Core {
         let expected = t.backup_private_digest.as_ref().ok_or_else(|| {
             CoreError::new(
                 "privateEvidence",
-                "This legacy backup has no complete private routing witness",
+                UiMessage::error_core_operations_legacy_backup_has_no_complete_private_routing_witness(),
             )
         })?;
         let workspace = self.require_workspace(Path::new(&t.request.root))?;
@@ -304,7 +306,7 @@ impl Core {
         if &capture.digest != expected {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Original private recovery membership or routing changed",
+                UiMessage::error_core_operations_original_private_recovery_membership_or_routing_changed(),
             ));
         }
         // The normal transaction reader immediately acquires the exact
@@ -624,13 +626,13 @@ fn digest_json(digest: &mut Sha256, value: &impl Serialize) -> Result<()> {
 fn backup_budget() -> CoreError {
     CoreError::new(
         "budget",
-        "Complete library backup exceeds 64 MiB or 5000 members",
+        UiMessage::error_core_operations_complete_library_backup_exceeds64_mi_b_or5000_members(),
     )
 }
 fn private_evidence() -> CoreError {
     CoreError::new(
         "privateEvidence",
-        "Original private evidence cannot be scoped completely without reading another library",
+        UiMessage::error_core_operations_original_private_evidence_cannot_scoped_completely_without_reading_another_library(),
     )
 }
 
@@ -736,7 +738,7 @@ fn route_selected_bytes(
         }
         return Ok(serde_json::to_string(&scope)?);
     }
-    let value: UniqueValue = serde_json::from_slice(bytes)?;
+    let value = private_record_json(bytes)?;
     if record_kind(core, path)? == RecordKind::Actor {
         let scope = crate::hosted::read_actor_input_header(&mut std::io::Cursor::new(bytes))?;
         if !matches!(&scope, crate::hosted::ActorInputScope::Qualified { scope } if selected_input_scope(core, scope, expected)?)
@@ -745,7 +747,7 @@ fn route_selected_bytes(
         }
         return Ok(serde_json::to_string(&scope)?);
     }
-    let binding: ActorLibraryBinding = serde_json::from_value(value.0["library"].clone())?;
+    let binding: ActorLibraryBinding = serde_json::from_value(value["library"].clone())?;
     if binding != *expected {
         return Err(private_evidence());
     }
@@ -808,7 +810,7 @@ fn validate_selected_record(
         }
         return Ok(());
     }
-    let value: UniqueValue = serde_json::from_slice(bytes)?;
+    let value = private_record_json(bytes)?;
     if kind == RecordKind::Draft {
         let draft: Draft = serde_json::from_slice(bytes)?;
         let guard = ParentGuard::acquire(&root.join(".backup-draft-root"))?;
@@ -842,7 +844,7 @@ fn validate_selected_record(
             return Err(private_evidence());
         }
     }
-    let file_plan = value.0["coreOperationId"]
+    let file_plan = value["coreOperationId"]
         .as_str()
         .and_then(|id| core.operations.get(id))
         .filter(|plan| matches!(plan.kind.as_str(), "save" | "saveAs"));
@@ -852,7 +854,7 @@ fn validate_selected_record(
             return Err(private_evidence());
         }
     }
-    if let Some(library) = value.0.get("library") {
+    if let Some(library) = value.get("library") {
         let binding: ActorLibraryBinding = serde_json::from_value(library.clone())?;
         if kind != RecordKind::Actor && binding != expected {
             return Err(private_evidence());
@@ -866,74 +868,11 @@ fn validate_selected_record(
     Ok(())
 }
 
-struct UniqueValue(serde_json::Value);
-impl<'de> Deserialize<'de> for UniqueValue {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
-        struct V;
-        impl<'de> serde::de::Visitor<'de> for V {
-            type Value = UniqueValue;
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "JSON with unique object fields")
-            }
-            fn visit_bool<E: serde::de::Error>(
-                self,
-                v: bool,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Self::Value, E> {
-                serde_json::Number::from_f64(v)
-                    .map(|n| UniqueValue(n.into()))
-                    .ok_or_else(|| E::custom("Invalid JSON number"))
-            }
-            fn visit_str<E: serde::de::Error>(
-                self,
-                v: &str,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_string<E: serde::de::Error>(
-                self,
-                v: String,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueValue(serde_json::Value::Null))
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                self,
-                mut a: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut v = vec![];
-                while let Some(UniqueValue(e)) = a.next_element()? {
-                    v.push(e);
-                }
-                Ok(UniqueValue(v.into()))
-            }
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                mut a: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut v = serde_json::Map::new();
-                while let Some(k) = a.next_key::<String>()? {
-                    if v.contains_key(&k) {
-                        return Err(serde::de::Error::custom("Duplicate private metadata field"));
-                    }
-                    let UniqueValue(e) = a.next_value()?;
-                    v.insert(k, e);
-                }
-                Ok(UniqueValue(v.into()))
-            }
-        }
-        d.deserialize_any(V)
-    }
+// Complete records reach this decoder only after scope-first classification
+// and exact selected-byte or own-suffix budget checks. Foreign routing remains streaming.
+fn private_record_json(bytes: &[u8]) -> Result<serde_json::Value> {
+    weftext_data::parse_unique_json(bytes)
+        .map_err(|error| CoreError::from_data("invalidState", error))
 }
 
 fn own_suffix_limit(plan: &Plan) -> usize {
@@ -997,7 +936,7 @@ fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGu
         return Err(private_evidence());
     }
     let bytes = read_blob(&mut file)?;
-    let UniqueValue(value) = serde_json::from_slice(&bytes)?;
+    let value = private_record_json(&bytes)?;
     match suffix {
         "install" => {
             if value
@@ -1078,3 +1017,97 @@ fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGu
 
 #[cfg(all(test, windows))]
 mod tests;
+
+#[cfg(all(test, windows))]
+mod parse_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn selected_private_metadata_rejects_duplicates_with_typed_data_classification() {
+        for (bytes, duplicate) in [
+            (br#"{"library":{},"library":{}}"#.as_slice(), "library"),
+            (
+                br#"{"nested":{"duplicate":1,"duplicate":2}}"#.as_slice(),
+                "duplicate",
+            ),
+        ] {
+            let original = bytes.to_vec();
+            let error = private_record_json(bytes).unwrap_err();
+            assert_eq!(error.code, "invalidState");
+            assert_eq!(
+                error.explanation,
+                UiMessage::error_data_schema_json_key_duplicate(
+                    weftext_messages::params::ErrorDataSchemaJsonKeyDuplicate {
+                        key: duplicate.into()
+                    }
+                )
+            );
+            assert!(error.diagnostics.is_empty());
+            assert!(
+                matches!(error.details, Some(crate::CoreErrorDetails::Aggregate { groups })
+                if groups.iter().any(|group| matches!(group, crate::ErrorDetailGroup::Data {
+                    classification: weftext_data::DataErrorKind::Invalid, diagnostics
+                } if diagnostics.is_empty())))
+            );
+            assert_eq!(bytes, original);
+        }
+        let malformed = br#"{"nested":[}"#;
+        let raw = serde_json::from_slice::<serde_json::Value>(malformed)
+            .unwrap_err()
+            .to_string();
+        let error = private_record_json(malformed).unwrap_err();
+        assert_eq!(error.code, "invalidState");
+        assert_eq!(error.diagnostics.len(), 1);
+        assert_eq!(error.diagnostics[0].origin, DiagnosticOrigin::Json);
+        assert_eq!(error.diagnostics[0].text, raw);
+    }
+
+    #[test]
+    fn foreign_actor_classification_still_stops_at_header_before_malformed_author_body() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("private");
+        let core = Core::new(&data).unwrap();
+        let selected = temp.path().join("selected");
+        let foreign = temp.path().join("foreign");
+        fs::create_dir_all(&selected).unwrap();
+        fs::create_dir_all(&foreign).unwrap();
+        let binding = |root: &Path| {
+            let guard = ParentGuard::acquire(&root.join(".header-prospective")).unwrap();
+            ActorLibraryBinding {
+                root: display(&guard.directory_coordinates().unwrap()),
+                root_identity: guard.directory_identity().unwrap(),
+                workspace_id: Some(fresh()),
+            }
+        };
+        let expected = binding(&selected);
+        let foreign_binding = binding(&foreign);
+        let path = core
+            .data_dir
+            .join("actors")
+            .join(hash(b"foreign-actor"))
+            .join("operations")
+            .join(format!("{}.json", fresh()));
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let original = format!(
+            "{{\"library\":{},\"body\":NOT_JSON_\"\\ud800",
+            serde_json::to_string(&foreign_binding).unwrap()
+        );
+        fs::write(&path, &original).unwrap();
+        let mut file = File::open(&path).unwrap();
+        let (included, route) = classify_record(
+            &core,
+            &path,
+            &mut file,
+            &selected,
+            &expected,
+            0,
+            original.len() as u64,
+        )
+        .unwrap();
+        assert!(!included);
+        assert_eq!(route, serde_json::to_string(&foreign_binding).unwrap());
+        assert_eq!(file.stream_position().unwrap(), 0);
+        assert_eq!(fs::read(&path).unwrap(), original.as_bytes());
+        assert!(private_record_json(original.as_bytes()).is_err());
+    }
+}

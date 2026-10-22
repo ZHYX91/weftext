@@ -45,11 +45,13 @@ portable 控制资料只保存无法从当前文件恢复的事实：身份创�
 
 原生内容包另用 `capture_native_export` 在一次捕获中生成包字节、manifest 与内存 `NativeExportWitness`，消费方交付前复验同一见证，不另读一份当前树来证明旧包。获权的纳管正文、登记资源、批注、Schema、设置和样式按原角色收集；未纳管、忽略和 Trash 内容只记录必要的省略路径及物理元数据，不读其正文后再过滤。当前最多 5,000 个命名空间成员与 64 MiB 保留输入，见证核实际观察到的成员及对象，不承诺任意未来原始文件的强负范围。该包不包含私有 journal、草稿或凭据，不能替代完整恢复备份。
 
-v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。
+v2 原生包包含闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。
 
-v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.json` 的完整合法 v2 森林；导出捕获原 Core 已接纳完整树和同一见证，当前 v1 表须先显式升级，不能在导出／复制时改写原 blob。跨库导入默认通过目标 Core 为全树创建新身份并保必要祖先，在同一个 ImportNative／CreateTree Plan 的 updates 中写 Tags。以完整源 TagRef 建本次映射，统一改父级、正文 typed 引用、Query CEL 的 tagRef 字面及按 Shape 证明的 typed 参数默认值；普通 literal 原样保留。不按同名或裸 UUID 合并，不顺带改挂已有目标标签，不另存永久别名表，完整原 ZIP 继续保留。
+v2 原生内容包另包含闭合 `Tags` 角色，只允许根 `.weftext-tags.json` 的完整合法 v2 森林；导出捕获原 Core 已接纳完整树和同一见证，当前 v1 表须先显式升级，不能在导出／复制时改写原 blob。跨库导入默认通过目标 Core 为全树创建新身份并保必要祖先，在同一个 ImportNative／CreateTree Plan 的 updates 中写 Tags。以完整源 TagRef 建本次映射，统一改父级、正文 typed 引用、Query CEL 的 tagRef 字面及按 Shape 证明的 typed 参数默认值；普通 literal 原样保留。不按同名或裸 UUID 合并，不顺带改挂已有目标标签，不另存永久别名表，完整原 ZIP 继续保留。
 
 导入 Query 的 Schema 基线仅在完整源 schemaRef／revision 与包中准确 Schema entry.revision 一致、且目标 Schema 语义一致时重绑为目标合法 revision。目标尚无 Schema 而实际 bundled Schema 相等时，在同一 Plan 初始化并固定新 revision。包未保准确的 Query Schema 历史时以 `schemaMappingRequired` 拒绝，不能用包的 latest 或目标当前定义冒原基线。托管导入依据实际计划副作用另查 tags.create／schema.write 及原读取权限；原导入槽权不隐含共享标签／Schema 写权，重试、提交及恢复仍核同一原计划。
+
+当前原生内容包版本为 **v2**：损失和产品说明使用同一类型化消息合同，保留损失的机器代码、位置与完整并列诊断。v1 包明确以 `unsupportedVersion` 拒绝；真实旧 ZIP 保留原件，不自动升级或保留旧解析分支。这里的包版本独立于格式标记、Tag 森林及完整恢复备份版本。
 
 ### 2.1 普通文件会话
 
@@ -324,6 +326,14 @@ producer公布轻量FieldAccessProfile：内部绑定当前exact sourceRevision�
 
 `CompileSnapshot` 保存 exact SourceSnapshot、Environment、完整实际 World dependencies、最终官方 semantic projection/origin map、输出或诊断。合法源/body 编译或投影失败仍保原源、Draft 和可用静态 fields；旧预览不能冒当前。worker 无 ambient 文件/网络/凭据/写权，有可终止的时间/内存/输出预算；无完整追踪不给强资格。编译不会创建身份、保存或隐式调用业务动作。
 
+产品错误和计算出的状态说明使用 canonical `UiMessage`（语义 key 与有类型的命名参数），不按机器 code、英文或中文运行时文本推导翻译。`ErrorDescription` 的 `explanation`、`diagnostics`、`causes` 均必填；原始诊断保留原文，并明确标注 `os/json/typst/network/externalTool/dependency` 来源。作者正文、第三方诊断与真实历史原文不进入产品模板。Core 错误另保机器 code、获权 `currentSource` 和类型化 details；普通状态投影不重新公开受保护源码。真正因果链最多 32 项，超出时完整原结构进入既有类型化问题集合，不截断或 panic。并列校验／编译问题不折成因果链或拼接字符串；其预算由原输入及生产边界控制。聚合 details 区分 Data 的真实分类、产品问题与未满足的准确语义证据；解码证据描述不授予写入资格。
+
+JSON 正文路由共用一个请求解析边界：授权 middleware 先于正文，先核 JSON 内容类型，再按原路由字节上限读取原请求。框架字段／语法错误保原 HTTP 状态及原诊断，并使用同一类型化错误 envelope。处理器收到请求前，唯一 Data 严格解析器检查原字节中的全部对象键，包含泛型 Value 和嵌套 JSON；不从已丢失重复键的对象声称验证成功。响应 JSON 不改作请求解析器。原提交回执与后续交付独立，交付错误携带完整获权类型化事实，不覆盖已知提交状态。
+
+托管导入／复制审核在原 ActorOperation 中冻结闭合的安全损失语义。该授权投影排除私有路径、作者值和来源诊断，不持久化翻译后的文案。公开损失只含固定安全 code、canonical 类型化说明、原诊断与因果数组，以及必填 `productDiagnostics` 数组。切换显示语言不重新生成已审核的损失事实。旧字符串 message 损失记录明确拒绝，原字节不重写。
+
+编译／批注 worker 的唯一内部错误协议为 **version 2**。`display_tree_budget` 保持独立机器类别，并与 `product_error` 一样必带完整 `productDiagnostics` 数组；产品失败另有类型化 description。预算与真实 World 问题可同时保留。旧协议、未知／重复／额外成员和不合形状的对象均拒绝，不从错误文案恢复类别。新操作回执只保存操作、计划、提交状态、路径与成员事实，不再生成冗余说明字符串；既有 journal 和真实历史说明保留原字节。界面语言只控制显示。确需写入 DOCX／PDF 或新批注正文的产品标签，使用单独明确的输出／内容语言意图并冻结在相应请求与原计划中；切换界面语言不重写原 Plan、已存批注、作者值或 CEL 结果。
+
 中文默认依 [EDITOR](EDITOR.zh-CN.md) §8.6 落实。字体锁固定可用字体集合及其准确文件版本/许可与回退环境，不能只记最终已用字体而忽略集合新增改变回退选择。Desktop、Server/CLI 和 WebUI 消费同一已准入集合；宿主系统字体只有显式准入后才能参加该环境，worker 不扫描 ambient 字体。浏览器获权同源交付遵守资源授权/撤权，不增加外网权限。字体集合、库语言/样式或实际依赖变化失效受影响 compile/preview/Job 准备；静态字段和 note 原字节不因字体变化而改动。已确认下载仍交原 staged bytes，缺当前交付资格则停止而不重编译替换。
 
 ### 9.1 共同LogicalCut及current发布
@@ -390,13 +400,19 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 `tasks/reminder` 是唯一作者意图。Core 从准入且当前可读的已保存 Task 重建候选，不从 Draft、通知参数或第二任务缓存取事实。共同 `device-state/reminders.json` 仅保存库选择、逐提醒 opt-in、个人处理和投递责任；复用 device-state 身份，不用 sync replica_id。复制任务不复制启用资格。固定叶 typed 完整格式拒未知／重复成员，限 16 MiB、128 库及 32768 记录，经原字节摘要和共同 device guard/CAS/flush/回读持久。库固定 WorkspaceId 与物理根身份，路径仅定位；外国设备／profile 不自动采纳。scope-first backup 仅在完整验证已知叶后排除该设备全局数据，未知文件仍拒绝。
 
+设备记录使用 schema version 2。`failedBeforeCall` 与 `unknown` 保存类型化 `CoreDescription`，在原记录预算内保留实际因果链、原诊断来源及完整并列事实。单条投递说明另有 16 KiB 序列化预算，超过时明确拒绝，不截断。调度问题连同 owner 与 reminder 身份保留完整原始类型化 Core 错误。状态／版本／重复校验使用显式事实，不解析诊断文案。v1 与旧字符串诊断记录明确拒绝，原始字节保留。原 OS 请求中的标题／正文、执行键域及系统通知 group 属于独立外部事实，保持原值。
+
 执行键为 `weftext.reminder-effect.v1` 与 device、NodeRef、reminderId、实际语义摘要和精确 trigger 的 canonical SHA256。先持久原键的 submitting、完整 OS request 和 attempt，才返回不可反序列化／克隆的 permit。每次系统调用前必须 `check_reminder_permit`：重验当前源、库、设备、任务和授权，复核共同源／配置正负见证闭包及全部后置检查，并最终核对目标分钟、单调 5 秒时限和墙钟未回拨；全部通过后才准入一次并消费许可。普通投递不能因资格核查耗时越过目标分钟。Native 在 Core 锁外调用 OS，再以原 permit 写回结果；最后检查不声称与之后的作者编辑或 OS 调用全局原子。Server 没有 toast producer 或投递 HTTP 接口。
 
 submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；重启后的 submitting 对外也是 unknown，成功不是已读。只有完整原 app/tag/group/activation/request 在系统历史出现才能确认 unknown；缺席、用户清除或系统限制不解锁重试。明确取消原因（库／提醒关闭、Task 关闭、定义变更）与个人 handled、外部结果正交；处理不写 Task.status。撤回使用原地址，opaque activation key 回跳逐成员重新授权，不能恢复旧读取权。
 
 宿主可按真实单条／汇总投递键有界读取完整原通知，核对激活目录保存的 opaque key。此读取仅验证当前设备账本，不要求作者库在线，也不改投递结果；汇总内的任务成员键不是独立 OS 通知地址。后续打开仍通过实际 Core 回跳重新授权，原记录存在不授予当前作者读取权。
 
-订阅按每页 32 个重读，受限 scope 明示而非空集合。每次恢复最多一个汇总、64 个成员；先在同一账本固定排序成员和 summary key。可能已有外部效果者不得重组或重播；确证未调用的失败可重验后重组，保原失败事实。完成、失效和已处理项排除。
+恢复汇总由 Core 可信扫描当前全部已启用且同意投递的订阅，调用方不能挑选前 64 项。受限或未知 scope 仅产生保留完整原因的类型化问题，不消费该范围。问题样本最多 32 项，`issue_count` 保留总数、`issues_complete` 明示样本是否完整；任何问题都不能被解释为完整可资格集合。完成、失效和已处理项排除。
+
+全部新增错过项必须同时符合 1,024 输入、64 MiB 扫描及 16 MiB／32,768 记录的账本预算；超预算整批不发 permit、不写水位，并明确报告预算／部分范围。在预算内按 execution key 排序，一次 CAS 固定不超过 64 个实际 OS 成员和其余项的 `SummaryOverflow`。后者仅投影 `inAppOnly`，没有 OS Attempt；原通知读取、历史确认、完成和激活入口均不把它当作系统通知。汇总在扫描后的新可信准入时间固定 cutoff，`nextAllowedAt = cutoff + 900 秒`，重启保留冷却时间，墙钟回拨时拒绝新批。
+
+仅原 Individual 的确定 `failedBeforeCall` 可以首次进入该错过阶段，并保留 prior Attempt。既有 SummaryMember／Overflow 或任何可能已有 OS 效果者不得进入新批。原汇总的确定调用前失败仅能按原 key、原 request 和原成员显式重试，cutoff、overflow 和 cooldown 均不变；不重组为另一个汇总。
 
 最终决定前后保持正向输入共享只读 guard、核对原 parent／准确字节／身份／Pending；缺失配置保原见证并前后复验，使用唯一 bundled schema，无用户安装前置。缺失槽是观察而非未来创建锁；后验变化不给 permit，已持久 submitting／unknown 不抹去。最后检查与 OS 效果不声称对之后任意作者编辑全局原子。已有无效配置不回退。单独数据／账本测试不等于真实桌面 DSK03–08 验收。
 

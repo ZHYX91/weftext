@@ -118,7 +118,7 @@ async fn relocate(fixture: &Fixture, context: Option<Context>) -> (Value, String
     let operation_id = uuid::Uuid::new_v4().to_string();
     let plan = prepare_operation(
         State(fixture.state.clone()),
-        Json(OperationRequest {
+        crate::RequestJson(OperationRequest {
             operation_id: operation_id.clone(),
             root: fixture.root.to_string_lossy().into_owned(),
             intent: OperationIntent::RelocateDirectory {
@@ -133,7 +133,7 @@ async fn relocate(fixture: &Fixture, context: Option<Context>) -> (Value, String
     .0;
     let receipt = commit(
         State(fixture.state.clone()),
-        Json(CommitRequest {
+        crate::RequestJson(CommitRequest {
             operation_id: operation_id.clone(),
             plan_id: plan["planId"].as_str().unwrap().into(),
             context,
@@ -209,7 +209,7 @@ async fn directory_result_rebinds_current_and_nested_dirty_sessions_and_status()
     .unwrap();
     let result = status(
         State(f.state.clone()),
-        Json(StatusRequest {
+        crate::RequestJson(StatusRequest {
             operation_id,
             context: Some(f.contexts[0].clone()),
         }),
@@ -241,4 +241,134 @@ async fn directory_result_without_context_maps_all_children_without_inventing_a_
         assert_rebound(&f, &effect["document"], index, relative).await;
     }
     assert!(!f.target.join("Moved/Moved.typ").exists());
+}
+
+#[tokio::test]
+async fn committed_directory_retry_keeps_typed_affected_failure_until_original_child_returns() {
+    let f = fixture();
+    let (receipt, operation_id) = relocate(&f, None).await;
+    let child = receipt["affectedDocuments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|effect| effect["priorSessionId"] == f.contexts[1].session_id)
+        .unwrap();
+    let path = PathBuf::from(child["document"]["path"].as_str().unwrap());
+    let retained = f._temp.path().join("original-child-retained.typ");
+    let original_bytes = fs::read(&path).unwrap();
+    fs::rename(&path, &retained).unwrap();
+    let blocked = status(
+        State(f.state.clone()),
+        crate::RequestJson(StatusRequest {
+            operation_id: operation_id.clone(),
+            context: None,
+        }),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(blocked["status"], "committed");
+    assert_eq!(blocked["operationId"], receipt["operationId"]);
+    assert_eq!(blocked["path"], receipt["path"]);
+    let child = blocked["affectedDocuments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|effect| effect["priorSessionId"] == f.contexts[1].session_id)
+        .unwrap();
+    assert_eq!(child["documentDisposition"], "rebound");
+    assert!(child["document"].is_null());
+    let error = &child["documentError"];
+    assert_eq!(error["code"], "committedResultUnavailable");
+    assert!(error.get("message").is_none());
+    serde_json::from_value::<UiMessage>(error["explanation"].clone()).unwrap();
+    assert!(error["diagnostics"].is_array());
+    assert!(error["causes"].is_array());
+    assert_eq!(error["details"]["kind"], "core");
+    assert_eq!(error["details"]["code"], error["code"]);
+    check_snapshot(
+        &f.state,
+        &f.contexts[1].session_id,
+        &f.contexts[1].source,
+        f.contexts[1].serial,
+        None,
+    )
+    .unwrap();
+    fs::rename(&retained, &path).unwrap();
+    let delivered = status(
+        State(f.state.clone()),
+        crate::RequestJson(StatusRequest {
+            operation_id,
+            context: None,
+        }),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(delivered["status"], "committed");
+    let child = delivered["affectedDocuments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|effect| effect["priorSessionId"] == f.contexts[1].session_id)
+        .unwrap();
+    assert!(child.get("documentError").is_none());
+    assert_rebound(&f, &child["document"], 1, "Nested/Second/Second.typ").await;
+    assert_eq!(fs::read(&path).unwrap(), original_bytes);
+}
+
+#[tokio::test]
+async fn local_citation_reasons_have_one_error_description_contract_and_keep_author_source() {
+    let fixture = fixture();
+    let mut context = fixture.contexts[0].clone();
+    let initial = bundle(&fixture.state, &context).await.unwrap();
+    let workspace = initial.selected.owner.workspace_id.clone();
+    drop(initial);
+    let original = fs::read(fixture.documents[0]["path"].as_str().unwrap()).unwrap();
+    context.source.push_str(&format!(
+        "\n#link(\"weftext-node://{workspace}/{}\")[Unresolved author link]",
+        uuid::Uuid::new_v4()
+    ));
+    context.serial += 1;
+    observe(&fixture.state, &context).unwrap();
+    let mut captured = bundle(&fixture.state, &context).await.unwrap();
+    // Exercise the computed coverage failure at the serializer boundary; it is
+    // not new authority and does not change any author or Core operation.
+    captured.citation_rename_available = false;
+    let catalog = citation_catalog(&captured, None);
+    let unready = catalog["choices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|choice| choice["citationReady"] == false)
+        .unwrap();
+    let choice: weftext_messages::ErrorDescription =
+        serde_json::from_value(unready["reason"].clone()).unwrap();
+    assert_eq!(
+        choice.explanation.key(),
+        "error.api.knowledge.citationPublicationRequired"
+    );
+    let rename: weftext_messages::ErrorDescription =
+        serde_json::from_value(catalog["editor"]["renameReason"].clone()).unwrap();
+    assert_eq!(
+        rename.explanation.key(),
+        "error.api.knowledge.citationRenameScopeUnproven"
+    );
+    let link = catalog["links"].as_array().unwrap().last().unwrap();
+    assert_eq!(link["editable"], false);
+    let reason: weftext_messages::ErrorDescription =
+        serde_json::from_value(link["reason"].clone()).unwrap();
+    assert_eq!(
+        reason.explanation.key(),
+        "error.api.knowledge.nativeLinkTitleUnavailable"
+    );
+    for reason in [&choice, &rename, &reason] {
+        assert!(reason.diagnostics.is_empty());
+        assert!(reason.causes.as_slice().is_empty());
+    }
+    assert_eq!(captured.selected.source, context.source);
+    assert_eq!(
+        fs::read(fixture.documents[0]["path"].as_str().unwrap()).unwrap(),
+        original
+    );
 }

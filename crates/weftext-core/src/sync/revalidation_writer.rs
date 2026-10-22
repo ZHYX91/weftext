@@ -18,6 +18,7 @@ use crate::{
     journal::Plan,
     operations::{AbsentDependency, SnapshotBinding},
 };
+use weftext_messages::{ErrorCauses, ErrorDescription, UiMessage};
 
 /// Derived validation evidence retained in the original SyncApplication. These
 /// records explain the actual read, never authorize a new author transaction.
@@ -41,8 +42,36 @@ pub(crate) struct CapturedSemanticValidation {
     historical_blobs: BTreeMap<String, Vec<u8>>,
 }
 
-fn refused(code: &str, message: &str) -> CoreError {
+fn refused(code: &str, message: UiMessage) -> CoreError {
     CoreError::new(code, message)
+}
+
+/// Encode the actual qualification result without turning its machine reason
+/// into interface text or modifying the original annotation target.
+fn preserved_annotation_target_loss(
+    target: &revalidation::SyncAnnotationTargetStatus,
+) -> weftext_knowledge::Loss {
+    let mut description = ErrorDescription::new(
+        UiMessage::error_core_sync_revalidation_writer_annotation_preserved_awaiting_reconnection(
+            weftext_messages::params::ErrorCoreSyncRevalidationWriterAnnotationPreservedAwaitingReconnection {
+                annotation_id: target.annotation_id.clone(),
+            },
+        ),
+    );
+    description.causes = ErrorCauses::one(
+        target.reason.clone(),
+        UiMessage::error_core_sync_revalidation_writer_annotation_target_qualification_unavailable(
+        ),
+    );
+    weftext_knowledge::Loss {
+        path: format!(
+            "weftext-node://{}/{}",
+            target.owner.workspace_id, target.owner.node_id
+        ),
+        code: "annotationTargetUnavailable".into(),
+        description,
+        product_diagnostics: Vec::new(),
+    }
 }
 fn same_path(a: &Path, b: &Path) -> bool {
     crate::history::history_relative_path(a, b).is_some_and(|p| p.as_os_str().is_empty())
@@ -98,11 +127,12 @@ fn query_lifecycles(checked: &revalidation::CheckedRevalidation) -> Result<BTree
                     &invocation.plan,
                     &invocation.context.definitions,
                 )
-                .map_err(|_| {
+                .map_err(|error| {
                     refused(
                         "queryScopeUnavailable",
-                        "Actual Query lifecycle closure is unavailable",
+                        UiMessage::error_core_sync_actual_query_lifecycle_closure_unavailable(),
                     )
+                    .caused_by(CoreError::from_data("data", error))
                 })?,
             );
             Ok(lifecycles)
@@ -117,7 +147,9 @@ pub(crate) fn close_revalidation_selection(
     requested: &BTreeSet<ObjectKey>,
 ) -> Result<BTreeSet<ObjectKey>> {
     if requested.is_empty() || requested.len() > MAX_CHANGES {
-        return Err(invalid("Select one bounded nonempty received cut"));
+        return Err(invalid(
+            UiMessage::error_core_sync_revalidation_writer_received_cut_selection_invalid(),
+        ));
     }
     let current = graph.objects()?;
     let installed = graph.closure(&local.values().map(|v| v.commit.clone()).collect());
@@ -126,7 +158,7 @@ pub(crate) fn close_revalidation_selection(
         if needed.len() > MAX_CHANGES {
             return Err(refused(
                 "budget",
-                "The original transaction/dependency closure exceeds 5000 objects",
+                UiMessage::error_core_sync_original_transaction_dependency_closure_exceeds5000_objects(),
             ));
         }
         let previous = needed.len();
@@ -136,7 +168,7 @@ pub(crate) fn close_revalidation_selection(
                 current.get(object).ok_or_else(|| {
                     refused(
                         "syncIncomplete",
-                        "A selected dependency has no accepted received state",
+                        UiMessage::error_core_sync_selected_dependency_has_no_accepted_received_state(),
                     )
                 })
             })
@@ -148,7 +180,7 @@ pub(crate) fn close_revalidation_selection(
             let manifest = graph.manifest(id).ok_or_else(|| {
                 refused(
                     "syncIncomplete",
-                    "An original transaction manifest is missing",
+                    UiMessage::error_core_sync_original_transaction_manifest_missing(),
                 )
             })?;
             needed.extend(manifest.changes.iter().map(|c| c.object.clone()));
@@ -158,7 +190,7 @@ pub(crate) fn close_revalidation_selection(
             let view = current.get(&object).ok_or_else(|| {
                 refused(
                     "syncIncomplete",
-                    "An original dependency has no accepted received state",
+                    UiMessage::error_core_sync_original_dependency_has_no_accepted_received_state(),
                 )
             })?;
             for version in &view.versions {
@@ -169,7 +201,7 @@ pub(crate) fn close_revalidation_selection(
                         .ok_or_else(|| {
                             refused(
                                 "syncIncomplete",
-                                "An original dependency manifest is missing",
+                                UiMessage::error_core_sync_original_dependency_manifest_missing(),
                             )
                         })?
                         .dependencies
@@ -233,7 +265,9 @@ impl Core {
         if &setup.identity != identity
             || self.require_workspace(&root)?.workspace_id != identity.workspace_id
         {
-            return Err(invalid("Semantic installation names another local replica"));
+            return Err(invalid(
+                UiMessage::error_core_sync_revalidation_writer_installation_replica_mismatch(),
+            ));
         }
         self.publish_sync(&root)?;
         let local = self.sync_local_state(&setup)?.0;
@@ -347,7 +381,9 @@ impl Core {
         if &setup.identity != identity
             || self.require_workspace(&root)?.workspace_id != identity.workspace_id
         {
-            return Err(invalid("The semantic review names another local replica"));
+            return Err(invalid(
+                UiMessage::error_core_sync_revalidation_writer_review_replica_mismatch(),
+            ));
         }
         let local = self.sync_local_state(setup)?.0;
         if blobs.len() > MAX_FILES
@@ -358,7 +394,7 @@ impl Core {
         {
             return Err(refused(
                 "budget",
-                "Semantic review blobs exceed the original sync budget",
+                UiMessage::error_core_sync_semantic_review_blobs_exceed_original_sync_budget(),
             ));
         }
         let mut graph = self.read_sync_history(identity)?;
@@ -437,7 +473,7 @@ impl Core {
         let application = plan
             .sync_application
             .as_ref()
-            .ok_or_else(|| invalid("A semantic decision requires its original SyncApplication"))?
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_revalidation_writer_decision_original_application_required()))?
             .clone();
         let root = PathBuf::from(&application.root);
         let setup = self.sync_setup_for(&root)?;
@@ -450,7 +486,7 @@ impl Core {
         {
             return Err(refused(
                 "syncBasisChanged",
-                "The original installed cut changed during semantic preparation",
+                UiMessage::error_core_sync_original_installed_cut_changed_during_semantic_preparation(),
             ));
         }
         let mut graph = self.read_sync_history(&application.identity)?;
@@ -474,7 +510,7 @@ impl Core {
                 .is_none_or(|v| v.state != after.state)
         }) {
             return Err(invalid(
-                "The original writer after states differ from the semantic proposal",
+                UiMessage::error_core_sync_revalidation_writer_proposal_after_states_mismatch(),
             ));
         }
         let preliminary = revalidation::inspect_revalidation(
@@ -523,12 +559,12 @@ impl Core {
         let application = plan
             .sync_application
             .as_ref()
-            .ok_or_else(|| invalid("Adoption requires its original application"))?
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_revalidation_writer_adoption_original_application_required()))?
             .clone();
         let transaction = plan
             .transaction
             .as_ref()
-            .ok_or_else(|| invalid("Adoption requires its original no-write transaction"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_revalidation_writer_adoption_no_write_transaction_required()))?;
         if !matches!(
             transaction.request.intent,
             crate::OperationIntent::AdoptSyncExternal { .. }
@@ -537,18 +573,20 @@ impl Core {
             || transaction.preview.operation_id != plan.operation_id
         {
             return Err(invalid(
-                "Semantic adoption requires its exact original request",
+                UiMessage::error_core_sync_revalidation_writer_adoption_original_request_required(),
             ));
         }
         let crate::operations::Mutation::Update { files: outputs } = &transaction.mutation else {
-            return Err(invalid("Adoption must retain the original no-write Update"));
+            return Err(invalid(
+                UiMessage::error_core_sync_revalidation_writer_adoption_original_update_required(),
+            ));
         };
         if outputs
             .iter()
             .any(|file| file.before.as_ref() != Some(&file.after))
         {
             return Err(invalid(
-                "External adoption cannot rewrite the observed author bytes",
+                UiMessage::error_core_sync_revalidation_writer_external_adoption_cannot_rewrite(),
             ));
         }
         let root = PathBuf::from(&application.root);
@@ -562,19 +600,19 @@ impl Core {
         {
             return Err(refused(
                 "syncBasisChanged",
-                "The exact reviewed installed adoption basis changed",
+                UiMessage::error_core_sync_exact_reviewed_installed_adoption_basis_changed(),
             ));
         }
         let publication = plan
             .sync_publication
             .as_ref()
-            .ok_or_else(|| invalid("Adoption requires its original publication"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_revalidation_writer_adoption_original_publication_required()))?;
         if publication.identity != application.identity
             || publication.manifest.operation_id != plan.operation_id
             || publication.manifest.changes.len() != application.after.len()
         {
             return Err(invalid(
-                "Adoption publication differs from the original application",
+                UiMessage::error_core_sync_revalidation_writer_adoption_publication_mismatch(),
             ));
         }
         let mut chosen = application
@@ -593,9 +631,11 @@ impl Core {
             .collect::<BTreeMap<_, _>>();
         let mut changed = BTreeSet::new();
         for after in &application.after {
-            let before = local
-                .get(&after.object)
-                .ok_or_else(|| invalid("Adoption cannot create a new owner"))?;
+            let before = local.get(&after.object).ok_or_else(|| {
+                invalid(
+                    UiMessage::error_core_sync_revalidation_writer_adoption_cannot_create_owner(),
+                )
+            })?;
             if !chosen.contains_key(&after.object)
                 || !changed.insert(after.object.clone())
                 || after.directory != before.directory
@@ -626,7 +666,7 @@ impl Core {
                 })
             {
                 return Err(invalid(
-                    "Adoption changes the original owner, placement or publication cut",
+                    UiMessage::error_core_sync_revalidation_writer_adoption_original_cut_changed(),
                 ));
             }
             chosen.get_mut(&after.object).unwrap().state = after.state.clone();
@@ -905,7 +945,7 @@ impl Core {
                     .ok_or_else(|| {
                         refused(
                             "syncIncomplete",
-                            "Exact historical semantic bytes are missing",
+                            UiMessage::error_core_sync_exact_historical_semantic_bytes_missing(),
                         )
                     })
             })
@@ -928,18 +968,14 @@ impl Core {
             historical_blobs,
         } = captured;
         if !capture.unfulfilled().is_empty() {
-            let gaps = capture
-                .unfulfilled()
-                .iter()
-                .map(|item| serde_json::json!({"obligation": item.obligation, "gap": item.gap}))
-                .collect::<Vec<_>>();
-            return Err(refused(
+            let mut error = refused(
                 "syncEvidenceRequired",
-                &format!(
-                    "Exact original-writer evidence remains required: {}",
-                    serde_json::to_string(&gaps)?
-                ),
-            ));
+                UiMessage::error_core_original_writer_evidence_required(),
+            );
+            error.add_detail_group(crate::ErrorDetailGroup::SemanticEvidence {
+                gaps: capture.unfulfilled().to_vec(),
+            });
+            return Err(error);
         }
         let reads = capture.into_read_set()?;
         if reads
@@ -949,13 +985,12 @@ impl Core {
         {
             return Err(refused(
                 "syncDependencyRequired",
-                "Actual semantic evidence escaped the exact reviewed cut",
+                UiMessage::error_core_sync_actual_semantic_evidence_escaped_exact_reviewed_cut(),
             ));
         }
-        let transaction = plan
-            .transaction
-            .as_mut()
-            .ok_or_else(|| invalid("Semantic evidence requires the original transaction"))?;
+        let transaction = plan.transaction.as_mut().ok_or_else(|| {
+            invalid(UiMessage::error_core_sync_semantic_evidence_original_transaction_required())
+        })?;
         for witness in reads.witnesses {
             let SnapshotBinding {
                 path,
@@ -971,7 +1006,7 @@ impl Core {
                     if existing.stamp != file.stamp || existing.bytes != file.bytes {
                         return Err(refused(
                             "syncEvidenceChanged",
-                            "Original writer capture changed before semantic freezing",
+                            UiMessage::error_core_sync_original_writer_capture_changed_before_semantic_freezing(),
                         ));
                     }
                 } else {
@@ -996,7 +1031,7 @@ impl Core {
             {
                 return Err(refused(
                     "scopeChanged",
-                    "The original Query membership differs from the writer cut",
+                    UiMessage::error_core_sync_original_query_membership_differs_from_writer_cut(),
                 ));
             }
             transaction.expected_membership = Some(members);
@@ -1009,7 +1044,7 @@ impl Core {
             {
                 return Err(refused(
                     "scopeChanged",
-                    "The original Trash Query membership differs from the writer cut",
+                    UiMessage::error_core_sync_original_trash_query_membership_differs_from_writer_cut(),
                 ));
             }
             transaction.expected_trash_membership = Some(members);
@@ -1027,23 +1062,15 @@ impl Core {
         {
             return Err(refused(
                 "budget",
-                "Frozen semantic reads exceed the original writer transaction budget",
+                UiMessage::error_core_sync_frozen_semantic_reads_exceed_original_writer_transaction_budget(),
             ));
         }
         for target in &reads.annotation_targets {
             if target.state != "exact" {
-                let message = format!(
-                    "Annotation {} is preserved unchanged; target unavailable, awaiting explicit reconnection ({})",
-                    target.annotation_id, target.reason
-                );
-                transaction.preview.losses.push(weftext_knowledge::Loss {
-                    path: format!(
-                        "weftext-node://{}/{}",
-                        target.owner.workspace_id, target.owner.node_id
-                    ),
-                    code: "annotationTargetUnavailable".into(),
-                    detail: message,
-                });
+                transaction
+                    .preview
+                    .losses
+                    .push(preserved_annotation_target_loss(target));
             }
         }
         // A committed Definition discharge may name a pinned historical
@@ -1052,7 +1079,7 @@ impl Core {
         let frozen_application = plan
             .sync_application
             .as_mut()
-            .ok_or_else(|| invalid("Semantic evidence requires its original application"))?;
+            .ok_or_else(|| invalid(UiMessage::error_core_sync_revalidation_writer_evidence_original_application_required()))?;
         for input in &checked.historical_inputs {
             let bytes = historical_blobs[&input.digest].as_slice();
             if frozen_application
@@ -1061,7 +1088,7 @@ impl Core {
                 .is_some_and(|old| old.as_slice() != bytes)
             {
                 return Err(invalid(
-                    "Historical semantic blob changes its accepted digest",
+                    UiMessage::error_core_sync_revalidation_writer_historical_blob_digest_changed(),
                 ));
             }
             frozen_application
@@ -1077,7 +1104,7 @@ impl Core {
         {
             return Err(refused(
                 "budget",
-                "Retained semantic inputs exceed the original application budget",
+                UiMessage::error_core_sync_retained_semantic_inputs_exceed_original_application_budget(),
             ));
         }
         let absent_objects = checked
@@ -1156,7 +1183,7 @@ impl Core {
     ) -> Result<()> {
         if request.root != application.root {
             return Err(invalid(
-                "Semantic evidence belongs to another original request root",
+                UiMessage::error_core_sync_revalidation_writer_evidence_original_root_mismatch(),
             ));
         }
         self.validate_sync_semantic_cut(
@@ -1182,7 +1209,10 @@ impl Core {
                 ObjectKey::Schema => ".weftext-schema.json",
                 ObjectKey::Rules => ".weftext-rules",
                 ObjectKey::Settings => ".weftext-settings.json",
-                _ => return Err(invalid("Unsupported absent semantic configuration")),
+                _ => return Err(invalid(
+                    UiMessage::error_core_sync_revalidation_writer_absent_configuration_unsupported(
+                    ),
+                )),
             };
             self.check_pending_except(
                 &Path::new(&application.root).join(name),
@@ -1214,7 +1244,7 @@ impl Core {
         }) {
             return Err(refused(
                 "syncConflictChanged",
-                "An explicitly absent semantic configuration arrived after review",
+                UiMessage::error_core_sync_explicitly_absent_semantic_configuration_arrived_after_review(),
             ));
         }
         for value in &evidence.historical_inputs {
@@ -1232,7 +1262,7 @@ impl Core {
             {
                 return Err(refused(
                     "syncIncomplete",
-                    "An exact retained semantic input is no longer available",
+                    UiMessage::error_core_sync_exact_retained_semantic_input_no_longer_available(),
                 ));
             }
         }
@@ -1243,3 +1273,74 @@ impl Core {
 #[cfg(all(test, windows))]
 #[path = "revalidation_writer_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod annotation_loss_contract_tests {
+    use super::*;
+
+    #[test]
+    fn annotation_loss_preserves_typed_identity_and_original_machine_qualification_reason() {
+        let mut target = revalidation::SyncAnnotationTargetStatus {
+            owner: weftext_knowledge::NodeRef {
+                workspace_id: "58c47256-bfce-4d29-a037-b83a3a644fb0".into(),
+                node_id: "00000000-0000-4000-8000-000000000001".into(),
+            },
+            annotation_id: "00000000-0000-4000-8000-000000000002".into(),
+            state: "unavailable".into(),
+            reason: "preserved-target-not-in-authorized-read-cut".into(),
+        };
+        for reason in [
+            "preserved-target-not-in-authorized-read-cut",
+            "preserved-exact-anchor-revision-unavailable",
+        ] {
+            target.reason = reason.into();
+            let original = serde_json::to_value(&target).unwrap();
+            let loss = preserved_annotation_target_loss(&target);
+            assert_eq!(loss.code, "annotationTargetUnavailable");
+            assert_eq!(
+                loss.path,
+                format!(
+                    "weftext-node://{}/{}",
+                    target.owner.workspace_id, target.owner.node_id
+                )
+            );
+            assert_eq!(loss.description.causes.as_slice().len(), 1);
+            assert_eq!(loss.description.causes.as_slice()[0].code, reason);
+            assert!(loss.description.diagnostics.is_empty());
+            assert!(loss.product_diagnostics.is_empty());
+            let wire = serde_json::to_value(&loss).unwrap();
+            assert_eq!(
+                wire["explanation"]["key"],
+                "error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection"
+            );
+            assert_eq!(
+                wire["explanation"]["params"]["annotationId"],
+                target.annotation_id
+            );
+            assert_eq!(wire["causes"][0]["code"], reason);
+            assert_eq!(wire["productDiagnostics"], serde_json::json!([]));
+            assert!(wire.get("detail").is_none());
+            let decoded: weftext_knowledge::Loss = serde_json::from_value(wire.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), wire);
+            assert_eq!(serde_json::to_value(&target).unwrap(), original);
+            let _ = loss
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::ZhCn);
+            let _ = loss
+                .description
+                .explanation
+                .render(weftext_messages::UiLocale::EnUs);
+            assert_eq!(serde_json::to_value(&loss).unwrap(), wire);
+            let mut missing_parallel = wire.clone();
+            missing_parallel
+                .as_object_mut()
+                .unwrap()
+                .remove("productDiagnostics");
+            assert!(serde_json::from_value::<weftext_knowledge::Loss>(missing_parallel).is_err());
+            let mut legacy = wire;
+            legacy["detail"] = "legacy product text".into();
+            assert!(serde_json::from_value::<weftext_knowledge::Loss>(legacy).is_err());
+        }
+    }
+}

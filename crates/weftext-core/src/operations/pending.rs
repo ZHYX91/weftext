@@ -231,8 +231,10 @@ impl Core {
 fn pending(operation_id: &str) -> CoreError {
     CoreError::new(
         "recoveryPending",
-        format!(
-            "Original unfinished operation {operation_id} overlaps this Plan's frozen read or mutation scope; inspect its retained recovery before any effect"
+        UiMessage::error_core_pending_original_operation(
+            weftext_messages::params::ErrorCorePendingOriginalOperation {
+                operation_id: operation_id.into(),
+            },
         ),
     )
 }

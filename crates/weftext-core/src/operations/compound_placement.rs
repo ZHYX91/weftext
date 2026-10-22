@@ -1,6 +1,7 @@
 //! Intermediate locations belong to the original Compound Plan. All roots
 //! retain their original directory/file identities; parking never copies data.
 use super::*;
+use weftext_messages::UiMessage;
 
 pub(super) fn coordinate(step: &RelocationStep, phase: StepPhase) -> &Path {
     Path::new(match phase {
@@ -114,7 +115,7 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
     if steps.iter().any(|step| step.parking.is_none()) {
         return Err(CoreError::new(
             "invalidPlan",
-            "Compound parking must cover its complete participant set",
+            UiMessage::error_core_operations_compound_parking_must_cover_complete_participant_set(),
         ));
     }
     for (index, step) in steps.iter().enumerate() {
@@ -129,7 +130,7 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
         if crate::backend::namespace_path_compare(path, &expected)? != std::cmp::Ordering::Equal {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Parking is not the original operation's frozen sibling slot",
+                UiMessage::error_core_operations_parking_not_original_operation_s_frozen_sibling_slot(),
             ));
         }
         for other in steps {
@@ -139,7 +140,7 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
                 {
                     return Err(CoreError::new(
                         "invalidPlan",
-                        "Parking overlaps an original or final participant",
+                        UiMessage::error_core_operations_parking_overlaps_original_or_final_participant(),
                     ));
                 }
             }
@@ -156,7 +157,8 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
             {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Parking overlaps an original read or content slot",
+                    UiMessage::error_core_operations_parking_overlaps_original_read_or_content_slot(
+                    ),
                 ));
             }
         }
@@ -166,7 +168,7 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
             {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Parking overlaps a create-only directory",
+                    UiMessage::error_core_operations_parking_overlaps_create_only_directory(),
                 ));
             }
         }
@@ -216,12 +218,12 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
                 .iter()
                 .filter(|(_, identity)| identity.as_ref() == Some(&step.source_identity));
             let (path, _) = locations.next().ok_or_else(|| {
-                CoreError::new("thirdState", "Original moving directory is missing")
+                CoreError::new("thirdState", UiMessage::error_core_operations_original_moving_directory_missing())
             })?;
             if locations.next().is_some() {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Original moving directory occupies ambiguous slots",
+                    UiMessage::error_core_operations_original_moving_directory_occupies_ambiguous_slots(),
                 ));
             }
             let same = |other: &str| {
@@ -243,7 +245,7 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
             } else {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Original directory is outside its own frozen positions",
+                    UiMessage::error_core_operations_original_directory_outside_own_frozen_positions(),
                 ));
             };
             let old = capture_optional(&path.join(&step.old_leaf))?;
@@ -258,7 +260,7 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
                 } else {
                     Err(CoreError::new(
                         "thirdState",
-                        "Original canonical file is missing or replaced",
+                        UiMessage::error_core_operations_original_canonical_file_missing_or_replaced(),
                     ))
                 };
             }
@@ -276,7 +278,7 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
                 (state, None, Some(file)) if file.stamp.identity == step.leaf_identity => Ok(state),
                 _ => Err(CoreError::new(
                     "thirdState",
-                    "Original canonical leaf is outside its exact frozen phase",
+                    UiMessage::error_core_operations_original_canonical_leaf_outside_exact_frozen_phase(),
                 )),
             }
         })
@@ -288,7 +290,7 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
         {
             return Err(CoreError::new(
                 "thirdState",
-                "An original Compound namespace slot has a foreign directory",
+                UiMessage::error_core_operations_original_compound_namespace_slot_has_foreign_directory(),
             ));
         }
     }
@@ -344,7 +346,7 @@ pub(super) fn acquire(
                 anchor = anchor.parent().ok_or_else(|| {
                     CoreError::new(
                         "invalidPlan",
-                        "Preservation directory lacks an original ancestor",
+                        UiMessage::error_core_operations_preservation_directory_lacks_original_ancestor(),
                     )
                 })?;
             }

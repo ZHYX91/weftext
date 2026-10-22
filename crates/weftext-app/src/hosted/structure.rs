@@ -165,7 +165,7 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "structureChanged",
-        "原结构依据、权限或目标已变化；请保留草稿并核对原操作。",
+        UiMessage::error_api_hosted_structure_structure_basis_changed(),
     )
 }
 fn core_error(error: CoreError) -> ApiError {
@@ -173,13 +173,13 @@ fn core_error(error: CoreError) -> ApiError {
         return ApiError::new(
             StatusCode::CONFLICT,
             "basisRequired",
-            "结构事务的保护需要现存的库规则文件；请由库所有者显式安装后重试。",
+            UiMessage::error_api_hosted_structure_structure_rules_required(),
         );
     }
     ApiError::new(
         StatusCode::CONFLICT,
         &error.code,
-        "结构操作未完成，原件与草稿保留；请核对原操作状态。",
+        UiMessage::error_api_hosted_structure_structure_operation_unresolved(),
     )
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
@@ -307,14 +307,15 @@ fn anchor_access(inner: &HostedInner, actor: &str, resource: &str) -> Result<(),
 fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiError> {
     let rights = rights(inner, actor)?;
     if !KINDS.contains(&req.kind.as_str()) {
-        return Err(ApiError::bad("未知结构操作"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_unknown_structure_operation(),
+        ));
     }
     let builtin = req.kind == "template" && req.template.as_deref() == Some("native-note");
     if req.kind == "create" || builtin {
-        let d = req
-            .destination
-            .as_deref()
-            .ok_or_else(|| ApiError::bad("缺少固定目标槽"))?;
+        let d = req.destination.as_deref().ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_hosted_structure_fixed_destination_slot_required())
+        })?;
         if req.resource != d
             || req.source.is_some()
             || !rights.destinations.get(d).is_some_and(|d| d.create)
@@ -322,10 +323,11 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
             return Err(unavailable());
         }
     } else {
-        let source = req
-            .source
-            .as_deref()
-            .ok_or_else(|| ApiError::bad("缺少配置源对象"))?;
+        let source = req.source.as_deref().ok_or_else(|| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_structure_configuration_source_object_required(),
+            )
+        })?;
         let r = rights
             .sources
             .get(source)
@@ -346,10 +348,11 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
             library::access(inner, actor, "schema", false)?;
         }
         if req.kind != "trash" {
-            let d = req
-                .destination
-                .as_deref()
-                .ok_or_else(|| ApiError::bad("缺少固定目标槽"))?;
+            let d = req.destination.as_deref().ok_or_else(|| {
+                ApiError::bad(
+                    UiMessage::error_api_hosted_structure_fixed_destination_slot_required(),
+                )
+            })?;
             if !rights.destinations.get(d).is_some_and(|d| d.receive) {
                 return Err(unavailable());
             }
@@ -362,10 +365,14 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
     }
     if req.inputs.len() > 64 || req.inputs.iter().collect::<BTreeSet<_>>().len() != req.inputs.len()
     {
-        return Err(ApiError::bad("显式引用输入超过预算或重复"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_explicit_reference_inputs_invalid(),
+        ));
     }
     if !req.inputs.is_empty() && !matches!(req.kind.as_str(), "create" | "copy" | "template") {
-        return Err(ApiError::bad("此结构操作不读取显式引用输入"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_explicit_references_unused(),
+        ));
     }
     for id in &req.inputs {
         if !inner
@@ -392,7 +399,9 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
         || req.kind != "restore" && req.trash_operation_id.is_some()
         || req.kind == "trash" && req.destination.is_some()
     {
-        return Err(ApiError::bad("输入不属于所选原结构操作"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_structure_inputs_mismatch(),
+        ));
     }
     Ok(())
 }
@@ -506,11 +515,14 @@ fn owner(inner: &HostedInner, id: &str) -> Result<weftext_core::QualifiedQueryNo
 }
 fn capture_body(c: &Capture) -> Result<String, ApiError> {
     if c.body.len() > MAX_SOURCE || c.title.as_ref().is_some_and(|t| t.len() > 16 * 1024) {
-        return Err(ApiError::bad("创建正文或标题超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_body_title_budget(),
+        ));
     }
     let body = match c.body_mode.as_deref().unwrap_or("text") {
-        "text" => weftext_engine::encode_literal(&c.body)
-            .map_err(|_| ApiError::bad("文字输入不可编码"))?,
+        "text" => weftext_engine::encode_literal(&c.body).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_hosted_structure_text_encoding_unsupported())
+        })?,
         "markup" => {
             fn isolated(
                 node: &typst_syntax::SyntaxNode,
@@ -541,17 +553,23 @@ fn capture_body(c: &Capture) -> Result<String, ApiError> {
             let source = typst_syntax::Source::detached(c.body.clone());
             if !isolated(source.root(), 0, &mut 20_000) {
                 return Err(ApiError::bad(
-                    "创建 markup 仅支持可证明的排版内容；代码与身份、类型、字段声明须经独立正文编辑保存",
+                    UiMessage::error_api_hosted_structure_created_markup_unsupported(),
                 ));
             }
             c.body.clone()
         }
-        _ => return Err(ApiError::bad("正文模式须为 text 或 markup")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_body_mode_invalid(),
+            ));
+        }
     };
     Ok(if let Some(title) = &c.title {
         format!(
             "\n#set document(title: [{}])\n#title()\n\n{}",
-            weftext_engine::encode_literal(title).map_err(|_| ApiError::bad("标题不可编码"))?,
+            weftext_engine::encode_literal(title).map_err(|_| ApiError::bad(
+                UiMessage::error_api_hosted_structure_title_encoding_unsupported()
+            ))?,
             body
         )
     } else {
@@ -567,7 +585,9 @@ fn capture_source(
     captured: &inputs::Captured,
 ) -> Result<String, ApiError> {
     if c.types.len() > 32 || c.fields.len() > 64 {
-        return Err(ApiError::bad("创建类型或字段超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_types_fields_budget(),
+        ));
     }
     let body = capture_body(c)?;
     if c.types.is_empty() && c.fields.is_empty() {
@@ -607,7 +627,9 @@ fn capture_source(
     // closure before invoking any native default, constraint or validator.
     let (resolved, check) = schema.expand_types(&c.types);
     if !check.is_valid() {
-        return Err(ApiError::bad("类型组合不可用"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_type_combination_unavailable(),
+        ));
     }
     for (f, required) in schema.applicable_fields(&resolved) {
         if (required
@@ -618,7 +640,9 @@ fn capture_source(
             return Err(unavailable());
         }
         if c.fields.keys().any(|id| id == &f.key && id != &f.id) {
-            return Err(ApiError::bad("创建字段须使用准确 FieldId"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_exact_created_field_id_required(),
+            ));
         }
     }
     // Provider capability remains separate even when complete schema read is
@@ -631,8 +655,12 @@ fn capture_source(
     restricted
         .series_policies
         .retain(|p| providers.series_policies.contains(&p.id));
-    let source = weftext_data::capture_template(&c.types, &c.fields, &body, &restricted)
-        .map_err(|_| ApiError::bad("创建字段或原生依赖不可用"))?;
+    let source =
+        weftext_data::capture_template(&c.types, &c.fields, &body, &restricted).map_err(|_| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_structure_created_field_dependencies_unavailable(),
+            )
+        })?;
     let check_source = weftext_data::capture_source(
         "00000000-0000-4000-8000-000000000000",
         &c.types,
@@ -640,7 +668,11 @@ fn capture_source(
         &body,
         &restricted,
     )
-    .map_err(|_| ApiError::bad("创建字段或原生依赖不可用"))?;
+    .map_err(|_| {
+        ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_field_dependencies_unavailable(),
+        )
+    })?;
     let validation = weftext_data::validate_note(
         &check_source,
         &restricted,
@@ -651,7 +683,9 @@ fn capture_source(
         },
     );
     if !validation.is_valid() {
-        return Err(ApiError::bad("创建类型、字段或上下文约束不可用"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_context_constraints_unavailable(),
+        ));
     }
     let mut targets = vec![];
     let mut sources = vec![];
@@ -697,7 +731,7 @@ fn capture_source(
     );
     if !relations.is_valid() {
         return Err(ApiError::bad(
-            "创建关系需要准确获权目标；完整图依赖未获权时不可假定成功",
+            UiMessage::error_api_hosted_structure_relation_target_qualification_required(),
         ));
     }
     pool.push(w);
@@ -787,7 +821,9 @@ fn typed_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Value
         .map_err(core_error)?;
     let dto = json!({"types":schema.types.iter().filter(|t|expanded.contains(&t.id)).collect::<Vec<_>>(),"fields":fields,"definitions":definitions,"aliases":{}});
     if serde_json::to_vec(&dto).map_err(|_| changed())?.len() > MAX_SOURCE {
-        return Err(ApiError::bad("类型创建表单超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_type_creation_form_budget(),
+        ));
     }
     Ok(dto)
 }
@@ -826,7 +862,9 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
             .sum::<usize>(),
     ) > MAX_BYTES
     {
-        return Err(ApiError::bad("模板依据超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_template_basis_budget(),
+        ));
     }
     let f = &cut.files[0];
     if cut.files[1].revision.is_none() {
@@ -870,7 +908,7 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| prepare_inner(inner, &auth, req)).await?,
@@ -881,7 +919,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
     authorize(inner, &actor, &req)?;
     let encoded = serde_json::to_vec(&req).map_err(|_| changed())?;
     if encoded.len() > MAX_SOURCE + 128 * 1024 {
-        return Err(ApiError::bad("结构请求超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_structure_request_budget(),
+        ));
     }
     let fp = digest(&encoded);
     let actor_scope = scope(inner, &actor);
@@ -902,7 +942,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
     let built = (|| {
         let captured = inputs::capture(inner, &actor, &req.inputs)?;
         if captured.retained_bytes() > MAX_BYTES {
-            return Err(ApiError::bad("显式引用输入超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_explicit_reference_input_budget(),
+            ));
         }
         let transfer = captured.plan_witnesses()?;
         let destination = if let Some(d) = &req.destination {
@@ -925,10 +967,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
         let mut selected_source = None;
         if let Some(source) = &req.source {
             let q = if req.kind == "restore" {
-                let original = req
-                    .trash_operation_id
-                    .as_deref()
-                    .ok_or_else(|| ApiError::bad("缺少原 Trash 操作编号"))?;
+                let original = req.trash_operation_id.as_deref().ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_structure_original_trash_id_required(),
+                    )
+                })?;
                 let receipt = inner
                     .core
                     .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
@@ -970,7 +1013,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .capture_feature_tree(&root, path.parent().ok_or_else(changed)?, &q.owner)
                     .map_err(core_error)?;
                 if captured.retained_bytes() > MAX_BYTES {
-                    return Err(ApiError::bad("整树传递依据超过 32 MiB 预算"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_whole_tree_basis_budget(),
+                    ));
                 }
                 tree = Some(captured);
             }
@@ -1017,7 +1062,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .qualified_query_node_at(&root, path, source_owner.as_ref().unwrap(), "live")
                     .map_err(core_error)?;
                 if q.coordinate.parent().and_then(Path::parent) != Some(coordinate.as_path()) {
-                    return Err(ApiError::bad("重命名须使用同一父目录中的固定目标槽"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_rename_destination_slot_invalid(),
+                    ));
                 }
                 OperationIntent::RenameNode {
                     source: path
@@ -1036,7 +1083,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .and_then(Path::file_name)
                     .is_none_or(|n| n != s.name.as_str())
                 {
-                    return Err(ApiError::bad("移动目标须保留原笔记名称"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_move_name_must_remain(),
+                    ));
                 }
                 OperationIntent::MoveNode {
                     source: path
@@ -1132,7 +1181,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                         .slots
                         .iter()
                         .find(|s| s.name == *name)
-                        .ok_or_else(|| ApiError::bad("参数不属于原准确模板槽"))?;
+                        .ok_or_else(|| {
+                            ApiError::bad(
+                                UiMessage::error_api_hosted_structure_template_parameter_mismatch(),
+                            )
+                        })?;
                     parameters.insert(
                         name.clone(),
                         crate::knowledge_api::parse_template_value(v, slot.kind)?,
@@ -1143,7 +1196,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     &definition.slots,
                     &parameters,
                 )
-                .map_err(|_| ApiError::bad("模板参数或原准确槽不可用"))?;
+                .map_err(|_| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_structure_template_parameters_unavailable(),
+                    )
+                })?;
                 OperationIntent::TemplateNode {
                     source: path.to_string_lossy().into_owned(),
                     parent: p.to_string_lossy().into_owned(),
@@ -1152,7 +1209,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     source_base_id: f.base_id.clone(),
                 }
             }
-            _ => return Err(ApiError::bad("未知结构操作")),
+            _ => {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_structure_unknown_structure_operation(),
+                ));
+            }
         };
         let bytes = pool
             .iter()
@@ -1168,7 +1229,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
             )
             .saturating_add(encoded.len());
         if bytes > MAX_BYTES {
-            return Err(ApiError::bad("结构请求与原保护依据超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_structure_protection_budget(),
+            ));
         }
         let decision = Decision {
             epoch: inner.actor_generation(&actor),
@@ -1177,7 +1240,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
             request: req.clone(),
             owner: source_owner.clone(),
         };
-        let preview = json!({"kind":req.kind,"summary":"在明确授权的源与固定目标槽之间执行原结构事务；正文草稿不自动保存或切换。","source":req.source,"destination":req.destination,"_structure":decision});
+        let preview = json!({"kind":req.kind,"summary":UiMessage::error_api_hosted_structure_plan_summary(),"source":req.source,"destination":req.destination,"_structure":decision});
         let request = OperationRequest {
             operation_id: req.operation_id.clone(),
             root: root.to_string_lossy().into_owned(),
@@ -1217,14 +1280,14 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;anchor_access(inner,&actor,&req.resource)?;let status=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|c|c.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;match status{Some(s)=>safe_status(inner,&actor,s),None=>Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"nodeRefs":[],"resourceRefs":[],"commitAllowed":false,"result":null}))}}).await?))
 }
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1244,7 +1307,7 @@ async fn settle(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1294,7 +1357,7 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         for(id,r)in &rights.destinations {if !r.create&&!r.receive{continue;}let slot=&inner.config.structure_slots[id];let parent=&inner.config.directories[&slot.parent];let ready=inner.core.qualified_query_scope_at(&inner.config.root,&inner.config.root.join(&parent.path),&parent.reference,"live").is_ok();partial|=!ready;
             let mut row=json!({"resource":id,"title":inner.file(id)?.title,"name":slot.name,"parent":slot.parent,"parentTitle":parent.title,"create":r.create,"receive":r.receive,"status":if ready{"ready"}else{"unavailable"},"types":slot.types});
             if r.create&&!slot.types.is_empty(){match typed_catalog(inner,&actor,id){Ok(c)=>row["capture"]=c,Err(_)=>{row["captureStatus"]="unavailable".into();partial=true;}}}slots.push(row);}
-        if rights.destinations.values().any(|d|d.create){templates.push(json!({"id":"native-note","title":"原生笔记","status":"ready","builtin":true,"parameters":[{"name":"title","kind":"markup","nullable":false,"required":true},{"name":"body","kind":"markup","nullable":false,"required":false,"default":""}]}));}
+        if rights.destinations.values().any(|d|d.create){templates.push(json!({"id":"native-note","title":UiMessage::error_api_hosted_structure_native_note_template_title(),"status":"ready","builtin":true,"parameters":[{"name":"title","kind":"markup","nullable":false,"required":true},{"name":"body","kind":"markup","nullable":false,"required":false,"default":""}]}));}
         let configured=inner.config.structure_templates.clone();for(id,t)in &configured {if rights.sources.get(&t.source).is_some_and(|r|r.template&&r.tree_read&&r.tree_export)&&library::access(inner,&actor,"schema",false).is_ok(){match template_catalog(inner,&actor,id){Ok(t)=>templates.push(t),Err(_)=>{templates.push(json!({"id":id,"title":inner.file(&t.source)?.title,"source":t.source,"status":"unavailable","builtin":false}));partial=true;}}}}
         Ok(json!({"scope":"configuredAuthorizedStructure","coverage":if partial{"partial"}else{"complete"},"sources":sources,"slots":slots,"templates":templates}))
     }).await?))
@@ -1415,6 +1478,58 @@ mod tests {
             .unwrap();
         safe_status(inner, &actor, s).unwrap()
     }
+    #[tokio::test]
+    async fn builtin_template_title_is_typed_and_slot_author_title_stays_exact() {
+        let (_temp, state, auth) = fixture();
+        let author_title = "Author 原题名 😀";
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.config.files.get_mut("Created").unwrap().title = author_title.into();
+            grant(&mut inner, "Shared", "create", "Created");
+        }
+        let delivered = catalog(State(state.clone()), Extension(auth.clone()))
+            .await
+            .unwrap()
+            .0;
+        let template = delivered["templates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["builtin"] == true)
+            .unwrap();
+        let title: UiMessage = serde_json::from_value(template["title"].clone()).unwrap();
+        assert_eq!(
+            title.key(),
+            "error.api.hostedStructure.nativeNoteTemplateTitle"
+        );
+        assert_eq!(title.render(weftext_messages::UiLocale::ZhCn), "原生笔记");
+        assert_eq!(
+            title.render(weftext_messages::UiLocale::EnUs),
+            "Native note"
+        );
+        let slot = delivered["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["resource"] == "Created")
+            .unwrap();
+        assert_eq!(slot["title"], author_title);
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .structure
+                .destinations
+                .clear();
+        }
+        let revoked = catalog(State(state), Extension(auth)).await.unwrap().0;
+        assert!(revoked["templates"].as_array().unwrap().is_empty());
+        assert!(revoked["slots"].as_array().unwrap().is_empty());
+    }
+
     #[test]
     fn independent_creation_read_and_original_request_fence() {
         let (_temp, state, auth) = fixture();

@@ -3,6 +3,7 @@
 use super::*;
 use hosted::ActorLibraryBinding;
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub const MAX_CAPTURE_RECORD_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_CAPTURE_DOMAIN_BYTES: u64 = 64 * 1024 * 1024;
@@ -29,7 +30,7 @@ impl CaptureText {
     }
     pub fn utf8(&self) -> Result<String> {
         String::from_utf16(&self.utf16).map_err(|_| CoreError::new(
-            "captureTextIncomplete", "Unpaired UTF-16 input is retained; complete it before creating UTF-8 author source",
+            "captureTextIncomplete", UiMessage::error_core_capture_draft_unpaired_u_t_f16_input_retained_complete_it_before_creating_u_t_f8_author_source(),
         ))
     }
 }
@@ -100,10 +101,9 @@ impl CaptureLibrary {
             Self::Bound { binding } => file_save_scope::QualifiedLibrary {
                 root: binding.root.clone(),
                 root_identity: binding.root_identity.clone(),
-                workspace_id: binding
-                    .workspace_id
-                    .clone()
-                    .ok_or_else(|| invalid("Capture requires a qualified library owner"))?,
+                workspace_id: binding.workspace_id.clone().ok_or_else(|| {
+                    invalid(UiMessage::error_core_capture_draft_qualified_library_owner_required())
+                })?,
             }
             .validate(),
         }
@@ -283,13 +283,13 @@ pub struct CaptureStorageStatus {
     pub retained_stage_bytes: u64,
 }
 
-fn invalid(message: &str) -> CoreError {
+fn invalid(message: UiMessage) -> CoreError {
     CoreError::new("captureRecordUnavailable", message)
 }
 fn budget() -> CoreError {
     CoreError::new(
         "budget",
-        "Capture recovery exceeds its bounded record or owner-domain budget",
+        UiMessage::error_core_capture_draft_capture_recovery_exceeds_bounded_record_or_owner_domain_budget(),
     )
 }
 fn canonical_id(id: &str) -> Result<()> {
@@ -297,7 +297,7 @@ fn canonical_id(id: &str) -> Result<()> {
         Ok(())
     } else {
         Err(invalid(
-            "Capture identifiers require canonical lowercase UUIDs",
+            UiMessage::error_core_capture_draft_capture_identifiers_require_canonical_lowercase_u_u_i_ds(),
         ))
     }
 }
@@ -309,7 +309,9 @@ fn digest_valid(value: &str) -> bool {
 }
 fn next_revision(revision: u64) -> Result<u64> {
     if revision >= MAX_CAPTURE_REVISION {
-        return Err(invalid("Capture revision exhausted"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_revision_exhausted(),
+        ));
     }
     Ok(revision + 1)
 }
@@ -351,7 +353,9 @@ fn input_valid(input: &CaptureInput) -> Result<()> {
         .iter()
         .any(|id| !id_valid(id) || !types.insert(id))
     {
-        return Err(invalid("Capture type IDs are invalid or duplicated"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_type_i_ds_invalid_or_duplicated(),
+        ));
     }
     let mut fields = BTreeSet::new();
     if input
@@ -359,10 +363,14 @@ fn input_valid(input: &CaptureInput) -> Result<()> {
         .iter()
         .any(|field| !id_valid(&field.field_id) || !fields.insert(&field.field_id))
     {
-        return Err(invalid("Capture FieldIds are invalid or duplicated"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_field_ids_invalid_or_duplicated(),
+        ));
     }
     if input.template_id.as_ref().is_some_and(|id| !id_valid(id)) {
-        return Err(invalid("Capture template identity is invalid"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_template_identity_invalid(),
+        ));
     }
     let mut nodes = 0usize;
     for field in &input.fields {
@@ -385,7 +393,9 @@ fn input_valid(input: &CaptureInput) -> Result<()> {
                 weftext_data::ValuePath::Index { index }
                     if *index as u64 > MAX_CAPTURE_REVISION =>
                 {
-                    return Err(invalid("Capture path index is not an exact UI integer"));
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_capture_path_index_not_exact_u_i_integer(),
+                    ));
                 }
                 _ => {}
             }
@@ -399,7 +409,7 @@ fn input_valid(input: &CaptureInput) -> Result<()> {
             ))?)
         {
             return Err(invalid(
-                "Capture raw-input addresses are invalid or duplicated",
+                UiMessage::error_core_capture_draft_capture_raw_input_addresses_invalid_or_duplicated(),
             ));
         }
     }
@@ -409,7 +419,9 @@ fn input_valid(input: &CaptureInput) -> Result<()> {
             || basis.schema_ref.len() > 160
             || !digest_valid(&basis.semantic_digest))
     {
-        return Err(invalid("Capture form basis is invalid"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_form_basis_invalid(),
+        ));
     }
     Ok(())
 }
@@ -433,7 +445,9 @@ fn native_valid(
             let mut keys = BTreeSet::new();
             for member in members {
                 if !keys.insert(&member.key) {
-                    return Err(invalid("Capture native members are duplicated"));
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_capture_native_members_duplicated(),
+                    ));
                 }
                 add_input_bytes(bytes, member.key.len())?;
                 native_valid(&member.value, depth + 1, nodes, bytes)?;
@@ -456,11 +470,15 @@ fn header_valid(header: &CaptureScopeHeader) -> Result<()> {
     if let CaptureOwner::Actor { actor } = &header.owner
         && (actor.is_empty() || actor.len() > 256)
     {
-        return Err(invalid("Capture actor is invalid"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_actor_invalid(),
+        ));
     }
     match &header.library {
         CaptureLibrary::DeviceUnassigned if header.owner != CaptureOwner::Local => {
-            return Err(invalid("Only local capture can be device-unassigned"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_only_local_capture_can_device_unassigned(),
+            ));
         }
         CaptureLibrary::Bound { binding }
             if !Path::new(&binding.root).is_absolute()
@@ -469,7 +487,9 @@ fn header_valid(header: &CaptureScopeHeader) -> Result<()> {
                     .as_deref()
                     .is_none_or(|id| canonical_id(id).is_err()) =>
         {
-            return Err(invalid("Capture library provenance is invalid"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_library_provenance_invalid(),
+            ));
         }
         _ => {}
     }
@@ -491,7 +511,7 @@ fn pending_valid(pending: &FrozenCaptureRequest, input_revision: u64) -> Result<
         || pending.input_revision > input_revision
     {
         return Err(invalid(
-            "Frozen capture wire, request binding or input revision is invalid",
+            UiMessage::error_core_capture_draft_frozen_capture_wire_request_binding_or_input_revision_invalid(),
         ));
     }
     // Deliberately do not parse wire as serde_json::Value: a rejected original
@@ -507,11 +527,13 @@ pub(crate) fn validate_capture_record(
     if bytes.len() > MAX_CAPTURE_RECORD_BYTES {
         return Err(budget());
     }
-    let draft: CaptureDraft = serde_json::from_slice(bytes)
-        .map_err(|_| invalid("Capture record is malformed; original bytes were preserved"))?;
+    let draft: CaptureDraft = serde_json::from_slice(bytes).map_err(|_| {
+        invalid(UiMessage::error_core_capture_draft_capture_record_malformed_original_bytes_were_preserved())
+    })?;
     if serde_json::to_vec(&draft)? != bytes {
         return Err(invalid(
-            "Capture record is not its exact closed canonical encoding",
+            UiMessage::error_core_capture_draft_capture_record_not_exact_closed_canonical_encoding(
+            ),
         ));
     }
     header_valid(&draft.scope)?;
@@ -526,7 +548,9 @@ pub(crate) fn validate_capture_record(
         || draft.input_revision > draft.revision
         || capture_record_path(data_dir, &draft.scope.owner, &draft.draft_id)? != path
     {
-        return Err(invalid("Capture version, namespace or revision is invalid"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_version_namespace_or_revision_invalid(),
+        ));
     }
     input_valid(&draft.current_input)?;
     match (&draft.scope.library, &draft.target) {
@@ -548,7 +572,9 @@ pub(crate) fn validate_capture_record(
                     || reference.len() > 180
                     || !absolute_path(Path::new(path_hint))?.starts_with(&target.root_hint)
                 {
-                    return Err(invalid("Capture parent belongs to another library"));
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_capture_parent_belongs_to_another_library(),
+                    ));
                 }
             }
             if target
@@ -556,7 +582,9 @@ pub(crate) fn validate_capture_record(
                 .as_ref()
                 .is_some_and(|slot| slot.is_empty() || slot.len() > 256)
             {
-                return Err(invalid("Capture approved slot is invalid"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_capture_approved_slot_invalid(),
+                ));
             }
             if let Some(basis) = &draft.current_input.form_basis
                 && basis.schema_ref
@@ -565,14 +593,22 @@ pub(crate) fn validate_capture_record(
                         binding.workspace_id.as_deref().unwrap()
                     )
             {
-                return Err(invalid("Capture Schema belongs to another library"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_capture_schema_belongs_to_another_library(),
+                ));
             }
         }
-        _ => return Err(invalid("Capture target and original scope differ")),
+        _ => {
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_target_and_original_scope_differ(),
+            ));
+        }
     }
     if let Some(pending) = &draft.pending {
         if draft.target.is_none() {
-            return Err(invalid("Unassigned capture cannot have a submission"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_unassigned_capture_cannot_have_submission(),
+            ));
         }
         pending_valid(pending, draft.input_revision)?;
         pending_target_valid(draft.target.as_ref().unwrap(), pending)?;
@@ -601,7 +637,7 @@ fn pending_target_valid(target: &CaptureTarget, request: &FrozenCaptureRequest) 
             Ok(())
         }
         _ => Err(invalid(
-            "Frozen request does not name the original capture target",
+            UiMessage::error_core_capture_draft_frozen_request_does_not_name_original_capture_target(),
         )),
     }
 }
@@ -614,20 +650,52 @@ struct WireIdentity {
     resource: Option<String>,
     destination: Option<String>,
 }
+#[derive(Clone, Copy, Debug)]
+enum WireIdentityFailure {
+    DuplicateMember,
+    ExcessMembers,
+    OperationMismatch,
+    OperationMissing,
+}
+impl WireIdentityFailure {
+    fn explanation(self) -> UiMessage {
+        match self {
+            Self::DuplicateMember => UiMessage::error_core_capture_draft_wire_member_duplicate(),
+            Self::ExcessMembers => UiMessage::error_core_capture_draft_wire_members_exceeded(),
+            Self::OperationMismatch => {
+                UiMessage::error_core_capture_draft_wire_operation_mismatch()
+            }
+            Self::OperationMissing => UiMessage::error_core_capture_draft_wire_operation_missing(),
+        }
+    }
+}
+impl std::fmt::Display for WireIdentityFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // A private Serde stop marker; the per-parse typed side channel below
+        // consumes it before any diagnostic can leave this function.
+        std::fmt::Debug::fmt(self, f)
+    }
+}
 fn wire_identity(wire: &str, expected: &str) -> Result<WireIdentity> {
     struct Metadata<'a> {
         expected: &'a str,
+        failure: &'a mut Option<WireIdentityFailure>,
+    }
+    impl Metadata<'_> {
+        fn stop<E: serde::de::Error>(&mut self, failure: WireIdentityFailure) -> E {
+            *self.failure = Some(failure);
+            E::custom(failure)
+        }
     }
     impl<'de> serde::de::Visitor<'de> for Metadata<'_> {
         type Value = WireIdentity;
         fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str("the original request object with its exact operationId")
+            f.write_str("a JSON object")
         }
         fn visit_map<M: serde::de::MapAccess<'de>>(
-            self,
+            mut self,
             mut map: M,
         ) -> std::result::Result<WireIdentity, M::Error> {
-            use serde::de::Error;
             let mut keys = BTreeSet::new();
             let mut found = false;
             let mut identity = WireIdentity {
@@ -637,17 +705,17 @@ fn wire_identity(wire: &str, expected: &str) -> Result<WireIdentity> {
                 destination: None,
             };
             while let Some(key) = map.next_key::<String>()? {
-                if keys.len() == 64 || !keys.insert(key.clone()) {
-                    return Err(M::Error::custom(
-                        "Original wire has duplicated or excessive top-level members",
-                    ));
+                if keys.contains(&key) {
+                    return Err(self.stop(WireIdentityFailure::DuplicateMember));
                 }
+                if keys.len() == 64 {
+                    return Err(self.stop(WireIdentityFailure::ExcessMembers));
+                }
+                keys.insert(key.clone());
                 match key.as_str() {
                     "operationId" => {
                         if map.next_value::<String>()? != self.expected {
-                            return Err(M::Error::custom(
-                                "Frozen wire belongs to another operationId",
-                            ));
+                            return Err(self.stop(WireIdentityFailure::OperationMismatch));
                         }
                         found = true;
                     }
@@ -661,17 +729,33 @@ fn wire_identity(wire: &str, expected: &str) -> Result<WireIdentity> {
                 }
             }
             if !found {
-                return Err(M::Error::custom("Original operationId is missing"));
+                return Err(self.stop(WireIdentityFailure::OperationMissing));
             }
             Ok(identity)
         }
     }
+    let mut failure = None;
     let mut decoder = serde_json::Deserializer::from_str(wire);
-    let identity = serde::de::Deserializer::deserialize_map(&mut decoder, Metadata { expected })
-        .map_err(|_| invalid("Frozen capture wire or original identity is invalid"))?;
-    decoder
-        .end()
-        .map_err(|_| invalid("Frozen capture wire contains trailing data"))?;
+    let parsed = serde::de::Deserializer::deserialize_map(
+        &mut decoder,
+        Metadata {
+            expected,
+            failure: &mut failure,
+        },
+    );
+    if let Some(failure) = failure {
+        return Err(invalid(failure.explanation()));
+    }
+    let identity = parsed.map_err(|error| {
+        invalid(
+            UiMessage::error_core_capture_draft_frozen_capture_wire_or_original_identity_invalid(),
+        )
+        .diagnostic(DiagnosticOrigin::Json, error.to_string())
+    })?;
+    decoder.end().map_err(|error| {
+        invalid(UiMessage::error_core_capture_draft_frozen_capture_wire_contains_trailing_data())
+            .diagnostic(DiagnosticOrigin::Json, error.to_string())
+    })?;
     Ok(identity)
 }
 pub(crate) fn capture_record_path(
@@ -698,9 +782,11 @@ pub(crate) fn validate_capture_header_path(
     let id = path
         .file_stem()
         .and_then(|id| id.to_str())
-        .ok_or_else(|| invalid("Invalid capture filename"))?;
+        .ok_or_else(|| invalid(UiMessage::error_core_capture_draft_invalid_capture_filename()))?;
     if capture_record_path(data_dir, &header.owner, id)? != path {
-        return Err(invalid("Capture header owner differs from namespace"));
+        return Err(invalid(
+            UiMessage::error_core_capture_draft_capture_header_owner_differs_from_namespace(),
+        ));
     }
     Ok(())
 }
@@ -721,22 +807,30 @@ pub(crate) fn read_capture_header(reader: &mut (impl Read + Seek)) -> Result<Cap
                 return Err(budget());
             }
             let mut byte = [0];
-            reader
-                .read_exact(&mut byte)
-                .map_err(|_| invalid("Capture scope header is truncated"))?;
+            reader.read_exact(&mut byte).map_err(|_| {
+                invalid(UiMessage::error_core_capture_draft_capture_scope_header_truncated())
+            })?;
             let b = byte[0];
             prefix.push(b);
             if value_start.is_none() {
                 if b == b':' && !quoted {
-                    let head = std::str::from_utf8(&prefix[..prefix.len() - 1])
-                        .map_err(|_| invalid("Invalid capture scope header"))?;
+                    let head = std::str::from_utf8(&prefix[..prefix.len() - 1]).map_err(|_| {
+                        invalid(UiMessage::error_core_capture_draft_invalid_capture_scope_header())
+                    })?;
                     let key = head
                         .trim_start_matches([' ', '\r', '\n', '\t'])
                         .strip_prefix('{')
-                        .ok_or_else(|| invalid("Capture scope must be the first field"))?
+                        .ok_or_else(|| {
+                            invalid(
+                                UiMessage::error_core_capture_draft_capture_scope_must_first_field(
+                                ),
+                            )
+                        })?
                         .trim_matches(|c: char| matches!(c, ' ' | '\r' | '\n' | '\t'));
                     if serde_json::from_str::<String>(key).ok().as_deref() != Some("scope") {
-                        return Err(invalid("Capture scope must be the first field"));
+                        return Err(invalid(
+                            UiMessage::error_core_capture_draft_capture_scope_must_first_field(),
+                        ));
                     }
                     value_start = Some(prefix.len());
                 } else if b == b'"' && !escaped {
@@ -764,24 +858,31 @@ pub(crate) fn read_capture_header(reader: &mut (impl Read + Seek)) -> Result<Cap
                 b'{' | b'[' => depth += 1,
                 b'}' | b']' => {
                     if depth == 0 {
-                        return Err(invalid("Capture scope object is missing"));
+                        return Err(invalid(
+                            UiMessage::error_core_capture_draft_capture_scope_object_missing(),
+                        ));
                     }
                     depth -= 1;
                     if depth == 0 {
-                        let header: CaptureScopeHeader =
-                            serde_json::from_slice(&prefix[start..])
-                                .map_err(|_| invalid("Capture scope header is invalid"))?;
+                        let header: CaptureScopeHeader = serde_json::from_slice(&prefix[start..])
+                            .map_err(|_| {
+                            invalid(
+                                UiMessage::error_core_capture_draft_capture_scope_header_invalid(),
+                            )
+                        })?;
                         header_valid(&header)?;
                         if serde_json::to_vec(&header)? != prefix[start..] {
                             return Err(invalid(
-                                "Capture scope metadata has unknown or noncanonical members",
+                                UiMessage::error_core_capture_draft_capture_scope_metadata_has_unknown_or_noncanonical_members(),
                             ));
                         }
                         return Ok(header);
                     }
                 }
                 _ if depth == 0 && !b.is_ascii_whitespace() => {
-                    return Err(invalid("Capture scope must be an object"));
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_capture_scope_must_object(),
+                    ));
                 }
                 _ => {}
             }
@@ -808,12 +909,18 @@ impl Core {
     }
     fn check_capture_scope(&self, scope: &CaptureScopeHeader) -> Result<()> {
         if scope.owner != self.capture_owner() {
-            return Err(invalid("Capture owner differs"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_owner_differs(),
+            ));
         }
         if self.actor.is_some() {
             match (&scope.library, &self.actor_library) {
                 (CaptureLibrary::Bound { binding }, Some(actual)) if binding == actual => {}
-                _ => return Err(invalid("Capture actor library differs")),
+                _ => {
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_capture_actor_library_differs(),
+                    ));
+                }
             }
         }
         Ok(())
@@ -832,7 +939,9 @@ impl Core {
             .read_to_end(&mut bytes)?;
         let draft = validate_capture_record(&path, &self.data_dir, &bytes)?;
         if draft.scope != header {
-            return Err(invalid("Capture scope changed during read"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_scope_changed_during_read(),
+            ));
         }
         Ok((draft, bytes))
     }
@@ -850,7 +959,9 @@ impl Core {
         let mut selected_bytes = 0u64;
         for (name, attrs) in entries {
             if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
-                return Err(invalid("Invalid capture namespace member"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_invalid_capture_namespace_member(),
+                ));
             }
             let path = directory.join(name);
             let file_guard = ParentGuard::acquire(&path)?;
@@ -923,7 +1034,9 @@ impl Core {
         let mut count = 1usize;
         for (name, attrs) in entries {
             if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
-                return Err(invalid("Capture namespace contains an unsupported member"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_capture_namespace_contains_unsupported_member(),
+                ));
             }
             let existing = directory.join(name);
             if existing == path {
@@ -935,11 +1048,15 @@ impl Core {
             let id = existing
                 .file_stem()
                 .and_then(|s| s.to_str())
-                .ok_or_else(|| invalid("Invalid capture filename"))?;
+                .ok_or_else(|| {
+                    invalid(UiMessage::error_core_capture_draft_invalid_capture_filename())
+                })?;
             if capture_record_path(&self.data_dir, &header.owner, id)? != existing
                 || header.owner != draft.scope.owner
             {
-                return Err(invalid("Capture owner namespace differs"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_capture_owner_namespace_differs(),
+                ));
             }
             total = total
                 .checked_add(file.metadata()?.len())
@@ -979,7 +1096,9 @@ impl Core {
         }
         let (readback, actual) = self.capture_read(&draft.draft_id)?;
         if actual != bytes {
-            return Err(invalid("Capture durable readback differs"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_durable_readback_differs(),
+            ));
         }
         Ok(readback)
     }
@@ -996,14 +1115,18 @@ impl Core {
         };
         for (name, attrs) in entries {
             if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
-                return Err(invalid("Invalid capture staging member"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_invalid_capture_staging_member(),
+                ));
             }
-            let name = name
-                .to_str()
-                .ok_or_else(|| invalid("Invalid capture staging name"))?;
+            let name = name.to_str().ok_or_else(|| {
+                invalid(UiMessage::error_core_capture_draft_invalid_capture_staging_name())
+            })?;
             let parts = name.split('.').collect::<Vec<_>>();
             if parts.len() != 3 || parts[2] != "stage" {
-                return Err(invalid("Unrecognized capture staging member"));
+                return Err(invalid(
+                    UiMessage::error_core_capture_draft_unrecognized_capture_staging_member(),
+                ));
             }
             canonical_id(parts[0])?;
             canonical_id(parts[1])?;
@@ -1036,15 +1159,16 @@ impl Core {
         input_valid(&input)?;
         if self.actor.is_some() {
             return Err(invalid(
-                "Hosted capture creation requires a qualified library target",
+                UiMessage::error_core_capture_draft_hosted_capture_creation_requires_qualified_library_target(),
             ));
         }
         let fingerprint = hash(&serde_json::to_vec(&(0u64, "create", &input))?);
         let path = capture_record_path(&self.data_dir, &self.capture_owner(), id)?;
         if path.exists() {
             let draft = self.read_capture_draft(id)?;
-            return Self::capture_replay(draft, mutation_id, &fingerprint)?
-                .ok_or_else(|| invalid("Capture ID already exists"));
+            return Self::capture_replay(draft, mutation_id, &fingerprint)?.ok_or_else(|| {
+                invalid(UiMessage::error_core_capture_draft_capture_i_d_already_exists())
+            });
         }
         let draft = CaptureDraft {
             scope: CaptureScopeHeader {
@@ -1089,8 +1213,9 @@ impl Core {
         let path = capture_record_path(&self.data_dir, &self.capture_owner(), id)?;
         if path.exists() {
             let draft = self.read_capture_draft(id)?;
-            return Self::capture_replay(draft, mutation_id, &fingerprint)?
-                .ok_or_else(|| invalid("Capture ID already exists"));
+            return Self::capture_replay(draft, mutation_id, &fingerprint)?.ok_or_else(|| {
+                invalid(UiMessage::error_core_capture_draft_capture_i_d_already_exists())
+            });
         }
         let (library, target) = self.capture_target(root, parent, hosted_slot)?;
         let draft = CaptureDraft {
@@ -1122,7 +1247,10 @@ impl Core {
             return Ok(None);
         }
         if draft.last_mutation.fingerprint != fingerprint {
-            return Err(invalid("Capture mutationId belongs to different input"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_mutation_id_belongs_to_different_input(
+                ),
+            ));
         }
         Ok(Some(draft))
     }
@@ -1141,7 +1269,7 @@ impl Core {
         if draft.revision != expected {
             return Err(CoreError::new(
                 "captureConflict",
-                "Capture changed in another writer; old and new input must be retained",
+                UiMessage::error_core_capture_draft_capture_changed_in_another_writer_old_and_new_input_must_retained(),
             ));
         }
         Ok(Ok(draft))
@@ -1200,7 +1328,9 @@ impl Core {
             Err(replay) => return Ok(replay),
         };
         if draft.pending.is_some() {
-            return Err(invalid("Pending capture target is immutable"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_pending_capture_target_immutable(),
+            ));
         }
         let (library, target) = self.capture_target(root, parent, hosted_slot)?;
         if let CaptureLibrary::Bound { binding: original } = &draft.scope.library
@@ -1209,7 +1339,10 @@ impl Core {
                     binding: original.clone(),
                 })
         {
-            return Err(invalid("Use a separate capture draft for another library"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_use_separate_capture_draft_for_another_library(
+                ),
+            ));
         }
         draft.scope.library = library;
         draft.target = Some(target);
@@ -1233,16 +1366,20 @@ impl Core {
             workspace_id: Some(workspace.workspace_id),
         };
         if self.actor.is_some() && self.actor_library.as_ref() != Some(&binding) {
-            return Err(invalid("Trusted capture library differs"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_trusted_capture_library_differs(),
+            ));
         }
         let selected = if parent == root {
             CaptureParent::LibraryRoot
         } else {
             let selected = self.capture_navigation_target(&root, &parent)?;
             CaptureParent::Managed {
-                reference: selected
-                    .target_ref
-                    .ok_or_else(|| invalid("Capture parent needs an admitted stable identity"))?,
+                reference: selected.target_ref.ok_or_else(|| {
+                    invalid(
+                        UiMessage::error_core_capture_draft_capture_parent_needs_admitted_stable_identity(),
+                    )
+                })?,
                 path_hint: display(&parent),
                 identity_digest: hash(&serde_json::to_vec(&parent_guard.directory_identity()?)?),
             }
@@ -1273,7 +1410,7 @@ impl Core {
             || request.input_revision != draft.input_revision
         {
             return Err(invalid(
-                "Capture already has pending input or its frozen revision differs",
+                UiMessage::error_core_capture_draft_capture_already_has_pending_input_or_frozen_revision_differs(),
             ));
         }
         pending_valid(&request, draft.input_revision)?;
@@ -1292,12 +1429,13 @@ impl Core {
         self.resolve_capture_target_record(&self.read_capture_draft(id)?)
     }
     fn resolve_capture_target_record(&self, draft: &CaptureDraft) -> Result<CaptureResolvedTarget> {
-        let target = draft
-            .target
-            .as_ref()
-            .ok_or_else(|| invalid("Select an actual capture library first"))?;
+        let target = draft.target.as_ref().ok_or_else(|| {
+            invalid(UiMessage::error_core_capture_draft_select_actual_capture_library_first())
+        })?;
         let CaptureLibrary::Bound { binding } = &draft.scope.library else {
-            return Err(invalid("Capture is not bound to a library"));
+            return Err(invalid(
+                UiMessage::error_core_capture_draft_capture_not_bound_to_library(),
+            ));
         };
         let root = absolute_path(Path::new(&target.root_hint))?;
         let guard = ParentGuard::acquire(&root.join(".capture-resolve"))?;
@@ -1307,7 +1445,8 @@ impl Core {
             || display(&guard.directory_coordinates()?) != binding.root
         {
             return Err(invalid(
-                "The original capture library was replaced or moved",
+                UiMessage::error_core_capture_draft_original_capture_library_was_replaced_or_moved(
+                ),
             ));
         }
         let parent = match &target.parent {
@@ -1318,17 +1457,19 @@ impl Core {
                 ..
             } => {
                 let resolved = self.resolve_navigation_target(&root, reference)?;
-                let path = PathBuf::from(
-                    resolved
-                        .path
-                        .ok_or_else(|| invalid("Original capture parent is unavailable"))?,
-                );
+                let path = PathBuf::from(resolved.path.ok_or_else(|| {
+                    invalid(
+                        UiMessage::error_core_capture_draft_original_capture_parent_unavailable(),
+                    )
+                })?);
                 // Both NodeRef and DirectoryRef resolve to their actual container.
                 let parent_guard = ParentGuard::acquire(&path.join(".capture-parent"))?;
                 if hash(&serde_json::to_vec(&parent_guard.directory_identity()?)?)
                     != *identity_digest
                 {
-                    return Err(invalid("Original capture parent container was replaced"));
+                    return Err(invalid(
+                        UiMessage::error_core_capture_draft_original_capture_parent_container_was_replaced(),
+                    ));
                 }
                 display(&path)
             }
@@ -1356,7 +1497,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "captureConflict",
-                "Capture changed before close; no close permit was issued",
+                UiMessage::error_core_capture_draft_capture_changed_before_close_no_close_permit_was_issued(),
             ));
         }
         Ok(CaptureFlushReceipt {
@@ -1373,3 +1514,98 @@ impl Core {
 #[cfg(all(test, windows))]
 #[path = "capture_draft/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod wire_boundary_tests {
+    use super::*;
+
+    const OPERATION: &str = "00000000-0000-4000-8000-000000000001";
+
+    #[test]
+    fn typed_metadata_failures_never_escape_as_raw_serde_diagnostics() {
+        for (wire, explanation) in [
+            (
+                format!(r#"{{"operationId":"{OPERATION}","operationId":"{OPERATION}"}}"#),
+                UiMessage::error_core_capture_draft_wire_member_duplicate(),
+            ),
+            (
+                format!(r#"{{"operationId":"{OPERATION}","opaque":0,"opaque":1}}"#),
+                UiMessage::error_core_capture_draft_wire_member_duplicate(),
+            ),
+            (
+                r#"{"operationId":"other"}"#.into(),
+                UiMessage::error_core_capture_draft_wire_operation_mismatch(),
+            ),
+            (
+                r#"{"body":"\ud800\u0000"}"#.into(),
+                UiMessage::error_core_capture_draft_wire_operation_missing(),
+            ),
+        ] {
+            let original = wire.clone();
+            let error = wire_identity(&wire, OPERATION).err().unwrap();
+            assert_eq!(error.code, "captureRecordUnavailable");
+            assert_eq!(error.explanation, explanation);
+            assert!(error.diagnostics.is_empty());
+            assert!(error.causes.as_slice().is_empty());
+            assert_eq!(wire, original);
+        }
+    }
+
+    #[test]
+    fn exact_member_budget_stops_before_excess_author_payload_and_does_not_leak_parse_state() {
+        let mut members = vec![format!(r#""operationId":"{OPERATION}""#)];
+        for index in 0..63 {
+            members.push(format!(r#""opaque{index}":0"#));
+        }
+        let boundary = format!("{{{}}}", members.join(","));
+        assert!(wire_identity(&boundary, OPERATION).is_ok());
+        // The 65th member's value is deliberately malformed. The original
+        // bounded metadata reader must stop before attempting to read it.
+        let excess = format!("{{{},\"overflow\":", members.join(","));
+        let error = wire_identity(&excess, OPERATION).err().unwrap();
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_core_capture_draft_wire_members_exceeded()
+        );
+        assert!(error.diagnostics.is_empty());
+        assert!(wire_identity(&boundary, OPERATION).is_ok());
+        let missing = wire_identity("{}", OPERATION).err().unwrap();
+        assert_eq!(
+            missing.explanation,
+            UiMessage::error_core_capture_draft_wire_operation_missing()
+        );
+    }
+
+    #[test]
+    fn ignored_original_payload_preserves_lone_utf16_nul_and_nested_duplicate_members() {
+        let wire = format!(
+            r#"{{"operationId":"{OPERATION}","root":"original-root","parent":"original-parent","body":"\ud800\u0000\udc00","opaque":{{"same":"\ud800","same":1}}}}"#
+        );
+        let original = wire.clone();
+        let identity = wire_identity(&wire, OPERATION).unwrap();
+        assert_eq!(identity.root.as_deref(), Some("original-root"));
+        assert_eq!(identity.parent.as_deref(), Some("original-parent"));
+        assert_eq!(wire, original);
+        // A generic Value decoder would reject this author's original string;
+        // it is deliberately not the wire-identity admission contract.
+        assert!(serde_json::from_str::<serde_json::Value>(&wire).is_err());
+    }
+
+    #[test]
+    fn genuine_json_syntax_type_and_trailing_errors_keep_attributed_original_diagnostics() {
+        for wire in [
+            r#"{"operationId":"#,
+            r#"{"operationId":7}"#,
+            r#"{"operationId":"00000000-0000-4000-8000-000000000001","root":7}"#,
+            "[]",
+            r#"{"operationId":"00000000-0000-4000-8000-000000000001"} trailing"#,
+        ] {
+            let error = wire_identity(wire, OPERATION).err().unwrap();
+            assert_eq!(error.code, "captureRecordUnavailable");
+            assert_eq!(error.diagnostics.len(), 1);
+            assert_eq!(error.diagnostics[0].origin, DiagnosticOrigin::Json);
+            assert!(!error.diagnostics[0].text.is_empty());
+            assert!(error.causes.as_slice().is_empty());
+        }
+    }
+}

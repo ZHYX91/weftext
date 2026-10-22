@@ -2,6 +2,7 @@
 //! are changed. The seal is an installation/profile witness, not an auth token.
 use super::*;
 use std::ffi::c_void;
+use weftext_messages::UiMessage;
 
 #[repr(C)]
 struct Blob {
@@ -85,7 +86,9 @@ pub(super) fn current_user_sid() -> Result<String> {
         GetTokenInformation(token.0, 1, std::ptr::null_mut(), 0, &mut length);
     }
     if length < std::mem::size_of::<SidAndAttributes>() as u32 || length > 64 * 1024 {
-        return Err(evidence("Unexpected TokenUser byte length"));
+        return Err(evidence(
+            UiMessage::error_core_device_state_windows_unexpected_token_user_byte_length(),
+        ));
     }
     let mut buffer = vec![0usize; (length as usize).div_ceil(std::mem::size_of::<usize>())];
     if unsafe { GetTokenInformation(token.0, 1, buffer.as_mut_ptr().cast(), length, &mut length) }
@@ -105,15 +108,20 @@ pub(super) fn current_user_sid() -> Result<String> {
         end += 1;
     }
     if end == 256 {
-        return Err(evidence("Unexpected Windows SID length"));
+        return Err(evidence(
+            UiMessage::error_core_device_state_windows_unexpected_windows_s_i_d_length(),
+        ));
     }
-    String::from_utf16(unsafe { std::slice::from_raw_parts(text, end) })
-        .map_err(|_| evidence("Windows SID text is not valid UTF16"))
+    String::from_utf16(unsafe { std::slice::from_raw_parts(text, end) }).map_err(|_| {
+        evidence(UiMessage::error_core_device_state_windows_windows_s_i_d_text_not_valid_u_t_f16())
+    })
 }
 
 pub(super) fn seal(bytes: &[u8]) -> Result<Vec<u8>> {
     let input = Blob {
-        length: u32::try_from(bytes.len()).map_err(|_| evidence("Binding byte budget exceeded"))?,
+        length: u32::try_from(bytes.len()).map_err(|_| {
+            evidence(UiMessage::error_core_device_state_windows_binding_byte_budget_exceeded())
+        })?,
         data: bytes.as_ptr().cast_mut(),
     };
     let mut output = Blob {
@@ -141,7 +149,9 @@ pub(super) fn seal(bytes: &[u8]) -> Result<Vec<u8>> {
 
 pub(super) fn unseal(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
     let input = Blob {
-        length: u32::try_from(bytes.len()).map_err(|_| evidence("Binding byte budget exceeded"))?,
+        length: u32::try_from(bytes.len()).map_err(|_| {
+            evidence(UiMessage::error_core_device_state_windows_binding_byte_budget_exceeded())
+        })?,
         data: bytes.as_ptr().cast_mut(),
     };
     let mut output = Blob {
@@ -170,7 +180,9 @@ pub(super) fn unseal(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
 fn copy_output(output: Blob) -> Result<Vec<u8>> {
     let _allocation = LocalAllocation(output.data.cast());
     if output.data.is_null() || output.length == 0 || output.length > 64 * 1024 {
-        return Err(evidence("Unexpected protected binding length"));
+        return Err(evidence(
+            UiMessage::error_core_device_state_windows_unexpected_protected_binding_length(),
+        ));
     }
     Ok(unsafe { std::slice::from_raw_parts(output.data, output.length as usize) }.to_vec())
 }

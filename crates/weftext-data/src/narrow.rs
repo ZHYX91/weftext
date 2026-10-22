@@ -40,7 +40,9 @@ pub fn narrow_query_metadata(
 }
 
 fn unavailable() -> DataError {
-    DataError("Narrow field profile unavailable".into())
+    DataError::unavailable(
+        weftext_messages::UiMessage::error_data_narrow_narrow_field_profile_unavailable(),
+    )
 }
 
 /// Determines write dependencies from control/schema syntax, before reading
@@ -392,8 +394,8 @@ pub fn patch_narrow_field(
         )
         .is_valid()
         {
-            return Err(DataError(
-                "Selected field constraint rejected the proposal".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_narrow_selected_field_constraint_rejected_proposal(),
             ));
         }
     }

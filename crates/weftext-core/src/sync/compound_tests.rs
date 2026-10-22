@@ -648,11 +648,15 @@ fn compound_interrupted_original_cut_rejects_late_receive_without_replaying_seco
     let info = pair.b.inspect_recovery(&preview.operation_id).unwrap();
     assert_eq!(info.coherence, "unavailable");
     assert!(info.allowed_actions.is_empty());
-    assert!(
-        info.members.iter().any(
-            |member| member.kind == "syncCut" && member.message.contains("syncConflictChanged")
-        )
-    );
+    assert!(info.members.iter().any(|member| member.kind == "syncCut"
+        && member.description.as_ref().is_some_and(|description| {
+            description.explanation.key() == "recovery.replicaCutUnqualified"
+                && description
+                    .causes
+                    .as_slice()
+                    .iter()
+                    .any(|cause| cause.code == "syncConflictChanged")
+        })));
     for action in ["keepCurrent", "adoptAfterImages", "resumeOriginalPlan"] {
         assert!(
             pair.b

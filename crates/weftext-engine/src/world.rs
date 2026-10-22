@@ -1,6 +1,6 @@
-use crate::{Dependency, EngineError};
+use crate::{Dependency, EngineError, ErrorDescription, UiMessage};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -25,17 +25,27 @@ fn admitted_file_id(path: &Path) -> Result<FileId, EngineError> {
             .components()
             .any(|c| !matches!(c, std::path::Component::Normal(_)))
     {
-        return Err(EngineError("冻结文件路径必须是根内准确相对路径".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_world_frozen_path_relative_required(),
+        ));
     }
     let logical = path
         .to_str()
-        .ok_or_else(|| EngineError("冻结路径须为 UTF-8".into()))?
+        .ok_or_else(|| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_frozen_path_utf8_required(),
+            )
+        })?
         .replace('\\', "/");
     if logical.chars().any(char::is_control) {
-        return Err(EngineError("冻结路径含控制字符".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_world_frozen_path_controls_unsupported(),
+        ));
     }
-    let virtual_path =
-        VirtualPath::new(format!("/{logical}")).map_err(|e| EngineError(e.to_string()))?;
+    let virtual_path = VirtualPath::new(format!("/{logical}")).map_err(|e| {
+        EngineError::new(crate::UiMessage::error_engine_world_frozen_virtual_path_invalid())
+            .diagnostic(crate::DiagnosticOrigin::Dependency, e.to_string())
+    })?;
     Ok(FileId::new(RootedPath::new(
         VirtualRoot::Project,
         virtual_path,
@@ -57,8 +67,18 @@ pub(crate) struct LocalWorld<'a> {
     pub(crate) trusted_style_sources: HashSet<FileId>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ProductFailure {
+    PackagesUnavailable,
+    FrozenPackagesUnavailable,
+    DependencyCountBudget,
+    DependencyByteBudget,
+    TotalDependencyByteBudget,
+}
+
 #[derive(Default)]
 struct Cache {
+    product_failures: BTreeMap<ProductFailure, ErrorDescription>,
     files: HashMap<FileId, FileResult<Bytes>>,
     sources: HashMap<FileId, FileResult<Source>>,
     dependencies: HashMap<(FileId, &'static str), Dependency>,
@@ -74,13 +94,19 @@ impl<'a> LocalWorld<'a> {
         root: &Path,
     ) -> Result<Self, EngineError> {
         if source.len() as u64 > FILE_LIMIT {
-            return Err(EngineError("源文件超过 32 MiB 编译上限".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_source_byte_budget(),
+            ));
         }
         if is_reparse(root).unwrap_or(false) {
-            return Err(EngineError("依赖根不可是符号链接或 reparse point".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_dependency_root_link_unsupported(),
+            ));
         }
-        let root =
-            fs::canonicalize(root).map_err(|e| EngineError(format!("无法打开依赖根：{e}")))?;
+        let root = fs::canonicalize(root).map_err(|e| {
+            EngineError::new(crate::UiMessage::error_engine_world_dependency_root_unavailable())
+                .diagnostic(crate::DiagnosticOrigin::Os, e.to_string())
+        })?;
         let input_path = if path.is_absolute() {
             path.to_path_buf()
         } else {
@@ -97,25 +123,35 @@ impl<'a> LocalWorld<'a> {
         } else {
             root.clone()
         };
-        reject_reparse_chain(&input_path, &lexical_root)
-            .map_err(|_| EngineError("主文件必须位于依赖根内且不能经过符号链接".into()))?;
-        let parent = input_path
-            .parent()
-            .ok_or_else(|| EngineError("主文件没有父目录".into()))?;
-        let parent =
-            fs::canonicalize(parent).map_err(|e| EngineError(format!("主文件目录不可用：{e}")))?;
+        reject_reparse_chain(&input_path, &lexical_root).map_err(|_| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_main_root_confinement_required(),
+            )
+        })?;
+        let parent = input_path.parent().ok_or_else(|| {
+            EngineError::new(weftext_messages::UiMessage::error_engine_world_main_parent_missing())
+        })?;
+        let parent = fs::canonicalize(parent).map_err(|e| {
+            EngineError::new(crate::UiMessage::error_engine_world_main_directory_unavailable())
+                .diagnostic(crate::DiagnosticOrigin::Os, e.to_string())
+        })?;
         if !parent.starts_with(&root) {
-            return Err(EngineError("主文件必须在已选择的依赖根内".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_main_outside_root(),
+            ));
         }
-        let main_path = parent.join(
-            input_path
-                .file_name()
-                .ok_or_else(|| EngineError("主文件路径无效".into()))?,
-        );
-        reject_reparse_chain(&main_path, &root)
-            .map_err(|_| EngineError("主文件路径含符号链接或 reparse point".into()))?;
-        let vpath = VirtualPath::virtualize(&root, &main_path)
-            .map_err(|e| EngineError(format!("主文件路径无效：{e}")))?;
+        let main_path = parent.join(input_path.file_name().ok_or_else(|| {
+            EngineError::new(weftext_messages::UiMessage::error_engine_world_main_path_invalid())
+        })?);
+        reject_reparse_chain(&main_path, &root).map_err(|_| {
+            EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_main_path_link_unsupported(),
+            )
+        })?;
+        let vpath = VirtualPath::virtualize(&root, &main_path).map_err(|e| {
+            EngineError::new(crate::UiMessage::error_engine_world_main_path_invalid())
+                .diagnostic(crate::DiagnosticOrigin::Dependency, e.to_string())
+        })?;
         let main_id = FileId::new(RootedPath::new(VirtualRoot::Project, vpath));
         let main_source = Source::new(main_id, source.to_owned());
         Ok(Self {
@@ -149,14 +185,18 @@ impl<'a> LocalWorld<'a> {
             return Ok(world);
         }
         if style.source.len() as u64 > FILE_LIMIT {
-            return Err(EngineError("样式模块超过 32 MiB".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_style_byte_budget(),
+            ));
         }
         if style.entry_function.is_empty()
             || !style.entry_function.chars().enumerate().all(|(i, c)| {
                 c.is_ascii_alphabetic() || c == '_' || (i > 0 && (c.is_ascii_digit() || c == '-'))
             })
         {
-            return Err(EngineError("样式入口必须是原生函数标识符".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_style_entry_identifier_required(),
+            ));
         }
         let style_path = Path::new(&style.path);
         if style_path.is_absolute()
@@ -164,18 +204,27 @@ impl<'a> LocalWorld<'a> {
                 .components()
                 .any(|c| !matches!(c, std::path::Component::Normal(_)))
         {
-            return Err(EngineError("样式模块须使用库内相对路径".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_style_relative_path_required(),
+            ));
         }
         let style_path = world.root.join(style_path);
         if world.frozen_files.is_none() {
-            reject_reparse_chain(&style_path, &world.root)
-                .map_err(|_| EngineError("样式模块路径越界或经过链接".into()))?;
+            reject_reparse_chain(&style_path, &world.root).map_err(|_| {
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_style_path_invalid(),
+                )
+            })?;
         }
-        let style_vpath = VirtualPath::virtualize(&world.root, &style_path)
-            .map_err(|e| EngineError(e.to_string()))?;
+        let style_vpath = VirtualPath::virtualize(&world.root, &style_path).map_err(|e| {
+            EngineError::new(crate::UiMessage::error_engine_world_style_virtual_path_invalid())
+                .diagnostic(crate::DiagnosticOrigin::Dependency, e.to_string())
+        })?;
         let style_id = FileId::new(RootedPath::new(VirtualRoot::Project, style_vpath));
         if style_id == world.main_id {
-            return Err(EngineError("笔记与样式模块必须是不同对象".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_style_aliases_main(),
+            ));
         }
         let entry_id = FileId::new(RootedPath::new(
             VirtualRoot::Project,
@@ -188,27 +237,38 @@ impl<'a> LocalWorld<'a> {
                     style.path
                 ))
             ))
-            .map_err(|e| EngineError(e.to_string()))?,
+            .map_err(|e| {
+                EngineError::new(crate::UiMessage::error_engine_world_runtime_entry_path_invalid())
+                    .diagnostic(crate::DiagnosticOrigin::Dependency, e.to_string())
+            })?,
         ));
         if entry_id == world.main_id || entry_id == style_id {
-            return Err(EngineError("作者源占用了派生入口路径".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_author_source_reserved_path(),
+            ));
         }
         if let Some(files) = &world.frozen_files {
             if files.contains_key(&entry_id) {
-                return Err(EngineError("冻结文件占用了派生入口路径".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_file_reserved_path(),
+                ));
             }
             if files
                 .get(&style_id)
                 .is_some_and(|bytes| bytes.as_slice() != style.source.as_bytes())
             {
-                return Err(EngineError("冻结样式与显式样式源不一致".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_style_mismatch(),
+                ));
             }
         } else if entry_id
             .vpath()
             .realize(&world.root)
             .is_ok_and(|path| path.exists())
         {
-            return Err(EngineError("作者文件占用了派生入口路径".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_author_file_reserved_path(),
+            ));
         }
         let entry = format!(
             "#import {}: {}\n#show: {}\n#include {}\n",
@@ -243,38 +303,53 @@ impl<'a> LocalWorld<'a> {
                 )
             })
         {
-            return Err(EngineError("冻结根须为准确绝对路径".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_frozen_root_absolute_required(),
+            ));
         }
         let relative = if input.path.is_absolute() {
-            input
-                .path
-                .strip_prefix(&input.root)
-                .map_err(|_| EngineError("冻结主源在根外".into()))?
+            input.path.strip_prefix(&input.root).map_err(|_| {
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_main_outside_root(),
+                )
+            })?
         } else {
             input.path.as_path()
         };
         let main_id = admitted_file_id(relative)?;
         if input.source.len() as u64 > FILE_LIMIT {
-            return Err(EngineError("冻结主源超过 32 MiB".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_frozen_main_byte_budget(),
+            ));
         }
         let mut files = HashMap::new();
         let mut total = input.source.len();
         for (path, data) in &input.files {
             let id = admitted_file_id(Path::new(path))?;
             if data.len() as u64 > FILE_LIMIT {
-                return Err(EngineError("冻结文件超过 32 MiB".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_file_byte_budget(),
+                ));
             }
-            total = total
-                .checked_add(data.len())
-                .ok_or_else(|| EngineError("冻结输入大小溢出".into()))?;
+            total = total.checked_add(data.len()).ok_or_else(|| {
+                EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_input_size_overflow(),
+                )
+            })?;
             if total > TOTAL_LIMIT {
-                return Err(EngineError("冻结输入超过 128 MiB".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_input_byte_budget(),
+                ));
             }
             if id == main_id && data.as_slice() != input.source.as_bytes() {
-                return Err(EngineError("冻结主文件与显式主源不一致".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_main_mismatch(),
+                ));
             }
             if files.insert(id, Bytes::new(data.clone())).is_some() {
-                return Err(EngineError("冻结文件路径不唯一".into()));
+                return Err(EngineError::new(
+                    weftext_messages::UiMessage::error_engine_world_frozen_path_duplicate(),
+                ));
             }
         }
         let world = Self {
@@ -310,11 +385,33 @@ impl<'a> LocalWorld<'a> {
         Ok(admitted_file_id(path)? == self.main_id)
     }
 
+    // One explanation per actual admission fact per compilation. Compiler
+    // diagnostics retain every source occurrence independently.
+    pub(crate) fn product_diagnostics(&self) -> Vec<ErrorDescription> {
+        self.cache
+            .lock()
+            .unwrap()
+            .product_failures
+            .values()
+            .cloned()
+            .collect()
+    }
+    fn product_failure(&self, kind: ProductFailure, explanation: UiMessage) -> FileError {
+        self.cache
+            .lock()
+            .unwrap()
+            .product_failures
+            .entry(kind)
+            .or_insert_with(|| explanation.into());
+        FileError::Other(None)
+    }
+
     fn resolve(&self, id: FileId) -> FileResult<PathBuf> {
         if !matches!(id.root(), VirtualRoot::Project) {
-            return Err(FileError::Other(Some(
-                "packages are unavailable; install explicit project dependencies locally".into(),
-            )));
+            return Err(self.product_failure(
+                ProductFailure::PackagesUnavailable,
+                UiMessage::error_engine_world_packages_unavailable(),
+            ));
         }
         let path = id.vpath().realize(&self.root)?;
         reject_reparse_chain(&path, &self.root)?;
@@ -449,15 +546,17 @@ impl World for LocalWorld<'_> {
         }
         let result = (|| {
             if self.cache.lock().unwrap().files.len() >= DEPENDENCY_LIMIT {
-                return Err(FileError::Other(Some(
-                    "dependency count exceeds limit".into(),
-                )));
+                return Err(self.product_failure(
+                    ProductFailure::DependencyCountBudget,
+                    UiMessage::error_engine_world_dependency_count_budget(),
+                ));
             }
             if let Some(files) = &self.frozen_files {
                 if !matches!(id.root(), VirtualRoot::Project) {
-                    return Err(FileError::Other(Some(
-                        "packages are unavailable in the frozen input".into(),
-                    )));
+                    return Err(self.product_failure(
+                        ProductFailure::FrozenPackagesUnavailable,
+                        UiMessage::error_engine_world_frozen_packages_unavailable(),
+                    ));
                 }
                 return files.get(&id).cloned().ok_or(FileError::AccessDenied);
             }
@@ -467,9 +566,10 @@ impl World for LocalWorld<'_> {
                 return Err(FileError::IsDirectory);
             }
             if metadata.len() > FILE_LIMIT {
-                return Err(FileError::Other(Some(
-                    "dependency exceeds 32 MiB limit".into(),
-                )));
+                return Err(self.product_failure(
+                    ProductFailure::DependencyByteBudget,
+                    UiMessage::error_engine_world_dependency_byte_budget(),
+                ));
             }
             let data = fs::read(&path).map_err(|e| FileError::from_io(e, &path))?;
             // Recheck the path after reading, so a straightforward reparse
@@ -479,9 +579,13 @@ impl World for LocalWorld<'_> {
             }
             let mut cache = self.cache.lock().unwrap();
             if cache.bytes.saturating_add(data.len()) > TOTAL_LIMIT {
-                return Err(FileError::Other(Some(
-                    "total dependencies exceed 128 MiB limit".into(),
-                )));
+                cache
+                    .product_failures
+                    .entry(ProductFailure::TotalDependencyByteBudget)
+                    .or_insert_with(|| {
+                        UiMessage::error_engine_world_total_dependency_byte_budget().into()
+                    });
+                return Err(FileError::Other(None));
             }
             cache.bytes += data.len();
             Ok(Bytes::new(data))
@@ -522,5 +626,46 @@ fn is_reparse(path: &Path) -> std::io::Result<bool> {
     #[cfg(not(windows))]
     {
         Ok(metadata.file_type().is_symlink())
+    }
+}
+
+#[cfg(test)]
+mod product_failure_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn frozen_file_admission_budget_is_typed_and_isolated_per_compilation() {
+        let engine = crate::Engine::new_with_system_fonts(false).unwrap();
+        let root = tempfile::TempDir::new().unwrap();
+        let input = crate::FrozenRenderRequest {
+            source: "作者原文😀".into(),
+            path: root.path().join("main.typ"),
+            root: root.path().into(),
+            files: (0..=DEPENDENCY_LIMIT)
+                .map(|index| (format!("part{index}.typ"), b"content".to_vec()))
+                .collect::<BTreeMap<_, _>>(),
+            style: None,
+        };
+        let world = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        for index in 0..DEPENDENCY_LIMIT {
+            let id = admitted_file_id(Path::new(&format!("part{index}.typ"))).unwrap();
+            assert!(world.file(id).is_ok());
+        }
+        let next = admitted_file_id(Path::new(&format!("part{DEPENDENCY_LIMIT}.typ"))).unwrap();
+        assert!(matches!(world.file(next), Err(FileError::Other(None))));
+        assert!(world.file(next).is_err());
+        let diagnostics = world.product_diagnostics();
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].explanation,
+            UiMessage::error_engine_world_dependency_count_budget()
+        );
+        assert!(diagnostics[0].diagnostics.is_empty());
+        assert!(diagnostics[0].causes.as_slice().is_empty());
+        assert_eq!(world.main_source.text(), input.source);
+        let separate = LocalWorld::frozen(&engine.library, &engine.fonts, &input).unwrap();
+        assert!(separate.product_diagnostics().is_empty());
+        assert!(separate.file(next).is_ok());
     }
 }
