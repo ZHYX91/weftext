@@ -69,7 +69,21 @@ impl LocalService {
     /// Core failures retain `CoreError` in `io::Error::get_ref`; a host may
     /// inspect its code without treating paths or diagnostic text as authority.
     pub async fn bind(options: LocalServiceOptions) -> io::Result<Self> {
-        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port)).await?;
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port))
+            .await
+            .map_err(|source| {
+                let kind = source.kind();
+                let error = api::CoreError::new(
+                    "localBind",
+                    weftext_messages::UiMessage::error_local_service_bind_failed(
+                        weftext_messages::params::ErrorLocalServiceBindFailed {
+                            port: options.port.to_string(),
+                        },
+                    ),
+                )
+                .diagnostic(weftext_messages::DiagnosticOrigin::Os, source.to_string());
+                io::Error::new(kind, error)
+            })?;
         Self::bind_with_listener(options, listener).await
     }
 
