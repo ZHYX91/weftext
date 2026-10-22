@@ -1,3 +1,7 @@
+import { reminderForm, type ReminderRawInput } from "./reminder-form";
+import { nativeControlAddress } from "./native-control-identity";
+import { newReminder } from "./reminder-values";
+import { ReminderDeviceControl } from "./reminder-device-control";
 import type { OpenedDocument } from "./types";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 export * from "./native-value-form";
@@ -32,7 +36,10 @@ export class DataPanel {
     private advancedOpen = false;
     private renderedIdentity: string | null = null;
     private draftIdentity: string | null = null;
+    private reminderDisposers: (() => void)[] = [];
+    private readonly reminderDevice: ReminderDeviceControl;
     constructor(private readonly host: PanelHost) {
+        this.reminderDevice = new ReminderDeviceControl(host);
         setUiAttr(this.element, "aria-label", uiMessage("dataPanel.regionLabel"));
         this.element.append(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
         this.element.addEventListener("compositionstart", () => { this.composing = true; });
@@ -57,6 +64,8 @@ export class DataPanel {
             this.basis = null;
             this.projection = null;
             this.draftIdentity = this.renderedIdentity = null;
+            this.reminderDisposers.splice(0).forEach(dispose => dispose());
+            this.reminderDevice.retire();
             this.element.replaceChildren(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
             return;
         }
@@ -139,6 +148,11 @@ export class DataPanel {
         this.element.append(filter);
         this.element.append(ui("div", "data-fields"));
         this.renderFields();
+        this.reminderDevice.retire();
+        if (this.basis && fieldsForTypes(schema, projection.types).some(item => item.field.id === "tasks/reminder")) {
+            this.element.append(this.reminderDevice.element);
+            void this.reminderDevice.refresh(this.basis);
+        }
         if (projection.unknownFields.length) {
             const unknown = ui("details", "data-unknown-fields");
             unknown.append(ui("summary", "", displayMessage("dataPanel.unknownFieldsDisclosure", { p0: projection.unknownFields.length })));
@@ -211,6 +225,7 @@ export class DataPanel {
         const oldAdvanced = target.querySelector<HTMLDetailsElement>(".advanced");
         if (oldAdvanced)
             this.advancedOpen = oldAdvanced.open;
+        this.reminderDisposers.splice(0).forEach(dispose => dispose());
         target.replaceChildren();
         const schema = this.schema;
         const declared = fieldsForTypes(schema, this.projection.types);
@@ -258,7 +273,7 @@ export class DataPanel {
                 cell.diagnostics?.forEach(item => wrapper.append(ui("p", "data-warning", descriptionUiText(item))));
             }
             else if (cell.state === "absent" && !this.drafts.has(field.key))
-                wrapper.append(action(uiMessage("dataPanel.fillField"), () => { this.drafts.set(field.key, { value: emptyNativeValue(field.shape, schema), changed: true, original: JSON.stringify(cell) }); this.renderFields(); }));
+                wrapper.append(action(uiMessage("dataPanel.fillField"), () => { this.drafts.set(field.key, { value: field.id === "tasks/reminder" ? newReminder("absolute") : emptyNativeValue(field.shape, schema), changed: true, original: JSON.stringify(cell) }); this.renderFields(); }));
             else {
                 const draft: FieldDraft = this.drafts.get(field.key) ?? { value: cell.value ?? { kind: "none" } as NativeValue, changed: false, original: JSON.stringify(cell) };
                 const binding = JSON.stringify([field.id, field.shape, schema.definitions]);
@@ -284,11 +299,26 @@ export class DataPanel {
                 if (schemaChanged && draft.changed)
                     wrapper.append(ui("p", "data-warning", uiMessage("dataPanel.fieldBindingChanged")), ui("pre", "data-readonly-source", JSON.stringify({ value: draft.value, rawInputs: draft.rawInputs }, null, 2)));
                 else {
-                    wrapper.append(valueEditor(field.shape, draft.value, schema, next => { draft.value = next; draft.changed = true; apply.disabled = conflicted; }, fieldNames[field.key] ?? field.key, { fieldId: field.id, path: [] }, 0, this.references));
-                    for (const [key, control] of this.formInputs(wrapper)) {
-                        if (draft.rawInputs && key in draft.rawInputs) {
+                    const changed = (next: NativeValue): void => { draft.value = next; draft.changed = true; apply.disabled = conflicted; };
+                    if (field.id === "tasks/reminder") {
+                        const form = reminderForm(draft.value, schema, changed, { fieldId: field.id, path: [] });
+                        wrapper.append(form.element);
+                        this.reminderDisposers.push(form.dispose);
+                        const raw: ReminderRawInput[] = [], retained: string[] = [];
+                        for (const control of form.element.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select")) {
+                            const address = nativeControlAddress(control);
+                            if (!draft.rawInputs || !Object.hasOwn(draft.rawInputs, address.key)) continue;
+                            const text = draft.rawInputs[address.key];
+                            if (control instanceof HTMLInputElement) raw.push({path: address.identity.path, role: address.role, text});
+                            else if (control.value !== text) retained.push(text);
+                        }
+                        retained.push(...form.restoreRaw(raw).rejected.map(item => item.input.text));
+                        if (retained.length) wrapper.append(ui("pre", "data-readonly-source", retained.join("\n")));
+                    } else {
+                        wrapper.append(valueEditor(field.shape, draft.value, schema, changed, fieldNames[field.key] ?? field.key, { fieldId: field.id, path: [] }, 0, this.references));
+                        for (const [key, control] of this.formInputs(wrapper)) if (draft.rawInputs && key in draft.rawInputs) {
                             control.value = draft.rawInputs[key];
-                            control.dispatchEvent(new Event("input", { bubbles: true }));
+                            control.dispatchEvent(new Event("input", {bubbles:true}));
                         }
                     }
                 }
@@ -455,6 +485,8 @@ export class QuickCapture {
     private pending: Record<string, unknown> | null = null;
     private schema: DataSchema | null = null;
     private references = emptyReferences();
+    private reminderDisposers: (() => void)[] = [];
+    dispose(): void { this.reminderDisposers.splice(0).forEach(dispose => dispose()); }
     constructor(private readonly host: PanelHost, private context: CaptureContext) { setUiAttr(this.element, "aria-label", uiMessage("quickCapture.title")); }
     async initialize(): Promise<void> {
         try {
@@ -479,6 +511,7 @@ export class QuickCapture {
         setUiText(help, template.disabled ? uiMessage("quickCapture.openLibraryNoteForTemplate") : uiMessage("quickCapture.templateWizardHelp"));
     }
     private render(): void {
+        this.dispose();
         if (!this.schema)
             return;
         const schema = this.schema;
@@ -515,13 +548,22 @@ export class QuickCapture {
         let values = new Map<string, NativeValue>();
         form.append(fields);
         type.onchange = () => {
+            this.dispose();
             fields.replaceChildren();
             values = new Map();
             for (const { field, required } of fieldsForTypes(schema, type.value ? [type.value] : [])) {
                 const container = required || commonFields.has(field.key) ? ui("section", "capture-property") : ui("details", "capture-property");
                 const heading = container instanceof HTMLDetailsElement ? ui("summary", "", fieldNames[field.key] ?? field.key) : ui("h3", "", () => `${uiTextValue(fieldNames[field.key] ?? field.key)}${uiTextValue(required ? " *" : "")}`);
                 container.append(heading);
-                const addEditor = (): void => { const value = emptyNativeValue(field.shape, schema); values.set(field.key, value); container.append(valueEditor(field.shape, value, schema, next => values.set(field.key, next), fieldNames[field.key] ?? field.key, { fieldId: field.id, path: [] }, 0, this.references)); };
+                const addEditor = (): void => {
+                    const value = field.id === "tasks/reminder" ? newReminder("absolute") : emptyNativeValue(field.shape, schema);
+                    values.set(field.key, value);
+                    if (field.id === "tasks/reminder") {
+                        const form = reminderForm(value, schema, next => values.set(field.key, next), {fieldId:field.id,path:[]});
+                        container.append(form.element);
+                        this.reminderDisposers.push(form.dispose);
+                    } else container.append(valueEditor(field.shape, value, schema, next => values.set(field.key, next), fieldNames[field.key] ?? field.key, {fieldId:field.id,path:[]}, 0, this.references));
+                };
                 if (required)
                     addEditor();
                 else {
