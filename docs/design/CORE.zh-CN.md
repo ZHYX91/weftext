@@ -229,7 +229,7 @@ Compound root 已到达原计划最终位置，且将作为另一参与者的目
 安装算法：
 
 1. 在操作日志及exact blobs已durable后取得§5.1目标祖先/父闭包和Core范围reader barrier。预算预留计划文件数对应的同时handle容量；不足在安装前失败/显式改批，不先半写。
-2. 一个后端调用create-only建立计划目录并返回其原guard，不采用`mkdir → reopen`。Windows候选使用[NtCreateFile](https://learn.microsoft.com/zh-cn/windows/win32/api/winternl/nf-winternl-ntcreatefile)：`RootDirectory`是已持target-parent handle，name仅单个相对目录分量；`FILE_CREATE`、`FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT`，LIST_DIRECTORY/READ_ATTRIBUTES/DELETE/SYNCHRONIZE access，share READ|WRITE而不shareDELETE。要求成功且`IO_STATUS_BLOCK.Information=FILE_CREATED`，日志登记返回对象证据并持续保留同handle加入闭包。已有同名目录冲突，不在其中合并。初始workspace root也对获权外部parent使用同一调用。普通外部工具可能先看见目录，Core reader仅见incomplete/installing。有限本机NTFS probe已验证返回创建handle、同名collision与外部root rename被拒；生产平台/耐久资格仍待验。只有mkdir/reopen的后端不能伪造创建归属，必须提供真实等价原语或保持该scope pending。
+2. 一个后端调用create-only建立计划目录并返回其原guard，不采用`mkdir → reopen`。Windows候选使用[NtCreateFile](https://learn.microsoft.com/zh-cn/windows/win32/api/winternl/nf-winternl-ntcreatefile)：`RootDirectory`是已持target-parent handle，name仅单个相对目录分量；`FILE_CREATE`、`FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT`，LIST_DIRECTORY/READ_ATTRIBUTES/DELETE/SYNCHRONIZE access，share READ|WRITE而不shareDELETE。要求成功且`IO_STATUS_BLOCK.Information=FILE_CREATED`，日志登记返回对象证据并持续保留同handle加入闭包。已有同名目录冲突，不在其中合并。初始workspace root也对获权外部parent使用同一调用。普通外部工具可能先看见目录，Core reader仅见incomplete/installing。有限本机NTFS probe已验证返回创建handle、同名collision与外部root rename被拒；生产平台/耐久资格仍待验。Linux受控服务档位仅在已接纳OS隔离namespace和原writer fence连续持有时，允许`mkdirat → constrained open`作为等价原语；先同步parent，再持有新原对象并在决议前登记opaque身份。未隔离的mkdir/reopen不能伪造创建归属。
 3. 逐个`CreateNEW`创建计划文件，RW share0，以创建返回的同handle写准确after、设置精确长度、flush并回读。所有这些文件handle保持到commit，不关闭再hash/replace。目标filename被外部抢占则冲突，不替换；新对象的本操作归属直接来自create-only返回handle和journal。
 4. 校验全部计划目标、fresh identity/ref map与constraint。复制要求的每个snapshot对象都已创建，才能commit。纯copy的after是该固定成员集，不要求排除目标目录里其他人的新raw文件。未知新增是独立external对象，不记成本次copied result、不授ID/typed资格，也不删除；交付可以标`external_pending`，需要排他全集后条件则此次strong intent不满足。
 5. durable marker固定所有计划对象/receipt后释放文件/目录guard。Core重新扫描实际树时保新增外部资料，原snapshot Receipt保持；不能因外部额外file而把缺少计划目标的copy洗成成功。
@@ -250,6 +250,12 @@ purge仍是获权破坏性动作；root和确认的bytes/成员固定，ignored/
 这允许静止正常本地Trash完成purge；遇到并发新稿则保全并等待明确新决定。它没有排他全namespace承诺。真正需要原子erase全树/业务strong negative范围的部署使用有独立OS权限/fencing的Server writer，不从同用户ACL名字推导。
 
 已知ignored/unmanaged边界仍在操作前拒且扫描不重入；开放树late boundary在rename后、commit前发现时保真实树并pending，不覆盖原路径第三对象；commit之后的新boundary是后续external observation，不能撤销原历史Receipt或重执行该move。若要求在任意raw新增竞态下瞬间不存在boundary/唯一值，该意图是强negative-scope，不能由本地目录guards冒充。普通同对象move、固定snapshot copy与安全purge各有自己的明确完成条件，不因此全不可用。
+
+**合格文件系统元数据 v2。** 当前 Core 存储档位为 `weftext.qualified-fs.v2`，与原生导出包版本独立。物理身份与保留目录项元数据均有明确平台标签：Windows 保留真实 volume／file-index／creation 证据；Linux 使用合格文件系统实际 FSID 与 `name_to_handle_at` opaque handle，不能用 inode／ctime 元组或伪造 Windows 属性位。旧无标签物理记录明确拒绝，原件不重写。作者内容只通过显式导入／接纳进入另一物理副本；历史 Windows 证据不能授予 Linux 连续性。
+
+**Linux 受控服务档位。** `Core::with_backend` 接收显式接纳的 `BackendContext`；普通 `Core::new` 不自动授予任意 Linux 路径写权。接纳通过无符号链接、不可由服务或其他用户写入的祖先目录，读取有界且 root 管理员拥有的 enrollment，核查专属非登录 service UID、不同的 client／worker UID、准确 real／effective／saved 身份、无 capabilities／supplementary groups、原 root opaque 身份、私有服务所有权和有界完整现存树。管理员拥有的 root 父目录阻止普通客户端／worker 替换根目录项。对真实 root FD 的锁仅协调不同私有 data-dir 的服务实例，不是 OS 写隔离机制。客户端／worker 必须以各自不同的 OS 身份运行，不能继承服务描述符或凭据；调用者自报 API 参数和同 UID 锁都不构成该部署。
+
+Linux 的 `BoundFile` 保留 root／parent FD 与准确 basename；`openat2` 使用 BENEATH／NO_SYMLINKS／NO_MAGICLINKS／NO_XDEV，包括拒绝 bind mount。原生 ext4／XFS 须实际支持 opaque handles；不合格文件系统、非 UTF-8 名、符号链接、硬链接和特殊项明确失败。枚举真实目录 FD 并返回 complete／budget 结果。移动使用 `renameat2(RENAME_NOREPLACE)`，同步受影响的两个目录；私有替换明确声明 replace。文件同步和目录项同步为不同耐久步骤。source／read 范围在已隔离的服务权限下持有相容的进程内 lease。机制仍需逐平台产品检查，不建立真实断电、桌面、Mobile 或 macOS 验收。
 
 **Server 与后续平台。** Server writer service 使用 OS 隔离目录，普通客户端和 worker 不直写；fence 每次实际文件动作和日志决议。该部署可实现强 namespace 与自动恢复。Linux 的普通 advisory 锁无法阻止任意同用户工具；Linux 首轮可提供受控服务目录或明确的独占宿主模式，开放本地写后端待单独证明。网络文件系统逐项认证。可选 checkout→三方导回服务于长期外部编辑或不合格后端，保留原 Base/current/proposed；不是正常 Desktop 保存的强制步骤。
 

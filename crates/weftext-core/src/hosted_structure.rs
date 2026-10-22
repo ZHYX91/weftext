@@ -92,18 +92,37 @@ impl Core {
         path: &Path,
         resource: &str,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         valid_resource(resource)?;
         let root = absolute_path(root)?;
         let path = absolute_path(path)?;
         let workspace = self.require_workspace(&root)?;
         self.check_pending(&path)?;
-        let identity = stamp(&ParentGuard::acquire(&path)?.open_placement_file()?)?.identity;
+        let identity = {
+            let file = ParentGuard::acquire(&self.backend, &path)?.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         self.check_pending_identity(&identity)?;
         let mut expected = None;
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -195,11 +214,14 @@ impl Core {
         expected: &weftext_knowledge::NodeRef,
     ) -> Result<FeatureTreeWitness> {
         let root = absolute_path(root)?;
-        let root_coordinate = ParentGuard::acquire(&root.join(".feature-root-prospective"))?
-            .directory_coordinates()?;
-        let source_coordinate =
-            ParentGuard::acquire(&source_directory.join(".feature-tree-prospective"))?
+        let root_coordinate =
+            ParentGuard::acquire(&self.backend, &root.join(".feature-root-prospective"))?
                 .directory_coordinates()?;
+        let source_coordinate = ParentGuard::acquire(
+            &self.backend,
+            &source_directory.join(".feature-tree-prospective"),
+        )?
+        .directory_coordinates()?;
         let source = root.join(
             source_coordinate
                 .strip_prefix(&root_coordinate)
@@ -219,7 +241,7 @@ impl Core {
         self.check_subtree_boundary(&root, &source)?;
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(&source, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, &source, &mut files, &mut directories, false)?;
         if files.len() + directories.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
@@ -259,8 +281,8 @@ impl Core {
     }
     fn feature_file_witness(&self, path: &Path) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
-        let captured = capture_optional(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
+        let captured = capture_optional(&self.backend, path)?;
         if let Some(f) = &captured {
             check_size(&f.bytes)?;
             self.check_pending_identity(&f.stamp.identity)?;
@@ -308,8 +330,10 @@ impl Core {
             }
         }
         for d in &witness.directories {
-            let guard =
-                ParentGuard::acquire(&Path::new(&d.path).join(".feature-tree-prospective"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(&d.path).join(".feature-tree-prospective"),
+            )?;
             let (entries, complete) = guard.directory_entries(5000)?;
             let entries = sorted_entries(entries, Path::new(&d.path));
             if !complete || guard.directory_identity()? != d.identity || entries != d.entries {
@@ -352,7 +376,7 @@ impl Core {
                 continue;
             }
             seen_files.push(f);
-            let birth = self.admitted_binding(&f.stamp.identity).ok_or_else(|| {
+            let birth = self.admitted_binding(&f.stamp.identity)?.ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
                     UiMessage::error_core_hosted_structure_captured_canonical_source_not_physically_admitted(),
@@ -415,6 +439,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorStructureReceipt>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.actor_feature_record(resource, operation)? else {
             return Ok(None);
         };
@@ -490,6 +515,7 @@ impl Core {
         operation: &str,
         expected: &weftext_knowledge::NodeRef,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         let receipt = self
             .actor_feature_structure_receipt(resource, operation)?
             .ok_or_else(|| {
@@ -509,8 +535,11 @@ impl Core {
         let qualified = self.qualified_query_node_at(root, path, expected, &node.lifecycle)?;
         let record = self.actor_feature_record(resource, operation)?.unwrap();
         let plan = &self.operations[&record.core_operation_id];
-        let guard = ParentGuard::acquire(path)?;
-        let identity = stamp(&guard.open_placement_file()?)?.identity;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
+        let identity = {
+            let file = guard.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         let original = match &plan.transaction.as_ref().unwrap().mutation {
             Mutation::CreateTree { .. } => {
                 self.read_births(&record.core_operation_id)?

@@ -429,6 +429,7 @@ fn same_bytes_replacement_invalidates_snapshot_and_multi_file_reader_barrier() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&p.operation_id, "install"),
         b"{\"testCrash\":true}",
     )
@@ -710,7 +711,7 @@ fn parent_chain_guards_block_ancestor_rename_and_leaf_replacement() {
     fs::create_dir(&parent).unwrap();
     let path = parent.join("note.typ");
     fs::write(&path, "x").unwrap();
-    let guard = ParentGuard::acquire(&path).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &path).unwrap();
     let file = guard.open_file(true, false).unwrap();
     assert!(fs::rename(&parent, temp.path().join("moved")).is_err());
     assert!(fs::rename(&path, parent.join("replaced.typ")).is_err());
@@ -735,7 +736,12 @@ fn namespace_leaf_rename_keeps_guards_and_identity_through_directory_move() {
     fs::create_dir(&target_parent).unwrap();
     fs::write(source.join("Original.typ"), "original content").unwrap();
 
-    let guard = backend::NamespaceGuard::acquire(&source, &target_parent).unwrap();
+    let guard = backend::NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &source,
+        &target_parent,
+    )
+    .unwrap();
     let directory_id = guard.source_identity().unwrap();
     let leaf = guard.open_source_file("Original.typ", true).unwrap();
     let file_id = backend::stamp(&leaf).unwrap().identity;
@@ -772,7 +778,12 @@ fn namespace_leaf_rename_refuses_an_occupied_name_without_replacing_either_file(
     fs::create_dir(&source).unwrap();
     fs::write(source.join("Original.typ"), "original content").unwrap();
     fs::write(source.join("Occupied.typ"), "other content").unwrap();
-    let guard = backend::NamespaceGuard::acquire(&source, temp.path()).unwrap();
+    let guard = backend::NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &source,
+        temp.path(),
+    )
+    .unwrap();
     let leaf = guard.open_source_file("Original.typ", true).unwrap();
     let file_id = backend::stamp(&leaf).unwrap().identity;
 
@@ -822,6 +833,19 @@ fn interrupted_write_third_state_and_partial_commit_never_reexecute() {
     )
     .unwrap();
     drop(f.core);
+    assert!(Core::new(&f.data).is_err());
+    let invalid_decision = f.data.join("journal").join(format!("{id}.commit.json"));
+    assert_eq!(
+        fs::read(&invalid_decision).unwrap(),
+        b"{incomplete decision"
+    );
+    // The constructor never repairs an unknown decision. The fixture retains
+    // that original explicitly before exercising the separate pending plan.
+    fs::rename(
+        &invalid_decision,
+        invalid_decision.with_extension("owned-test-parked"),
+    )
+    .unwrap();
     let mut restarted = Core::new(&f.data).unwrap();
     assert_eq!(
         restarted.open(&f.path, None).unwrap_err().code,

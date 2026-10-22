@@ -984,6 +984,7 @@ fn hosted_structure_category_fence_and_installed_status_are_not_regenerated() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         b"{\"testInterruption\":true}",
     )

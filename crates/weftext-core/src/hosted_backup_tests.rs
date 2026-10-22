@@ -223,6 +223,7 @@ fn owner_backup_installing_status_survives_restart_and_settle_cannot_cancel() {
     // Persist the original decision's real installing marker without claiming
     // that any afterimage was installed; recovery must remain authoritative.
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         &serde_json::to_vec(
             &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),

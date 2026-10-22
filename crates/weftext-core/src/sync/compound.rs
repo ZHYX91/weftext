@@ -104,6 +104,7 @@ fn original_creation_path(path: &Path, placements: &[(PathBuf, PathBuf)]) -> Res
     Ok(original.map_or_else(|| path.into(), |(_, original)| original))
 }
 fn snapshot_moving_tree(
+    backend: &crate::BackendContext,
     source: &Path,
     placements: &[(PathBuf, PathBuf)],
     files: &mut Vec<crate::operations::CapturedFile>,
@@ -116,10 +117,11 @@ fn snapshot_moving_tree(
             return Ok(());
         }
     }
-    snapshot_tree(source, files, directories, false)
+    snapshot_tree(backend, source, files, directories, false)
 }
 
 fn plan_parent_directories(
+    backend: &crate::BackendContext,
     root: &Path,
     original: &Path,
     final_path: &Path,
@@ -129,7 +131,7 @@ fn plan_parent_directories(
 ) -> Result<()> {
     let mut original = original.parent().ok_or_else(structure_required)?;
     let mut final_path = final_path.parent().ok_or_else(structure_required)?;
-    while !original.exists() {
+    while !backend.entry_exists(original)? {
         if original == root || !final_path.starts_with(root) {
             return Err(structure_required());
         }
@@ -139,14 +141,14 @@ fn plan_parent_directories(
                 UiMessage::error_core_sync_too_many_compound_create_only_directories(),
             ));
         }
-        if original.parent().unwrap().exists()
+        if backend.entry_exists(original.parent().unwrap())?
             && !placements.iter().any(|(_, target)| {
                 crate::history::history_relative_path(final_path, target).is_some()
             })
         {
             write_parents.push((
                 display(final_path),
-                ParentGuard::acquire(original)?.directory_identity()?,
+                ParentGuard::acquire(backend, original)?.directory_identity()?,
             ));
         }
         original = original.parent().ok_or_else(structure_required)?;
@@ -291,18 +293,18 @@ impl Core {
         if placements
             .iter()
             .any(|(_, target)| target.starts_with(&trash))
-            && !trash.exists()
+            && !self.backend.entry_exists(&trash)?
         {
             created_directories.insert(display(&trash));
             trash_parents.push((
                 display(&trash),
-                ParentGuard::acquire(&trash)?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, &trash)?.directory_identity()?,
             ));
         }
         let source_identities = placements
             .iter()
             .map(|(source, _)| {
-                ParentGuard::acquire(&source.join(".original-moving-participant"))?
+                ParentGuard::acquire(&self.backend, &source.join(".original-moving-participant"))?
                     .directory_identity()
             })
             .collect::<Result<Vec<_>>>()?;
@@ -336,7 +338,11 @@ impl Core {
                     != std::cmp::Ordering::Equal;
             let trash_source = source.starts_with(root.join(".weftext-trash"));
             let trash_target = target.starts_with(root.join(".weftext-trash"));
-            if moving_parent || !target.parent().unwrap().exists() || trash_source || trash_target {
+            if moving_parent
+                || !self.backend.entry_exists(target.parent().unwrap())?
+                || trash_source
+                || trash_target
+            {
                 // Qualify the original source before its final parent exists
                 // at that coordinate. A moving parent's existing directory FI
                 // remains distinct from a genuinely create-only parent.
@@ -351,10 +357,13 @@ impl Core {
                             &format!("weftext-directory://{}/{id}", identity.workspace_id),
                             "trash",
                         )?;
-                        let marker = capture_optional(&source.join("weftext.directory.json"))?
-                            .ok_or_else(structure_required)?;
-                        let parent =
-                            ParentGuard::acquire(Path::new(&marker.path))?.directory_identity()?;
+                        let marker = capture_optional(
+                            &self.backend,
+                            &source.join("weftext.directory.json"),
+                        )?
+                        .ok_or_else(structure_required)?;
+                        let parent = ParentGuard::acquire(&self.backend, Path::new(&marker.path))?
+                            .directory_identity()?;
                         (marker, parent)
                     } else {
                         self.qualified_directory_marker(&root, source)?
@@ -375,13 +384,14 @@ impl Core {
                             },
                             "trash",
                         )?;
-                        capture_optional(&path)?.ok_or_else(structure_required)?
+                        capture_optional(&self.backend, &path)?.ok_or_else(structure_required)?
                     } else {
                         self.managed_node(&root, source, false)?
                     };
                     (canonical, None)
                 };
-                let namespace = NamespaceGuard::acquire(source, source.parent().unwrap())?;
+                let namespace =
+                    NamespaceGuard::acquire(&self.backend, source, source.parent().unwrap())?;
                 let source_identity = namespace.source_identity()?;
                 if expected_directory.is_some_and(|identity| identity != source_identity) {
                     return Err(CoreError::new(
@@ -409,12 +419,17 @@ impl Core {
                         UiMessage::error_core_sync_original_source_changed_while_qualifying_planned_parent(),
                     ));
                 }
-                let target_parent_identity = if original_parent.exists() {
-                    let identity =
-                        ParentGuard::acquire(&original_parent.join(".original-compound-parent"))?
-                            .directory_identity()?;
+                let target_parent_identity = if self.backend.entry_exists(&original_parent)? {
+                    let identity = ParentGuard::acquire(
+                        &self.backend,
+                        &original_parent.join(".original-compound-parent"),
+                    )?
+                    .directory_identity()?;
                     let original_slot = original_parent.join(target.file_name().unwrap());
-                    match ParentGuard::acquire(&original_slot.join(".original-compound-slot")) {
+                    match ParentGuard::acquire(
+                        &self.backend,
+                        &original_slot.join(".original-compound-slot"),
+                    ) {
                         Ok(guard) if source_identities.contains(&guard.directory_identity()?) => {}
                         Ok(_) => {
                             return Err(CoreError::new(
@@ -436,7 +451,8 @@ impl Core {
                     target: display(target),
                     parking: None,
                     source_identity,
-                    source_parent_identity: ParentGuard::acquire(source)?.directory_identity()?,
+                    source_parent_identity: ParentGuard::acquire(&self.backend, source)?
+                        .directory_identity()?,
                     target_parent_identity,
                     old_leaf,
                     new_leaf,
@@ -451,7 +467,13 @@ impl Core {
                     .push(change(target, "relocateTo", canonical.bytes.len()));
                 drop(held);
                 drop(namespace);
-                snapshot_moving_tree(source, &placements, &mut files, &mut directories)?;
+                snapshot_moving_tree(
+                    &self.backend,
+                    source,
+                    &placements,
+                    &mut files,
+                    &mut directories,
+                )?;
                 continue;
             }
             let mut occupant = None;
@@ -501,7 +523,8 @@ impl Core {
             if create_trash_parent {
                 return Err(structure_required());
             }
-            let source_parent_identity = ParentGuard::acquire(source)?.directory_identity()?;
+            let source_parent_identity =
+                ParentGuard::acquire(&self.backend, source)?.directory_identity()?;
             relocations.push(RelocationStep {
                 source: original_source,
                 target: original_target,
@@ -514,7 +537,13 @@ impl Core {
                 leaf_identity,
                 members,
             });
-            snapshot_moving_tree(source, &placements, &mut files, &mut directories)?;
+            snapshot_moving_tree(
+                &self.backend,
+                source,
+                &placements,
+                &mut files,
+                &mut directories,
+            )?;
         }
         let mut parking_parents = Vec::new();
         if needs_parking {
@@ -529,10 +558,10 @@ impl Core {
                 if source_forest {
                     parking_parents.push((
                         display(&parking),
-                        ParentGuard::acquire(&parking)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &parking)?.directory_identity()?,
                     ));
                 }
-                crate::operations::ensure_absent(&parking)?;
+                crate::operations::ensure_absent(&self.backend, &parking)?;
                 preview.changes.push(change(&parking, "relocateVia", 0));
                 step.parking = Some(display(&parking));
             }
@@ -600,7 +629,7 @@ impl Core {
                         .find(|f| Path::new(&f.path) == path)
                         .ok_or_else(structure_required)?;
                     if self
-                        .admitted_binding(&captured.stamp.identity)
+                        .admitted_binding(&captured.stamp.identity)?
                         .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                     {
                         return Err(CoreError::new(
@@ -631,7 +660,7 @@ impl Core {
                                 &identity.workspace_id,
                                 id,
                                 &resource.stamp.identity,
-                            ) {
+                            )? {
                                 return Err(CoreError::new(
                                     "syncExternalChange",
                                     UiMessage::error_core_sync_moved_resource_identity_differs_from_original_admission(),
@@ -658,7 +687,8 @@ impl Core {
                 // exact read, held through the same decision even though unmoved.
                 for (name, digest) in &old.state.files {
                     let path = Path::new(&old.directory).join(name);
-                    let captured = capture_optional(&path)?.ok_or_else(structure_required)?;
+                    let captured =
+                        capture_optional(&self.backend, &path)?.ok_or_else(structure_required)?;
                     budget.charge(captured.bytes.len(), 1)?;
                     if hash(&captured.bytes) != *digest {
                         return Err(CoreError::new(
@@ -669,7 +699,7 @@ impl Core {
                     }
                     write_parents.push((
                         display(&path),
-                        ParentGuard::acquire(&path)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
                     ));
                     files.push(captured);
                 }
@@ -688,7 +718,7 @@ impl Core {
                     .find(|f| Path::new(&f.path) == path)
                     .ok_or_else(structure_required)?;
                 if self
-                    .admitted_binding(&file.stamp.identity)
+                    .admitted_binding(&file.stamp.identity)?
                     .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                 {
                     return Err(CoreError::new(
@@ -724,13 +754,13 @@ impl Core {
                     &identity.workspace_id,
                     owner,
                     &captured.stamp.identity,
-                ) {
+                )? {
                     return Err(CoreError::new(
                         "identityConflict",
                         UiMessage::error_core_sync_retired_resource_lost_original_physical_admission(),
                     ));
                 }
-                let guard = ParentGuard::acquire(&source)?;
+                let guard = ParentGuard::acquire(&self.backend, &source)?;
                 let mut file = guard.open_file(false, false)?;
                 if crate::stamp(&file)? != captured.stamp
                     || crate::operations::read_blob(&mut file)? != captured.bytes
@@ -743,9 +773,9 @@ impl Core {
                 let retention = root
                     .join(".weftext-trash")
                     .join(format!("{}-members", request.operation_id));
-                crate::operations::ensure_absent(&retention)?;
+                crate::operations::ensure_absent(&self.backend, &retention)?;
                 created_directories.insert(display(&retention));
-                if !trash.exists() {
+                if !self.backend.entry_exists(&trash)? {
                     created_directories.insert(display(&trash));
                     if !write_parents
                         .iter()
@@ -753,7 +783,7 @@ impl Core {
                     {
                         write_parents.push((
                             display(&trash),
-                            ParentGuard::acquire(&trash)?.directory_identity()?,
+                            ParentGuard::acquire(&self.backend, &trash)?.directory_identity()?,
                         ));
                     }
                 } else if !write_parents
@@ -762,7 +792,7 @@ impl Core {
                 {
                     write_parents.push((
                         display(&retention),
-                        ParentGuard::acquire(&retention)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &retention)?.directory_identity()?,
                     ));
                 }
                 let target =
@@ -806,8 +836,9 @@ impl Core {
                     ));
                 }
                 if captured.is_none() {
-                    if !preimage.parent().unwrap().exists() {
+                    if !self.backend.entry_exists(preimage.parent().unwrap())? {
                         plan_parent_directories(
+                            &self.backend,
                             &root,
                             &preimage,
                             &path,
@@ -816,7 +847,8 @@ impl Core {
                             &mut write_parents,
                         )?;
                     }
-                    if preimage.parent().unwrap().exists() && capture_optional(&preimage)?.is_some()
+                    if self.backend.entry_exists(preimage.parent().unwrap())?
+                        && capture_optional(&self.backend, &preimage)?.is_some()
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
@@ -831,10 +863,10 @@ impl Core {
                     {
                         return Err(structure_required());
                     }
-                    if moved.is_none() && preimage.parent().unwrap().exists() {
+                    if moved.is_none() && self.backend.entry_exists(preimage.parent().unwrap())? {
                         write_parents.push((
                             display(&path),
-                            ParentGuard::acquire(&preimage)?.directory_identity()?,
+                            ParentGuard::acquire(&self.backend, &preimage)?.directory_identity()?,
                         ));
                     }
                 }
@@ -853,7 +885,7 @@ impl Core {
                             &identity.workspace_id,
                             owner,
                             &file.stamp.identity,
-                        ) {
+                        )? {
                             return Err(CoreError::new(
                                 "syncExternalChange",
                                 UiMessage::error_core_sync_incoming_resource_changed_admitted_identity(),
@@ -867,7 +899,10 @@ impl Core {
                     }
                 }
                 if matches!(object, ObjectKey::Tags)
-                    && captured.is_some_and(|f| self.accepted_revision(f).is_none())
+                    && captured
+                        .map(|f| self.accepted_revision(f).map(|revision| revision.is_none()))
+                        .transpose()?
+                        .unwrap_or(false)
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
@@ -910,7 +945,7 @@ impl Core {
                 let original_directory = original_creation_path(directory, &placements)?;
                 self.check_pending(directory)?;
                 self.check_pending(&original_directory)?;
-                crate::operations::ensure_absent(&original_directory)?;
+                crate::operations::ensure_absent(&self.backend, &original_directory)?;
                 let resources = super::apply::validate_state(&graph, object, &version.state)?;
                 if matches!(object, ObjectKey::Directory(_))
                     && !version.state.files.contains_key("weftext.directory.json")
@@ -925,6 +960,7 @@ impl Core {
                     self.check_pending(&path)?;
                     self.check_pending(&original)?;
                     plan_parent_directories(
+                        &self.backend,
                         &root,
                         &original,
                         &path,
@@ -1002,7 +1038,7 @@ impl Core {
                 ));
             }
             self.check_pending(&path)?;
-            crate::operations::ensure_absent(&path)?;
+            crate::operations::ensure_absent(&self.backend, &path)?;
             let digest = &version.state.files[name];
             let bytes = graph.blob(digest).ok_or_else(structure_required)?;
             budget.charge(bytes.len(), 1)?;
@@ -1018,7 +1054,7 @@ impl Core {
             }
             write_parents.push((
                 display(&path),
-                ParentGuard::acquire(&path)?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
             ));
             preview
                 .changes
@@ -1118,12 +1154,13 @@ impl Core {
         ] {
             let path = root.join(name);
             if !files.iter().any(|file| Path::new(&file.path) == path) {
-                let captured = capture_optional(&path)?.ok_or_else(structure_required)?;
+                let captured =
+                    capture_optional(&self.backend, &path)?.ok_or_else(structure_required)?;
                 budget.charge(captured.bytes.len(), 1)?;
                 files.push(captured);
                 write_parents.push((
                     display(&path),
-                    ParentGuard::acquire(&path)?.directory_identity()?,
+                    ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
                 ));
             }
         }

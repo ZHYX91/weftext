@@ -257,6 +257,7 @@ fn sync_setup_cannot_launder_forged_replaced_or_lost_tag_registry_identity() {
         assert!(!core.journal_path(&enable, "plan").exists());
         assert!(
             core.sync_setups()
+                .unwrap()
                 .iter()
                 .all(|setup| setup.root != display(&root))
         );
@@ -587,7 +588,7 @@ fn damaged_transport_cache_does_not_turn_saved_into_failed_or_allocate_new_opera
         .map(|p| p.operation_id.clone())
         .collect();
     assert_eq!(pending.len(), 1);
-    assert!(core.committed(&pending[0]));
+    assert!(core.committed(&pending[0]).unwrap());
     assert!(core.publish_sync(&root).is_err());
     assert_eq!(fs::read_to_string(&note.path).unwrap(), changed);
     assert_eq!(

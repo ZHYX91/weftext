@@ -24,9 +24,9 @@ pub(crate) mod compound;
 /// One original namespace participant. Physical evidence belongs to this Plan,
 /// while portable object versions remain in its original SyncApplication.
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 pub(crate) enum RelocationParent {
-    /// Legacy Compound plans retain this exact serialized FileIdentity shape.
+    /// Original platform-tagged physical evidence for an existing parent.
     Existing(FileIdentity),
     Created {
         created_directory: String,
@@ -52,7 +52,7 @@ pub(crate) struct RetiredMember {
     pub(crate) target: String,
     pub(crate) identity: FileIdentity,
     pub(crate) parent: FileIdentity,
-    pub(crate) attributes: u32,
+    pub(crate) attributes: backend::EntryMetadata,
     pub(crate) object: sync::ObjectKey,
     pub(crate) relative_path: String,
     pub(crate) resource_id: String,
@@ -871,12 +871,12 @@ impl Core {
         }
         self.check_pending(&path)?;
         self.check_discovery_boundary(&root, path.parent().unwrap())?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_file(false, false)?;
         let actual = stamp(&file)?;
         self.check_pending_identity(&actual.identity)?;
         let bytes = read_source(&mut file)?;
-        let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
+        let birth = self.admitted_binding(&actual.identity)?.ok_or_else(|| {
             CoreError::new(
                 "identityPending",
                 UiMessage::error_core_operations_selected_object_has_no_committed_node_admission(),
@@ -904,7 +904,7 @@ impl Core {
                 workspace_id: birth.workspace_id,
                 node_id: birth.node_id,
             },
-            revision: self.accepted_revision(&captured),
+            revision: self.accepted_revision(&captured)?,
             source_hash: hash(&captured.bytes),
             identity: captured.stamp.identity.clone(),
             witness: SnapshotWitness {
@@ -922,6 +922,7 @@ impl Core {
         path: &Path,
         session_id: &str,
     ) -> Result<QualifiedNode> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_actor_session(session_id)?;
         let session = &self.sessions[session_id];
         if session.path != absolute_path(path)? {
@@ -932,7 +933,7 @@ impl Core {
         }
         let current = self.qualified_node_at(root, path)?;
         let original = self
-            .admitted_binding(&session.stamp.identity)
+            .admitted_binding(&session.stamp.identity)?
             .ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
@@ -997,7 +998,7 @@ impl Core {
         }
         valid_operation_id(&source.revision)?;
         let birth = self
-            .admitted_binding(&source.stamp.identity)
+            .admitted_binding(&source.stamp.identity)?
             .ok_or_else(invalid)?;
         if binding.workspace_id.as_ref() != Some(&birth.workspace_id)
             || owner.is_some_and(|owner| owner != birth.node_id)
@@ -1013,7 +1014,7 @@ impl Core {
         &self,
         operation_id: &str,
     ) -> Result<Option<SavedOperationSource>> {
-        self.sync_local_owner()?;
+        self.backend.check_path(&self.data_dir)?;
         valid_operation_id(operation_id)?;
         let Some(plan) = self.operations.get(operation_id) else {
             return Ok(None);
@@ -1024,14 +1025,15 @@ impl Core {
                 UiMessage::error_core_operations_operation_not_original_source_save(),
             ));
         }
-        self.validate_file_save_plan(plan)?;
-        let definition_key =
-            match fs::read(self.journal_path(operation_id, "definition-reservation")) {
-                Ok(bytes) => Some(serde_json::from_slice::<DefinitionReservation>(&bytes)?.key),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                Err(e) => return Err(e.into()),
-            };
-        let committed = self.original_commit_fact(operation_id)?;
+        let definition_key = match self
+            .backend
+            .read_bytes(self.journal_path(operation_id, "definition-reservation"))
+        {
+            Ok(bytes) => Some(serde_json::from_slice::<DefinitionReservation>(&bytes)?.key),
+            Err(e) if e.code == "missing" => None,
+            Err(e) => return Err(e),
+        };
+        let committed = self.committed(operation_id)?;
         Ok(Some(SavedOperationSource {
             root: match &plan.file_save.as_ref().unwrap().scope {
                 QualifiedInputScope::Library { binding } => Some(binding.root.clone()),
@@ -1057,17 +1059,34 @@ impl Core {
     }
     pub(crate) fn read_observation_facts(&self, operation_id: &str) -> Result<Vec<RevisionFact>> {
         let mut facts = Vec::new();
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        let mut record_found = false;
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let path = entry?.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             if name == format!("{operation_id}.observations.json")
                 || (name.starts_with(&format!("{operation_id}.recovery-observations-"))
                     && name.ends_with(".json"))
             {
-                facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(&fs::read(
-                    path,
-                )?)?);
+                record_found = true;
+                facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(
+                    &self.backend.read_bytes(path)?,
+                )?);
             }
+        }
+        if !record_found
+            && self.operations.get(operation_id).is_some_and(|plan| {
+                plan.content_revision.is_some()
+                    || plan
+                        .transaction
+                        .as_ref()
+                        .is_some_and(|t| !t.preview.revisions.is_empty())
+            })
+            && self.committed(operation_id)?
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "Original committed physical revision observations are missing",
+            ));
         }
         Ok(facts)
     }
@@ -1089,11 +1108,7 @@ impl Core {
             Ok(backend::namespace_relative_path(path, &trash)?.is_some())
         };
         let mut members = BTreeSet::new();
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             for birth in self.read_births(&plan.operation_id)? {
                 if birth.workspace_id == workspace.workspace_id {
                     members.insert(birth.node_id);
@@ -1103,7 +1118,10 @@ impl Core {
         let mut trash_members = self
             .admitted_trash_files(root)?
             .iter()
-            .filter_map(|file| self.admitted_binding(&file.stamp.identity))
+            .map(|file| self.admitted_binding(&file.stamp.identity))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .filter(|birth| birth.workspace_id == workspace.workspace_id)
             .map(|birth| birth.node_id)
             .collect::<BTreeSet<_>>();
@@ -1111,7 +1129,7 @@ impl Core {
         // Project only this original transaction's captured Node objects back
         // to their before lifecycle. Foreign late members remain in the set.
         let mut positions = match &t.mutation {
-            Mutation::Compound { .. } => compound::compound_membership_positions(t)?,
+            Mutation::Compound { .. } => compound::compound_membership_positions(&self.backend, t)?,
             _ => BTreeMap::new(),
         };
         let relocations = t.relocations();
@@ -1122,8 +1140,10 @@ impl Core {
                     if !Path::new(candidate).try_exists()? {
                         continue;
                     }
-                    let guard =
-                        ParentGuard::acquire(&Path::new(candidate).join(".recovery-membership"))?;
+                    let guard = ParentGuard::acquire(
+                        &self.backend,
+                        &Path::new(candidate).join(".recovery-membership"),
+                    )?;
                     if guard.directory_identity()? == *step.source_identity {
                         if positions
                             .insert(step.source.into(), PathBuf::from(candidate))
@@ -1136,7 +1156,7 @@ impl Core {
                 }
             }
             let current = positions.get(step.source).ok_or_else(failure)?;
-            let guard = ParentGuard::acquire(&current.join(".recovery-membership"))?;
+            let guard = ParentGuard::acquire(&self.backend, &current.join(".recovery-membership"))?;
             if guard.directory_identity()? != *step.source_identity {
                 return Err(failure());
             }
@@ -1145,7 +1165,7 @@ impl Core {
         let mut held_files = Vec::new();
         for original in &t.files {
             let Some(birth) = self
-                .admitted_binding(&original.stamp.identity)
+                .admitted_binding(&original.stamp.identity)?
                 .filter(|birth| birth.workspace_id == workspace.workspace_id)
             else {
                 continue;
@@ -1196,7 +1216,7 @@ impl Core {
                 if !candidate.try_exists()? {
                     continue;
                 }
-                let guard = ParentGuard::acquire(&candidate)?;
+                let guard = ParentGuard::acquire(&self.backend, &candidate)?;
                 let file = guard.open_file(false, false)?;
                 if stamp(&file)?.identity != original.stamp.identity {
                     continue;
@@ -1236,7 +1256,7 @@ impl Core {
             {
                 return Err(failure());
             }
-            let guard = ParentGuard::acquire(Path::new(&planned.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&planned.path))?;
             let file = guard.open_file(false, false)?;
             if stamp(&file)?.identity != birth.identity {
                 return Err(failure());
@@ -1300,8 +1320,9 @@ impl Core {
             })
             .collect::<Result<Vec<_>>>()?;
         let record = self.journal_path(&plan.operation_id, "observations");
-        if record.exists() {
+        if self.backend.entry_exists(&record)? {
             journal::private_create(
+                &self.backend,
                 &self.journal_path(
                     &plan.operation_id,
                     &format!("recovery-observations-{}", fresh()),
@@ -1309,7 +1330,7 @@ impl Core {
                 &serde_json::to_vec(&facts)?,
             )?;
         } else {
-            journal::private_create(&record, &serde_json::to_vec(&facts)?)?;
+            journal::private_create(&self.backend, &record, &serde_json::to_vec(&facts)?)?;
         }
         if !t.births().is_empty() {
             let births = t.births();
@@ -1338,8 +1359,8 @@ impl Core {
                 });
             }
             let record = self.journal_path(&plan.operation_id, "births");
-            if record.exists() {
-                let old: Vec<Birth> = serde_json::from_slice(&fs::read(&record)?)?;
+            if self.backend.entry_exists(&record)? {
+                let old: Vec<Birth> = serde_json::from_slice(&self.backend.read_bytes(&record)?)?;
                 if old.len() != actual.len()
                     || old.iter().any(|b| {
                         !actual.iter().any(|a| {
@@ -1355,7 +1376,7 @@ impl Core {
                     ));
                 }
             } else if !actual.is_empty() {
-                journal::private_create(&record, &serde_json::to_vec(&actual)?)?;
+                journal::private_create(&self.backend, &record, &serde_json::to_vec(&actual)?)?;
             }
         }
         let mut resources = Vec::new();
@@ -1404,8 +1425,9 @@ impl Core {
         }
         let record = self.journal_path(&plan.operation_id, "resource-births");
         if !resources.is_empty() {
-            if record.exists() {
-                let old: Vec<ResourceBirth> = serde_json::from_slice(&fs::read(&record)?)?;
+            if self.backend.entry_exists(&record)? {
+                let old: Vec<ResourceBirth> =
+                    serde_json::from_slice(&self.backend.read_bytes(&record)?)?;
                 if old.len() != resources.len()
                     || old.iter().any(|b| {
                         !resources.iter().any(|a| {
@@ -1421,7 +1443,7 @@ impl Core {
                     ));
                 }
             } else {
-                journal::private_create(&record, &serde_json::to_vec(&resources)?)?;
+                journal::private_create(&self.backend, &record, &serde_json::to_vec(&resources)?)?;
             }
         }
         Ok(())
@@ -1430,9 +1452,10 @@ impl Core {
         &self,
         operation_id: &str,
         path: &Path,
-        file: &File,
+        file: &backend::BoundFile,
     ) -> Result<()> {
         journal::private_create(
+            &self.backend,
             &self.journal_path(
                 operation_id,
                 &format!("object-{}", hash(display(path).as_bytes())),
@@ -1447,7 +1470,7 @@ impl Core {
         operation_id: &str,
         path: &Path,
     ) -> Result<Option<FileIdentity>> {
-        match fs::read(self.journal_path(
+        match self.backend.read_bytes(self.journal_path(
             operation_id,
             &format!("object-{}", hash(display(path).as_bytes())),
         )) {
@@ -1461,8 +1484,8 @@ impl Core {
                 }
                 Ok(Some(serde_json::from_value(v["identity"].clone())?))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) if e.code == "missing" => Ok(None),
+            Err(e) => Err(e),
         }
     }
     pub(crate) fn record_observation(
@@ -1474,6 +1497,7 @@ impl Core {
         revision: &str,
     ) -> Result<()> {
         journal::private_create(
+            &self.backend,
             &self.journal_path(operation_id, "observations"),
             &serde_json::to_vec(&vec![RevisionFact {
                 path: display(path),
@@ -1484,6 +1508,7 @@ impl Core {
         )
     }
     pub fn prepared_operation_files(&self, operation_id: &str) -> Result<Vec<FileChange>> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_sync_operation_access(operation_id)?;
         let t = self
             .operations
@@ -1512,6 +1537,7 @@ impl Core {
         &self,
         operation_id: &str,
     ) -> Result<Option<OperationReceipt>> {
+        self.backend.check_path(&self.data_dir)?;
         let p = self.operations.get(operation_id).ok_or_else(|| {
             CoreError::new(
                 "operationMissing",
@@ -1524,7 +1550,7 @@ impl Core {
                 UiMessage::error_core_operations_i_d_belongs_to_legacy_operation(),
             )
         })?;
-        Ok(self.committed(operation_id).then(|| t.receipt.clone()))
+        Ok(self.committed(operation_id)?.then(|| t.receipt.clone()))
     }
     pub fn reserve_definition_key(
         &mut self,
@@ -1553,11 +1579,11 @@ impl Core {
                 UiMessage::error_core_operations_definitions_require_canonical_node_source(),
             ));
         }
-        let owner = self.admitted_binding(&current.stamp.identity).unwrap();
+        let owner = self.admitted_binding(&current.stamp.identity)?.unwrap();
         let record = self.journal_path(operation_id, "definition-reservation");
-        if let Ok(bytes) = fs::read(&record) {
+        if let Ok(bytes) = self.backend.read_bytes(&record) {
             let old: DefinitionReservation = serde_json::from_slice(&bytes)?;
-            if old.owner_id == owner.node_id && self.committed(operation_id) {
+            if old.owner_id == owner.node_id && self.committed(operation_id)? {
                 return Ok(old.key);
             }
             if old.owner_id != owner.node_id
@@ -1573,8 +1599,9 @@ impl Core {
         }
         self.verify_snapshot(&path, base_id, Some(&current))?;
         let key = fresh();
-        let revision = self.accepted_revision(&current).unwrap_or_else(fresh);
+        let revision = self.accepted_revision(&current)?.unwrap_or_else(fresh);
         journal::private_create(
+            &self.backend,
             &record,
             &serde_json::to_vec(&DefinitionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -1617,15 +1644,12 @@ impl Core {
                 UiMessage::error_core_operations_not_canonical_owner(),
             ));
         }
-        let owner = self.admitted_binding(&node.stamp.identity).ok_or_else(|| {
-            CoreError::new(
-                "identityConflict",
-                UiMessage::error_core_operations_owner_not_admitted(),
-            )
-        })?;
+        let owner = self
+            .admitted_binding(&node.stamp.identity)?
+            .ok_or_else(|| CoreError::new("identityConflict", "Owner is not admitted"))?;
         let directory = self.journal_path("probe", "definition-reservation");
         let mut found = None;
-        for entry in fs::read_dir(directory.parent().unwrap())? {
+        for entry in self.backend.read_dir(directory.parent().unwrap())? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
@@ -1633,11 +1657,11 @@ impl Core {
                 continue;
             };
             let reservation: DefinitionReservation =
-                serde_json::from_slice(&fs::read(entry.path())?)?;
+                serde_json::from_slice(&self.backend.read_bytes(entry.path())?)?;
             if reservation.owner_id == owner.node_id
                 && reservation.source.stamp.identity == node.stamp.identity
                 && reservation.key == key
-                && !self.committed(id)
+                && !self.committed(id)?
                 && !self.resolved(id)?
             {
                 if found.is_some() {
@@ -1663,11 +1687,7 @@ impl Core {
             workspace_id: workspace.workspace_id,
             node_id: owner_id.into(),
         };
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             if self.hosted_definition_key_admitted(p, &owner, key)? {
                 return Ok(true);
             }
@@ -1716,10 +1736,9 @@ impl Core {
                     }
                 }
             }
-            let reservation =
-                fs::read(self.journal_path(&p.operation_id, "definition-reservation"))
-                    .ok()
-                    .and_then(|b| serde_json::from_slice::<DefinitionReservation>(&b).ok());
+            let reservation = self.backend.read_optional_json::<DefinitionReservation>(
+                self.journal_path(&p.operation_id, "definition-reservation"),
+            )?;
             if let Some(r) = reservation
                 && r.owner_id == owner_id
                 && r.key == key
@@ -1824,9 +1843,9 @@ impl Core {
         )?;
         if Path::new(&current.path) != path
             || self
-                .admitted_binding(&current.stamp.identity)
+                .admitted_binding(&current.stamp.identity)?
                 .is_none_or(|birth| birth.node_id != owner_id)
-            || self.accepted_revision(&current).is_none()
+            || self.accepted_revision(&current)?.is_none()
         {
             return Err(CoreError::new(
                 "revisionUnavailable",
@@ -1845,25 +1864,32 @@ impl Core {
         for p in self
             .operations
             .values()
-            .filter(|p| self.committed(&p.operation_id))
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && (p.workspace_id.as_deref() == Some(workspace_id)
+                                || (p.kind == "save"
+                                    && p.identity
+                                        .as_ref()
+                                        .map(|id| self.admitted_binding(id))
+                                        .transpose()?
+                                        .flatten()
+                                        .is_some_and(|birth| {
+                                            birth.workspace_id == workspace_id
+                                                && birth.node_id == owner_id
+                                        })))
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
         {
-            let selected = if matches!(p.kind.as_str(), "save" | "saveAs") {
-                self.validate_file_save_plan(p)
-                    .inspect_err(|error| {
-                        resource_diagnostics::error(
-                            "retained_revision.scope",
-                            &p.operation_id,
-                            error,
-                        )
-                    })
-                    .is_ok()
-                    && matches!(&p.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == workspace_id)
-            } else {
-                p.workspace_id.as_deref() == Some(workspace_id)
-            };
-            if !selected {
-                continue;
-            }
             if let Ok(bytes) = self.revision_payload(p, revision)
                 && weftext_engine::inspect_metadata(&decode(&bytes)?)
                     .id
@@ -1872,7 +1898,9 @@ impl Core {
             {
                 return Ok(bytes);
             }
-            if let Ok(bytes) = fs::read(self.journal_path(&p.operation_id, "revision-reservation"))
+            if let Ok(bytes) = self
+                .backend
+                .read_bytes(self.journal_path(&p.operation_id, "revision-reservation"))
             {
                 let r: RevisionReservation = serde_json::from_slice(&bytes)?;
                 if r.revision == revision
@@ -1901,13 +1929,25 @@ impl Core {
         role: ConfigRole,
         revision: &str,
     ) -> Result<Vec<u8>> {
+        self.backend.check_path(&self.data_dir)?;
         let root = absolute_path(root.as_ref())?;
         self.require_workspace(&root)?;
         let path = display(&root.join(role.filename()));
         for p in self
             .operations
             .values()
-            .filter(|p| self.committed(&p.operation_id) && p.workspace_id.is_some())
+            .map(|p| -> Result<_> {
+                Ok(
+                    if self.committed(&p.operation_id)? && p.workspace_id.is_some() {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
         {
             if p.transaction.as_ref().is_some_and(|t| {
                 t.request.root == display(&root)
@@ -1971,29 +2011,75 @@ impl Core {
                 )
             })
     }
+
     pub(crate) fn admitted_resource(
         &self,
         id: &str,
         workspace: &str,
         node: &str,
         identity: &FileIdentity,
-    ) -> bool {
-        self.operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .any(|p| {
-                fs::read(self.journal_path(&p.operation_id, "resource-births"))
-                    .ok()
-                    .and_then(|b| serde_json::from_slice::<Vec<ResourceBirth>>(&b).ok())
-                    .is_some_and(|bs| {
-                        bs.iter().any(|b| {
-                            b.resource_id == id
-                                && b.workspace_id == workspace
-                                && b.node_id == node
-                                && &b.identity == identity
-                        })
-                    })
-            })
+    ) -> Result<bool> {
+        for plan in self.committed_plans()? {
+            if self.resource_births(plan)?.iter().any(|birth| {
+                birth.resource_id == id
+                    && birth.workspace_id == workspace
+                    && birth.node_id == node
+                    && &birth.identity == identity
+            }) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    fn resource_births(&self, plan: &journal::Plan) -> Result<Vec<ResourceBirth>> {
+        let bytes = match self
+            .backend
+            .read_bytes(self.journal_path(&plan.operation_id, "resource-births"))
+        {
+            Ok(bytes) => bytes,
+            Err(error)
+                if error.code == "missing"
+                    && plan
+                        .transaction
+                        .as_ref()
+                        .is_none_or(|t| t.preview.resource_map.is_empty()) =>
+            {
+                return Ok(Vec::new());
+            }
+            Err(error) => return Err(error),
+        };
+        let births: Vec<ResourceBirth> = serde_json::from_slice(&bytes)?;
+        if births.iter().any(|birth| {
+            birth.resource_id.is_empty()
+                || birth.node_id.is_empty()
+                || birth.workspace_id.is_empty()
+        }) || plan
+            .transaction
+            .as_ref()
+            .is_some_and(|t| !t.preview.resource_map.is_empty() && births.is_empty())
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "Original resource birth evidence is incomplete",
+            ));
+        }
+        Ok(births)
+    }
+    pub(crate) fn resource_owner_born(
+        &self,
+        id: &str,
+        owner: &weftext_knowledge::NodeRef,
+    ) -> Result<bool> {
+        for plan in self.committed_plans()? {
+            if self.resource_births(plan)?.iter().any(|birth| {
+                birth.resource_id == id
+                    && birth.workspace_id == owner.workspace_id
+                    && birth.node_id == owner.node_id
+            }) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     pub fn managed_resource_snapshot(
         &mut self,
@@ -2017,14 +2103,11 @@ impl Core {
             })
         });
         let node = if in_trash {
-            let original = capture_optional(&path)?.ok_or_else(|| {
-                CoreError::new(
-                    "missingNode",
-                    UiMessage::error_core_operations_retained_canonical_source_missing(),
-                )
+            let original = capture_optional(&self.backend, &path)?.ok_or_else(|| {
+                CoreError::new("missingNode", "The retained canonical source is missing")
             })?;
             let birth = self
-                .admitted_binding(&original.stamp.identity)
+                .admitted_binding(&original.stamp.identity)?
                 .ok_or_else(|| {
                     CoreError::new(
                         "identityPending",
@@ -2063,7 +2146,7 @@ impl Core {
         } else {
             self.managed_node(&root, directory, false)?
         };
-        let birth = self.admitted_binding(&node.stamp.identity).unwrap();
+        let birth = self.admitted_binding(&node.stamp.identity)?.unwrap();
         let manifest_path = directory.join("weftext.resources.json");
         let manifest = self
             .read_snapshot(&root, &[display(&manifest_path)])?
@@ -2142,7 +2225,7 @@ impl Core {
                 &birth.workspace_id,
                 &birth.node_id,
                 &capture.stamp.identity,
-            );
+            )?;
             result.push(ManagedResource {
                 resource_id: id.into(),
                 resource_ref: format!("weftext-resource://{}/{id}", birth.workspace_id),
@@ -2212,7 +2295,11 @@ impl Core {
         if self.workspace(&root)?.is_some() {
             return Ok(true);
         }
-        if root.join(".weftext-format").exists() || root.join(".weftext-workspace.json").exists() {
+        if self.backend.entry_exists(root.join(".weftext-format"))?
+            || self
+                .backend
+                .entry_exists(root.join(".weftext-workspace.json"))?
+        {
             return Err(CoreError::new(
                 "unadmittedLibrary",
                 UiMessage::error_core_operations_existing_library_controls_incomplete_or_lack_their_original_private_journal(),
@@ -2236,7 +2323,11 @@ impl Core {
             ));
         }
         self.check_pending(&path)?;
-        self.verify_snapshot(&path, base_id, capture_optional(&path)?.as_ref())
+        self.verify_snapshot(
+            &path,
+            base_id,
+            capture_optional(&self.backend, &path)?.as_ref(),
+        )
     }
     pub fn take_snapshot_witness(&mut self, base_id: &str) -> Result<SnapshotWitness> {
         self.snapshots
@@ -2252,6 +2343,7 @@ impl Core {
     /// Retain the same original read evidence for another bounded consumer.
     /// This does not observe current bytes or grant a write capability.
     pub fn snapshot_witness(&self, base_id: &str) -> Result<SnapshotWitness> {
+        self.backend.check_path(&self.data_dir)?;
         self.snapshots
             .get(base_id)
             .cloned()
@@ -2279,7 +2371,11 @@ impl Core {
             ));
         }
         self.check_pending(&path)?;
-        self.verify_snapshot_binding(&path, &witness.binding, capture_optional(&path)?.as_ref())
+        self.verify_snapshot_binding(
+            &path,
+            &witness.binding,
+            capture_optional(&self.backend, &path)?.as_ref(),
+        )
     }
     /// Consume each validation's owned witnesses into one bounded exact pool.
     /// Duplicates are dropped only after their complete versions agree. An
@@ -2371,7 +2467,10 @@ impl Core {
                 UiMessage::error_core_operations_at_most2048_original_read_witnesses(),
             ));
         }
-        let owner_identity = stamp(&ParentGuard::acquire(&owner)?.open_placement_file()?)?.identity;
+        let owner_identity = {
+            let file = ParentGuard::acquire(&self.backend, &owner)?.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         let mut selected = Vec::<&SnapshotBinding>::new();
         let mut total = 0usize;
         for witness in witnesses {
@@ -2421,7 +2520,7 @@ impl Core {
         for basis in selected {
             let path = Path::new(&basis.path);
             self.check_pending(path)?;
-            let guard = ParentGuard::acquire(path)?;
+            let guard = ParentGuard::acquire(&self.backend, path)?;
             if basis
                 .captured
                 .as_ref()
@@ -2472,6 +2571,7 @@ impl Core {
         action(self)
     }
     pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         let root = absolute_path(root.as_ref())?;
         let b = self.style_bases.get(base_id).ok_or_else(|| {
             CoreError::new(
@@ -2499,8 +2599,8 @@ impl Core {
             b.owner.as_ref().unwrap_or(&b.settings),
         ] {
             self.check_pending(Path::new(&basis.path))?;
-            let current = capture_optional(Path::new(&basis.path))?;
-            let parent = ParentGuard::acquire(Path::new(&basis.path))?;
+            let current = capture_optional(&self.backend, Path::new(&basis.path))?;
+            let parent = ParentGuard::acquire(&self.backend, Path::new(&basis.path))?;
             if basis.parent != parent.directory_identity()?
                 || basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
                     != current.as_ref().map(|f| (&f.stamp, &f.bytes))
@@ -2557,6 +2657,7 @@ impl Core {
         Self::merge_dependency_witnesses(pool, incoming, true)
     }
     pub fn library_style_basis_retained_bytes(&self, base_id: &str) -> Result<usize> {
+        self.backend.check_path(&self.data_dir)?;
         let basis = self.style_bases.get(base_id).ok_or_else(|| {
             CoreError::new(
                 "basisRequired",
@@ -2575,6 +2676,7 @@ impl Core {
         root: impl AsRef<Path>,
         base_id: &str,
     ) -> Result<LibraryStyleDocument> {
+        self.backend.check_path(&self.data_dir)?;
         let root = absolute_path(root.as_ref())?;
         self.validate_library_style(&root, base_id)?;
         let b = &self.style_bases[base_id];
@@ -2720,7 +2822,7 @@ impl Core {
                     )
                 })?;
             let owner = self
-                .admitted_binding(&owner_capture.stamp.identity)
+                .admitted_binding(&owner_capture.stamp.identity)?
                 .ok_or_else(|| {
                     CoreError::new(
                         "styleSelection",
@@ -2743,7 +2845,7 @@ impl Core {
                 &workspace.workspace_id,
                 &owner.node_id,
                 &binding.stamp.identity,
-            ) {
+            )? {
                 return Err(CoreError::new(
                     "styleSelection",
                     UiMessage::error_core_operations_selected_style_resource_object_has_no_committed_core_birth_binding(),
@@ -2798,7 +2900,8 @@ impl Core {
             },
         })
     }
-    pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Option<String> {
+
+    pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
         let digest = hash(&captured.bytes);
         let mut candidates = self
             .operations
@@ -2868,15 +2971,12 @@ impl Core {
             .iter()
             .any(|(s, r)| s == sequence && r != revision)
         {
-            resource_diagnostics::branch(
-                "accepted_revision.ambiguous",
-                &resource_diagnostics::stamp_token(&captured.stamp),
-                "ambiguousRevision",
-            );
-            None
-        } else {
-            Some(revision.clone())
+            return Err(CoreError::new(
+                "identityPending",
+                "Original accepted revision facts disagree at the same durable commit sequence",
+            ));
         }
+        Ok(Some(revision.clone()))
     }
     pub fn reserve_source_revision(
         &mut self,
@@ -2907,11 +3007,11 @@ impl Core {
             ));
         }
         self.verify_snapshot(&path, base_id, Some(&current))?;
-        if let Some(revision) = self.accepted_revision(&current) {
+        if let Some(revision) = self.accepted_revision(&current)? {
             return Ok(revision);
         }
         let reservation_path = self.journal_path(operation_id, "revision-reservation");
-        if let Ok(bytes) = fs::read(&reservation_path) {
+        if let Ok(bytes) = self.backend.read_bytes(&reservation_path) {
             let old: RevisionReservation = serde_json::from_slice(&bytes)?;
             if old.path != current.path || old.stamp != current.stamp || old.bytes != current.bytes
             {
@@ -2924,6 +3024,7 @@ impl Core {
         }
         let revision = fresh();
         journal::private_create(
+            &self.backend,
             &reservation_path,
             &serde_json::to_vec(&RevisionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -2957,7 +3058,7 @@ impl Core {
         basis: &SnapshotBinding,
         current: Option<&CapturedFile>,
     ) -> Result<()> {
-        let parent_guard = ParentGuard::acquire(path)?;
+        let parent_guard = ParentGuard::acquire(&self.backend, path)?;
         if basis.path != display(path)
             || basis.parent != parent_guard.directory_identity()?
             || basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
@@ -3089,7 +3190,7 @@ impl Core {
                 ));
             }
             self.check_pending(&path)?;
-            let guard = ParentGuard::acquire(&path)?;
+            let guard = ParentGuard::acquire(&self.backend, &path)?;
             let handle = match guard.open_file(false, false) {
                 Ok(f) => Some(f),
                 Err(e) if e.code == "missing" => None,
@@ -3122,9 +3223,15 @@ impl Core {
             }
             let birth = captured
                 .as_ref()
-                .and_then(|f| self.admitted_binding(&f.stamp.identity));
+                .map(|f| self.admitted_binding(&f.stamp.identity))
+                .transpose()?
+                .flatten();
             let base_id = fresh();
-            let revision = captured.as_ref().and_then(|f| self.accepted_revision(f));
+            let revision = captured
+                .as_ref()
+                .map(|f| self.accepted_revision(f))
+                .transpose()?
+                .flatten();
             output.push(SnapshotFile {
                 path: display(path),
                 bytes: captured.as_ref().map(|f| f.bytes.clone()),
@@ -3160,13 +3267,11 @@ impl Core {
         let mut files = Vec::new();
         for entry in self.original_trash_roots(root)? {
             let path = entry.path;
-            match fs::symlink_metadata(&path) {
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                result => {
-                    result?;
-                }
+            if !self.backend.entry_exists(&path)? {
+                continue;
             }
-            let guard = ParentGuard::acquire(&Path::new(&path).join(".trash-membership"))?;
+            let guard =
+                ParentGuard::acquire(&self.backend, &Path::new(&path).join(".trash-membership"))?;
             if guard.directory_identity()? != entry.identity {
                 return Err(CoreError::new(
                     "scopeChanged",
@@ -3175,9 +3280,15 @@ impl Core {
             }
             let mut captured = Vec::new();
             let mut directories = Vec::new();
-            snapshot_tree(Path::new(&path), &mut captured, &mut directories, false)?;
+            snapshot_tree(
+                &self.backend,
+                Path::new(&path),
+                &mut captured,
+                &mut directories,
+                false,
+            )?;
             for file in captured {
-                if self.admitted_binding(&file.stamp.identity).is_some()
+                if self.admitted_binding(&file.stamp.identity)?.is_some()
                     && !files
                         .iter()
                         .any(|old: &CapturedFile| locator_equal(&old.path, &file.path))
@@ -3204,11 +3315,7 @@ impl Core {
         // private authority, not all raw directories that resemble Nodes.
         let mut expected = BTreeMap::new();
         let mut trashed = BTreeSet::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             for b in self.read_births(&p.operation_id)? {
                 if b.workspace_id == workspace.workspace_id {
                     expected.insert(b.node_id.clone(), b);
@@ -3216,7 +3323,7 @@ impl Core {
             }
         }
         for file in self.admitted_trash_files(&root)? {
-            if let Some(birth) = self.admitted_binding(&file.stamp.identity)
+            if let Some(birth) = self.admitted_binding(&file.stamp.identity)?
                 && birth.workspace_id == workspace.workspace_id
             {
                 trashed.insert(birth.node_id);
@@ -3253,7 +3360,7 @@ impl Core {
                 continue;
             }
             let candidate = candidates[0];
-            let observed = capture_optional(Path::new(&candidate.path))?;
+            let observed = capture_optional(&self.backend, Path::new(&candidate.path))?;
             if observed
                 .as_ref()
                 .is_none_or(|f| f.stamp.identity != birth.identity)
@@ -3412,7 +3519,7 @@ impl Core {
         let mut complete = true;
         let mut entries = Vec::new();
         for file in self.admitted_trash_files(&root)? {
-            let Some(birth) = self.admitted_binding(&file.stamp.identity) else {
+            let Some(birth) = self.admitted_binding(&file.stamp.identity)? else {
                 continue;
             };
             if birth.workspace_id != workspace.workspace_id {
@@ -3597,7 +3704,7 @@ impl Core {
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?
             .clone();
         self.check_pending(&session.path)?;
-        let main_guard = ParentGuard::acquire(&session.path)?;
+        let main_guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let main = main_guard.open_file(false, false)?;
         if stamp(&main)?.identity != session.stamp.identity {
             return Err(CoreError::new(
@@ -3685,7 +3792,7 @@ impl Core {
         let mut handles = Vec::new();
         for file in captured {
             self.check_pending(Path::new(&file.path))?;
-            let guard = ParentGuard::acquire(Path::new(&file.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&file.path))?;
             let mut handle = guard.open_file(false, false)?;
             if stamp(&handle)? != file.stamp
                 || read_blob(&mut handle)? != file.bytes
@@ -3700,8 +3807,10 @@ impl Core {
             handles.push(handle);
         }
         for directory in directories {
-            let guard =
-                ParentGuard::acquire(&Path::new(&directory.path).join(".compile-membership"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(&directory.path).join(".compile-membership"),
+            )?;
             let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
             if !complete
                 || guard.directory_identity()? != directory.identity
@@ -3751,8 +3860,8 @@ impl Core {
                 ));
             }
             if current.is_none() {
-                let guard = ParentGuard::acquire(Path::new(&basis.path))?;
-                ensure_absent(Path::new(&basis.path))?;
+                let guard = ParentGuard::acquire(&self.backend, Path::new(&basis.path))?;
+                ensure_absent(&self.backend, Path::new(&basis.path))?;
                 if guard.directory_identity()? != basis.parent {
                     return Err(CoreError::new(
                         "scopeChanged",
@@ -3837,7 +3946,9 @@ impl Core {
             let owner = captured
                 .iter()
                 .find(|f| locator_equal(&f.path, &display(&root.join("Styles/Styles.typ"))))
-                .and_then(|f| self.admitted_binding(&f.stamp.identity))
+                .map(|f| self.admitted_binding(&f.stamp.identity))
+                .transpose()?
+                .flatten()
                 .ok_or_else(|| {
                     CoreError::new(
                         "styleSelection",
@@ -3849,7 +3960,7 @@ impl Core {
                 workspace_id,
                 &owner.node_id,
                 &module.stamp.identity,
-            ) {
+            )? {
                 return Err(CoreError::new(
                     "styleSelection",
                     UiMessage::error_core_operations_selected_style_not_admitted_resource_object(),
@@ -3879,7 +3990,7 @@ impl Core {
         for f in captured {
             let path = Path::new(&f.path);
             let base_id = fresh();
-            let parent = ParentGuard::acquire(path)?.directory_identity()?;
+            let parent = ParentGuard::acquire(&self.backend, path)?.directory_identity()?;
             files.insert(
                 path.strip_prefix(root)
                     .map_err(|_| {
@@ -3921,6 +4032,7 @@ impl Core {
         operation_id: &str,
         canonical_author_intent: &serde_json::Value,
     ) -> Result<Option<OperationPreview>> {
+        self.backend.check_path(&self.data_dir)?;
         valid_operation_id(operation_id)?;
         let fingerprint = hash(&canonical_json_bytes(canonical_author_intent)?);
         if let Some(p) = self.operations.get(operation_id) {
@@ -4154,7 +4266,7 @@ impl Core {
                 ));
             }
             self.check_pending(Path::new(&basis.path))?;
-            let current = capture_optional(Path::new(&basis.path))?;
+            let current = capture_optional(&self.backend, Path::new(&basis.path))?;
             self.verify_snapshot_binding(Path::new(&basis.path), &basis, current.as_ref())?;
             if let Some(f) = current {
                 files.push(f);
@@ -4188,7 +4300,7 @@ impl Core {
                         UiMessage::error_core_operations_frozen_cut_basis_unavailable(),
                     )
                 })?;
-                let current = capture_optional(Path::new(&basis.path))?;
+                let current = capture_optional(&self.backend, Path::new(&basis.path))?;
                 self.verify_snapshot(Path::new(&basis.path), id, current.as_ref())?;
                 if let Some(f) = current {
                     files.push(f);
@@ -4392,7 +4504,7 @@ impl Core {
                 let parent = absolute_path(Path::new(parent))?;
                 self.owned_parent(&root, &parent)?;
                 let target = parent.join(name);
-                ensure_absent(&target)?;
+                ensure_absent(&self.backend, &target)?;
                 let node_id = fresh();
                 let source = match source {
                     None => default_note_source(&node_id, name)?,
@@ -4464,7 +4576,7 @@ impl Core {
                             UiMessage::error_core_operations_file_exceeds64_mi_b(),
                         ));
                     }
-                    let current = capture_optional(&path)?;
+                    let current = capture_optional(&self.backend, &path)?;
                     if current.as_ref().map(|f| &f.bytes) != c.before.as_ref() {
                         return Err(CoreError::new(
                             "conflict",
@@ -4476,18 +4588,21 @@ impl Core {
                     let revision = current
                         .as_ref()
                         .filter(|f| f.bytes == c.after)
-                        .and_then(|f| self.accepted_revision(f));
-                    let reservation =
-                        fs::read(self.journal_path(&request.operation_id, "revision-reservation"))
-                            .ok()
-                            .and_then(|b| serde_json::from_slice::<RevisionReservation>(&b).ok())
-                            .filter(|r| {
-                                r.path == c.path
-                                    && current
-                                        .as_ref()
-                                        .is_some_and(|f| f.stamp == r.stamp && f.bytes == r.bytes)
-                                    && r.bytes == c.after
-                            });
+                        .map(|f| self.accepted_revision(f))
+                        .transpose()?
+                        .flatten();
+                    let reservation = self
+                        .backend
+                        .read_optional_json::<RevisionReservation>(
+                            self.journal_path(&request.operation_id, "revision-reservation"),
+                        )?
+                        .filter(|r| {
+                            r.path == c.path
+                                && current
+                                    .as_ref()
+                                    .is_some_and(|f| f.stamp == r.stamp && f.bytes == r.bytes)
+                                && r.bytes == c.after
+                        });
                     preview.revisions.insert(
                         c.path.clone(),
                         revision
@@ -4500,14 +4615,22 @@ impl Core {
                         files.push(f);
                     }
                     let action = if c.before.as_ref() == Some(&c.after) {
-                        if preview.revisions.get(&c.path).is_some_and(|r| {
-                            files
-                                .iter()
-                                .find(|f| f.path == c.path)
-                                .and_then(|f| self.accepted_revision(f))
-                                .as_ref()
-                                != Some(r)
-                        }) {
+                        if preview
+                            .revisions
+                            .get(&c.path)
+                            .map(|r| -> Result<bool> {
+                                Ok(files
+                                    .iter()
+                                    .find(|f| f.path == c.path)
+                                    .map(|f| self.accepted_revision(f))
+                                    .transpose()?
+                                    .flatten()
+                                    .as_ref()
+                                    != Some(r))
+                            })
+                            .transpose()?
+                            .unwrap_or(false)
+                        {
                             "admitObservedSource"
                         } else {
                             "readDependency"
@@ -4539,7 +4662,7 @@ impl Core {
                 self.owned_parent(&root, &parent)?;
                 self.check_subtree_boundary(&root, &source)?;
                 let target = parent.join(name);
-                ensure_absent(&target)?;
+                ensure_absent(&self.backend, &target)?;
                 let mut members = Vec::new();
                 if let Some(tree) = tree {
                     if !crate::history::history_relative_path(&requested_source, &tree.source)
@@ -4553,14 +4676,20 @@ impl Core {
                     members.extend(tree.files.clone());
                     directories.extend(tree.directories.clone());
                 } else {
-                    snapshot_tree(&source, &mut members, &mut directories, false)?;
+                    snapshot_tree(
+                        &self.backend,
+                        &source,
+                        &mut members,
+                        &mut directories,
+                        false,
+                    )?;
                 }
                 files.extend(members.clone());
                 let schema_path = root.join(ConfigRole::Schema.filename());
                 let schema = if let Some(tree) = tree {
                     tree.schema.binding.captured.clone()
                 } else {
-                    capture_optional(&schema_path)?
+                    capture_optional(&self.backend, &schema_path)?
                 };
                 let mut context = members.clone();
                 for witness in transfer_witnesses {
@@ -4592,7 +4721,8 @@ impl Core {
                 } else {
                     absent_dependencies.push(AbsentDependency {
                         path: display(&schema_path),
-                        parent: ParentGuard::acquire(&schema_path)?.directory_identity()?,
+                        parent: ParentGuard::acquire(&self.backend, &schema_path)?
+                            .directory_identity()?,
                     });
                 }
                 mutation
@@ -4636,7 +4766,7 @@ impl Core {
                 self.owned_parent(&root, &parent)?;
                 self.check_subtree_boundary(&root, source)?;
                 let target = parent.join(name);
-                ensure_absent(&target)?;
+                ensure_absent(&self.backend, &target)?;
                 let mut originals = Vec::new();
                 let mut original_dirs = Vec::new();
                 if let Some(tree) = tree {
@@ -4651,11 +4781,17 @@ impl Core {
                     originals.extend(tree.files.clone());
                     original_dirs.extend(tree.directories.clone());
                 } else {
-                    snapshot_tree(source, &mut originals, &mut original_dirs, false)?;
+                    snapshot_tree(
+                        &self.backend,
+                        source,
+                        &mut originals,
+                        &mut original_dirs,
+                        false,
+                    )?;
                 }
                 let mut instantiated = originals.clone();
                 let owner = self
-                    .admitted_binding(&original.stamp.identity)
+                    .admitted_binding(&original.stamp.identity)?
                     .ok_or_else(|| {
                         CoreError::new(
                             "templateSource",
@@ -4671,7 +4807,7 @@ impl Core {
                 let schema = if let Some(tree) = tree {
                     tree.schema.binding.captured.clone()
                 } else {
-                    capture_optional(&schema_path)?
+                    capture_optional(&self.backend, &schema_path)?
                 };
                 let mut context = instantiated.clone();
                 for witness in transfer_witnesses {
@@ -4717,7 +4853,8 @@ impl Core {
                 } else {
                     absent_dependencies.push(AbsentDependency {
                         path: display(&schema_path),
-                        parent: ParentGuard::acquire(&schema_path)?.directory_identity()?,
+                        parent: ParentGuard::acquire(&self.backend, &schema_path)?
+                            .directory_identity()?,
                     });
                 }
                 mutation
@@ -4734,8 +4871,8 @@ impl Core {
                         UiMessage::error_core_operations_backup_destination_must_outside_library_and_private_data_directory(),
                     ));
                 }
-                ensure_absent(&target)?;
-                snapshot_tree(&root, &mut files, &mut directories, false)?;
+                ensure_absent(&self.backend, &target)?;
+                snapshot_tree(&self.backend, &root, &mut files, &mut directories, false)?;
                 let library_count = files.len();
                 let library_dirs = directories.len();
                 let private = self.capture_owner_backup_private(
@@ -4871,7 +5008,7 @@ impl Core {
                     basis.manifest.as_ref().unwrap_or(&basis.settings),
                     basis.owner.as_ref().unwrap_or(&basis.settings),
                 ] {
-                    let current = capture_optional(Path::new(&b.path))?;
+                    let current = capture_optional(&self.backend, Path::new(&b.path))?;
                     if b.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
                         != current.as_ref().map(|f| (&f.stamp, &f.bytes))
                     {
@@ -4947,7 +5084,7 @@ impl Core {
                         ],
                     }
                 } else {
-                    ensure_absent(&target)?;
+                    ensure_absent(&self.backend, &target)?;
                     self.owned_parent(&root, &root)?;
                     let node_id = fresh();
                     let node_path = target.join("Styles.typ");
@@ -5030,7 +5167,7 @@ impl Core {
                         UiMessage::error_core_operations_select_canonical_admitted_node_source(),
                     ));
                 }
-                let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
+                let owner = self.admitted_binding(&canonical.stamp.identity)?.unwrap();
                 let target = directory.join(name);
                 let manifest_path = directory.join("weftext.resources.json");
                 if target == node_path
@@ -5043,7 +5180,7 @@ impl Core {
                         ),
                     ));
                 }
-                let manifest = capture_optional(&manifest_path)?;
+                let manifest = capture_optional(&self.backend, &manifest_path)?;
                 self.verify_snapshot(&manifest_path, manifest_base_id, manifest.as_ref())?;
                 if manifest
                     .as_ref()
@@ -5057,7 +5194,7 @@ impl Core {
                 if manifest.is_none() {
                     self.require_resource_collection_uninitialized(&owner)?;
                 }
-                let current = capture_optional(&target)?;
+                let current = capture_optional(&self.backend, &target)?;
                 self.verify_snapshot(&target, resource_base_id, current.as_ref())?;
                 if current.is_some() {
                     return Err(CoreError::new(
@@ -5227,7 +5364,7 @@ impl Core {
         let mut identities = BTreeMap::new();
         for file in files {
             let identity = &file.stamp.identity;
-            let key = (identity.volume, identity.index, identity.created);
+            let key = identity.clone();
             if let Some(&index) = identities.get(&key) {
                 let original: &mut CapturedFile = &mut unique[index];
                 // Dedup only a proven spelling alias of the same directory
@@ -5241,6 +5378,7 @@ impl Core {
                     )
                     .is_some_and(|relative| relative.as_os_str().is_empty())
                     || !backend::same_directory(
+                        &self.backend,
                         Path::new(&file.path).parent().unwrap(),
                         Path::new(&original.path).parent().unwrap(),
                     )?
@@ -5274,13 +5412,13 @@ impl Core {
         for c in writes {
             write_parents.push((
                 c.path.clone(),
-                ParentGuard::acquire(Path::new(&c.path))?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, Path::new(&c.path))?.directory_identity()?,
             ));
         }
         if let Mutation::CreateTree { target, .. } = &mutation {
             write_parents.push((
                 target.clone(),
-                ParentGuard::acquire(Path::new(target))?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, Path::new(target))?.directory_identity()?,
             ));
         }
         if let Some(destination) = destination_slot {
@@ -5304,6 +5442,7 @@ impl Core {
         Ok(preview)
     }
     pub fn operation_details(&self, operation_id: &str) -> Result<OperationPreview> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_sync_operation_access(operation_id)?;
         let p = self
             .operations
@@ -5316,11 +5455,14 @@ impl Core {
                 )
             })?;
         let mut preview = p.preview.clone();
-        preview.status = if self.committed(operation_id) {
+        preview.status = if self.committed(operation_id)? {
             "committed"
         } else if self.resolved(operation_id)? {
             "resolved"
-        } else if self.journal_path(operation_id, "install").exists() {
+        } else if self
+            .backend
+            .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             "recoveryPending"
         } else {
             "prepared"
@@ -5335,31 +5477,34 @@ impl Core {
     ) -> Result<OperationReceipt> {
         // Reading a damaged decision must fail before a mutation, never become
         // a guessed absence inside the error-classification closure below.
-        let resolved = if self.committed(operation_id) {
+        let resolved = if self.committed(operation_id)? {
             false
         } else {
             self.resolved(operation_id)?
         };
-        let result = self.execute_operation_inner(operation_id, plan_id);
-        result.map_err(|error| {
-            if self.journal_path(operation_id, "install").exists()
-                && !self.committed(operation_id)
-                && !resolved
-            {
-                CoreError::new(
-                    "recoveryPending",
-                    UiMessage::error_core_recovery_installation_unresolved(
-                        weftext_messages::params::ErrorCoreRecoveryInstallationUnresolved {
-                            operation_id: operation_id.into(),
-                        },
-                    ),
-                )
-                .caused_by(error)
-            } else {
-                error
+        match self.execute_operation_inner(operation_id, plan_id) {
+            Ok(receipt) => Ok(receipt),
+            Err(error) => {
+                let started = self
+                    .backend
+                    .entry_exists(self.journal_path(operation_id, "install"))?;
+                if started && !self.committed(operation_id)? && !resolved {
+                    Err(CoreError::new(
+                        "recoveryPending",
+                        UiMessage::error_core_recovery_installation_unresolved(
+                            weftext_messages::params::ErrorCoreRecoveryInstallationUnresolved {
+                                operation_id: operation_id.into(),
+                            },
+                        ),
+                    )
+                    .caused_by(error))
+                } else {
+                    Err(error)
+                }
             }
-        })
+        }
     }
+
     fn execute_operation_inner(
         &mut self,
         operation_id: &str,
@@ -5393,10 +5538,14 @@ impl Core {
                 UiMessage::error_core_operations_execute_exact_reviewed_frozen_plan_i_d(),
             ));
         }
-        if self.committed(operation_id) {
+        if self.committed(operation_id)? {
             return Ok(t.receipt.clone());
         }
-        if self.resolved(operation_id)? || self.journal_path(operation_id, "install").exists() {
+        if self.resolved(operation_id)?
+            || self
+                .backend
+                .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_operations_original_operation_may_have_effects_inspect_it_and_do_not_execute_again(),
@@ -5407,7 +5556,7 @@ impl Core {
         let root = Path::new(&t.request.root);
         if let OperationIntent::CloneSync { identity, .. } = &t.request.intent
             && self
-                .sync_setups()
+                .sync_setups()?
                 .iter()
                 .any(|s| s.identity.workspace_id == identity.workspace_id)
         {
@@ -5508,7 +5657,7 @@ impl Core {
         let mut observations = Vec::new();
         let _private_capture = self.validate_owner_backup_private(&plan, false)?;
         for (path, parent) in &t.write_parents {
-            let guard = ParentGuard::acquire(Path::new(path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(path))?;
             if guard.directory_identity()? != *parent {
                 return Err(CoreError::new(
                     "scopeChanged",
@@ -5518,7 +5667,7 @@ impl Core {
             guards.push(guard);
         }
         for absent in &t.absent_dependencies {
-            let guard = ParentGuard::acquire(Path::new(&absent.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&absent.path))?;
             if guard.directory_identity()? != absent.parent {
                 return Err(CoreError::new(
                     "scopeChanged",
@@ -5542,7 +5691,7 @@ impl Core {
                 if !matches!(t.request.intent, OperationIntent::BackupLibrary { .. }) {
                     self.check_pending(Path::new(&f.path))?;
                 }
-                let guard = ParentGuard::acquire(Path::new(&f.path))?;
+                let guard = ParentGuard::acquire(&self.backend, Path::new(&f.path))?;
                 let write = matches!(&t.mutation, Mutation::Update {files} if files.iter().any(|c|c.path==f.path && c.before.as_ref()!=Some(&c.after)))
                     || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path && c.before.as_ref()!=Some(&c.after)));
                 let mut handle = if !write
@@ -5563,8 +5712,10 @@ impl Core {
                 handles.push(handle);
             }
             for d in &t.directories {
-                let guard =
-                    ParentGuard::acquire(&Path::new(&d.path).join(".snapshot-prospective"))?;
+                let guard = ParentGuard::acquire(
+                    &self.backend,
+                    &Path::new(&d.path).join(".snapshot-prospective"),
+                )?;
                 let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
                 let names = sorted_entries(entries, Path::new(&d.path));
                 if !complete
@@ -5623,7 +5774,7 @@ impl Core {
                     .filter(|f| !Path::new(&f.path).starts_with(source))
                 {
                     self.check_pending(Path::new(&file.path))?;
-                    let guard = ParentGuard::acquire(Path::new(&file.path))?;
+                    let guard = ParentGuard::acquire(&self.backend, Path::new(&file.path))?;
                     let write = updates
                         .iter()
                         .any(|c| c.path == file.path && c.before.as_ref() != Some(&c.after));
@@ -5647,6 +5798,7 @@ impl Core {
                         self.check_pending(Path::new(&file.path))?;
                     }
                     let mut preliminary = NamespaceGuard::acquire(
+                        &self.backend,
                         source,
                         if *create_trash_parent {
                             root
@@ -5664,26 +5816,27 @@ impl Core {
                     }
                     let held = validate_relocation_tree(&mut preliminary, t, false)?;
                     drop(held);
-                    validate_relocation_creations(&mut preliminary, t)?;
+                    validate_relocation_creations(&self.backend, &mut preliminary, t)?;
                 }
                 let mut trash_guard = None;
                 let mut trash_directory = None;
                 if *create_trash_parent {
-                    let guard = ParentGuard::acquire(target.parent().unwrap())?;
+                    let guard = ParentGuard::acquire(&self.backend, target.parent().unwrap())?;
                     if guard.directory_identity()? != *target_parent_identity {
                         return Err(CoreError::new(
                             "conflict",
                             UiMessage::error_core_operations_trash_parent_closure_changed(),
                         ));
                     }
-                    ensure_absent(target.parent().unwrap())?;
+                    ensure_absent(&self.backend, target.parent().unwrap())?;
                     self.install_record(&plan)?;
                     let directory = guard.create_directory()?;
                     self.record_materialized(operation_id, target.parent().unwrap(), &directory)?;
                     trash_directory = Some(directory);
                     trash_guard = Some(guard);
                 }
-                let mut namespace = NamespaceGuard::acquire(source, target.parent().unwrap())?;
+                let mut namespace =
+                    NamespaceGuard::acquire(&self.backend, source, target.parent().unwrap())?;
                 if namespace.source_identity()? != *source_identity
                     || (!create_trash_parent
                         && namespace.parent_identity()? != *target_parent_identity)
@@ -5725,7 +5878,7 @@ impl Core {
                     self.commit(&plan)?;
                     return Ok(t.receipt.clone());
                 }
-                ensure_absent(target)?;
+                ensure_absent(&self.backend, target)?;
                 if !create_trash_parent {
                     self.install_record(&plan)?;
                 }
@@ -5768,7 +5921,7 @@ impl Core {
                         let file = if let Ok(relative) = path.strip_prefix(target) {
                             namespace.open_source_output(relative, true, true)?
                         } else {
-                            let guard = ParentGuard::acquire(path)?;
+                            let guard = ParentGuard::acquire(&self.backend, path)?;
                             let file = guard.open_file(true, true)?;
                             guards.push(guard);
                             file
@@ -5833,8 +5986,8 @@ impl Core {
             Mutation::Update { files: changes } => {
                 let mut created = Vec::new();
                 for c in changes.iter().filter(|c| c.before.is_none()) {
-                    let guard = ParentGuard::acquire(Path::new(&c.path))?;
-                    ensure_absent(Path::new(&c.path))?;
+                    let guard = ParentGuard::acquire(&self.backend, Path::new(&c.path))?;
+                    ensure_absent(&self.backend, Path::new(&c.path))?;
                     created.push((guard, c));
                 }
                 self.install_record(&plan)?;
@@ -5884,11 +6037,13 @@ impl Core {
                 }
                 if !resource_births.is_empty() {
                     journal::private_create(
+                        &self.backend,
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
                 journal::private_create(
+                    &self.backend,
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -5926,20 +6081,20 @@ impl Core {
                 } else {
                     PathBuf::from(target)
                 };
-                let guard = ParentGuard::acquire(&guard_path)?;
+                let guard = ParentGuard::acquire(&self.backend, &guard_path)?;
                 if !existing_target {
-                    ensure_absent(Path::new(target))?;
+                    ensure_absent(&self.backend, Path::new(target))?;
                 }
                 for relative in directories {
-                    ensure_absent(&Path::new(target).join(relative))?;
+                    ensure_absent(&self.backend, &Path::new(target).join(relative))?;
                 }
                 for c in output {
-                    ensure_absent(Path::new(&c.path))?;
+                    ensure_absent(&self.backend, Path::new(&c.path))?;
                 }
                 let mut update_creates = Vec::new();
                 for c in updates.iter().filter(|c| c.before.is_none()) {
-                    let g = ParentGuard::acquire(Path::new(&c.path))?;
-                    ensure_absent(Path::new(&c.path))?;
+                    let g = ParentGuard::acquire(&self.backend, Path::new(&c.path))?;
+                    ensure_absent(&self.backend, Path::new(&c.path))?;
                     update_creates.push((g, c));
                 }
                 self.install_record(&plan)?;
@@ -5965,8 +6120,10 @@ impl Core {
                             relative.file_name().unwrap().to_str().unwrap(),
                         )?
                     } else if *existing_target {
-                        let parent_guard =
-                            ParentGuard::acquire(&Path::new(target).join(&relative))?;
+                        let parent_guard = ParentGuard::acquire(
+                            &self.backend,
+                            &Path::new(target).join(&relative),
+                        )?;
                         let handle = parent_guard.create_directory()?;
                         guards.push(parent_guard);
                         handle
@@ -6000,7 +6157,7 @@ impl Core {
                             relative.file_name().unwrap().to_str().unwrap(),
                         )?
                     } else if *existing_target {
-                        let parent_guard = ParentGuard::acquire(Path::new(&c.path))?;
+                        let parent_guard = ParentGuard::acquire(&self.backend, Path::new(&c.path))?;
                         let file = parent_guard.open_file(true, true)?;
                         guards.push(parent_guard);
                         file
@@ -6094,17 +6251,20 @@ impl Core {
                 }
                 if !new_births.is_empty() {
                     journal::private_create(
+                        &self.backend,
                         &self.journal_path(operation_id, "births"),
                         &serde_json::to_vec(&new_births)?,
                     )?;
                 }
                 if !resource_births.is_empty() {
                     journal::private_create(
+                        &self.backend,
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
                 journal::private_create(
+                    &self.backend,
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -6120,6 +6280,7 @@ impl Core {
     }
     pub(crate) fn install_record(&self, plan: &journal::Plan) -> Result<()> {
         journal::private_create(
+            &self.backend,
             &self.journal_path(&plan.operation_id, "install"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),
@@ -6148,7 +6309,7 @@ impl Core {
             ));
         }
         self.check_discovery_boundary(root, parent)?;
-        let _ = ParentGuard::acquire(&parent.join(".parent-prospective"))?;
+        let _ = ParentGuard::acquire(&self.backend, &parent.join(".parent-prospective"))?;
         Ok(())
     }
     pub(crate) fn managed_node(
@@ -6168,19 +6329,17 @@ impl Core {
         }
         let name = node_name(directory)?;
         let path = directory.join(format!("{name}.typ"));
-        let file = capture_optional(&path)?.ok_or_else(|| {
-            CoreError::new(
-                "missingNode",
-                UiMessage::error_core_operations_canonical_source_missing(),
-            )
-        })?;
+        let file = capture_optional(&self.backend, &path)?
+            .ok_or_else(|| CoreError::new("missingNode", "The canonical source is missing"))?;
         self.check_pending(&path)?;
-        let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
-            CoreError::new(
-                "identityConflict",
-                UiMessage::error_core_operations_source_object_has_no_committed_admission(),
-            )
-        })?;
+        let birth = self
+            .admitted_binding(&file.stamp.identity)?
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityConflict",
+                    "Source object has no committed admission",
+                )
+            })?;
         let workspace = self.require_workspace(root)?;
         if birth.workspace_id != workspace.workspace_id
             || weftext_engine::inspect(&decode(&file.bytes)?).id.as_ref() != Some(&birth.node_id)
@@ -6244,12 +6403,14 @@ impl Core {
             self.managed_node(root, source, false)?
         };
         self.check_pending(Path::new(&file.path))?;
-        let birth = self.admitted_binding(&file.stamp.identity).ok_or_else(|| {
-            CoreError::new(
-                "identityConflict",
-                UiMessage::error_core_operations_original_admitted_node_object_was_replaced(),
-            )
-        })?;
+        let birth = self
+            .admitted_binding(&file.stamp.identity)?
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityConflict",
+                    "Original admitted node object was replaced",
+                )
+            })?;
         let workspace = self.require_workspace(root)?;
         if birth.workspace_id != workspace.workspace_id
             || weftext_engine::inspect(&decode(&file.bytes)?).id.as_ref() != Some(&birth.node_id)
@@ -6268,8 +6429,13 @@ impl Core {
         }
         let create_trash_parent = target
             .parent()
-            .is_some_and(|p| p == root.join(".weftext-trash") && !p.exists());
+            .map(|p| -> Result<bool> {
+                Ok(p == root.join(".weftext-trash") && !self.backend.entry_exists(p)?)
+            })
+            .transpose()?
+            .unwrap_or(false);
         let mut namespace = NamespaceGuard::acquire(
+            &self.backend,
             source,
             if create_trash_parent {
                 root
@@ -6291,10 +6457,13 @@ impl Core {
             format!("{}.typ", node_name(target)?)
         };
         if source != target {
-            qualify_relocation_target(target, occupant)?;
+            qualify_relocation_target(&self.backend, target, occupant)?;
         }
-        if old_leaf != new_leaf {
-            ensure_absent(&source.join(&new_leaf))?;
+        if old_leaf != new_leaf && namespace.source_entry_exists(Path::new(&new_leaf))? {
+            return Err(CoreError::new(
+                "exists",
+                "Create-only target is occupied; no overwrite is allowed",
+            ));
         }
         let source_identity = namespace.source_identity()?;
         if trash_origin
@@ -6363,11 +6532,7 @@ impl Core {
     ) -> Result<Vec<RelocationMember>> {
         let mut candidates = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             for birth in self
                 .read_births(&p.operation_id)?
                 .into_iter()
@@ -6492,8 +6657,8 @@ impl Core {
         } else if name == "weftext.annotations.json" || name == "weftext.resources.json" {
             let _: serde_json::Value = serde_json::from_slice(after)?;
         } else {
-            let manifest =
-                capture_optional(&parent.join("weftext.resources.json"))?.ok_or_else(|| {
+            let manifest = capture_optional(&self.backend, &parent.join("weftext.resources.json"))?
+                .ok_or_else(|| {
                     CoreError::new(
                         "unsupportedRole",
                         UiMessage::error_core_operations_resource_updates_require_existing_owned_resource_manifest(),
@@ -6520,13 +6685,10 @@ impl Core {
                     UiMessage::error_core_operations_file_not_registered_as_node_owned_resource(),
                 ));
             }
-            let file = capture_optional(path)?.ok_or_else(|| {
-                CoreError::new(
-                    "resourceMissing",
-                    UiMessage::error_core_operations_dependency_resource_missing(),
-                )
+            let file = capture_optional(&self.backend, path)?.ok_or_else(|| {
+                CoreError::new("resourceMissing", "A dependency resource is missing")
             })?;
-            let owner = self.admitted_binding(&canonical.stamp.identity).unwrap();
+            let owner = self.admitted_binding(&canonical.stamp.identity)?.unwrap();
             let resource_id = value["resources"]
                 .as_array()
                 .unwrap()
@@ -6541,7 +6703,7 @@ impl Core {
                     &owner.workspace_id,
                     &owner.node_id,
                     &file.stamp.identity,
-                )
+                )?
             {
                 return Err(CoreError::new(
                     "unsupportedRole",
@@ -6624,16 +6786,12 @@ impl Core {
             } else if let Some(f) = files.iter().find(|f| f.path == item.path) {
                 f.clone()
             } else {
-                capture_optional(Path::new(&item.path))?.ok_or_else(|| {
-                    CoreError::new(
-                        "scopeChanged",
-                        UiMessage::error_core_operations_link_target_disappeared(),
-                    )
-                })?
+                capture_optional(&self.backend, Path::new(&item.path))?
+                    .ok_or_else(|| CoreError::new("scopeChanged", "Link target disappeared"))?
             };
             let source_text = decode(&observed.bytes)?;
             let info = weftext_engine::inspect_metadata(&source_text);
-            let revision = self.accepted_revision(&observed).unwrap_or_default();
+            let revision = self.accepted_revision(&observed)?.unwrap_or_default();
             nodes.push(knowledge::NodeSnapshot {
                 owner: owner.clone(),
                 path: file_url(Path::new(&item.path))?,
@@ -6749,7 +6907,7 @@ impl Core {
                         &workspace.workspace_id,
                         &owner.node_id,
                         &resource.stamp.identity,
-                    ) {
+                    )? {
                         return Err(CoreError::new(
                             "resourceUnadmitted",
                             UiMessage::error_core_operations_manifest_u_u_i_d_alone_does_not_establish_resource_identity(),
@@ -6777,7 +6935,7 @@ impl Core {
                     resources.push(knowledge::ResourceSnapshot {
                         key: old_ref,
                         path: file_url(&resource_path)?,
-                        revision_id: self.accepted_revision(resource).unwrap_or_default(),
+                        revision_id: self.accepted_revision(resource)?.unwrap_or_default(),
                     });
                     record["resourceId"] = new_id.into();
                 }
@@ -7046,7 +7204,7 @@ fn copy_path(source: &Path, target: &Path, path: &Path) -> Result<PathBuf> {
         Ok(target.join(relative))
     }
 }
-pub(crate) fn read_blob(file: &mut File) -> Result<Vec<u8>> {
+pub(crate) fn read_blob(file: &mut backend::BoundFile) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     file.seek(SeekFrom::Start(0))?;
     file.take(MAX_OPERATION_BYTES as u64 + 1)
@@ -7059,7 +7217,7 @@ pub(crate) fn read_blob(file: &mut File) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
-pub(crate) fn write_blob(file: &mut File, bytes: &[u8]) -> Result<()> {
+pub(crate) fn write_blob(file: &mut backend::BoundFile, bytes: &[u8]) -> Result<()> {
     file.seek(SeekFrom::Start(0))?;
     file.write_all(bytes)?;
     file.set_len(bytes.len() as u64)?;
@@ -7092,9 +7250,13 @@ pub(crate) fn node_name(directory: &Path) -> Result<String> {
     valid_name(name)?;
     Ok(name.into())
 }
-fn qualify_relocation_target(path: &Path, occupant: Option<&FileIdentity>) -> Result<()> {
+fn qualify_relocation_target(
+    backend: &crate::BackendContext,
+    path: &Path,
+    occupant: Option<&FileIdentity>,
+) -> Result<()> {
     if let Some(expected) = occupant {
-        let guard = ParentGuard::acquire(&path.join(".original-participant-proof"))?;
+        let guard = ParentGuard::acquire(backend, &path.join(".original-participant-proof"))?;
         if guard.directory_identity()? != *expected {
             return Err(CoreError::new(
                 "conflict",
@@ -7103,21 +7265,24 @@ fn qualify_relocation_target(path: &Path, occupant: Option<&FileIdentity>) -> Re
         }
         Ok(())
     } else {
-        ensure_absent(path)
+        ensure_absent(backend, path)
     }
 }
-pub(crate) fn ensure_absent(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(CoreError::new(
+pub(crate) fn ensure_absent(backend: &crate::BackendContext, path: &Path) -> Result<()> {
+    if backend.entry_exists(path)? {
+        Err(CoreError::new(
             "exists",
-            UiMessage::error_core_operations_create_only_target_occupied_no_overwrite_allowed(),
-        )),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e.into()),
+            "Create-only target is occupied; no overwrite is allowed",
+        ))
+    } else {
+        Ok(())
     }
 }
-pub(crate) fn capture_optional(path: &Path) -> Result<Option<CapturedFile>> {
-    let guard = ParentGuard::acquire(path)?;
+pub(crate) fn capture_optional(
+    backend: &crate::BackendContext,
+    path: &Path,
+) -> Result<Option<CapturedFile>> {
+    let guard = ParentGuard::acquire(backend, path)?;
     match guard.open_file(false, false) {
         Ok(mut file) => {
             let bytes = read_blob(&mut file)?;
@@ -7162,7 +7327,10 @@ pub(crate) fn operation_read_control(root: &Path, path: &Path) -> bool {
         )
     })
 }
-pub(crate) fn sorted_entries(entries: Vec<(std::ffi::OsString, u32)>, _: &Path) -> Vec<String> {
+pub(crate) fn sorted_entries(
+    entries: Vec<(std::ffi::OsString, backend::EntryMetadata)>,
+    _: &Path,
+) -> Vec<String> {
     let mut names = entries
         .into_iter()
         .map(|(name, attrs)| format!("{}:{attrs}", name.to_string_lossy()))
@@ -7244,7 +7412,7 @@ fn validate_relocation_membership(
 fn validate_relocation_members(
     namespace: &mut NamespaceGuard,
     members: &[RelocationMember],
-) -> Result<Vec<File>> {
+) -> Result<Vec<backend::BoundFile>> {
     let mut held = Vec::new();
     for member in members {
         let relative = Path::new(&member.relative_path);
@@ -7262,11 +7430,11 @@ fn validate_relocation_members(
     Ok(held)
 }
 fn validate_relocation_creations(
+    backend: &crate::BackendContext,
     namespace: &mut NamespaceGuard,
     t: &FrozenOperation,
 ) -> Result<()> {
     let Mutation::Relocate {
-        source,
         target,
         old_leaf,
         new_leaf,
@@ -7276,7 +7444,7 @@ fn validate_relocation_creations(
     else {
         unreachable!()
     };
-    if old_leaf != new_leaf && Path::new(source).join(new_leaf).exists() {
+    if old_leaf != new_leaf && namespace.source_entry_exists(Path::new(new_leaf))? {
         return Err(CoreError::new(
             "exists",
             UiMessage::error_core_operations_renamed_canonical_filename_already_occupied(),
@@ -7295,7 +7463,7 @@ fn validate_relocation_creations(
                 }
             }
         } else {
-            ensure_absent(Path::new(&change.path))?;
+            ensure_absent(backend, Path::new(&change.path))?;
         }
     }
     Ok(())
@@ -7304,7 +7472,7 @@ fn validate_relocation_tree(
     namespace: &mut NamespaceGuard,
     t: &FrozenOperation,
     after: bool,
-) -> Result<Vec<File>> {
+) -> Result<Vec<backend::BoundFile>> {
     let Mutation::Relocate {
         source,
         old_leaf,
@@ -7352,6 +7520,7 @@ fn validate_relocation_tree(
     Ok(held)
 }
 pub(crate) fn snapshot_tree(
+    backend: &crate::BackendContext,
     root: &Path,
     files: &mut Vec<CapturedFile>,
     dirs: &mut Vec<CapturedDirectory>,
@@ -7366,7 +7535,7 @@ pub(crate) fn snapshot_tree(
                 UiMessage::error_core_operations_snapshot_exceeds5000_directories_no_partial_success(),
             ));
         }
-        let guard = ParentGuard::acquire(&path.join(".snapshot-prospective"))?;
+        let guard = ParentGuard::acquire(backend, &path.join(".snapshot-prospective"))?;
         let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
         if !complete {
             return Err(CoreError::new(
@@ -7383,14 +7552,14 @@ pub(crate) fn snapshot_tree(
             if skip_instance_lock && path == root && name == "instance.lock" {
                 continue;
             }
-            if attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+            if attrs.is_unsupported() {
                 return Err(CoreError::new(
                     "unsupportedPath",
                     UiMessage::error_core_operations_snapshot_member_reparse_offline_or_cloud_placeholder(),
                 ));
             }
             let child = path.join(name);
-            if attrs & 0x10 != 0 {
+            if attrs.is_directory() {
                 if dirs.len() + queue.len() >= MAX_OPERATION_FILES {
                     return Err(CoreError::new(
                         "budget",
@@ -7399,12 +7568,8 @@ pub(crate) fn snapshot_tree(
                 }
                 queue.push(child);
             } else {
-                let captured = capture_optional(&child)?.ok_or_else(|| {
-                    CoreError::new(
-                        "scopeChanged",
-                        UiMessage::error_core_operations_snapshot_file_disappeared(),
-                    )
-                })?;
+                let captured = capture_optional(backend, &child)?
+                    .ok_or_else(|| CoreError::new("scopeChanged", "Snapshot file disappeared"))?;
                 total += captured.bytes.len();
                 files.push(captured);
                 if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {

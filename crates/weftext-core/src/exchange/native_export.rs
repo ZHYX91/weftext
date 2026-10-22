@@ -288,7 +288,7 @@ impl Core {
                         &witness.workspace_id,
                         node_id,
                         &file.stamp.identity,
-                    ) {
+                    )? {
                         return Err(CoreError::new(
                             "resourceUnadmitted",
                             UiMessage::error_core_exchange_resource_lacks_exact_physical_admission(
@@ -298,7 +298,7 @@ impl Core {
                     let mut entry = NativeEntry::new(Role::Resource, &file.bytes);
                     entry.owner_node_id = Some(node_id.clone());
                     entry.resource_id = Some(id.into());
-                    entry.revision = self.accepted_revision(file);
+                    entry.revision = self.accepted_revision(file)?;
                     put(
                         &mut package,
                         relative(&root, &file.path)?,
@@ -345,7 +345,7 @@ impl Core {
             .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         let mut schema_entry = NativeEntry::new(Role::Schema, &schema);
         if let Some(file) = captured_named(&witness, ".weftext-schema.json") {
-            schema_entry.revision = self.accepted_revision(file);
+            schema_entry.revision = self.accepted_revision(file)?;
         }
         put(
             &mut package,
@@ -439,11 +439,7 @@ impl Core {
 
     fn native_export_admissions(&self, workspace: &str) -> Result<Vec<(String, FileIdentity)>> {
         let mut births = BTreeMap::new();
-        for plan in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             for birth in self.read_births(&plan.operation_id)? {
                 if birth.workspace_id != workspace {
                     continue;
@@ -476,7 +472,8 @@ impl Core {
         let mut omitted = vec![];
         let mut metadata_bytes = root.as_os_str().len() * 2 + std::mem::size_of::<PathBuf>();
         while let Some(path) = queue.pop() {
-            let guard = ParentGuard::acquire(&path.join(".native-export-membership"))?;
+            let guard =
+                ParentGuard::acquire(&self.backend, &path.join(".native-export-membership"))?;
             let (entries, complete) = guard.directory_entries(MAX_MEMBERS)?;
             if !complete {
                 return Err(CoreError::new(
@@ -505,16 +502,18 @@ impl Core {
             directories.push(directory);
             for (name, attrs) in entries {
                 let child = path.join(name);
-                if attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+                if attrs.is_unsupported() {
                     return Err(CoreError::new(
                         "unsupportedPath",
                         UiMessage::error_core_exchange_native_membership_includes_reparse_offline_or_placeholder_object(),
                     ));
                 }
-                if attrs & 0x10 != 0 {
+                if attrs.is_directory() {
                     if is_private_tree(root, &child) {
-                        let omitted_guard =
-                            ParentGuard::acquire(&child.join(".native-export-omitted"))?;
+                        let omitted_guard = ParentGuard::acquire(
+                            &self.backend,
+                            &child.join(".native-export-omitted"),
+                        )?;
                         let omitted_path = display(&child);
                         native_metadata_charge(
                             &mut metadata_bytes,
@@ -530,7 +529,7 @@ impl Core {
                     }
                 } else {
                     self.check_pending(&child)?;
-                    let leaf = ParentGuard::acquire(&child)?;
+                    let leaf = ParentGuard::acquire(&self.backend, &child)?;
                     let handle = leaf.open_placement_file()?;
                     let actual = stamp(&handle)?;
                     self.check_pending_identity(&actual.identity)?;
@@ -569,7 +568,7 @@ impl Core {
         path: &Path,
     ) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let parent = guard.directory_identity()?;
         let observed = witness
             .observations
@@ -627,19 +626,14 @@ impl Core {
                     UiMessage::error_core_exchange_trash_tree_not_in_captured_membership(),
                 )
             })?;
-        if !self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .any(|p| {
-                p.transaction.as_ref().is_some_and(|t| {
-                    t.is_trash()
-                        && matches!(&t.mutation,
+        if !self.committed_plans()?.into_iter().any(|p| {
+            p.transaction.as_ref().is_some_and(|t| {
+                t.is_trash()
+                    && matches!(&t.mutation,
                 Mutation::Relocate { target, source_identity, .. }
                 if same_path(Path::new(target), &tree) && source_identity == identity)
-                })
             })
-        {
+        }) {
             return Err(CoreError::new(
                 "coverageIncomplete",
                 UiMessage::error_core_exchange_trash_member_has_no_original_physical_tree_placement(
@@ -652,11 +646,12 @@ impl Core {
     fn native_export_guards(
         &self,
         witness: &NativeExportWitness,
-    ) -> Result<(Vec<ParentGuard>, Vec<File>)> {
+    ) -> Result<(Vec<ParentGuard>, Vec<backend::BoundFile>)> {
         let mut guards = vec![];
         let mut handles = vec![];
         for directory in &witness.directories {
             let guard = ParentGuard::acquire(
+                &self.backend,
                 &Path::new(&directory.path).join(".native-export-membership"),
             )?;
             if guard.directory_identity()? != directory.identity {
@@ -668,7 +663,10 @@ impl Core {
             guards.push(guard);
         }
         for (path, identity) in &witness.omitted_directories {
-            let guard = ParentGuard::acquire(&Path::new(path).join(".native-export-omitted"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(path).join(".native-export-omitted"),
+            )?;
             if guard.directory_identity()? != *identity {
                 return Err(CoreError::new(
                     "scopeChanged",
@@ -681,7 +679,7 @@ impl Core {
             let binding = &input.binding;
             let path = Path::new(&binding.path);
             self.check_pending(path)?;
-            let guard = ParentGuard::acquire(path)?;
+            let guard = ParentGuard::acquire(&self.backend, path)?;
             if guard.directory_identity()? != binding.parent {
                 return Err(CoreError::new(
                     "staleBase",
@@ -731,7 +729,7 @@ impl Core {
                 &witness.workspace_id,
                 &resource.node_id,
                 &file.stamp.identity,
-            ) {
+            )? {
                 return Err(CoreError::new(
                     "resourceUnadmitted",
                     UiMessage::error_core_exchange_native_resource_admission_changed(),
@@ -744,7 +742,10 @@ impl Core {
 
     fn native_export_membership(&self, witness: &NativeExportWitness) -> Result<()> {
         for (path, identity) in &witness.omitted_directories {
-            let guard = ParentGuard::acquire(&Path::new(path).join(".native-export-omitted"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(path).join(".native-export-omitted"),
+            )?;
             if guard.directory_identity()? != *identity {
                 return Err(CoreError::new(
                     "scopeChanged",
@@ -754,6 +755,7 @@ impl Core {
         }
         for directory in &witness.directories {
             let guard = ParentGuard::acquire(
+                &self.backend,
                 &Path::new(&directory.path).join(".native-export-membership"),
             )?;
             let (entries, complete) = guard.directory_entries(MAX_MEMBERS)?;
@@ -768,7 +770,7 @@ impl Core {
             }
         }
         for observed in &witness.observations {
-            let guard = ParentGuard::acquire(Path::new(&observed.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&observed.path))?;
             let handle = guard.open_placement_file()?;
             if guard.directory_identity()? != observed.parent || stamp(&handle)? != observed.stamp {
                 return Err(CoreError::new(

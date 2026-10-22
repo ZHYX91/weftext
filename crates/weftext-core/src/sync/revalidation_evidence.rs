@@ -527,7 +527,7 @@ impl Capture<'_, '_> {
         captured: &crate::operations::CapturedFile,
     ) -> Result<bool> {
         let local = &self.cut.installed[object];
-        if let Some(observed) = self.core.accepted_revision(captured) {
+        if let Some(observed) = self.core.accepted_revision(captured)? {
             // An existing observation never falls back to initialization.
             return Ok(local.state.file_revisions.get(relative) == Some(&observed));
         }
@@ -678,7 +678,7 @@ impl Capture<'_, '_> {
         if let ObjectKey::Node(id) = object {
             let birth = self
                 .core
-                .admitted_binding(&file.stamp.identity)
+                .admitted_binding(&file.stamp.identity)?
                 .ok_or_else(mismatch)?;
             if birth.workspace_id != self.cut.graph.workspace_id
                 || birth.node_id != *id
@@ -784,7 +784,7 @@ impl Capture<'_, '_> {
                 &owner.workspace_id,
                 &owner.node_id,
                 &actual.stamp.identity,
-            )
+            )?
         {
             return Err(mismatch());
         }

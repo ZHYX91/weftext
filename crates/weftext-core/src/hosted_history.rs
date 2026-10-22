@@ -179,7 +179,7 @@ impl Core {
         };
         let plan = self.actor_history_plan(&record)?;
         let state = if let Some(plan) = plan {
-            if self.original_commit_fact(&plan.operation_id)? {
+            if self.committed(&plan.operation_id)? {
                 "committed"
             } else if self.resolved(&plan.operation_id)? {
                 "resolved"
@@ -276,7 +276,7 @@ impl Core {
                 UiMessage::error_core_hosted_history_original_restore_has_no_source_save_plan(),
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_hosted_history_original_restore_not_committed(),
@@ -310,7 +310,7 @@ impl Core {
                 UiMessage::error_core_hosted_history_original_restore_has_no_source_save_plan(),
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_hosted_history_original_restore_not_committed(),
@@ -417,7 +417,11 @@ impl Core {
                 UiMessage::error_core_hosted_history_history_request_exceeds_durable_budget(),
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("historyActorDurable")?;
         let restored = match self.restore_history_at(root, path, internal_request(&record)?) {
@@ -476,9 +480,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_history_restore_status(resource, operation)?
             .ok_or_else(conflict)

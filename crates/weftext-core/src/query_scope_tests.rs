@@ -70,7 +70,11 @@ fn query_scope_exact_admitted_root_node_and_directory_without_ambient_reads() {
     let reference = f.reference(&node);
     let owner = f.owner(&node);
     let secret = f.node(&root, "Private");
-    let guard = ParentGuard::acquire(Path::new(&secret.path)).unwrap();
+    let guard = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&secret.path),
+    )
+    .unwrap();
     let _unreadable = guard.open_file(false, false).unwrap();
     let root_ref = f.directory(&root);
     let folder = root.join("Ordinary");
@@ -525,7 +529,7 @@ fn query_scope_genuine_legacy_absence_is_readable_but_not_a_guarded_save_basis()
         (".weftext-mvp-commit.json".into(),serde_json::to_vec(&serde_json::json!({"workspaceId":workspace,"operationId":operation,"storageProfile":STORAGE_PROFILE})).unwrap()),
     ];
     core.stage(p.clone()).unwrap();
-    let guard = ParentGuard::acquire(&root).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
     let directory = guard.create_directory().unwrap();
     for (name, bytes) in &p.files {
         let mut file = ParentGuard::child_file(&directory, name).unwrap();
@@ -566,7 +570,12 @@ fn query_scope_relocation_member_recovery_keeps_exact_identity_and_allows_late_b
         source: display(&root.join("A")),
         name: "C".into(),
     });
-    journal::private_create(&f.core.journal_path(&p.operation_id, "install"), b"{}").unwrap();
+    journal::private_create(
+        &crate::BackendContext::local().unwrap(),
+        &f.core.journal_path(&p.operation_id, "install"),
+        b"{}",
+    )
+    .unwrap();
     fs::write(&child.path, child.source.clone() + "\nlate recovery body\n").unwrap();
     fs::rename(root.join("A/A.typ"), root.join("A/C.typ")).unwrap();
     fs::rename(root.join("A"), root.join("C")).unwrap();
@@ -593,7 +602,12 @@ fn query_scope_relocation_recovery_rejects_same_bytes_replacement_or_moved_out_m
             source: display(&root.join("A")),
             name: "C".into(),
         });
-        journal::private_create(&f.core.journal_path(&p.operation_id, "install"), b"{}").unwrap();
+        journal::private_create(
+            &crate::BackendContext::local().unwrap(),
+            &f.core.journal_path(&p.operation_id, "install"),
+            b"{}",
+        )
+        .unwrap();
         fs::rename(root.join("A/A.typ"), root.join("A/C.typ")).unwrap();
         fs::rename(root.join("A"), root.join("C")).unwrap();
         let path = root.join("C/Child/Child.typ");
@@ -609,7 +623,7 @@ fn query_scope_relocation_recovery_rejects_same_bytes_replacement_or_moved_out_m
                 .resolve_recovery(&p.operation_id, "adoptAfterImages")
                 .is_err()
         );
-        assert!(!f.core.committed(&p.operation_id));
+        assert!(!f.core.committed(&p.operation_id).unwrap());
     }
 }
 

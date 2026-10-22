@@ -342,7 +342,7 @@ impl Core {
                 }
                 let path = Path::new(&original.directory).join(relative);
                 self.check_pending(&path)?;
-                let captured = capture_optional(&path)?;
+                let captured = capture_optional(&self.backend, &path)?;
                 if let Some(input) = requested_removed.get(&display(&path)) {
                     self.verify_snapshot(&path, &input.base_id, captured.as_ref())?;
                     if captured.is_some() {
@@ -463,7 +463,7 @@ impl Core {
                         &identity.workspace_id,
                         id,
                         &source.stamp.identity,
-                    ) {
+                    )? {
                         return Err(CoreError::new(
                             "identityConflict",
                             UiMessage::error_core_sync_adopted_resource_not_original_owner_bound_physical_object(),
@@ -474,6 +474,7 @@ impl Core {
             }
             if let ObjectKey::Directory(id) | ObjectKey::RootDirectory(id) = object {
                 let parent = ParentGuard::acquire(
+                    &self.backend,
                     &Path::new(&installed.directory).join("weftext.directory.json"),
                 )?
                 .directory_identity()?;
@@ -500,9 +501,8 @@ impl Core {
             ".weftext-mvp-commit.json",
         ] {
             let path = root.join(name);
-            let captured = capture_optional(&path)?.ok_or_else(|| {
-                invalid(UiMessage::error_core_sync_original_workspace_control_unavailable())
-            })?;
+            let captured = capture_optional(&self.backend, &path)?
+                .ok_or_else(|| invalid("Original workspace control is unavailable"))?;
             total += captured.bytes.len();
             if total > MAX_BLOB_BYTES || files.len() == MAX_FILES {
                 return Err(CoreError::new(
@@ -553,7 +553,7 @@ impl Core {
         for file in &files {
             write_parents.push((
                 file.path.clone(),
-                ParentGuard::acquire(Path::new(&file.path))?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, Path::new(&file.path))?.directory_identity()?,
             ));
         }
         let receipt = OperationReceipt {
@@ -631,7 +631,7 @@ impl Core {
         let resources = super::apply::validate_state(graph, &original.object, &original.state)?;
         let id = resources.get(relative).ok_or_else(failure)?;
         let stamp = &physical[&original.state.file_revisions[relative]];
-        if !self.admitted_resource(id, &identity.workspace_id, owner, &stamp.identity) {
+        if !self.admitted_resource(id, &identity.workspace_id, owner, &stamp.identity)? {
             return Err(CoreError::new(
                 "identityConflict",
                 UiMessage::error_core_sync_removed_resource_lacks_original_owner_bound_physical_admission(),
@@ -640,7 +640,7 @@ impl Core {
         let source_path =
             Path::new(&original.directory).join(format!("{}.typ", original.state.name));
         self.check_pending(&source_path)?;
-        let source = capture_optional(&source_path)?.ok_or_else(failure)?;
+        let source = capture_optional(&self.backend, &source_path)?.ok_or_else(failure)?;
         if source.stamp.identity
             != physical[&original.state.file_revisions[&format!("{}.typ", original.state.name)]]
                 .identity
@@ -665,7 +665,7 @@ impl Core {
         )?;
         let manifest_path = Path::new(&original.directory).join("weftext.resources.json");
         self.check_pending(&manifest_path)?;
-        let manifest = capture_optional(&manifest_path)?.ok_or_else(failure)?;
+        let manifest = capture_optional(&self.backend, &manifest_path)?.ok_or_else(failure)?;
         if manifest.stamp.identity
             != physical[&original.state.file_revisions["weftext.resources.json"]].identity
         {
@@ -702,11 +702,7 @@ impl Core {
             .filter(|revision| leaves.is_none_or(|leaves| leaves.contains(revision)))
             .collect();
         let mut selected = BTreeMap::<String, (u64, crate::FileStamp)>::new();
-        for plan in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             if matches!(plan.kind.as_str(), "save" | "saveAs")
                 && self
                     .validate_file_save_plan(plan)
@@ -721,9 +717,11 @@ impl Core {
             {
                 continue;
             }
-            let commit: serde_json::Value = serde_json::from_slice(&std::fs::read(
-                self.journal_path(&plan.operation_id, "commit"),
-            )?)?;
+            let commit: serde_json::Value = serde_json::from_slice(
+                &self
+                    .backend
+                    .read_bytes(self.journal_path(&plan.operation_id, "commit"))?,
+            )?;
             let sequence = commit["commitSequence"].as_u64().unwrap_or(0);
             for fact in self
                 .read_observation_facts(&plan.operation_id)?
@@ -747,7 +745,7 @@ impl Core {
                 }
             }
         }
-        for setup in self.sync_setups() {
+        for setup in self.sync_setups()? {
             for physical in &setup.physical_bindings {
                 if !objects.contains(&physical.object) {
                     continue;
@@ -976,7 +974,7 @@ impl Core {
         path: &Path,
         absent_dependencies: &mut Vec<AbsentDependency>,
     ) -> Result<()> {
-        if capture_optional(path)?.is_some() {
+        if capture_optional(&self.backend, path)?.is_some() {
             return Err(CoreError::new(
                 "syncDependencyRequired",
                 UiMessage::error_core_sync_actual_configuration_outside_installed_cut_must_explicitly_handled_before_adopting_source(),
@@ -985,7 +983,7 @@ impl Core {
         self.require_workspace(root)?;
         absent_dependencies.push(AbsentDependency {
             path: display(path),
-            parent: ParentGuard::acquire(path)?.directory_identity()?,
+            parent: ParentGuard::acquire(&self.backend, path)?.directory_identity()?,
         });
         Ok(())
     }

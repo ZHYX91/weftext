@@ -185,10 +185,12 @@ impl Core {
         };
         for other in self.operations.values() {
             if other.operation_id == plan.operation_id
-                || self.committed(&other.operation_id)
+                || self.committed(&other.operation_id)?
                 || self.resolved(&other.operation_id)?
                 || (other.transaction.is_some()
-                    && !self.journal_path(&other.operation_id, "install").exists())
+                    && !self
+                        .backend
+                        .entry_exists(self.journal_path(&other.operation_id, "install"))?)
             {
                 continue;
             }

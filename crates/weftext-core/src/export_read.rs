@@ -10,6 +10,7 @@ impl Core {
         base_id: &str,
         root: &Path,
     ) -> Result<BTreeMap<String, Vec<u8>>> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_session_base(session_id, base_id)?;
         let root = absolute_path(root)?;
         let session = self.sessions.get(session_id).ok_or_else(|| {
@@ -31,7 +32,8 @@ impl Core {
         let mut total = 0usize;
         let mut count = 0usize;
         while let Some(directory) = pending.pop() {
-            let guard = ParentGuard::acquire(&directory.join(".weftext-export-scope"))?;
+            let guard =
+                ParentGuard::acquire(&self.backend, &directory.join(".weftext-export-scope"))?;
             let (mut entries, complete) = guard.directory_entries(5000)?;
             if !complete {
                 return Err(CoreError::new(
@@ -48,19 +50,19 @@ impl Core {
                         UiMessage::error_core_export_read_export_dependency_scope_exceeds5000_entries(),
                     ));
                 }
-                if attrs & 0x400 != 0 {
+                if attrs.is_unsupported() {
                     return Err(CoreError::new(
                         "unsupportedPath",
                         UiMessage::error_core_export_read_export_dependencies_cannot_traverse_reparse_points(),
                     ));
                 }
                 let path = directory.join(name);
-                if attrs & 0x10 != 0 {
+                if attrs.is_directory() {
                     pending.push(path);
                     continue;
                 }
                 self.check_pending(&path)?;
-                let leaf = ParentGuard::acquire(&path)?;
+                let leaf = ParentGuard::acquire(&self.backend, &path)?;
                 let mut handle = leaf.open_file(false, false)?;
                 let stamp = stamp(&handle)?;
                 self.check_pending_identity(&stamp.identity)?;

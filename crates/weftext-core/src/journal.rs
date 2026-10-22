@@ -181,19 +181,41 @@ impl RecoveryBlob {
         }
     }
 }
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecoveryIdentity {
-    pub volume: u32,
-    pub index: String,
-    pub created: String,
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "platform", rename_all = "camelCase")]
+pub enum RecoveryIdentity {
+    Windows {
+        volume: u32,
+        index: String,
+        created: String,
+    },
+    Linux {
+        filesystem: [i32; 2],
+        handle_type: i32,
+        handle: Vec<u8>,
+    },
 }
 impl From<&FileIdentity> for RecoveryIdentity {
     fn from(identity: &FileIdentity) -> Self {
-        Self {
-            volume: identity.volume,
-            index: identity.index.to_string(),
-            created: identity.created.to_string(),
+        match identity {
+            FileIdentity::Windows {
+                volume,
+                index,
+                created,
+            } => Self::Windows {
+                volume: *volume,
+                index: index.to_string(),
+                created: created.to_string(),
+            },
+            FileIdentity::Linux {
+                filesystem,
+                handle_type,
+                handle,
+            } => Self::Linux {
+                filesystem: *filesystem,
+                handle_type: *handle_type,
+                handle: handle.clone(),
+            },
         }
     }
 }
@@ -239,6 +261,19 @@ fn encode_base64(bytes: &[u8]) -> String {
     }
     encoded
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CommitRecord {
+    operation_id: String,
+    fingerprint: String,
+    receipt: Option<Receipt>,
+    file_save: Option<FileSaveData>,
+    storage_profile: String,
+    #[serde(rename = "savedAtUnixMs")]
+    _saved_at_unix_ms: Option<u64>,
+    commit_sequence: u64,
+}
+
 impl Core {
     pub(crate) fn journal_path(&self, id: &str, suffix: &str) -> PathBuf {
         self.data_dir
@@ -246,13 +281,13 @@ impl Core {
             .join(format!("{id}.{suffix}.json"))
     }
     pub(crate) fn load_journals(&mut self) -> Result<()> {
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let path = entry?.path();
             if path
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".plan.json"))
             {
-                let bytes = fs::read(&path)?;
+                let bytes = self.backend.read_bytes(&path)?;
                 let plan: Plan = serde_json::from_slice(&bytes)?;
                 valid_operation_id(&plan.operation_id)?;
                 if path.file_name().and_then(|n| n.to_str())
@@ -273,6 +308,17 @@ impl Core {
                 self.operations.insert(plan.operation_id.clone(), plan);
             }
         }
+        // All committed decisions must have their original Plan, even if no
+        // caller happens to query that operation during this process lifetime.
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+            let name = entry?.file_name();
+            if let Some(id) = name
+                .to_str()
+                .and_then(|name| name.strip_suffix(".commit.json"))
+            {
+                self.committed_record(id)?;
+            }
+        }
         self.validate_resolution_namespace()
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
@@ -286,99 +332,107 @@ impl Core {
         self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
         private_create(
+            &self.backend,
             &self.journal_path(&plan.operation_id, "plan"),
             &serde_json::to_vec(&plan)?,
         )?;
         self.operations.insert(plan.operation_id.clone(), plan);
         Ok(())
     }
+    fn committed_record(&self, id: &str) -> Result<Option<CommitRecord>> {
+        valid_operation_id(id)?;
+        let bytes = match self.backend.read_bytes(self.journal_path(id, "commit")) {
+            Ok(bytes) => bytes,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let original_plan = self.operations.get(id).ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_journal_original_commit_evidence_invalid(),
+            )
+        })?;
+        validate_original_commit_bytes(original_plan, &bytes)?;
+        let record: CommitRecord = serde_json::from_slice(&bytes)?;
+        if record.storage_profile != STORAGE_PROFILE {
+            return Err(CoreError::new(
+                "unsupportedStorageProfile",
+                "The committed storage profile is unsupported; preserve the original decision",
+            ));
+        }
+        let plan = self.operations.get(id).ok_or_else(|| {
+            CoreError::new(
+                "resolutionUnavailable",
+                "An original committed decision has no retained Plan",
+            )
+        })?;
+        if record.operation_id != id
+            || record.fingerprint != plan.fingerprint
+            || serde_json::to_value(&record.file_save)? != serde_json::to_value(&plan.file_save)?
+            || record.commit_sequence == 0
+            || serde_json::to_value(&record.receipt)? != serde_json::to_value(&plan.receipt)?
+        {
+            return Err(CoreError::new(
+                "resolutionUnavailable",
+                "The original committed decision no longer matches its exact Plan",
+            ));
+        }
+        Ok(Some(record))
+    }
     pub(crate) fn commit(&self, plan: &Plan) -> Result<()> {
-        // One Core instance owns this directory. Sequence records the durable
-        // decision order independently of the display clock (which may move
-        // backwards); legacy records deliberately have neither field.
-        let sequence = self
-            .operations
-            .values()
-            .filter_map(|p| {
-                let bytes = fs::read(self.journal_path(&p.operation_id, "commit")).ok()?;
-                let fact: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-                (fact["operationId"] == p.operation_id
-                    && fact["fingerprint"] == p.fingerprint
-                    && fact["storageProfile"] == STORAGE_PROFILE)
-                    .then(|| fact["commitSequence"].as_u64())
-                    .flatten()
-            })
-            .max()
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or_else(|| {
-                CoreError::new(
-                    "invalidState",
-                    UiMessage::error_core_journal_commit_sequence_exhausted(),
-                )
-            })?;
+        let mut maximum = 0;
+        for candidate in self.operations.values() {
+            if let Some(record) = self.committed_record(&candidate.operation_id)? {
+                maximum = maximum.max(record.commit_sequence);
+            }
+        }
+        let sequence = maximum.checked_add(1).ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_journal_commit_sequence_exhausted(),
+            )
+        })?;
         let saved_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .ok()
-            .and_then(|d| u64::try_from(d.as_millis()).ok());
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
         private_create(
+            &self.backend,
             &self.journal_path(&plan.operation_id, "commit"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"fileSave":plan.file_save,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
             )?,
         )
     }
-    pub(crate) fn committed(&self, id: &str) -> bool {
-        let Some(plan) = self.operations.get(id) else {
-            return false;
-        };
-        fs::read(self.journal_path(id, "commit"))
-            .inspect_err(|error| resource_diagnostics::io_error("committed.read", id, error))
-            .ok()
-            .and_then(|b| {
-                serde_json::from_slice::<serde_json::Value>(&b)
-                    .inspect_err(|_| {
-                        resource_diagnostics::branch("committed.parse", id, "invalidState")
-                    })
-                    .ok()
-            })
-            .is_some_and(|c| {
-                let matches = c["operationId"] == id
-                    && c["fingerprint"] == plan.fingerprint
-                    && c["storageProfile"] == STORAGE_PROFILE
-                    && serde_json::to_value(&plan.file_save)
-                        .is_ok_and(|scope| c["fileSave"] == scope);
-                if !matches {
-                    resource_diagnostics::branch("committed.match", id, "recordMismatch");
-                }
-                matches
+    pub(crate) fn commit_sequence(&self, id: &str) -> Result<u64> {
+        self.committed_record(id)?
+            .map(|record| record.commit_sequence)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    "The original accepted decision is missing",
+                )
             })
     }
-    /// A query must distinguish a missing decision from unreadable or corrupt
-    /// evidence. This reads the same original commit, without another ledger.
-    pub(crate) fn original_commit_fact(&self, id: &str) -> Result<bool> {
-        valid_operation_id(id)?;
-        let Some(plan) = self.operations.get(id) else {
-            return Ok(false);
-        };
-        let mut file = match File::open(self.journal_path(id, "commit")) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-            Err(error) => return Err(error.into()),
-        };
-        let mut bytes = Vec::new();
-        Read::by_ref(&mut file)
-            .take(65537)
-            .read_to_end(&mut bytes)?;
-        validate_original_commit_bytes(plan, &bytes)?;
-        Ok(true)
+    pub(crate) fn committed(&self, id: &str) -> Result<bool> {
+        Ok(self.committed_record(id)?.is_some())
+    }
+    pub(crate) fn committed_plans(&self) -> Result<Vec<&Plan>> {
+        self.backend.check_path(&self.data_dir)?;
+        let mut plans = Vec::new();
+        for plan in self.operations.values() {
+            if self.committed(&plan.operation_id)? {
+                plans.push(plan);
+            }
+        }
+        Ok(plans)
     }
     pub(crate) fn resolution_record(&self, id: &str) -> Result<Option<ResolutionRecord>> {
         valid_operation_id(id)?;
-        let mut file = match File::open(self.journal_path(id, "resolution")) {
+        let mut file = match self.backend.open_read(self.journal_path(id, "resolution")) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
         };
         let mut bytes = Vec::new();
         Read::by_ref(&mut file)
@@ -415,7 +469,7 @@ impl Core {
     ) -> Result<Option<hosted::ActorLibraryBinding>> {
         valid_operation_id(id)?;
         let mut scope = None;
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(|| {
@@ -470,7 +524,7 @@ impl Core {
                     }
                 }
             } else {
-                let mut file = File::open(&path)?;
+                let mut file = self.backend.open_read(&path)?;
                 let binding = match hosted::read_actor_library_header(&mut file)? {
                     hosted::ActorLibraryHeader::Bound(binding) => binding,
                     _ => {
@@ -513,7 +567,7 @@ impl Core {
         Ok(scope)
     }
     fn validate_resolution_namespace(&self) -> Result<()> {
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(|| {
@@ -551,6 +605,7 @@ impl Core {
             self.validate_unregistered_fence_namespace(id)?;
         }
         private_create(
+            &self.backend,
             &path,
             &serde_json::to_vec(&ResolutionRecord {
                 operation_id: id.into(),
@@ -561,6 +616,7 @@ impl Core {
         )
     }
     pub(crate) fn check_pending(&self, path: &Path) -> Result<()> {
+        self.backend.check_path(path)?;
         self.check_pending_except(path, None)
     }
     pub(crate) fn check_pending_except(&self, path: &Path, except: Option<&str>) -> Result<()> {
@@ -574,11 +630,13 @@ impl Core {
             let affects = a == b
                 || (p.kind == "createLibrary" && b.starts_with(&(a + "\\")))
                 || p.transaction.as_ref().is_some_and(|t| t.affects(path));
-            let installing =
-                p.transaction.is_none() || self.journal_path(&p.operation_id, "install").exists();
+            let installing = p.transaction.is_none()
+                || self
+                    .backend
+                    .entry_exists(self.journal_path(&p.operation_id, "install"))?;
             if affects
                 && installing
-                && !self.committed(&p.operation_id)
+                && !self.committed(&p.operation_id)?
                 && !self.resolved(&p.operation_id)?
             {
                 return Err(CoreError::new(
@@ -611,8 +669,10 @@ impl Core {
                     .as_ref()
                     .is_some_and(|t| t.has_identity(identity)))
                 && (plan.transaction.is_none()
-                    || self.journal_path(&plan.operation_id, "install").exists())
-                && !self.committed(&plan.operation_id)
+                    || self
+                        .backend
+                        .entry_exists(self.journal_path(&plan.operation_id, "install"))?)
+                && !self.committed(&plan.operation_id)?
                 && !self.resolved(&plan.operation_id)?
             {
                 return Err(CoreError::new(
@@ -632,7 +692,7 @@ impl Core {
                     UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
-            if self.original_commit_fact(id)? {
+            if self.committed(id)? {
                 return Ok(plan.receipt.clone());
             }
             return Err(CoreError::new(
@@ -643,12 +703,15 @@ impl Core {
         Ok(None)
     }
     pub fn recoveries(&self) -> Result<Vec<RecoveryInfo>> {
+        self.backend.check_path(&self.data_dir)?;
         let mut entries = Vec::new();
         for p in self.operations.values() {
-            if !self.committed(&p.operation_id)
+            if !self.committed(&p.operation_id)?
                 && !self.resolved(&p.operation_id)?
                 && (p.transaction.is_none()
-                    || self.journal_path(&p.operation_id, "install").exists())
+                    || self
+                        .backend
+                        .entry_exists(self.journal_path(&p.operation_id, "install"))?)
             {
                 entries.push(self.inspect_recovery(&p.operation_id)?);
             }
@@ -689,6 +752,7 @@ impl Core {
         }
     }
     pub fn inspect_recovery(&self, operation_id: &str) -> Result<RecoveryInfo> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
         let Some(plan) = self.operations.get(operation_id) else {
@@ -725,7 +789,7 @@ impl Core {
         if plan.transaction.is_some() {
             return self.inspect_transaction_recovery(plan);
         }
-        if self.committed(operation_id) {
+        if self.committed(operation_id)? {
             return Ok(Self::recovery_info(
                 plan,
                 "committed",
@@ -749,7 +813,7 @@ impl Core {
                 None,
             ));
         }
-        let guard = match ParentGuard::acquire(Path::new(&plan.path)) {
+        let guard = match ParentGuard::acquire(&self.backend, Path::new(&plan.path)) {
             Ok(g) => g,
             Err(e) => return Ok(Self::recovery_info(plan, "unavailable", e, None)),
         };
@@ -820,18 +884,54 @@ impl Core {
         self.inspect_recovery(operation_id)
     }
     pub(crate) fn read_birth(&self, id: &str) -> Result<Option<Birth>> {
-        match fs::read(self.journal_path(id, "birth")) {
+        match self.backend.read_bytes(self.journal_path(id, "birth")) {
             Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) if e.code == "missing" => Ok(None),
+            Err(e) => Err(e),
         }
     }
     pub(crate) fn read_births(&self, id: &str) -> Result<Vec<Birth>> {
         let mut births = self.read_birth(id)?.into_iter().collect::<Vec<_>>();
-        match fs::read(self.journal_path(id, "births")) {
+        match self.backend.read_bytes(self.journal_path(id, "births")) {
             Ok(bytes) => births.extend(serde_json::from_slice::<Vec<Birth>>(&bytes)?),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => {}
+            Err(e) => return Err(e),
+        }
+        if let Some(plan) = self.operations.get(id) {
+            let mut expected = std::collections::BTreeSet::new();
+            if plan.kind == "newNode" {
+                if let Some(node) = &plan.node_id {
+                    expected.insert(node.clone());
+                } else {
+                    return Err(CoreError::new(
+                        "identityPending",
+                        "The committed Node Plan has no original Node identity",
+                    ));
+                }
+            }
+            if let Some(transaction) = &plan.transaction {
+                expected.extend(
+                    transaction
+                        .births()
+                        .iter()
+                        .map(|birth| birth.node_id.clone()),
+                );
+            }
+            if !expected.is_empty() && self.committed(id)? {
+                let actual: std::collections::BTreeSet<_> =
+                    births.iter().map(|birth| birth.node_id.clone()).collect();
+                if actual != expected
+                    || births.len() != expected.len()
+                    || births
+                        .iter()
+                        .any(|birth| Some(&birth.workspace_id) != plan.workspace_id.as_ref())
+                {
+                    return Err(CoreError::new(
+                        "identityPending",
+                        "The committed Node birth evidence is incomplete; preserve the original source",
+                    ));
+                }
+            }
         }
         Ok(births)
     }
@@ -871,17 +971,19 @@ pub(crate) fn validate_original_commit_bytes(plan: &Plan, bytes: &[u8]) -> Resul
     let _ = fact.saved_at_unix_ms;
     Ok(())
 }
-pub(crate) fn private_create(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn private_create(
+    backend: &crate::BackendContext,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
     let temporary = path.with_extension(format!("{}.pending", fresh()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
+    let guard = ParentGuard::acquire(backend, &temporary)?;
+    let mut file = guard.open_file(true, true)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
     // Public record names appear only after the complete payload is flushed.
-    backend::publish_private_create(&temporary, path)?;
+    backend::publish_private_create(backend, &temporary, path)?;
     Ok(())
 }
 

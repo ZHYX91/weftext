@@ -103,11 +103,14 @@ fn assert_new_nodes_in_moving_tree(pair: &mut Pair, child: &str, nested: &str, o
 #[test]
 fn compound_moving_tree_new_nodes_and_owned_resource_commit_in_original_decision() {
     let (mut pair, child, nested) = with_new_nodes_in_moving_tree();
-    let original = crate::operations::capture_optional(&pair.br.join("Left/Left.typ"))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let original = crate::operations::capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &pair.br.join("Left/Left.typ"),
+    )
+    .unwrap()
+    .unwrap()
+    .stamp
+    .identity;
     let preview = pair.b.prepare_operation(request(&pair)).unwrap();
     assert!(!pair.br.join("Left/NewChild").exists());
     assert!(!pair.br.join("新名").exists());
@@ -142,11 +145,14 @@ fn compound_moving_tree_new_nodes_and_owned_resource_commit_in_original_decision
         .unwrap();
     assert_new_nodes_in_moving_tree(&mut pair, &child, &nested, &preview.operation_id);
     assert_eq!(
-        crate::operations::capture_optional(&pair.br.join("新名/新名.typ"))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        crate::operations::capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &pair.br.join("新名/新名.typ")
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         original
     );
 }
@@ -256,7 +262,7 @@ fn compound_moving_tree_new_node_materialized_directory_replacement_refuses_reco
         fs::read(path.join("foreign.raw")).unwrap(),
         b"retain replacement directory"
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn with_new_directory_parent() -> (Pair, String) {
@@ -343,7 +349,7 @@ fn assert_directory_parent_created(pair: &mut Pair, reference: &str, operation: 
             .code,
         "noChange"
     );
-    assert!(pair.b.committed(operation));
+    assert!(pair.b.committed(operation).unwrap());
 }
 
 #[test]
@@ -489,7 +495,7 @@ fn compound_new_directory_parent_same_bytes_marker_replacement_does_not_gain_ide
         "managed"
     );
     assert_eq!(fs::read(&marker).unwrap(), bytes);
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn with_new_parent() -> (Pair, String) {
@@ -613,7 +619,7 @@ fn assert_created(pair: &mut Pair, parent: &str, operation: &str) {
     pair.b
         .validate_query_node_witness(&pair.br, &qualified.witness)
         .unwrap();
-    assert!(pair.b.committed(operation));
+    assert!(pair.b.committed(operation).unwrap());
     assert_eq!(
         pair.b
             .sync_binding_info(&pair.br)
@@ -627,11 +633,14 @@ fn assert_created(pair: &mut Pair, parent: &str, operation: &str) {
 fn compound_created_node_parent_and_two_original_moves_keep_birth_history_and_actor_drafts() {
     let (mut pair, parent) = with_new_parent();
     let before = ["Left/Left.typ", "Right/Right.typ"].map(|path| {
-        crate::operations::capture_optional(&pair.br.join(path))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity
+        crate::operations::capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &pair.br.join(path),
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity
     });
     for actor in ["alice", "bob"] {
         pair.b
@@ -680,11 +689,14 @@ fn compound_created_node_parent_and_two_original_moves_keep_birth_history_and_ac
         .enumerate()
     {
         assert_eq!(
-            crate::operations::capture_optional(&pair.br.join(path))
-                .unwrap()
-                .unwrap()
-                .stamp
-                .identity,
+            crate::operations::capture_optional(
+                &crate::BackendContext::local().unwrap(),
+                &pair.br.join(path)
+            )
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
             before[index]
         );
     }
@@ -819,7 +831,7 @@ fn compound_materialized_parent_replacement_or_extra_member_refuses_all_recovery
         }
         assert!(pair.br.join("Left/Left.typ").exists());
         assert!(pair.br.join("Right/Right.typ").exists());
-        assert!(!pair.b.committed(&preview.operation_id));
+        assert!(!pair.b.committed(&preview.operation_id).unwrap());
     }
 }
 
@@ -923,7 +935,7 @@ fn assert_late_pending_moving_member_blocks_first_effect(create_only: bool) {
     assert!(!pair.br.join("NewParent").exists());
     assert!(!pair.br.join("新名").exists());
     assert_eq!(fs::read(&path).ok(), basis.bytes);
-    assert!(!pair.b.committed(&other.operation_id));
+    assert!(!pair.b.committed(&other.operation_id).unwrap());
 }
 
 #[test]
@@ -972,7 +984,7 @@ fn compound_late_pending_unmaterialized_child_blocks_first_effect() {
     assert!(pair.br.join("Right/Right.typ").exists());
     assert!(!pair.br.join("NewParent").exists());
     assert!(!pair.br.join("新名").exists());
-    assert!(!pair.b.committed(&other.operation_id));
+    assert!(!pair.b.committed(&other.operation_id).unwrap());
 }
 
 fn assert_independent_unicode_case_targets_refuse(create_new: bool) {
@@ -1037,14 +1049,20 @@ fn assert_independent_unicode_case_targets_refuse(create_new: bool) {
     // This host's actual protected namespace resolves the two spellings to the
     // same object; no Rust Unicode transform is used to establish that fact.
     assert_eq!(
-        ParentGuard::acquire(&ar.join("Ä/.probe"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
-        ParentGuard::acquire(&ar.join("ä/.probe"))
-            .unwrap()
-            .directory_identity()
-            .unwrap()
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &ar.join("Ä/.probe")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap(),
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &ar.join("ä/.probe")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap()
     );
     for (core, root, selected) in [(&a, &ar, &original_keys), (&b, &br, &keys)] {
         core.publish_sync(root).unwrap();
@@ -1157,8 +1175,8 @@ fn compound_recovery_retains_legacy_coexisting_pending_absent_child_without_movi
     assert!(pair.br.join("Right/Right.typ").exists());
     assert!(!pair.br.join("Left/LateChild").exists());
     assert!(!pair.br.join("NewParent").exists());
-    assert!(!pair.b.committed(&preview.operation_id));
-    assert!(!pair.b.committed(&other.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
+    assert!(!pair.b.committed(&other.operation_id).unwrap());
 }
 
 fn native_resource_parent() -> (Pair, String, String) {
@@ -1381,5 +1399,5 @@ fn compound_nested_created_parent_recovery_requires_each_original_directory_iden
     assert!(recovery.allowed_actions.is_empty());
     assert!(pair.br.join("Left/Left.typ").exists());
     assert!(pair.br.join("Right/Right.typ").exists());
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }

@@ -106,6 +106,7 @@ impl Core {
             .join(if manifest { "manifests" } else { "blobs" })
             .join(format!("{id}.{}", if manifest { "json" } else { "blob" }));
         match read_record(
+            &self.backend,
             &path,
             if manifest {
                 MAX_MANIFEST_BYTES
@@ -129,10 +130,8 @@ impl Core {
                 }
                 Ok(Some(bytes))
             }
-            Err(error) => match std::fs::symlink_metadata(&path) {
-                Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                _ => Err(error),
-            },
+            Err(error) if error.code == "missing" => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
@@ -192,7 +191,7 @@ impl Core {
             ));
         }
         let (path, _guards) = self.sync_store(identity, true)?;
-        let mut graph = load_graph(&path, identity)?;
+        let mut graph = load_graph(&self.backend, &path, identity)?;
         for (id, blob) in &bundle.blobs {
             graph.offer_blob(id, blob.clone())?;
         }
@@ -202,12 +201,21 @@ impl Core {
         let status = status(&graph, identity)?;
         // The identity is durable before payloads. No default policy or copied
         // author-tree UUID can silently re-pair an existing local store.
-        immutable(&path.join("identity.json"), &serde_json::to_vec(identity)?)?;
+        immutable(
+            &self.backend,
+            &path.join("identity.json"),
+            &serde_json::to_vec(identity)?,
+        )?;
         for (id, blob) in bundle.blobs {
-            immutable(&path.join("blobs").join(format!("{id}.blob")), &blob)?;
+            immutable(
+                &self.backend,
+                &path.join("blobs").join(format!("{id}.blob")),
+                &blob,
+            )?;
         }
         for (id, manifest) in bundle.manifests {
             immutable(
+                &self.backend,
                 &path.join("manifests").join(format!("{id}.json")),
                 &serde_json::to_vec(&manifest)?,
             )?;
@@ -218,7 +226,7 @@ impl Core {
     pub fn read_sync_history(&self, identity: &SyncIdentity) -> Result<ReplicaGraph> {
         self.check_sync_owner(identity)?;
         let (path, _guards) = self.sync_store(identity, false)?;
-        load_graph(&path, identity)
+        load_graph(&self.backend, &path, identity)
     }
 
     /// Read a specified admitted object revision, including retained ancestors
@@ -396,17 +404,20 @@ impl Core {
         let path = base.join(&identity.workspace_id);
         let mut guards = Vec::new();
         for directory in [&base, &path, &path.join("blobs"), &path.join("manifests")] {
-            if create && !directory.exists() {
+            if create && !self.backend.entry_exists(directory)? {
                 // Qualify each immediate ancestor before creating the next;
                 // create_dir_all could follow an untrusted intermediate link.
-                let parent = ParentGuard::acquire(directory)?;
+                let parent = ParentGuard::acquire(&self.backend, directory)?;
                 let handle = parent.create_directory()?;
                 drop(handle);
             }
-            guards.push(ParentGuard::acquire(&directory.join(".sync-store"))?);
+            guards.push(ParentGuard::acquire(
+                &self.backend,
+                &directory.join(".sync-store"),
+            )?);
         }
         let binding = path.join("identity.json");
-        match read_record(&binding, 1024) {
+        match read_record(&self.backend, &binding, 1024) {
             Ok(bytes) => {
                 let stored: SyncIdentity = serde_json::from_slice(&bytes)?;
                 if &stored != identity {
@@ -422,14 +433,18 @@ impl Core {
     }
 }
 
-pub(super) fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<ReplicaGraph> {
+pub(super) fn load_graph(
+    backend: &crate::BackendContext,
+    path: &Path,
+    identity: &SyncIdentity,
+) -> Result<ReplicaGraph> {
     let mut graph = ReplicaGraph::new(&identity.workspace_id, &identity.genesis)?;
     for (folder, extension, limit) in [
         ("blobs", ".blob", MAX_BLOB_BYTES),
         ("manifests", ".json", MAX_MANIFEST_BYTES),
     ] {
         let directory = path.join(folder);
-        let guard = ParentGuard::acquire(&directory.join(".enumeration"))?;
+        let guard = ParentGuard::acquire(backend, &directory.join(".enumeration"))?;
         let (entries, complete) = guard.directory_entries(MAX_RECORDS)?;
         if !complete {
             return Err(invalid(
@@ -449,7 +464,7 @@ pub(super) fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<Replica
                 return Err(invalid(UiMessage::error_core_sync_store_record_unexpected()));
             };
             digest(id)?;
-            let bytes = read_record(&directory.join(name), limit)?;
+            let bytes = read_record(backend, &directory.join(name), limit)?;
             if folder == "blobs" {
                 graph.offer_blob(id, bytes)?;
             } else {
@@ -487,8 +502,12 @@ fn status(graph: &ReplicaGraph, identity: &SyncIdentity) -> Result<SyncStatus> {
     })
 }
 
-pub(super) fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
-    let guard = ParentGuard::acquire(path)?;
+pub(super) fn read_record(
+    backend: &crate::BackendContext,
+    path: &Path,
+    limit: usize,
+) -> Result<Vec<u8>> {
+    let guard = ParentGuard::acquire(backend, path)?;
     let file = guard.open_file(false, false)?;
     let mut bytes = Vec::new();
     file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
@@ -500,13 +519,11 @@ pub(super) fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-pub(super) fn immutable(path: &Path, bytes: &[u8]) -> Result<()> {
-    match read_record(path, bytes.len()) {
+pub(super) fn immutable(backend: &crate::BackendContext, path: &Path, bytes: &[u8]) -> Result<()> {
+    match read_record(backend, path, bytes.len()) {
         Ok(existing) if existing == bytes => Ok(()),
-        Ok(_) => Err(invalid(
-            UiMessage::error_core_sync_store_immutable_record_differs(),
-        )),
-        Err(e) if e.code == "missing" => private_create(path, bytes),
+        Ok(_) => Err(invalid("Existing immutable record differs")),
+        Err(e) if e.code == "missing" => private_create(backend, path, bytes),
         Err(e) => Err(e),
     }
 }

@@ -378,7 +378,7 @@ impl Core {
                 UiMessage::error_core_original_delivery_physical_result_unavailable(),
             )
         };
-        if !self.original_commit_fact(id)? {
+        if !self.committed(id)? {
             return Err(unavailable());
         }
         let plan = self.operations.get(id).cloned().ok_or_else(unavailable)?;

@@ -30,9 +30,9 @@ impl Core {
         let directory = self.sync_transport_path(directory.as_ref())?;
         self.publish_sync(&root)?;
         let bundle = self.export_sync_objects(&identity, objects)?;
-        let _guards = transport_guards(&directory, &identity, true)?;
+        let _guards = transport_guards(&self.backend, &directory, &identity, true)?;
         // Before any payload write, validate the whole combined bounded store.
-        let mut graph = store::load_graph(&directory, &identity)?;
+        let mut graph = store::load_graph(&self.backend, &directory, &identity)?;
         for (id, bytes) in &bundle.blobs {
             graph.offer_blob(id, bytes.clone())?;
         }
@@ -48,10 +48,15 @@ impl Core {
                 .iter()
                 .sum::<usize>();
         for (id, bytes) in &bundle.blobs {
-            store::immutable(&directory.join("blobs").join(format!("{id}.blob")), bytes)?;
+            store::immutable(
+                &self.backend,
+                &directory.join("blobs").join(format!("{id}.blob")),
+                bytes,
+            )?;
         }
         for (id, manifest) in &bundle.manifests {
             store::immutable(
+                &self.backend,
                 &directory.join("manifests").join(format!("{id}.json")),
                 &serde_json::to_vec(manifest)?,
             )?;
@@ -76,8 +81,8 @@ impl Core {
         // Validate explicit pairing even for an empty or malformed directory.
         ReplicaGraph::new(&identity.workspace_id, &identity.genesis)?;
         let directory = self.sync_transport_path(directory.as_ref())?;
-        let _guards = transport_guards(&directory, identity, false)?;
-        let graph = store::load_graph(&directory, identity)?;
+        let _guards = transport_guards(&self.backend, &directory, identity, false)?;
+        let graph = store::load_graph(&self.backend, &directory, identity)?;
         self.receive_sync(
             identity,
             SyncBundle {
@@ -90,15 +95,34 @@ impl Core {
     fn sync_transport_path(&self, directory: &Path) -> Result<crate::PathBuf> {
         let directory = absolute_path(directory)?;
         let overlaps = |other: &Path| directory.starts_with(other) || other.starts_with(&directory);
-        if directory
-            .ancestors()
-            .any(|p| p.join(".weftext-workspace.json").exists() || p.join("instance.lock").exists())
-            || overlaps(&self.data_dir)
-            || self.operations.values().any(|p| {
-                self.committed(&p.operation_id)
-                    && matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && overlaps(Path::new(&p.path))
-            })
+        if self.backend.ancestors(&directory)?.into_iter().try_fold(
+            false,
+            |found, p| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok({
+                        self.backend
+                            .entry_exists(p.join(".weftext-workspace.json"))?
+                            || self.backend.entry_exists(p.join("instance.lock"))?
+                    })
+                }
+            },
+        )? || overlaps(&self.data_dir)
+            || self
+                .operations
+                .values()
+                .try_fold(false, |found, p| -> Result<bool> {
+                    if found {
+                        Ok(true)
+                    } else {
+                        Ok({
+                            self.committed(&p.operation_id)?
+                                && matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && overlaps(Path::new(&p.path))
+                        })
+                    }
+                })?
         {
             return Err(CoreError::new(
                 "syncTargetOverlap",
@@ -110,6 +134,7 @@ impl Core {
 }
 
 fn transport_guards(
+    backend: &crate::BackendContext,
     path: &Path,
     identity: &SyncIdentity,
     create: bool,
@@ -117,17 +142,30 @@ fn transport_guards(
     let mut guards = Vec::new();
     // A new transport has one explicit family binding. Never annex an existing
     // unpaired user directory, even if it happens to be empty.
-    if create && !path.exists() {
-        let parent = ParentGuard::acquire(path)?;
+    if create && !backend.entry_exists(path)? {
+        let parent = ParentGuard::acquire(backend, path)?;
         let handle = parent.create_directory()?;
-        guards.push(ParentGuard::acquire(&path.join(".transport-root"))?);
-        store::immutable(&path.join("identity.json"), &serde_json::to_vec(identity)?)?;
+        guards.push(ParentGuard::acquire(
+            backend,
+            &path.join(".transport-root"),
+        )?);
+        store::immutable(
+            backend,
+            &path.join("identity.json"),
+            &serde_json::to_vec(identity)?,
+        )?;
         drop(handle);
         guards.push(parent);
     } else {
-        guards.push(ParentGuard::acquire(&path.join(".transport-root"))?);
-        let stored: SyncIdentity =
-            serde_json::from_slice(&store::read_record(&path.join("identity.json"), 1024)?)?;
+        guards.push(ParentGuard::acquire(
+            backend,
+            &path.join(".transport-root"),
+        )?);
+        let stored: SyncIdentity = serde_json::from_slice(&store::read_record(
+            backend,
+            &path.join("identity.json"),
+            1024,
+        )?)?;
         if &stored != identity {
             return Err(invalid(
                 UiMessage::error_core_sync_transport_paired_family_mismatch(),
@@ -148,14 +186,20 @@ fn transport_guards(
     }
     for name in ["blobs", "manifests"] {
         let directory = path.join(name);
-        if create && !directory.exists() {
-            let parent = ParentGuard::acquire(&directory)?;
+        if create && !backend.entry_exists(&directory)? {
+            let parent = ParentGuard::acquire(backend, &directory)?;
             let handle = parent.create_directory()?;
-            guards.push(ParentGuard::acquire(&directory.join(".transport-records"))?);
+            guards.push(ParentGuard::acquire(
+                backend,
+                &directory.join(".transport-records"),
+            )?);
             drop(handle);
             guards.push(parent);
         } else {
-            guards.push(ParentGuard::acquire(&directory.join(".transport-records"))?);
+            guards.push(ParentGuard::acquire(
+                backend,
+                &directory.join(".transport-records"),
+            )?);
         }
     }
     Ok(guards)
@@ -164,16 +208,22 @@ fn transport_guards(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{FixtureRoots, copy_transport, open_core};
     use crate::{OperationIntent, OperationRequest, SaveRequest, fresh};
     use std::fs;
 
     #[test]
+    #[cfg_attr(
+        target_os = "linux",
+        ignore = "requires three explicit administrator peer enrollments; run serially"
+    )]
     fn real_directory_exchange_is_separate_staged_and_partial_then_applies_via_original_plan() {
-        let temp = tempfile::tempdir().unwrap();
-        let ar = temp.path().join("a-library");
-        let br = temp.path().join("b-library");
-        let transport = temp.path().join("transport");
-        let mut a = Core::new(temp.path().join("a-private")).unwrap();
+        let temp = FixtureRoots::new();
+        let ar = temp.a_path().join("a-library");
+        let br = temp.b_path().join("b-library");
+        let transport = temp.a_path().join("transport");
+        let receiver_transport = temp.b_path().join("transport");
+        let mut a = open_core(temp.a_path().join("a-private")).unwrap();
         a.create_library(&ar).unwrap();
         let note = a.create_note_fixture(&ar, &ar, "Note").unwrap();
         a.create_note_fixture(&ar, &ar, "NotSelected").unwrap();
@@ -188,8 +238,18 @@ mod tests {
                 .unwrap()
                 .manifests
         );
-        let mut b = Core::new(temp.path().join("b-private")).unwrap();
-        let status = b.read_sync_directory(&identity, &transport).unwrap();
+        let mut b = open_core(temp.b_path().join("b-private")).unwrap();
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            b.read_sync_directory(&identity, &transport)
+                .unwrap_err()
+                .code,
+            "outsideRoot"
+        );
+        copy_transport(&transport, &receiver_transport);
+        let status = b
+            .read_sync_directory(&identity, &receiver_transport)
+            .unwrap();
         assert_eq!(status.objects.len(), 1);
         assert!(!br.exists());
         let preview = b
@@ -214,7 +274,9 @@ mod tests {
             source: edited.clone(),
         })
         .unwrap();
-        b.write_sync_directory(&br, &transport, &keys).unwrap();
+        b.write_sync_directory(&br, &receiver_transport, &keys)
+            .unwrap();
+        copy_transport(&receiver_transport, &transport);
         a.read_sync_directory(&identity, &transport).unwrap();
         assert_eq!(
             fs::read_to_string(ar.join("Note/Note.typ")).unwrap(),
@@ -251,7 +313,8 @@ mod tests {
             "syncOwnerRequired"
         );
         assert_eq!(
-            b.with_actor("reader", |c| c.read_sync_directory(&identity, &transport))
+            b.with_actor("reader", |c| c
+                .read_sync_directory(&identity, &receiver_transport))
                 .unwrap_err()
                 .code,
             "syncOwnerRequired"
@@ -259,16 +322,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        target_os = "linux",
+        ignore = "requires three explicit administrator peer enrollments; run serially"
+    )]
     fn corrupt_wrong_family_unpaired_and_author_directories_are_never_overwritten() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("library");
-        let data = temp.path().join("private");
-        let mut core = Core::new(&data).unwrap();
+        let temp = FixtureRoots::new();
+        let root = temp.a_path().join("library");
+        let data = temp.a_path().join("private");
+        let mut core = open_core(&data).unwrap();
         core.create_library(&root).unwrap();
         let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let identity = core.enable_sync(&root, &fresh()).unwrap().identity;
         let keys = BTreeSet::from([ObjectKey::Node(note.node_id.unwrap())]);
-        for path in [&root, &root.join("transport"), &data, temp.path()] {
+        for path in [&root, &root.join("transport"), &data, temp.a_path()] {
             assert_eq!(
                 core.write_sync_directory(&root, path, &keys)
                     .unwrap_err()
@@ -276,7 +343,7 @@ mod tests {
                 "syncTargetOverlap"
             );
         }
-        let unpaired = temp.path().join("unpaired");
+        let unpaired = temp.a_path().join("unpaired");
         fs::create_dir(&unpaired).unwrap();
         fs::write(unpaired.join("sentinel.txt"), "owned elsewhere").unwrap();
         assert!(core.write_sync_directory(&root, &unpaired, &keys).is_err());
@@ -285,7 +352,7 @@ mod tests {
             "owned elsewhere"
         );
         assert!(!unpaired.join("identity.json").exists());
-        let transport = temp.path().join("transport");
+        let transport = temp.a_path().join("transport");
         core.write_sync_directory(&root, &transport, &keys).unwrap();
         let wrong = SyncIdentity {
             workspace_id: fresh(),

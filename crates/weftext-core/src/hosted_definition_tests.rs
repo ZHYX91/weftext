@@ -243,10 +243,9 @@ impl Fixture {
             .unwrap()
             .unwrap()
     }
-    fn admitted(&self, doc: &OpenedDocument, key: &str) -> bool {
+    fn admitted(&self, doc: &OpenedDocument, key: &str) -> Result<bool> {
         self.core
             .is_definition_key_admitted(&self.root, doc.node_id.as_ref().unwrap(), key)
-            .unwrap()
     }
 }
 
@@ -262,7 +261,7 @@ fn hosted_definitions_exact_proposal_retry_restart_and_multiple_source_admission
     let first_source = first.patch.as_ref().unwrap().source.clone();
     assert_eq!(first.status.status, "reserved");
     assert_eq!(fs::read_to_string(&f.path).unwrap(), doc.source);
-    assert!(!f.admitted(&doc, &first_key));
+    assert!(!f.admitted(&doc, &first_key).unwrap());
     let second_id = fresh();
     let second = f
         .reserve(&doc, &first_source, "weftext-query-second", &second_id)
@@ -314,8 +313,8 @@ fn hosted_definitions_exact_proposal_retry_restart_and_multiple_source_admission
         .unwrap();
     assert_ne!(raw.core_operation_id, save_id);
     assert_eq!(raw.save_definition_reservations.len(), 2);
-    assert!(f.admitted(&doc, &first_key));
-    assert!(f.admitted(&doc, &second_key));
+    assert!(f.admitted(&doc, &first_key).unwrap());
+    assert!(f.admitted(&doc, &second_key).unwrap());
     assert_eq!(
         f.status(&first_id).save_operation_id.as_deref(),
         Some(save_id.as_str())
@@ -349,7 +348,7 @@ fn hosted_definition_undo_save_redo_uses_original_key_and_new_current_basis() {
         .save(&doc, &undone, std::slice::from_ref(&id), &fresh())
         .unwrap();
     assert_eq!(f.status(&id).status, "reserved");
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     doc.base_id = saved.base_id.unwrap();
     let redone = proposal.patch.unwrap().source + "\n正文在Undo定义后仍继续编辑\n";
     let edited = weftext_data::upsert_saved_query(
@@ -371,7 +370,7 @@ fn hosted_definition_undo_save_redo_uses_original_key_and_new_current_basis() {
             .status,
         "committed"
     );
-    assert!(f.admitted(&doc, &key));
+    assert!(f.admitted(&doc, &key).unwrap());
     let actual = fs::read_to_string(&f.path).unwrap();
     assert!(actual.contains("weftext-query-renamed"));
     assert!(actual.contains("正文在Undo定义后仍继续编辑"));
@@ -485,7 +484,7 @@ fn hosted_definition_false_key_and_raw_occurrences_never_admit() {
     )
     .unwrap();
     let saved = f.save(&doc, &fabricated.source, &[], &fresh()).unwrap();
-    assert!(!f.admitted(&doc, &false_key));
+    assert!(!f.admitted(&doc, &false_key).unwrap());
     doc.base_id = saved.base_id.unwrap();
     let id = fresh();
     let proposal = f
@@ -496,7 +495,7 @@ fn hosted_definition_false_key_and_raw_occurrences_never_admit() {
     let saved = f
         .save(&doc, &raw, std::slice::from_ref(&id), &fresh())
         .unwrap();
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     doc.base_id = saved.base_id.unwrap();
     let malformed = proposal
         .patch
@@ -505,7 +504,7 @@ fn hosted_definition_false_key_and_raw_occurrences_never_admit() {
         .replace("weftext.query", "weftext.query.unknown");
     f.save(&doc, &malformed, std::slice::from_ref(&id), &fresh())
         .unwrap();
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     assert_eq!(f.status(&id).status, "reserved");
 }
 
@@ -640,7 +639,7 @@ fn hosted_definition_preplan_failures_settle_original_and_explicitly_save_same_k
         );
         f.save(&current, &source, std::slice::from_ref(&id), &fresh())
             .unwrap();
-        assert!(f.admitted(&current, &key));
+        assert!(f.admitted(&current, &key).unwrap());
     }
 }
 
@@ -678,7 +677,7 @@ fn hosted_definition_installed_pending_is_not_cancelled_and_committed_lost_respo
                 .status,
             expected
         );
-        assert_eq!(f.admitted(&doc, &key), point == "saveCommitted");
+        assert_eq!(f.admitted(&doc, &key).unwrap(), point == "saveCommitted");
         let retry = f
             .save(&doc, &source, std::slice::from_ref(&id), &save_id)
             .unwrap();
@@ -795,7 +794,12 @@ fn hosted_definition_replaced_owner_and_mismatched_admission_evidence_fail_close
     let mut evidence: serde_json::Value =
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     evidence["sourceHash"] = serde_json::json!("0".repeat(64));
-    private_replace(&path, &serde_json::to_vec(&evidence).unwrap()).unwrap();
+    private_replace(
+        &crate::BackendContext::local().unwrap(),
+        &path,
+        &serde_json::to_vec(&evidence).unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         f.core
             .is_definition_key_admitted(&f.root, doc.node_id.as_ref().unwrap(), &key)
@@ -839,7 +843,7 @@ fn hosted_definition_legacy_single_reservation_still_admits_only_its_original_sa
         &f.schema,
     )
     .unwrap();
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     f.core
         .save(SaveRequest {
             session_id: doc.session_id,
@@ -915,7 +919,7 @@ fn hosted_definition_other_actor_cannot_claim_proposal_but_can_preserve_raw_nati
             )
         })
         .unwrap();
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     assert_eq!(f.status(&id).status, "reserved");
 }
 
@@ -944,7 +948,7 @@ fn hosted_definition_cancel_in_preplan_gap_prevents_delayed_original_save() {
             .code,
         "operationCancelled"
     );
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     assert_eq!(fs::read_to_string(&f.path).unwrap(), doc.source);
 }
 
@@ -1201,7 +1205,7 @@ fn hosted_definition_first_admission_rejects_changed_owner_and_binding_before_so
             .is_none()
     );
     assert_eq!(fs::read_to_string(&f.path).unwrap(), doc.source);
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     assert_eq!(f.status(&id).status, "reserved");
 }
 
@@ -1288,7 +1292,7 @@ fn hosted_definition_recovery_keep_current_never_admits_until_explicit_new_save(
         .with_actor(ACTOR, |c| c.resolve_recovery(&internal, "keepCurrent"))
         .unwrap();
     assert_eq!(f.status(&id).status, "reserved");
-    assert!(!f.admitted(&doc, &key));
+    assert!(!f.admitted(&doc, &key).unwrap());
     assert_eq!(
         f.save(&doc, &source, std::slice::from_ref(&id), &save_id)
             .unwrap()
@@ -1298,5 +1302,5 @@ fn hosted_definition_recovery_keep_current_never_admits_until_explicit_new_save(
     let current = f.open();
     f.save(&current, &source, std::slice::from_ref(&id), &fresh())
         .unwrap();
-    assert!(f.admitted(&current, &key));
+    assert!(f.admitted(&current, &key).unwrap());
 }

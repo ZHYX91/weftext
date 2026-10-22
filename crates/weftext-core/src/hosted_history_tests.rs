@@ -431,7 +431,11 @@ fn hosted_history_explicit_owner_result_and_navigation_do_not_scan_unconfigured_
     let duplicate = f.root.join("UnconfiguredCopy");
     fs::create_dir(&duplicate).unwrap();
     fs::write(duplicate.join("UnconfiguredCopy.typ"), &f.original_source).unwrap();
-    let hidden_guard = ParentGuard::acquire(Path::new(&hidden.path)).unwrap();
+    let hidden_guard = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&hidden.path),
+    )
+    .unwrap();
     let _hidden_file = hidden_guard.open_file(true, false).unwrap();
     let selected = f.core.qualified_node_at(&f.root, &f.path).unwrap();
     assert_eq!(selected.owner.node_id, f.doc.node_id.clone().unwrap());

@@ -100,6 +100,7 @@ mod error_contract_tests;
 #[cfg(all(test, windows))]
 mod recovery_tests;
 
+pub use backend::BackendContext;
 use backend::{FileIdentity, FileStamp, ParentGuard, stamp};
 pub use inventory::validate_library_rules;
 pub use inventory::{Inventory, InventoryEntry};
@@ -113,7 +114,12 @@ pub use operations::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+#[cfg(all(test, windows))]
+use std::fs;
+#[cfg(all(test, windows))]
+use std::fs::File;
+#[cfg(all(test, windows))]
+use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
@@ -123,7 +129,7 @@ pub use weftext_messages::{
 
 pub type Result<T> = std::result::Result<T, CoreError>;
 pub const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
-pub const STORAGE_PROFILE: &str = "weftext.local-mvp.v1";
+pub const STORAGE_PROFILE: &str = "weftext.qualified-fs.v2";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -471,7 +477,7 @@ pub struct SaveAsRequest {
     pub operation_id: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Receipt {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision_id: Option<String>,
@@ -561,10 +567,11 @@ struct Birth {
 }
 
 pub struct Core {
+    backend: BackendContext,
     actor_library: Option<hosted::ActorLibraryBinding>,
     actor_library_path: Option<PathBuf>,
     actor: Option<String>,
-    _instance_lock: File,
+    _instance_lock: backend::BoundFile,
     _data_guard: ParentGuard,
     _private_guards: Vec<ParentGuard>,
     data_dir: PathBuf,
@@ -577,6 +584,7 @@ pub struct Core {
 }
 impl Core {
     pub fn check_session_base(&self, session_id: &str, base_id: &str) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_actor_session(session_id)?;
         let session = self
             .sessions
@@ -589,7 +597,7 @@ impl Core {
             ));
         }
         self.check_pending(&session.path)?;
-        let guard = ParentGuard::acquire(&session.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let mut file = guard.open_file(false, false)?;
         if stamp(&file)? != session.stamp || read_source(&mut file)? != session.bytes {
             return Err(CoreError::new(
@@ -600,18 +608,23 @@ impl Core {
         Ok(())
     }
     pub fn new(data_dir: impl AsRef<Path>) -> Result<Self> {
+        Self::with_backend(data_dir, BackendContext::local()?)
+    }
+    pub fn with_backend(data_dir: impl AsRef<Path>, backend: BackendContext) -> Result<Self> {
         let data_dir = absolute_path(data_dir.as_ref())?;
-        fs::create_dir_all(&data_dir)?;
-        let data_guard = ParentGuard::acquire(&data_dir.join("instance.lock"))?;
-        let instance_lock = instance_lock(&data_dir)?;
-        fs::create_dir_all(data_dir.join("journal"))?;
-        fs::create_dir_all(data_dir.join("drafts"))?;
-        fs::create_dir_all(data_dir.join("draft-history"))?;
-        fs::create_dir_all(data_dir.join(device_state::DEVICE_STATE_ROOT))?;
-        fs::create_dir_all(data_dir.join(capture_draft::CAPTURE_DIRECTORY))?;
-        fs::create_dir_all(data_dir.join(capture_draft::CAPTURE_STAGING_DIRECTORY))?;
-        fs::create_dir_all(
-            data_dir
+        backend.check_path(&data_dir)?;
+        backend.create_private_directory(&data_dir)?;
+        let data_guard = ParentGuard::acquire(&backend, &data_dir.join("instance.lock"))?;
+        let instance_lock = instance_lock(&backend, &data_dir)?;
+        backend.create_private_directory(&data_dir.join("journal"))?;
+        backend.create_private_directory(&data_dir.join("drafts"))?;
+        backend.create_private_directory(&data_dir.join("draft-history"))?;
+        backend.create_private_directory(&data_dir.join(device_state::DEVICE_STATE_ROOT))?;
+        backend.create_private_directory(&data_dir.join(capture_draft::CAPTURE_DIRECTORY))?;
+        backend
+            .create_private_directory(&data_dir.join(capture_draft::CAPTURE_STAGING_DIRECTORY))?;
+        backend.create_private_directory(
+            &data_dir
                 .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
                 .join("local"),
         )?;
@@ -625,9 +638,12 @@ impl Core {
             "capture-staging/local",
         ]
         .into_iter()
-        .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
+        .map(|name| {
+            ParentGuard::acquire(&backend, &data_dir.join(name).join(".private-prospective"))
+        })
         .collect::<Result<Vec<_>>>()?;
         let mut core = Self {
+            backend,
             actor_library: None,
             actor_library_path: None,
             actor: None,
@@ -661,38 +677,55 @@ impl Core {
                 UiMessage::error_source_outside_selected_root(),
             ));
         }
+        self.backend.check_path(&root)?;
         self.actor_library_for_root(&root)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_file(false, false)?;
         let bytes = read_source(&mut file)?;
         let observed = stamp(&file)?;
         self.check_pending_identity(&observed.identity)?;
-        let bound = self.admitted_binding(&observed.identity);
+        let bound = self.admitted_binding(&observed.identity)?;
         if let Some(birth) = &bound
-            && let Some(library) = self.operations.values().find(|p| {
-                p.kind == "createLibrary"
-                    && p.workspace_id.as_deref() == Some(&birth.workspace_id)
-                    && self.committed(&p.operation_id)
-            })
+            && let Some(library) =
+                self.operations
+                    .values()
+                    .try_fold(None, |found, p| -> Result<Option<_>> {
+                        if found.is_some() {
+                            Ok(found)
+                        } else {
+                            Ok(
+                                if {
+                                    p.kind == "createLibrary"
+                                        && p.workspace_id.as_deref() == Some(&birth.workspace_id)
+                                        && self.committed(&p.operation_id)?
+                                } {
+                                    Some(p)
+                                } else {
+                                    None
+                                },
+                            )
+                        }
+                    })?
         {
             let library_root = PathBuf::from(&library.path);
             if path.starts_with(&library_root) {
                 root = library_root;
             }
         }
+        self.backend.check_path(&root)?;
         self.actor_library_for_root(&root)?;
         let source = decode(&bytes)?;
         let info = weftext_engine::inspect(&source);
         let workspace = self.workspace(&root)?;
         let candidate = is_canonical(&path);
-        let admitted = bound.as_ref().map(|b| b.node_id.clone()).or_else(|| {
-            info.id.as_ref().and_then(|id| {
-                workspace.as_ref().and_then(|w| {
-                    self.admitted(id, &w.workspace_id, &observed.identity)
-                        .then_some(id.clone())
-                })
-            })
-        });
+        let admitted = if let Some(binding) = &bound {
+            Some(binding.node_id.clone())
+        } else if let (Some(id), Some(workspace)) = (info.id.as_ref(), workspace.as_ref()) {
+            self.admitted(id, &workspace.workspace_id, &observed.identity)?
+                .then_some(id.clone())
+        } else {
+            None
+        };
         let kind = if admitted.is_some()
             && path.strip_prefix(&root).ok().is_some_and(|p| {
                 p.components().next().is_some_and(|c| {
@@ -852,6 +885,7 @@ impl Core {
         let next_witness = reviewed.witness()?;
         if let Some((_, original_bytes)) = latest_record {
             journal::private_create(
+                &self.backend,
                 &self
                     .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),
@@ -955,7 +989,7 @@ impl Core {
                 ));
             }
         }
-        let guard = ParentGuard::acquire(&session.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let mut file = guard.open_file(true, false)?;
         let before = read_source(&mut file)?;
         let current_stamp = stamp(&file)?;
@@ -995,7 +1029,7 @@ impl Core {
                 path: display(&session.path),
                 bytes: plan.after.clone(),
                 stamp: current_stamp.clone(),
-            })
+            })?
             .unwrap_or_else(fresh)
         } else {
             plan.receipt.as_ref().unwrap().base_id.clone()
@@ -1086,7 +1120,7 @@ impl Core {
                 UiMessage::error_save_as_target_must_be_absent(),
             ));
         }
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let data = FileSaveData::new(
             request.session_id.clone(),
             None,
@@ -1178,71 +1212,75 @@ impl Core {
     }
     fn workspace(&self, root: &Path) -> Result<Option<WorkspaceConfig>> {
         let config_path = root.join(".weftext-workspace.json");
-        if !config_path.exists() {
-            return Ok(None);
-        }
-        let read_control = |path: &Path| -> Result<Vec<u8>> {
-            let guard = ParentGuard::acquire(path)?;
-            let mut file = guard.open_read_guard_file()?;
-            read_source(&mut file)
+        let bytes = match self.backend.read_bytes(&config_path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
         };
-        let config: WorkspaceConfig = match serde_json::from_slice(&read_control(&config_path)?) {
-            Ok(c) => c,
-            Err(_) => return Ok(None),
+        let unadmitted = |error: serde_json::Error| {
+            let mut error = CoreError::from(error);
+            error.code = "unadmittedLibrary".into();
+            error
         };
-        if config.version != 1 || config.storage_profile != STORAGE_PROFILE {
-            return Ok(None);
+        let config: WorkspaceConfig = serde_json::from_slice(&bytes).map_err(unadmitted)?;
+        if config.version != 1
+            || config.storage_profile != STORAGE_PROFILE
+            || self.backend.read_bytes(root.join(".weftext-format"))? != b"weftext.typst.v1\n"
+        {
+            return Err(CoreError::new(
+                "unsupportedStorageProfile",
+                "The workspace storage profile is unsupported; preserve its originals and use explicit import or conversion",
+            ));
         }
-        if read_control(&root.join(".weftext-format"))? != b"weftext.typst.v1\n" {
+        let activation: serde_json::Value = serde_json::from_slice(
+            &self
+                .backend
+                .read_bytes(root.join(".weftext-mvp-commit.json"))?,
+        )
+        .map_err(unadmitted)?;
+        let operation_id = activation["operationId"].as_str().ok_or_else(|| {
+            CoreError::new(
+                "identityPending",
+                "The original library activation does not identify its retained decision",
+            )
+        })?;
+        let Some(plan) = self.operations.get(operation_id) else {
             return Ok(None);
-        }
-        let activation: serde_json::Value =
-            match read_control(&root.join(".weftext-mvp-commit.json")) {
-                Ok(bytes) => serde_json::from_slice(&bytes)?,
-                Err(_) => return Ok(None),
-            };
-        let operation_id = activation["operationId"].as_str().unwrap_or("");
-        let owned = self.operations.get(operation_id).is_some_and(|p| {
-            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                && crate::history::history_relative_path(root, Path::new(&p.path))
-                    .is_some_and(|p| p.as_os_str().is_empty())
-                && backend::same_directory(Path::new(&p.path), root).unwrap_or(false)
-                && self.library_creation_root_matches(p, root).unwrap_or(false)
-                && p.workspace_id.as_ref() == Some(&config.workspace_id)
-                && self.committed(operation_id)
-        });
+        };
+        let owned = matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
+            && crate::history::history_relative_path(root, Path::new(&plan.path))
+                .is_some_and(|path| path.as_os_str().is_empty())
+            && backend::same_directory(&self.backend, Path::new(&plan.path), root)?
+            && self.library_creation_root_matches(plan, root)?
+            && plan.workspace_id.as_ref() == Some(&config.workspace_id)
+            && self.committed(operation_id)?;
         Ok(owned.then_some(config))
     }
-    fn admitted(&self, node_id: &str, workspace_id: &str, identity: &FileIdentity) -> bool {
-        self.operations.values().any(|p| {
-            p.workspace_id.as_deref() == Some(workspace_id)
-                && self.committed(&p.operation_id)
-                && self.read_births(&p.operation_id).ok().is_some_and(|bs| {
-                    bs.iter().any(|b| {
-                        b.node_id == node_id
-                            && b.workspace_id == workspace_id
-                            && &b.identity == identity
-                    })
-                })
-        })
+    fn admitted(&self, node_id: &str, workspace_id: &str, identity: &FileIdentity) -> Result<bool> {
+        for plan in self.committed_plans()? {
+            if plan.workspace_id.as_deref() != Some(workspace_id) {
+                continue;
+            }
+            for birth in self.read_births(&plan.operation_id)? {
+                if birth.node_id == node_id
+                    && birth.workspace_id == workspace_id
+                    && &birth.identity == identity
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
-    fn admitted_binding(&self, identity: &FileIdentity) -> Option<Birth> {
-        self.operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .find_map(|p| {
-                self.read_births(&p.operation_id)
-                    .inspect_err(|error| {
-                        resource_diagnostics::error(
-                            "admitted_binding.births",
-                            &p.operation_id,
-                            error,
-                        )
-                    })
-                    .ok()?
-                    .into_iter()
-                    .find(|b| &b.identity == identity)
-            })
+    fn admitted_binding(&self, identity: &FileIdentity) -> Result<Option<Birth>> {
+        for plan in self.committed_plans()? {
+            for birth in self.read_births(&plan.operation_id)? {
+                if &birth.identity == identity {
+                    return Ok(Some(birth));
+                }
+            }
+        }
+        Ok(None)
     }
     #[cfg(test)]
     fn legacy_draft_path(&self, path: &Path) -> PathBuf {
@@ -1269,24 +1307,28 @@ fn default_note_source(node_id: &str, name: &str) -> Result<String> {
 fn known_base() -> bool {
     true
 }
-fn instance_lock(data_dir: &Path) -> Result<File> {
-    let mut options = OpenOptions::new();
-    options.read(true).write(true).create(true).truncate(false);
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.share_mode(0).custom_flags(0x00200000);
-    }
-    options.open(data_dir.join("instance.lock")).map_err(|e| {
-        if matches!(e.raw_os_error(), Some(32 | 33)) {
-            CoreError::new(
-                "instanceBusy",
-                UiMessage::error_private_core_instance_busy(),
-            )
-        } else {
-            e.into()
+fn instance_lock(backend: &BackendContext, data_dir: &Path) -> Result<backend::BoundFile> {
+    let guard = ParentGuard::acquire(backend, &data_dir.join("instance.lock"))?;
+    let opened = match guard.open_file(true, false) {
+        Err(error) if error.code == "missing" => guard.open_file(true, true),
+        other => other,
+    };
+    let file = opened.map_err(|mut error| {
+        if matches!(error.code.as_str(), "busy" | "exists") {
+            error.code = "instanceBusy".into();
         }
-    })
+        error
+    })?;
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::fd::AsRawFd;
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } < 0 {
+            let mut error: CoreError = std::io::Error::last_os_error().into();
+            error.code = "instanceBusy".into();
+            return Err(error);
+        }
+    }
+    Ok(file)
 }
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -1308,7 +1350,7 @@ fn check_size(bytes: &[u8]) -> Result<()> {
         Ok(())
     }
 }
-fn read_source(file: &mut File) -> Result<Vec<u8>> {
+fn read_source(file: &mut backend::BoundFile) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     file.seek(SeekFrom::Start(0))?;
     file.take(MAX_SOURCE_BYTES as u64 + 1)
@@ -1316,7 +1358,7 @@ fn read_source(file: &mut File) -> Result<Vec<u8>> {
     check_size(&bytes)?;
     Ok(bytes)
 }
-fn write_source(file: &mut File, bytes: &[u8]) -> Result<()> {
+fn write_source(file: &mut backend::BoundFile, bytes: &[u8]) -> Result<()> {
     file.seek(SeekFrom::Start(0))?;
     file.write_all(bytes)?;
     file.set_len(bytes.len() as u64)?;
@@ -1425,18 +1467,18 @@ fn is_canonical(path: &Path) -> bool {
         .zip(path.parent().and_then(Path::file_name))
         .is_some_and(|(a, b)| a == b)
 }
-fn private_replace(path: &Path, bytes: &[u8]) -> Result<()> {
+fn private_replace(backend: &crate::BackendContext, path: &Path, bytes: &[u8]) -> Result<()> {
     let temp = path.with_extension(format!("{}.tmp", fresh()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)?;
+    let guard = ParentGuard::acquire(backend, &temp)?;
+    let mut file = guard.open_file(true, true)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
-    fs::rename(&temp, path)?;
-    Ok(())
+    backend::publish_private_replace(backend, &temp, path)
 }
 
 #[cfg(all(test, windows))]
 mod tests;
+
+#[cfg(test)]
+mod test_support;

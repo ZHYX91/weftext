@@ -162,7 +162,7 @@ impl Core {
         let directory = owner_path.parent().unwrap();
         let manifest_path = directory.join("weftext.resources.json");
         self.check_pending(&manifest_path)?;
-        let manifest_guard = ParentGuard::acquire(&manifest_path)?;
+        let manifest_guard = ParentGuard::acquire(&self.backend, &manifest_path)?;
         if manifest_guard.directory_coordinates()? != owner.coordinate.parent().unwrap() {
             return Err(CoreError::new(
                 "staleBase",
@@ -220,7 +220,7 @@ impl Core {
             ));
         }
         self.check_pending(&resource_path_input)?;
-        let resource_guard = ParentGuard::acquire(&resource_path_input)?;
+        let resource_guard = ParentGuard::acquire(&self.backend, &resource_path_input)?;
         let mut resource_handle = match resource_guard.open_file(false, false) {
             Ok(handle) => handle,
             Err(error) if allow_missing && error.code == "missing" => {
@@ -236,14 +236,14 @@ impl Core {
                     },
                 };
                 let manifest_revision = self
-                    .accepted_revision(manifest.binding.captured.as_ref().unwrap())
+                    .accepted_revision(manifest.binding.captured.as_ref().unwrap())?
                     .ok_or_else(|| {
                         CoreError::new(
                             "resourceManifest",
                             UiMessage::error_core_resource_missing_input_requires_currently_accepted_exact_registration(),
                         )
                     })?;
-                if !self.resource_owner_birth_known(id, expected_owner) {
+                if !self.resource_owner_birth_known(id, expected_owner)? {
                     return Err(CoreError::new(
                         "resourceUnadmitted",
                         UiMessage::error_core_resource_missing_input_has_no_original_committed_owner_bound_resource_birth(),
@@ -297,7 +297,7 @@ impl Core {
             &expected_owner.workspace_id,
             &expected_owner.node_id,
             &resource_stamp.identity,
-        ) {
+        )? {
             return Err(CoreError::new(
                 "resourceUnadmitted",
                 UiMessage::error_core_resource_resource_object_has_no_original_owner_bound_core_birth(),
@@ -309,7 +309,7 @@ impl Core {
             bytes,
             stamp: resource_stamp,
         };
-        let revision = self.accepted_revision(&captured);
+        let revision = self.accepted_revision(&captured)?;
         if expected_revision.is_some_and(|v| revision.as_deref() != Some(v)) {
             return Err(CoreError::new(
                 "resourceVersion",
@@ -358,36 +358,13 @@ impl Core {
             },
         )))
     }
+
     pub(crate) fn resource_owner_birth_known(
         &self,
         id: &str,
         owner: &weftext_knowledge::NodeRef,
-    ) -> bool {
-        self.operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-            .any(|plan| {
-                fs::read(self.journal_path(&plan.operation_id, "resource-births"))
-                    .ok()
-                    .and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).ok())
-                    .is_some_and(|births| {
-                        births.iter().any(|birth| {
-                            birth["resource_id"] == id
-                                && birth["workspace_id"] == owner.workspace_id
-                                && birth["node_id"] == owner.node_id
-                                && serde_json::from_value::<FileIdentity>(birth["identity"].clone())
-                                    .ok()
-                                    .is_some_and(|identity| {
-                                        self.admitted_resource(
-                                            id,
-                                            &owner.workspace_id,
-                                            &owner.node_id,
-                                            &identity,
-                                        )
-                                    })
-                        })
-                    })
-            })
+    ) -> Result<bool> {
+        self.resource_owner_born(id, owner)
     }
     pub fn validate_missing_resource_witness(
         &self,
@@ -404,7 +381,7 @@ impl Core {
         self.validate_snapshot_witness(root, &witness.manifest.binding.path, &witness.manifest)?;
         self.validate_snapshot_witness(root, &witness.resource.binding.path, &witness.resource)?;
         if self
-            .accepted_revision(witness.manifest.binding.captured.as_ref().unwrap())
+            .accepted_revision(witness.manifest.binding.captured.as_ref().unwrap())?
             .as_deref()
             != Some(witness.manifest_revision.as_str())
         {
@@ -431,7 +408,7 @@ impl Core {
         // the same physical object, stamp and bytes. Preserve the original
         // qualification, including an observed None becoming accepted Some.
         let captured = witness.resource.binding.captured.as_ref().unwrap();
-        if self.accepted_revision(captured) != witness.revision {
+        if self.accepted_revision(captured)? != witness.revision {
             return Err(CoreError::new(
                 "resourceVersion",
                 UiMessage::error_core_resource_original_resource_revision_qualification_changed(),

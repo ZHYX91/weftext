@@ -194,7 +194,7 @@ impl Core {
         )?;
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(source, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, source, &mut files, &mut directories, false)?;
         // Preserve arbitrary local companion files, but every managed file must
         // still be the exact installed portable preimage. Raw edits need adoption.
         let mut write_parents = Vec::new();
@@ -242,7 +242,7 @@ impl Core {
                         .find(|f| Path::new(&f.path) == path)
                         .ok_or_else(structure_required)?;
                     if self
-                        .admitted_binding(&captured.stamp.identity)
+                        .admitted_binding(&captured.stamp.identity)?
                         .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                     {
                         return Err(CoreError::new(
@@ -273,7 +273,7 @@ impl Core {
                                 &identity.workspace_id,
                                 id,
                                 &resource.stamp.identity,
-                            ) {
+                            )? {
                                 return Err(CoreError::new(
                                     "syncExternalChange",
                                     UiMessage::error_core_sync_moved_resource_identity_differs_from_original_admission(),
@@ -300,7 +300,8 @@ impl Core {
                 // exact read, held through the same decision even though unmoved.
                 for (name, digest) in &old.state.files {
                     let path = Path::new(&old.directory).join(name);
-                    let captured = capture_optional(&path)?.ok_or_else(structure_required)?;
+                    let captured =
+                        capture_optional(&self.backend, &path)?.ok_or_else(structure_required)?;
                     if hash(&captured.bytes) != *digest {
                         return Err(CoreError::new(
                             "syncExternalChange",
@@ -310,7 +311,7 @@ impl Core {
                     }
                     write_parents.push((
                         display(&path),
-                        ParentGuard::acquire(&path)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
                     ));
                     files.push(captured);
                 }
@@ -329,7 +330,7 @@ impl Core {
                     .find(|f| Path::new(&f.path) == path)
                     .ok_or_else(structure_required)?;
                 if self
-                    .admitted_binding(&file.stamp.identity)
+                    .admitted_binding(&file.stamp.identity)?
                     .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                 {
                     return Err(CoreError::new(
@@ -368,10 +369,10 @@ impl Core {
                     ));
                 }
                 if captured.is_none() {
-                    if !preimage.parent().unwrap().exists() {
+                    if !self.backend.entry_exists(preimage.parent().unwrap())? {
                         return Err(structure_required());
                     }
-                    if capture_optional(&preimage)?.is_some() {
+                    if capture_optional(&self.backend, &preimage)?.is_some() {
                         return Err(CoreError::new(
                             "syncExternalChange",
                             UiMessage::error_core_sync_incoming_creation_occupied(),
@@ -388,7 +389,7 @@ impl Core {
                     if moved.is_none() {
                         write_parents.push((
                             display(&path),
-                            ParentGuard::acquire(&preimage)?.directory_identity()?,
+                            ParentGuard::acquire(&self.backend, &preimage)?.directory_identity()?,
                         ));
                     }
                 }
@@ -407,7 +408,7 @@ impl Core {
                             &identity.workspace_id,
                             owner,
                             &file.stamp.identity,
-                        ) {
+                        )? {
                             return Err(CoreError::new(
                                 "syncExternalChange",
                                 UiMessage::error_core_sync_incoming_resource_changed_admitted_identity(),
@@ -421,7 +422,10 @@ impl Core {
                     }
                 }
                 if matches!(object, ObjectKey::Tags)
-                    && captured.is_some_and(|f| self.accepted_revision(f).is_none())
+                    && captured
+                        .map(|f| self.accepted_revision(f).map(|revision| revision.is_none()))
+                        .transpose()?
+                        .unwrap_or(false)
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",

@@ -298,7 +298,7 @@ impl Core {
         let root = absolute_path(root)?;
         self.require_workspace(&root)?;
         let path = root.join(".weftext-schema.json");
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_file(false, false)?;
         let bytes = read_source(&mut file)?;
         let captured = operations::CapturedFile {
@@ -309,7 +309,7 @@ impl Core {
         if expected.path != captured.path
             || expected.bytes.as_ref() != Some(&captured.bytes)
             || expected.revision.is_none()
-            || self.accepted_revision(&captured) != expected.revision
+            || self.accepted_revision(&captured)? != expected.revision
         {
             return Err(CoreError::new(
                 "schemaBasisChanged",
@@ -337,7 +337,8 @@ impl Core {
             "operations",
             capture_draft::CAPTURE_DIRECTORY,
         ] {
-            fs::create_dir_all(root.join(directory))?;
+            self.backend
+                .create_private_directory(&root.join(directory))?;
         }
         let _guards = [
             "drafts",
@@ -345,15 +346,16 @@ impl Core {
             "operations",
             capture_draft::CAPTURE_DIRECTORY,
         ]
-        .map(|directory| ParentGuard::acquire(&root.join(directory).join(".scope")))
+        .map(|directory| ParentGuard::acquire(&self.backend, &root.join(directory).join(".scope")))
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
         let staging = self
             .data_dir
             .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
             .join(hash(actor.as_bytes()));
-        fs::create_dir_all(&staging)?;
-        let _staging_guard = ParentGuard::acquire(&staging.join(".capture-staging-scope"))?;
+        self.backend.create_private_directory(&staging)?;
+        let _staging_guard =
+            ParentGuard::acquire(&self.backend, &staging.join(".capture-staging-scope"))?;
         self.actor = Some(actor.into());
         let result = action(self);
         self.actor = None;
@@ -395,10 +397,13 @@ impl Core {
     /// Service-owned policy survives restarts; bootstrap configuration cannot
     /// silently restore a revoked grant. No client chooses this filesystem path.
     pub fn hosted_policy(&self) -> Result<Option<Vec<u8>>> {
-        match fs::read(self.data_dir.join("hosted-policy.json")) {
+        match self
+            .backend
+            .read_bytes(self.data_dir.join("hosted-policy.json"))
+        {
             Ok(bytes) => Ok(Some(bytes)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) if e.code == "missing" => Ok(None),
+            Err(e) => Err(e),
         }
     }
     pub fn store_hosted_policy(&self, bytes: &[u8]) -> Result<()> {
@@ -408,7 +413,11 @@ impl Core {
                 UiMessage::error_core_hosted_policy_exceeds2_mi_b(),
             ));
         }
-        private_replace(&self.data_dir.join("hosted-policy.json"), bytes)
+        private_replace(
+            &self.backend,
+            &self.data_dir.join("hosted-policy.json"),
+            bytes,
+        )
     }
 
     pub(super) fn actor_input_scope_for_root(&self, root: &Path) -> Result<ActorInputScope> {
@@ -534,7 +543,7 @@ impl Core {
     ) -> Result<Option<(ActorOperation, usize)>> {
         feature::valid_resource(resource)?;
         let path = self.actor_record(operation)?;
-        let guard = match ParentGuard::acquire(&path) {
+        let guard = match ParentGuard::acquire(&self.backend, &path) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" => return Ok(None),
             Err(error) => return Err(error),
@@ -823,7 +832,7 @@ impl Core {
             return Ok(status);
         }
         record.cancelled = true;
-        private_replace(&path, &self.actor_operation_bytes(&record)?)?;
+        private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         self.actor_save_status(resource, operation)?.ok_or_else(|| {
             CoreError::new(
                 "invalidState",
@@ -927,7 +936,11 @@ impl Core {
                     history: None,
                     owner_backup: None,
                 };
-                journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
+                journal::private_create(
+                    &self.backend,
+                    &path,
+                    &self.actor_operation_bytes(&record)?,
+                )?;
                 record
             }
         };
@@ -1073,7 +1086,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
+        journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -1121,6 +1134,7 @@ impl Core {
                 owner_backup: None,
             };
             journal::private_create(
+                &self.backend,
                 &self.actor_record(operation)?,
                 &self.actor_operation_bytes(&record)?,
             )?;
@@ -1162,7 +1176,7 @@ impl Core {
             }
             let path = root.join(relative_path);
             self.check_pending(&path)?;
-            let guard = ParentGuard::acquire(&path)?;
+            let guard = ParentGuard::acquire(&self.backend, &path)?;
             let file = guard.open_file(false, false)?;
             self.check_pending_identity(&stamp(&file)?.identity)?;
             guards.push(guard);

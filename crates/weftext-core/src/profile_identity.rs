@@ -25,7 +25,8 @@ impl QualifiedProfile {
     pub fn contains_profile(&self, other: &QualifiedProfile) -> Result<bool> {
         let identity = self._guard.directory_identity()?;
         for ancestor in other.path.ancestors() {
-            let guard = ParentGuard::acquire(&ancestor.join(".profile-prospective"))?;
+            let backend = crate::BackendContext::local()?;
+            let guard = ParentGuard::acquire(&backend, &ancestor.join(".profile-prospective"))?;
             if guard.directory_identity()? == identity {
                 return Ok(true);
             }
@@ -36,7 +37,8 @@ impl QualifiedProfile {
 
 pub fn qualify_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
     let path = absolute_path(path.as_ref())?;
-    let guard = qualify_directory(&path)?;
+    let backend = crate::BackendContext::local()?;
+    let guard = qualify_directory(&backend, &path)?;
     qualified(path, guard)
 }
 
@@ -44,13 +46,14 @@ pub fn qualify_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
 /// original. A missing/replaced directory is a rejection, never a fresh owner.
 pub fn qualify_existing_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
     let path = absolute_path(path.as_ref())?;
-    let guard = ParentGuard::acquire(&path.join(".profile-prospective"))?;
+    let backend = crate::BackendContext::local()?;
+    let guard = ParentGuard::acquire(&backend, &path.join(".profile-prospective"))?;
     qualified(path, guard)
 }
 
 fn qualified(path: PathBuf, guard: ParentGuard) -> Result<QualifiedProfile> {
     let identity = format!(
-        "weftext.profile.ntfs.v1:{}",
+        "weftext.profile.physical.v2:{}",
         hash(&serde_json::to_vec(&guard.directory_identity()?)?)
     );
     Ok(QualifiedProfile {
@@ -60,9 +63,9 @@ fn qualified(path: PathBuf, guard: ParentGuard) -> Result<QualifiedProfile> {
     })
 }
 
-fn qualify_directory(path: &Path) -> Result<ParentGuard> {
+fn qualify_directory(backend: &crate::BackendContext, path: &Path) -> Result<ParentGuard> {
     let prospective = path.join(".profile-prospective");
-    match ParentGuard::acquire(&prospective) {
+    match ParentGuard::acquire(backend, &prospective) {
         Ok(guard) => Ok(guard),
         Err(error) if error.code == "missing" => {
             let parent = path.parent().ok_or_else(|| {
@@ -71,17 +74,17 @@ fn qualify_directory(path: &Path) -> Result<ParentGuard> {
                     UiMessage::error_core_profile_identity_profile_has_no_qualified_parent(),
                 )
             })?;
-            let _parent_guard = qualify_directory(parent)?;
-            let leaf = ParentGuard::acquire(path)?;
+            let _parent_guard = qualify_directory(backend, parent)?;
+            let leaf = ParentGuard::acquire(backend, path)?;
             match leaf.create_directory() {
                 Ok(directory) => {
-                    let guard = ParentGuard::acquire(&prospective)?;
+                    let guard = ParentGuard::acquire(backend, &prospective)?;
                     drop(directory);
                     Ok(guard)
                 }
                 // Another first-start process may have created this exact
                 // directory. Qualify it; do not recreate, remove or overwrite.
-                Err(error) if error.code == "exists" => ParentGuard::acquire(&prospective),
+                Err(error) if error.code == "exists" => ParentGuard::acquire(backend, &prospective),
                 Err(error) => Err(error),
             }
         }

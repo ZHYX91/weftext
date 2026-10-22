@@ -1,17 +1,400 @@
-//! Narrow Windows NTFS backend. All user writes retain the parent closure and the
-//! same share-zero leaf handle through verification, write, flush and decision.
+//! Qualified physical filesystem capabilities. Coordinates are never identity
+//! or authority; every namespace mutation retains its original entry binding.
 use crate::{CoreError, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use weftext_messages::UiMessage;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) use weftext_enrollment::PhysicalIdentity as FileIdentity;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct FileIdentity {
-    pub volume: u32,
-    pub index: u64,
-    pub created: u64,
+pub(crate) enum EntryKind {
+    File,
+    Directory,
+    Unsupported,
+}
+
+/// Preserved native metadata is tagged. Consumers use kind/qualification rather
+/// than interpreting Windows bits on a different operating system.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "platform", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum NativeMetadata {
+    Windows {
+        attributes: u32,
+    },
+    Linux {
+        mode: u32,
+        uid: u32,
+        gid: u32,
+        links: u64,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct EntryMetadata {
+    pub kind: EntryKind,
+    pub qualified: bool,
+    pub native: NativeMetadata,
+}
+
+impl EntryMetadata {
+    pub fn is_directory(&self) -> bool {
+        self.kind == EntryKind::Directory
+    }
+    pub fn is_file(&self) -> bool {
+        self.kind == EntryKind::File && self.qualified
+    }
+    pub fn is_unsupported(&self) -> bool {
+        !self.qualified
+    }
+    #[cfg(windows)]
+    fn windows(attributes: u32) -> Self {
+        Self {
+            kind: if attributes & 0x10 != 0 {
+                EntryKind::Directory
+            } else {
+                EntryKind::File
+            },
+            qualified: attributes & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) == 0,
+            native: NativeMetadata::Windows { attributes },
+        }
+    }
+}
+
+impl std::fmt::Display for EntryMetadata {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&serde_json::to_string(self).map_err(|_| std::fmt::Error)?)
+    }
+}
+
+/// Owns the actual file and its original entry binding. Linux additionally
+/// retains parent descriptors; Windows addresses the intrinsic NT file entry
+/// handle and its existing guard closure, including the witness handoff.
+pub(crate) struct BoundFile {
+    file: File,
+    binding: std::sync::Arc<EntryBinding>,
+    #[cfg(target_os = "linux")]
+    lease: Option<platform::FileLease>,
+}
+struct EntryBinding {
+    file: File,
+    #[cfg(target_os = "linux")]
+    parent: std::sync::Mutex<Option<std::sync::Arc<EntryBinding>>>,
+    name: std::sync::Mutex<std::ffi::OsString>,
+    #[cfg(target_os = "linux")]
+    root: Option<std::sync::Arc<platform::ControlledRoot>>,
+}
+impl BoundFile {
+    fn bind(file: File, parent: Option<&BoundFile>, name: &std::ffi::OsStr) -> Result<Self> {
+        let binding = std::sync::Arc::new(EntryBinding {
+            file: file.try_clone()?,
+            #[cfg(target_os = "linux")]
+            parent: std::sync::Mutex::new(parent.map(|p| p.binding.clone())),
+            name: std::sync::Mutex::new(name.to_owned()),
+            #[cfg(target_os = "linux")]
+            root: parent.and_then(|p| p.binding.root.clone()),
+        });
+        #[cfg(not(target_os = "linux"))]
+        let _ = parent;
+        Ok(Self {
+            file,
+            binding,
+            #[cfg(target_os = "linux")]
+            lease: None,
+        })
+    }
+    fn check_authority(&self) -> Result<()> {
+        #[cfg(target_os = "linux")]
+        {
+            self.binding
+                .root
+                .as_ref()
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "controlledRootRequired",
+                        "File descriptor has no controlled-root authority",
+                    )
+                })?
+                .check_fence()?;
+        }
+        Ok(())
+    }
+    pub fn sync_all(&self) -> Result<()> {
+        self.check_authority()?;
+        Ok(self.file.sync_all()?)
+    }
+    pub fn set_len(&self, size: u64) -> Result<()> {
+        self.check_authority()?;
+        Ok(self.file.set_len(size)?)
+    }
+}
+
+/// Explicit admission authority owned by one Core. Linux admission requires an
+/// administrator-enrolled, separately privileged service root.
+pub struct BackendContext {
+    #[cfg(target_os = "linux")]
+    root: std::sync::Arc<platform::ControlledRoot>,
+}
+impl BackendContext {
+    /// Convert an address to the coordinate system reported by retained native
+    /// handles. Only the independently qualified volume root is opened here;
+    /// descendant qualification still belongs to its original namespace guard.
+    pub(crate) fn namespace_coordinate(&self, path: &Path) -> Result<PathBuf> {
+        let path = crate::absolute_path(path)?;
+        self.check_path(&path)?;
+        #[cfg(windows)]
+        {
+            let drive = path
+                .ancestors()
+                .last()
+                .ok_or_else(|| CoreError::new("invalidPath", "Invalid volume path"))?;
+            let guard = ParentGuard::acquire(self, &drive.join(".coordinate-prospective"))?;
+            let relative = path.strip_prefix(drive).map_err(|_| {
+                CoreError::new("invalidPath", "Path is outside its protected volume")
+            })?;
+            Ok(guard.directory_coordinates()?.join(relative))
+        }
+        #[cfg(not(windows))]
+        Ok(path)
+    }
+    pub(crate) fn ancestors<'a>(&self, path: &'a Path) -> Result<Vec<&'a Path>> {
+        self.check_path(path)?;
+        Ok(path
+            .ancestors()
+            .take_while(|ancestor| {
+                #[cfg(target_os = "linux")]
+                {
+                    ancestor.starts_with(&self.root.path)
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let _ = ancestor;
+                    true
+                }
+            })
+            .collect())
+    }
+    /// Test presence only after checking this Core's authority and a complete,
+    /// qualified parent inventory. Read/permission/unsupported failures remain
+    /// failures; only an actually missing path is absence.
+    pub(crate) fn entry_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
+        let path = crate::absolute_path(path.as_ref())?;
+        self.check_path(&path)?;
+        #[cfg(target_os = "linux")]
+        if path == self.root.path {
+            return Ok(true);
+        }
+        let name = path
+            .file_name()
+            .ok_or_else(|| CoreError::new("invalidPath", "An entry path requires a leaf name"))?;
+        let parent = path.parent().ok_or_else(|| {
+            CoreError::new("invalidPath", "An entry path requires its original parent")
+        })?;
+        let guard = match ParentGuard::acquire(self, &parent.join(".private-enumeration")) {
+            Ok(guard) => guard,
+            Err(error) if error.code == "missing" => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        let (entries, complete) = guard.directory_entries(5000)?;
+        qualified_entry_exists(entries, complete, name)
+    }
+    pub(crate) fn read_bytes(&self, path: impl AsRef<Path>) -> Result<Vec<u8>> {
+        use std::io::Read;
+        let guard = ParentGuard::acquire(self, path.as_ref())?;
+        let mut file = guard.open_read_guard_file()?;
+        let original = stamp(&file)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        if stamp(&file)? != original || bytes.len() as u64 != original.size {
+            return Err(CoreError::new(
+                "thirdState",
+                "The original private record changed during its guarded read",
+            ));
+        }
+        Ok(bytes)
+    }
+    pub(crate) fn read_optional_json<T: serde::de::DeserializeOwned>(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<Option<T>> {
+        match self.read_bytes(path) {
+            Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
+            Err(error) if error.code == "missing" => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+    pub(crate) fn open_read(&self, path: impl AsRef<Path>) -> Result<BoundFile> {
+        ParentGuard::acquire(self, path.as_ref())?.open_read_guard_file()
+    }
+    pub(crate) fn read_dir(&self, path: impl AsRef<Path>) -> Result<ScopedDirectoryEntries> {
+        let path = path.as_ref();
+        let guard = ParentGuard::acquire(self, &path.join(".private-enumeration"))?;
+        let (entries, complete) = guard.directory_entries(5000)?;
+        if !complete {
+            return Err(CoreError::new(
+                "budget",
+                "Private namespace enumeration exceeds its complete inventory budget",
+            ));
+        }
+        let entries = entries
+            .into_iter()
+            .map(|(name, metadata)| {
+                if metadata.is_unsupported() {
+                    Err(CoreError::new(
+                        "unsupportedPath",
+                        "The private namespace contains an unsupported filesystem entry",
+                    ))
+                } else {
+                    Ok(ScopedDirectoryEntry {
+                        path: path.join(&name),
+                        name,
+                    })
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(ScopedDirectoryEntries {
+            _guard: guard,
+            entries: entries.into_iter(),
+        })
+    }
+    pub fn local() -> Result<Self> {
+        #[cfg(windows)]
+        {
+            Ok(Self {})
+        }
+        #[cfg(not(windows))]
+        {
+            Err(CoreError::new(
+                "controlledRootRequired",
+                "This platform requires an explicitly enrolled controlled-service root",
+            ))
+        }
+    }
+    #[cfg(target_os = "linux")]
+    pub fn controlled_service(enrollment: &Path) -> Result<Self> {
+        Ok(Self {
+            root: platform::ControlledRoot::admit(enrollment)?,
+        })
+    }
+    pub(crate) fn check_path(&self, path: &Path) -> Result<()> {
+        #[cfg(target_os = "linux")]
+        {
+            self.root.check_path(path)?;
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = path;
+        }
+        Ok(())
+    }
+    pub(crate) fn create_private_directory(&self, path: &Path) -> Result<()> {
+        self.check_path(path)?;
+        #[cfg(target_os = "linux")]
+        {
+            platform::create_private_directory(&self.root, path)
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Ok(std::fs::create_dir_all(path)?)
+        }
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn linux_device_authority(&self) -> Result<platform::LinuxDeviceAuthority> {
+        self.root.check_fence()?;
+        Ok(self.root.device_authority.clone())
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn seal_linux_device(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        use hmac::{Hmac, Mac};
+        self.root.check_fence()?;
+        let mut mac =
+            Hmac::<sha2::Sha256>::new_from_slice(&self.root.device_key).map_err(|_| {
+                CoreError::new(
+                    "controlledRootAuthority",
+                    "Device authentication key is unavailable",
+                )
+            })?;
+        mac.update(b"weftext.device.controlled-service.v1\0");
+        mac.update(bytes);
+        let mut sealed = mac.finalize().into_bytes().to_vec();
+        sealed.extend_from_slice(bytes);
+        Ok(sealed)
+    }
+    #[cfg(target_os = "linux")]
+    pub(crate) fn unseal_linux_device(&self, bytes: &[u8]) -> Result<Option<Vec<u8>>> {
+        use hmac::{Hmac, Mac};
+        self.root.check_fence()?;
+        let Some((tag, payload)) = bytes.split_at_checked(32) else {
+            return Ok(None);
+        };
+        let mut mac =
+            Hmac::<sha2::Sha256>::new_from_slice(&self.root.device_key).map_err(|_| {
+                CoreError::new(
+                    "controlledRootAuthority",
+                    "Device authentication key is unavailable",
+                )
+            })?;
+        mac.update(b"weftext.device.controlled-service.v1\0");
+        mac.update(payload);
+        Ok(mac.verify_slice(tag).is_ok().then(|| payload.to_vec()))
+    }
+}
+pub(crate) struct ScopedDirectoryEntry {
+    path: PathBuf,
+    name: std::ffi::OsString,
+}
+impl ScopedDirectoryEntry {
+    pub fn path(&self) -> PathBuf {
+        self.path.clone()
+    }
+    pub fn file_name(&self) -> std::ffi::OsString {
+        self.name.clone()
+    }
+}
+pub(crate) struct ScopedDirectoryEntries {
+    _guard: ParentGuard,
+    entries: std::vec::IntoIter<ScopedDirectoryEntry>,
+}
+impl Iterator for ScopedDirectoryEntries {
+    type Item = Result<ScopedDirectoryEntry>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.next().map(Ok)
+    }
+}
+impl std::ops::Deref for BoundFile {
+    type Target = File;
+    fn deref(&self) -> &File {
+        &self.file
+    }
+}
+impl std::ops::DerefMut for BoundFile {
+    fn deref_mut(&mut self) -> &mut File {
+        &mut self.file
+    }
+}
+impl std::io::Read for BoundFile {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        self.check_authority().map_err(std::io::Error::other)?;
+        std::io::Read::read(&mut self.file, bytes)
+    }
+}
+impl std::io::Write for BoundFile {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.check_authority().map_err(std::io::Error::other)?;
+        std::io::Write::write(&mut self.file, bytes)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.check_authority().map_err(std::io::Error::other)?;
+        std::io::Write::flush(&mut self.file)
+    }
+}
+impl std::io::Seek for BoundFile {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        std::io::Seek::seek(&mut self.file, pos)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -21,7 +404,7 @@ pub(crate) struct FileStamp {
     pub size: u64,
 }
 
-type DirectorySnapshot = (FileIdentity, Vec<(std::ffi::OsString, u32)>, bool);
+type DirectorySnapshot = (FileIdentity, Vec<(std::ffi::OsString, EntryMetadata)>, bool);
 
 #[cfg(windows)]
 mod platform {
@@ -195,15 +578,25 @@ mod platform {
             weftext_messages::UiMessage::error_core_windows_file_protection_failed();
         error
     }
-    pub(crate) fn publish_private_create(from: &Path, to: &Path) -> Result<()> {
-        publish_private(from, to, 8)
+    pub(crate) fn publish_private_create(
+        backend: &BackendContext,
+        from: &Path,
+        to: &Path,
+    ) -> Result<()> {
+        publish_private(backend, from, to, 8)
     }
-    pub(crate) fn publish_private_replace(from: &Path, to: &Path) -> Result<()> {
+    pub(crate) fn publish_private_replace(
+        backend: &BackendContext,
+        from: &Path,
+        to: &Path,
+    ) -> Result<()> {
         // REPLACE_EXISTING | WRITE_THROUGH; caller holds the qualified parent
         // closure and owns the Core lease/CAS for this private record.
-        publish_private(from, to, 1 | 8)
+        publish_private(backend, from, to, 1 | 8)
     }
-    fn publish_private(from: &Path, to: &Path, flags: u32) -> Result<()> {
+    fn publish_private(backend: &BackendContext, from: &Path, to: &Path, flags: u32) -> Result<()> {
+        backend.check_path(from)?;
+        backend.check_path(to)?;
         let wide = |p: &Path| {
             let absolute = p.as_os_str().to_string_lossy().replace('/', "\\");
             let extended = if absolute.starts_with("\\\\?\\") {
@@ -222,22 +615,22 @@ mod platform {
         Ok(())
     }
     fn nt_open(
-        parent: Option<&File>,
+        parent: Option<&BoundFile>,
         name: &std::ffi::OsStr,
         directory: bool,
         write: bool,
         create: bool,
-    ) -> Result<File> {
+    ) -> Result<BoundFile> {
         nt_open_access(parent, name, directory, write, create, false)
     }
     fn nt_open_access(
-        parent: Option<&File>,
+        parent: Option<&BoundFile>,
         name: &std::ffi::OsStr,
         directory: bool,
         write: bool,
         create: bool,
         delete: bool,
-    ) -> Result<File> {
+    ) -> Result<BoundFile> {
         nt_open_mode(
             parent,
             name,
@@ -255,14 +648,14 @@ mod platform {
         SharedRead,
     }
     fn nt_open_mode(
-        parent: Option<&File>,
+        parent: Option<&BoundFile>,
         name: &std::ffi::OsStr,
         directory: bool,
         write: bool,
         create: bool,
         delete: bool,
         profile: AccessProfile,
-    ) -> Result<File> {
+    ) -> Result<BoundFile> {
         let mut wide: Vec<u16> = name.encode_wide().collect();
         if wide.len() > 16000 {
             return Err(CoreError::new(
@@ -323,7 +716,7 @@ mod platform {
         // SAFETY: NtCreateFile returned an owned successful kernel handle.
         let file = unsafe { File::from_raw_handle(result) };
         verify(&file, directory)?;
-        Ok(file)
+        BoundFile::bind(file, parent, name)
     }
     fn info(file: &File) -> Result<Info> {
         let mut result = Info::default();
@@ -357,7 +750,7 @@ mod platform {
     pub(crate) fn stamp(file: &File) -> Result<FileStamp> {
         let i = info(file)?;
         Ok(FileStamp {
-            identity: FileIdentity {
+            identity: FileIdentity::Windows {
                 volume: i.volume,
                 index: ((i.index_high as u64) << 32) | i.index_low as u64,
                 created: ((i.created_high as u64) << 32) | i.created_low as u64,
@@ -366,8 +759,8 @@ mod platform {
             size: ((i.size_high as u64) << 32) | i.size_low as u64,
         })
     }
-    pub(crate) fn attributes(file: &File) -> Result<u32> {
-        Ok(info(file)?.attrs)
+    pub(crate) fn attributes(file: &File) -> Result<EntryMetadata> {
+        Ok(EntryMetadata::windows(info(file)?.attrs))
     }
     pub(crate) fn file_coordinates(file: &File) -> Result<PathBuf> {
         let mut buffer = vec![0u16; 32768];
@@ -392,7 +785,7 @@ mod platform {
     fn directory_entries(
         directory: &File,
         max: usize,
-    ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
+    ) -> Result<(Vec<(std::ffi::OsString, EntryMetadata)>, bool)> {
         // Enumerate the actual protected directory handle. A concurrent reparse
         // attribute edit cannot redirect this enumeration through a path string.
         let mut names = Vec::new();
@@ -463,7 +856,7 @@ mod platform {
                     if names.len() == max {
                         return Ok((names, false));
                     }
-                    names.push((name, attrs));
+                    names.push((name, EntryMetadata::windows(attrs)));
                 }
                 if next == 0 {
                     break;
@@ -485,7 +878,7 @@ mod platform {
         Ok((names, true))
     }
     pub(crate) struct ParentGuard {
-        dirs: Vec<File>,
+        dirs: Vec<BoundFile>,
         pub name: std::ffi::OsString,
     }
     impl ParentGuard {
@@ -498,11 +891,12 @@ mod platform {
         pub fn directory_entries(
             &self,
             max: usize,
-        ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
+        ) -> Result<(Vec<(std::ffi::OsString, EntryMetadata)>, bool)> {
             directory_entries(self.dirs.last().unwrap(), max)
         }
-        pub fn acquire(path: &Path) -> Result<Self> {
+        pub fn acquire(backend: &BackendContext, path: &Path) -> Result<Self> {
             let path = crate::absolute_path(path)?;
+            backend.check_path(&path)?;
             let text = path.to_string_lossy();
             if text.starts_with("\\\\") || text.as_bytes().get(1) != Some(&b':') {
                 return Err(CoreError::new(
@@ -562,7 +956,9 @@ mod platform {
                 .to_os_string();
             for part in parts {
                 let child = nt_open(dirs.last(), part.as_os_str(), true, false, false)?;
-                if stamp(&child)?.identity.volume != stamp(&dirs[0])?.identity.volume {
+                if stamp(&child)?.identity.windows_volume()
+                    != stamp(&dirs[0])?.identity.windows_volume()
+                {
                     return Err(CoreError::new(
                         "unsupportedVolume",
                         UiMessage::error_core_backend_directory_crossed_protected_volume(),
@@ -572,13 +968,13 @@ mod platform {
             }
             Ok(Self { dirs, name })
         }
-        pub fn open_file(&self, write: bool, create: bool) -> Result<File> {
+        pub fn open_file(&self, write: bool, create: bool) -> Result<BoundFile> {
             nt_open(self.dirs.last(), &self.name, false, write, create)
         }
-        pub(crate) fn open_retiring_file(&self, delete: bool) -> Result<File> {
+        pub(crate) fn open_retiring_file(&self, delete: bool) -> Result<BoundFile> {
             nt_open_access(self.dirs.last(), &self.name, false, false, false, delete)
         }
-        pub(crate) fn open_placement_file(&self) -> Result<File> {
+        pub(crate) fn open_placement_file(&self) -> Result<BoundFile> {
             nt_open_mode(
                 self.dirs.last(),
                 &self.name,
@@ -589,7 +985,7 @@ mod platform {
                 AccessProfile::Placement,
             )
         }
-        pub(crate) fn open_read_guard_file(&self) -> Result<File> {
+        pub(crate) fn open_read_guard_file(&self) -> Result<BoundFile> {
             nt_open_mode(
                 self.dirs.last(),
                 &self.name,
@@ -600,10 +996,10 @@ mod platform {
                 AccessProfile::SharedRead,
             )
         }
-        pub fn create_directory(&self) -> Result<File> {
+        pub fn create_directory(&self) -> Result<BoundFile> {
             nt_open(self.dirs.last(), &self.name, true, true, true)
         }
-        pub fn child_file(directory: &File, name: &str) -> Result<File> {
+        pub fn child_file(directory: &BoundFile, name: &str) -> Result<BoundFile> {
             nt_open(
                 Some(directory),
                 std::ffi::OsStr::new(name),
@@ -612,7 +1008,7 @@ mod platform {
                 true,
             )
         }
-        pub fn child_directory(directory: &File, name: &str) -> Result<File> {
+        pub fn child_directory(directory: &BoundFile, name: &str) -> Result<BoundFile> {
             nt_open(
                 Some(directory),
                 std::ffi::OsStr::new(name),
@@ -626,13 +1022,17 @@ mod platform {
     /// One closure, one handle per physical directory. The source directory is
     /// opened with DELETE from the outset, never upgraded after protection.
     pub(crate) struct NamespaceGuard {
-        dirs: std::collections::BTreeMap<PathBuf, File>,
+        dirs: std::collections::BTreeMap<PathBuf, BoundFile>,
         source: PathBuf,
         target_parent: PathBuf,
         canonical_keys: bool,
     }
     impl NamespaceGuard {
-        pub fn acquire(source: &Path, target_parent: &Path) -> Result<Self> {
+        pub fn acquire(
+            backend: &BackendContext,
+            source: &Path,
+            target_parent: &Path,
+        ) -> Result<Self> {
             let source = crate::absolute_path(source)?;
             let target_parent = crate::absolute_path(target_parent)?;
             let source_text = source.to_string_lossy();
@@ -651,12 +1051,12 @@ mod platform {
                 ));
             }
             // Reuse the already qualified volume-root and ancestor opening logic.
-            let qualified = ParentGuard::acquire(&source)?;
+            let qualified = ParentGuard::acquire(backend, &source)?;
             drop(qualified);
             let drive = PathBuf::from(format!("{}\\", &source_text[..2]));
             let root_nt = format!("\\??\\{}", drive.display());
             let root = nt_open(None, std::ffi::OsStr::new(&root_nt), true, false, false)?;
-            let volume = stamp(&root)?.identity.volume;
+            let volume = stamp(&root)?.identity.windows_volume();
             let mut dirs = std::collections::BTreeMap::new();
             dirs.insert(drive.clone(), root);
             for leaf in [&source, &target_parent] {
@@ -681,7 +1081,7 @@ mod platform {
                             false,
                             next == source,
                         )?;
-                        if stamp(&file)?.identity.volume != volume {
+                        if stamp(&file)?.identity.windows_volume() != volume {
                             return Err(CoreError::new(
                                 "crossVolume",
                                 UiMessage::error_core_backend_directory_crossed_protected_volume(),
@@ -702,10 +1102,13 @@ mod platform {
         pub fn source_identity(&self) -> Result<FileIdentity> {
             Ok(stamp(self.dirs.get(&self.source).unwrap())?.identity)
         }
+        pub(crate) fn source_coordinates(&self) -> Result<PathBuf> {
+            file_coordinates(self.dirs.get(&self.source).unwrap())
+        }
         pub fn parent_identity(&self) -> Result<FileIdentity> {
             Ok(stamp(self.dirs.get(&self.target_parent).unwrap())?.identity)
         }
-        pub fn open_source_file(&self, name: &str, delete: bool) -> Result<File> {
+        pub fn open_source_file(&self, name: &str, delete: bool) -> Result<BoundFile> {
             nt_open_access(
                 self.dirs.get(&self.source),
                 std::ffi::OsStr::new(name),
@@ -717,7 +1120,7 @@ mod platform {
         }
         /// Descendants are resolved from the retained original directory handle,
         /// including after its move. Never reopen the old pathname as authority.
-        fn source_directory(&mut self, relative: &Path) -> Result<&File> {
+        fn source_directory(&mut self, relative: &Path) -> Result<&BoundFile> {
             let mut path = self.source.clone();
             for part in relative.components() {
                 let std::path::Component::Normal(name) = part else {
@@ -735,6 +1138,16 @@ mod platform {
                     let directory = nt_open(self.dirs.get(&path), name, true, false, false)?;
                     self.dirs.insert(next.clone(), directory);
                 }
+                if namespace_path_compare(
+                    &file_coordinates(&self.dirs[&next])?,
+                    &file_coordinates(&self.dirs[&path])?.join(name),
+                )? != std::cmp::Ordering::Equal
+                {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "The retained source descendant no longer occupies its original parent entry",
+                    ));
+                }
                 path = next;
             }
             Ok(&self.dirs[&path])
@@ -748,10 +1161,10 @@ mod platform {
             let (entries, complete) = directory_entries(directory, max)?;
             Ok((stamp(directory)?.identity, entries, complete))
         }
-        pub fn open_source_descendant(&mut self, relative: &Path) -> Result<File> {
+        pub fn open_source_descendant(&mut self, relative: &Path) -> Result<BoundFile> {
             self.open_source_output(relative, false, false)
         }
-        pub(crate) fn open_source_placement(&mut self, relative: &Path) -> Result<File> {
+        pub(crate) fn open_source_placement(&mut self, relative: &Path) -> Result<BoundFile> {
             let name = relative.file_name().ok_or_else(|| {
                 CoreError::new(
                     "invalidPath",
@@ -777,7 +1190,7 @@ mod platform {
             relative: &Path,
             write: bool,
             create: bool,
-        ) -> Result<File> {
+        ) -> Result<BoundFile> {
             let name = relative.file_name().ok_or_else(|| {
                 CoreError::new(
                     "invalidPath",
@@ -791,7 +1204,7 @@ mod platform {
             &mut self,
             relative: &Path,
             delete: bool,
-        ) -> Result<File> {
+        ) -> Result<BoundFile> {
             let name = relative.file_name().ok_or_else(|| {
                 CoreError::new(
                     "invalidPath",
@@ -805,7 +1218,7 @@ mod platform {
             self.dirs
                 .retain(|path, _| path == &self.source || !path.starts_with(&self.source));
         }
-        pub fn rename_leaf(&self, file: &File, name: &str) -> Result<()> {
+        pub fn rename_leaf(&self, file: &BoundFile, name: &str) -> Result<()> {
             // A basename-only rename uses the file's current directory. Supplying
             // our DELETE directory guard as RootDirectory would make Windows
             // reopen that same directory and conflict with the retained guard.
@@ -818,7 +1231,7 @@ mod platform {
                 name,
             )
         }
-        pub fn open_moved_file(&self, name: &str) -> Result<File> {
+        pub fn open_moved_file(&self, name: &str) -> Result<BoundFile> {
             nt_open(
                 self.dirs.get(&self.source),
                 std::ffi::OsStr::new(name),
@@ -850,35 +1263,46 @@ mod platform {
         parents: Vec<PathBuf>,
     }
     impl MultiNamespaceGuard {
-        pub(crate) fn acquire(participants: &[(&Path, &Path)]) -> Result<Self> {
-            Self::acquire_planned(participants, &[])
+        pub(crate) fn acquire(
+            backend: &BackendContext,
+            participants: &[(&Path, &Path)],
+        ) -> Result<Self> {
+            Self::acquire_planned(backend, participants, &[])
         }
         /// Retain existing ancestors without inventing identities for absent
         /// create-only directories. Only this exact planned set may be absent.
         pub(crate) fn acquire_planned(
+            backend: &BackendContext,
             participants: &[(&Path, &Path)],
             planned: &[PathBuf],
         ) -> Result<Self> {
-            Self::acquire_with_ancestors(participants, planned, &[])
+            Self::acquire_with_ancestors(backend, participants, planned, &[])
         }
         pub(crate) fn acquire_with_ancestors(
+            backend: &BackendContext,
             participants: &[(&Path, &Path)],
             planned: &[PathBuf],
             ancestors: &[PathBuf],
         ) -> Result<Self> {
-            Self::acquire_union(participants, planned, ancestors, false)
+            Self::acquire_union(backend, participants, planned, ancestors, false)
         }
         pub(crate) fn acquire_forest_with_ancestors(
+            backend: &BackendContext,
             participants: &[(&Path, &Path)],
             planned: &[PathBuf],
             ancestors: &[PathBuf],
         ) -> Result<Self> {
-            Self::acquire_union(participants, planned, ancestors, true)
+            Self::acquire_union(backend, participants, planned, ancestors, true)
         }
-        pub(crate) fn acquire_anchors(ancestors: &[PathBuf], planned: &[PathBuf]) -> Result<Self> {
-            Self::acquire_union(&[], planned, ancestors, true)
+        pub(crate) fn acquire_anchors(
+            backend: &BackendContext,
+            ancestors: &[PathBuf],
+            planned: &[PathBuf],
+        ) -> Result<Self> {
+            Self::acquire_union(backend, &[], planned, ancestors, true)
         }
         fn acquire_union(
+            backend: &BackendContext,
             participants: &[(&Path, &Path)],
             planned: &[PathBuf],
             ancestors: &[PathBuf],
@@ -924,6 +1348,7 @@ mod platform {
                 .collect::<Result<Vec<_>>>()?;
             for parent in &ancestors {
                 drop(ParentGuard::acquire(
+                    backend,
                     &parent.join(".original-placement-parent"),
                 )?);
             }
@@ -967,7 +1392,7 @@ mod platform {
                 }
                 // Establish the existing NTFS qualification without retaining a
                 // second closure that would block the union's DELETE handles.
-                drop(ParentGuard::acquire(source)?);
+                drop(ParentGuard::acquire(backend, source)?);
                 let mut anchor = parent.as_path();
                 while planned_keys.contains(&namespace_key(anchor)?) {
                     anchor = anchor.parent().ok_or_else(|| {
@@ -978,6 +1403,7 @@ mod platform {
                     })?;
                 }
                 drop(ParentGuard::acquire(
+                    backend,
                     &anchor.join(".namespace-prospective"),
                 )?);
             }
@@ -985,7 +1411,7 @@ mod platform {
             let drive_key = namespace_key(&drive)?;
             let root_nt = format!("\\??\\{}", drive.display());
             let root = nt_open(None, std::ffi::OsStr::new(&root_nt), true, false, false)?;
-            let volume = stamp(&root)?.identity.volume;
+            let volume = stamp(&root)?.identity.windows_volume();
             let mut dirs = std::collections::BTreeMap::new();
             dirs.insert(drive_key.clone(), root);
             for leaf in actual
@@ -1014,7 +1440,7 @@ mod platform {
                             }
                             other => other?,
                         };
-                        if stamp(&file)?.identity.volume != volume {
+                        if stamp(&file)?.identity.windows_volume() != volume {
                             return Err(CoreError::new(
                                 "crossVolume",
                                 UiMessage::error_core_backend_compound_directory_crossed_protected_volume(),
@@ -1177,7 +1603,7 @@ mod platform {
                 })?;
             self.move_file_to(source, target)
         }
-        pub(crate) fn move_file_to(&self, file: &File, target: &Path) -> Result<()> {
+        pub(crate) fn move_file_to(&self, file: &BoundFile, target: &Path) -> Result<()> {
             let parent = target.parent().ok_or_else(|| {
                 CoreError::new(
                     "invalidPlan",
@@ -1234,7 +1660,7 @@ mod platform {
                 .map(|file| Ok(stamp(file)?.identity))
                 .transpose()
         }
-        pub(crate) fn directory_file(&self, path: &Path) -> Result<&File> {
+        pub(crate) fn directory_file(&self, path: &Path) -> Result<&BoundFile> {
             self.inner.dirs.get(&namespace_key(path)?).ok_or_else(|| {
                 CoreError::new(
                     "missing",
@@ -1242,7 +1668,7 @@ mod platform {
                 )
             })
         }
-        pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&File> {
+        pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&BoundFile> {
             let key = namespace_key(path)?;
             if !self.inner.dirs.contains_key(&key) {
                 let parent_key = key
@@ -1294,7 +1720,7 @@ mod platform {
                 )
             })?)
         }
-        pub(crate) fn create_directory(&mut self, path: &Path) -> Result<&File> {
+        pub(crate) fn create_directory(&mut self, path: &Path) -> Result<&BoundFile> {
             let key = namespace_key(path)?;
             if self.inner.dirs.contains_key(&key) {
                 return Err(CoreError::new(
@@ -1325,7 +1751,12 @@ mod platform {
             self.inner.dirs.insert(key.clone(), file);
             Ok(&self.inner.dirs[&key])
         }
-        pub(crate) fn open_output(&self, path: &Path, write: bool, create: bool) -> Result<File> {
+        pub(crate) fn open_output(
+            &self,
+            path: &Path,
+            write: bool,
+            create: bool,
+        ) -> Result<BoundFile> {
             let key = namespace_key(path)?;
             let parent = key
                 .parent()
@@ -1354,7 +1785,7 @@ mod platform {
             Ok((stamp(directory)?.identity, entries, complete))
         }
     }
-    fn rename_handle(file: &File, parent: Option<&File>, name: &str) -> Result<()> {
+    fn rename_handle(file: &BoundFile, parent: Option<&BoundFile>, name: &str) -> Result<()> {
         #[repr(C)]
         struct RenameInfo {
             replace: u8,
@@ -1383,11 +1814,23 @@ mod platform {
             information: 0,
         };
         let status = unsafe {
-            NtSetInformationFile(file.as_raw_handle(), &mut io, ptr.cast(), length as u32, 10)
+            NtSetInformationFile(
+                file.binding.file.as_raw_handle(),
+                &mut io,
+                ptr.cast(),
+                length as u32,
+                10,
+            )
         };
         if status < 0 {
             return Err(native_error(status));
         }
+        *file
+            .binding
+            .name
+            .lock()
+            .map_err(|_| CoreError::new("busy", "Entry binding is unavailable"))? =
+            std::ffi::OsString::from(name);
         Ok(())
     }
 
@@ -1396,6 +1839,52 @@ mod platform {
         use super::*;
         use std::fs;
         use std::os::windows::fs::OpenOptionsExt;
+
+        #[test]
+        fn source_presence_uses_retained_delete_closure_and_keeps_external_rename_blocked() {
+            let temp = tempfile::tempdir().unwrap();
+            let source = temp.path().join("Original");
+            let target = temp.path().join("Target");
+            fs::create_dir(&source).unwrap();
+            fs::write(source.join("Original.typ"), "original").unwrap();
+            let backend = BackendContext::local().unwrap();
+            let mut namespace = NamespaceGuard::acquire(&backend, &source, temp.path()).unwrap();
+            assert!(
+                namespace
+                    .source_entry_exists(Path::new("Original.typ"))
+                    .unwrap()
+            );
+            assert!(
+                !namespace
+                    .source_entry_exists(Path::new("Renamed.typ"))
+                    .unwrap()
+            );
+            assert!(fs::rename(&source, &target).is_err());
+            let canonical = namespace.open_source_file("Original.typ", true).unwrap();
+            namespace.rename_leaf(&canonical, "Renamed.typ").unwrap();
+            drop(canonical);
+            assert!(
+                !namespace
+                    .source_entry_exists(Path::new("Original.typ"))
+                    .unwrap()
+            );
+            assert!(
+                namespace
+                    .source_entry_exists(Path::new("Renamed.typ"))
+                    .unwrap()
+            );
+            assert!(fs::rename(&source, &target).is_err());
+            namespace.move_source("Target").unwrap();
+            assert!(
+                namespace
+                    .source_entry_exists(Path::new("Renamed.typ"))
+                    .unwrap()
+            );
+            assert_eq!(
+                fs::read_to_string(target.join("Renamed.typ")).unwrap(),
+                "original"
+            );
+        }
 
         struct Fixture {
             union: MultiNamespaceGuard,
@@ -1420,6 +1909,7 @@ mod platform {
                     .unwrap()
                     .identity;
                 let mut union = MultiNamespaceGuard::acquire_forest_with_ancestors(
+                    &BackendContext::local().unwrap(),
                     &[(&parent, &container), (&child, &parent)],
                     &[],
                     &[],
@@ -1545,7 +2035,11 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[path = "backend/linux.rs"]
+mod platform;
+
+#[cfg(not(any(windows, target_os = "linux")))]
 mod platform {
     use super::*;
     pub(crate) struct ParentGuard;
@@ -1553,55 +2047,55 @@ mod platform {
         pub fn directory_entries(
             &self,
             _: usize,
-        ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
+        ) -> Result<(Vec<(std::ffi::OsString, EntryMetadata)>, bool)> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn acquire(_: &Path) -> Result<Self> {
+        pub fn acquire(backend: &BackendContext, _: &Path) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_m_v_p_write_backend_requires_windows_local_n_t_f_s(),
             ))
         }
-        pub fn open_file(&self, _: bool, _: bool) -> Result<File> {
+        pub fn open_file(&self, _: bool, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_retiring_file(&self, _: bool) -> Result<File> {
+        pub(crate) fn open_retiring_file(&self, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_placement_file(&self) -> Result<File> {
+        pub(crate) fn open_placement_file(&self) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_read_guard_file(&self) -> Result<File> {
+        pub(crate) fn open_read_guard_file(&self) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn create_directory(&self) -> Result<File> {
+        pub fn create_directory(&self) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn child_file(_: &File, _: &str) -> Result<File> {
+        pub fn child_file(_: &BoundFile, _: &str) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn child_directory(_: &File, _: &str) -> Result<File> {
+        pub fn child_directory(_: &BoundFile, _: &str) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1622,7 +2116,7 @@ mod platform {
     }
     pub(crate) struct NamespaceGuard;
     impl NamespaceGuard {
-        pub fn acquire(_: &Path, _: &Path) -> Result<Self> {
+        pub fn acquire(backend: &BackendContext, _: &Path, _: &Path) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1634,13 +2128,19 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
+        pub(crate) fn source_coordinates(&self) -> Result<PathBuf> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub fn parent_identity(&self) -> Result<FileIdentity> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn open_source_file(&self, _: &str, _: bool) -> Result<File> {
+        pub fn open_source_file(&self, _: &str, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1656,13 +2156,13 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn open_source_descendant(&mut self, _: &Path) -> Result<File> {
+        pub fn open_source_descendant(&mut self, _: &Path) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_source_placement(&mut self, _: &Path) -> Result<File> {
+        pub(crate) fn open_source_placement(&mut self, _: &Path) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1674,20 +2174,20 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn open_source_output(&mut self, _: &Path, _: bool, _: bool) -> Result<File> {
+        pub fn open_source_output(&mut self, _: &Path, _: bool, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_source_retiring(&mut self, _: &Path, _: bool) -> Result<File> {
+        pub(crate) fn open_source_retiring(&mut self, _: &Path, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn release_source_descendants(&mut self) {}
-        pub fn rename_leaf(&self, _: &File, _: &str) -> Result<()> {
+        pub fn rename_leaf(&self, _: &BoundFile, _: &str) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1699,7 +2199,7 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub fn open_moved_file(&self, _: &str) -> Result<File> {
+        pub fn open_moved_file(&self, _: &str) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1708,19 +2208,24 @@ mod platform {
     }
     pub(crate) struct MultiNamespaceGuard;
     impl MultiNamespaceGuard {
-        pub(crate) fn acquire(_: &[(&Path, &Path)]) -> Result<Self> {
+        pub(crate) fn acquire(backend: &BackendContext, _: &[(&Path, &Path)]) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn acquire_planned(_: &[(&Path, &Path)], _: &[PathBuf]) -> Result<Self> {
+        pub(crate) fn acquire_planned(
+            backend: &BackendContext,
+            _: &[(&Path, &Path)],
+            _: &[PathBuf],
+        ) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub(crate) fn acquire_with_ancestors(
+            backend: &BackendContext,
             _: &[(&Path, &Path)],
             _: &[PathBuf],
             _: &[PathBuf],
@@ -1731,6 +2236,7 @@ mod platform {
             ))
         }
         pub(crate) fn acquire_forest_with_ancestors(
+            backend: &BackendContext,
             _: &[(&Path, &Path)],
             _: &[PathBuf],
             _: &[PathBuf],
@@ -1740,13 +2246,17 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn acquire_anchors(_: &[PathBuf], _: &[PathBuf]) -> Result<Self> {
+        pub(crate) fn acquire_anchors(
+            backend: &BackendContext,
+            _: &[PathBuf],
+            _: &[PathBuf],
+        ) -> Result<Self> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn move_file_to(&self, _: &File, _: &Path) -> Result<()> {
+        pub(crate) fn move_file_to(&self, _: &BoundFile, _: &Path) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1782,13 +2292,13 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn directory_file(&self, _: &Path) -> Result<&File> {
+        pub(crate) fn directory_file(&self, _: &Path) -> Result<&BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn retain_directory(&mut self, _: &Path) -> Result<&File> {
+        pub(crate) fn retain_directory(&mut self, _: &Path) -> Result<&BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1800,7 +2310,7 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn create_directory(&mut self, _: &Path) -> Result<&File> {
+        pub(crate) fn create_directory(&mut self, _: &Path) -> Result<&BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1812,7 +2322,7 @@ mod platform {
                 UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
-        pub(crate) fn open_output(&self, _: &Path, _: bool, _: bool) -> Result<File> {
+        pub(crate) fn open_output(&self, _: &Path, _: bool, _: bool) -> Result<BoundFile> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 UiMessage::error_core_backend_windows_backend_required(),
@@ -1849,19 +2359,27 @@ mod platform {
             UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
-    pub(crate) fn attributes(_: &File) -> Result<u32> {
+    pub(crate) fn attributes(_: &File) -> Result<EntryMetadata> {
         Err(CoreError::new(
             "unsupportedPlatform",
             UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
-    pub(crate) fn publish_private_create(_: &Path, _: &Path) -> Result<()> {
+    pub(crate) fn publish_private_create(
+        backend: &BackendContext,
+        _: &Path,
+        _: &Path,
+    ) -> Result<()> {
         Err(CoreError::new(
             "unsupportedPlatform",
             UiMessage::error_core_backend_windows_backend_required(),
         ))
     }
-    pub(crate) fn publish_private_replace(_: &Path, _: &Path) -> Result<()> {
+    pub(crate) fn publish_private_replace(
+        backend: &BackendContext,
+        _: &Path,
+        _: &Path,
+    ) -> Result<()> {
         Err(CoreError::new(
             "unsupportedPlatform",
             UiMessage::error_core_backend_windows_backend_required(),
@@ -1872,6 +2390,46 @@ pub(crate) use platform::{
     MultiNamespaceGuard, NamespaceGuard, ParentGuard, attributes, file_coordinates,
     publish_private_create, publish_private_replace, stamp,
 };
+/// Presence is qualified from the complete retained parent inventory. Unrelated
+/// sibling entries do not become authority for this selected entry.
+fn qualified_entry_exists(
+    entries: Vec<(std::ffi::OsString, EntryMetadata)>,
+    complete: bool,
+    name: &std::ffi::OsStr,
+) -> Result<bool> {
+    if !complete {
+        return Err(CoreError::new(
+            "budget",
+            "Private namespace enumeration exceeds its complete inventory budget",
+        ));
+    }
+    for (actual, metadata) in entries {
+        if namespace_path_compare(Path::new(&actual), Path::new(name))? == std::cmp::Ordering::Equal
+        {
+            if metadata.is_unsupported() {
+                return Err(CoreError::new(
+                    "unsupportedPath",
+                    "The private namespace contains an unsupported filesystem entry",
+                ));
+            }
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+impl NamespaceGuard {
+    /// Use the already retained source closure, including its original parent
+    /// handles. Reopening its pathname conflicts with Windows DELETE ownership
+    /// and could substitute a different source after a lawful move.
+    pub(crate) fn source_entry_exists(&mut self, relative: &Path) -> Result<bool> {
+        let name = relative
+            .file_name()
+            .ok_or_else(|| CoreError::new("invalidPath", "An entry path requires a leaf name"))?;
+        let (_, entries, complete) = self
+            .source_directory_snapshot(relative.parent().unwrap_or_else(|| Path::new("")), 5000)?;
+        qualified_entry_exists(entries, complete, name)
+    }
+}
 pub(crate) fn namespace_relative_path(path: &Path, prefix: &Path) -> Result<Option<PathBuf>> {
     let mut path = path.components();
     for expected in prefix.components() {
@@ -1911,9 +2469,9 @@ pub(crate) fn namespace_path_compare(left: &Path, right: &Path) -> Result<std::c
         }
     }
 }
-pub(crate) fn same_directory(a: &Path, b: &Path) -> Result<bool> {
-    let a = ParentGuard::acquire(&a.join(".directory-identity-prospective"))?;
-    let b = ParentGuard::acquire(&b.join(".directory-identity-prospective"))?;
+pub(crate) fn same_directory(backend: &BackendContext, a: &Path, b: &Path) -> Result<bool> {
+    let a = ParentGuard::acquire(backend, &a.join(".directory-identity-prospective"))?;
+    let b = ParentGuard::acquire(backend, &b.join(".directory-identity-prospective"))?;
     Ok(a.directory_identity()? == b.directory_identity()?
         && a.directory_coordinates()? == b.directory_coordinates()?)
 }

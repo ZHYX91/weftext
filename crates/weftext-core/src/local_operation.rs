@@ -21,7 +21,7 @@ impl Core {
             matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
                 && plan.workspace_id.as_ref() == Some(workspace)
         }) {
-            if self.original_commit_fact(&plan.operation_id)? && original.replace(plan).is_some() {
+            if self.committed(&plan.operation_id)? && original.replace(plan).is_some() {
                 return Err(invalid());
             }
         }
@@ -56,7 +56,7 @@ impl Core {
     }
     pub(crate) fn check_attempt_not_cancelled(&self, id: &str) -> Result<()> {
         // A committed original wins over unrelated delivery metadata.
-        if !self.committed(id) && self.resolved(id)? {
+        if !self.committed(id)? && self.resolved(id)? {
             return Err(CoreError::new(
                 "operationCancelled",
                 UiMessage::error_core_local_operation_original_attempt_durably_terminated_no_effects_were_retried(),
@@ -165,7 +165,7 @@ impl Core {
             ));
         }
         self.validate_file_save_plan(plan)?;
-        if self.original_commit_fact(id)? {
+        if self.committed(id)? {
             return plan.receipt.clone().map(Some).ok_or_else(|| {
                 CoreError::new(
                     "invalidState",
@@ -178,6 +178,7 @@ impl Core {
     /// Public global lookup is local-owner only. Actor APIs use their scoped
     /// records before accessing the same internal Plan and commit fact.
     pub fn local_operation_status(&self, id: &str) -> Result<serde_json::Value> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         valid_operation_id(id)?;
         let Some(plan) = self.operations.get(id) else {
@@ -188,7 +189,7 @@ impl Core {
             };
             return Ok(serde_json::json!({"operationId":id,"status":status}));
         };
-        let committed = self.original_commit_fact(id)?;
+        let committed = self.committed(id)?;
         if let Some(t) = &plan.transaction {
             if t.request.operation_id != id
                 || t.preview.operation_id != id
@@ -274,7 +275,7 @@ impl Core {
                     self.validate_original_reservation_library(&binding.actor_binding())?,
                 );
                 let workspace = self.require_workspace(&root)?;
-                let guard = ParentGuard::acquire(&root.join(".file-result-root"))?;
+                let guard = ParentGuard::acquire(&self.backend, &root.join(".file-result-root"))?;
                 if workspace.workspace_id != binding.workspace_id
                     || guard.directory_identity()? != binding.root_identity
                 {
@@ -322,7 +323,7 @@ impl Core {
             QualifiedInputScope::DeviceUnassigned => (PathBuf::from(&receipt.path), None),
         };
         self.validate_current_file_save_scope(scope, &path)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         if stamp(&guard.open_file(false, false)?)?.identity != identity {
             return Err(CoreError::new(
                 "committedResultUnavailable",
@@ -343,6 +344,7 @@ impl Core {
         Ok((source, document))
     }
     pub fn local_operation_root(&self, id: &str) -> Result<String> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         valid_operation_id(id)?;
         self.operations
@@ -382,7 +384,7 @@ impl Core {
         let bytes = serde_json::to_vec(&record)?;
         journal::decode_resolution(id, &bytes)?;
         self.validate_unregistered_fence_namespace(id)?;
-        journal::private_create(&self.journal_path(id, "resolution"), &bytes)?;
+        journal::private_create(&self.backend, &self.journal_path(id, "resolution"), &bytes)?;
         self.local_operation_status(id)
     }
 }

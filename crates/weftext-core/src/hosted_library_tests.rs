@@ -676,7 +676,7 @@ fn no_input_actor_readers_reject_author_payload_and_never_hide_an_existing_commi
         core.with_actor(ACTOR, |core| core.actor_settle("Note", &saved))
             .is_err()
     );
-    assert!(core.original_commit_fact(&core_id).unwrap());
+    assert!(core.committed(&core_id).unwrap());
     assert_eq!(fs::read(core.journal_path(&core_id, "plan")).unwrap(), plan);
     assert_eq!(
         fs::read(core.journal_path(&core_id, "commit")).unwrap(),

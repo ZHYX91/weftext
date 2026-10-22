@@ -169,15 +169,23 @@ pub(crate) fn navigation_order_directory_entries(
 impl Core {
     fn navigation_settings_were_committed(&self, root: &Path) -> Result<bool> {
         let workspace = self.require_workspace(root)?;
-        Ok(self.operations.values().any(|plan| {
-            plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
-                && self.committed(&plan.operation_id)
-                && plan.transaction.as_ref().is_some_and(|transaction| {
-                    transaction.preview.revisions.contains_key(&display(
-                        &Path::new(&transaction.request.root).join(SETTINGS),
-                    ))
-                })
-        }))
+        self.operations
+            .values()
+            .try_fold(false, |found, plan| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok({
+                        plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
+                            && self.committed(&plan.operation_id)?
+                            && plan.transaction.as_ref().is_some_and(|transaction| {
+                                transaction.preview.revisions.contains_key(&display(
+                                    &Path::new(&transaction.request.root).join(SETTINGS),
+                                ))
+                            })
+                    })
+                }
+            })
     }
 
     fn navigation_members(
@@ -204,7 +212,7 @@ impl Core {
         })?);
         let inventory = self.inventory(root)?;
         let mut complete = inventory.complete;
-        let parent_guard = ParentGuard::acquire(&parent.join(".order-prospective"))?;
+        let parent_guard = ParentGuard::acquire(&self.backend, &parent.join(".order-prospective"))?;
         let (physical, enumerated) = parent_guard.directory_entries(MAX_ORDER_MEMBERS)?;
         complete &= enumerated;
         let visible_directories = inventory
@@ -217,7 +225,7 @@ impl Core {
         // Do not disclose excluded names, but refuse a subset author reorder.
         for (name, attributes) in physical {
             let path = parent.join(name);
-            if attributes & 0x10 != 0
+            if attributes.is_directory()
                 && !crate::inventory::internal(path.strip_prefix(root).unwrap())
                 && !visible_directories.contains(path.as_path())
             {
@@ -251,7 +259,7 @@ impl Core {
                 .map(|entry| PathBuf::from(&entry.path)),
         ) {
             let marker = path.join("weftext.directory.json");
-            if let Some(file) = operations::capture_optional(&marker)? {
+            if let Some(file) = operations::capture_optional(&self.backend, &marker)? {
                 self.check_pending(&marker)?;
                 if crate::directory_identity::validate_directory_marker(&file.bytes).is_err() {
                     if path.parent() == Some(parent.as_path()) {
@@ -264,7 +272,10 @@ impl Core {
                 *directory_ids.entry(id.clone()).or_default() += 1;
                 directories.insert(
                     path,
-                    (id, ParentGuard::acquire(&marker)?.directory_identity()?),
+                    (
+                        id,
+                        ParentGuard::acquire(&self.backend, &marker)?.directory_identity()?,
+                    ),
                 );
             }
         }
@@ -461,7 +472,10 @@ impl Core {
         if matches!(preview.status.as_str(), "committed" | "resolved") {
             return Ok(preview);
         }
-        if self.journal_path(operation_id, "install").exists() {
+        if self
+            .backend
+            .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_author_order_original_installation_may_have_effects_inspect_recovery_instead(),
@@ -542,7 +556,7 @@ impl Core {
                 .chain(members.into_iter().map(|member| PathBuf::from(member.path)))
             {
                 let anchor = path.join(".order-prospective");
-                let guard = ParentGuard::acquire(&anchor)?;
+                let guard = ParentGuard::acquire(&self.backend, &anchor)?;
                 let (entries, complete) = guard.directory_entries(MAX_ORDER_MEMBERS)?;
                 if !complete {
                     return Err(invalid(
@@ -565,7 +579,7 @@ impl Core {
                     path.file_name().unwrap_or_default().to_string_lossy()
                 ));
                 for dependency in [canonical, path.join("weftext.directory.json")] {
-                    if let Some(file) = operations::capture_optional(&dependency)?
+                    if let Some(file) = operations::capture_optional(&self.backend, &dependency)?
                         && !files.iter().any(|old| old.path == file.path)
                     {
                         files.push(file);

@@ -200,14 +200,17 @@ fn slots(steps: &[RelocationStep]) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
+pub(super) fn phases(
+    backend: &crate::BackendContext,
+    steps: &[RelocationStep],
+) -> Result<Vec<StepPhase>> {
     if steps.iter().all(|step| step.parking.is_none()) {
-        return steps.iter().map(phase).collect();
+        return steps.iter().map(|step| phase(backend, step)).collect();
     }
     let observed = slots(steps)?
         .into_iter()
         .map(|path| {
-            let identity = bound_directory(&path)?;
+            let identity = bound_directory(backend, &path)?;
             Ok((path, identity))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -248,11 +251,11 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
                     UiMessage::error_core_operations_original_directory_outside_own_frozen_positions(),
                 ));
             };
-            let old = capture_optional(&path.join(&step.old_leaf))?;
+            let old = capture_optional(backend, &path.join(&step.old_leaf))?;
             let new = if step.old_leaf == step.new_leaf {
                 None
             } else {
-                capture_optional(&path.join(&step.new_leaf))?
+                capture_optional(backend, &path.join(&step.new_leaf))?
             };
             if step.old_leaf == step.new_leaf {
                 return if old.is_some_and(|file| file.stamp.identity == step.leaf_identity) {
@@ -284,7 +287,7 @@ pub(super) fn phases(steps: &[RelocationStep]) -> Result<Vec<StepPhase>> {
         })
         .collect::<Result<Vec<_>>>()?;
     for path in phase_slots(steps, &phases) {
-        if bound_directory(&path)?
+        if bound_directory(backend, &path)?
             .as_ref()
             .is_some_and(|identity| !steps.iter().any(|step| &step.source_identity == identity))
         {
@@ -315,24 +318,157 @@ fn phase_slots(steps: &[RelocationStep], phases: &[StepPhase]) -> Vec<PathBuf> {
         .collect()
 }
 
-pub(super) fn verify_vacancies(steps: &[RelocationStep], phases: &[StepPhase]) -> Result<()> {
+fn current_coordinate(
+    steps: &[RelocationStep],
+    phases: &[StepPhase],
+    step: &RelocationStep,
+    phase: StepPhase,
+) -> PathBuf {
+    match phase {
+        StepPhase::After => target_parent_path(steps, phases, step)
+            .join(Path::new(&step.target).file_name().unwrap()),
+        StepPhase::Parked => PathBuf::from(step.parking.as_ref().unwrap()),
+        _ => source_slot(steps, phases, step),
+    }
+}
+
+/// A Plan supplies the expected phase, never namespace authority. Qualify each
+/// original root through its retained handle, then compare its kernel-reported
+/// current location with that phase before selecting a descendant closure.
+fn qualified_roots(
+    backend: &crate::BackendContext,
+    union: &mut MultiNamespaceGuard,
+    steps: &[RelocationStep],
+    phases: &[StepPhase],
+) -> Result<Vec<PathBuf>> {
+    if steps.len() != phases.len() {
+        return Err(CoreError::new(
+            "invalidPlan",
+            "Missing namespace participant",
+        ));
+    }
+    steps
+        .iter()
+        .zip(phases)
+        .enumerate()
+        .map(|(index, (step, phase))| {
+            let namespace = union.select(index)?;
+            let coordinate = namespace.source_coordinates()?;
+            if namespace.source_identity()? != step.source_identity
+                || crate::backend::namespace_path_compare(
+                    &coordinate,
+                    &backend
+                        .namespace_coordinate(&current_coordinate(steps, phases, step, *phase))?,
+                )? != std::cmp::Ordering::Equal
+            {
+                return Err(CoreError::new(
+                    "thirdState",
+                    "Compound original directory or parent identity changed",
+                ));
+            }
+            Ok(coordinate)
+        })
+        .collect()
+}
+
+fn containing_source(roots: &[PathBuf], path: &Path) -> Result<Option<(usize, PathBuf)>> {
+    let mut selected = None;
+    let mut depth = 0;
+    for (index, root) in roots.iter().enumerate() {
+        if let Some(relative) = crate::backend::namespace_relative_path(path, root)?
+            && !relative.as_os_str().is_empty()
+            && root.components().count() > depth
+        {
+            depth = root.components().count();
+            selected = Some((index, relative));
+        }
+    }
+    Ok(selected)
+}
+
+pub(super) fn entry_parent(
+    backend: &crate::BackendContext,
+    union: &mut MultiNamespaceGuard,
+    steps: &[RelocationStep],
+    phases: &[StepPhase],
+    path: &Path,
+) -> Result<(FileIdentity, Option<ParentGuard>)> {
+    let coordinate = backend.namespace_coordinate(path)?;
+    let roots = qualified_roots(backend, union, steps, phases)?;
+    let result = if let Some((index, relative)) = containing_source(&roots, &coordinate)? {
+        (
+            union.select(index)?.source_parent_identity(&relative)?,
+            None,
+        )
+    } else {
+        // This is an independent external participant, admitted by this Core's
+        // explicit authority and retained for the enclosing operation.
+        let guard = ParentGuard::acquire(backend, path)?;
+        (guard.directory_identity()?, Some(guard))
+    };
+    qualified_roots(backend, union, steps, phases)?;
+    Ok(result)
+}
+
+pub(super) fn ensure_absent(
+    backend: &crate::BackendContext,
+    union: &mut MultiNamespaceGuard,
+    steps: &[RelocationStep],
+    phases: &[StepPhase],
+    path: &Path,
+) -> Result<()> {
+    let coordinate = backend.namespace_coordinate(path)?;
+    let roots = qualified_roots(backend, union, steps, phases)?;
+    let mut is_root = false;
+    for root in &roots {
+        is_root |=
+            crate::backend::namespace_path_compare(&coordinate, root)? == std::cmp::Ordering::Equal;
+    }
+    let exists = if is_root {
+        true
+    } else if let Some((index, relative)) = containing_source(&roots, &coordinate)? {
+        union.select(index)?.source_entry_exists(&relative)?
+    } else {
+        backend.entry_exists(path)?
+    };
+    qualified_roots(backend, union, steps, phases)?;
+    if exists {
+        Err(CoreError::new(
+            "exists",
+            "Create-only target is occupied; no overwrite is allowed",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub(super) fn verify_vacancies(
+    backend: &crate::BackendContext,
+    union: &mut MultiNamespaceGuard,
+    steps: &[RelocationStep],
+    phases: &[StepPhase],
+) -> Result<()> {
+    let roots = qualified_roots(backend, union, steps, phases)?;
     for path in phase_slots(steps, phases) {
+        let coordinate = backend.namespace_coordinate(&path)?;
         let mut owned = false;
-        for (step, phase) in steps.iter().zip(phases) {
-            if crate::backend::namespace_path_compare(&path, coordinate(step, *phase))?
+        for root in &roots {
+            if crate::backend::namespace_path_compare(&coordinate, root)?
                 == std::cmp::Ordering::Equal
             {
                 owned = true;
             }
         }
         if !owned {
-            ensure_absent(&path)?;
+            ensure_absent(backend, union, steps, phases, &path)?;
         }
     }
+    qualified_roots(backend, union, steps, phases)?;
     Ok(())
 }
 
 pub(super) fn acquire(
+    backend: &crate::BackendContext,
     steps: &[RelocationStep],
     phases: &[StepPhase],
     keys: &BTreeMap<String, PathBuf>,
@@ -353,6 +489,7 @@ pub(super) fn acquire(
             anchors.insert(anchor.to_path_buf());
         }
         return MultiNamespaceGuard::acquire_anchors(
+            backend,
             &anchors.into_iter().collect::<Vec<_>>(),
             &planned.into_iter().collect::<Vec<_>>(),
         );
@@ -384,9 +521,10 @@ pub(super) fn acquire(
         .collect::<Vec<_>>();
     if ancestors.is_empty() {
         return if keys.is_empty() {
-            MultiNamespaceGuard::acquire(&pairs)
+            MultiNamespaceGuard::acquire(backend, &pairs)
         } else {
             MultiNamespaceGuard::acquire_planned(
+                backend,
                 &pairs,
                 &keys.values().cloned().collect::<Vec<_>>(),
             )
@@ -394,14 +532,177 @@ pub(super) fn acquire(
     }
     if forest(steps) {
         return MultiNamespaceGuard::acquire_forest_with_ancestors(
+            backend,
             &pairs,
             &keys.values().cloned().collect::<Vec<_>>(),
             &ancestors,
         );
     }
     MultiNamespaceGuard::acquire_with_ancestors(
+        backend,
         &pairs,
         &keys.values().cloned().collect::<Vec<_>>(),
         &ancestors,
     )
+}
+
+#[cfg(test)]
+mod retained_presence_tests {
+    use super::*;
+    use crate::test_support::{FixtureRoots, open_core};
+
+    #[test]
+    fn nested_presence_follows_actual_original_roots_through_each_phase() {
+        let roots = FixtureRoots::new();
+        let core = open_core(roots.a_path().join("private")).unwrap();
+        let backend = &core.backend;
+        let outer = roots.a_path().join("Outer");
+        let inner = outer.join("Inner");
+        let container = roots.a_path().join("Container");
+        let external = roots.a_path().join("External");
+        for path in [&outer, &inner, &container, &external] {
+            backend.create_private_directory(path).unwrap();
+        }
+        for path in [outer.join("Outer.typ"), inner.join("kept.bin")] {
+            crate::journal::private_create(backend, &path, b"original bytes").unwrap();
+        }
+        let identity = |path: &Path| {
+            ParentGuard::acquire(backend, &path.join(".identity"))
+                .unwrap()
+                .directory_identity()
+                .unwrap()
+        };
+        let outer_id = identity(&outer);
+        let inner_id = identity(&inner);
+        let canonical = backend.open_read(outer.join("Outer.typ")).unwrap();
+        let leaf_id = stamp(&canonical).unwrap().identity;
+        drop(canonical);
+        let inner_file = backend.open_read(inner.join("kept.bin")).unwrap();
+        let inner_leaf_id = stamp(&inner_file).unwrap().identity;
+        drop(inner_file);
+        let final_outer = container.join("PlacedOuter");
+        let parked_outer = roots.a_path().join("ParkedOuter");
+        let parked_inner = roots.a_path().join("ParkedInner");
+        let steps = vec![
+            RelocationStep {
+                source: display(&outer),
+                target: display(&final_outer),
+                parking: Some(display(&parked_outer)),
+                source_identity: outer_id.clone(),
+                source_parent_identity: identity(roots.a_path()),
+                target_parent_identity: RelocationParent::Existing(identity(&container)),
+                old_leaf: "Outer.typ".into(),
+                new_leaf: "Outer.typ".into(),
+                leaf_identity: leaf_id.clone(),
+                members: vec![],
+            },
+            RelocationStep {
+                source: display(&inner),
+                target: display(&final_outer.join("InnerRenamed")),
+                parking: Some(display(&parked_inner)),
+                source_identity: inner_id.clone(),
+                source_parent_identity: outer_id.clone(),
+                target_parent_identity: RelocationParent::Existing(outer_id),
+                old_leaf: "kept.bin".into(),
+                new_leaf: "kept.bin".into(),
+                leaf_identity: inner_leaf_id,
+                members: vec![],
+            },
+        ];
+        let mut union = MultiNamespaceGuard::acquire_forest_with_ancestors(
+            backend,
+            &[(&outer, &container), (&inner, &outer)],
+            &[],
+            &[],
+        )
+        .unwrap();
+        let mut phases = vec![StepPhase::Before; 2];
+        verify_vacancies(backend, &mut union, &steps, &phases).unwrap();
+        assert_eq!(
+            ensure_absent(
+                backend,
+                &mut union,
+                &steps,
+                &phases,
+                &inner.join("kept.bin")
+            )
+            .unwrap_err()
+            .code,
+            "exists"
+        );
+        assert_eq!(
+            entry_parent(
+                backend,
+                &mut union,
+                &steps,
+                &phases,
+                &inner.join("absent.bin")
+            )
+            .unwrap()
+            .0,
+            inner_id
+        );
+        union.move_source_to(1, &parked_inner).unwrap();
+        phases[1] = StepPhase::Parked;
+        verify_vacancies(backend, &mut union, &steps, &phases).unwrap();
+        assert_eq!(
+            union
+                .select(0)
+                .unwrap()
+                .source_entry_exists(Path::new("Inner/kept.bin"))
+                .unwrap_err()
+                .code,
+            "thirdState"
+        );
+        assert_eq!(
+            ensure_absent(backend, &mut union, &steps, &[StepPhase::Before; 2], &inner)
+                .unwrap_err()
+                .code,
+            "thirdState"
+        );
+        ensure_absent(backend, &mut union, &steps, &phases, &inner).unwrap();
+        union.move_source_to(0, &final_outer).unwrap();
+        phases[0] = StepPhase::After;
+        verify_vacancies(backend, &mut union, &steps, &phases).unwrap();
+        ensure_absent(
+            backend,
+            &mut union,
+            &steps,
+            &phases,
+            &final_outer.join("Inner"),
+        )
+        .unwrap();
+        union
+            .finish_source_move(0, "PlacedOuter", "Outer.typ", &leaf_id)
+            .unwrap();
+        union
+            .select(1)
+            .unwrap()
+            .move_source("InnerRenamed")
+            .unwrap();
+        phases[1] = StepPhase::After;
+        verify_vacancies(backend, &mut union, &steps, &phases).unwrap();
+        let target_leaf = final_outer.join("InnerRenamed/kept.bin");
+        assert_eq!(
+            ensure_absent(backend, &mut union, &steps, &phases, &target_leaf)
+                .unwrap_err()
+                .code,
+            "exists"
+        );
+        let external_leaf = external.join("foreign.bin");
+        let (_, external_guard) =
+            entry_parent(backend, &mut union, &steps, &phases, &external_leaf).unwrap();
+        assert!(external_guard.is_some());
+        ensure_absent(backend, &mut union, &steps, &phases, &external_leaf).unwrap();
+        drop(external_guard);
+        crate::journal::private_create(backend, &external_leaf, b"foreign bytes").unwrap();
+        assert_eq!(
+            ensure_absent(backend, &mut union, &steps, &phases, &external_leaf)
+                .unwrap_err()
+                .code,
+            "exists"
+        );
+        assert_eq!(std::fs::read(&target_leaf).unwrap(), b"original bytes");
+        assert_eq!(std::fs::read(&external_leaf).unwrap(), b"foreign bytes");
+    }
 }

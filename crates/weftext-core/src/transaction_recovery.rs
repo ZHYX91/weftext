@@ -9,8 +9,8 @@ use weftext_messages::UiMessage;
 pub(crate) struct RecoveryCapture {
     pub(crate) members: Vec<RecoveryMember>,
     pub(crate) guards: Vec<ParentGuard>,
-    pub(crate) files: Vec<(usize, File)>,
-    pub(crate) placement_files: Vec<File>,
+    pub(crate) files: Vec<(usize, backend::BoundFile)>,
+    pub(crate) placement_files: Vec<backend::BoundFile>,
     pub(crate) changes: Vec<FileChange>,
     pub(crate) coherence: String,
     pub(crate) compound: Option<operations::compound::CompoundCapture>,
@@ -37,8 +37,10 @@ impl Core {
         }
         let t = plan.transaction.as_ref().unwrap();
         let capture = self.capture_transaction_recovery(plan, false)?;
-        let installing = self.journal_path(&plan.operation_id, "install").exists();
-        let status = if self.committed(&plan.operation_id) {
+        let installing = self
+            .backend
+            .entry_exists(self.journal_path(&plan.operation_id, "install"))?;
+        let status = if self.committed(&plan.operation_id)? {
             "committed"
         } else if self.resolved(&plan.operation_id)? {
             "resolved"
@@ -54,7 +56,7 @@ impl Core {
             }
         };
         let mut allowed_actions = Vec::new();
-        if !self.committed(&plan.operation_id) && !self.resolved(&plan.operation_id)? {
+        if !self.committed(&plan.operation_id)? && !self.resolved(&plan.operation_id)? {
             if capture.coherence == "knownBefore" {
                 allowed_actions.push("keepCurrent".into());
             }
@@ -105,14 +107,16 @@ impl Core {
                 UiMessage::error_core_transaction_recovery_choose_action_permitted_by_inspected_original_plan(),
             ));
         }
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return self.inspect_transaction_recovery(plan);
         }
         let t = plan.transaction.as_ref().unwrap();
         let mut capture =
             self.capture_transaction_recovery(plan, action == "resumeOriginalPlan")?;
         let _private_capture = self.validate_owner_backup_private(plan, true)?;
-        let installing = self.journal_path(&plan.operation_id, "install").exists();
+        let installing = self
+            .backend
+            .entry_exists(self.journal_path(&plan.operation_id, "install"))?;
         if action == "keepCurrent" {
             if capture.coherence != "knownBefore" {
                 return Err(CoreError::new(
@@ -201,7 +205,8 @@ impl Core {
                         let mut file = if let Some(file) = compound_file {
                             file
                         } else {
-                            let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                            let guard =
+                                ParentGuard::acquire(&self.backend, Path::new(&change.path))?;
                             let file = guard
                                 .open_file(true, true)
                                 .map_err(|e| recovery_failure(plan, e))?;
@@ -285,7 +290,7 @@ impl Core {
             coherence: String::new(),
             compound: None,
         };
-        if !self.committed(&plan.operation_id)
+        if !self.committed(&plan.operation_id)?
             && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_operation_pending(plan)
         {
@@ -307,7 +312,7 @@ impl Core {
             });
         }
         if plan.sync_application.is_some()
-            && !self.committed(&plan.operation_id)
+            && !self.committed(&plan.operation_id)?
             && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_sync_recovery_cut(plan)
         {
@@ -572,7 +577,7 @@ impl Core {
                     &mut capture,
                 )?;
                 let member = capture.members.last_mut().unwrap();
-                match ParentGuard::acquire(Path::new(&absent.path)) {
+                match ParentGuard::acquire(&self.backend, Path::new(&absent.path)) {
                     Ok(guard) => {
                         if guard.directory_identity()? != absent.parent {
                             member.state = "thirdState".into();
@@ -619,7 +624,10 @@ impl Core {
                 Some(&directory.identity),
                 Some(&directory.identity),
             );
-            match ParentGuard::acquire(&Path::new(&directory.path).join(".recovery-prospective")) {
+            match ParentGuard::acquire(
+                &self.backend,
+                &Path::new(&directory.path).join(".recovery-prospective"),
+            ) {
                 Ok(guard) => {
                     let identity = guard.directory_identity()?;
                     let (entries, complete) = guard.directory_entries(5000)?;
@@ -696,7 +704,7 @@ impl Core {
             current_identity: None,
             description: None,
         };
-        match ParentGuard::acquire(Path::new(path)) {
+        match ParentGuard::acquire(&self.backend, Path::new(path)) {
             Ok(guard) => {
                 let opened = if !write
                     && plan.transaction.as_ref().is_some_and(|t| {
@@ -833,7 +841,10 @@ impl Core {
                 b"{\"kind\":\"directory\",\"identity\":\"allocatedByCreateOnly\"}",
             ));
         }
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 let bound = expected.as_ref() == Some(&identity);
@@ -863,7 +874,7 @@ impl Core {
                     }
                     .into(),
                 );
-                if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
+                if let Ok(parent) = ParentGuard::acquire(&self.backend, Path::new(path)) {
                     capture.guards.push(parent);
                 }
             }
@@ -984,7 +995,7 @@ impl Core {
                 Some(&member.identity),
             );
             fact.kind = "file".into();
-            match ParentGuard::acquire(&locator).and_then(|g| {
+            match ParentGuard::acquire(&self.backend, &locator).and_then(|g| {
                 if g.directory_identity()? != member.parent {
                     return Err(CoreError::new(
                         "thirdState",
@@ -1132,11 +1143,11 @@ impl Core {
                 capture,
             )?;
             let intermediate = capture.members.last_mut().unwrap();
-            if intermediate.current_identity.as_ref().is_some_and(|i| {
-                i.volume == leaf_identity.volume
-                    && i.index == leaf_identity.index.to_string()
-                    && i.created == leaf_identity.created.to_string()
-            }) && intermediate.current.sha256.as_deref() == Some(hash(&canonical.bytes).as_str())
+            if intermediate
+                .current_identity
+                .as_ref()
+                .is_some_and(|i| i == &RecoveryIdentity::from(leaf_identity))
+                && intermediate.current.sha256.as_deref() == Some(hash(&canonical.bytes).as_str())
             {
                 intermediate.state = "knownIntermediate".into();
                 intermediate.description =
@@ -1156,7 +1167,10 @@ impl Core {
     ) -> Result<()> {
         let expected = before.or(after).unwrap();
         let mut member = directory_member(path, "namespace", before, after);
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 member.current = directory_blob(Some(&identity));
@@ -1202,7 +1216,7 @@ impl Core {
                 }
                 .into();
                 member.identity_binding = "missing".into();
-                if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
+                if let Ok(parent) = ParentGuard::acquire(&self.backend, Path::new(path)) {
                     capture.guards.push(parent);
                 }
             }
@@ -1218,7 +1232,10 @@ impl Core {
         capture: &mut RecoveryCapture,
     ) -> Result<()> {
         let mut member = directory_member(path, "readDependency", Some(expected), Some(expected));
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 let bound = &identity == expected;

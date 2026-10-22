@@ -322,7 +322,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
             // Backup above preserves the uncommitted proposal. Creating a new
             // library at its old root remains fenced until explicit recovery.
             let pending = ids.last().unwrap();
-            assert!(!f.core.original_commit_fact(pending).unwrap());
+            assert!(!f.core.committed(pending).unwrap());
             assert_eq!(
                 f.core
                     .resolve_recovery(pending, "keepCurrent")
@@ -629,7 +629,7 @@ fn owner_backup_keeps_scoped_actor_drafts_history_unknown_fences_and_pending_sou
     assert!(f.core.inspect_recovery(&pending).unwrap().status != "committed");
     let backed = fs::read_to_string(target.join("library/A/A.typ")).unwrap();
     assert!(backed.contains("PENDING_SELECTED"));
-    assert!(!f.core.committed(&pending));
+    assert!(!f.core.committed(&pending).unwrap());
 }
 
 #[test]

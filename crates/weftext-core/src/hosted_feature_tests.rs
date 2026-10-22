@@ -417,6 +417,7 @@ fn hosted_feature_install_marker_cannot_be_cancelled_or_blindly_replayed() {
     let prepared = f.prepare(&op);
     let internal = f.internal(&op);
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -996,6 +997,7 @@ fn hosted_feature_docx_unknown_fence_and_install_marker_survive_restart() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -1124,7 +1126,11 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
             // Model a crash after Core's frozen plan but before its safe loss list
             // became durable or reached the browser.
             record.feature.as_mut().unwrap().import_losses = None;
-            private_replace(&core.actor_record(&op)?, &serde_json::to_vec(&record)?)
+            private_replace(
+                &crate::BackendContext::local().unwrap(),
+                &core.actor_record(&op)?,
+                &serde_json::to_vec(&record)?,
+            )
         })
         .unwrap();
     f.restart();
@@ -1139,13 +1145,14 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
     let (record_path, original_bytes, frozen) = f
         .core
         .with_actor(IMPORT_ACTOR, |core| {
-            let record = core.actor_feature_record("Imported", &op)?.unwrap();
-            let path = core.actor_record(&op)?;
-            Ok((
-                path.clone(),
-                fs::read(path)?,
-                record.feature.unwrap().import_losses.unwrap(),
-            ))
+            let mut record = core.actor_feature_record("Imported", &op)?.unwrap();
+            assert!(record.feature.as_ref().unwrap().import_losses.is_some());
+            record.feature.as_mut().unwrap().import_losses = Some(original.clone());
+            private_replace(
+                &crate::BackendContext::local().unwrap(),
+                &core.actor_record(&op)?,
+                &serde_json::to_vec(&record)?,
+            )
         })
         .unwrap();
     for loss in &frozen {

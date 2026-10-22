@@ -281,11 +281,16 @@ fn original_created_settings_after_image_recovers_without_treating_it_as_a_new_s
     };
     let after = changes[0].after.clone();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
-    let guard = ParentGuard::acquire(&root.join(SETTINGS)).unwrap();
+    let guard = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &root.join(SETTINGS),
+    )
+    .unwrap();
     let mut file = guard.open_file(true, true).unwrap();
     core.record_materialized(&preview.operation_id, &root.join(SETTINGS), &file)
         .unwrap();

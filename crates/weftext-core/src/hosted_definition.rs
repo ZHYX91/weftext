@@ -186,10 +186,11 @@ fn exact_insertion(patch: &FieldPatch) -> bool {
 }
 
 fn bounded_record(
+    backend: &crate::BackendContext,
     path: &Path,
     accept: impl FnOnce(&DefinitionSaveMetadata) -> Result<bool>,
 ) -> Result<Option<(DefinitionSaveRecord, Vec<u8>)>> {
-    let guard = match ParentGuard::acquire(path) {
+    let guard = match ParentGuard::acquire(backend, path) {
         Ok(guard) => guard,
         Err(error) if error.code == "missing" => return Ok(None),
         Err(error) => return Err(error),
@@ -317,7 +318,7 @@ impl Core {
             ));
         }
         let birth = self
-            .admitted_binding(&session.stamp.identity)
+            .admitted_binding(&session.stamp.identity)?
             .ok_or_else(conflict)?;
         if birth.workspace_id != workspace.workspace_id
             || Some(&birth.node_id) != session.node_id.as_ref()
@@ -447,7 +448,11 @@ impl Core {
                 ),
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         test_failpoint("reservationDurable")?;
         self.actor_definition_details(resource, &request.operation_id)?
@@ -477,6 +482,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.definition_record(resource, operation)? else {
             return Ok(None);
         };
@@ -511,7 +517,7 @@ impl Core {
                 {
                     continue;
                 }
-                if self.committed(&plan.operation_id) {
+                if self.committed(&plan.operation_id)? {
                     state = "admitted";
                     saved = Some(admissions.save_operation_id);
                     break;
@@ -583,9 +589,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -599,13 +605,14 @@ impl Core {
         root: &Path,
         session_id: &str,
     ) -> Result<Vec<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         valid_resource(resource)?;
         self.check_actor_session(session_id)?;
         self.check_session_base(session_id, &self.sessions[session_id].base_id)?;
         let (owner, identity) = self.definition_owner(root, session_id)?;
         let mut result = vec![];
         let mut bytes_used = 0usize;
-        for entry in fs::read_dir(self.draft_directory("operations"))? {
+        for entry in self.backend.read_dir(self.draft_directory("operations"))? {
             let path = entry?.path();
             let Some(operation) = path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
@@ -811,7 +818,7 @@ impl Core {
         let path = self.journal_path(&record.core_operation_id, "definition-reservations");
         let bytes = serde_json::to_vec(&admissions)?;
         let expected = DefinitionSaveMetadata::from(&admissions);
-        if let Some((_, original)) = bounded_record(&path, |metadata| {
+        if let Some((_, original)) = bounded_record(&self.backend, &path, |metadata| {
             if *metadata != expected {
                 return Err(conflict());
             }
@@ -821,7 +828,7 @@ impl Core {
                 return Err(conflict());
             }
         } else {
-            journal::private_create(&path, &bytes)?;
+            journal::private_create(&self.backend, &path, &bytes)?;
         }
         #[cfg(all(test, windows))]
         test_failpoint("admissionsDurable")?;
@@ -848,7 +855,7 @@ impl Core {
         if scope.is_some_and(|scope| scope != &plan.file_save.as_ref().unwrap().scope) {
             return Ok(None);
         }
-        let Some((record, _)) = bounded_record(&path, |metadata| {
+        let Some((record, _)) = bounded_record(&self.backend, &path, |metadata| {
             if metadata.core_operation_id != plan.operation_id {
                 return Err(conflict());
             }
@@ -896,7 +903,7 @@ impl Core {
         owner: &NodeRef,
         key: &str,
     ) -> Result<bool> {
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Ok(false);
         }
         if plan.kind != "save" {

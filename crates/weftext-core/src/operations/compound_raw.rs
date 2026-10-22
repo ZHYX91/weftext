@@ -73,11 +73,7 @@ impl Budget {
             return Ok(());
         }
         let workspace = core.require_workspace(Path::new(&t.request.root))?;
-        for plan in core
-            .operations
-            .values()
-            .filter(|plan| core.committed(&plan.operation_id))
-        {
+        for plan in core.committed_plans()?.into_iter() {
             if plan.workspace_id.as_deref() == Some(workspace.workspace_id.as_str()) {
                 for birth in core.read_births(&plan.operation_id)? {
                     if birth.workspace_id == workspace.workspace_id
@@ -89,10 +85,13 @@ impl Budget {
                     }
                 }
             }
-            let bytes = match fs::read(core.journal_path(&plan.operation_id, "resource-births")) {
+            let bytes = match core
+                .backend
+                .read_bytes(core.journal_path(&plan.operation_id, "resource-births"))
+            {
                 Ok(bytes) => bytes,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error.into()),
+                Err(error) if error.code == "missing" => continue,
+                Err(error) => return Err(error),
             };
             for birth in serde_json::from_slice::<Vec<ResourceBirth>>(&bytes)? {
                 if birth.workspace_id == workspace.workspace_id
@@ -125,7 +124,7 @@ fn changed_member() -> CoreError {
 /// of a complete validation. Bodies are neither read nor admitted.
 pub(super) fn validate_additions(
     namespace: &mut NamespaceGuard,
-    additions: Vec<(PathBuf, OsString, u32)>,
+    additions: Vec<(PathBuf, OsString, backend::EntryMetadata)>,
     budget: &mut Budget,
 ) -> Result<()> {
     if additions.is_empty() {
@@ -133,14 +132,14 @@ pub(super) fn validate_additions(
     }
     let mut queue = additions;
     while let Some((parent, name, attributes)) = queue.pop() {
-        if attributes & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+        if attributes.is_unsupported() {
             return Err(CoreError::new(
                 "unsupportedPath",
                 UiMessage::error_core_operations_extra_companion_reparse_offline_or_cloud_placeholder(),
             ));
         }
         let relative = parent.join(name);
-        let directory = attributes & 0x10 != 0;
+        let directory = attributes.is_directory();
         let identity = if directory {
             let (identity, entries, complete) =
                 namespace.source_directory_snapshot(&relative, budget.remaining())?;

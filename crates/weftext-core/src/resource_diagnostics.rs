@@ -35,23 +35,12 @@ pub(crate) fn error(phase: &str, token: &str, error: &CoreError) {
     emit(phase, token, &error.code, error.os_error());
 }
 
-pub(crate) fn io_error(phase: &str, token: &str, error: &std::io::Error) {
-    emit(phase, token, "io", error.raw_os_error());
-}
-
 pub(crate) fn branch(phase: &str, token: &str, code: &str) {
     emit(phase, token, code, None);
 }
 
 pub(crate) fn stamp_token(stamp: &FileStamp) -> String {
-    format!(
-        "{}:{}:{}:{}:{}",
-        stamp.identity.volume,
-        stamp.identity.index,
-        stamp.identity.created,
-        stamp.modified,
-        stamp.size
-    )
+    format!("{:?}:{}:{}", stamp.identity, stamp.modified, stamp.size)
 }
 
 #[cfg(test)]

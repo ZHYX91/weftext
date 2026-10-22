@@ -1155,7 +1155,7 @@ impl Core {
     /// The shared execution/recovery cut gate invokes this before its first
     /// effect. Negative received dependencies cannot be protected by disk-only
     /// absent guards when a new remote configuration has arrived meanwhile.
-    #[cfg(test)]
+    #[cfg(all(test, windows))]
     pub(crate) fn validate_sync_semantic_evidence(
         &self,
         operation_id: &str,

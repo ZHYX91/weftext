@@ -206,6 +206,7 @@ impl Core {
             owner_backup: None,
         };
         journal::private_create(
+            &self.backend,
             &self.actor_record(operation)?,
             &self.actor_operation_bytes(&record)?,
         )?;

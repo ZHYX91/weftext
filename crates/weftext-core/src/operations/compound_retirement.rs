@@ -5,7 +5,7 @@ use weftext_messages::UiMessage;
 
 pub(super) struct Proof {
     pub member: RecoveryMember,
-    pub file: File,
+    pub file: backend::BoundFile,
     pub guard: Option<ParentGuard>,
 }
 
@@ -55,7 +55,7 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
     Ok(())
 }
 
-fn optional_file(result: Result<File>) -> Result<Option<File>> {
+fn optional_file(result: Result<backend::BoundFile>) -> Result<Option<backend::BoundFile>> {
     match result {
         Ok(file) => Ok(Some(file)),
         Err(error) if error.code == "missing" => Ok(None),
@@ -66,7 +66,7 @@ fn optional_file(result: Result<File>) -> Result<Option<File>> {
 pub(super) fn check_file(
     t: &FrozenOperation,
     retired: &RetiredMember,
-    file: &mut File,
+    file: &mut backend::BoundFile,
 ) -> Result<Vec<u8>> {
     let original = t
         .files
@@ -113,7 +113,7 @@ pub(super) fn capture(
             }
             optional_file(namespace.open_source_retiring(&relative, write))?
         } else {
-            let guard = ParentGuard::acquire(Path::new(&retired.source))?;
+            let guard = ParentGuard::acquire(&core.backend, Path::new(&retired.source))?;
             if guard.directory_identity()? != retired.parent {
                 return Err(CoreError::new(
                     "thirdState",
@@ -129,7 +129,7 @@ pub(super) fn capture(
             Path::new(&retired.target).parent().unwrap(),
         )?;
         let mut target_guard = None;
-        let target = match ParentGuard::acquire(Path::new(&retired.target)) {
+        let target = match ParentGuard::acquire(&core.backend, Path::new(&retired.target)) {
             Ok(guard) => {
                 if Some(guard.directory_identity()?) != expected_parent {
                     return Err(CoreError::new(
@@ -211,9 +211,10 @@ pub(super) fn refresh(core: &Core, plan: &Plan, capture: &mut RecoveryCapture) -
 pub(super) fn verify_held(
     core: &Core,
     plan: &Plan,
-    union: &MultiNamespaceGuard,
+    union: &mut MultiNamespaceGuard,
+    phases: &[StepPhase],
     retired: &RetiredMember,
-    file: &mut File,
+    file: &mut backend::BoundFile,
 ) -> Result<()> {
     let t = plan.transaction.as_ref().unwrap();
     check_file(t, retired, file)?;
@@ -236,6 +237,12 @@ pub(super) fn verify_held(
             UiMessage::error_core_operations_original_retired_member_outside_frozen_preservation_slot(),
         ));
     }
-    ensure_absent(Path::new(&t.relocated_path(&retired.source)))?;
+    placement::ensure_absent(
+        &core.backend,
+        union,
+        steps(t)?,
+        phases,
+        Path::new(&t.relocated_path(&retired.source)),
+    )?;
     Ok(())
 }

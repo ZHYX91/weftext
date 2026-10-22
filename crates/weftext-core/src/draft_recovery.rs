@@ -125,7 +125,7 @@ impl Core {
         // A path-equivalent replacement, changed disk basis or pending operation
         // cannot transfer an original producer's continuation authority.
         self.check_pending(&session.path)?;
-        let guard = ParentGuard::acquire(&session.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let mut file = guard.open_file(false, false)?;
         if stamp(&file)? != session.stamp
             || read_source(&mut file)? != session.bytes
@@ -216,7 +216,7 @@ impl Core {
         let scope =
             self.draft_scope_for_session(&request.session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_file(false, false)?;
         // Read only original scope metadata before buffering author payload.
         if file_save_scope::read_input_scope(&mut file)? != scope {
@@ -410,11 +410,7 @@ impl Core {
         let mut paths = BTreeSet::from([first.to_owned()]);
         loop {
             let previous = paths.len();
-            for plan in self
-                .operations
-                .values()
-                .filter(|plan| self.committed(&plan.operation_id))
-            {
+            for plan in self.committed_plans()?.into_iter() {
                 let Some(transaction) = &plan.transaction else {
                     continue;
                 };
@@ -491,7 +487,10 @@ impl Core {
                         else {
                             continue;
                         };
-                        let guard = ParentGuard::acquire(&actual_root.join(".draft-prospective"))?;
+                        let guard = ParentGuard::acquire(
+                            &self.backend,
+                            &actual_root.join(".draft-prospective"),
+                        )?;
                         if guard.directory_identity()? != *source_identity {
                             continue;
                         }
@@ -532,7 +531,7 @@ impl Core {
         let path = self.object_draft_path(identity, &draft.scope)?;
         // Inspect metadata before replacing the one current record.
         let _ = self.read_draft_record(&path, &draft.scope, &draft.identity)?;
-        private_replace(&path, &bytes)
+        private_replace(&self.backend, &path, &bytes)
     }
     pub(super) fn read_draft_record(
         &self,
@@ -540,7 +539,7 @@ impl Core {
         scope: &QualifiedInputScope,
         identity: &FileIdentity,
     ) -> Result<Option<(Draft, Vec<u8>)>> {
-        let guard = match ParentGuard::acquire(path) {
+        let guard = match ParentGuard::acquire(&self.backend, path) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" => return Ok(None),
             Err(error) => return Err(error),
@@ -575,7 +574,7 @@ impl Core {
     }
     #[cfg(test)]
     pub(super) fn draft_path(&self, path: &Path) -> PathBuf {
-        let actual = ParentGuard::acquire(path)
+        let actual = ParentGuard::acquire(&self.backend, path)
             .and_then(|guard| guard.open_file(false, false))
             .and_then(|file| stamp(&file));
         if let (Ok(actual), Ok(scope)) = (actual, self.capture_file_save_scope(path)) {
@@ -584,7 +583,7 @@ impl Core {
         self.legacy_draft_path(path)
     }
     pub(super) fn read_relocated_draft(&self, path: &Path) -> Result<Option<Draft>> {
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let mut current = guard.open_file(false, false)?;
         let identity = stamp(&current)?.identity;
         let source = decode(&read_source(&mut current)?)?;
@@ -628,6 +627,7 @@ impl Core {
             let _ = encode_draft_record(&next)?;
             // Preserve the original before rebinding the unique current record.
             journal::private_create(
+                &self.backend,
                 &self
                     .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),

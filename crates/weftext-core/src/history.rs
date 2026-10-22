@@ -136,12 +136,12 @@ impl Core {
             )
         })?;
         self.check_pending(&session.path)?;
-        let guard = ParentGuard::acquire(&session.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let mut handle = guard.open_file(false, false)?;
         let observed = stamp(&handle)?;
         self.check_pending_identity(&observed.identity)?;
         let bytes = read_source(&mut handle)?;
-        let birth = self.admitted_binding(&observed.identity).ok_or_else(|| {
+        let birth = self.admitted_binding(&observed.identity)?.ok_or_else(|| {
             CoreError::new(
                 "historyUnavailable",
                 UiMessage::error_core_history_source_has_no_admitted_stable_note_identity(),
@@ -162,11 +162,23 @@ impl Core {
         let root = self
             .operations
             .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(&birth.workspace_id)
-                    && self.committed(&p.operation_id)
-            })
+            .try_fold(None, |found, p| -> Result<Option<_>> {
+                if found.is_some() {
+                    Ok(found)
+                } else {
+                    Ok(
+                        if {
+                            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && p.workspace_id.as_ref() == Some(&birth.workspace_id)
+                                && self.committed(&p.operation_id)?
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
+                }
+            })?
             .map(|p| PathBuf::from(&p.path))
             .ok_or_else(|| {
                 CoreError::new(
@@ -215,7 +227,7 @@ impl Core {
         if places.len() != 1
             || !places
                 .iter()
-                .any(|p| same_placement_path(Path::new(p), current).unwrap_or(false))
+                .any(|p| same_placement_path(&self.backend, Path::new(p), current).unwrap_or(false))
         {
             return Err(CoreError::new(
                 "identityPending",
@@ -236,11 +248,7 @@ impl Core {
     ) -> Result<BTreeSet<String>> {
         let mut places = BTreeSet::<String>::new();
         let mut birth_sequence = None;
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             if self.read_births(&p.operation_id)?.iter().any(|b| {
                 b.node_id == birth.node_id
                     && b.workspace_id == birth.workspace_id
@@ -301,11 +309,7 @@ impl Core {
         through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
         let mut edges = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             if let Some(t) = &p.transaction
                 && matches!(
                     t.mutation,
@@ -411,8 +415,11 @@ impl Core {
         &self,
         plan: &journal::Plan,
     ) -> Result<(Option<u64>, Option<u64>)> {
-        let v: serde_json::Value =
-            serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "commit"))?)?;
+        let v: serde_json::Value = serde_json::from_slice(
+            &self
+                .backend
+                .read_bytes(self.journal_path(&plan.operation_id, "commit"))?,
+        )?;
         if v["operationId"] != plan.operation_id
             || v["fingerprint"] != plan.fingerprint
             || v["storageProfile"] != STORAGE_PROFILE
@@ -430,11 +437,7 @@ impl Core {
     }
     fn history_records_for(&self, birth: &Birth) -> Result<Vec<HistoryRecord>> {
         let mut records = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             let candidate = if matches!(p.kind.as_str(), "save" | "createNote") {
                 (p.identity.as_ref() == Some(&birth.identity)
                     || (p.node_id.as_ref() == Some(&birth.node_id)
@@ -526,8 +529,11 @@ impl Core {
                 }
                 // A cached plan is not a replacement for a removed/unreadable
                 // retained record. Re-read and require its exact payload.
-                let retained: journal::Plan =
-                    serde_json::from_slice(&fs::read(self.journal_path(&p.operation_id, "plan"))?)?;
+                let retained: journal::Plan = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&p.operation_id, "plan"))?,
+                )?;
                 if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
                     return Err(CoreError::new(
                         "invalidState",
@@ -566,7 +572,9 @@ impl Core {
                 }
                 Err(e) => {
                     version.status = match e.code.as_str() {
-                        "missing" => "missing",
+                        // Missing committed observations stay unavailable. This
+                        // presentation state never admits a new ordinary source.
+                        "missing" | "identityPending" => "missing",
                         "unsupportedFileSaveEvidence" => "unsupported",
                         "permissionDenied" | "io" | "busy" => "unreadable",
                         _ => "invalid",
@@ -589,13 +597,32 @@ impl Core {
         // This is an existing reservation + committed frozen read, not a new
         // history record, and must not be omitted merely because it was not the
         // operation's final output.
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_ref() == Some(&birth.workspace_id)
-        }) {
-            let bytes = match fs::read(self.journal_path(&p.operation_id, "revision-reservation")) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&birth.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
+            let bytes = match self
+                .backend
+                .read_bytes(self.journal_path(&p.operation_id, "revision-reservation"))
+            {
                 Ok(bytes) => bytes,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.into()),
+                Err(e) if e.code == "missing" => continue,
+                Err(e) => return Err(e),
             };
             let r: operations::RevisionReservation = serde_json::from_slice(&bytes)?;
             if r.stamp.identity != birth.identity
@@ -611,8 +638,11 @@ impl Core {
                 continue;
             }
             let (time, sequence) = self.history_commit_time(p)?;
-            let retained: journal::Plan =
-                serde_json::from_slice(&fs::read(self.journal_path(&p.operation_id, "plan"))?)?;
+            let retained: journal::Plan = serde_json::from_slice(
+                &self
+                    .backend
+                    .read_bytes(self.journal_path(&p.operation_id, "plan"))?,
+            )?;
             if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
                 return Err(CoreError::new(
                     "historyUnavailable",
@@ -803,12 +833,15 @@ impl Core {
         let mut drafts = Vec::new();
         let mut total = 0usize;
         let mut records = 0usize;
-        for entry in fs::read_dir(self.draft_directory("draft-history"))? {
+        for entry in self
+            .backend
+            .read_dir(self.draft_directory("draft-history"))?
+        {
             let path = entry?.path();
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
-            let guard = ParentGuard::acquire(&path)?;
+            let guard = ParentGuard::acquire(&self.backend, &path)?;
             let mut file = guard.open_read_guard_file()?;
             let Some((metadata, bytes)) = hosted::read_qualified_private_record(
                 &mut file,
@@ -896,8 +929,11 @@ impl Core {
                 UiMessage::error_core_history_restore_different_owner(),
             ));
         }
-        let retained: journal::Plan =
-            serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "plan"))?)?;
+        let retained: journal::Plan = serde_json::from_slice(
+            &self
+                .backend
+                .read_bytes(self.journal_path(&plan.operation_id, "plan"))?,
+        )?;
         if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
             return Err(CoreError::new(
                 "historyUnavailable",
@@ -959,11 +995,23 @@ impl Core {
         let root = self
             .operations
             .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(&binding.workspace_id)
-                    && self.committed(&p.operation_id)
-            })
+            .try_fold(None, |found, p| -> Result<Option<_>> {
+                if found.is_some() {
+                    Ok(found)
+                } else {
+                    Ok(
+                        if {
+                            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && p.workspace_id.as_ref() == Some(&binding.workspace_id)
+                                && self.committed(&p.operation_id)?
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
+                }
+            })?
             .map(|p| PathBuf::from(&p.path))
             .ok_or_else(|| {
                 CoreError::new(
@@ -986,7 +1034,7 @@ impl Core {
             ));
         }
         let path = Path::new(&owners[0].path);
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let mut file = guard.open_file(false, false)?;
         let current = stamp(&file)?;
         if current.identity != binding.identity {
@@ -1009,6 +1057,7 @@ impl Core {
         )
     }
     pub fn history_restore_status(&self, operation_id: &str) -> Result<HistoryRestoreStatus> {
+        self.backend.check_path(&self.data_dir)?;
         valid_operation_id(operation_id)?;
         let Some(plan) = self.operations.get(operation_id) else {
             return Ok(HistoryRestoreStatus {
@@ -1030,7 +1079,7 @@ impl Core {
                 UiMessage::error_core_history_operation_not_history_restore(),
             ));
         }
-        let committed = self.committed(operation_id);
+        let committed = self.committed(operation_id)?;
         let (result, result_error) = if committed {
             match self.restore_result(plan) {
                 Ok(result) => (Some(result), None),
@@ -1095,7 +1144,7 @@ impl Core {
         // checks. A lost response may have already advanced that Base.
         if let Some(plan) = self.operations.get(&request.operation_id) {
             self.check_restore_request(&request)?;
-            if self.committed(&request.operation_id) {
+            if self.committed(&request.operation_id)? {
                 return self.restore_result(plan);
             }
             return Err(CoreError::new(
@@ -1196,6 +1245,7 @@ impl Core {
             for draft in to_protect {
                 let name = fresh();
                 journal::private_create(
+                    &self.backend,
                     &self
                         .draft_directory("draft-history")
                         .join(format!("{name}.json")),
@@ -1264,14 +1314,18 @@ pub(crate) fn history_relative_path(path: &Path, prefix: &Path) -> Option<PathBu
     }
     Some(components.collect())
 }
-pub(crate) fn same_placement_path(expected: &Path, actual: &Path) -> Result<bool> {
+pub(crate) fn same_placement_path(
+    backend: &crate::BackendContext,
+    expected: &Path,
+    actual: &Path,
+) -> Result<bool> {
     if !history_relative_path(expected, actual).is_some_and(|p| p.as_os_str().is_empty()) {
         return Ok(false);
     }
     // Resolve only these two explicit parent directories. Their final handle
     // coordinates preserve real OS names without Unicode case folding.
-    let a = ParentGuard::acquire(expected)?;
-    let b = ParentGuard::acquire(actual)?;
+    let a = ParentGuard::acquire(backend, expected)?;
+    let b = ParentGuard::acquire(backend, actual)?;
     Ok(a.directory_identity()? == b.directory_identity()?
         && a.directory_coordinates()? == b.directory_coordinates()?
         && expected

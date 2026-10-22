@@ -39,6 +39,7 @@ fn commit_competing_registry_then_preserve_original(
 
 fn mark_install(core: &Core, preview: &OperationPreview) {
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         br#"{"testInterruption":true}"#,
     )
@@ -143,7 +144,7 @@ fn native_root_tag_update_cannot_rebirth_after_competing_commit_loss_and_restart
 
 fn materialize_change(core: &Core, operation: &str, change: &FileChange) {
     let path = Path::new(&change.path);
-    let guard = ParentGuard::acquire(path).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), path).unwrap();
     let mut file = guard.open_file(true, change.before.is_none()).unwrap();
     if change.before.is_none() {
         core.record_materialized(operation, path, &file).unwrap();
@@ -173,7 +174,8 @@ fn materialize_original(core: &Core, preview: &OperationPreview) {
         } => {
             assert!(!existing_target);
             let target = Path::new(target);
-            let guard = ParentGuard::acquire(target).unwrap();
+            let guard =
+                ParentGuard::acquire(&crate::BackendContext::local().unwrap(), target).unwrap();
             let directory = guard.create_directory().unwrap();
             core.record_materialized(&preview.operation_id, target, &directory)
                 .unwrap();
@@ -220,11 +222,12 @@ fn original_created_tag_after_image_recovers_with_its_own_materialized_identity(
     let (_temp, mut core, root, data) = fixture();
     let original = prepare_tag(&mut core, &root, "Original tag");
     materialize_original(&core, &original.preview);
-    let before_identity = operations::capture_optional(&root.join(TAGS))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let before_identity =
+        operations::capture_optional(&crate::BackendContext::local().unwrap(), &root.join(TAGS))
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity;
     drop(core);
     let mut core = Core::new(data).unwrap();
     let recovery = core
@@ -238,7 +241,7 @@ fn original_created_tag_after_image_recovers_with_its_own_materialized_identity(
         original.target_ref
     );
     assert_eq!(
-        operations::capture_optional(&root.join(TAGS))
+        operations::capture_optional(&crate::BackendContext::local().unwrap(), &root.join(TAGS))
             .unwrap()
             .unwrap()
             .stamp
@@ -254,11 +257,12 @@ fn original_native_tags_and_tree_after_images_recover_without_new_identities() {
     let original = prepare_native(&mut core, &root, bytes);
     materialize_original(&core, &original);
     let before = fs::read(root.join(TAGS)).unwrap();
-    let before_identity = operations::capture_optional(&root.join(TAGS))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let before_identity =
+        operations::capture_optional(&crate::BackendContext::local().unwrap(), &root.join(TAGS))
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity;
     drop(core);
     let mut core = Core::new(data).unwrap();
     let recovery = core.inspect_recovery(&original.operation_id).unwrap();
@@ -269,7 +273,7 @@ fn original_native_tags_and_tree_after_images_recover_without_new_identities() {
     assert_eq!(core.read_tag_registry(&root).unwrap().tags.len(), 1);
     assert_eq!(fs::read(root.join(TAGS)).unwrap(), before);
     assert_eq!(
-        operations::capture_optional(&root.join(TAGS))
+        operations::capture_optional(&crate::BackendContext::local().unwrap(), &root.join(TAGS))
             .unwrap()
             .unwrap()
             .stamp

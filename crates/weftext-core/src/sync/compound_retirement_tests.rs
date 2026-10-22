@@ -18,13 +18,18 @@ enum Actual {
     File(FileIdentity, Vec<u8>),
 }
 fn directory_identity(path: &Path) -> FileIdentity {
-    ParentGuard::acquire(&path.join(".retirement-probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap()
+    ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &path.join(".retirement-probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap()
 }
 fn capture(path: &Path) -> CapturedFile {
-    capture_optional(path).unwrap().unwrap()
+    capture_optional(&crate::BackendContext::local().unwrap(), path)
+        .unwrap()
+        .unwrap()
 }
 fn tree(root: &Path) -> BTreeMap<PathBuf, Actual> {
     fn visit(root: &Path, path: &Path, found: &mut BTreeMap<PathBuf, Actual>) {
@@ -404,7 +409,7 @@ impl Fixture {
         self.b = Core::new(&self.bd).unwrap();
     }
     fn assert_installed(&mut self, req: &OperationRequest, preview: &OperationPreview) {
-        assert!(self.b.committed(&preview.operation_id));
+        assert!(self.b.committed(&preview.operation_id).unwrap());
         assert_eq!(
             serde_json::to_value(
                 self.b
@@ -454,7 +459,7 @@ impl Fixture {
                 graph.blob(&installed.state.files[&canonical]).unwrap()
             );
             assert_eq!(
-                self.b.accepted_revision(&captured).as_ref(),
+                self.b.accepted_revision(&captured).unwrap().as_ref(),
                 installed.state.file_revisions.get(&canonical)
             );
             let resource = capture(&directory.join("owned.bin"));
@@ -727,6 +732,6 @@ fn compound_retirement_late_exact_or_case_alias_foreign_target_refuses_without_a
             serde_json::to_value(&f.b.operations[&preview.operation_id]).unwrap(),
             original
         );
-        assert!(!f.b.committed(&preview.operation_id));
+        assert!(!f.b.committed(&preview.operation_id).unwrap());
     }
 }

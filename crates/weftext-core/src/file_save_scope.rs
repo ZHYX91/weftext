@@ -257,7 +257,7 @@ mod tests {
                 .unwrap(),
             &original
         );
-        assert!(core.original_commit_fact(&id).unwrap());
+        assert!(core.committed(&id).unwrap());
         let old_plan = fs::read(core.journal_path(&id, "plan")).unwrap();
         core.sessions.clear();
         let (_, delivered) = core.reopen_local_save(&id).unwrap();

@@ -29,14 +29,17 @@ enum Actual {
 }
 
 fn directory_identity(path: &Path) -> FileIdentity {
-    ParentGuard::acquire(&path.join(".identity-probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap()
+    ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &path.join(".identity-probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap()
 }
 
 fn file_identity(path: &Path) -> FileIdentity {
-    crate::operations::capture_optional(path)
+    crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
         .unwrap()
         .unwrap()
         .stamp
@@ -551,7 +554,7 @@ impl Pair {
     }
 
     fn assert_installed(&mut self, request: &OperationRequest, preview: &crate::OperationPreview) {
-        assert!(self.b.committed(&preview.operation_id));
+        assert!(self.b.committed(&preview.operation_id).unwrap());
         let retained = self
             .b
             .sync_operation_request(&preview.operation_id)
@@ -1005,7 +1008,7 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
             &creation_id,
         )
         .unwrap();
-    assert!(pair.b.committed(&creation_id));
+    assert!(pair.b.committed(&creation_id).unwrap());
     let child_key = ObjectKey::Node(child.node_ids[0].clone());
     let after_local = pair
         .b
@@ -1054,8 +1057,8 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
     pair.restart();
     pair.reject_every_effect(&preview);
     assert_eq!(actual_tree(&pair.br), created);
-    assert!(pair.b.committed(&creation_id));
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(pair.b.committed(&creation_id).unwrap());
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     assert_eq!(
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         serde_json::to_value(original_plan).unwrap()
@@ -1118,7 +1121,7 @@ fn compound_exchange_late_raw_metadata_budget_is_shared_across_original_roots() 
             .allowed_actions
             .is_empty()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     assert_eq!(
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         original_plan
@@ -1145,7 +1148,8 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
                     visit(root, &entry.unwrap().path(), result);
                 }
             } else {
-                let guard = ParentGuard::acquire(path).unwrap();
+                let guard =
+                    ParentGuard::acquire(&crate::BackendContext::local().unwrap(), path).unwrap();
                 let file = guard.open_placement_file().unwrap();
                 result.insert(
                     relative,
@@ -1236,7 +1240,7 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
     );
     let install = pair.b.journal_path(&preview.operation_id, "install");
     let marker = fs::read(&install).unwrap();
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     let mut expected = BTreeMap::new();
     let coordinates = steps
         .iter()
@@ -1315,7 +1319,7 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         assert_eq!(actual_tree(directory), *records);
     }
     assert_eq!(crate::backend::stamp(&held).unwrap().identity, identity);
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     drop(held);
     pair.b
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
@@ -1400,7 +1404,7 @@ fn compound_exchange_interrupted_original_cut_rejects_late_received_head_without
         .unwrap(),
         serde_json::to_value(original_files).unwrap()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn exchange_parking_steps(
@@ -1447,7 +1451,7 @@ fn interrupt_placement(pair: &mut Pair, preview: &crate::OperationPreview, point
             .journal_path(&preview.operation_id, "install")
             .exists()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn copy_foreign_tree(source: &Path, target: &Path) {
@@ -1514,7 +1518,7 @@ fn reject_interrupted_placement_without_effect(pair: &mut Pair, preview: &crate:
             );
             assert_eq!(actual_tree(&pair.br), current);
         }
-        assert!(!pair.b.committed(&preview.operation_id));
+        assert!(!pair.b.committed(&preview.operation_id).unwrap());
         assert_eq!(fs::read(&install).unwrap(), original_marker);
         assert_eq!(
             serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
@@ -1648,7 +1652,7 @@ fn compound_exchange_late_foreign_parking_slot_refuses_before_first_effect() {
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         original_plan
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -1863,7 +1867,7 @@ fn compound_exchange_original_actor_sessions_keep_continued_input_and_stale_save
                     })
                     .unwrap_err();
                 assert_eq!(error.code, "staleBase");
-                assert!(!core.committed(&operation_id));
+                assert!(!core.committed(&operation_id).unwrap());
                 assert!(!core.journal_path(&operation_id, "install").exists());
                 Ok(())
             })
@@ -2302,7 +2306,7 @@ fn compound_extract_directory_parked_created_child_and_exact_5000_metadata_membe
         Some(captured.stamp.identity.clone())
     );
     assert_eq!(
-        pair.b.accepted_revision(&captured).as_ref(),
+        pair.b.accepted_revision(&captured).unwrap().as_ref(),
         chosen.state.file_revisions.get("NewChild.typ")
     );
     let owner = weftext_knowledge::NodeRef {
@@ -2324,5 +2328,7 @@ fn compound_extract_directory_parked_created_child_and_exact_5000_metadata_membe
 }
 
 fn capture_optional_for_budget(path: &Path) -> crate::operations::CapturedFile {
-    crate::operations::capture_optional(path).unwrap().unwrap()
+    crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
+        .unwrap()
+        .unwrap()
 }

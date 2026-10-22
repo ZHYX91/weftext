@@ -390,7 +390,7 @@ impl Core {
         if self.actor.is_some() {
             return self.actor_library_for_root(root);
         }
-        let guard = ParentGuard::acquire(&root.join(".draft-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".draft-root-prospective"))?;
         let workspace = self.workspace(root)?;
         if workspace.is_none()
             && [
@@ -399,7 +399,13 @@ impl Core {
                 ".weftext-mvp-commit.json",
             ]
             .iter()
-            .any(|name| root.join(name).exists())
+            .try_fold(false, |found, name| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok(self.backend.entry_exists(root.join(name))?)
+                }
+            })?
         {
             // Preserve local ordinary-file behavior, without claiming that
             // damaged/unadmitted controls are an ordinary qualified library.
@@ -430,7 +436,7 @@ impl Core {
             ));
         }
         let root = absolute_path(root)?;
-        let guard = ParentGuard::acquire(&root.join(".actor-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".actor-root-prospective"))?;
         let workspace = self.workspace(&root)?;
         if workspace.is_none()
             && [
@@ -439,7 +445,13 @@ impl Core {
                 ".weftext-mvp-commit.json",
             ]
             .iter()
-            .any(|name| root.join(name).exists())
+            .try_fold(false, |found, name| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok(self.backend.entry_exists(root.join(name))?)
+                }
+            })?
         {
             return Err(CoreError::new(
                 "unadmittedLibrary",
@@ -476,7 +488,7 @@ impl Core {
             return Ok(None);
         };
         let root = absolute_path(root)?;
-        let guard = ParentGuard::acquire(&root.join(".actor-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".actor-root-prospective"))?;
         if guard.directory_identity()? != binding.root_identity
             || self.workspace(&root)?.map(|w| w.workspace_id) != binding.workspace_id
         {

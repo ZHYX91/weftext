@@ -73,8 +73,8 @@ fn pending_create_only_refuses(node: bool, recovery: bool) {
     assert!(!root.join("AbsentParent").exists());
     assert!(!root.join(".weftext-schema.json").exists());
     assert_eq!(fs::read(root.join(".weftext-rules")).unwrap(), before);
-    assert!(!core.committed(&first.operation_id));
-    assert!(!core.committed(&other.operation_id));
+    assert!(!core.committed(&first.operation_id).unwrap());
+    assert!(!core.committed(&other.operation_id).unwrap());
     assert!(core.operation_details(&first.operation_id).is_ok());
     assert!(core.operation_details(&other.operation_id).is_ok());
 }
@@ -159,8 +159,8 @@ fn pending_absent_child_refuses(recovery: bool) {
     );
     assert!(!root.join("Original/AbsentChild").exists());
     assert!(!root.join("Renamed").exists());
-    assert!(!core.committed(&first.operation_id));
-    assert!(!core.committed(&other.operation_id));
+    assert!(!core.committed(&first.operation_id).unwrap());
+    assert!(!core.committed(&other.operation_id).unwrap());
 }
 
 #[test]

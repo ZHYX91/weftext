@@ -65,6 +65,8 @@ fn pair_plan_inner(
     }
     .unwrap();
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -166,10 +168,14 @@ fn mixed_restart_creates_only_original_absent_sidecar_and_records_real_object() 
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    let actual = ParentGuard::acquire(&sidecar)
-        .unwrap()
-        .open_file(false, false)
-        .unwrap();
+    let actual = ParentGuard::acquire(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
+        &sidecar,
+    )
+    .unwrap()
+    .open_file(false, false)
+    .unwrap();
     assert_eq!(
         restarted
             .materialized_identity(&preview.operation_id, &sidecar)
@@ -211,7 +217,7 @@ fn third_bytes_or_same_bytes_replacement_never_unblock_mixed_pair() {
             );
         }
         assert_eq!(fs::read(&sidecar).unwrap(), external);
-        assert!(!restarted.committed(&preview.operation_id));
+        assert!(!restarted.committed(&preview.operation_id).unwrap());
         assert_eq!(
             restarted.open(&note.path, Some(root)).unwrap_err().code,
             "recoveryPending"
@@ -416,11 +422,18 @@ fn after_image_adoption_uses_original_create_only_objects_and_original_births() 
         panic!("expected frozen create");
     };
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
-    let guard = ParentGuard::acquire(Path::new(target)).unwrap();
+    let guard = ParentGuard::acquire(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
+        Path::new(target),
+    )
+    .unwrap();
     let directory = guard.create_directory().unwrap();
     core.record_materialized(&preview.operation_id, Path::new(target), &directory)
         .unwrap();
@@ -504,6 +517,8 @@ fn intermediate_leaf_rename_is_visible_and_namespace_is_never_replayed() {
         })
         .unwrap();
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -631,6 +646,8 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
         )
         .unwrap();
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -651,7 +668,7 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
         "recoveryConflict"
     );
     assert_eq!(fs::read(&sidecar).unwrap(), before_sidecar);
-    assert!(!restarted.committed(&preview.operation_id));
+    assert!(!restarted.committed(&preview.operation_id).unwrap());
 }
 #[test]
 fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
@@ -676,7 +693,7 @@ fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
     assert_eq!(
         fs::read(&sidecar).unwrap(),
         b"{\"version\":1,\"annotations\":[],\"recovered\":true}"
@@ -692,7 +709,12 @@ fn missing_materialized_participant_never_gets_replaced_by_a_new_object() {
     let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, after_source).unwrap();
-    let guard = ParentGuard::acquire(&sidecar).unwrap();
+    let guard = ParentGuard::acquire(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
+        &sidecar,
+    )
+    .unwrap();
     let mut created = guard.open_file(true, true).unwrap();
     core.record_materialized(&preview.operation_id, &sidecar, &created)
         .unwrap();
@@ -719,12 +741,12 @@ fn missing_materialized_participant_never_gets_replaced_by_a_new_object() {
     );
     assert!(!sidecar.exists());
     assert!(retained.exists());
-    assert!(!restarted.committed(&preview.operation_id));
+    assert!(!restarted.committed(&preview.operation_id).unwrap());
     fs::rename(&retained, &sidecar).unwrap();
     restarted
         .resolve_recovery(&preview.operation_id, "adoptAfterImages")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
 }
 #[test]
 fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
@@ -745,6 +767,8 @@ fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
         })
         .unwrap();
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -851,6 +875,8 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     fs::set_permissions(&dependency.path, permission).unwrap();
     let dependency_modified = fs::metadata(&dependency.path).unwrap().modified().unwrap();
     journal::private_create(
+        &self.backend,
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -869,7 +895,7 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
     assert_eq!(fs::read(&note.path).unwrap(), after_source);
     assert_eq!(
         fs::read(&sidecar).unwrap(),
@@ -906,7 +932,7 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
     let mut legacy_value = serde_json::to_value(&legacy).unwrap();
     legacy_value.as_object_mut().unwrap().remove("scope");
     let legacy_bytes = serde_json::to_vec(&legacy_value).unwrap();
-    private_replace(&legacy_path, &legacy_bytes).unwrap();
+    private_replace(&self.backend, &legacy_path, &legacy_bytes).unwrap();
     operate(
         &mut core,
         &root,
@@ -1025,7 +1051,7 @@ fn resolution_stops_writing_display_prose_and_preserves_historical_original_byte
     // or an instruction from which recovery authority may be inferred.
     historical["message"] = "historical original 原始摘要 {literal}".into();
     let original_bytes = serde_json::to_vec(&historical).unwrap();
-    private_replace(&resolution_path, &original_bytes).unwrap();
+    private_replace(&self.backend, &resolution_path, &original_bytes).unwrap();
     let record = journal::decode_resolution(&preview.operation_id, &original_bytes).unwrap();
     assert_eq!(
         record.historical_message.as_deref(),

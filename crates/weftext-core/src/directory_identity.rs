@@ -282,9 +282,12 @@ pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
     Ok((kind, workspace, id))
 }
 
-fn marker_claim(path: &Path) -> Result<Option<(DirectoryMarker, FileIdentity)>> {
+fn marker_claim(
+    backend: &crate::BackendContext,
+    path: &Path,
+) -> Result<Option<(DirectoryMarker, FileIdentity)>> {
     let marker_path = path.join(DIRECTORY_MARKER);
-    let guard = ParentGuard::acquire(&marker_path)?;
+    let guard = ParentGuard::acquire(backend, &marker_path)?;
     let identity = guard.directory_identity()?;
     let mut file = match guard.open_file(false, false) {
         Ok(file) => file,
@@ -401,13 +404,10 @@ impl Core {
                 )
             })?;
         let marker: DirectoryMarker = serde_json::from_slice(after)?;
-        let parent = path.parent().ok_or_else(|| {
-            CoreError::new(
-                "invalidPath",
-                UiMessage::error_core_directory_identity_directory_marker_has_no_parent(),
-            )
-        })?;
-        let guard = ParentGuard::acquire(path)?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| CoreError::new("invalidPath", "Directory marker has no parent"))?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         if reservation.root != display(root)
             || reservation.path != display(parent)
             || reservation.workspace_id != self.require_workspace(root)?.workspace_id
@@ -439,10 +439,13 @@ impl Core {
         operation_id: &str,
         suffix: &str,
     ) -> Result<Option<T>> {
-        match fs::read(self.journal_path(operation_id, suffix)) {
+        match self
+            .backend
+            .read_bytes(self.journal_path(operation_id, suffix))
+        {
             Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
+            Err(error) if error.code == "missing" => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
@@ -463,11 +466,7 @@ impl Core {
         identity: &FileIdentity,
     ) -> Result<Vec<(String, String)>> {
         let mut origins = vec![];
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             if plan.workspace_id.as_deref() == Some(workspace)
                 && let Some(transaction) = plan.transaction.as_ref()
                 && matches!(
@@ -563,11 +562,7 @@ impl Core {
         let observed = |identity: &FileIdentity| -> Result<bool> {
             Ok(identities.contains(&serde_json::to_string(identity)?))
         };
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             if plan.workspace_id.as_deref() == Some(workspace)
                 && let Some(transaction) = &plan.transaction
             {
@@ -650,9 +645,25 @@ impl Core {
         workspace: &str,
     ) -> Result<Vec<(String, String, FileIdentity)>> {
         let mut candidates = Vec::new();
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
-        }) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             if let Some(r) = self.read_navigation_record::<DirectoryReservation>(
                 &p.operation_id,
                 "directory-reservation",
@@ -700,9 +711,25 @@ impl Core {
     ) -> Result<BTreeSet<String>> {
         let registry = display(&root.join(TAG_REGISTRY));
         let mut ids = BTreeSet::new();
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -840,7 +867,7 @@ impl Core {
                 label,
             ));
         }
-        match marker_claim(&path) {
+        match marker_claim(&self.backend, &path) {
             Ok(Some((marker, _))) => self.resolve_navigation_target(
                 &root,
                 &entity_ref("directory", &workspace.workspace_id, &marker.directory_id),
@@ -885,7 +912,7 @@ impl Core {
         if kind == "tag" {
             let registry = root.join(TAG_REGISTRY);
             self.check_pending(&registry)?;
-            let guard = ParentGuard::acquire(&registry)?;
+            let guard = ParentGuard::acquire(&self.backend, &registry)?;
             let mut file = match guard.open_file(false, false) {
                 Ok(file) => file,
                 Err(error) if error.code == "missing" => {
@@ -919,8 +946,8 @@ impl Core {
                 stamp: observed_stamp,
                 bytes,
             };
-            if self.accepted_revision(&captured).is_none()
-                || !self.tag_registry_identity_admitted(&root, &identity)
+            if self.accepted_revision(&captured)?.is_none()
+                || !self.tag_registry_identity_admitted(&root, &identity)?
                 || !self.tag_admitted(&root, ref_workspace, id, &identity)?
             {
                 return Ok(target(
@@ -1008,7 +1035,7 @@ impl Core {
         );
         for path in candidates {
             self.check_pending(&path.join(DIRECTORY_MARKER))?;
-            if let Some((marker, identity)) = marker_claim(&path)?
+            if let Some((marker, identity)) = marker_claim(&self.backend, &path)?
                 && marker.directory_id == id
             {
                 matches.push((path, identity));
@@ -1158,7 +1185,7 @@ impl Core {
             ));
         }
         let marker_path = path.join(DIRECTORY_MARKER);
-        let guard = ParentGuard::acquire(&marker_path)?;
+        let guard = ParentGuard::acquire(&self.backend, &marker_path)?;
         let identity = guard.directory_identity()?;
         let fingerprint = hash(&operations::canonical_json_bytes(&canonical)?);
         let reservation = if let Some(old) = self
@@ -1183,6 +1210,7 @@ impl Core {
                 fingerprint,
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "directory-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1235,7 +1263,7 @@ impl Core {
             .map(|file| file.stamp.identity.clone());
         let mut tags = Vec::new();
         let mut warnings = Vec::new();
-        if snapshot.bytes.is_none() && self.tag_registry_was_born(&root) {
+        if snapshot.bytes.is_none() && self.tag_registry_was_born(&root)? {
             return Err(CoreError::new(
                 "identityConflict",
                 UiMessage::error_core_directory_identity_admitted_registry_missing_recover_original_object(),
@@ -1245,7 +1273,12 @@ impl Core {
             && (snapshot.revision.is_none()
                 || identity
                     .as_ref()
-                    .is_none_or(|fi| !self.tag_registry_identity_admitted(&root, fi)))
+                    .map(|fi| {
+                        self.tag_registry_identity_admitted(&root, fi)
+                            .map(|admitted| !admitted)
+                    })
+                    .transpose()?
+                    .unwrap_or(true))
         {
             return Ok(TagRegistrySnapshot {
                 tags,
@@ -1306,15 +1339,15 @@ impl Core {
             .captured
             .as_ref()
             .map(|file| file.stamp.identity.clone());
-        if before.is_none() && self.tag_registry_was_born(root) {
+        if before.is_none() && self.tag_registry_was_born(root)? {
             return Err(CoreError::new(
                 "identityConflict",
                 UiMessage::error_core_directory_identity_admitted_registry_missing_recover_original_object(),
             ));
         }
         if let Some(file) = &basis.captured
-            && (self.accepted_revision(file).is_none()
-                || !self.tag_registry_identity_admitted(root, &file.stamp.identity))
+            && (self.accepted_revision(file)?.is_none()
+                || !self.tag_registry_identity_admitted(root, &file.stamp.identity)?)
         {
             return Err(CoreError::new(
                 "externalPending",
@@ -1343,42 +1376,42 @@ impl Core {
         })
     }
 
-    fn tag_registry_was_born(&self, root: &Path) -> bool {
+    fn tag_registry_was_born(&self, root: &Path) -> Result<bool> {
         let path = display(&root.join(TAG_REGISTRY));
-        self.operations.values().any(|p| {
-            self.committed(&p.operation_id)
-                && p.transaction.as_ref().is_some_and(|t| {
-                    t.created_files().iter().any(|f| f.path == path)
-                        || t.files.iter().any(|f| f.path == path)
-                        || tag_update_files(t).iter().any(|f| f.path == path)
-                })
-        })
+        Ok(self.committed_plans()?.into_iter().any(|p| {
+            p.transaction.as_ref().is_some_and(|t| {
+                t.created_files().iter().any(|f| f.path == path)
+                    || t.files.iter().any(|f| f.path == path)
+                    || tag_update_files(t).iter().any(|f| f.path == path)
+            })
+        }))
     }
 
-    fn tag_registry_identity_admitted(&self, root: &Path, identity: &FileIdentity) -> bool {
+    fn tag_registry_identity_admitted(&self, root: &Path, identity: &FileIdentity) -> Result<bool> {
         let path = display(&root.join(TAG_REGISTRY));
-        self.operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .any(|p| {
-                p.transaction.as_ref().is_some_and(|t| {
-                    t.files
-                        .iter()
-                        .any(|f| f.path == path && &f.stamp.identity == identity)
-                        || t.created_files().iter().any(|f| {
-                            f.path == path
-                                && self
-                                    .materialized_identity(&p.operation_id, Path::new(&path))
-                                    .is_ok_and(|fi| fi.as_ref() == Some(identity))
-                        })
-                        || (tag_update_files(t)
-                            .iter()
-                            .any(|f| f.path == path && f.before.is_none())
-                            && self
-                                .materialized_identity(&p.operation_id, Path::new(&path))
-                                .is_ok_and(|fi| fi.as_ref() == Some(identity)))
-                })
-            })
+        for plan in self.committed_plans()? {
+            let Some(t) = plan.transaction.as_ref() else {
+                continue;
+            };
+            if t.files
+                .iter()
+                .any(|f| f.path == path && &f.stamp.identity == identity)
+            {
+                return Ok(true);
+            }
+            if (t.created_files().iter().any(|f| f.path == path)
+                || tag_update_files(t)
+                    .iter()
+                    .any(|f| f.path == path && f.before.is_none()))
+                && self
+                    .materialized_identity(&plan.operation_id, Path::new(&path))?
+                    .as_ref()
+                    == Some(identity)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Qualify only the exact bytes already captured with the caller's other
@@ -1406,7 +1439,7 @@ impl Core {
     }
 
     pub(crate) fn validate_tag_registry_absence(&self, root: &Path) -> Result<()> {
-        if self.tag_registry_was_born(root) {
+        if self.tag_registry_was_born(root)? {
             Err(CoreError::new(
                 "identityConflict",
                 UiMessage::error_core_directory_identity_original_tags_object_missing(),
@@ -1422,8 +1455,8 @@ impl Core {
         file: &operations::CapturedFile,
     ) -> Result<TagDocument> {
         if Path::new(&file.path) != root.join(TAG_REGISTRY)
-            || !self.tag_registry_identity_admitted(root, &file.stamp.identity)
-            || self.accepted_revision(file).is_none()
+            || !self.tag_registry_identity_admitted(root, &file.stamp.identity)?
+            || self.accepted_revision(file)?.is_none()
         {
             return Err(CoreError::new(
                 "identityConflict",
@@ -1506,6 +1539,7 @@ impl Core {
                 fingerprint: fingerprint.into(),
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1720,7 +1754,7 @@ impl Core {
     pub(crate) fn validate_tag_plan_changes(&self, plan: &journal::Plan) -> Result<()> {
         // A retained terminal receipt cannot acquire another filesystem effect.
         // Historical v1 receipts remain readable rather than being rewritten.
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return Ok(());
         }
         let transaction = plan.transaction.as_ref().ok_or_else(|| {
@@ -1881,6 +1915,7 @@ impl Core {
                 fingerprint,
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -2180,7 +2215,10 @@ impl Core {
         if matches!(preview.status.as_str(), "committed" | "resolved") {
             return Ok(preview);
         }
-        if self.journal_path(operation_id, "install").exists() {
+        if self
+            .backend
+            .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_directory_identity_inspect_original_operation_installation_may_have_effects(),
@@ -2209,7 +2247,11 @@ impl Core {
                 serde_json::json!({"operationId":operation_id,"planId":preview.plan_id,"status":preview.status}),
             );
         }
-        if plan_id.is_some() || self.journal_path(operation_id, "install").exists() {
+        if plan_id.is_some()
+            || self
+                .backend
+                .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
                 UiMessage::error_core_directory_identity_original_navigation_plan_cannot_qualified(
