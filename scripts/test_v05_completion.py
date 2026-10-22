@@ -418,13 +418,7 @@ class V05Completion(features.LocalFeatures):
         for path in (self.data_dir / 'drafts').glob('*.json'):
             original = path.read_bytes()
             record = json.loads(original)
-            if path.name.endswith('.relocation.json'):
-                # A consumed-input marker is a different original record type,
-                # without a Draft path or source. Do not treat it as a proposal.
-                self.assertIn(set(record), ({'identity', 'consumed'},
-                                            {'library', 'identity', 'consumed'}))
-                self.assertIsInstance(record['consumed'], list)
-                continue
+            self.assertIn(record['scope']['kind'], {'deviceUnassigned', 'library'})
             if (record['path'] == doc['path'] and record['source'] == draft
                     and record['identity'] == expected_identity):
                 candidates.append((path, original))

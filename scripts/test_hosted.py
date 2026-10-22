@@ -149,7 +149,7 @@ class Hosted(unittest.TestCase):
         self.assertEqual(no,hidden)
         self.assertEqual(self.call('search',{'text':'HIDDEN_PAYLOAD'},'bob')['rows'],[])
         self.assertNotIn(str(self.root),json.dumps(files))
-        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
+        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/api/recognition/open','/api/operations/status','/api/operations/settle','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
             code,body,_=self.server.call(route,{} if route.startswith('/api/') else None,self.tokens['alice'])
             self.assertEqual(code,404,(route,body))
 

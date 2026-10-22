@@ -6,6 +6,8 @@ owner shutdown; this test does not certify UI shutdown or power loss.
 import argparse
 import hashlib
 import json
+import os
+import shutil
 from pathlib import Path
 import socket
 import tempfile
@@ -81,6 +83,35 @@ def run(executable, evidence):
         assert later['documentSourceMatchesCommit'] is False
         assert Path(doc['path']).read_text('utf-8') == waiting
 
+        save_as_path = evidence / 'TEST-save-as.typ'
+        save_as = {'sessionId': later['document']['sessionId'], 'path': str(save_as_path), 'source': waiting, 'operationId': test_hosted.uid()}
+        saved_as = call('/api/save-as', save_as)
+        assert saved_as['status'] == 'saved' and saved_as['documentSourceMatchesCommit'] is True
+        assert saved_as['document']['path'] == str(save_as_path)
+        as_plan = state / 'journal' / f"{save_as['operationId']}.plan.json"
+        as_commit = state / 'journal' / f"{save_as['operationId']}.commit.json"
+        as_original_journal = (as_plan.read_bytes(), as_commit.read_bytes())
+        as_original = save_as_path.read_bytes()
+        as_physical = (save_as_path.stat().st_dev, save_as_path.stat().st_ino)
+        retained_as = evidence / 'TEST-retained-save-as-original.typ'
+        save_as_path.rename(retained_as)
+        save_as_path.write_bytes(as_original)
+        assert (save_as_path.stat().st_dev, save_as_path.stat().st_ino) != as_physical
+        assert call('/api/open', {'sessionId': saved_as['document']['sessionId']}, 409)['error']['code'] == 'sourceIdentityChanged'
+        call('/api/open', {'sessionId': saved_as['document']['sessionId'], 'path': str(save_as_path)}, 422)
+        for route, payload in [('/api/operations/status', {'operationId': save_as['operationId']}), ('/api/save-as', save_as)]:
+            unavailable = call(route, payload)
+            assert unavailable['baseId'] == saved_as['baseId'] and unavailable.get('documentError')
+            assert 'document' not in unavailable
+        assert (as_plan.read_bytes(), as_commit.read_bytes()) == as_original_journal
+        assert retained_as.read_bytes() == as_original
+        save_as_path.rename(evidence / 'TEST-retained-save-as-substitute.typ')
+        retained_as.rename(save_as_path)
+        as_restored = call('/api/operations/status', {'operationId': save_as['operationId']})
+        assert as_restored['baseId'] == saved_as['baseId'] and as_restored['documentSourceMatchesCommit'] is True
+        qualified_refresh = call('/api/open', {'sessionId': saved_as['document']['sessionId']})
+        assert qualified_refresh['source'] == waiting and qualified_refresh['sessionId'] != saved_as['document']['sessionId']
+
         # The rejected author JSON cannot be parsed a second time to settle it.
         invalid = {'sessionId': later['document']['sessionId'], 'baseId': later['document']['baseId'], 'source': waiting + '\ud800', 'operationId': test_hosted.uid()}
         call('/api/save', invalid, 400)
@@ -154,6 +185,68 @@ def run(executable, evidence):
         assert not original_dir.exists() and (retained / 'Original.typ').is_file()
         retained.rename(original_dir)
 
+        # The original result follows its physical birth, not an old pathname.
+        parent = created_document(call('/api/note/create', {**create, 'name': 'DeliveryParent', 'operationId': test_hosted.uid()}))
+        original_request = {**create, 'name': 'DeliveryX', 'operationId': test_hosted.uid()}
+        original_receipt = call('/api/note/create', original_request)
+        original_x = created_document(original_receipt)
+        x_bytes = Path(original_x['path']).read_bytes()
+        identity = lambda file: [os.stat(file).st_dev, os.stat(file).st_ino]
+        x_identity = identity(original_x['path'])
+        journal_files = [state / 'journal' / f"{original_request['operationId']}.{suffix}.json" for suffix in ('plan', 'commit', 'births', 'materialized')]
+        original_journal = {str(file): hashlib.sha256(file.read_bytes()).hexdigest() for file in journal_files if file.exists()}
+        move = call('/api/operations/prepare', {'root': str(root), 'operationId': test_hosted.uid(), 'intent': {'kind': 'moveNode', 'source': original_receipt['path'], 'parent': str(Path(parent['path']).parent)}})
+        moved = call('/api/operations/commit', {'operationId': move['operationId'], 'planId': move['planId']})
+        y = created_document(call('/api/note/create', {**original_request, 'operationId': test_hosted.uid()}))
+        for route, payload in [('/api/operations/status', {'operationId': original_request['operationId']}), ('/api/note/create', original_request)]:
+            delivered = call(route, payload)
+            assert all(delivered[key] == original_receipt[key] for key in ('operationId', 'planId', 'path', 'nodeIds', 'status', 'message'))
+            assert delivered['document']['nodeId'] == original_x['nodeId'] != y['nodeId']
+            assert identity(delivered['document']['path']) == x_identity != identity(y['path'])
+            assert Path(delivered['document']['path']).read_bytes() == x_bytes
+        actual_x = Path(moved['path']) / 'DeliveryX.typ'
+        held_x = evidence / 'TEST-original-physical-X.typ'
+        actual_x.rename(held_x); actual_x.write_bytes(x_bytes)
+        substitute = call('/api/operations/status', {'operationId': original_request['operationId']})
+        assert substitute['status'] == 'committed' and substitute.get('documentError') and 'document' not in substitute
+        actual_x.rename(evidence / 'TEST-preserved-ID-substitute.typ'); held_x.rename(actual_x)
+        assert {file: hashlib.sha256(Path(file).read_bytes()).hexdigest() for file in original_journal} == original_journal
+
+        # Library creation retains its fact while the original root cannot be
+        # delivered; copied controls in another physical directory do not count.
+        library_request = {'path': str(evidence / 'TEST-library-result'), 'operationId': test_hosted.uid(), 'options': {'initialRoot': {'title': '', 'queries': []}}}
+        library_receipt = call('/api/library/create', library_request)
+        assert library_receipt['rootDocument']['workspaceId'] == library_receipt['workspaceId']
+        library_root = Path(library_request['path']); held_library = evidence / 'TEST-preserved-original-library'
+        library_root.rename(held_library); shutil.copytree(held_library, library_root)
+        unavailable_library = call('/api/library/create', library_request)
+        assert unavailable_library['status'] == 'committed' and unavailable_library.get('deliveryError') and 'rootDocument' not in unavailable_library
+        library_root.rename(evidence / 'TEST-preserved-substitute-library'); held_library.rename(library_root)
+        library_delivered = call('/api/operations/status', {'operationId': library_request['operationId']})
+        assert library_delivered['rootDocument']['nodeId'] == library_receipt['rootDocument']['nodeId']
+
+        schema_basis = call('/api/data/schema', {'root': str(root)})
+        schema_plan = call('/api/data/schema/prepare', {'root': str(root), 'operationId': test_hosted.uid(), 'source': schema_basis['source'], 'beforeSource': schema_basis['source'], 'beforeRevision': schema_basis['revision']})
+        call('/api/data/schema/install', {'operationId': schema_plan['operationId'], 'planId': schema_plan['planId']})
+        owner = created_document(call('/api/note/create', {**create, 'name': 'DefinitionReplay', 'operationId': test_hosted.uid()}))
+        definition_request = {'sessionId': owner['sessionId'], 'baseId': owner['baseId'], 'source': owner['source'], 'serial': 1, 'label': 'weftext-query-original', 'plan': {'types': [], 'select': [], 'order': []}, 'operationId': test_hosted.uid()}
+        definition = call('/api/query/definition/save', definition_request)
+        definition_bytes = Path(owner['path']).read_bytes()
+        stop(); start()  # Neither a live Core Session nor App location survives.
+        definition_replay = call('/api/query/definition/save', definition_request)
+        assert definition_replay['status'] == 'committed' and definition_replay['baseId'] == definition['baseId']
+        assert definition_replay['document']['sessionId'] != owner['sessionId']
+        for field, value in [('sessionId', test_hosted.uid()), ('baseId', test_hosted.uid()), ('source', owner['source'] + '\nchanged')]:
+            assert call('/api/query/definition/save', {**definition_request, field: value}, 409)['error']['code'] == 'operationConflict'
+        assert Path(owner['path']).read_bytes() == definition_bytes
+
+        setup_request = {'root': str(root), 'operationId': test_hosted.uid()}
+        setup = call('/api/sync/enable', setup_request)
+        setup_fact = call('/api/operations/status', {'operationId': setup_request['operationId']})
+        assert setup_fact['status'] == 'committed' and setup_fact['kind'] == 'enableSync'
+        assert setup_fact['identity'] == setup['identity'] and setup_fact['replicaId'] == setup['replicaId']
+        assert call('/api/operations/settle', fence(setup_request, 'operation')) == setup_fact
+
         cancelled = test_hosted.uid()
         call('/api/operations/settle', fence({'operationId': cancelled}, 'newNode'))
         blocked = call('/api/note/create', {**create, 'name': 'NeverCreated', 'operationId': cancelled}, 409)
@@ -161,6 +254,51 @@ def run(executable, evidence):
         backup = call('/api/operations/prepare', {'root': str(root), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(evidence / 'TEST-backup')}})
         assert call('/api/operations/commit', {'operationId': backup['operationId'], 'planId': backup['planId']})['status'] == 'committed'
         assert not (evidence / 'TEST-backup/private/journal' / f'{cancelled}.resolution.json').exists()
+        # Reusing A's old root path for independently admitted B must neither
+        # include A's private facts nor let A's bounded foreign header block B.
+        reused = evidence / 'TEST-reused-library-root'
+        library_a = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
+        a_request = {'root': str(reused), 'parent': str(reused), 'name': 'A', 'operationId': test_hosted.uid()}
+        a_receipt = call('/api/note/create', a_request); a_doc = created_document(a_receipt)
+        call('/api/draft', {'sessionId': a_doc['sessionId'], 'source': a_doc['source'] + '\nA original private draft'})
+        device_input = evidence / 'TEST-device-input.typ'; device_input.write_text('device input', encoding='utf-8')
+        device_doc = call('/api/open', {'path': str(device_input)})
+        nested = reused / 'nested'; nested.mkdir()
+        ordinary_path = nested / 'ordinary.typ'
+        ordinary_as = {'sessionId': device_doc['sessionId'], 'path': str(ordinary_path), 'source': 'A PRIVATE ordinary SaveAs', 'operationId': test_hosted.uid()}
+        ordinary_result = call('/api/save-as', ordinary_as)
+        ordinary = call('/api/open', {'path': str(ordinary_path)})
+        ordinary_save = {'sessionId': ordinary['sessionId'], 'baseId': ordinary['baseId'], 'source': 'A PRIVATE ordinary Save S', 'operationId': test_hosted.uid()}
+        call('/api/save', ordinary_save)
+        call('/api/draft', {'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE later input Y'})
+        a_ids = set()
+        for file in (state / 'journal').glob('*.plan.json'):
+            saved_plan = json.loads(file.read_text('utf-8'))
+            scope = saved_plan.get('fileSave', {}).get('scope', {})
+            if saved_plan.get('workspaceId') == library_a['workspaceId'] or scope.get('binding', {}).get('workspaceId') == library_a['workspaceId']:
+                a_ids.add(saved_plan['operationId'])
+        assert {ordinary_as['operationId'], ordinary_save['operationId']} <= a_ids
+        a_private = evidence / 'TEST-A-complete-backup'
+        a_backup = call('/api/operations/prepare', {'root': str(reused), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(a_private)}})
+        call('/api/operations/commit', {'operationId': a_backup['operationId'], 'planId': a_backup['planId']})
+        assert all((a_private / 'private/journal' / f'{op}.plan.json').is_file() for op in (ordinary_as['operationId'], ordinary_save['operationId']))
+        a_journal = {file: file.read_bytes() for file in (state / 'journal').glob('*.json') if file.name.split('.')[0] in a_ids}
+        retained_a = evidence / 'TEST-preserved-A-root'; reused.rename(retained_a)
+        library_b = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
+        assert library_b['workspaceId'] != library_a['workspaceId']
+        call('/api/draft', {'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE input after path reuse'})
+        stop(); start()  # The original scope must survive a Core restart.
+        b_request = {**a_request, 'name': 'B', 'operationId': test_hosted.uid()}
+        b_doc = created_document(call('/api/note/create', b_request))
+        call('/api/draft', {'sessionId': b_doc['sessionId'], 'source': b_doc['source'] + '\nB selected private draft'})
+        b_backup = evidence / 'TEST-B-only-backup'
+        b_plan = call('/api/operations/prepare', {'root': str(reused), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(b_backup)}})
+        assert call('/api/operations/commit', {'operationId': b_plan['operationId'], 'planId': b_plan['planId']})['status'] == 'committed'
+        for file, original in a_journal.items():
+            assert file.read_bytes() == original and not (b_backup / 'private/journal' / file.name).exists()
+        assert (retained_a / 'A/A.typ').read_text('utf-8') == a_doc['source']
+        private_drafts = list((b_backup / 'private/drafts').glob('*.json'))
+        assert private_drafts and all(json.loads(file.read_text('utf-8'))['scope']['binding']['workspaceId'] == library_b['workspaceId'] for file in private_drafts)
         orphan = test_hosted.uid()
         original_evidence = state / 'journal' / f'{orphan}.install.json'
         original_evidence.write_bytes(b'TEST retained unknown install evidence')

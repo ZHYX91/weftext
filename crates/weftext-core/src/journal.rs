@@ -79,6 +79,8 @@ pub(crate) struct Plan {
     pub files: Vec<(String, Vec<u8>)>,
     pub node_id: Option<String>,
     pub workspace_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_save: Option<FileSaveData>,
     #[serde(default)]
     pub transaction: Option<operations::FrozenOperation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -114,6 +116,7 @@ impl Plan {
             files: Vec::new(),
             node_id: None,
             workspace_id: None,
+            file_save: None,
             transaction: None,
             history_restore: None,
             sync_setup: None,
@@ -308,7 +311,7 @@ impl Core {
         private_create(
             &self.journal_path(&plan.operation_id, "commit"),
             &serde_json::to_vec(
-                &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
+                &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"fileSave":plan.file_save,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
             )?,
         )
     }
@@ -329,12 +332,33 @@ impl Core {
             .is_some_and(|c| {
                 let matches = c["operationId"] == id
                     && c["fingerprint"] == plan.fingerprint
-                    && c["storageProfile"] == STORAGE_PROFILE;
+                    && c["storageProfile"] == STORAGE_PROFILE
+                    && serde_json::to_value(&plan.file_save)
+                        .is_ok_and(|scope| c["fileSave"] == scope);
                 if !matches {
                     resource_diagnostics::branch("committed.match", id, "recordMismatch");
                 }
                 matches
             })
+    }
+    /// A query must distinguish a missing decision from unreadable or corrupt
+    /// evidence. This reads the same original commit, without another ledger.
+    pub(crate) fn original_commit_fact(&self, id: &str) -> Result<bool> {
+        valid_operation_id(id)?;
+        let Some(plan) = self.operations.get(id) else {
+            return Ok(false);
+        };
+        let mut file = match File::open(self.journal_path(id, "commit")) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(65537)
+            .read_to_end(&mut bytes)?;
+        validate_original_commit_bytes(plan, &bytes)?;
+        Ok(true)
     }
     pub(crate) fn resolution_record(&self, id: &str) -> Result<Option<ResolutionRecord>> {
         valid_operation_id(id)?;
@@ -580,13 +604,14 @@ impl Core {
     }
     pub(crate) fn retry(&self, id: &str, fingerprint: &str) -> Result<Option<Receipt>> {
         if let Some(plan) = self.operations.get(id) {
+            self.validate_file_save_plan(plan)?;
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
                     "This operationId already belongs to different input",
                 ));
             }
-            if self.committed(id) {
+            if self.original_commit_fact(id)? {
                 return Ok(plan.receipt.clone());
             }
             return Err(CoreError::new(
@@ -787,6 +812,40 @@ impl Core {
         }
         Ok(births)
     }
+}
+pub(crate) fn validate_original_commit_bytes(plan: &Plan, bytes: &[u8]) -> Result<()> {
+    let invalid = || {
+        CoreError::new(
+            "invalidState",
+            "Original commit evidence is invalid; preserve it without guessing its outcome",
+        )
+    };
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct CommitFact {
+        operation_id: String,
+        fingerprint: String,
+        receipt: Option<Receipt>,
+        file_save: Option<FileSaveData>,
+        storage_profile: String,
+        saved_at_unix_ms: Option<u64>,
+        commit_sequence: Option<u64>,
+    }
+    if bytes.len() > 65536 {
+        return Err(invalid());
+    }
+    let fact: CommitFact = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    if fact.operation_id != plan.operation_id
+        || fact.fingerprint != plan.fingerprint
+        || fact.storage_profile != STORAGE_PROFILE
+        || serde_json::to_value(&fact.receipt)? != serde_json::to_value(&plan.receipt)?
+        || serde_json::to_value(&fact.file_save)? != serde_json::to_value(&plan.file_save)?
+        || fact.commit_sequence == Some(0)
+    {
+        return Err(invalid());
+    }
+    let _ = fact.saved_at_unix_ms;
+    Ok(())
 }
 pub(crate) fn private_create(path: &Path, bytes: &[u8]) -> Result<()> {
     let temporary = path.with_extension(format!("{}.pending", fresh()));

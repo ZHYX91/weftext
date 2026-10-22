@@ -1,5 +1,5 @@
 """Owned real-program acceptance of ordinary root presets and native Query organization."""
-from _creation_result import created_document
+from _creation_result import created_document, library_fact
 import json
 from pathlib import Path
 import sys
@@ -18,7 +18,7 @@ class QueryOrganization(unittest.TestCase):
         self.data=self.folder/'state'; self.root=self.folder/'Library'; self.server=test_hosted.Server(['--data-dir',str(self.data)]); self.addCleanup(lambda:self.server.close()); self.serial=0
         self.options={'initialRoot':{'title':'我的首页😀','queries':['tasks','events']}}
         self.operation=uid(); self.receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options})
-        self.doc=self.call('/api/open',{'root':str(self.root),'path':self.receipt['rootNotePath']})
+        self.doc=self.receipt['rootDocument']
     def call(self,route,body=None,status=200):
         code,value,_=self.server.call(route,body); self.assertEqual(code,status,(route,value)); return value
     def basis(self,source=None):
@@ -27,7 +27,7 @@ class QueryOrganization(unittest.TestCase):
         basis=self.basis(source); return basis,self.call('/api/query/embedded/discover',basis)['occurrences']
     def test_root_presets_have_real_schema_original_keys_and_complete_empty_typed_results(self):
         self.assertEqual(Path(self.receipt['rootNotePath']),self.root/'Library.typ')
-        self.assertEqual(self.doc['kind'],'managed'); self.assertEqual(self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}),self.receipt)
+        self.assertEqual(self.doc['kind'],'managed'); replay=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual(library_fact(replay),library_fact(self.receipt)); self.assertEqual(replay['rootDocument']['nodeId'],self.doc['nodeId'])
         schema=self.call('/api/data/schema',{'root':str(self.root)}); self.assertFalse(schema['builtinDefault'])
         basis,queries=self.discover(); self.assertEqual(len(queries),2)
         for query in queries:
@@ -71,8 +71,8 @@ class QueryOrganization(unittest.TestCase):
         owner=self.doc['nodeId']; source=f'#metadata((id: "{owner}", types: ())) <weftext>\n\n用户清空预设后自己的正文😀\n'
         self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':source,'operationId':uid()})
         self.server.close(); self.server=test_hosted.Server(['--data-dir',str(self.data)])
-        receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual(receipt,self.receipt)
-        self.doc=self.call('/api/open',{'root':str(self.root),'path':receipt['rootNotePath']}); self.assertEqual(self.doc['source'],source); self.serial=0
+        receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual({key:receipt[key] for key in ('operationId','root','workspaceId','status','rootNotePath')},{key:self.receipt[key] for key in ('operationId','root','workspaceId','status','rootNotePath')})
+        self.doc=receipt['rootDocument']; self.assertEqual(self.doc['source'],source); self.serial=0
         self.assertEqual(self.discover()[1],[])
     def test_root_preset_sync_clone_keeps_schema_keys_and_exact_author_source(self):
         envelope=(self.root/'.weftext-workspace.json').read_bytes()

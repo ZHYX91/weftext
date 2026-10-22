@@ -32,8 +32,6 @@ export interface PendingRestore {
   message: string;
 }
 
-const success = new Set(["committed", "saved", "complete", "success"]);
-const failed = new Set(["conflict", "failed", "rejected", "failed-no-effect"]);
 const terminalErrorCodes = new Set(["conflict", "operationConflict", "preimageChanged", "invalidName", "invalidPath", "trashMissing", "trashSelectionRequired", "trashSelectionMismatch", "targetExists", "destinationExists", "unsupported", "permissionDenied", "rejected"]);
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function errorCode(error: unknown): string { return error && typeof error === "object" && "code" in error ? String(error.code) : ""; }
@@ -95,7 +93,8 @@ export class LibraryTrashRestoreFlow {
     this.busy = true; pending.message = "正在检查原恢复结果…";
     try {
       const result = await this.host.request<KnowledgeReceipt & Partial<KnowledgePlan>>("/api/operations/status", { operationId: pending.request.operationId });
-      if (result.operationId && result.operationId !== pending.request.operationId) throw new Error("状态响应属于另一操作，原恢复保留。" );
+      if (result.operationId !== pending.request.operationId) throw new Error("状态响应属于另一操作，原恢复保留。" );
+      if (pending.state === "committed" && result.status !== "committed") throw new Error("原恢复已确认提交，后续状态不能降低原事实或释放原编号。" );
       if (result.status === "prepared" && typeof result.planId === "string") {
         if (pending.plan && pending.plan.planId !== result.planId) throw new Error("原恢复准备标识已变化，请保留原记录检查。");
         pending.plan = result as KnowledgePlan; pending.state = "prepared";
@@ -112,18 +111,19 @@ export class LibraryTrashRestoreFlow {
     const pending = this.pending;
     if (!pending || pending.state !== "committed" || pending.delivered) return;
     const document = pending.receipt?.document;
-    if (!openedDocument(document, pending.request.intent.nodeId)) { pending.message = "恢复已完成，准确笔记的打开信息暂不可用。检查原操作以读取同一结果。"; return; }
+    if (pending.receipt?.documentError || !openedDocument(document, pending.request.intent.nodeId)) { pending.message = "恢复已完成，准确笔记的打开信息暂不可用。检查原操作以读取同一结果。"; return; }
     try { await this.host.created(document); pending.delivered = true; pending.message = "笔记已恢复并打开。"; this.host.notify(pending.message); }
     catch (error) { pending.message = `笔记已恢复；打开尚未完成：${errorMessage(error)}`; throw error; }
   }
 
   private async receive(receipt: KnowledgeReceipt): Promise<void> {
     const pending = this.pending; if (!pending) return;
-    if (receipt.operationId && receipt.operationId !== pending.request.operationId) throw new Error("恢复结果与原请求不一致，不能交付另一操作。" );
+    if (receipt.operationId !== pending.request.operationId) throw new Error("恢复结果与原请求不一致，不能交付另一操作。" );
     if (pending.plan && typeof receipt.planId === "string" && receipt.planId !== pending.plan.planId) throw new Error("恢复结果与已确认准备不一致。" );
+    if (!["committed", "resolved", "recoveryPending", "unknown"].includes(receipt.status) || pending.state === "committed" && receipt.status !== "committed") throw new Error("恢复状态不符合原操作合同；原请求、已知事实与编号保留。" );
     pending.receipt = receipt;
-    if (success.has(receipt.status)) { const changed = pending.state !== "committed"; pending.state = "committed"; pending.message = receipt.message || "恢复已完成。"; if (changed) this.host.environmentChanged?.(pending.request.root); await this.deliverCommitted(); }
-    else if (failed.has(receipt.status)) { pending.state = "failed"; pending.message = receipt.message || "恢复未应用，原笔记仍需检查。"; }
+    if (receipt.status === "committed") { const changed = pending.state !== "committed"; pending.state = "committed"; pending.message = receipt.message || "恢复已完成。"; if (changed) this.host.environmentChanged?.(pending.request.root); await this.deliverCommitted(); }
+    else if (receipt.status === "resolved") { pending.state = "failed"; pending.message = receipt.message || "原恢复已明确结束，原笔记与原件保留。"; }
     else { pending.state = "unknown"; pending.message = receipt.message || "恢复结果尚未确认。原操作已保留，不会重复恢复。"; }
   }
 

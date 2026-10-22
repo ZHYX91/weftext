@@ -67,7 +67,7 @@ struct FileRoute {
     route: String,
 }
 
-fn selected_attempt_scope(
+fn selected_library_scope(
     scope: Option<&ActorLibraryBinding>,
     expected: &ActorLibraryBinding,
 ) -> Result<bool> {
@@ -77,16 +77,70 @@ fn selected_attempt_scope(
     if scope == expected {
         return Ok(true);
     }
-    if scope.workspace_id == expected.workspace_id
-        || scope.root.eq_ignore_ascii_case(&expected.root)
-        || scope.root_identity == expected.root_identity
+    // An explicit different workspace at a different physical root is foreign,
+    // including when its old locator has since been reused. A logical/physical
+    // identity contradiction remains an error; a path cannot override either.
+    if scope.root_identity == expected.root_identity || scope.workspace_id == expected.workspace_id
     {
         return Err(CoreError::new(
             "scopeChanged",
-            "Original reservation library identity differs from this backup",
+            "Original private library identity differs from this backup",
+        ));
+    }
+    if scope.workspace_id.is_some() && expected.workspace_id.is_some() {
+        return Ok(false);
+    }
+    if scope.root.eq_ignore_ascii_case(&expected.root) {
+        return Err(CoreError::new(
+            "scopeChanged",
+            "Unqualified original library scope differs from this backup",
         ));
     }
     Ok(false)
+}
+fn selected_input_scope(
+    core: &Core,
+    scope: &QualifiedInputScope,
+    expected: &ActorLibraryBinding,
+) -> Result<bool> {
+    core.validate_original_input_scope(scope)?;
+    match scope {
+        QualifiedInputScope::DeviceUnassigned => Ok(false),
+        QualifiedInputScope::Library { binding } => {
+            if binding.workspace_id.as_str()
+                == expected
+                    .workspace_id
+                    .as_deref()
+                    .ok_or_else(private_evidence)?
+                && binding.root_identity == expected.root_identity
+            {
+                return Ok(true);
+            }
+            if binding.root_identity == expected.root_identity
+                || Some(&binding.workspace_id) == expected.workspace_id.as_ref()
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Original private logical and physical library identities contradict this backup",
+                ));
+            }
+            Ok(false)
+        }
+    }
+}
+fn selected_plan_scope(
+    core: &Core,
+    plan: &Plan,
+    workspace_id: &str,
+    expected: &ActorLibraryBinding,
+) -> Result<bool> {
+    if matches!(plan.kind.as_str(), "save" | "saveAs") {
+        core.validate_file_save_plan(plan)?;
+        return selected_input_scope(core, &plan.file_save.as_ref().unwrap().scope, expected);
+    }
+    let original = plan.workspace_id.as_ref().ok_or_else(private_evidence)?;
+    Uuid::parse_str(original).map_err(|_| private_evidence())?;
+    Ok(original == workspace_id)
 }
 fn qualified_journal_suffix<'a>(id: &str, name: &'a str) -> Result<&'a str> {
     let suffix = name
@@ -301,29 +355,27 @@ impl Core {
                         &[]
                     },
                 )?;
-                if selected_attempt_scope(scope.as_ref(), &binding)? {
+                if selected_library_scope(scope.as_ref(), &binding)? {
                     selected_attempts.push(id.to_owned());
                 }
             }
         }
-        let selected_plans = self
-            .operations
-            .values()
-            .filter(|p| {
-                !library_creation::is_cancellation(p)
-                    && own.is_none_or(|own| p.operation_id != own.operation_id)
-                    && (p.workspace_id.as_deref() == Some(workspace_id)
-                        || locator_within(Path::new(&p.path), root))
-            })
-            .map(|p| p.operation_id.as_str())
-            .chain(selected_attempts.iter().map(String::as_str))
-            .collect::<BTreeSet<_>>();
         let mut capture = PrivateCapture {
             digest: String::new(),
             selected_files: Vec::new(),
             guards: vec![root_guard],
             handles: Vec::new(),
         };
+        let mut selected_plans = BTreeSet::new();
+        for plan in self.operations.values() {
+            if !library_creation::is_cancellation(plan)
+                && own.is_none_or(|own| plan.operation_id != own.operation_id)
+                && selected_plan_scope(self, plan, workspace_id, &binding)?
+            {
+                selected_plans.insert(plan.operation_id.as_str());
+            }
+        }
+        selected_plans.extend(selected_attempts.iter().map(String::as_str));
         let base_guard = ParentGuard::acquire(&self.data_dir.join(".backup-private-prospective"))?;
         let (base_entries, complete) = base_guard.directory_entries(MAX_ROUTING_MEMBERS)?;
         if !complete {
@@ -463,7 +515,7 @@ impl Core {
                                     &[]
                                 },
                             )?;
-                            let selected = selected_attempt_scope(scope.as_ref(), &binding)?;
+                            let selected = selected_library_scope(scope.as_ref(), &binding)?;
                             let mut decision = File::open(self.journal_path(id, "resolution"))?;
                             let mut bytes = Vec::new();
                             Read::by_ref(&mut decision)
@@ -514,8 +566,11 @@ impl Core {
                             &mut file,
                             root,
                             &binding,
-                            MAX_OPERATION_BYTES.saturating_sub(selected_bytes),
-                            actual.size,
+                            (
+                                MAX_OPERATION_BYTES.saturating_sub(selected_bytes),
+                                actual.size,
+                            ),
+                            &selected_plans,
                         )?
                     };
                     capture.guards.push(file_guard);
@@ -583,28 +638,18 @@ fn classify_record(
     core: &Core,
     path: &Path,
     file: &mut File,
-    root: &Path,
+    _root: &Path,
     expected: &ActorLibraryBinding,
-    remaining: usize,
-    size: u64,
+    bounds: (usize, u64),
+    _selected_plans: &BTreeSet<&str>,
 ) -> Result<(bool, String)> {
+    let (remaining, size) = bounds;
     if record_kind(core, path)? == RecordKind::Capture {
         let header = capture_draft::read_capture_header(file)?;
         capture_draft::validate_capture_header_path(path, &core.data_dir, &header)?;
         let selected = match &header.library {
             CaptureLibrary::DeviceUnassigned => false,
-            CaptureLibrary::Bound { binding } => {
-                if binding != expected
-                    && (binding.workspace_id == expected.workspace_id
-                        || binding.root.eq_ignore_ascii_case(&expected.root))
-                {
-                    return Err(CoreError::new(
-                        "scopeChanged",
-                        "Capture original library identity differs",
-                    ));
-                }
-                binding == expected
-            }
+            CaptureLibrary::Bound { binding } => selected_library_scope(Some(binding), expected)?,
         };
         if selected
             && (size > remaining as u64 || size > capture_draft::MAX_CAPTURE_RECORD_BYTES as u64)
@@ -613,63 +658,40 @@ fn classify_record(
         }
         return Ok((selected, serde_json::to_string(&header)?));
     }
-    match read_actor_library_header(file)? {
-        ActorLibraryHeader::Bound(binding) => {
-            let selected = binding == *expected;
-            if !selected
-                && (binding.workspace_id == expected.workspace_id
-                    || binding.root.eq_ignore_ascii_case(&expected.root))
-            {
-                return Err(CoreError::new(
-                    "scopeChanged",
-                    "A private record's original library identity differs",
-                ));
-            }
-            Ok((selected, serde_json::to_string(&binding)?))
-        }
-        ActorLibraryHeader::LegacyUnbound => {
-            file.seek(SeekFrom::Start(0))?;
-            let is_draft = record_kind(core, path)? == RecordKind::Draft;
-            if is_draft {
-                // Identify the primary path before a legacy author string. A
-                // selected record's complete size is charged before scanning
-                // its alternatives, so routed legacy bodies cannot multiply
-                // the whole-backup read budget.
-                let mut prefix = Tokens::new(file, 4096);
-                prefix.expect(b'{')?;
-                match prefix.key()?.as_str() {
-                    "path" => {
-                        let path = prefix.string()?;
-                        if !locator_within(Path::new(&path), root) {
-                            return Err(private_evidence());
-                        }
-                        if size > remaining as u64 {
-                            return Err(backup_budget());
-                        }
-                    }
-                    "identity" => {
-                        // Legacy migration contains routing metadata only.
-                        // Its ordinary producer remains bounded by the same
-                        // private record byte budget; never parse unknown fields.
-                        if size > MAX_OPERATION_BYTES as u64 {
-                            return Err(backup_budget());
-                        }
-                    }
-                    _ => return Err(private_evidence()),
+    if record_kind(core, path)? == RecordKind::Draft {
+        let scope = file_save_scope::read_input_scope(file)?;
+        return Ok((
+            selected_input_scope(core, &scope, expected)?,
+            serde_json::to_string(&scope)?,
+        ));
+    }
+    if record_kind(core, path)? == RecordKind::Actor {
+        let scope = crate::hosted::read_actor_input_header(file)?;
+        let selected = match &scope {
+            crate::hosted::ActorInputScope::NoInput => {
+                if size > 4096 {
+                    return Err(backup_budget());
                 }
+                let prior = file.stream_position()?;
                 file.seek(SeekFrom::Start(0))?;
-                let route = legacy_draft_route(file, root)?;
-                return Ok((route.0, route.1));
+                let mut bytes = Vec::new();
+                Read::by_ref(file).take(4097).read_to_end(&mut bytes)?;
+                file.seek(SeekFrom::Start(prior))?;
+                core.validate_no_input_actor_fence(path, &bytes)?;
+                false
             }
-            if record_kind(core, path)? == RecordKind::Output {
-                return Err(private_evidence());
+            crate::hosted::ActorInputScope::Qualified { scope } => {
+                selected_input_scope(core, scope, expected)?
             }
-            let id = legacy_actor_core_id(file)?;
-            let plan = core.operations.get(&id).ok_or_else(private_evidence)?;
-            let selected = plan.workspace_id.as_deref() == expected.workspace_id.as_deref()
-                || locator_within(Path::new(&plan.path), root);
-            Ok((selected, format!("legacyPlan:{id}:{}", plan.fingerprint)))
-        }
+        };
+        return Ok((selected, serde_json::to_string(&scope)?));
+    }
+    match read_actor_library_header(file)? {
+        ActorLibraryHeader::Bound(binding) => Ok((
+            selected_library_scope(Some(&binding), expected)?,
+            serde_json::to_string(&binding)?,
+        )),
+        ActorLibraryHeader::LegacyUnbound => Err(private_evidence()),
     }
 }
 
@@ -677,7 +699,7 @@ fn route_selected_bytes(
     core: &Core,
     path: &Path,
     bytes: &[u8],
-    root: &Path,
+    _root: &Path,
     expected: &ActorLibraryBinding,
     selected_plans: &BTreeSet<&str>,
 ) -> Result<String> {
@@ -707,28 +729,27 @@ fn route_selected_bytes(
         qualified_journal_suffix(id, &name)?;
         return Ok("selectedJournal".into());
     }
-    let value: UniqueValue = serde_json::from_slice(bytes)?;
-    if let Some(library) = value.0.get("library") {
-        let binding: ActorLibraryBinding = serde_json::from_value(library.clone())?;
-        if binding != *expected {
+    if record_kind(core, path)? == RecordKind::Draft {
+        let scope = file_save_scope::read_input_scope(&mut std::io::Cursor::new(bytes))?;
+        if !selected_input_scope(core, &scope, expected)? {
             return Err(private_evidence());
         }
-        return Ok(serde_json::to_string(&binding)?);
+        return Ok(serde_json::to_string(&scope)?);
     }
-    if record_kind(core, path)? == RecordKind::Draft {
-        return legacy_draft_route(&mut std::io::Cursor::new(bytes), root).map(|r| r.1);
+    let value: UniqueValue = serde_json::from_slice(bytes)?;
+    if record_kind(core, path)? == RecordKind::Actor {
+        let scope = crate::hosted::read_actor_input_header(&mut std::io::Cursor::new(bytes))?;
+        if !matches!(&scope, crate::hosted::ActorInputScope::Qualified { scope } if selected_input_scope(core, scope, expected)?)
+        {
+            return Err(private_evidence());
+        }
+        return Ok(serde_json::to_string(&scope)?);
     }
-    let id = value.0["coreOperationId"]
-        .as_str()
-        .ok_or_else(private_evidence)?;
-    // The full Plan fingerprint was fixed by capture; find it through the
-    // current Core in the live routing path rather than trusting actor payload.
-    // Protected input routing below substitutes this exact captured route.
-    if !selected_plans.contains(id) {
+    let binding: ActorLibraryBinding = serde_json::from_value(value.0["library"].clone())?;
+    if binding != *expected {
         return Err(private_evidence());
     }
-    let plan = core.operations.get(id).ok_or_else(private_evidence)?;
-    Ok(format!("legacyPlan:{id}:{}", plan.fingerprint))
+    Ok(serde_json::to_string(&binding)?)
 }
 
 fn validate_selected_record(
@@ -743,6 +764,19 @@ fn validate_selected_record(
         let name = path.file_name().unwrap().to_string_lossy();
         let id = name.split('.').next().ok_or_else(private_evidence)?;
         let suffix = qualified_journal_suffix(id, &name)?;
+        if let Some(plan) = core.operations.get(id) {
+            if suffix == "plan" {
+                let retained: Plan = serde_json::from_slice(bytes)?;
+                if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
+                    return Err(private_evidence());
+                }
+                if matches!(retained.kind.as_str(), "save" | "saveAs") {
+                    core.validate_file_save_plan(&retained)?;
+                }
+            } else if suffix == "commit" {
+                journal::validate_original_commit_bytes(plan, bytes)?;
+            }
+        }
         if !core.operations.contains_key(id) {
             if suffix == "resolution" {
                 let record = journal::decode_resolution(id, bytes)?;
@@ -775,329 +809,63 @@ fn validate_selected_record(
         return Ok(());
     }
     let value: UniqueValue = serde_json::from_slice(bytes)?;
-    if let Some(library) = value.0.get("library") {
-        let binding: ActorLibraryBinding = serde_json::from_value(library.clone())?;
-        let guard = ParentGuard::acquire(&root.join(".backup-record-prospective"))?;
-        if binding.root != display(&guard.directory_coordinates()?)
-            || binding.root_identity != guard.directory_identity()?
-            || binding.workspace_id.as_deref() != Some(workspace_id)
-        {
-            return Err(private_evidence());
-        }
-        if matches!(kind, RecordKind::Actor | RecordKind::Output) {
-            core.validate_scoped_actor_record(path, bytes, &binding)?;
-        }
-    } else if kind == RecordKind::Actor {
-        let guard = ParentGuard::acquire(&root.join(".backup-record-prospective"))?;
-        let binding = ActorLibraryBinding {
+    if kind == RecordKind::Draft {
+        let draft: Draft = serde_json::from_slice(bytes)?;
+        let guard = ParentGuard::acquire(&root.join(".backup-draft-root"))?;
+        let expected = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),
             root_identity: guard.directory_identity()?,
             workspace_id: Some(workspace_id.into()),
         };
-        core.validate_legacy_actor_backup_record(path, bytes, &binding)?;
-    }
-    if kind == RecordKind::Draft {
-        if value.0.get("consumed").is_some() {
-            #[derive(Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct Migration {
-                #[serde(default)]
-                library: Option<ActorLibraryBinding>,
-                identity: FileIdentity,
-                consumed: Vec<Reference>,
-            }
-            #[derive(Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct Reference {
-                #[serde(default)]
-                library: Option<ActorLibraryBinding>,
-                path: String,
-                fingerprint: String,
-            }
-            let migration: Migration = serde_json::from_slice(bytes)?;
-            if migration.consumed.is_empty() {
-                return Err(private_evidence());
-            }
-            for reference in &migration.consumed {
-                if !locator_within(Path::new(&reference.path), root)
-                    || reference.library != migration.library
-                    || reference.fingerprint.len() != 64
-                {
-                    return Err(private_evidence());
-                }
-            }
-            let _ = migration.identity;
-        } else {
-            let draft: Draft = serde_json::from_slice(bytes)?;
-            if !locator_within(Path::new(&draft.path), root)
-                || draft
-                    .alternatives
-                    .iter()
-                    .any(|d| !locator_within(Path::new(&d.path), root))
-            {
-                return Err(private_evidence());
-            }
-        }
-        for value in std::iter::once(&value.0)
-            .chain(value.0["alternatives"].as_array().into_iter().flatten())
-            .chain(value.0["consumed"].as_array().into_iter().flatten())
+        if !selected_input_scope(core, &draft.scope, &expected)?
+            || !locator_within(Path::new(&draft.path), root)
+            || draft
+                .alternatives
+                .iter()
+                .any(|d| !locator_within(Path::new(&d.path), root))
         {
-            if let Some(p) = value["path"].as_str()
-                && !locator_within(Path::new(p), root)
-            {
-                return Err(private_evidence());
-            }
+            return Err(private_evidence());
         }
+        core.validate_original_file_save_scope(&draft.scope, Path::new(&draft.path))?;
+        return Ok(());
+    }
+    let guard = ParentGuard::acquire(&root.join(".backup-record-prospective"))?;
+    let expected = ActorLibraryBinding {
+        root: display(&guard.directory_coordinates()?),
+        root_identity: guard.directory_identity()?,
+        workspace_id: Some(workspace_id.into()),
+    };
+    if kind == RecordKind::Actor {
+        let input = crate::hosted::read_actor_input_header(&mut std::io::Cursor::new(bytes))?;
+        if !matches!(&input, crate::hosted::ActorInputScope::Qualified { scope } if selected_input_scope(core, scope, &expected)?)
+        {
+            return Err(private_evidence());
+        }
+    }
+    let file_plan = value.0["coreOperationId"]
+        .as_str()
+        .and_then(|id| core.operations.get(id))
+        .filter(|plan| matches!(plan.kind.as_str(), "save" | "saveAs"));
+    if let Some(plan) = file_plan {
+        core.validate_file_save_plan(plan)?;
+        if !selected_input_scope(core, &plan.file_save.as_ref().unwrap().scope, &expected)? {
+            return Err(private_evidence());
+        }
+    }
+    if let Some(library) = value.0.get("library") {
+        let binding: ActorLibraryBinding = serde_json::from_value(library.clone())?;
+        if kind != RecordKind::Actor && binding != expected {
+            return Err(private_evidence());
+        }
+        core.validate_scoped_actor_record(path, bytes, &binding)?;
+    } else if kind == RecordKind::Actor {
+        core.validate_unbound_actor_backup_record(path, bytes, &expected)?;
+    } else {
+        return Err(private_evidence());
     }
     Ok(())
 }
 
-// Strict first metadata readers. These never buffer a foreign author payload.
-struct Tokens<'a, R: Read> {
-    reader: &'a mut R,
-    look: Option<u8>,
-    count: usize,
-    limit: usize,
-}
-impl<'a, R: Read> Tokens<'a, R> {
-    fn new(reader: &'a mut R, limit: usize) -> Self {
-        Self {
-            reader,
-            look: None,
-            count: 0,
-            limit,
-        }
-    }
-    fn byte(&mut self) -> Result<u8> {
-        if let Some(byte) = self.look.take() {
-            return Ok(byte);
-        }
-        if self.count >= self.limit {
-            return Err(backup_budget());
-        }
-        let mut b = [0];
-        self.reader
-            .read_exact(&mut b)
-            .map_err(|_| private_evidence())?;
-        self.count += 1;
-        Ok(b[0])
-    }
-    fn next(&mut self) -> Result<u8> {
-        loop {
-            let b = self.byte()?;
-            if !b.is_ascii_whitespace() {
-                return Ok(b);
-            }
-        }
-    }
-    fn expect(&mut self, expected: u8) -> Result<()> {
-        if self.next()? != expected {
-            return Err(private_evidence());
-        }
-        Ok(())
-    }
-    fn string(&mut self) -> Result<String> {
-        self.expect(b'"')?;
-        let mut bytes = vec![b'"'];
-        let mut escape = false;
-        loop {
-            let b = self.byte()?;
-            bytes.push(b);
-            if b == b'"' && !escape {
-                break;
-            }
-            escape = b == b'\\' && !escape;
-            if b != b'\\' {
-                escape = false;
-            }
-        }
-        serde_json::from_slice(&bytes).map_err(|_| private_evidence())
-    }
-    fn key(&mut self) -> Result<String> {
-        let key = self.string()?;
-        self.expect(b':')?;
-        Ok(key)
-    }
-    fn scalar(&mut self) -> Result<()> {
-        let first = self.next()?;
-        if first == b'"' {
-            self.look = Some(first);
-            self.string()?;
-            return Ok(());
-        }
-        let mut bytes = vec![first];
-        loop {
-            let b = self.byte()?;
-            if matches!(b, b',' | b'}' | b']') || b.is_ascii_whitespace() {
-                self.look = Some(b);
-                break;
-            }
-            bytes.push(b);
-        }
-        let value: serde_json::Value =
-            serde_json::from_slice(&bytes).map_err(|_| private_evidence())?;
-        if value.is_array() || value.is_object() {
-            return Err(private_evidence());
-        }
-        Ok(())
-    }
-    fn identity(&mut self) -> Result<()> {
-        let b = self.next()?;
-        if b == b'n' {
-            self.look = Some(b);
-            return self.scalar();
-        }
-        if b != b'{' {
-            return Err(private_evidence());
-        }
-        let mut keys = BTreeSet::new();
-        loop {
-            let key = self.key()?;
-            if !keys.insert(key.clone()) || !["volume", "index", "created"].contains(&key.as_str())
-            {
-                return Err(private_evidence());
-            }
-            self.scalar()?;
-            match self.next()? {
-                b'}' => break,
-                b',' => {}
-                _ => return Err(private_evidence()),
-            }
-        }
-        Ok(())
-    }
-}
-fn legacy_actor_core_id(file: &mut impl Read) -> Result<String> {
-    let mut t = Tokens::new(file, 4096);
-    t.expect(b'{')?;
-    for expected in ["actor", "resource", "fingerprint", "coreOperationId"] {
-        if t.key()? != expected {
-            return Err(private_evidence());
-        }
-        if expected == "coreOperationId" {
-            let id = t.string()?;
-            valid_operation_id(&id)?;
-            return Ok(id);
-        }
-        t.string()?;
-        t.expect(b',')?;
-    }
-    Err(private_evidence())
-}
-fn legacy_draft_route(reader: &mut impl Read, root: &Path) -> Result<(bool, String)> {
-    let mut t = Tokens::new(reader, MAX_OPERATION_BYTES);
-    t.expect(b'{')?;
-    let first = t.key()?;
-    if first == "identity" {
-        // This old record has no author strings. A bounded metadata-only join
-        // remains possible, while an arbitrarily large unscoped list does not.
-        t.limit = 16 * 1024;
-        t.identity()?;
-        t.expect(b',')?;
-        if t.key()? != "consumed" {
-            return Err(private_evidence());
-        }
-        t.expect(b'[')?;
-        let mut paths = Vec::new();
-        loop {
-            let b = t.next()?;
-            if b == b']' {
-                break;
-            }
-            if b != b'{' {
-                return Err(private_evidence());
-            }
-            if t.key()? != "path" {
-                return Err(private_evidence());
-            }
-            let path = t.string()?;
-            paths.push(path);
-            t.expect(b',')?;
-            if t.key()? != "fingerprint" {
-                return Err(private_evidence());
-            }
-            t.string()?;
-            t.expect(b'}')?;
-            match t.next()? {
-                b']' => break,
-                b',' => {}
-                _ => return Err(private_evidence()),
-            }
-        }
-        t.expect(b'}')?;
-        if paths.is_empty() {
-            return Err(private_evidence());
-        }
-        let selected = paths.iter().all(|p| locator_within(Path::new(p), root));
-        if !selected && paths.iter().any(|p| locator_within(Path::new(p), root)) {
-            return Err(private_evidence());
-        }
-        return Ok((
-            selected,
-            format!("legacyMigration:{}", serde_json::to_string(&paths)?),
-        ));
-    }
-    if first != "path" {
-        return Err(private_evidence());
-    }
-    let path = t.string()?;
-    if !locator_within(Path::new(&path), root) {
-        return Err(private_evidence());
-    }
-    t.expect(b',')?;
-    draft_fields(&mut t, root, false)?;
-    Ok((true, format!("legacyDraft:{path}")))
-}
-fn draft_fields<R: Read>(t: &mut Tokens<'_, R>, root: &Path, alternative: bool) -> Result<()> {
-    let mut keys = BTreeSet::new();
-    loop {
-        let key = t.key()?;
-        if !keys.insert(key.clone()) {
-            return Err(private_evidence());
-        }
-        match key.as_str() {
-            "baseSource" | "source" => {
-                t.string()?;
-            }
-            "baseKnown" => t.scalar()?,
-            "identity" if !alternative => t.identity()?,
-            "alternatives" if !alternative => {
-                t.expect(b'[')?;
-                loop {
-                    let b = t.next()?;
-                    if b == b']' {
-                        break;
-                    }
-                    if b != b'{' {
-                        return Err(private_evidence());
-                    }
-                    if t.key()? != "path" {
-                        return Err(private_evidence());
-                    }
-                    let path = t.string()?;
-                    if !locator_within(Path::new(&path), root) {
-                        return Err(private_evidence());
-                    }
-                    t.expect(b',')?;
-                    draft_fields(t, root, true)?;
-                    match t.next()? {
-                        b']' => break,
-                        b',' => {}
-                        _ => return Err(private_evidence()),
-                    }
-                }
-            }
-            _ => return Err(private_evidence()),
-        }
-        match t.next()? {
-            b'}' => return Ok(()),
-            b',' => {}
-            _ => return Err(private_evidence()),
-        }
-    }
-}
-
-// serde_json::Value accepts duplicate map keys; recovery provenance must not.
 struct UniqueValue(serde_json::Value);
 impl<'de> Deserialize<'de> for UniqueValue {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
@@ -1244,13 +1012,8 @@ fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGu
             }
         }
         "commit" => {
-            if value["operationId"] != plan.operation_id
-                || value["fingerprint"] != plan.fingerprint
-                || value["receipt"] != serde_json::to_value(&plan.receipt)?
-                || value["storageProfile"] != STORAGE_PROFILE
-                || value["commitSequence"].as_u64().is_none()
-                || !value.as_object().is_some_and(|v| v.len() == 6)
-            {
+            journal::validate_original_commit_bytes(plan, &bytes)?;
+            if value["commitSequence"].as_u64().is_none() {
                 return Err(private_evidence());
             }
         }

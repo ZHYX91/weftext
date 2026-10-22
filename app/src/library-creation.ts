@@ -1,16 +1,19 @@
 import { nativeLanguageOptions } from "./style-panel";
+import type { Inventory, OpenedDocument } from "./types";
 
 export interface InitialLibraryStyle { source: string; enabled: boolean }
 export interface InitialRootNote { title: string; queries: string[] }
 export interface LibraryCreateOptions { initialStyle?: InitialLibraryStyle | null; initialRoot?: InitialRootNote }
 export interface LibraryCreationRequest { path: string; options: LibraryCreateOptions; operationId: string }
-export interface LibraryCreationReceipt { operationId: string; root: string; workspaceId: string; status: string; rootNotePath?: string }
+export interface LibraryCreationReceipt { operationId: string; root: string; workspaceId: string; status: string; rootNotePath?: string; library?: Inventory; rootDocument?: OpenedDocument; deliveryError?: { message: string } }
 interface CreationSlot { key: string; value: string; editable: boolean; range: { utf16From: number; utf16To: number; raw: string } | null }
 export interface LibraryCreationDefaults { source: string; sourceHash: string; controls: CreationSlot[]; rootPresets?: { id: string; title: string; plan: unknown }[] }
 export interface LibraryCreationRecovery { operationId: string; status: string; message: string; allowedActions?: string[]; [key: string]: unknown }
 export interface LibraryCreationHost {
   defaults(): Promise<LibraryCreationDefaults>;
   create(request: LibraryCreationRequest): Promise<LibraryCreationReceipt>;
+  delivery(operationId: string): Promise<LibraryCreationReceipt>;
+  deliver(receipt: LibraryCreationReceipt): Promise<void>;
   inspect(operationId: string): Promise<LibraryCreationRecovery>;
   resolve(operationId: string, action: string): Promise<LibraryCreationRecovery>;
   cancel?(request: LibraryCreationRequest): Promise<LibraryCreationRecovery>;
@@ -84,8 +87,8 @@ export class LibraryCreationController {
     }
     this.busy = true;
     try {
-      const receipt = await this.host.create(structuredClone(this.request));
-      if (receipt.operationId !== this.request.operationId || !receipt.workspaceId || !receipt.root) throw new Error("创建回执与原操作不一致，请继续核对原编号。");
+      const receipt = this.receipt ? await this.host.delivery(this.request.operationId) : await this.host.create(structuredClone(this.request));
+      if (receipt.operationId !== this.request.operationId || receipt.status !== "committed" || !receipt.workspaceId || !receipt.root || this.receipt && (receipt.workspaceId !== this.receipt.workspaceId || receipt.root !== this.receipt.root)) throw new Error("创建回执与原操作不一致，请继续核对原编号。");
       this.receipt = structuredClone(receipt); this.retain(); return receipt;
     } finally { this.busy = false; }
   }
@@ -104,9 +107,19 @@ export class LibraryCreationController {
     this.busy = true;
     try { this.installRecovery(await this.host.cancel(structuredClone(this.request))); } finally { this.busy = false; }
   }
-  acknowledge(): void { if (!this.receipt) throw new Error("创建结果尚未核对。"); this.storage.removeItem(key); }
+  async deliver(): Promise<LibraryCreationReceipt> {
+    const receipt = await this.create();
+    this.busy = true;
+    try {
+      if (receipt.deliveryError) throw new Error(`资料库已提交，交付尚未完成：${receipt.deliveryError.message}`);
+      await this.host.deliver(receipt);
+      this.storage.removeItem(key);
+      return receipt;
+    } finally { this.busy = false; }
+  }
   private installRecovery(result: LibraryCreationRecovery): void {
     if (!this.request || result.operationId !== this.request.operationId) throw new Error("恢复结果与原创建操作不一致。");
+    if (this.receipt && result.status !== "committed") throw new Error("原资料库已确认提交，后续状态不一致；原回执与请求保留。");
     this.recovery = structuredClone(result);
     if (result.status === "resolved" || result.status === "cancelled") { this.request = null; this.proposal = null; this.receipt = null; }
     this.retain();
@@ -139,7 +152,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
   let composing = false, finish: (value: LibraryCreationReceipt | null) => void = () => {};
   const button = (label: string, run: () => Promise<void> | void) => { const b = el("button", label); b.type = "button"; b.className = "button-secondary"; b.onclick = () => { void (async () => { try { if (composing) return; const promise = run(); draw(); await promise; } catch (error) { message.textContent = `${error instanceof Error ? error.message : String(error)}${controller.request ? ` 原操作 ${controller.request.operationId} 与全部选择已保留。` : ""}`; } draw(); })(); }; actions.append(b); return b; };
   const prepare = button("预览创建", () => { controller.preview(); message.textContent = "请核对路径和文档排版默认，再创建资料库。"; });
-  const create = button("创建资料库", async () => { const receipt = await controller.create(); controller.acknowledge(); finish(receipt); });
+  const create = button("创建资料库", async () => { const receipt = await controller.deliver(); finish(receipt); });
   const inspect = button("查看原操作恢复信息", () => controller.inspect());
   const cancel = button("结束尚未开始的原创建", () => controller.cancel());
   const close = button("关闭", () => finish(null));

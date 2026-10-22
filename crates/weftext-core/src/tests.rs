@@ -1229,7 +1229,8 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
 }
 
 #[test]
-fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumption() {
+fn selected_library_backup_excludes_foreign_plaintext_and_preserves_current_draft_and_archived_input()
+ {
     let mut f = Fixture::new("ordinary");
     let first = f.temp.path().join("L1");
     let second = f.temp.path().join("L2");
@@ -1276,10 +1277,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
             }),
         "Explicit resolution must preserve the original selected proposal before backup"
     );
-    let marker = f
-        .core
-        .draft_path(&first.join("C/C.typ"))
-        .with_extension("relocation.json");
+    let marker = f.core.draft_path(&first.join("C/C.typ"));
     assert!(marker.exists());
     operation(
         &mut f.core,
@@ -1292,10 +1290,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
     f.core
         .open(second.join("D/D.typ"), Some(second.clone()))
         .unwrap();
-    let foreign_marker = f
-        .core
-        .draft_path(&second.join("D/D.typ"))
-        .with_extension("relocation.json");
+    let foreign_marker = f.core.draft_path(&second.join("D/D.typ"));
     let target = f.temp.path().join("selected-backup");
     operation(
         &mut f.core,

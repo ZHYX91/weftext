@@ -183,6 +183,7 @@ impl Core {
             return Ok(status);
         }
         let record = ActorOperation {
+            scope: self.actor_input_scope_for_root(Path::new(&navigation.root))?,
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -205,7 +206,7 @@ impl Core {
         };
         journal::private_create(
             &self.actor_record(operation)?,
-            &Self::actor_operation_bytes(&record)?,
+            &self.actor_operation_bytes(&record)?,
         )?;
         navigation.prepare(self, &record.core_operation_id)?;
         self.actor_feature_status(resource, operation)?
