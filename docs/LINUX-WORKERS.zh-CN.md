@@ -62,3 +62,5 @@ daemon 持有内核 pidfd 与该任务 cgroup，自己作为 subreaper。自然�
 普通代码检查使用产品仓库入口及 `cargo test -p weftext-worker-broker`。`boundary-probe` 是显式 feature 下的敌对测试 ELF，绝不作为产品 runtime 或安装包交付。`scripts/test_linux_worker_broker.py` 是需显式 `--run-approved` 的真实 Linux root 机制测试，它不安装组件、创建用户、授予 cgroup 或修改系统安全设置。必须先审核具体源码、映像摘要、策略、原注册及专属 `/etc`、`/var/lib`、cgroup 路径，再单独批准部署和测试命令。
 
 机制测试覆盖严格帧、peer 混淆、FD 注入、映像/摘要/祖先错误、进入包含边界后才执行、fork/setsid/孤儿、超时/取消/断开回收、真实 UID/GID/caps/组/NNP、环境和网络、Core 根/密钥 DAC 及额外写 FD 关闭。实际原始日志、源码/产物 SHA256 和未验项归原任务证据；不把这些局部机制测试记作 Linux Desktop、整个产品或 v0.7 验收。部署仍须验证真实 Render / Notes 产品映像、App 唯一适配器及同一受控 Core 消费链。
+
+`python3 -B scripts/test_linux_worker_broker_harness.py -v` 只检查普通 pipe、poll 和自有 helper 子进程，不启动产品 daemon 或改变 UID。实际部署 harness 的每个 case 共用一个 8 秒绝对截止时间，预留最后 0.5 秒给报告与精确回收；socket、stdin 写入、stdout/stderr 并行排空、result pipe 和 wait 都按剩余时间等待。helper 通过 held pidfd 取消，只有实际 waitpid 状态才记 `clientReaped`。超时、强制收尾、坏报告或未知状态均保留失败/原 bytes，不算 case 完成。合法 service fixture 实际清空五组 capabilities（含 bounding）、附加组并启用 NNP1；root peer 负例保持真实 UID0。daemon 45 秒内无法证明退出时记录 `cleanupUnknown`，保留仍持有自有树的 daemon 供管理员检查。
