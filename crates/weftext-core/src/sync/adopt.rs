@@ -502,7 +502,7 @@ impl Core {
         ] {
             let path = root.join(name);
             let captured = capture_optional(&self.backend, &path)?
-                .ok_or_else(|| invalid("Original workspace control is unavailable"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_adopt_original_workspace_control_is_unavailable()))?;
             total += captured.bytes.len();
             if total > MAX_BLOB_BYTES || files.len() == MAX_FILES {
                 return Err(CoreError::new(

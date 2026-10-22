@@ -249,15 +249,11 @@ impl Core {
         }
         if producers == 0 {
             let _guard = ParentGuard::acquire(&self.backend, &target)?;
-            match fs::symlink_metadata(&target) {
-                Ok(_) => {
-                    return Err(CoreError::new(
+            if self.backend.entry_exists(&target)? {
+                return Err(CoreError::new(
                         "slotUnavailable",
                         UiMessage::error_core_hosted_content_import_unrelated_object_occupies_future_import_slot(),
                     ));
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e.into()),
             }
         }
         members.sort_by(|a, b| {

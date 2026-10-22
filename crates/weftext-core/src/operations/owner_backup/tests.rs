@@ -390,13 +390,14 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
 #[test]
 fn owner_backup_same_logical_or_physical_root_with_contradictory_binding_remains_an_error() {
     let f = Fixture::new();
-    let guard = ParentGuard::acquire(&f.root.join("prospective")).unwrap();
+    let guard = ParentGuard::acquire(&f.core.backend, &f.root.join("prospective")).unwrap();
     let expected = ActorLibraryBinding {
         root: display(&f.root),
         root_identity: guard.directory_identity().unwrap(),
         workspace_id: Some(f.core.require_workspace(&f.root).unwrap().workspace_id),
     };
-    let foreign_guard = ParentGuard::acquire(&f.foreign.join("prospective")).unwrap();
+    let foreign_guard =
+        ParentGuard::acquire(&f.core.backend, &f.foreign.join("prospective")).unwrap();
     let foreign = ActorLibraryBinding {
         root: expected.root.clone(),
         root_identity: foreign_guard.directory_identity().unwrap(),
@@ -873,7 +874,7 @@ fn owner_backup_qualified_input_header_stops_before_foreign_author_body_and_rewi
     let mut reader = std::io::Cursor::new(bytes);
     let header = file_save_scope::read_input_scope(&mut reader).unwrap();
     assert_eq!(reader.position(), 0);
-    let guard = ParentGuard::acquire(&f.root.join("prospective")).unwrap();
+    let guard = ParentGuard::acquire(&f.core.backend, &f.root.join("prospective")).unwrap();
     let expected = ActorLibraryBinding {
         root: display(&f.root),
         root_identity: guard.directory_identity().unwrap(),
@@ -903,7 +904,7 @@ fn original_qualified_scope_rejects_damaged_stable_locator_before_foreign_routin
     };
     binding.root = display(&f.temp.path().join("contradictory-locator"));
     let bad = QualifiedInputScope::Library { binding };
-    let guard = ParentGuard::acquire(&f.root.join("prospective")).unwrap();
+    let guard = ParentGuard::acquire(&f.core.backend, &f.root.join("prospective")).unwrap();
     let expected = ActorLibraryBinding {
         root: display(&f.root),
         root_identity: guard.directory_identity().unwrap(),

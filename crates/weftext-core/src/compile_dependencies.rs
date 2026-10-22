@@ -596,7 +596,7 @@ impl CompileDependencyWitness {
 fn absent(backend: &crate::BackendContext, path: &Path) -> Result<()> {
     if backend.entry_exists(path)? {
         Err(stale(
-            "An originally unavailable native input slot is now occupied",
+            weftext_messages::UiMessage::error_core_compile_dependencies_originally_unavailable_native_input_slot_now_occupied(),
         ))
     } else {
         Ok(())

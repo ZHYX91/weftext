@@ -3,10 +3,7 @@
 use crate::{ApiError, DiagnosticOrigin, StatusCode, UiMessage};
 use axum::{
     body::Bytes,
-    extract::{
-        FromRequest, Request,
-        rejection::{JsonRejection, MissingJsonContentType},
-    },
+    extract::{FromRequest, Request, rejection::JsonRejection},
     http::{HeaderMap, header},
 };
 use serde::de::DeserializeOwned;
@@ -24,19 +21,31 @@ where
     async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
         // Keep the framework's media-type precedence before reading any body.
         if !json_content_type(request.headers()) {
-            return Err(rejection(MissingJsonContentType.into()));
+            let error = axum::Json::<T>::from_request(request, state)
+                .await
+                .err()
+                .expect("the framework rejects a missing JSON media type before reading the body");
+            return Err(rejection(error));
         }
         // Bytes honors the router's original DefaultBodyLimit while streaming.
         let bytes = Bytes::from_request(request, state)
             .await
             .map_err(|error| rejection(JsonRejection::from(error)))?;
-        let axum::Json(value) = axum::Json::<T>::from_bytes(&bytes).map_err(rejection)?;
         // The original bytes, rather than an already-decoded Value, establish
         // uniqueness even for generic or nested JSON. Nothing reaches a handler
         // before this check succeeds. Reuse the sole Data parser and its typed
         // policy diagnostics; do not turn owned duplicate failures into raw text.
-        weftext_data::parse_unique_json(&bytes)
-            .map_err(|error| ApiError::from_data(StatusCode::BAD_REQUEST, "invalid_json", error))?;
+        if let Err(error) = weftext_data::parse_unique_json(&bytes) {
+            // Preserve actual framework syntax diagnostics without invoking a
+            // request type's deserializer on an ambiguous object.
+            let _ = axum::Json::<serde::de::IgnoredAny>::from_bytes(&bytes).map_err(rejection)?;
+            return Err(ApiError::from_data(
+                StatusCode::BAD_REQUEST,
+                "invalid_json",
+                error,
+            ));
+        }
+        let axum::Json(value) = axum::Json::<T>::from_bytes(&bytes).map_err(rejection)?;
         Ok(Self(value))
     }
 }
@@ -194,6 +203,37 @@ mod tests {
             );
             assert_eq!(wire["explanation"]["params"], json!({"key":"member"}));
         }
+    }
+
+    #[tokio::test]
+    async fn ambiguous_json_never_invokes_the_request_type_deserializer() {
+        #[derive(Debug)]
+        struct Rejected;
+        impl<'de> serde::Deserialize<'de> for Rejected {
+            fn deserialize<D: serde::Deserializer<'de>>(_: D) -> Result<Self, D::Error> {
+                Err(serde::de::Error::custom(
+                    "request deserializer must not see ambiguous input",
+                ))
+            }
+        }
+        let error = RequestJson::<Rejected>::from_request(
+            request(
+                br#"{"member":1,"member":2}"#.to_vec(),
+                Some("application/json"),
+            ),
+            &(),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_data_schema_json_key_duplicate(
+                weftext_messages::params::ErrorDataSchemaJsonKeyDuplicate {
+                    key: "member".into()
+                }
+            )
+        );
     }
 
     #[tokio::test]

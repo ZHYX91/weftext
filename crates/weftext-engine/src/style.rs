@@ -41,6 +41,7 @@ pub struct StyleControl {
 pub struct StyleInspection {
     pub source_hash: String,
     pub syntax_valid: bool,
+    pub entry_count: usize,
     pub controls: Vec<StyleControl>,
 }
 type StyleLabelFactory = fn() -> UiMessage;
@@ -214,6 +215,7 @@ pub fn inspect_library_style(source: &str) -> StyleInspection {
     StyleInspection {
         source_hash: source_hash(source),
         syntax_valid,
+        entry_count: entries,
         controls,
     }
 }

@@ -140,7 +140,7 @@ pub fn retain_docx_import_originals(
     next.files.insert(manifest_path.into(), bytes);
     next.manifest.entries.insert(manifest_path.into(), entry);
     next.manifest.losses.extend_from_slice(conversion_losses);
-    validate_native_package(&next).map_err(|e| ExportError::from_native(e))?;
+    validate_native_package(&next).map_err(ExportError::from_native)?;
     *package = next;
     Ok(())
 }
@@ -773,8 +773,8 @@ impl Builder<'_> {
     fn literal(&mut self, s: &str) -> Result<(), DocxError> {
         for c in s.chars() {
             let start = self.source.len();
-            let encoded = weftext_engine::encode_literal(&c.to_string())
-                .map_err(|e| DocxError::from_engine(e))?;
+            let encoded =
+                weftext_engine::encode_literal(&c.to_string()).map_err(DocxError::from_engine)?;
             self.source.push_str(&encoded);
             self.positions.push((start, self.source.len()));
             self.visible.push(c);
@@ -1448,7 +1448,7 @@ impl Builder<'_> {
                     self.source.push_str(&format!("\n\n#figure(kind: {kind}, numbering: \"1\", caption: figure.caption(position: {})[",c.get("position").unwrap_or("bottom")));
                     self.source.push_str(
                         &weftext_engine::encode_literal(c.get("caption").unwrap_or(""))
-                            .map_err(|e| DocxError::from_engine(e))?,
+                            .map_err(DocxError::from_engine)?,
                     );
                     self.source.push_str("], [");
                     self.blocks(c)?;
@@ -1652,7 +1652,7 @@ fn build(
             weftext_messages::UiMessage::error_export_docx_import_operation_id_required(),
         )));
     }
-    weftext_data::Schema::from_author_json(schema).map_err(|e| DocxError::from_data(e))?;
+    weftext_data::Schema::from_author_json(schema).map_err(DocxError::from_data)?;
     let package = Package::load(Some(bytes))?;
     let doc = package.xml("word/document.xml")?.ok_or_else(|| {
         DocxError::new(weftext_messages::ErrorDescription::new(
@@ -2084,7 +2084,7 @@ fn build(
         None,
         None,
     );
-    validate_native_package(&native).map_err(|e| DocxError::from_native(e))?;
+    validate_native_package(&native).map_err(DocxError::from_native)?;
     Ok(native)
 }
 

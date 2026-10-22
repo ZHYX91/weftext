@@ -316,7 +316,7 @@ impl Core {
         }
         for f in &witness.files {
             self.check_pending(Path::new(&f.path))?;
-            let actual = capture_optional(Path::new(&f.path))?.ok_or_else(|| {
+            let actual = capture_optional(&self.backend, Path::new(&f.path))?.ok_or_else(|| {
                 CoreError::new(
                     "scopeChanged",
                     UiMessage::error_core_hosted_structure_authorized_tree_member_disappeared(),

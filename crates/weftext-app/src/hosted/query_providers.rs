@@ -390,7 +390,7 @@ pub(super) fn check_shape_names(
                     }
                 }
             }
-            for child in &advanced.union_all {
+            for child in advanced.union_all.iter().flatten() {
                 visit(schema, public, field_names, child, remaining)?;
             }
             if let Some(related) = &advanced.related {
@@ -594,9 +594,9 @@ mod tests {
                 let current = (
                     error.status,
                     error.code,
-                    error.explanation,
-                    error.diagnostics,
-                    error.causes,
+                    error.description.explanation,
+                    error.description.diagnostics,
+                    error.description.causes,
                 );
                 assert_eq!(refusal.get_or_insert(current.clone()), &current);
             }
@@ -624,9 +624,9 @@ mod tests {
             let current = (
                 error.status,
                 error.code,
-                error.explanation,
-                error.diagnostics,
-                error.causes,
+                error.description.explanation,
+                error.description.diagnostics,
+                error.description.causes,
             );
             assert_eq!(refusal.get_or_insert(current.clone()), &current);
         }

@@ -1,4 +1,5 @@
 use super::*;
+use weftext_messages::ErrorCauses;
 
 #[test]
 fn api_data_bridge_keeps_status_kind_and_independent_problems() {
@@ -102,6 +103,7 @@ async fn original_creation_receipt_survives_typed_document_delivery_failure() {
         renders: Default::default(),
         editor_versions: Default::default(),
         exports: Default::default(),
+        native_status: Default::default(),
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         sync_remote: Default::default(),
         initial: None,

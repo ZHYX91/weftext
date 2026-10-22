@@ -873,7 +873,7 @@ impl Core {
             if draft.identity != metadata.identity || draft.scope != metadata.scope {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Protected draft metadata changed during its qualified read",
+                    weftext_messages::UiMessage::error_core_history_protected_draft_metadata_changed_during_its_qualified_read(),
                 ));
             }
             append_draft_alternatives(&mut drafts, &draft);
@@ -944,7 +944,7 @@ impl Core {
         if binding.draft_records.len() > 128 {
             return Err(CoreError::new(
                 "budget",
-                "Original restore exceeds 128 protected Draft records",
+                weftext_messages::UiMessage::error_core_history_original_restore_exceeds128_protected_draft_records(),
             ));
         }
         let mut protected_bytes = 0usize;
@@ -960,20 +960,20 @@ impl Core {
                     plan.identity.as_ref().ok_or_else(|| {
                         CoreError::new(
                             "historyUnavailable",
-                            "Original restore physical owner is missing",
+                            weftext_messages::UiMessage::error_core_history_original_restore_physical_owner_is_missing(),
                         )
                     })?,
                 )?
                 .ok_or_else(|| {
-                    CoreError::new("historyUnavailable", "Original protected Draft is missing")
+                    CoreError::new("historyUnavailable", weftext_messages::UiMessage::error_core_history_original_protected_draft_is_missing())
                 })?;
             protected_bytes = protected_bytes
                 .checked_add(bytes.len())
-                .ok_or_else(|| CoreError::new("budget", "Protected Draft byte count overflow"))?;
+                .ok_or_else(|| CoreError::new("budget", weftext_messages::UiMessage::error_core_history_protected_draft_byte_count_overflow()))?;
             if protected_bytes > 16 * 1024 * 1024 {
                 return Err(CoreError::new(
                     "budget",
-                    "Original protected Drafts exceed 16 MiB",
+                    weftext_messages::UiMessage::error_core_history_original_protected_drafts_exceed16_mi_b(),
                 ));
             }
             append_draft_alternatives(&mut protected_drafts, &draft);

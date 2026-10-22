@@ -48,7 +48,8 @@ fn docx_options_and_legacy_originals_share_one_durable_plan_and_exact_fingerprin
             conversion_losses: vec![weftext_export::exchange::NativeLoss {
                 path: "original.doc".into(),
                 code: "legacyStage".into(),
-                detail: "Thread relation is unverified".into(),
+                description: weftext_messages::UiMessage::error_api_legacy_office_reply_preservation_unverified().into(),
+                product_diagnostics: vec![],
             }],
         },
     };

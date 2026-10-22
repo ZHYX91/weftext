@@ -363,8 +363,11 @@ async fn schema(
 }
 fn schema_semantic_digest(schema: &Schema) -> Result<String, ApiError> {
     Ok(weftext_engine::source_hash(
-        &serde_json::to_string(schema)
-            .map_err(|_| ApiError::internal("Schema serialization failed"))?,
+        &serde_json::to_string(schema).map_err(|_| {
+            ApiError::internal(
+                weftext_messages::UiMessage::error_api_data_api_schema_serialization_failed(),
+            )
+        })?,
     ))
 }
 
@@ -750,10 +753,13 @@ fn capture_template(
             ))
         })?;
         if field.id != *key {
-            return Err(weftext_data::DataError(format!(
-                "Capture requires stable FieldId {}; field keys are not identities",
-                field.id
-            )));
+            return Err(weftext_data::DataError::new(
+                UiMessage::error_capture_field_identity_required(
+                    weftext_messages::params::ErrorCaptureFieldIdentityRequired {
+                        field: field.id.clone(),
+                    },
+                ),
+            ));
         }
         if !seen.insert(&field.id) {
             return Err(weftext_data::DataError::new(
@@ -771,8 +777,9 @@ fn capture_template(
 
 fn capture_body(req: &CaptureRequest) -> Result<String, weftext_data::DataError> {
     let body = match &req.body_mode {
-        weftext_core::CaptureBodyMode::Text => weftext_engine::encode_literal(&req.body)
-            .map_err(|error| weftext_data::DataError(error.to_string()))?,
+        weftext_core::CaptureBodyMode::Text => {
+            weftext_engine::encode_literal(&req.body).map_err(weftext_data::DataError::from)?
+        }
         weftext_core::CaptureBodyMode::Markup => req.body.clone(),
     };
     Ok(match &req.title {
@@ -832,7 +839,7 @@ pub(crate) fn capture_document(
             {
                 return Err(CoreError::new(
                     "captureSchemaChanged",
-                    "The original capture Schema identity or shape changed; raw input is retained",
+                    weftext_messages::UiMessage::error_api_data_api_the_original_capture_schema_identity_or_shape_changed_raw_input_is(),
                 ));
             }
         }
@@ -846,13 +853,14 @@ pub(crate) fn capture_frozen_wire(
     let request: CaptureRequest = serde_json::from_str(wire).map_err(|error| {
         CoreError::new(
             "captureRequestInvalid",
-            format!("The exact frozen request is not valid UTF-8 author input: {error}"),
+            UiMessage::error_api_data_frozen_request_invalid(),
         )
+        .caused_by(CoreError::from(error))
     })?;
     if (!request.types.is_empty() || !request.fields.is_empty()) && request.form_basis.is_none() {
         return Err(CoreError::new(
             "captureSchemaRequired",
-            "Typed capture requires its original Schema identity and semantic digest",
+            weftext_messages::UiMessage::error_api_data_api_typed_capture_requires_its_original_schema_identity_and_semantic_digest(),
         ));
     }
     capture_document(core, &request)
@@ -1189,12 +1197,12 @@ async fn resolve_period(
         let bounds = weftext_data::period_bounds(&period,&frozen.schema)
             .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
         let (plan,policy) = period_plan(frozen,&period)?;
-        let mut result = weftext_data::execute_query(&frozen.input,&plan,&frozen.schema)
+        let result = weftext_data::execute_query(&frozen.input,&plan,&frozen.schema)
             .map_err(|error| CoreError::from_data("invalidQuery", error))?;
-        result.diagnostics.append(&mut frozen.diagnostics);
+        let diagnostics = result.diagnostics.into_iter().map(weftext_core::CoreDescription::from).chain(std::mem::take(&mut frozen.diagnostics)).collect::<Vec<_>>();
         let can_create = result.coverage == "complete" && (policy.multiplicity == "many" || result.rows.is_empty());
         Ok(json!({"period":period,"bounds":bounds,"policy":policy,"matches":result.rows,"coverage":result.coverage,
-            "canCreate":can_create,"cutId":result.cut_id,"diagnostics":result.diagnostics,"snapshotMode":"admittedFrozen",
+            "canCreate":can_create,"cutId":result.cut_id,"diagnostics":diagnostics,"snapshotMode":"admittedFrozen",
             "snapshotLabel":UiMessage::error_api_data_admitted_snapshot_label(),"rawScope":{"complete":frozen.raw_complete,"pendingCount":frozen.raw_pending}}))
         })
     }).await?;

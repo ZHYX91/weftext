@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::Value;
 
 #[test]
 fn hosted_creation_lost_reply_uses_original_location_hints_after_separator_change_and_restart() {
@@ -482,13 +483,8 @@ fn all_top_level_private_values_and_original_pending_survive_pure_producer_updat
         .core
         .update_capture_author_input(&draft.draft_id, record.revision, &fresh(), cleared)
         .unwrap();
-    assert_eq!(saved.current_input.author_texts.body.len(), 2);
-    assert!(
-        saved.current_input.author_texts.body[1]
-            .text
-            .utf16
-            .is_empty()
-    );
+    assert_eq!(saved.texts.body.len(), 2);
+    assert!(saved.texts.body[1].text.utf16.is_empty());
     let plan = f.backup("top-provenance-backup").unwrap();
     f.core
         .execute_operation(&plan.operation_id, &plan.plan_id)
@@ -1631,11 +1627,14 @@ fn unsupported_selected_capture_versions_precede_new_body_decoding_and_preserve_
                 .unwrap_err(),
         ] {
             assert_eq!(error.code, "captureRecordUnavailable");
-            assert!(
-                error.message.starts_with(&format!(
-                    "Unsupported Capture record version {version}; expected 2;"
-                )),
-                "unexpected version diagnosis: {error}"
+            assert_eq!(
+                error.explanation,
+                UiMessage::error_capture_version_unsupported(
+                    weftext_messages::params::ErrorCaptureVersionUnsupported {
+                        actual: version.to_string(),
+                        expected: "2".into()
+                    }
+                )
             );
         }
         assert_eq!(fs::read(&path).unwrap(), bytes);

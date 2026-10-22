@@ -94,7 +94,7 @@ pub(crate) fn open_core(path: impl AsRef<Path>) -> crate::Result<Core> {
         }
         Err(crate::CoreError::new(
             "outsideRoot",
-            "The path is outside its admitted controlled-service root",
+            weftext_messages::UiMessage::error_core_posix_outside_controlled_root(),
         ))
     }
 }

@@ -270,7 +270,7 @@ impl CaptureAuthorInput {
                         || author.provenance.revision == old.provenance.revision
                             && author.text != old.text
                     {
-                        return Err(invalid("Capture raw author proof revision differs"));
+                        return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_raw_author_proof_revision_differs()));
                     }
                 }
                 raw.author = Some(CaptureRawAuthor {
@@ -288,17 +288,16 @@ impl CaptureAuthorInput {
                     && entry.input.value_path == author.input.value_path
                     && entry.input.control_role == author.input.control_role
             }) {
-                if let Some(old) = &entry.input.author {
-                    if old.provenance.producer_id != author.input.provenance.producer_id
+                if let Some(old) = &entry.input.author
+                    && (old.provenance.producer_id != author.input.provenance.producer_id
                         || old.provenance.input_id != author.input.provenance.input_id
                         || author.input.provenance.revision < old.provenance.revision
                         || author.input.provenance.revision == old.provenance.revision
-                            && author.input.text != old.text
-                    {
-                        return Err(invalid(
-                            "Retired Capture proof identity or revision differs",
+                            && author.input.text != old.text)
+                {
+                    return Err(invalid(
+                            weftext_messages::UiMessage::error_core_capture_draft_retired_capture_proof_identity_or_revision_differs(),
                         ));
-                    }
                 }
                 entry.input.author = Some(CaptureRawAuthor {
                     text: author.input.text,
@@ -379,10 +378,14 @@ pub(crate) struct CaptureRecordPrefix {
 impl CaptureRecordPrefix {
     pub(crate) fn require_supported_version(&self) -> Result<()> {
         if self.version != CAPTURE_RECORD_VERSION {
-            return Err(invalid(&format!(
-                "Unsupported Capture record version {}; expected {}; original bytes were preserved",
-                self.version, CAPTURE_RECORD_VERSION
-            )));
+            return Err(invalid(
+                weftext_messages::UiMessage::error_capture_version_unsupported(
+                    weftext_messages::params::ErrorCaptureVersionUnsupported {
+                        actual: self.version.to_string(),
+                        expected: CAPTURE_RECORD_VERSION.to_string(),
+                    },
+                ),
+            ));
         }
         Ok(())
     }
@@ -568,6 +571,17 @@ pub struct CaptureMutationTarget {
     pub hosted_slot: Option<String>,
 }
 impl CaptureMutationCommand {
+    fn kind(&self) -> CaptureMutationKind {
+        match self {
+            Self::Checkpoint { .. } => CaptureMutationKind::Checkpoint,
+            Self::Create { .. } => CaptureMutationKind::Create,
+            Self::Input { .. } => CaptureMutationKind::Input,
+            Self::Target { .. } => CaptureMutationKind::Target,
+            Self::Freeze { .. } => CaptureMutationKind::Freeze,
+            Self::Advance { .. } => CaptureMutationKind::Advance,
+        }
+    }
+
     fn fingerprint(&self) -> Result<String> {
         match self {
             Self::Create { input, .. } | Self::Input { input, .. } => input_valid(input)?,
@@ -636,9 +650,9 @@ fn capture_fingerprint(command: &impl Serialize) -> Result<String> {
     Ok(hash(&serde_json::to_vec(command)?))
 }
 fn full_input_fingerprint(expected: u64, input: &CaptureInput) -> Result<String> {
-    Ok(hash(&canonical_json_bytes(&serde_json::to_value((
-        expected, "input", input,
-    ))?)?))
+    Ok(hash(&operations::canonical_json_bytes(
+        &serde_json::to_value((expected, "input", input))?,
+    )?))
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -730,7 +744,7 @@ fn raw_inputs_valid(
             return Err(budget());
         }
         if !input_token_valid(&entry.field_id) || !input_token_valid(&entry.control_role) {
-            return Err(invalid("Capture raw-input address is invalid"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_raw_input_address_is_invalid()));
         }
         text_valid(&entry.text)?;
         add_input_bytes(bytes, entry.text.utf16.len() * 2)?;
@@ -757,13 +771,13 @@ fn raw_inputs_valid(
             &entry.value_path,
             &entry.control_role,
         ))?) {
-            return Err(invalid("Capture live raw-input address is duplicated"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_live_raw_input_address_is_duplicated()));
         }
     }
     for entry in detached {
         canonical_id(&entry.retirement_id)?;
         if !retired.insert(&entry.retirement_id) {
-            return Err(invalid("Capture retired raw identity is duplicated"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_retired_raw_identity_is_duplicated()));
         }
     }
     Ok(())
@@ -777,7 +791,7 @@ fn provenance_valid(provenance: &CaptureRawProvenance) -> Result<()> {
             .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         || provenance.revision > MAX_CAPTURE_REVISION
     {
-        return Err(invalid("Capture author provenance is invalid"));
+        return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_author_provenance_is_invalid()));
     }
     Ok(())
 }
@@ -805,7 +819,7 @@ fn author_input_valid(input: &CaptureAuthorInput) -> Result<()> {
             return Err(budget());
         }
         if !input_token_valid(&entry.field_id) || !input_token_valid(&entry.control_role) {
-            return Err(invalid("Capture author-input address is invalid"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_author_input_address_is_invalid()));
         }
         provenance_valid(&entry.provenance)?;
         text_valid(&entry.text)?;
@@ -828,13 +842,13 @@ fn author_input_valid(input: &CaptureAuthorInput) -> Result<()> {
             &entry.value_path,
             &entry.control_role,
         ))?) {
-            return Err(invalid("Capture author-input address is duplicated"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_author_input_address_is_duplicated()));
         }
     }
     for entry in &input.detached_raw_inputs {
         canonical_id(&entry.retirement_id)?;
         if !retired.insert(&entry.retirement_id) {
-            return Err(invalid("Capture retired author identity is duplicated"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_retired_author_identity_is_duplicated()));
         }
     }
     Ok(())
@@ -856,7 +870,7 @@ fn author_texts_valid(texts: &CaptureAuthorTexts, bytes: &mut usize) -> Result<(
         for author in slot {
             provenance_valid(&author.provenance)?;
             if !identities.insert((&author.provenance.producer_id, &author.provenance.input_id)) {
-                return Err(invalid("Capture top-level author identity is duplicated"));
+                return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_top_level_author_identity_is_duplicated()));
             }
             text_valid(&author.text)?;
             add_input_bytes(bytes, author.text.utf16.len() * 2)?;
@@ -883,7 +897,7 @@ fn merge_author_texts(current: &mut CaptureAuthorTexts, next: CaptureAuthorTexts
                         && author.text != old.text
                 {
                     return Err(invalid(
-                        "Capture author proof revision differs from retained input",
+                        weftext_messages::UiMessage::error_core_capture_draft_capture_author_proof_revision_differs_from_retained_input(),
                     ));
                 }
                 *old = author;
@@ -1351,7 +1365,7 @@ fn read_capture_prefix_byte(reader: &mut impl Read, prefix: &mut Vec<u8>) -> Res
     let mut byte = [0];
     reader
         .read_exact(&mut byte)
-        .map_err(|_| invalid("Capture metadata prefix is truncated"))?;
+        .map_err(|_| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_metadata_prefix_is_truncated()))?;
     prefix.push(byte[0]);
     Ok(byte[0])
 }
@@ -1457,15 +1471,15 @@ pub(crate) fn read_capture_prefix(reader: &mut (impl Read + Seek)) -> Result<Cap
         if read_capture_prefix_non_whitespace(reader, &mut prefix)? != b','
             || read_capture_prefix_non_whitespace(reader, &mut prefix)? != b'"'
         {
-            return Err(invalid("Capture version must follow scope"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_version_must_follow_scope()));
         }
         for expected in b"version\"" {
             if read_capture_prefix_byte(reader, &mut prefix)? != *expected {
-                return Err(invalid("Capture version must be the second field"));
+                return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_version_must_be_the_second_field()));
             }
         }
         if read_capture_prefix_non_whitespace(reader, &mut prefix)? != b':' {
-            return Err(invalid("Capture version metadata is invalid"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_version_metadata_is_invalid()));
         }
         let mut byte = read_capture_prefix_non_whitespace(reader, &mut prefix)?;
         let mut version_bytes = Vec::new();
@@ -1477,10 +1491,10 @@ pub(crate) fn read_capture_prefix(reader: &mut (impl Read + Seek)) -> Result<Cap
             byte = read_capture_prefix_non_whitespace(reader, &mut prefix)?;
         }
         if !matches!(byte, b',' | b'}') {
-            return Err(invalid("Capture version requires an unsigned integer"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_version_requires_an_unsigned_integer()));
         }
         let version = serde_json::from_slice::<u32>(&version_bytes)
-            .map_err(|_| invalid("Capture version requires an unsigned integer"))?;
+            .map_err(|_| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_version_requires_an_unsigned_integer()))?;
         Ok(CaptureRecordPrefix { scope, version })
     })();
     reader.seek(SeekFrom::Start(original))?;
@@ -1568,10 +1582,10 @@ impl Core {
         let pending = draft
             .pending
             .as_ref()
-            .ok_or_else(|| invalid("Capture has no original result to deliver"))?;
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_has_no_original_result_to_deliver()))?;
         if pending.operation_id != operation_id || pending.request_kind != "capture" {
             return Err(invalid(
-                "Capture result differs from its original pending request",
+                weftext_messages::UiMessage::error_core_capture_draft_capture_result_differs_from_its_original_pending_request(),
             ));
         }
         let request: CaptureCreationRequest = serde_json::from_str(&pending.wire)?;
@@ -1584,45 +1598,45 @@ impl Core {
                 .is_none()
         {
             return Err(invalid(
-                "Original capture request has no matching canonical Plan",
+                weftext_messages::UiMessage::error_core_capture_draft_original_capture_request_has_no_matching_canonical_plan(),
             ));
         }
         let CaptureLibrary::Bound { binding } = &draft.scope.library else {
             return Err(invalid(
-                "Unassigned capture cannot deliver a library result",
+                weftext_messages::UiMessage::error_core_capture_draft_unassigned_capture_cannot_deliver_a_library_result(),
             ));
         };
         let target = draft
             .target
             .as_ref()
-            .ok_or_else(|| invalid("Capture has no original library target"))?;
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_has_no_original_library_target()))?;
         if target.hosted_slot.is_some() {
-            return Err(invalid("Hosted result delivery requires its actor wrapper"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_hosted_result_delivery_requires_its_actor_wrapper()));
         }
         let root = absolute_path(Path::new(&target.root_hint))?;
-        let guard = ParentGuard::acquire(&root.join(".capture-result-root"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".capture-result-root"))?;
         let workspace = self.require_workspace(&root)?;
         if guard.directory_identity()? != binding.root_identity
             || display(&guard.directory_coordinates()?) != binding.root
             || binding.workspace_id.as_deref() != Some(&workspace.workspace_id)
         {
-            return Err(invalid("Original capture library is unavailable"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_original_capture_library_is_unavailable()));
         }
         let plan = self
             .operations
             .get(operation_id)
-            .ok_or_else(|| invalid("Original capture Plan is unavailable"))?;
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_original_capture_plan_is_unavailable()))?;
         let transaction = plan
             .transaction
             .as_ref()
-            .ok_or_else(|| invalid("Original capture is not a node transaction"))?;
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_original_capture_is_not_a_node_transaction()))?;
         if plan.workspace_id != binding.workspace_id
             || Path::new(&transaction.request.root) != root
             || !matches!(transaction.request.intent, OperationIntent::NewNode { .. })
             || transaction.births().len() != 1
         {
             return Err(invalid(
-                "Original capture result belongs to another kind or library",
+                weftext_messages::UiMessage::error_core_capture_draft_original_capture_result_belongs_to_another_kind_or_library(),
             ));
         }
         let owner = weftext_knowledge::NodeRef {
@@ -1734,10 +1748,8 @@ impl Core {
         let fingerprint = command.fingerprint()?;
         let status = if draft.last_mutation.mutation_id != mutation_id {
             "supersededOrUnknown"
-        } else if draft.last_mutation.kind == CaptureMutationKind::AuthorInput
+        } else if draft.last_mutation.kind == command.kind()
             && draft.last_mutation.fingerprint == fingerprint
-            && draft.revision == expected + 1
-            && draft.input_cut == CaptureInputCut::AuthorOnly
         {
             "applied"
         } else {
@@ -1761,9 +1773,12 @@ impl Core {
         let target = draft
             .target
             .as_ref()
-            .ok_or_else(|| invalid("Capture has no original target"))?;
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_has_no_original_target()))?;
         if target.hosted_slot.as_deref() != Some(slot) {
-            return Err(invalid("Capture original slot differs"));
+            return Err(invalid(
+                weftext_messages::UiMessage::error_core_capture_draft_capture_original_slot_differs(
+                ),
+            ));
         }
         let parent = match &target.parent {
             CaptureParent::LibraryRoot => target.root_hint.clone(),
@@ -2103,7 +2118,7 @@ impl Core {
         if draft.revision != expected {
             return Err(CoreError::new(
                 "captureConflict",
-                "Capture changed before owner input persistence; preserve both inputs",
+                weftext_messages::UiMessage::error_core_capture_draft_capture_changed_before_owner_input_persistence_preserve_both_inputs(),
             ));
         }
         input.install(&mut draft.current_input)?;
@@ -2138,7 +2153,7 @@ impl Core {
         if draft.revision != expected {
             return Err(CoreError::new(
                 "captureConflict",
-                "Capture changed before private-proposal checkpoint; query the original mutation and preserve current input",
+                weftext_messages::UiMessage::error_core_capture_draft_capture_changed_before_private_proposal_checkpoint_query_the_original_mutation_and(),
             ));
         }
         draft.revision = next_revision(draft.revision)?;
@@ -2187,7 +2202,7 @@ impl Core {
     ) -> Result<(String, CaptureAuthorRecovery)> {
         canonical_id(mutation_id)?;
         if expected == 0 || expected > MAX_CAPTURE_REVISION || !digest_valid(fingerprint) {
-            return Err(invalid("Original full-input mutation identity is invalid"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_original_full_input_mutation_identity_is_invalid()));
         }
         let (draft, _) = self.capture_read_selected(id, false)?;
         let status = if draft.last_mutation.mutation_id != mutation_id {
@@ -2344,22 +2359,23 @@ impl Core {
             Ok(draft) => draft,
             Err(replay) => return Ok(replay),
         };
-        let pending = draft
-            .pending
-            .as_ref()
-            .ok_or_else(|| invalid("No original capture attempt"))?;
+        let pending = draft.pending.as_ref().ok_or_else(|| {
+            invalid(
+                weftext_messages::UiMessage::error_core_capture_draft_no_original_capture_attempt(),
+            )
+        })?;
         if pending.operation_id != operation_id {
-            return Err(invalid("Capture original operation differs"));
+            return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_differs()));
         }
         let committed = if self.actor.is_some() {
             let slot = draft
                 .target
                 .as_ref()
                 .and_then(|target| target.hosted_slot.as_deref())
-                .ok_or_else(|| invalid("Capture original actor slot is unavailable"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_actor_slot_is_unavailable()))?;
             let status = self
                 .actor_feature_status(slot, operation_id)?
-                .ok_or_else(|| invalid("Capture original operation is still unknown"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_is_still_unknown()))?;
             if !matches!(
                 status.status.as_str(),
                 "committed" | "cancelled" | "resolved"
@@ -2367,38 +2383,38 @@ impl Core {
                 status.intent_kind.as_str(),
                 "newNode" | "templateNode" | "unknown"
             ) {
-                return Err(invalid("Capture original operation is not terminal"));
+                return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_is_not_terminal()));
             }
             status.status == "committed"
         } else if let Some(plan) = self.operations.get(operation_id) {
             let target = draft
                 .target
                 .as_ref()
-                .ok_or_else(|| invalid("Capture target is unavailable"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_target_is_unavailable()))?;
             let transaction = plan
                 .transaction
                 .as_ref()
-                .ok_or_else(|| invalid("Capture operation is not a new-note transaction"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_operation_is_not_a_new_note_transaction()))?;
             if transaction.request.root != target.root_hint
                 || !matches!(transaction.request.intent, OperationIntent::NewNode { .. })
             {
                 return Err(invalid(
-                    "Capture original operation belongs to another target or kind",
+                    weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_belongs_to_another_target_or_kind(),
                 ));
             }
-            if !self.committed(operation_id) && !self.resolved(operation_id)? {
-                return Err(invalid("Capture original operation is not terminal"));
+            if !self.committed(operation_id)? && !self.resolved(operation_id)? {
+                return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_is_not_terminal()));
             }
-            self.committed(operation_id)
+            self.committed(operation_id)?
         } else {
             let resolution = self
                 .resolution_record(operation_id)?
-                .ok_or_else(|| invalid("Capture original operation is still unknown"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_operation_is_still_unknown()))?;
             if !resolution.attempt.is_some_and(|attempt| {
                 attempt.request_kind == pending.request_kind
                     && attempt.wire_digest == pending.wire_digest
             }) {
-                return Err(invalid("Capture original fence belongs to another request"));
+                return Err(invalid(weftext_messages::UiMessage::error_core_capture_draft_capture_original_fence_belongs_to_another_request()));
             }
             false
         };
@@ -2509,7 +2525,7 @@ impl Core {
         let (draft, bytes) = self.capture_read_selected(id, require_library)?;
         if require_library && draft.input_cut != CaptureInputCut::Full {
             return Err(invalid(
-                "Owner-only recovery is not a complete form acknowledgement",
+                weftext_messages::UiMessage::error_core_capture_draft_owner_only_recovery_is_not_a_complete_form_acknowledgement(),
             ));
         }
         if draft.revision != expected

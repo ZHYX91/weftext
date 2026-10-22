@@ -8,19 +8,20 @@ import vm from "node:vm";
 import ts from "typescript";
 import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
+import type { PersonalInputBundle } from "./personal-input-storage";
 import { applySaveResult, hostedOpenedDraft } from "./hosted-state";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
   || ts.isExpressionStatement(node) && (node.getText(sourceFile).startsWith('el("logout").onclick') || node.getText(sourceFile).startsWith('window.addEventListener("pagehide"')));
 const compiled = ts.transpileModule(statements.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
 
-function fixture() {
+async function fixture() {
   const testDocument = new TestDocument();
   const nodes = new Map<string, any>(), listeners = new Map<string, (event: any) => void>();
   const calls: { url: string; options: RequestInit }[] = [];
@@ -39,6 +40,7 @@ function fixture() {
     renderEverydayBar() {}, noteInputAudience() { return null; }, noteInputRecovery: { count() { return 0; } },
     authoringEditable() { return false; }, actionVersion: 0,
     requestEpoch: 0, authorizationEpoch: 0, cachePrefix: "weftext-hosted-draft:space:alice:0:",
+    hostedCapture: undefined, captureVersion: 0, capturePanel: testDocument.createElement("section"),
     doc: { sessionId: "alice-original", resource: "Shared", rights: { read: true, write: true } },
     draft: { source: "unsaved draft", baseSource: "saved source" },
     identity: { actor: "alice", deployment: "space", generation: 0 }, token: "alice-credential",
@@ -55,14 +57,23 @@ function fixture() {
     context[name] = { value: "unsaved draft", viewMode: "source", pausedSession: false, clear() { cleared.push(name); }, revoke() { cleared.push(name); }, hasPending() { return false; } };
   }
   context.draftCache = new HostedDraftCache(context.sessionStorage, () => context.cachePrefix);
-  context.personalInputs = new PersonalInputRecovery(context.sessionStorage);
+  const proposals = new Map<string, PersonalInputBundle>();
+  context.personalInputs = new PersonalInputRecovery({
+    async read(audience) { return structuredClone(proposals.get(audience)); },
+    async compareAndWrite(audience, expectedCommit, metadata, texts) {
+      assert.equal(proposals.get(audience)?.commitId ?? 0, expectedCommit);
+      proposals.set(audience, { commitId: expectedCommit + 1, metadata, texts: new Map(texts) });
+      return expectedCommit + 1;
+    },
+  });
+  await context.personalInputs.open(context.verifiedPersonalAudience);
   context.source.personalInputRecords = () => [];
   vm.createContext(context); vm.runInContext(compiled, context);
   return { context, nodes, listeners, calls, storage, cleared };
 }
 
-test("logout releases the original document before clearing its credential and all panels", () => {
-  const f = fixture();
+test("logout releases the original document before clearing its credential and all panels", async () => {
+  const f = await fixture();
   for (let index = 0; index < 40; index++) {
     f.context.doc = { sessionId: `alice-${index}`, resource: "Shared", rights: { read: true, write: true } };
     f.context.draft = { source: "saved", baseSource: "saved" };
@@ -81,7 +92,7 @@ test("logout releases the original document before clearing its credential and a
 });
 
 test("cleanup of a late temporary session uses its original actor after another actor connects", async () => {
-  const f = fixture(), captured = f.context.sessionAudience();
+  const f = await fixture(), captured = f.context.sessionAudience();
   f.context.identity = { actor: "bob", deployment: "space", generation: 2 }; f.context.token = "bob-credential";
   f.context.doc = { sessionId: "bob-current", resource: "Other", rights: { read: true, write: true } };
   await f.context.closeOwnedSession("alice-late", captured);
@@ -91,8 +102,8 @@ test("cleanup of a late temporary session uses its original actor after another 
   assert.equal(f.cleared.length, 0);
 });
 
-test("pagehide preserves a back-forward cached page, but final departure releases all owned coordinates", () => {
-  const f = fixture(), handler = f.listeners.get("pagehide");
+test("pagehide preserves a back-forward cached page, but final departure releases all owned coordinates", async () => {
+  const f = await fixture(), handler = f.listeners.get("pagehide");
   assert.ok(handler);
   f.context.retiredStructureSessions.add("alice-retired");
   handler({ persisted: true }); assert.equal(f.calls.length, 0); assert.equal(f.context.localeDisposals, 0);
@@ -104,19 +115,19 @@ test("pagehide preserves a back-forward cached page, but final departure release
 });
 
 test("failed close delivery or browser storage does not block local logout and page departure", async () => {
-  const f = fixture();
+  const f = await fixture();
   f.context.fetch = async () => { throw new Error("offline"); };
   assert.doesNotThrow(() => f.nodes.get("logout").onclick());
   await Promise.resolve();
   assert.equal(f.context.token, ""); assert.equal(f.context.doc, undefined); assert.equal(f.cleared.length, 17);
-  const other = fixture();
+  const other = await fixture();
   other.context.sessionStorage.setItem = () => { throw new Error("quota"); };
   assert.doesNotThrow(() => other.listeners.get("pagehide")!({ persisted: false }));
   assert.equal(other.calls.length, 1);
 });
 
 test("an expired lease preserves draft and Undo, blocks saving, and does not reopen or retry the write", async () => {
-  const f = fixture(), original = f.context.doc, draft = f.context.draft;
+  const f = await fixture(), original = f.context.doc, draft = f.context.draft;
   let requests = 0;
   f.context.request = async (path: string, data: { sessionId: string }) => {
     requests++; assert.equal(path, "session/keepalive"); assert.equal(data.sessionId, "alice-original");
@@ -131,7 +142,7 @@ test("an expired lease preserves draft and Undo, blocks saving, and does not reo
 });
 
 test("a late lease-expiry response cannot pause a newer document or actor", async () => {
-  const f = fixture();
+  const f = await fixture();
   let reject!: (reason: unknown) => void;
   f.context.request = () => new Promise((_, fail) => { reject = fail; });
   const pending = f.context.refreshOpenSession();
@@ -146,7 +157,7 @@ test("a late lease-expiry response cannot pause a newer document or actor", asyn
 
 test("alias recovery queries only the frozen resource, retains unknown input and adopts only after the original receipt", async () => {
   for (const terminal of [false, true]) {
-    const f = fixture(), c = f.context, originalDoc = c.doc;
+    const f = await fixture(), c = f.context, originalDoc = c.doc;
     const operation = "original-save", reference = "weftext-node://workspace/node";
     const retained = { source: "later input Y", baseSource: "base B", reference, pending: { resource: "Shared", operationId: operation, source: "submitted X", request: { sessionId: "alice-original", baseId: "original-base", operationId: operation, source: "submitted X" } } };
     c.draft = retained;

@@ -308,7 +308,7 @@ impl ConversionResult {
 pub(crate) struct LegacyError {
     pub(crate) code: String,
     #[serde(flatten)]
-    pub(crate) description: ErrorDescription,
+    pub(crate) description: Box<ErrorDescription>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) details: Option<CoreErrorDetails>,
 }
@@ -320,14 +320,14 @@ impl std::fmt::Display for LegacyError {
 impl std::error::Error for LegacyError {}
 impl LegacyError {
     pub(crate) fn into_parts(self) -> (ErrorDescription, Option<CoreErrorDetails>) {
-        (self.description, self.details)
+        (*self.description, self.details)
     }
     fn diagnostic(mut self, origin: DiagnosticOrigin, text: impl Into<String>) -> Self {
-        self.description = self.description.diagnostic(origin, text);
+        self.description = Box::new((*self.description).diagnostic(origin, text));
         self
     }
     fn caused_by(mut self, cause: LegacyError) -> Self {
-        self.description = merge_cause(self.description, &mut self.details, cause);
+        self.description = Box::new(merge_cause(*self.description, &mut self.details, cause));
         self
     }
 }
@@ -344,7 +344,7 @@ fn merge_cause(
     cause: LegacyError,
 ) -> ErrorDescription {
     merge_details(details, cause.details);
-    match outer.try_caused_by(cause.code, cause.description) {
+    match outer.try_caused_by(cause.code, *cause.description) {
         Ok(description) => description,
         Err(boundary) => {
             // Retain the complete overflowing original in the existing typed
@@ -406,7 +406,7 @@ fn public_details(details: CoreErrorDetails) -> CoreErrorDetails {
 fn error(code: &str, description: impl Into<ErrorDescription>) -> LegacyError {
     LegacyError {
         code: code.into(),
-        description: description.into(),
+        description: Box::new(description.into()),
         details: None,
     }
 }
@@ -891,13 +891,13 @@ async fn run(
             }
         }
     };
-    if !matches!(outcome, ProcessOutcome::Exited(_)) {
-        if let Err(cause) = child.kill().await {
-            return Ok(ProcessOutcome::Unknown(vec![RawDiagnostic {
-                origin: DiagnosticOrigin::Os,
-                text: cause.to_string(),
-            }]));
-        }
+    if !matches!(outcome, ProcessOutcome::Exited(_))
+        && let Err(cause) = child.kill().await
+    {
+        return Ok(ProcessOutcome::Unknown(vec![RawDiagnostic {
+            origin: DiagnosticOrigin::Os,
+            text: cause.to_string(),
+        }]));
     }
     Ok(outcome)
 }
@@ -1411,7 +1411,7 @@ async fn convert_in_new_workspace(
     }
     if let Err(failure) = execution_path_budget(&workspace, &request.backend) {
         result.code = failure.code;
-        result.description = failure.description;
+        result.description = *failure.description;
         result.details = failure.details;
         save_receipt(&result)?;
         return Ok(result);
@@ -1534,7 +1534,7 @@ async fn convert_in_new_workspace(
                 }
                 Err(e) => {
                     result.code = e.code;
-                    result.description = e.description;
+                    result.description = *e.description;
                     result.details = e.details;
                     save_receipt(&result)?;
                     return Ok(result);
@@ -1680,7 +1680,7 @@ async fn convert_in_new_workspace(
                 result.status = "failed".into();
                 result.code = e.code;
                 let prior_diagnostics = std::mem::take(&mut result.description.diagnostics);
-                result.description = e.description;
+                result.description = *e.description;
                 result.details = e.details;
                 result.description.diagnostics.extend(prior_diagnostics);
             }
@@ -1865,7 +1865,7 @@ mod tests {
         let parallel_json = serde_json::to_value(&parallel).unwrap();
         let cause = LegacyError {
             code: "originalFailure".into(),
-            description: original,
+            description: Box::new(original),
             details: Some(CoreErrorDetails::Aggregate {
                 groups: vec![ErrorDetailGroup::Data {
                     classification: weftext_data::DataErrorKind::Invalid,
@@ -2545,3 +2545,7 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "legacy_office/real_host_tests.rs"]
+mod real_host_tests;

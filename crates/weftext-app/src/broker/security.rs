@@ -58,7 +58,7 @@ fn token_sid(token: HANDLE) -> io::Result<String> {
     let user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
     let mut text = PWSTR::null();
     unsafe { ConvertSidToStringSidW(user.User.Sid, &mut text) }.map_err(error)?;
-    let result = unsafe { text.to_string() }.map_err(error);
+    let result = unsafe { text.to_string() }.map_err(io::Error::other);
     unsafe {
         let _ = LocalFree(Some(HLOCAL(text.0.cast())));
     }
@@ -212,20 +212,7 @@ pub(crate) async fn authenticate_client(
     pipe: &impl AsRawHandle,
     expected_sid: String,
 ) -> Result<(), AuthenticationError> {
-    let mut duplicate = HANDLE::default();
-    unsafe {
-        DuplicateHandle(
-            GetCurrentProcess(),
-            HANDLE(pipe.as_raw_handle()),
-            GetCurrentProcess(),
-            &mut duplicate,
-            0,
-            false,
-            DUPLICATE_SAME_ACCESS,
-        )
-    }
-    .map_err(|value| AuthenticationError::Fatal(error(value)))?;
-    let duplicate = own(duplicate);
+    let duplicate = duplicate_handle(pipe).map_err(AuthenticationError::Fatal)?;
     let (send, received) = tokio::sync::oneshot::channel();
     let thread = std::thread::Builder::new()
         .name("weftext-pipe-identification".into())
@@ -275,4 +262,21 @@ pub(crate) async fn authenticate_client(
             "Pipe identification ended without a result",
         ))
     })?
+}
+
+fn duplicate_handle(pipe: &impl AsRawHandle) -> io::Result<OwnedHandle> {
+    let mut duplicate = HANDLE::default();
+    unsafe {
+        DuplicateHandle(
+            GetCurrentProcess(),
+            HANDLE(pipe.as_raw_handle()),
+            GetCurrentProcess(),
+            &mut duplicate,
+            0,
+            false,
+            DUPLICATE_SAME_ACCESS,
+        )
+    }
+    .map_err(error)?;
+    Ok(own(duplicate))
 }

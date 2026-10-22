@@ -17,7 +17,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use weftext_messages::UiMessage;
 
 /// An explicit document locator; Core still qualifies identity and restores Draft.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

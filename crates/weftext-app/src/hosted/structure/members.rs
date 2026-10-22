@@ -111,7 +111,7 @@ pub(crate) fn member_ids(inner: &HostedInner, actor: &str) -> Result<Vec<String>
         }
         ids.extend(slot_member_ids(inner, slot)?);
         if ids.len() > 5000 {
-            return Err(ApiError::bad("获权结构成员超过 5000 项预算"));
+            return Err(ApiError::bad(weftext_messages::UiMessage::error_api_members_authorized_structure_members_exceed_the5000_member_budget()));
         }
     }
     Ok(ids)

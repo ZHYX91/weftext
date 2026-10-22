@@ -33,7 +33,7 @@ const DELIVERY: u8 = 7;
 const PARTIAL: u8 = 8;
 
 enum Transport {
-    Local(LocalConnection),
+    Local(Box<LocalConnection>),
     Remote(Remote),
 }
 struct Context {
@@ -122,7 +122,7 @@ impl Context {
                 profile_identity: connection.profile_identity().to_owned(),
             };
             Ok(Self {
-                transport: Transport::Local(connection),
+                transport: Transport::Local(Box::new(connection)),
                 target,
                 owner_incarnation: None,
                 owner_identity: Some(owner_identity),
@@ -647,22 +647,22 @@ async fn execute(args: &Args, locale: UiLocale) -> Result<u8, Failure> {
         }
     };
     let exit = outcome(kind, reply.status, &value, args.allow_partial);
-    if let Some(path) = source_output {
-        if exit == 0 {
-            let source = value["source"]
-                .as_str()
-                .ok_or_else(|| Failure::new("sourceUnavailable", DELIVERY))?;
-            let delivered_root = if context.remote() {
-                None
-            } else {
-                prepare::author_root(&value)
-            };
-            let actual_root = delivered_root.as_deref().or(author_root.as_deref());
-            let path = input::artifact_path(&path, &[actual_root, context.private_root.as_deref()])
-                .map_err(|e| Failure::new(io_code(&e), DELIVERY))?;
-            input::write_new(&path, source.as_bytes())
-                .map_err(|e| Failure::new(io_code(&e), DELIVERY))?;
-        }
+    if let Some(path) = source_output
+        && exit == 0
+    {
+        let source = value["source"]
+            .as_str()
+            .ok_or_else(|| Failure::new("sourceUnavailable", DELIVERY))?;
+        let delivered_root = if context.remote() {
+            None
+        } else {
+            prepare::author_root(&value)
+        };
+        let actual_root = delivered_root.as_deref().or(author_root.as_deref());
+        let path = input::artifact_path(&path, &[actual_root, context.private_root.as_deref()])
+            .map_err(|e| Failure::new(io_code(&e), DELIVERY))?;
+        input::write_new(&path, source.as_bytes())
+            .map_err(|e| Failure::new(io_code(&e), DELIVERY))?;
     }
     let envelope = Envelope {
         schema_version: 1,
@@ -793,17 +793,14 @@ async fn resolve_attempt(
         }
         _ => {}
     }
-    if original.kind.is_effect() {
-        if let Ok(call) = status_call(original, context.remote()) {
-            if let Ok((reply, fact)) = context.json(call).await {
-                if (200..300).contains(&reply.status)
-                    && valid_result_identity(original, &fact)
-                    && known_original_result(original.kind, &fact)
-                {
-                    return Ok((reply, fact));
-                }
-            }
-        }
+    if original.kind.is_effect()
+        && let Ok(call) = status_call(original, context.remote())
+        && let Ok((reply, fact)) = context.json(call).await
+        && (200..300).contains(&reply.status)
+        && valid_result_identity(original, &fact)
+        && known_original_result(original.kind, &fact)
+    {
+        return Ok((reply, fact));
     }
     match parsed {
         Ok((reply, body)) if reply.status == 401 || reply.status == 403 => Ok((reply, body)),

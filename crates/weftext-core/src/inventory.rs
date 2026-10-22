@@ -251,7 +251,7 @@ impl Core {
                 UiMessage::error_core_inventory_target_outside_selected_library(),
             )
         })?;
-        let rules = read_rules(root)?;
+        let rules = read_rules(&self.backend, root)?;
         if !rules.warnings.is_empty() {
             return Err(CoreError::new(
                 "unsupportedRules",
@@ -274,7 +274,7 @@ impl Core {
                 UiMessage::error_core_inventory_source_outside_library(),
             )
         })?;
-        let rules = read_rules(root)?;
+        let rules = read_rules(&self.backend, root)?;
         if rules
             .ignored
             .iter()

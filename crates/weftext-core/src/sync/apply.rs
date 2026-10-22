@@ -561,7 +561,7 @@ impl Core {
                             "trash",
                         )?;
                         capture_optional(&self.backend, &path)?
-                            .ok_or_else(|| invalid("The original retired source is unavailable"))?
+                            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_apply_the_original_retired_source_is_unavailable()))?
                     } else {
                         self.managed_node(&root, directory, false)?
                     };
@@ -607,11 +607,11 @@ impl Core {
                     created_directories.insert(display(
                         parent
                             .strip_prefix(&root)
-                            .map_err(|_| invalid("Incoming file escaped root"))?,
+                            .map_err(|_| invalid(weftext_messages::UiMessage::error_core_apply_incoming_file_escaped_root()))?,
                     ));
                     parent = parent
                         .parent()
-                        .ok_or_else(|| invalid("Incoming file escaped root"))?;
+                        .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_apply_incoming_file_escaped_root()))?;
                 }
                 let captured = if self.backend.entry_exists(path.parent().unwrap())? {
                     capture_optional(&self.backend, &path)?

@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
-use weftext_messages::{DiagnosticOrigin, ErrorCauses, ErrorDescription, RawDiagnostic, UiMessage};
+use weftext_messages::{DiagnosticOrigin, ErrorDescription, RawDiagnostic, UiMessage};
 #[cfg(test)]
 mod error_contract_tests;
 
@@ -56,7 +56,6 @@ mod builtin_module_api;
 mod capture_api;
 mod citation_api;
 pub mod cli;
-mod client_preferences_api;
 pub mod client_protocol;
 mod data_api;
 mod desktop_api;
@@ -162,11 +161,21 @@ struct ApiError {
     code: String,
     #[serde(skip)]
     private_worker_failure: Option<Arc<worker_failure::WorkerFailure>>,
-    explanation: UiMessage,
-    diagnostics: Vec<RawDiagnostic>,
-    causes: ErrorCauses,
+    #[serde(flatten)]
+    description: Box<ErrorDescription>,
     #[serde(skip_serializing_if = "Option::is_none")]
     details: Option<Box<ApiErrorDetails>>,
+}
+impl std::ops::Deref for ApiError {
+    type Target = ErrorDescription;
+    fn deref(&self) -> &Self::Target {
+        &self.description
+    }
+}
+impl std::ops::DerefMut for ApiError {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.description
+    }
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -193,10 +202,6 @@ enum ApiErrorDetails {
     EngineDiagnostics {
         diagnostics: Vec<weftext_engine::Diagnostic>,
     },
-    ProductDiagnostics {
-        code: Option<String>,
-        diagnostics: Vec<ErrorDescription>,
-    },
     CommittedReceipt {
         receipt: weftext_core::OperationReceipt,
         cause: Box<ApiError>,
@@ -214,9 +219,7 @@ impl ApiError {
         Self {
             status,
             code: code.into(),
-            explanation: description.explanation,
-            diagnostics: description.diagnostics,
-            causes: description.causes,
+            description: Box::new(description),
             details: None,
             private_worker_failure: None,
         }
@@ -304,54 +307,54 @@ impl ApiError {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "compiler_exit_unknown",
-                "The compiler's actual process exit is unconfirmed; the original input is retained",
+                UiMessage::error_api_worker_process_exit_unknown(),
             )
         } else {
             match failure.kind {
                 Kind::InputBudget => (
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "compiler_input_budget",
-                    "The complete frozen compiler input exceeds its byte budget",
+                    UiMessage::error_api_worker_input_budget(),
                 ),
                 Kind::Deadline => (
                     StatusCode::REQUEST_TIMEOUT,
                     "compile_timeout",
-                    "The compiler exceeded its deadline; the original input is retained",
+                    UiMessage::error_api_worker_deadline(),
                 ),
                 Kind::NonzeroExit => (
                     StatusCode::UNPROCESSABLE_ENTITY,
                     "compiler_failed",
-                    "The compiler stopped with a nonzero result; the original input is retained",
+                    weftext_messages::UiMessage::error_api_worker_nonzero_exit(),
                 ),
                 Kind::StdoutBudget | Kind::StderrBudget => (
                     StatusCode::PAYLOAD_TOO_LARGE,
                     "compiler_output_budget",
-                    "The compiler stream exceeded its byte budget; the original input is retained",
+                    weftext_messages::UiMessage::error_api_worker_stream_budget(),
                 ),
                 Kind::OutputRejected => (
                     StatusCode::BAD_GATEWAY,
                     "compiler_output_invalid",
-                    "The original compiler output does not satisfy its protocol",
+                    weftext_messages::UiMessage::error_api_worker_output_rejected(),
                 ),
                 Kind::SupervisionLost => (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "compiler_supervisor_unknown",
-                    "The compiler supervisor did not return its actual completion",
+                    weftext_messages::UiMessage::error_api_worker_supervision_lost(),
                 ),
                 Kind::Setup => (
                     StatusCode::SERVICE_UNAVAILABLE,
                     "compiler_unavailable",
-                    "The contained compiler process could not be started",
+                    weftext_messages::UiMessage::error_api_worker_setup_failed(),
                 ),
                 Kind::InputEncoding => (
                     StatusCode::BAD_REQUEST,
                     "compiler_input_invalid",
-                    "The frozen compiler input could not be encoded",
+                    weftext_messages::UiMessage::error_api_worker_input_encoding(),
                 ),
                 Kind::InputIo | Kind::StdoutIo | Kind::StderrIo | Kind::Wait => (
                     StatusCode::BAD_GATEWAY,
                     "compiler_transport_failed",
-                    "The original compiler transport did not complete",
+                    weftext_messages::UiMessage::error_api_worker_transport_failed(),
                 ),
             }
         };
@@ -360,7 +363,7 @@ impl ApiError {
 }
 impl std::fmt::Display for ApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(f, "{}: {:?}", self.code, self.explanation)
     }
 }
 impl std::error::Error for ApiError {
@@ -375,9 +378,7 @@ impl From<CoreError> for ApiError {
         Self {
             status: StatusCode::CONFLICT,
             code: error.code.clone(),
-            explanation: error.explanation.clone(),
-            diagnostics: error.diagnostics.clone(),
-            causes: error.causes.clone(),
+            description: error.description.clone(),
             details: Some(Box::new(ApiErrorDetails::Core { error })),
             private_worker_failure: None,
         }
@@ -452,17 +453,21 @@ fn forget_session_projection(state: &AppState, session_id: &str) -> Result<(), A
     state
         .locations
         .lock()
-        .map_err(|_| ApiError::internal("Session locations are unavailable"))?
+        .map_err(|_| {
+            ApiError::internal(
+                weftext_messages::UiMessage::error_api_lib_session_locations_are_unavailable(),
+            )
+        })?
         .remove(session_id);
     state
         .renders
         .lock()
-        .map_err(|_| ApiError::internal("Session render projections are unavailable"))?
+        .map_err(|_| ApiError::internal(weftext_messages::UiMessage::error_api_lib_session_render_projections_are_unavailable()))?
         .remove(session_id);
     state
         .editor_versions
         .lock()
-        .map_err(|_| ApiError::internal("Session editor projections are unavailable"))?
+        .map_err(|_| ApiError::internal(weftext_messages::UiMessage::error_api_lib_session_editor_projections_are_unavailable()))?
         .remove(session_id);
     Ok(())
 }

@@ -522,7 +522,9 @@ pub(super) fn read_record(
 pub(super) fn immutable(backend: &crate::BackendContext, path: &Path, bytes: &[u8]) -> Result<()> {
     match read_record(backend, path, bytes.len()) {
         Ok(existing) if existing == bytes => Ok(()),
-        Ok(_) => Err(invalid("Existing immutable record differs")),
+        Ok(_) => Err(invalid(
+            weftext_messages::UiMessage::error_core_store_existing_immutable_record_differs(),
+        )),
         Err(e) if e.code == "missing" => private_create(backend, path, bytes),
         Err(e) => Err(e),
     }

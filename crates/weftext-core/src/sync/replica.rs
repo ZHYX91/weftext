@@ -400,7 +400,7 @@ impl Core {
                 super::relative(&name)?;
                 let blob = hash(bytes);
                 let observed = crate::operations::capture_optional(&self.backend, &path)?
-                    .ok_or_else(|| invalid("Captured replica file disappeared"))?;
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_captured_replica_file_disappeared()))?;
                 let frozen = self.admitted_cuts[&captured.snapshot.cut_id]
                     .bases
                     .iter()
@@ -671,7 +671,7 @@ impl Core {
                 )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
-                    .ok_or_else(|| invalid("Publication lacks its durable commit order"))?;
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_publication_lacks_its_durable_commit_order()))?;
                 records.push((sequence, publication));
             }
         }
@@ -713,7 +713,7 @@ impl Core {
                 )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
-                    .ok_or_else(|| invalid("Replica event lacks commit order"))?;
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_replica_event_lacks_commit_order()))?;
                 records.push((sequence, p));
             }
         }

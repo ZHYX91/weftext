@@ -344,7 +344,7 @@ fn qualified_roots(
     if steps.len() != phases.len() {
         return Err(CoreError::new(
             "invalidPlan",
-            "Missing namespace participant",
+            weftext_messages::UiMessage::error_core_backend_missing_namespace_participant(),
         ));
     }
     steps
@@ -363,7 +363,7 @@ fn qualified_roots(
             {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Compound original directory or parent identity changed",
+                    weftext_messages::UiMessage::error_core_operations_compound_original_directory_or_parent_identity_changed(),
                 ));
             }
             Ok(coordinate)
@@ -435,7 +435,7 @@ pub(super) fn ensure_absent(
     if exists {
         Err(CoreError::new(
             "exists",
-            "Create-only target is occupied; no overwrite is allowed",
+            weftext_messages::UiMessage::error_core_operations_create_only_target_occupied_no_overwrite_allowed(),
         ))
     } else {
         Ok(())

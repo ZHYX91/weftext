@@ -1280,7 +1280,7 @@ impl HostedService {
                 return Err("Invalid configured directory scope".into());
             }
         }
-        validate_users(&config, &config.users).map_err(|e| e.message)?;
+        validate_users(&config, &config.users)?;
         if let Some(identity) = &config.sync_identity {
             match core.sync_binding_info(&config.root) {
                 Ok(binding) if binding.identity != *identity => {
@@ -1316,7 +1316,7 @@ impl HostedService {
                         return Err(Box::new(PairingMismatch));
                     }
                 }
-                validate_users(&config, &policy.users).map_err(|e| e.message)?;
+                validate_users(&config, &policy.users)?;
                 policy
             }
             None => {

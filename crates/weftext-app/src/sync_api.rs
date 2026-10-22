@@ -215,7 +215,7 @@ async fn native_validation_outputs_with_budget(
     requests: &weftext_core::sync::SyncNativeRenderInputs,
     budget: &mut NativeValidationBudget,
 ) -> Result<Vec<weftext_core::sync::SyncNativeRenderOutput>, super::ApiError> {
-    let failure = |message: &str| {
+    let failure = |message: weftext_messages::UiMessage| {
         super::ApiError::from(weftext_core::CoreError::new(
             "queryInvocationUnavailable",
             message,
@@ -224,36 +224,41 @@ async fn native_validation_outputs_with_budget(
     budget.notes = budget.notes.saturating_add(requests.len());
     if budget.notes > 32 {
         return Err(failure(
-            "The native Query validation exceeds 32 exact notes",
+            weftext_messages::UiMessage::error_api_sync_native_validation_note_budget(),
         ));
     }
     let mut outputs = Vec::with_capacity(requests.len());
     let mut retained = 0usize;
     for index in 0..requests.len() {
-        let request = requests
-            .render_request(index)
-            .ok_or_else(|| failure("The exact native input is missing"))?;
+        let request = requests.render_request(index).ok_or_else(|| {
+            failure(weftext_messages::UiMessage::error_api_sync_native_input_missing())
+        })?;
         let remaining = budget
             .deadline
             .saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
             return Err(failure(
-                "The native Query validation exceeded its total worker budget",
+                weftext_messages::UiMessage::error_api_sync_native_validation_worker_budget(),
             ));
         }
         let value = tokio::time::timeout(remaining, super::render_frozen_worker(state, request))
             .await
-            .map_err(|_| failure("The native Query validation timed out"))??;
-        let output: weftext_engine::RenderOutput = serde_json::from_value(value)
-            .map_err(|_| failure("The native worker returned an invalid exact result"))?;
+            .map_err(|_| {
+                failure(weftext_messages::UiMessage::error_api_sync_native_validation_timed_out())
+            })??;
+        let output: weftext_engine::RenderOutput = serde_json::from_value(value).map_err(|_| {
+            failure(weftext_messages::UiMessage::error_api_sync_native_result_invalid())
+        })?;
         retained = retained.saturating_add(
             serde_json::to_vec(&output.products)
-                .map_err(|_| failure("Invalid native products"))?
+                .map_err(|_| {
+                    failure(weftext_messages::UiMessage::error_api_sync_native_products_invalid())
+                })?
                 .len(),
         );
         if retained > 32 * 1024 * 1024 {
             return Err(failure(
-                "The native product inputs exceed the original Query byte budget",
+                weftext_messages::UiMessage::error_api_sync_native_product_byte_budget(),
             ));
         }
         outputs.push(output.into());
@@ -261,13 +266,18 @@ async fn native_validation_outputs_with_budget(
     Ok(outputs)
 }
 
-struct AdoptionJsonBudget(usize);
+#[derive(Default)]
+struct AdoptionJsonBudget {
+    bytes: usize,
+    exceeded: bool,
+}
 impl std::io::Write for AdoptionJsonBudget {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if self.0.saturating_add(bytes.len()) > 16 * 1024 * 1024 {
-            return Err(std::io::Error::other("adoption JSON exceeds 16 MiB"));
+        if self.bytes.saturating_add(bytes.len()) > 16 * 1024 * 1024 {
+            self.exceeded = true;
+            return Err(std::io::ErrorKind::FileTooLarge.into());
         }
-        self.0 += bytes.len();
+        self.bytes += bytes.len();
         Ok(bytes.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
@@ -290,7 +300,8 @@ async fn adoption_cut(
             let cut = core.read_sync_adoption_cut(std::path::Path::new(&req.root), &req.objects)?;
             // Count the actual wire representation without allocating a second
             // large byte array. Browser persistence can have a smaller budget.
-            if serde_json::to_writer(AdoptionJsonBudget(0), &cut).is_err() {
+            let mut budget = AdoptionJsonBudget::default();
+            if let Err(error) = serde_json::to_writer(&mut budget, &cut) {
                 for change in &cut.changes {
                     if let Some(base) = &change.base_id {
                         let _ = core.take_snapshot_witness(base);
@@ -299,10 +310,14 @@ async fn adoption_cut(
                 for member in &cut.removed_members {
                     let _ = core.take_snapshot_witness(&member.base_id);
                 }
-                return Err(weftext_core::CoreError::new(
-                    "budget",
-                    UiMessage::error_api_sync_adoption_preview_budget(),
-                ));
+                return Err(if budget.exceeded {
+                    weftext_core::CoreError::new(
+                        "budget",
+                        UiMessage::error_api_sync_adoption_preview_budget(),
+                    )
+                } else {
+                    error.into()
+                });
             }
             Ok(cut)
         })

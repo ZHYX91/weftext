@@ -80,14 +80,43 @@ pub(crate) fn get() -> io::Result<&'static Contract> {
                     && value != "."
                     && value != ".."
             };
+            let version = |value: &str| -> Option<[u16; 4]> {
+                value
+                    .split('.')
+                    .map(str::parse::<u16>)
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok()?
+                    .try_into()
+                    .ok()
+            };
+            let min_version = version(&contract.platform.min_version);
+            let max_version = version(&contract.platform.max_version_tested);
             if contract.schema_version != 1
                 || contract.platform.architecture != "x64"
+                || min_version.is_none()
+                || max_version.is_none()
+                || min_version > max_version
                 || contract.paths.persistent_known_folder != "LocalAppData"
                 || contract.paths.cache_known_folder != "LocalAppData"
                 || contract.roles.desktop.pe_subsystem != 2
                 || contract.roles.cli.pe_subsystem != 3
                 || !leaf(&contract.roles.desktop.filename)
                 || !leaf(&contract.roles.cli.filename)
+                || !leaf(&contract.roles.desktop.cargo_bin)
+                || !leaf(&contract.roles.cli.cargo_bin)
+                || contract.roles.desktop.filename
+                    != format!("{}.exe", contract.roles.desktop.cargo_bin)
+                || contract.roles.cli.filename != format!("{}.exe", contract.roles.cli.cargo_bin)
+                || contract.roles.desktop.cargo_bin == contract.roles.cli.cargo_bin
+                || contract.activation.portable_aumid.is_empty()
+                || contract.activation.portable_aumid.len() > 128
+                || !contract
+                    .activation
+                    .portable_aumid
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+                || contract.activation.startup_argument != "--login-startup"
+                || contract.activation.toast_argument != "--toast-server"
                 || !crate::broker::canonical_uuid(&contract.activation.toast_clsid)
             {
                 return Err("The shared Windows host contract is invalid".into());

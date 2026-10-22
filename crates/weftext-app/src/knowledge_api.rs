@@ -3874,7 +3874,7 @@ async fn register_template(
                     base_id: Some(bundle.settings.base_id),
                     before: bundle.settings.bytes,
                     after: serde_json::to_vec_pretty(&settings)
-                        .map_err(|_| ApiError::internal("无法编码模板设置"))?,
+                        .map_err(|_| ApiError::internal(weftext_messages::UiMessage::error_api_knowledge_api_template_settings_could_not_be_encoded()))?,
                 },
             ],
         },

@@ -84,6 +84,7 @@ impl SyncNativeRenderInputs {
 /// There is no serde input for installing a client supplied compilation proof.
 pub struct SyncNativeRenderOutput {
     pub ok: bool,
+    pub diagnostics: Vec<weftext_engine::Diagnostic>,
     pub products: Option<weftext_engine::RenderProducts>,
     pub dependencies: Vec<weftext_engine::Dependency>,
     pub compiler_version: String,
@@ -92,6 +93,7 @@ impl From<weftext_engine::RenderOutput> for SyncNativeRenderOutput {
     fn from(output: weftext_engine::RenderOutput) -> Self {
         Self {
             ok: output.ok,
+            diagnostics: output.diagnostics,
             products: output.products,
             dependencies: output.dependencies,
             compiler_version: output.compiler_version,
@@ -1372,15 +1374,22 @@ impl Core {
             }
             provenance.push(serde_json::json!({"entityKey":native.keys[index].0,"fileRevision":native.keys[index].1,
                 "sourceHash":native.keys[index].2,"compileIdentity":identity,"target":"html","compilerVersion":output.compiler_version,"ok":output.ok,
-                "dependencies":output.dependencies,"inputDigest":native.world_provenance["inputDigest"]}));
+                "dependencies":output.dependencies,"diagnostics":output.diagnostics,"inputDigest":native.world_provenance["inputDigest"]}));
             let product = match (output.ok, output.products) {
                 (true, Some(product)) if product.target == "html" => {
                     weftext_data::native_query_products(identity, product)
                 }
                 _ => {
-                    let unavailable = || weftext_data::Cell::Unavailable {
-                        reason: "The exact frozen native HTML compile did not qualify this product"
-                            .into(),
+                    let unavailable = || {
+                        weftext_data::Cell::Unavailable {
+                        kind: weftext_data::DataErrorKind::Unavailable,
+                        reason: weftext_messages::UiMessage::error_sync_native_compile_unqualified().into(),
+                        diagnostics: output.diagnostics.iter().map(|diagnostic| weftext_messages::ErrorDescription {
+                            explanation: diagnostic.explanation.clone().unwrap_or_else(weftext_messages::UiMessage::error_sync_native_compile_unqualified),
+                            diagnostics: diagnostic.diagnostics.clone(),
+                            causes: Default::default(),
+                        }).collect(),
+                    }
                     };
                     weftext_data::NoteProducts {
                         compile_identity: identity,

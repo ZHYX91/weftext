@@ -151,7 +151,7 @@ impl Core {
             let (bytes, _) = self
                 .read_device_record(DeviceRecordKind::ClientPreferences, 16 * 1024)?
                 .ok_or_else(|| {
-                    evidence("Client preferences disappeared during device qualification")
+                    evidence(weftext_messages::UiMessage::error_core_device_state_client_preferences_disappeared_during_device_qualification())
                 })?;
             validate_backup_record(DeviceRecordKind::ClientPreferences, &bytes)?;
         } else if !complete || !originals.is_empty() {
@@ -179,7 +179,7 @@ impl Core {
     pub fn existing_device_identity(&self) -> Result<DeviceIdentity> {
         let (bytes, _) = self
             .read_device_record(DeviceRecordKind::Identity, 64 * 1024)?
-            .ok_or_else(|| evidence("Existing device identity is unavailable"))?;
+            .ok_or_else(|| evidence(weftext_messages::UiMessage::error_core_backend_existing_device_identity_unavailable()))?;
         self.qualify_device_identity(&bytes)
     }
 
@@ -193,9 +193,7 @@ impl Core {
                 is_current: false,
             });
         };
-        let binding: Binding = serde_json::from_slice(&plaintext).map_err(|_| {
-            evidence("Device binding plaintext is not a strict current physical record")
-        })?;
+        let binding = decode_binding(&plaintext)?;
         let expected = self.current_device_binding(&record.id)?;
         Ok(DeviceIdentity {
             id: record.id,
@@ -233,7 +231,7 @@ impl Core {
         {
             let _ = (id, profile);
             Err(evidence(
-                "Device binding requires a qualified platform authority",
+                weftext_messages::UiMessage::error_core_backend_device_authority_required(),
             ))
         }
     }
@@ -253,7 +251,7 @@ impl Core {
         {
             let _ = bytes;
             Err(evidence(
-                "Device protection is unavailable on this platform",
+                weftext_messages::UiMessage::error_core_backend_device_protection_unavailable(),
             ))
         }
     }
@@ -416,11 +414,13 @@ impl Core {
             return Err(evidence(UiMessage::error_device_namespace_member_limit()));
         }
         for (name, attributes) in entries {
-            let name = name
-                .to_str()
-                .ok_or_else(|| evidence("Non-Unicode device record name"))?;
+            let name = name.to_str().ok_or_else(|| {
+                evidence(weftext_messages::UiMessage::error_device_record_name_not_unicode())
+            })?;
             if !attributes.is_file() || device_member_kind(name).is_none() {
-                return Err(evidence("Unknown or unsupported device namespace member"));
+                return Err(evidence(
+                    weftext_messages::UiMessage::error_device_namespace_member_unsupported(),
+                ));
             }
         }
         Ok(Some(guard))
@@ -453,8 +453,8 @@ fn validate_identity_record(bytes: &[u8]) -> Result<IdentityRecord> {
         return Err(evidence(UiMessage::error_device_identity_byte_limit()));
     }
     let record: IdentityRecord = serde_json::from_slice(bytes)?;
-    let id =
-        uuid::Uuid::parse_str(&record.id).map_err(|_| evidence("Invalid device identity UUID"))?;
+    let id = uuid::Uuid::parse_str(&record.id)
+        .map_err(|_| evidence(weftext_messages::UiMessage::error_device_identity_uuid_invalid()))?;
     if record.schema_version != 2
         || id.to_string() != record.id
         || id.get_version_num() != 4

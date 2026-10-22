@@ -4,7 +4,7 @@
 use super::{ApiResult, AppState, Location, core_call, location};
 #[cfg(test)]
 use crate::CoreTestFixture;
-use crate::RequestJson;
+use crate::{RequestJson, UiMessage};
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},

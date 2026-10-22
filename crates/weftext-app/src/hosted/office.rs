@@ -2901,6 +2901,7 @@ mod tests {
                 },
             )),
             backend: "libreoffice".into(),
+            details: None,
             backend_version: Some("fixture".into()),
             direction: super::super::super::legacy_office::Direction::DocxToDoc,
             original: make_artifact("original.docx", original.clone(), &bytes),

@@ -54,7 +54,7 @@ fn task() -> Result<Option<StartupTask>> {
     let contract = crate::host_contract::get().map_err(|_| Error::from(E_UNEXPECTED))?;
     let task =
         StartupTask::GetAsync(&HSTRING::from(&contract.activation.startup_task_id))?.join()?;
-    if task.TaskId()?.to_string() != contract.activation.startup_task_id {
+    if task.TaskId()? != contract.activation.startup_task_id {
         return Err(Error::from(E_ACCESSDENIED));
     }
     Ok(Some(task))

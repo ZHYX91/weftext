@@ -138,10 +138,13 @@ impl Core {
                 UiMessage::error_core_file_save_scope_file_parent_missing(),
             )
         })?;
-        let _parent_guard = ParentGuard::acquire(path)?;
+        let _parent_guard = ParentGuard::acquire(&self.backend, path)?;
         for candidate in parent.ancestors() {
             if let Some(workspace) = self.workspace(candidate)? {
-                let guard = ParentGuard::acquire(&candidate.join(".file-scope-prospective"))?;
+                let guard = ParentGuard::acquire(
+                    &self.backend,
+                    &candidate.join(".file-scope-prospective"),
+                )?;
                 let root_identity = guard.directory_identity()?;
                 let original_root =
                     self.validate_original_reservation_library(&ActorLibraryBinding {
@@ -162,15 +165,11 @@ impl Core {
                 ".weftext-format",
                 ".weftext-mvp-commit.json",
             ] {
-                match fs::symlink_metadata(candidate.join(marker)) {
-                    Ok(_) => {
-                        return Err(CoreError::new(
-                            "unadmittedLibrary",
-                            UiMessage::error_core_file_save_scope_ancestor_owner_unproven(),
-                        ));
-                    }
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => return Err(error.into()),
+                if self.backend.entry_exists(candidate.join(marker))? {
+                    return Err(CoreError::new(
+                        "unadmittedLibrary",
+                        UiMessage::error_core_file_save_scope_ancestor_owner_unproven(),
+                    ));
                 }
             }
         }

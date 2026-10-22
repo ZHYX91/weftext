@@ -115,7 +115,7 @@ impl BoundFile {
                 .ok_or_else(|| {
                     CoreError::new(
                         "controlledRootRequired",
-                        "File descriptor has no controlled-root authority",
+                        weftext_messages::UiMessage::error_core_backend_descriptor_authority_required(),
                     )
                 })?
                 .check_fence()?;
@@ -147,13 +147,18 @@ impl BackendContext {
         self.check_path(&path)?;
         #[cfg(windows)]
         {
-            let drive = path
-                .ancestors()
-                .last()
-                .ok_or_else(|| CoreError::new("invalidPath", "Invalid volume path"))?;
+            let drive = path.ancestors().last().ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    weftext_messages::UiMessage::error_core_backend_invalid_volume_path(),
+                )
+            })?;
             let guard = ParentGuard::acquire(self, &drive.join(".coordinate-prospective"))?;
             let relative = path.strip_prefix(drive).map_err(|_| {
-                CoreError::new("invalidPath", "Path is outside its protected volume")
+                CoreError::new(
+                    "invalidPath",
+                    weftext_messages::UiMessage::error_core_backend_path_outside_protected_volume(),
+                )
             })?;
             Ok(guard.directory_coordinates()?.join(relative))
         }
@@ -187,11 +192,17 @@ impl BackendContext {
         if path == self.root.path {
             return Ok(true);
         }
-        let name = path
-            .file_name()
-            .ok_or_else(|| CoreError::new("invalidPath", "An entry path requires a leaf name"))?;
+        let name = path.file_name().ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                weftext_messages::UiMessage::error_core_backend_entry_leaf_required(),
+            )
+        })?;
         let parent = path.parent().ok_or_else(|| {
-            CoreError::new("invalidPath", "An entry path requires its original parent")
+            CoreError::new(
+                "invalidPath",
+                weftext_messages::UiMessage::error_core_backend_entry_parent_required(),
+            )
         })?;
         let guard = match ParentGuard::acquire(self, &parent.join(".private-enumeration")) {
             Ok(guard) => guard,
@@ -211,7 +222,7 @@ impl BackendContext {
         if stamp(&file)? != original || bytes.len() as u64 != original.size {
             return Err(CoreError::new(
                 "thirdState",
-                "The original private record changed during its guarded read",
+                weftext_messages::UiMessage::error_core_backend_private_record_changed(),
             ));
         }
         Ok(bytes)
@@ -236,7 +247,7 @@ impl BackendContext {
         if !complete {
             return Err(CoreError::new(
                 "budget",
-                "Private namespace enumeration exceeds its complete inventory budget",
+                weftext_messages::UiMessage::error_core_backend_private_namespace_budget(),
             ));
         }
         let entries = entries
@@ -245,7 +256,7 @@ impl BackendContext {
                 if metadata.is_unsupported() {
                     Err(CoreError::new(
                         "unsupportedPath",
-                        "The private namespace contains an unsupported filesystem entry",
+                        weftext_messages::UiMessage::error_core_backend_unsupported_private_entry(),
                     ))
                 } else {
                     Ok(ScopedDirectoryEntry {
@@ -269,7 +280,7 @@ impl BackendContext {
         {
             Err(CoreError::new(
                 "controlledRootRequired",
-                "This platform requires an explicitly enrolled controlled-service root",
+                weftext_messages::UiMessage::error_core_backend_controlled_root_required(),
             ))
         }
     }
@@ -314,7 +325,7 @@ impl BackendContext {
             Hmac::<sha2::Sha256>::new_from_slice(&self.root.device_key).map_err(|_| {
                 CoreError::new(
                     "controlledRootAuthority",
-                    "Device authentication key is unavailable",
+                    weftext_messages::UiMessage::error_core_backend_device_authentication_key_unavailable(),
                 )
             })?;
         mac.update(b"weftext.device.controlled-service.v1\0");
@@ -334,7 +345,7 @@ impl BackendContext {
             Hmac::<sha2::Sha256>::new_from_slice(&self.root.device_key).map_err(|_| {
                 CoreError::new(
                     "controlledRootAuthority",
-                    "Device authentication key is unavailable",
+                    weftext_messages::UiMessage::error_core_backend_device_authentication_key_unavailable(),
                 )
             })?;
         mac.update(b"weftext.device.controlled-service.v1\0");
@@ -1145,7 +1156,7 @@ mod platform {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "The retained source descendant no longer occupies its original parent entry",
+                        weftext_messages::UiMessage::error_core_backend_source_descendant_placement_changed(),
                     ));
                 }
                 path = next;
@@ -1825,12 +1836,12 @@ mod platform {
         if status < 0 {
             return Err(native_error(status));
         }
-        *file
-            .binding
-            .name
-            .lock()
-            .map_err(|_| CoreError::new("busy", "Entry binding is unavailable"))? =
-            std::ffi::OsString::from(name);
+        *file.binding.name.lock().map_err(|_| {
+            CoreError::new(
+                "busy",
+                weftext_messages::UiMessage::error_core_backend_entry_binding_unavailable(),
+            )
+        })? = std::ffi::OsString::from(name);
         Ok(())
     }
 
@@ -2131,7 +2142,7 @@ mod platform {
         pub(crate) fn source_coordinates(&self) -> Result<PathBuf> {
             Err(CoreError::new(
                 "unsupportedPlatform",
-                "Windows backend required",
+                weftext_messages::UiMessage::error_core_backend_windows_backend_required(),
             ))
         }
         pub fn parent_identity(&self) -> Result<FileIdentity> {
@@ -2400,7 +2411,7 @@ fn qualified_entry_exists(
     if !complete {
         return Err(CoreError::new(
             "budget",
-            "Private namespace enumeration exceeds its complete inventory budget",
+            weftext_messages::UiMessage::error_core_backend_private_namespace_budget(),
         ));
     }
     for (actual, metadata) in entries {
@@ -2409,7 +2420,7 @@ fn qualified_entry_exists(
             if metadata.is_unsupported() {
                 return Err(CoreError::new(
                     "unsupportedPath",
-                    "The private namespace contains an unsupported filesystem entry",
+                    weftext_messages::UiMessage::error_core_backend_unsupported_private_entry(),
                 ));
             }
             return Ok(true);
@@ -2422,9 +2433,12 @@ impl NamespaceGuard {
     /// handles. Reopening its pathname conflicts with Windows DELETE ownership
     /// and could substitute a different source after a lawful move.
     pub(crate) fn source_entry_exists(&mut self, relative: &Path) -> Result<bool> {
-        let name = relative
-            .file_name()
-            .ok_or_else(|| CoreError::new("invalidPath", "An entry path requires a leaf name"))?;
+        let name = relative.file_name().ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                weftext_messages::UiMessage::error_core_backend_entry_leaf_required(),
+            )
+        })?;
         let (_, entries, complete) = self
             .source_directory_snapshot(relative.parent().unwrap_or_else(|| Path::new("")), 5000)?;
         qualified_entry_exists(entries, complete, name)

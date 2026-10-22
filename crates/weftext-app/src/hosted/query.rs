@@ -558,7 +558,7 @@ fn request_budget(req: &QueryRequest) -> Result<(), ApiError> {
             return Err(invalid());
         }
         if let Some(a) = &plan.advanced {
-            for p in &a.union_all {
+            for p in a.union_all.iter().flatten() {
                 visit(p, nodes, depth + 1)?;
             }
             if let Some(r) = &a.related {
@@ -978,7 +978,7 @@ fn canonical_definition_owners(
         if let Some(call) = &mut advanced.call {
             call.owner = owners.get(&call.owner).ok_or_else(changed)?.clone();
         }
-        for child in &mut advanced.union_all {
+        for child in advanced.union_all.iter_mut().flatten() {
             canonical_definition_owners(child, owners)?;
         }
         if let Some(related) = &mut advanced.related {
@@ -1672,11 +1672,9 @@ fn capture(
         // Union/call terminal columns belong to their actual producer.
         if req.plan.select.is_empty()
             && req.plan.group.is_none()
-            && req
-                .plan
-                .advanced
-                .as_ref()
-                .is_none_or(|a| a.union_all.is_empty() && a.call.is_none())
+            && req.plan.advanced.as_ref().is_none_or(|a| {
+                a.union_all.as_ref().is_none_or(|plans| plans.is_empty()) && a.call.is_none()
+            })
             && !req.fields.is_empty()
         {
             req.plan.select = req

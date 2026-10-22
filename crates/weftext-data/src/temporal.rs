@@ -527,7 +527,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
         }
         NativeValue::Text(s) => ExactInstant::parse(s)
             .map(Endpoint::Instant)
-            .map_err(|e| invalid_error(e)),
+            .map_err(invalid_error),
         NativeValue::Record(_) => {
             let calendar = value
                 .member("calendar")
@@ -609,8 +609,8 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                 }
                 let (lo, hi, ordinal) = match precision {
                     "year" => (
-                        civil(year, 1, 1).map_err(|e| invalid_error(e))?,
-                        civil(year, 12, 31).map_err(|e| invalid_error(e))?,
+                        civil(year, 1, 1).map_err(invalid_error)?,
+                        civil(year, 12, 31).map_err(invalid_error)?,
                         i64::from(year),
                     ),
                     "month" => {
@@ -619,12 +619,12 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                                 weftext_messages::UiMessage::error_data_temporal_invalid_month(),
                             )
                         })?;
-                        let first = civil(year, m, 1).map_err(|e| invalid_error(e))?;
+                        let first = civil(year, m, 1).map_err(invalid_error)?;
                         let last = if m == 12 {
-                            civil(year, 12, 31).map_err(|e| invalid_error(e))?
+                            civil(year, 12, 31).map_err(invalid_error)?
                         } else {
                             civil(year, m + 1, 1)
-                                .map_err(|e| invalid_error(e))?
+                                .map_err(invalid_error)?
                                 .pred_opt()
                                 .unwrap()
                         };
@@ -639,7 +639,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                         let day = u32::try_from(day.unwrap()).map_err(|_| {
                             invalid(weftext_messages::UiMessage::error_data_temporal_invalid_day())
                         })?;
-                        let d = civil(year, month, day).map_err(|e| invalid_error(e))?;
+                        let d = civil(year, month, day).map_err(invalid_error)?;
                         (d, d, i64::from(d.num_days_from_ce()))
                     }
                 };

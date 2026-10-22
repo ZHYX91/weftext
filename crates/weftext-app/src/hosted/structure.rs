@@ -48,7 +48,7 @@ impl Slot {
             NamePolicy::Fixed { name } => Ok(name.clone()),
             NamePolicy::UniqueChildren { prefix, .. } => {
                 if !uuid::Uuid::parse_str(operation).is_ok_and(|id| id.to_string() == operation) {
-                    return Err(ApiError::bad("创建原操作编号须为规范 UUID"));
+                    return Err(ApiError::bad(weftext_messages::UiMessage::error_api_structure_the_original_creation_operation_i_d_must_be_a_canonical_u_u_i_d()));
                 }
                 Ok(format!("{prefix}{operation}"))
             }
@@ -347,7 +347,7 @@ fn rights(inner: &HostedInner, actor: &str) -> Result<Rights, ApiError> {
                 rights.sources.insert(id, r.clone());
             }
             if rights.sources.len() > 5000 {
-                return Err(ApiError::bad("获权结构来源超过 5000 项预算"));
+                return Err(ApiError::bad(weftext_messages::UiMessage::error_api_structure_authorized_structure_sources_exceed_the5000_member_budget()));
             }
         }
     }

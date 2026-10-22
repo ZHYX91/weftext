@@ -756,7 +756,7 @@ impl Core {
             .get(&record.owner.workspace_id)
             .ok_or_else(|| err(UiMessage::error_reminder_original_library_missing()))?;
         let root = Path::new(&library.root);
-        let root_guard = ParentGuard::acquire(&root.join(".reminder-open-root"))?;
+        let root_guard = ParentGuard::acquire(&self.backend, &root.join(".reminder-open-root"))?;
         if root_guard.directory_identity()? != library.identity {
             return Err(CoreError::new(
                 "foreignLibraryState",
@@ -1034,8 +1034,8 @@ impl Core {
         // configuration gap, never proof that the library has no reminders.
         let due = value("tasks/due")?;
         let resolution = weftext_data::resolve_task_reminder(reminder, due, &schema);
-        let root_identity =
-            ParentGuard::acquire(&root.join(".reminder-root"))?.directory_identity()?;
+        let root_identity = ParentGuard::acquire(&self.backend, &root.join(".reminder-root"))?
+            .directory_identity()?;
         let candidate = TaskReminderCandidate {
             root: display(&root),
             owner: owner.clone(),
@@ -1112,7 +1112,7 @@ impl Core {
                     return Err(err(UiMessage::error_reminder_dependency_outside_library()));
                 }
                 self.check_pending(path)?;
-                let guard = ParentGuard::acquire(path)?;
+                let guard = ParentGuard::acquire(&self.backend, path)?;
                 if guard.directory_identity()? != basis.parent {
                     return Err(CoreError::new(
                         "staleBase",
@@ -1120,7 +1120,7 @@ impl Core {
                     ));
                 }
                 let Some(expected) = basis.captured.as_ref() else {
-                    reminder_absent(path)?;
+                    reminder_absent(&self.backend, path)?;
                     absent.push(path);
                     guards.push(guard);
                     continue;
@@ -1160,7 +1160,7 @@ impl Core {
             }
         }
         for path in absent {
-            reminder_absent(path)?;
+            reminder_absent(&self.backend, path)?;
         }
         drop(handles);
         drop(guards);
@@ -1176,7 +1176,7 @@ impl Core {
         let (mut state, digest) = self.read_reminders()?;
         let root = absolute_path(root)?;
         let workspace = self.require_workspace(&root)?;
-        let root_guard = ParentGuard::acquire(&root.join(".reminder-root"))?;
+        let root_guard = ParentGuard::acquire(&self.backend, &root.join(".reminder-root"))?;
         let identity = root_guard.directory_identity()?;
         let fp = hash(&serde_json::to_vec(&(
             "library",
@@ -2139,14 +2139,14 @@ fn issue(subscription: &ReminderSubscription, error: CoreError) -> ReminderSched
         error,
     }
 }
-fn reminder_absent(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(CoreError::new(
+fn reminder_absent(backend: &BackendContext, path: &Path) -> Result<()> {
+    if backend.entry_exists(path)? {
+        Err(CoreError::new(
             "staleBase",
             UiMessage::error_reminder_default_configuration_occupied(),
-        )),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
+        ))
+    } else {
+        Ok(())
     }
 }
 fn missed(candidate: &TaskReminderCandidate, at: &ExactInstant) -> Result<bool> {
@@ -2435,7 +2435,7 @@ mod tests {
             LIBRARY.into(),
             LibrarySelection {
                 root: "D:/qualified-library".into(),
-                identity: FileIdentity {
+                identity: FileIdentity::Windows {
                     volume: 1,
                     index: 2,
                     created: 3,

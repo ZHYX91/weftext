@@ -1085,7 +1085,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "Original committed physical revision observations are missing",
+                weftext_messages::UiMessage::error_core_backend_committed_observations_missing(),
             ));
         }
         Ok(facts)
@@ -1646,7 +1646,12 @@ impl Core {
         }
         let owner = self
             .admitted_binding(&node.stamp.identity)?
-            .ok_or_else(|| CoreError::new("identityConflict", "Owner is not admitted"))?;
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityConflict",
+                    weftext_messages::UiMessage::error_core_operations_owner_not_admitted(),
+                )
+            })?;
         let directory = self.journal_path("probe", "definition-reservation");
         let mut found = None;
         for entry in self.backend.read_dir(directory.parent().unwrap())? {
@@ -2060,7 +2065,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "Original resource birth evidence is incomplete",
+                weftext_messages::UiMessage::error_core_backend_resource_birth_incomplete(),
             ));
         }
         Ok(births)
@@ -2104,7 +2109,7 @@ impl Core {
         });
         let node = if in_trash {
             let original = capture_optional(&self.backend, &path)?.ok_or_else(|| {
-                CoreError::new("missingNode", "The retained canonical source is missing")
+                CoreError::new("missingNode", weftext_messages::UiMessage::error_core_operations_retained_canonical_source_missing())
             })?;
             let birth = self
                 .admitted_binding(&original.stamp.identity)?
@@ -2903,77 +2908,27 @@ impl Core {
 
     pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
         let digest = hash(&captured.bytes);
-        let mut candidates = self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .filter_map(|p| {
-                if matches!(p.kind.as_str(), "save" | "saveAs") {
-                    self.validate_file_save_plan(p)
-                        .inspect_err(|error| {
-                            resource_diagnostics::error(
-                                "accepted_revision.scope",
-                                &p.operation_id,
-                                error,
-                            )
-                        })
-                        .ok()?;
-                }
-
-                let revision = self
-                    .read_observation_facts(&p.operation_id)
-                    .inspect_err(|error| {
-                        resource_diagnostics::error(
-                            "accepted_revision.observations",
-                            &p.operation_id,
-                            error,
-                        )
-                    })
-                    .ok()?
-                    .into_iter()
-                    .find(|f| f.stamp == captured.stamp && f.hash == digest)?
-                    .revision;
-                let commit: serde_json::Value = serde_json::from_slice(
-                    &fs::read(self.journal_path(&p.operation_id, "commit"))
-                        .inspect_err(|error| {
-                            resource_diagnostics::io_error(
-                                "accepted_revision.commit_read",
-                                &p.operation_id,
-                                error,
-                            )
-                        })
-                        .ok()?,
-                )
-                .inspect_err(|_| {
-                    resource_diagnostics::branch(
-                        "accepted_revision.commit_parse",
-                        &p.operation_id,
-                        "invalidState",
-                    )
-                })
-                .ok()?;
-                Some((commit["commitSequence"].as_u64().unwrap_or(0), revision))
-            })
-            .collect::<Vec<_>>();
-        candidates.sort_by_key(|v| v.0);
-        let (sequence, revision) = candidates.last().or_else(|| {
-            resource_diagnostics::branch(
-                "accepted_revision.none",
-                &resource_diagnostics::stamp_token(&captured.stamp),
-                "noAcceptedFact",
-            );
-            None
-        })?;
-        // Same physical bytes can acquire a different portable revision after
-        // an explicit branch choice. Use the durable local decision order,
-        // never HashMap traversal or timestamps. Ambiguous legacy facts fail.
+        let mut candidates = Vec::new();
+        for plan in self.committed_plans()? {
+            if let Some(fact) = self
+                .read_observation_facts(&plan.operation_id)?
+                .into_iter()
+                .find(|fact| fact.stamp == captured.stamp && fact.hash == digest)
+            {
+                candidates.push((self.commit_sequence(&plan.operation_id)?, fact.revision));
+            }
+        }
+        candidates.sort_by_key(|value| value.0);
+        let Some((sequence, revision)) = candidates.last() else {
+            return Ok(None);
+        };
         if candidates
             .iter()
             .any(|(s, r)| s == sequence && r != revision)
         {
             return Err(CoreError::new(
                 "identityPending",
-                "Original accepted revision facts disagree at the same durable commit sequence",
+                UiMessage::error_core_backend_ambiguous_revision_facts(),
             ));
         }
         Ok(Some(revision.clone()))
@@ -3709,7 +3664,7 @@ impl Core {
         if stamp(&main)?.identity != session.stamp.identity {
             return Err(CoreError::new(
                 "scopeChanged",
-                "The opened source object was replaced",
+                weftext_messages::UiMessage::error_core_operations_the_opened_source_object_was_replaced(),
             ));
         }
         drop(main);
@@ -3721,22 +3676,28 @@ impl Core {
         } else {
             let mut captured = Vec::new();
             let mut directories = Vec::new();
-            snapshot_tree(&session.root, &mut captured, &mut directories, false)?;
+            snapshot_tree(
+                &self.backend,
+                &session.root,
+                &mut captured,
+                &mut directories,
+                false,
+            )?;
             let (_guards, _handles) = self.hold_compile_tree(&captured, &directories)?;
             let mut files = BTreeMap::new();
             for file in captured {
                 let relative = Path::new(&file.path)
                     .strip_prefix(&session.root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "Preview input is outside its actual root")
+                        CoreError::new("outsideRoot", weftext_messages::UiMessage::error_core_operations_preview_input_is_outside_its_actual_root())
                     })?
                     .to_str()
-                    .ok_or_else(|| CoreError::new("invalidPath", "Preview path is not Unicode"))?
+                    .ok_or_else(|| CoreError::new("invalidPath", weftext_messages::UiMessage::error_core_operations_preview_path_is_not_unicode()))?
                     .replace('\\', "/");
                 if files.insert(relative, file.bytes).is_some() {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "Preview input paths are not unique",
+                        weftext_messages::UiMessage::error_core_operations_preview_input_paths_are_not_unique(),
                     ));
                 }
             }
@@ -3748,11 +3709,11 @@ impl Core {
             .map_err(|_| {
                 CoreError::new(
                     "outsideRoot",
-                    "The opened source is outside its actual root",
+                    weftext_messages::UiMessage::error_core_operations_the_opened_source_is_outside_its_actual_root(),
                 )
             })?
             .to_str()
-            .ok_or_else(|| CoreError::new("invalidPath", "Preview path is not Unicode"))?
+            .ok_or_else(|| CoreError::new("invalidPath", weftext_messages::UiMessage::error_core_operations_preview_path_is_not_unicode()))?
             .replace('\\', "/");
         // The only replaced bytes are this caller's explicit current source.
         // Every dependency stays from the one qualified immutable capture.
@@ -3764,14 +3725,14 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Preview input exceeds the complete 64 MiB budget",
+                weftext_messages::UiMessage::error_core_operations_preview_input_exceeds_the_complete64_mi_b_budget(),
             ));
         }
         let main = main_guard.open_file(false, false)?;
         if stamp(&main)?.identity != session.stamp.identity {
             return Err(CoreError::new(
                 "scopeChanged",
-                "The opened source object changed during capture",
+                weftext_messages::UiMessage::error_core_operations_the_opened_source_object_changed_during_capture(),
             ));
         }
         Ok(weftext_engine::FrozenRenderRequest {
@@ -3787,7 +3748,7 @@ impl Core {
         &self,
         captured: &[CapturedFile],
         directories: &[CapturedDirectory],
-    ) -> Result<(Vec<ParentGuard>, Vec<File>)> {
+    ) -> Result<(Vec<ParentGuard>, Vec<backend::BoundFile>)> {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         for file in captured {
@@ -3834,7 +3795,7 @@ impl Core {
     ) -> Result<AdmittedCompileSnapshot> {
         let mut captured = Vec::new();
         let mut directories = Vec::new();
-        snapshot_tree(root, &mut captured, &mut directories, false)?;
+        snapshot_tree(&self.backend, root, &mut captured, &mut directories, false)?;
         let (mut guards, handles) = self.hold_compile_tree(&captured, &directories)?;
         for original in snapshot
             .files
@@ -6329,15 +6290,19 @@ impl Core {
         }
         let name = node_name(directory)?;
         let path = directory.join(format!("{name}.typ"));
-        let file = capture_optional(&self.backend, &path)?
-            .ok_or_else(|| CoreError::new("missingNode", "The canonical source is missing"))?;
+        let file = capture_optional(&self.backend, &path)?.ok_or_else(|| {
+            CoreError::new(
+                "missingNode",
+                weftext_messages::UiMessage::error_core_operations_canonical_source_missing(),
+            )
+        })?;
         self.check_pending(&path)?;
         let birth = self
             .admitted_binding(&file.stamp.identity)?
             .ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
-                    "Source object has no committed admission",
+                    weftext_messages::UiMessage::error_core_operations_source_object_has_no_committed_admission(),
                 )
             })?;
         let workspace = self.require_workspace(root)?;
@@ -6408,7 +6373,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
-                    "Original admitted node object was replaced",
+                    weftext_messages::UiMessage::error_core_operations_original_admitted_node_object_was_replaced(),
                 )
             })?;
         let workspace = self.require_workspace(root)?;
@@ -6462,7 +6427,7 @@ impl Core {
         if old_leaf != new_leaf && namespace.source_entry_exists(Path::new(&new_leaf))? {
             return Err(CoreError::new(
                 "exists",
-                "Create-only target is occupied; no overwrite is allowed",
+                weftext_messages::UiMessage::error_core_operations_create_only_target_occupied_no_overwrite_allowed(),
             ));
         }
         let source_identity = namespace.source_identity()?;
@@ -6686,7 +6651,11 @@ impl Core {
                 ));
             }
             let file = capture_optional(&self.backend, path)?.ok_or_else(|| {
-                CoreError::new("resourceMissing", "A dependency resource is missing")
+                CoreError::new(
+                    "resourceMissing",
+                    weftext_messages::UiMessage::error_core_operations_dependency_resource_missing(
+                    ),
+                )
             })?;
             let owner = self.admitted_binding(&canonical.stamp.identity)?.unwrap();
             let resource_id = value["resources"]
@@ -6786,8 +6755,13 @@ impl Core {
             } else if let Some(f) = files.iter().find(|f| f.path == item.path) {
                 f.clone()
             } else {
-                capture_optional(&self.backend, Path::new(&item.path))?
-                    .ok_or_else(|| CoreError::new("scopeChanged", "Link target disappeared"))?
+                capture_optional(&self.backend, Path::new(&item.path))?.ok_or_else(|| {
+                    CoreError::new(
+                        "scopeChanged",
+                        weftext_messages::UiMessage::error_core_operations_link_target_disappeared(
+                        ),
+                    )
+                })?
             };
             let source_text = decode(&observed.bytes)?;
             let info = weftext_engine::inspect_metadata(&source_text);
@@ -7272,7 +7246,7 @@ pub(crate) fn ensure_absent(backend: &crate::BackendContext, path: &Path) -> Res
     if backend.entry_exists(path)? {
         Err(CoreError::new(
             "exists",
-            "Create-only target is occupied; no overwrite is allowed",
+            weftext_messages::UiMessage::error_core_operations_create_only_target_occupied_no_overwrite_allowed(),
         ))
     } else {
         Ok(())
@@ -7569,7 +7543,7 @@ pub(crate) fn snapshot_tree(
                 queue.push(child);
             } else {
                 let captured = capture_optional(backend, &child)?
-                    .ok_or_else(|| CoreError::new("scopeChanged", "Snapshot file disappeared"))?;
+                    .ok_or_else(|| CoreError::new("scopeChanged", weftext_messages::UiMessage::error_core_operations_snapshot_file_disappeared()))?;
                 total += captured.bytes.len();
                 files.push(captured);
                 if total > MAX_OPERATION_BYTES || files.len() > MAX_OPERATION_FILES {

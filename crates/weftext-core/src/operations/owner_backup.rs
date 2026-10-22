@@ -379,7 +379,7 @@ impl Core {
         }
         selected_plans.extend(selected_attempts.iter().map(String::as_str));
         let base_guard = ParentGuard::acquire(
-            &core.backend,
+            &self.backend,
             &self.data_dir.join(".backup-private-prospective"),
         )?;
         let (base_entries, complete) = base_guard.directory_entries(MAX_ROUTING_MEMBERS)?;
@@ -524,7 +524,9 @@ impl Core {
                                 },
                             )?;
                             let selected = selected_library_scope(scope.as_ref(), &binding)?;
-                            let mut decision = File::open(self.journal_path(id, "resolution"))?;
+                            let mut decision = self
+                                .backend
+                                .open_read(self.journal_path(id, "resolution"))?;
                             let mut bytes = Vec::new();
                             Read::by_ref(&mut decision)
                                 .take(4097)
@@ -1117,15 +1119,15 @@ mod parse_boundary_tests {
             serde_json::to_string(&foreign_binding).unwrap()
         );
         fs::write(&path, &original).unwrap();
-        let mut file = File::open(&path).unwrap();
+        let mut file = core.backend.open_read(&path).unwrap();
         let (included, route) = classify_record(
             &core,
             &path,
             &mut file,
             &selected,
             &expected,
-            0,
-            original.len() as u64,
+            (0, original.len() as u64),
+            &BTreeSet::new(),
         )
         .unwrap();
         assert!(!included);

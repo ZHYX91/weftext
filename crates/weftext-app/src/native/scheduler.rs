@@ -14,7 +14,8 @@ use std::{
 use tokio::sync::watch;
 use weftext_core::reminder_device_state::{
     ReminderDeliveryStart, ReminderDeliveryState, ReminderNotificationOptions,
-    ReminderOriginalNotification, ReminderScheduleCursor, ReminderTiming,
+    ReminderOriginalNotification, ReminderScheduleCursor, ReminderSummaryPreparation,
+    ReminderTiming,
 };
 use weftext_messages::UiMessage;
 
@@ -203,16 +204,14 @@ async fn sweep(
             match eligibility.timing {
                 ReminderTiming::Upcoming => {}
                 ReminderTiming::Missed => {
-                    // This cannot use repeated slices of 64 as a fake durable
-                    // recovery decision. The same Core record's new bounded
-                    // summary admission is being integrated in this batch.
-                    status.scope_issue_count = status.scope_issue_count.saturating_add(1);
+                    // Only Core's complete missed-set admission below may
+                    // create an original summary, never a page-sized prefix.
                 }
                 ReminderTiming::Due => {
                     if eligibility.retained.as_ref().is_some_and(|retained| {
                         !matches!(
                             retained.delivery,
-                            ReminderDeliveryState::FailedBeforeCall { .. }
+                            weftext_core::reminder_device_state::ReminderRecordedDelivery::FailedBeforeCall { .. }
                         )
                     }) {
                         continue;
@@ -223,7 +222,7 @@ async fn sweep(
                         if !admission.load(Ordering::Acquire) {
                             return Err(weftext_core::CoreError::new(
                                 "schedulerPaused",
-                                "The desktop stopped accepting notification submissions",
+                                weftext_messages::UiMessage::error_api_scheduler_the_desktop_stopped_accepting_notification_submissions(),
                             ));
                         }
                         core.begin_reminder_delivery(&candidate, options)
@@ -252,6 +251,32 @@ async fn sweep(
             ));
         }
         tokio::task::yield_now().await;
+    }
+    if admitting.load(Ordering::Acquire) {
+        let admission = admitting.clone();
+        let summary = crate::core_call(state, move |core| {
+            if !admission.load(Ordering::Acquire) {
+                return Err(weftext_core::CoreError::new(
+                    "schedulerPaused",
+                    UiMessage::error_api_scheduler_the_desktop_stopped_accepting_notification_submissions(),
+                ));
+            }
+            core.prepare_reminder_summary(options)
+        }).await.map_err(io::Error::other)?;
+        match summary {
+            ReminderSummaryPreparation::Started {
+                permit,
+                issue_count,
+                ..
+            } => {
+                status.scope_issue_count = status.scope_issue_count.saturating_add(issue_count);
+                notification::submit(state, profile.clone(), *permit).await?;
+            }
+            ReminderSummaryPreparation::NoNewMissed { issue_count, .. } => {
+                status.scope_issue_count = status.scope_issue_count.saturating_add(issue_count);
+            }
+            ReminderSummaryPreparation::CoolingDown { .. } => {}
+        }
     }
     if status.scope_issue_count != 0 {
         status.scheduling = Scheduling::Restricted;

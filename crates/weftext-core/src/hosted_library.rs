@@ -91,7 +91,7 @@ pub(crate) fn read_metadata_prefix(
                     if !found.is_empty() && next_nonspace(&mut byte)? != b',' {
                         return Err(CoreError::new(
                             "privateEvidence",
-                            "Incomplete private metadata prefix",
+                            weftext_messages::UiMessage::error_core_hosted_library_incomplete_private_metadata_prefix(),
                         ));
                     }
                     let raw = metadata_value(&mut byte)?;
@@ -99,7 +99,7 @@ pub(crate) fn read_metadata_prefix(
                     if next_nonspace(&mut byte)? != b':' {
                         return Err(CoreError::new(
                             "privateEvidence",
-                            "Invalid private metadata separator",
+                            weftext_messages::UiMessage::error_core_hosted_library_invalid_private_metadata_separator(),
                         ));
                     }
                     key
@@ -115,7 +115,7 @@ pub(crate) fn read_metadata_prefix(
                 }
                 return Err(CoreError::new(
                     "unsupportedInputScope",
-                    "Private record lacks the required ordered original metadata; original bytes remain unchanged",
+                    weftext_messages::UiMessage::error_core_hosted_library_private_record_lacks_the_required_ordered_original_metadata_original_bytes_remain(),
                 ));
             }
             found.push((key, metadata_value(&mut byte)?));
@@ -131,7 +131,7 @@ fn metadata_value(next: &mut impl FnMut() -> Result<u8>) -> Result<Vec<u8>> {
     if !matches!(first, b'{' | b'[' | b'"') {
         return Err(CoreError::new(
             "privateEvidence",
-            "Invalid private metadata value",
+            weftext_messages::UiMessage::error_core_hosted_library_invalid_private_metadata_value(),
         ));
     }
     let string = first == b'"';
@@ -145,7 +145,7 @@ fn metadata_value(next: &mut impl FnMut() -> Result<u8>) -> Result<Vec<u8>> {
         if value.len() > MAX_LIBRARY_HEADER {
             return Err(CoreError::new(
                 "budget",
-                "Private metadata value exceeds its budget",
+                weftext_messages::UiMessage::error_core_hosted_library_private_metadata_value_exceeds_its_budget(),
             ));
         }
         if quoted {
@@ -217,7 +217,7 @@ pub(crate) fn read_qualified_private_record<R: Read + Seek, T>(
     if bytes.len() > maximum {
         return Err(CoreError::new(
             "budget",
-            "Qualified private record exceeds its body budget",
+            weftext_messages::UiMessage::error_core_hosted_library_qualified_private_record_exceeds_its_body_budget(),
         ));
     }
     Ok(Some((metadata, bytes)))
@@ -530,7 +530,7 @@ impl Core {
         if metadata != ActorOperationMetadata::from(record) {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Actor producer metadata differs",
+                weftext_messages::UiMessage::error_core_hosted_library_actor_producer_metadata_differs(),
             ));
         }
         let maximum = if record.history.is_some() {

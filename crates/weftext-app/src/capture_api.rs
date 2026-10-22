@@ -237,7 +237,7 @@ async fn identity(State(state): State<AppState>, Json(_req): Json<Empty>) -> Api
             if !identity.is_current {
                 return Err(weftext_core::CoreError::new(
                     "deviceIdentityUnavailable",
-                    "The retained device identity is not qualified for this Core profile",
+                    weftext_messages::UiMessage::error_api_capture_api_the_retained_device_identity_is_not_qualified_for_this_core_profile(),
                 ));
             }
             Ok(identity)
@@ -394,17 +394,17 @@ async fn advance(State(state): State<AppState>, Json(req): Json<Advance>) -> Api
 async fn submit(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResult {
     let (_preview, receipt) = core_call(&state, move |core| {
         let draft = core.read_capture_draft(&req.draft_id)?;
-        if draft.input_cut!=weftext_core::CaptureInputCut::Full {return Err(CoreError::new("captureInputIncomplete","Only an author recovery checkpoint is durable; query the original operation without dispatching an effect"));}
+        if draft.input_cut!=weftext_core::CaptureInputCut::Full {return Err(CoreError::new("captureInputIncomplete",weftext_messages::UiMessage::error_api_capture_api_only_an_author_recovery_checkpoint_is_durable_query_the_original_operation()));}
         let original = draft.pending.as_ref().ok_or_else(|| {
             CoreError::new(
                 "captureRequestMissing",
-                "No durable original capture request",
+                weftext_messages::UiMessage::error_api_capture_api_no_durable_original_capture_request(),
             )
         })?;
         if original.request_kind != "capture" {
             return Err(CoreError::new(
                 "captureRequestInvalid",
-                "This route only dispatches the original local capture request",
+                weftext_messages::UiMessage::error_api_capture_api_this_route_only_dispatches_the_original_local_capture_request(),
             ));
         }
         // A committed/prepared original is recovered before current-path
@@ -412,13 +412,13 @@ async fn submit(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResu
         // target container that was frozen, even if its old path was replaced.
         if core.local_operation_status(&original.operation_id)?["status"] == "unknown" {
             let actual = core.resolve_capture_target(&req.draft_id)?;
-            let target = draft.target.as_ref().ok_or_else(|| CoreError::new("captureTargetMissing", "Capture target is unavailable"))?;
+            let target = draft.target.as_ref().ok_or_else(|| CoreError::new("captureTargetMissing", weftext_messages::UiMessage::error_core_capture_draft_capture_target_is_unavailable()))?;
             let parent = match &target.parent {
                 weftext_core::CaptureParent::LibraryRoot => &target.root_hint,
                 weftext_core::CaptureParent::Managed { path_hint, .. } => path_hint,
             };
             if actual.root != target.root_hint || actual.parent != *parent {
-                return Err(CoreError::new("captureTargetChanged", "Original target moved after freezing; retain and settle this original attempt before selecting another"));
+                return Err(CoreError::new("captureTargetChanged", weftext_messages::UiMessage::error_api_capture_api_original_target_moved_after_freezing_retain_and_settle_this_original_attempt()));
             }
         }
         crate::data_api::capture_frozen_wire(core, &original.wire)

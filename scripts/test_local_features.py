@@ -327,7 +327,7 @@ class LocalFeatures(unittest.TestCase):
         self.assertGreater(len(pdf), 2000)
         (Path(doc['path']).parent / 'actual-native.pdf').write_bytes(pdf)
         self.assertTrue(any('Noto Serif CJK' in f for f in paged['fontFamilies']))
-        self.assertFalse(any('missing glyph' in d['message'].lower() for d in paged['diagnostics']))
+        self.assertFalse(any('missing glyph' in raw['text'].lower() for d in paged['diagnostics'] for raw in d['diagnostics']))
         self.assertEqual(Path(doc['path']).read_bytes(), source.encode())
 
     def test_05_styles_review_apply_render_override_and_conflict(self):

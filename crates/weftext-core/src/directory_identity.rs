@@ -406,7 +406,7 @@ impl Core {
         let marker: DirectoryMarker = serde_json::from_slice(after)?;
         let parent = path
             .parent()
-            .ok_or_else(|| CoreError::new("invalidPath", "Directory marker has no parent"))?;
+            .ok_or_else(|| CoreError::new("invalidPath", weftext_messages::UiMessage::error_core_directory_identity_directory_marker_has_no_parent()))?;
         let guard = ParentGuard::acquire(&self.backend, path)?;
         if reservation.root != display(root)
             || reservation.path != display(parent)

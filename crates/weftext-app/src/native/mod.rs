@@ -28,7 +28,6 @@ use crate::{
 use close::{Proof, SurfaceKind};
 use std::{
     io,
-    path::PathBuf,
     sync::{Arc, atomic::AtomicUsize},
     time::Duration,
 };
@@ -527,8 +526,9 @@ async fn run_owner(
     } else {
         None
     };
-    if failure.is_none() && activation != Activation::Headless {
-        if let Err(error) = activate(
+    if failure.is_none()
+        && activation != Activation::Headless
+        && let Err(error) = activate(
             &state,
             &profile,
             &url,
@@ -537,9 +537,8 @@ async fn run_owner(
             &continuation,
         )
         .await
-        {
-            failure = Some(error);
-        }
+    {
+        failure = Some(error);
     }
     let mut shutdown_reply: Option<oneshot::Sender<io::Result<Vec<u8>>>> = None;
     let mut exit_requested = false;
@@ -574,124 +573,125 @@ async fn run_owner(
                 .map(|desktop: &Desktop| desktop.thread.fault.clone());
             let mut scheduler_fault = scheduler.as_ref().map(|scheduler| scheduler.fault.clone());
             tokio::select! {
-                biased;
-                _=async {if let Some(fault)=scheduler_fault.as_mut(){let current=*fault.borrow();if !current{let _=fault.changed().await;}}else{std::future::pending::<()>().await;}},if !scheduler_faulted=>{
-                    scheduler_faulted=true;failure=Some(error("notificationCoordinatorStopped","The notification coordinator stopped unexpectedly; original delivery records remain retained"));
-                    if automatic_exit(&desktop,&mut exit_requested){break;}
-                }
-                _=tokio::time::sleep_until(toast_deadline),if toast_starting=>{
-                    toast_starting=false;
-                    if continuation.end_unclaimed_bootstrap(){failure=Some(error("toastActivationUnknown","The original notification owner did not receive a qualified activation"));break;}
-                }
-                result=&mut broker,if broker_result.is_none()=>{
-                    broker_result=Some(result);failure=Some(error("ownerStoppedUnexpectedly","The protected owner listener stopped unexpectedly"));
-                    if automatic_exit(&desktop,&mut exit_requested){break;}
-                }
-                result=&mut serving,if http_result.is_none()=>{
-                    http_result=Some(result);failure=Some(error("httpStoppedUnexpectedly","The local listener stopped unexpectedly; live input still requires the original Core proof"));
-                    if automatic_exit(&desktop,&mut exit_requested){break;}
-                }
-                fault=async{match ui_fault.as_mut(){Some(fault)=>{if *fault.borrow(){true}else{fault.changed().await.is_err()||*fault.borrow()}},None=>std::future::pending().await}},if !native_faulted=>{
-                    if fault{native_faulted=true;failure=Some(error("nativeFailed","The native dispatcher failed; a live unconfirmed author surface remains blocked"));if automatic_exit(&desktop,&mut exit_requested){break;}}
-                }
-                result=proofs.join_next(),if !proofs.is_empty()=>{
-                    match result {
-                        Some(Ok((sender,command)))=>if sender.send(command).is_err(){failure=Some(error("nativeFailed","The native proof result could not be delivered"));if automatic_exit(&desktop,&mut exit_requested){break;}},
-                        _=>{failure=Some(error("proofUnknown","The original Core close verification did not complete"));if exit_requested{if let Some(desktop)=&desktop{let _=desktop.thread.sender.send(ui::Command::CancelClose);}}if automatic_exit(&desktop,&mut exit_requested){break;}}
-                    }
-                }
-                request=requested.recv(),if control_open=>{
-                    let Some(request)=request else{
-                        control_open=false;failure=Some(error("ownerControlUnavailable","The protected owner control channel became unavailable"));
-                        if automatic_exit(&desktop,&mut exit_requested){break;}
-                        continue;
-                    };
-                    let HostRequest{command,reply}=request;
-                    if exit_requested{let _=reply.send(Err(closing()));continue;}
-                    match command {
-                        Command::Shutdown=>{
-                            if let Some(native)=&desktop{if native.thread.sender.send(ui::Command::BeginExit).is_err(){let _=reply.send(Err(closing()));failure=Some(error("nativeFailed","The native close request was not delivered"));if native.thread.returned_without_exposed(){break;}continue;}shutdown_reply=Some(reply);exit_requested=true;}
-                            else{let _=reply.send(Ok(br#"{"accepted":true}"#.to_vec()));break;}
-                        }
-                        Command::ShowLibrary{document}=>{
-                            let result=activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await;
-                            let result=match (result,document){(Ok(()),Some(document))=>open_document(&state,desktop.as_ref().unwrap(),document).await,(result,_)=>result};
-                            let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));
-                        }
-                        Command::ShowCapture=>{let result=activate(&state,&profile,&url,&mut desktop,Activation::Capture,&continuation).await;let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));}
-                        Command::LoginStartup=>{let result=activate_login(&state,&profile,&url,&mut desktop,&continuation).await;let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));}
-                        Command::ToastActivation{opaque}=>{
-                            let result=activate_toast(&state,&profile,&url,&mut desktop,opaque,&continuation).await;
-                            let failed=result.is_err();
-                            let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));
-                            if failed && toast_starting {toast_starting=false;if continuation.end_unclaimed_bootstrap(){failure=Some(error("toastActivationRejected","The original notification is no longer qualified"));break;}}
-                            if !failed {toast_starting=false;}
-                        }
-                        Command::Business{..}=>{let _=reply.send(Err(io::Error::other("Business calls must use the fixed owner bridge")));}
-                    }
-                }
-                notice=async{match desktop.as_mut(){Some(desktop)=>desktop.thread.notices.recv().await,None=>std::future::pending().await}},if notices_open=>{
-                    let Some(notice)=notice else{
-                        notices_open=false;failure=Some(error("nativeFailed","The native notice channel closed unexpectedly"));
-                        if automatic_exit(&desktop,&mut exit_requested){break;}
-                        continue;
-                    };
-                    match notice {
-                        ui::Notice::Draft{surface_id,surface_epoch,request_id,request}=>{
-                            let authority=state.clone();let sender=desktop.as_ref().unwrap().thread.sender.clone();
-                            proofs.spawn(async move{
-                                let (body,session_ack)=draft_call(&authority,request).await;drop(authority);
-                                (sender,ui::Command::DraftResult{surface_id,surface_epoch,request_id,body,session_ack})
-                            });
-                        }
-                        ui::Notice::Verify{kind,request,serial,final_pass,proofs:prepared}=>{
-                            let authority=state.clone();let sender=desktop.as_ref().unwrap().thread.sender.clone();
-                            proofs.spawn(async move{let valid=verify(&authority,prepared).await;drop(authority);(sender,ui::Command::VerifyResult{kind,request,serial,final_pass,valid})});
-                        }
-                        ui::Notice::Closed{proofs:closed,sessions}=>{if !retire(&state,closed,sessions).await{failure.get_or_insert(error("sessionRetirementUnknown","The confirmed author input remains retained; original window-owned session retirement was not confirmed"));}}
-                        ui::Notice::Empty{admission_epoch}=>{
-                            if failure.is_some(){if automatic_exit(&desktop,&mut exit_requested){break;}continue;}
-                            let current=crate::core_call(&state,|core|core.desktop_preferences()).await;
-                            if let Some(desktop)=desktop.as_mut(){match current{
-                                Ok(current)=>{desktop.preferences=current;if continuation.exit_after_last_window(desktop.preferences.effective_preferences().resident,admission_epoch){break;}}
-                                Err(_)=>{let _=desktop.feedback(&error("preferenceConflict","The current resident preference could not be confirmed"));}
-                            }}
-                        }
-                        ui::Notice::ExitPermitted=>{continuation.close();if let Some(reply)=shutdown_reply.take(){let _=reply.send(Ok(br#"{"accepted":true}"#.to_vec()));}break;}
-                        ui::Notice::CloseBlocked=>{exit_requested=false;if let Some(reply)=shutdown_reply.take(){let _=reply.send(Err(closing()));}}
-                        ui::Notice::ScheduleChanged=>{if let Some(scheduler)=&scheduler{scheduler.refresh();}}
-                        ui::Notice::MenuRequested=>{
-                            if let Some(desktop)=desktop.as_mut(){
-                                match desktop.reload(&state,&profile).await.and_then(|()|desktop.refresh()){
-                                    Ok(())=>{let _=desktop.thread.sender.send(ui::Command::Popup);}
-                                    Err(error)=>{let _=desktop.feedback(&error);}
+                            biased;
+                            _=async {if let Some(fault)=scheduler_fault.as_mut(){let current=*fault.borrow();if !current{let _=fault.changed().await;}}else{std::future::pending::<()>().await;}},if !scheduler_faulted=>{
+                                scheduler_faulted=true;failure=Some(error("notificationCoordinatorStopped","The notification coordinator stopped unexpectedly; original delivery records remain retained"));
+                                if automatic_exit(&desktop,&mut exit_requested){break;}
+                            }
+                            _=tokio::time::sleep_until(toast_deadline),if toast_starting=>{
+                                toast_starting=false;
+                                if continuation.end_unclaimed_bootstrap(){failure=Some(error("toastActivationUnknown","The original notification owner did not receive a qualified activation"));break;}
+                            }
+                            result=&mut broker,if broker_result.is_none()=>{
+                                broker_result=Some(result);failure=Some(error("ownerStoppedUnexpectedly","The protected owner listener stopped unexpectedly"));
+                                if automatic_exit(&desktop,&mut exit_requested){break;}
+                            }
+                            result=&mut serving,if http_result.is_none()=>{
+                                http_result=Some(result);failure=Some(error("httpStoppedUnexpectedly","The local listener stopped unexpectedly; live input still requires the original Core proof"));
+                                if automatic_exit(&desktop,&mut exit_requested){break;}
+                            }
+                            fault=async{match ui_fault.as_mut(){Some(fault)=>{if *fault.borrow(){true}else{fault.changed().await.is_err()||*fault.borrow()}},None=>std::future::pending().await}},if !native_faulted=>{
+                                if fault{native_faulted=true;failure=Some(error("nativeFailed","The native dispatcher failed; a live unconfirmed author surface remains blocked"));if automatic_exit(&desktop,&mut exit_requested){break;}}
+                            }
+                            result=proofs.join_next(),if !proofs.is_empty()=>{
+                                match result {
+                                    Some(Ok((sender,command)))=>if sender.send(command).is_err(){failure=Some(error("nativeFailed","The native proof result could not be delivered"));if automatic_exit(&desktop,&mut exit_requested){break;}},
+                                    _=>{failure=Some(error("proofUnknown","The original Core close verification did not complete"));if exit_requested&& let Some(desktop)=&desktop{let _=desktop.thread.sender.send(ui::Command::CancelClose);}
+            if automatic_exit(&desktop,&mut exit_requested){break;}}
                                 }
                             }
-                        }
-                        ui::Notice::ExternalUrl(uri)=>{let _=crate::host_environment::open_browser(&uri).await;}
-                        ui::Notice::LocaleChanged=>{
-                            let current=crate::core_call(&state,|core|core.client_preferences()).await;
-                            if let (Ok(current),Some(desktop))=(current,desktop.as_mut()){desktop.locale=current.preferences.ui_locale;let _=desktop.refresh();}
-                        }
-                        ui::Notice::Action(action)=>{
-                            if exit_requested{continue;}
-                            match action {
-                                tray::Action::Library=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await{if let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}}
-                                tray::Action::Capture=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Capture,&continuation).await{if let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}}
-                                tray::Action::Reminders=>{if activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await.is_ok(){let _=desktop.as_ref().unwrap().thread.sender.send(ui::Command::Post{kind:SurfaceKind::Library,message:serde_json::json!({"type":"open-reminders"}),activate:true});}}
-                                tray::Action::Exit=>{if !exit_requested {if desktop.as_ref().unwrap().thread.sender.send(ui::Command::BeginExit).is_err(){failure=Some(error("nativeFailed","The native close request was not delivered"));if desktop.as_ref().unwrap().thread.returned_without_exposed(){break;}}else{exit_requested=true;}}}
-                                action=>{if let Some(desktop)=desktop.as_mut(){if let Err(error)=update_preference(&state,&profile,desktop,action).await{let _=desktop.feedback(&error);}}}
+                            request=requested.recv(),if control_open=>{
+                                let Some(request)=request else{
+                                    control_open=false;failure=Some(error("ownerControlUnavailable","The protected owner control channel became unavailable"));
+                                    if automatic_exit(&desktop,&mut exit_requested){break;}
+                                    continue;
+                                };
+                                let HostRequest{command,reply}=request;
+                                if exit_requested{let _=reply.send(Err(closing()));continue;}
+                                match command {
+                                    Command::Shutdown=>{
+                                        if let Some(native)=&desktop{if native.thread.sender.send(ui::Command::BeginExit).is_err(){let _=reply.send(Err(closing()));failure=Some(error("nativeFailed","The native close request was not delivered"));if native.thread.returned_without_exposed(){break;}continue;}shutdown_reply=Some(reply);exit_requested=true;}
+                                        else{let _=reply.send(Ok(br#"{"accepted":true}"#.to_vec()));break;}
+                                    }
+                                    Command::ShowLibrary{document}=>{
+                                        let result=activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await;
+                                        let result=match (result,document){(Ok(()),Some(document))=>open_document(&state,desktop.as_ref().unwrap(),document).await,(result,_)=>result};
+                                        let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));
+                                    }
+                                    Command::ShowCapture=>{let result=activate(&state,&profile,&url,&mut desktop,Activation::Capture,&continuation).await;let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));}
+                                    Command::LoginStartup=>{let result=activate_login(&state,&profile,&url,&mut desktop,&continuation).await;let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));}
+                                    Command::ToastActivation{opaque}=>{
+                                        let result=activate_toast(&state,&profile,&url,&mut desktop,opaque,&continuation).await;
+                                        let failed=result.is_err();
+                                        let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));
+                                        if failed && toast_starting {toast_starting=false;if continuation.end_unclaimed_bootstrap(){failure=Some(error("toastActivationRejected","The original notification is no longer qualified"));break;}}
+                                        if !failed {toast_starting=false;}
+                                    }
+                                    Command::Business{..}=>{let _=reply.send(Err(io::Error::other("Business calls must use the fixed owner bridge")));}
+                                }
                             }
+                            notice=async{match desktop.as_mut(){Some(desktop)=>desktop.thread.notices.recv().await,None=>std::future::pending().await}},if notices_open=>{
+                                let Some(notice)=notice else{
+                                    notices_open=false;failure=Some(error("nativeFailed","The native notice channel closed unexpectedly"));
+                                    if automatic_exit(&desktop,&mut exit_requested){break;}
+                                    continue;
+                                };
+                                match notice {
+                                    ui::Notice::Draft{surface_id,surface_epoch,request_id,request}=>{
+                                        let authority=state.clone();let sender=desktop.as_ref().unwrap().thread.sender.clone();
+                                        proofs.spawn(async move{
+                                            let (body,session_ack)=draft_call(&authority,request).await;drop(authority);
+                                            (sender,ui::Command::DraftResult{surface_id,surface_epoch,request_id,body,session_ack})
+                                        });
+                                    }
+                                    ui::Notice::Verify{kind,request,serial,final_pass,proofs:prepared}=>{
+                                        let authority=state.clone();let sender=desktop.as_ref().unwrap().thread.sender.clone();
+                                        proofs.spawn(async move{let valid=verify(&authority,prepared).await;drop(authority);(sender,ui::Command::VerifyResult{kind,request,serial,final_pass,valid})});
+                                    }
+                                    ui::Notice::Closed{proofs:closed,sessions}=>{if !retire(&state,closed,sessions).await{failure.get_or_insert(error("sessionRetirementUnknown","The confirmed author input remains retained; original window-owned session retirement was not confirmed"));}}
+                                    ui::Notice::Empty{admission_epoch}=>{
+                                        if failure.is_some(){if automatic_exit(&desktop,&mut exit_requested){break;}continue;}
+                                        let current=crate::core_call(&state,|core|core.desktop_preferences()).await;
+                                        if let Some(desktop)=desktop.as_mut(){match current{
+                                            Ok(current)=>{desktop.preferences=current;if continuation.exit_after_last_window(desktop.preferences.effective_preferences().resident,admission_epoch){break;}}
+                                            Err(_)=>{let _=desktop.feedback(&error("preferenceConflict","The current resident preference could not be confirmed"));}
+                                        }}
+                                    }
+                                    ui::Notice::ExitPermitted=>{continuation.close();if let Some(reply)=shutdown_reply.take(){let _=reply.send(Ok(br#"{"accepted":true}"#.to_vec()));}break;}
+                                    ui::Notice::CloseBlocked=>{exit_requested=false;if let Some(reply)=shutdown_reply.take(){let _=reply.send(Err(closing()));}}
+                                    ui::Notice::ScheduleChanged=>{if let Some(scheduler)=&scheduler{scheduler.refresh();}}
+                                    ui::Notice::MenuRequested=>{
+                                        if let Some(desktop)=desktop.as_mut(){
+                                            match desktop.reload(&state,&profile).await.and_then(|()|desktop.refresh()){
+                                                Ok(())=>{let _=desktop.thread.sender.send(ui::Command::Popup);}
+                                                Err(error)=>{let _=desktop.feedback(&error);}
+                                            }
+                                        }
+                                    }
+                                    ui::Notice::ExternalUrl(uri)=>{let _=crate::host_environment::open_browser(&uri).await;}
+                                    ui::Notice::LocaleChanged=>{
+                                        let current=crate::core_call(&state,|core|core.client_preferences()).await;
+                                        if let (Ok(current),Some(desktop))=(current,desktop.as_mut()){desktop.locale=current.preferences.ui_locale;let _=desktop.refresh();}
+                                    }
+                                    ui::Notice::Action(action)=>{
+                                        if exit_requested{continue;}
+                                        match action {
+                                            tray::Action::Library=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await&& let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}
+                                            tray::Action::Capture=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Capture,&continuation).await&& let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}
+                                            tray::Action::Reminders=>{if activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await.is_ok(){let _=desktop.as_ref().unwrap().thread.sender.send(ui::Command::Post{kind:SurfaceKind::Library,message:serde_json::json!({"type":"open-reminders"}),activate:true});}}
+                                            tray::Action::Exit=>{if !exit_requested {if desktop.as_ref().unwrap().thread.sender.send(ui::Command::BeginExit).is_err(){failure=Some(error("nativeFailed","The native close request was not delivered"));if desktop.as_ref().unwrap().thread.returned_without_exposed(){break;}}else{exit_requested=true;}}}
+                                            action=>{if let Some(desktop)=desktop.as_mut()&& let Err(error)=update_preference(&state,&profile,desktop,action).await{let _=desktop.feedback(&error);}}
+                                        }
+                                    }
+                                }
+                            }
+                            signal=tokio::signal::ctrl_c(),if console_signals=>{
+                                if signal.is_err(){console_signals=false;failure=Some(error("shutdownSignalUnavailable","The console shutdown signal could not be monitored"));if automatic_exit(&desktop,&mut exit_requested){break;}continue;}
+                                if let Some(native)=&desktop{if !exit_requested{if native.thread.sender.send(ui::Command::BeginExit).is_err(){failure=Some(error("nativeFailed","The native close request was not delivered"));if native.thread.returned_without_exposed(){break;}}else{exit_requested=true;}}}
+                                else{break;}
+                            }
+                            else=>{std::future::pending::<()>().await;}
                         }
-                    }
-                }
-                signal=tokio::signal::ctrl_c(),if console_signals=>{
-                    if signal.is_err(){console_signals=false;failure=Some(error("shutdownSignalUnavailable","The console shutdown signal could not be monitored"));if automatic_exit(&desktop,&mut exit_requested){break;}continue;}
-                    if let Some(native)=&desktop{if !exit_requested{if native.thread.sender.send(ui::Command::BeginExit).is_err(){failure=Some(error("nativeFailed","The native close request was not delivered"));if native.thread.returned_without_exposed(){break;}}else{exit_requested=true;}}}
-                    else{break;}
-                }
-                else=>{std::future::pending::<()>().await;}
-            }
         }
     }
     // Every exit, including failed startup/fatal UI, uses this same drain.
@@ -706,13 +706,13 @@ async fn run_owner(
     drop(requested);
     let _ = stop_broker.send(true);
     let _ = stop_http.send(true);
-    if let Some(scheduler) = scheduler {
-        if scheduler.stop().await.is_err() {
-            failure.get_or_insert(error(
-                "notificationDrainUnknown",
-                "The original notification tail did not confirm its result",
-            ));
-        }
+    if let Some(scheduler) = scheduler
+        && scheduler.stop().await.is_err()
+    {
+        failure.get_or_insert(error(
+            "notificationDrainUnknown",
+            "The original notification tail did not confirm its result",
+        ));
     }
     while let Some(result) = proofs.join_next().await {
         if result.is_err() {
@@ -873,7 +873,7 @@ async fn activate_toast(
         if !device.is_current || device.id != device_id {
             return Err(weftext_core::CoreError::new(
                 "reminderDeviceUnavailable",
-                "The original notification device is not current",
+                weftext_messages::UiMessage::error_api_mod_the_original_notification_device_is_not_current(),
             ));
         }
         let original = core.original_reminder_notification(&execution_key)?;
@@ -883,7 +883,7 @@ async fn activate_toast(
         {
             return Err(weftext_core::CoreError::new(
                 "reminderUnavailable",
-                "The original notification address differs",
+                weftext_messages::UiMessage::error_api_mod_the_original_notification_address_differs(),
             ));
         }
         core.resolve_reminder_activation(&opaque)
@@ -959,7 +959,7 @@ async fn activate_login(
         if !device.is_current || device.id != device_id {
             return Err(weftext_core::CoreError::new(
                 "deviceNotCurrent",
-                "The original startup device is not current",
+                weftext_messages::UiMessage::error_api_mod_the_original_startup_device_is_not_current(),
             ));
         }
         Ok(core
@@ -1064,7 +1064,7 @@ async fn verify(state: &crate::AppState, proofs: Vec<Proof>) -> bool {
                     {
                         return Err(weftext_core::CoreError::new(
                             "captureFlushMismatch",
-                            "The exact prepared Capture record differs",
+                            weftext_messages::UiMessage::error_api_mod_the_exact_prepared_capture_record_differs(),
                         ));
                     }
                 }
@@ -1097,10 +1097,7 @@ async fn draft_call(
     .await;
     match result {
         Ok(body) => (body, acknowledges.then_some(session)),
-        Err(error) => (
-            serde_json::json!({"error":{"code":error.code,"message":error.message,"details":error.details}}),
-            None,
-        ),
+        Err(error) => (serde_json::json!({"error":error}), None),
     }
 }
 async fn retire(state: &crate::AppState, proofs: Vec<Proof>, sessions: Vec<String>) -> bool {

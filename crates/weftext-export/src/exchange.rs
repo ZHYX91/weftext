@@ -106,25 +106,25 @@ pub struct NativePackage {
 #[derive(Debug, Clone)]
 pub struct NativeError {
     pub code: String,
-    pub description: ErrorDescription,
+    pub description: Box<ErrorDescription>,
     pub product_diagnostics: Vec<ErrorDescription>,
 }
 impl NativeError {
     fn new(code: &str, description: impl Into<ErrorDescription>) -> Self {
         Self {
             code: code.into(),
-            description: description.into(),
+            description: Box::new(description.into()),
             product_diagnostics: Vec::new(),
         }
     }
     pub fn into_parts(self) -> (ErrorDescription, Vec<ErrorDescription>) {
-        (self.description, self.product_diagnostics)
+        (*self.description, self.product_diagnostics)
     }
     fn from_data(code: &str, error: weftext_data::DataError) -> Self {
         let (description, product_diagnostics) = crate::ExportError::from_data(error).into_parts();
         Self {
             code: code.into(),
-            description,
+            description: Box::new(description),
             product_diagnostics,
         }
     }

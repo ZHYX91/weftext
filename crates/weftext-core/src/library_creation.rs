@@ -422,12 +422,7 @@ impl Core {
         if let Some(style) = &options.initial_style {
             check_size(style.source.as_bytes())?;
             let inspection = weftext_engine::inspect_library_style(&style.source);
-            if !inspection.syntax_valid
-                || inspection
-                    .controls
-                    .iter()
-                    .any(|c| c.reason.as_deref() == Some("missing-or-ambiguous-entry"))
-            {
+            if !inspection.syntax_valid || inspection.entry_count != 1 {
                 return Err(CoreError::new(
                     "invalidStyle",
                     UiMessage::error_core_library_creation_initial_native_style_needs_valid_syntax_and_one_unambiguous_library_style_entry(),

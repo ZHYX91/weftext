@@ -26,8 +26,8 @@ pub(super) fn current() -> Result<Option<Identity>> {
     let contract = crate::host_contract::get().map_err(|_| Error::from(E_UNEXPECTED))?;
     let package = Package::Current()?.Id()?;
     let app = AppInfo::Current()?.Id()?.to_string();
-    if package.Name()?.to_string() != contract.identity.name
-        || package.Publisher()?.to_string() != contract.identity.publisher
+    if package.Name()? != contract.identity.name
+        || package.Publisher()? != contract.identity.publisher
         || app != contract.identity.application_id
     {
         return Err(Error::from(E_ACCESSDENIED));

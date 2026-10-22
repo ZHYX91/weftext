@@ -114,8 +114,6 @@ pub(crate) fn qualify_core(data: &Path) -> io::Result<weftext_core::QualifiedPro
 }
 
 pub(crate) struct NativePaths {
-    pub data: PathBuf,
-    pub physical_identity: String,
     pub user_data: PathBuf,
     _cache_guard: weftext_core::QualifiedProfile,
 }
@@ -135,8 +133,6 @@ impl NativePaths {
         let user_data = user_data_path(profile)?;
         let cache_guard = weftext_core::qualify_profile(&user_data).map_err(io::Error::other)?;
         Ok(Self {
-            data: profile.path().into(),
-            physical_identity: profile.physical_identity().into(),
             user_data,
             _cache_guard: cache_guard,
         })

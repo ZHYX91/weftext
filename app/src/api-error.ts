@@ -32,10 +32,6 @@ export type ApiErrorDetails = Readonly<{
     kind: "engineDiagnostics";
     diagnostics: readonly EngineDiagnostic[];
 }> | Readonly<{
-    kind: "productDiagnostics";
-    code: string | null;
-    diagnostics: readonly ErrorDescription[];
-}> | Readonly<{
     kind: "committedReceipt";
     receipt: OperationReceiptFacts;
     cause: ApiErrorBody;
@@ -64,8 +60,6 @@ function detailsText(details?: ApiErrorDetails): string {
         return `\n[${details.code}] ${uiTextValue(coreDescriptionUiText({ explanation: details.explanation, diagnostics: details.diagnostics, causes: details.causes, ...(details.details ? { details: details.details } : {}) }))}`;
     if (details.kind === "engineDiagnostics")
         return details.diagnostics.map(item => `\n${uiTextValue(engineDiagnosticUiText(item))}`).join("");
-    if (details.kind === "productDiagnostics")
-        return `${details.code ? `\n[${details.code}]` : ""}${details.diagnostics.map(item => `\n${uiTextValue(descriptionUiText(item))}`).join("")}`;
     return `\n[${details.cause.code}] ${uiTextValue(apiDescription(details.cause))}`;
 }
 /** One typed error envelope. Original diagnostics and conflict content never become translations. */
@@ -145,12 +139,7 @@ function decodeDetails(value: unknown, active: Set<object>): ApiErrorDetails | u
             }
             return Object.freeze({ kind: "engineDiagnostics", diagnostics: Object.freeze(diagnostics) });
         }
-        case "productDiagnostics": {
-            if (!exactKeys(record, ["kind", "code", "diagnostics"]) || record.code !== null && typeof record.code !== "string")
-                return;
-            const diagnostics = decodeErrorDescriptions(record.diagnostics);
-            return diagnostics ? Object.freeze({ kind: "productDiagnostics", code: record.code as string | null, diagnostics }) : undefined;
-        }
+
         case "schemaSource": {
             if (!exactKeys(record, ["kind", "source", "roleRef", "revision", "cause"]) || typeof record.source !== "string" || record.roleRef !== null && typeof record.roleRef !== "string" || record.revision !== null && typeof record.revision !== "string")
                 return;

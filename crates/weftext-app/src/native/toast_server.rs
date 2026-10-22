@@ -187,7 +187,7 @@ impl IClassFactory_Impl for Factory_Impl {
         } else {
             self.state
                 .locks
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                     count.checked_sub(1)
                 })
                 .map_err(|_| Error::from(E_UNEXPECTED))?;

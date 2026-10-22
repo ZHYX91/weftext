@@ -9966,7 +9966,201 @@ export const zhCN = {
   "shell.closeDocumentSwitchFrozen": "窗口关闭核对已冻结，未切换正文对象。",
   "shell.closeLateOpenFrozen": "窗口关闭核对已冻结，迟到的打开结果未替换正文。",
   "shell.closeSaveFrozen": "正文关闭核对已冻结，未创建另一保存操作。",
-  "error.core.backend.sourceDescendantPlacementChanged": "保留的源后代目录已不在原父目录条目中"
+  "error.core.backend.sourceDescendantPlacementChanged": "保留的源后代目录已不在原父目录条目中",
+  "error.core.captureDraft.captureRawAuthorProofRevisionDiffers": "捕获原始输入的作者证明修订不一致",
+  "error.core.captureDraft.retiredCaptureProofIdentityOrRevisionDiffers": "已退休的捕获证明身份或修订不一致",
+  "error.core.captureDraft.captureRawInputAddressIsInvalid": "捕获原始输入的控件地址无效",
+  "error.core.captureDraft.captureLiveRawInputAddressIsDuplicated": "捕获的当前原始输入地址重复",
+  "error.core.captureDraft.captureRetiredRawIdentityIsDuplicated": "捕获的已退休原始输入身份重复",
+  "error.core.captureDraft.captureAuthorProvenanceIsInvalid": "捕获作者输入的来源证明无效",
+  "error.core.captureDraft.captureAuthorInputAddressIsInvalid": "捕获作者输入的控件地址无效",
+  "error.core.captureDraft.captureAuthorInputAddressIsDuplicated": "捕获作者输入的控件地址重复",
+  "error.core.captureDraft.captureRetiredAuthorIdentityIsDuplicated": "捕获的已退休作者身份重复",
+  "error.core.captureDraft.captureTopLevelAuthorIdentityIsDuplicated": "捕获顶层作者输入身份重复",
+  "error.core.captureDraft.captureAuthorProofRevisionDiffersFromRetainedInput": "捕获作者证明的修订与保留输入不一致",
+  "error.core.captureDraft.captureMetadataPrefixIsTruncated": "捕获元数据前缀不完整",
+  "error.core.captureDraft.captureVersionMustFollowScope": "捕获版本必须紧随作用域",
+  "error.core.captureDraft.captureVersionMustBeTheSecondField": "捕获版本必须是第二个字段",
+  "error.core.captureDraft.captureVersionMetadataIsInvalid": "捕获版本元数据无效",
+  "error.core.captureDraft.captureVersionRequiresAnUnsignedInteger": "捕获版本必须是无符号整数",
+  "error.core.captureDraft.captureHasNoOriginalResultToDeliver": "捕获没有可交付的原始结果",
+  "error.core.captureDraft.captureResultDiffersFromItsOriginalPendingRequest": "捕获结果与原待决请求不一致",
+  "error.core.captureDraft.originalCaptureRequestHasNoMatchingCanonicalPlan": "原捕获请求没有匹配的规范 Plan",
+  "error.core.captureDraft.unassignedCaptureCannotDeliverALibraryResult": "未绑定库的捕获不能交付库结果",
+  "error.core.captureDraft.captureHasNoOriginalLibraryTarget": "捕获没有原始库目标",
+  "error.core.captureDraft.hostedResultDeliveryRequiresItsActorWrapper": "托管结果交付必须通过原 Actor 包装",
+  "error.core.captureDraft.originalCaptureLibraryIsUnavailable": "原捕获库不可用",
+  "error.core.captureDraft.originalCapturePlanIsUnavailable": "原捕获 Plan 不可用",
+  "error.core.captureDraft.originalCaptureIsNotANodeTransaction": "原捕获不是节点事务",
+  "error.core.captureDraft.originalCaptureResultBelongsToAnotherKindOrLibrary": "原捕获结果属于其他种类或库",
+  "error.core.captureDraft.captureHasNoOriginalTarget": "捕获没有原始目标",
+  "error.core.captureDraft.captureOriginalSlotDiffers": "捕获原目标槽位不一致",
+  "error.core.captureDraft.captureChangedBeforeOwnerInputPersistencePreserveBothInputs": "持久化本人输入前捕获已变化；两份输入均保留",
+  "error.core.captureDraft.captureChangedBeforePrivateProposalCheckpointQueryTheOriginalMutationAnd": "私有草稿检查点写入前捕获已变化；请查询原变更编号并保留当前输入",
+  "error.core.captureDraft.originalFullInputMutationIdentityIsInvalid": "原完整输入变更身份无效",
+  "error.core.captureDraft.noOriginalCaptureAttempt": "没有原捕获尝试",
+  "error.core.captureDraft.captureOriginalOperationDiffers": "捕获原操作不一致",
+  "error.core.captureDraft.captureOriginalActorSlotIsUnavailable": "捕获原 Actor 槽位不可用",
+  "error.core.captureDraft.captureOriginalOperationIsStillUnknown": "捕获原操作结果仍未知",
+  "error.core.captureDraft.captureOriginalOperationIsNotTerminal": "捕获原操作尚未终结",
+  "error.core.captureDraft.captureTargetIsUnavailable": "捕获目标不可用",
+  "error.core.captureDraft.captureOperationIsNotANewNoteTransaction": "捕获操作不是新建笔记事务",
+  "error.core.captureDraft.captureOriginalOperationBelongsToAnotherTargetOrKind": "捕获原操作属于其他目标或种类",
+  "error.core.captureDraft.captureOriginalFenceBelongsToAnotherRequest": "捕获原终止记录属于其他请求",
+  "error.core.captureDraft.ownerOnlyRecoveryIsNotACompleteFormAcknowledgement": "仅含本人输入的恢复记录不能证明完整表单已确认",
+  "error.core.deviceState.clientPreferencesDisappearedDuringDeviceQualification": "设备核验期间客户端偏好记录消失",
+  "error.core.draftRecovery.draftLacksSupportedOriginalMetadataOriginalBytesRemainUnchanged": "草稿缺少受支持的原始元数据；原字节保持不变",
+  "error.core.draftRecovery.draftInputProducerIsNotCanonical": "草稿输入生产者身份不是规范格式",
+  "error.core.draftRecovery.theActualSourceBasisChangedBeforeRecoveryContinuation": "继续恢复前实际源基线已变化",
+  "error.core.draftRecovery.theReviewedRecoveryRecordIsAbsent": "已审阅的恢复记录不存在",
+  "error.core.draftRecovery.reviewTheCompleteCurrentRecoveryRecordAgain": "请重新审阅完整的当前恢复记录",
+  "error.core.draftRecovery.thisRecoveryRecordHasNoTransferableProducer": "此恢复记录没有可移交的输入生产者",
+  "error.core.draftRecovery.thisSessionAlreadyAcknowledgedIndependentInput": "此会话已确认另一份独立输入",
+  "error.core.draftRecovery.theOriginalInputProducerStillHasALiveCoreSession": "原输入生产者仍有活动的 Core 会话",
+  "error.core.draftRecovery.expectedSourceDigestIsNotCanonical": "预期源摘要不是规范格式",
+  "error.core.draftRecovery.theDocumentBaseChanged": "文档基线已变化",
+  "error.core.draftRecovery.theCompleteDraftChangedDuringReadback": "读回期间完整草稿已变化",
+  "error.core.draftRecovery.thisInputProducerHasNoAcknowledgedDraft": "此输入生产者没有已确认的草稿",
+  "error.core.draftRecovery.thePersistedDraftDoesNotContainThePreparedInput": "持久草稿没有包含已准备的输入",
+  "error.core.draftRecovery.draftProducerDiffers": "草稿输入生产者不一致",
+  "error.core.draftRecovery.draftOriginalInputScopeOrPhysicalIdentityDiffers": "草稿原输入作用域或物理身份不一致",
+  "error.core.draftRecovery.draftMetadataChangedDuringItsQualifiedRead": "核验读取期间草稿元数据已变化",
+  "error.core.history.protectedDraftMetadataChangedDuringItsQualifiedRead": "核验读取期间受保护草稿元数据已变化",
+  "error.core.history.originalRestoreExceeds128ProtectedDraftRecords": "原恢复超过 128 份受保护草稿的预算",
+  "error.core.history.originalRestorePhysicalOwnerIsMissing": "原恢复的物理对象缺失",
+  "error.core.history.originalProtectedDraftIsMissing": "原受保护草稿缺失",
+  "error.core.history.protectedDraftByteCountOverflow": "受保护草稿字节计数溢出",
+  "error.core.history.originalProtectedDraftsExceed16MiB": "原受保护草稿超过 16 MiB",
+  "error.core.hosted.actorRecordHasNoSupportedOriginalMetadataOriginalBytesRemainUnchanged": "Actor 记录缺少受支持的原始元数据；原字节保持不变",
+  "error.core.hosted.invalidOriginalActorMetadata": "原 Actor 元数据无效",
+  "error.core.hosted.theOriginalOperationResourceDiffers": "原操作资源不一致",
+  "error.core.hosted.theOriginalUnboundInputDoesNotBelongToTheTrustedActor": "原未绑定输入不属于受信任的 Actor 库",
+  "error.core.hosted.actorRecordMetadataChangedDuringItsQualifiedRead": "核验读取期间 Actor 记录元数据已变化",
+  "error.core.hostedDefinition.definitionAdmissionMetadataIsMissing": "定义接纳元数据缺失",
+  "error.core.hostedDefinition.invalidDefinitionAdmissionActor": "定义接纳的 Actor 无效",
+  "error.core.hostedDefinition.definitionAdmissionMetadataChangedDuringItsQualifiedRead": "核验读取期间定义接纳元数据已变化",
+  "error.core.hostedDefinition.definitionAdmissionReferencesAnotherPlanKind": "定义接纳引用了另一种 Plan",
+  "error.core.hostedDestination.originalUniqueChildCapabilityIsUnavailable": "原唯一子项权限不可用",
+  "error.core.hostedDestination.originalUniqueChildEvidenceExceedsItsByteBudget": "原唯一子项证据超过字节预算",
+  "error.core.hostedDestination.uniqueChildMemberMetadataExceedsItsBudget": "唯一子项成员元数据超过预算",
+  "error.core.hostedDestination.uniqueChildMemberBudgetIsExhausted": "唯一子项成员预算已用尽",
+  "error.core.hostedDestination.retainedUniqueChildMembersExceedTheConfiguredBudget": "保留的唯一子项成员超过配置预算",
+  "error.core.hostedLibrary.incompletePrivateMetadataPrefix": "私有元数据前缀不完整",
+  "error.core.hostedLibrary.invalidPrivateMetadataSeparator": "私有元数据分隔符无效",
+  "error.core.hostedLibrary.privateRecordLacksTheRequiredOrderedOriginalMetadataOriginalBytesRemain": "私有记录缺少规定顺序的原始元数据；原字节保持不变",
+  "error.core.hostedLibrary.invalidPrivateMetadataValue": "私有元数据值无效",
+  "error.core.hostedLibrary.privateMetadataValueExceedsItsBudget": "私有元数据值超过预算",
+  "error.core.hostedLibrary.qualifiedPrivateRecordExceedsItsBodyBudget": "已核验私有记录的正文超过预算",
+  "error.core.hostedLibrary.actorProducerMetadataDiffers": "Actor 生产者元数据不一致",
+  "error.core.hostedLibraryTests.exactOriginalResourceDiffers": "准确的原资源不一致",
+  "error.core.lib.anotherProposalArrivedAfterThisRecoveryViewReopenAndCompareThe": "此恢复视图建立后出现了另一份提案；请重新打开并比较完整当前记录，再处理恢复",
+  "error.core.lib.theOriginalLibraryActivationDoesNotIdentifyItsRetainedDecision": "原库激活没有标识其保留的决定记录",
+  "error.core.operations.theOpenedSourceObjectWasReplaced": "已打开的源对象被替换",
+  "error.core.operations.previewInputIsOutsideItsActualRoot": "预览输入位于其实际根目录之外",
+  "error.core.operations.previewPathIsNotUnicode": "预览路径不是有效 Unicode",
+  "error.core.operations.previewInputPathsAreNotUnique": "预览输入路径不唯一",
+  "error.core.operations.theOpenedSourceIsOutsideItsActualRoot": "已打开的源位于其实际根目录之外",
+  "error.core.operations.previewInputExceedsTheComplete64MiBBudget": "预览输入超过完整的 64 MiB 预算",
+  "error.core.operations.theOpenedSourceObjectChangedDuringCapture": "捕获期间已打开的源对象发生变化",
+  "error.core.fieldWire.incompleteFieldContainsDuplicateOrInvalidNativeMembers": "未完成字段包含重复或无效的原生成员",
+  "error.core.fieldWire.incompleteFieldContainsUnknownOrMissingNativeMembers": "未完成字段包含未知成员或缺少原生成员",
+  "error.core.fieldWire.nativeScalarInputMustBeAString": "原生标量输入必须是字符串",
+  "error.core.fieldWire.incompleteJSONEscape": "JSON 转义不完整",
+  "error.core.fieldWire.invalidUTF16Escape": "UTF-16 转义无效",
+  "error.core.fieldWire.invalidJSONStringEscape": "JSON 字符串转义无效",
+  "error.core.fieldWire.incompleteFieldIsNotAClosedNativeValue": "未完成字段不是封闭的原生值",
+  "error.core.fieldWire.nativeFieldKindIsMissing": "原生字段种类缺失",
+  "error.core.fieldWire.nativeFieldKindMustBeAnIdentifier": "原生字段种类必须是标识符",
+  "error.core.fieldWire.nativeBooleanIsInvalid": "原生布尔值无效",
+  "error.core.fieldWire.incompleteNativeScalarHasNoExactOriginalControlAddress": "未完成的原生标量没有准确的原控件地址",
+  "error.core.fieldWire.nativeListIsInvalid": "原生列表无效",
+  "error.core.fieldWire.nativeRecordIsInvalid": "原生记录无效",
+  "error.core.fieldWire.nativeMemberIdentifiersMustBeCompleteRetainUnfinishedKeyInputSeparately": "原生成员标识符必须完整；请单独保留未完成的键输入",
+  "error.core.fieldWire.nativeRecordKeysAreDuplicated": "原生记录键重复",
+  "error.core.fieldWire.incompleteFieldHasAnUnknownNativeKind": "未完成字段含未知的原生种类",
+  "error.core.fieldWire.incompleteFieldWireIsInvalidJSON": "未完成字段的传输内容不是有效 JSON",
+  "error.core.fieldWire.aCompleteNativeFieldMustUseValidState": "完整的原生字段必须使用 Valid 状态",
+  "error.core.adopt.originalWorkspaceControlIsUnavailable": "原工作区控制记录不可用",
+  "error.core.apply.theOriginalRetiredSourceIsUnavailable": "原退役源不可用",
+  "error.core.apply.incomingFileEscapedRoot": "传入文件越出根目录",
+  "error.core.replica.capturedReplicaFileDisappeared": "已捕获的副本文件消失",
+  "error.core.replica.publicationLacksItsDurableCommitOrder": "发布缺少其持久提交次序",
+  "error.core.replica.replicaEventLacksCommitOrder": "副本事件缺少提交次序",
+  "error.core.store.existingImmutableRecordDiffers": "已有不可变记录不一致",
+  "error.api.captureApi.theRetainedDeviceIdentityIsNotQualifiedForThisCoreProfile": "保留的设备身份未获此 Core 配置的核验",
+  "error.api.captureApi.onlyAnAuthorRecoveryCheckpointIsDurableQueryTheOriginalOperation": "仅本人恢复检查点已持久化；请查询原操作，不派发新效果",
+  "error.api.captureApi.noDurableOriginalCaptureRequest": "没有持久化的原捕获请求",
+  "error.api.captureApi.thisRouteOnlyDispatchesTheOriginalLocalCaptureRequest": "此路由只能派发原本地捕获请求",
+  "error.api.captureApi.originalTargetMovedAfterFreezingRetainAndSettleThisOriginalAttempt": "冻结后原目标已移动；请保留并处理原尝试后再选择其他目标",
+  "error.api.dataApi.schemaSerializationFailed": "Schema 序列化失败",
+  "error.api.dataApi.theOriginalCaptureSchemaIdentityOrShapeChangedRawInputIs": "原捕获 Schema 身份或结构已变化；原始输入保留",
+  "error.api.dataApi.typedCaptureRequiresItsOriginalSchemaIdentityAndSemanticDigest": "类型化捕获必须提供原 Schema 身份和语义摘要",
+  "error.api.desktopApi.theActualDesktopStatusIsUnavailable": "实际桌面状态不可用",
+  "error.api.desktopApi.theExactOriginalSessionIDIsRequired": "必须提供准确的原 Session ID",
+  "error.api.knowledgeApi.templateSettingsCouldNotBeEncoded": "无法编码模板设置",
+  "error.api.lib.sessionLocationsAreUnavailable": "会话位置状态不可用",
+  "error.api.lib.sessionRenderProjectionsAreUnavailable": "会话渲染投影不可用",
+  "error.api.lib.sessionEditorProjectionsAreUnavailable": "会话编辑器投影不可用",
+  "error.api.mod.ownerHeaderExceedsItsFixedBudget": "所有者消息头超过固定预算",
+  "error.api.mod.ownerHeaderLengthIsInvalid": "所有者消息头长度无效",
+  "error.api.mod.ownerBodyLengthCannotBeRepresented": "所有者消息体长度无法表示",
+  "error.api.mod.ownerBodyExceedsItsFixedBudget": "所有者消息体超过固定预算",
+  "error.api.windows.theOwnerResultDoesNotMatchTheOriginalRequest": "所有者结果与原请求不匹配",
+  "error.api.windows.theVerifiedOwnerHandshakeDoesNotMatchThisPhysicalProfileAnd": "已核验的所有者握手与此物理配置及进程不匹配",
+  "error.api.windows.localListenerHasNoPort": "本地监听没有端口",
+  "error.api.windows.localOwnerCredentialIsUnavailable": "本地所有者凭据不可用",
+  "error.api.windows.ownerRoleAndLocalServiceAuthorityDiffer": "所有者角色与本地服务权限不一致",
+  "error.api.windows.hostResultExceedsTheFixedOutputBudget": "宿主结果超过固定输出预算",
+  "error.api.windows.hostedOwnerHasNoLocalBusinessBridge": "托管所有者没有本地业务桥接",
+  "error.api.windows.localAuthorityIsUnavailable": "本地权限不可用",
+  "error.api.windows.unknownLocalOperation": "本地操作未知",
+  "error.api.windows.originalReplyExceedsTheFixedOutputBudget": "原回复超过固定输出预算",
+  "error.api.windows.hostedOwnerAcceptsOnlyItsExactLifecycleControl": "托管所有者只接受其准确的生命周期控制",
+  "error.api.windows.hostControlDoesNotAcceptBusinessOrSecretBytes": "宿主控制不接受业务或秘密字节",
+  "error.api.windows.secretSidebandIsForbiddenForThisOperation": "此操作禁止秘密旁路数据",
+  "error.api.windows.transientSyncCredentialIsMissing": "临时同步凭据缺失",
+  "error.api.windows.syncPureInputIsInvalid": "同步纯输入无效",
+  "error.api.windows.syncConnectionPureInputIsMissing": "同步连接纯输入缺失",
+  "error.api.windows.syncPureInputCannotContainCredentials": "同步纯输入不能包含凭据",
+  "error.api.windows.credentialIsNotASCII": "凭据不是 ASCII",
+  "error.api.structure.theOriginalCreationOperationIDMustBeACanonicalUUID": "创建原操作编号须为规范 UUID",
+  "error.api.structure.authorizedStructureSourcesExceedThe5000MemberBudget": "获权结构来源超过 5000 项预算",
+  "error.api.mod.theOriginalNotificationDeviceIsNotCurrent": "原通知设备不是当前设备",
+  "error.api.mod.theOriginalNotificationAddressDiffers": "原通知地址不一致",
+  "error.api.mod.theOriginalStartupDeviceIsNotCurrent": "原启动设备不是当前设备",
+  "error.api.mod.theExactPreparedCaptureRecordDiffers": "准备的准确 Capture 记录不一致",
+  "error.api.scheduler.theDesktopStoppedAcceptingNotificationSubmissions": "桌面已停止接收通知提交",
+  "error.api.capture.captureRequestKindDiffers": "捕获请求种类不符",
+  "error.api.capture.theOriginalCaptureRequestContainsUnfinishedAuthorInputOriginalTextAnd": "原捕获请求含尚未完成的作者输入；原文和编号保留",
+  "error.api.members.authorizedStructureMembersExceedThe5000MemberBudget": "获权结构成员超过 5000 项预算",
+  "error.capture.versionUnsupported": "不支持捕获记录版本 {actual}；需要版本 {expected}，原字节已保留",
+  "error.sync.nativeCompileUnqualified": "准确冻结的原生 HTML 编译未能核验此产物",
+  "error.capture.fieldIdentityRequired": "捕获必须使用稳定 FieldId {field}；字段键不能替代身份",
+  "error.core.existingProfilePhysicalIdentityChanged": "原 Core 配置的物理身份不一致；没有创建或接纳替代配置",
+  "error.core.existingProfileDeviceIdentityChanged": "原 Core 配置的当前设备身份不一致；原记录已保留",
+  "error.api.data.frozenRequestInvalid": "准确冻结的请求不是有效作者输入",
+  "error.notification.preparationFailed": "通知在系统调用前准备失败",
+  "error.notification.submissionUnknown": "系统提交返回的结果尚未确认",
+  "error.api.remoteSync.ownerClosing": "所有者正在关闭；没有启动新的传输",
+  "error.api.recognition.ownerClosing": "所有者正在关闭；没有启动新的识别任务",
+  "error.api.sync.nativeValidationNoteBudget": "原生 Query 核验超过 32 篇准确笔记",
+  "error.api.sync.nativeInputMissing": "准确的原生输入缺失",
+  "error.api.sync.nativeValidationWorkerBudget": "原生 Query 核验超过总 worker 预算",
+  "error.api.sync.nativeValidationTimedOut": "原生 Query 核验超时",
+  "error.api.sync.nativeResultInvalid": "原生 worker 返回的准确结果无效",
+  "error.api.sync.nativeProductsInvalid": "原生产物无效",
+  "error.api.sync.nativeProductByteBudget": "原生产物输入超过原 Query 字节预算",
+  "error.api.worker.deadline": "原编译尝试已达时限；原输入保留",
+  "error.api.worker.inputBudget": "冻结的编译输入超过其字节预算",
+  "error.api.worker.nonzeroExit": "编译器以非零结果停止；原输入保留",
+  "error.api.worker.outputRejected": "原编译器输出不符合其协议",
+  "error.api.worker.supervisionLost": "编译器监督器没有返回实际完成结果",
+  "error.api.worker.setupFailed": "受控编译器进程无法启动",
+  "error.api.worker.inputEncoding": "冻结的编译输入无法编码",
+  "error.api.worker.transportFailed": "原编译器传输未完成",
+  "error.api.worker.streamBudget": "编译器流超过字节预算；原输入保留",
+  "error.api.worker.processExitUnknown": "编译器进程的实际退出尚未确认；原输入保留",
+  "error.api.broker.originalResultUnknown": "原结果尚未确认；请保留原操作编号"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19938,6 +20132,200 @@ export interface MessageParamsMap {
   "shell.closeLateOpenFrozen": {  };
   "shell.closeSaveFrozen": {  };
   "error.core.backend.sourceDescendantPlacementChanged": {  };
+  "error.core.captureDraft.captureRawAuthorProofRevisionDiffers": {  };
+  "error.core.captureDraft.retiredCaptureProofIdentityOrRevisionDiffers": {  };
+  "error.core.captureDraft.captureRawInputAddressIsInvalid": {  };
+  "error.core.captureDraft.captureLiveRawInputAddressIsDuplicated": {  };
+  "error.core.captureDraft.captureRetiredRawIdentityIsDuplicated": {  };
+  "error.core.captureDraft.captureAuthorProvenanceIsInvalid": {  };
+  "error.core.captureDraft.captureAuthorInputAddressIsInvalid": {  };
+  "error.core.captureDraft.captureAuthorInputAddressIsDuplicated": {  };
+  "error.core.captureDraft.captureRetiredAuthorIdentityIsDuplicated": {  };
+  "error.core.captureDraft.captureTopLevelAuthorIdentityIsDuplicated": {  };
+  "error.core.captureDraft.captureAuthorProofRevisionDiffersFromRetainedInput": {  };
+  "error.core.captureDraft.captureMetadataPrefixIsTruncated": {  };
+  "error.core.captureDraft.captureVersionMustFollowScope": {  };
+  "error.core.captureDraft.captureVersionMustBeTheSecondField": {  };
+  "error.core.captureDraft.captureVersionMetadataIsInvalid": {  };
+  "error.core.captureDraft.captureVersionRequiresAnUnsignedInteger": {  };
+  "error.core.captureDraft.captureHasNoOriginalResultToDeliver": {  };
+  "error.core.captureDraft.captureResultDiffersFromItsOriginalPendingRequest": {  };
+  "error.core.captureDraft.originalCaptureRequestHasNoMatchingCanonicalPlan": {  };
+  "error.core.captureDraft.unassignedCaptureCannotDeliverALibraryResult": {  };
+  "error.core.captureDraft.captureHasNoOriginalLibraryTarget": {  };
+  "error.core.captureDraft.hostedResultDeliveryRequiresItsActorWrapper": {  };
+  "error.core.captureDraft.originalCaptureLibraryIsUnavailable": {  };
+  "error.core.captureDraft.originalCapturePlanIsUnavailable": {  };
+  "error.core.captureDraft.originalCaptureIsNotANodeTransaction": {  };
+  "error.core.captureDraft.originalCaptureResultBelongsToAnotherKindOrLibrary": {  };
+  "error.core.captureDraft.captureHasNoOriginalTarget": {  };
+  "error.core.captureDraft.captureOriginalSlotDiffers": {  };
+  "error.core.captureDraft.captureChangedBeforeOwnerInputPersistencePreserveBothInputs": {  };
+  "error.core.captureDraft.captureChangedBeforePrivateProposalCheckpointQueryTheOriginalMutationAnd": {  };
+  "error.core.captureDraft.originalFullInputMutationIdentityIsInvalid": {  };
+  "error.core.captureDraft.noOriginalCaptureAttempt": {  };
+  "error.core.captureDraft.captureOriginalOperationDiffers": {  };
+  "error.core.captureDraft.captureOriginalActorSlotIsUnavailable": {  };
+  "error.core.captureDraft.captureOriginalOperationIsStillUnknown": {  };
+  "error.core.captureDraft.captureOriginalOperationIsNotTerminal": {  };
+  "error.core.captureDraft.captureTargetIsUnavailable": {  };
+  "error.core.captureDraft.captureOperationIsNotANewNoteTransaction": {  };
+  "error.core.captureDraft.captureOriginalOperationBelongsToAnotherTargetOrKind": {  };
+  "error.core.captureDraft.captureOriginalFenceBelongsToAnotherRequest": {  };
+  "error.core.captureDraft.ownerOnlyRecoveryIsNotACompleteFormAcknowledgement": {  };
+  "error.core.deviceState.clientPreferencesDisappearedDuringDeviceQualification": {  };
+  "error.core.draftRecovery.draftLacksSupportedOriginalMetadataOriginalBytesRemainUnchanged": {  };
+  "error.core.draftRecovery.draftInputProducerIsNotCanonical": {  };
+  "error.core.draftRecovery.theActualSourceBasisChangedBeforeRecoveryContinuation": {  };
+  "error.core.draftRecovery.theReviewedRecoveryRecordIsAbsent": {  };
+  "error.core.draftRecovery.reviewTheCompleteCurrentRecoveryRecordAgain": {  };
+  "error.core.draftRecovery.thisRecoveryRecordHasNoTransferableProducer": {  };
+  "error.core.draftRecovery.thisSessionAlreadyAcknowledgedIndependentInput": {  };
+  "error.core.draftRecovery.theOriginalInputProducerStillHasALiveCoreSession": {  };
+  "error.core.draftRecovery.expectedSourceDigestIsNotCanonical": {  };
+  "error.core.draftRecovery.theDocumentBaseChanged": {  };
+  "error.core.draftRecovery.theCompleteDraftChangedDuringReadback": {  };
+  "error.core.draftRecovery.thisInputProducerHasNoAcknowledgedDraft": {  };
+  "error.core.draftRecovery.thePersistedDraftDoesNotContainThePreparedInput": {  };
+  "error.core.draftRecovery.draftProducerDiffers": {  };
+  "error.core.draftRecovery.draftOriginalInputScopeOrPhysicalIdentityDiffers": {  };
+  "error.core.draftRecovery.draftMetadataChangedDuringItsQualifiedRead": {  };
+  "error.core.history.protectedDraftMetadataChangedDuringItsQualifiedRead": {  };
+  "error.core.history.originalRestoreExceeds128ProtectedDraftRecords": {  };
+  "error.core.history.originalRestorePhysicalOwnerIsMissing": {  };
+  "error.core.history.originalProtectedDraftIsMissing": {  };
+  "error.core.history.protectedDraftByteCountOverflow": {  };
+  "error.core.history.originalProtectedDraftsExceed16MiB": {  };
+  "error.core.hosted.actorRecordHasNoSupportedOriginalMetadataOriginalBytesRemainUnchanged": {  };
+  "error.core.hosted.invalidOriginalActorMetadata": {  };
+  "error.core.hosted.theOriginalOperationResourceDiffers": {  };
+  "error.core.hosted.theOriginalUnboundInputDoesNotBelongToTheTrustedActor": {  };
+  "error.core.hosted.actorRecordMetadataChangedDuringItsQualifiedRead": {  };
+  "error.core.hostedDefinition.definitionAdmissionMetadataIsMissing": {  };
+  "error.core.hostedDefinition.invalidDefinitionAdmissionActor": {  };
+  "error.core.hostedDefinition.definitionAdmissionMetadataChangedDuringItsQualifiedRead": {  };
+  "error.core.hostedDefinition.definitionAdmissionReferencesAnotherPlanKind": {  };
+  "error.core.hostedDestination.originalUniqueChildCapabilityIsUnavailable": {  };
+  "error.core.hostedDestination.originalUniqueChildEvidenceExceedsItsByteBudget": {  };
+  "error.core.hostedDestination.uniqueChildMemberMetadataExceedsItsBudget": {  };
+  "error.core.hostedDestination.uniqueChildMemberBudgetIsExhausted": {  };
+  "error.core.hostedDestination.retainedUniqueChildMembersExceedTheConfiguredBudget": {  };
+  "error.core.hostedLibrary.incompletePrivateMetadataPrefix": {  };
+  "error.core.hostedLibrary.invalidPrivateMetadataSeparator": {  };
+  "error.core.hostedLibrary.privateRecordLacksTheRequiredOrderedOriginalMetadataOriginalBytesRemain": {  };
+  "error.core.hostedLibrary.invalidPrivateMetadataValue": {  };
+  "error.core.hostedLibrary.privateMetadataValueExceedsItsBudget": {  };
+  "error.core.hostedLibrary.qualifiedPrivateRecordExceedsItsBodyBudget": {  };
+  "error.core.hostedLibrary.actorProducerMetadataDiffers": {  };
+  "error.core.hostedLibraryTests.exactOriginalResourceDiffers": {  };
+  "error.core.lib.anotherProposalArrivedAfterThisRecoveryViewReopenAndCompareThe": {  };
+  "error.core.lib.theOriginalLibraryActivationDoesNotIdentifyItsRetainedDecision": {  };
+  "error.core.operations.theOpenedSourceObjectWasReplaced": {  };
+  "error.core.operations.previewInputIsOutsideItsActualRoot": {  };
+  "error.core.operations.previewPathIsNotUnicode": {  };
+  "error.core.operations.previewInputPathsAreNotUnique": {  };
+  "error.core.operations.theOpenedSourceIsOutsideItsActualRoot": {  };
+  "error.core.operations.previewInputExceedsTheComplete64MiBBudget": {  };
+  "error.core.operations.theOpenedSourceObjectChangedDuringCapture": {  };
+  "error.core.fieldWire.incompleteFieldContainsDuplicateOrInvalidNativeMembers": {  };
+  "error.core.fieldWire.incompleteFieldContainsUnknownOrMissingNativeMembers": {  };
+  "error.core.fieldWire.nativeScalarInputMustBeAString": {  };
+  "error.core.fieldWire.incompleteJSONEscape": {  };
+  "error.core.fieldWire.invalidUTF16Escape": {  };
+  "error.core.fieldWire.invalidJSONStringEscape": {  };
+  "error.core.fieldWire.incompleteFieldIsNotAClosedNativeValue": {  };
+  "error.core.fieldWire.nativeFieldKindIsMissing": {  };
+  "error.core.fieldWire.nativeFieldKindMustBeAnIdentifier": {  };
+  "error.core.fieldWire.nativeBooleanIsInvalid": {  };
+  "error.core.fieldWire.incompleteNativeScalarHasNoExactOriginalControlAddress": {  };
+  "error.core.fieldWire.nativeListIsInvalid": {  };
+  "error.core.fieldWire.nativeRecordIsInvalid": {  };
+  "error.core.fieldWire.nativeMemberIdentifiersMustBeCompleteRetainUnfinishedKeyInputSeparately": {  };
+  "error.core.fieldWire.nativeRecordKeysAreDuplicated": {  };
+  "error.core.fieldWire.incompleteFieldHasAnUnknownNativeKind": {  };
+  "error.core.fieldWire.incompleteFieldWireIsInvalidJSON": {  };
+  "error.core.fieldWire.aCompleteNativeFieldMustUseValidState": {  };
+  "error.core.adopt.originalWorkspaceControlIsUnavailable": {  };
+  "error.core.apply.theOriginalRetiredSourceIsUnavailable": {  };
+  "error.core.apply.incomingFileEscapedRoot": {  };
+  "error.core.replica.capturedReplicaFileDisappeared": {  };
+  "error.core.replica.publicationLacksItsDurableCommitOrder": {  };
+  "error.core.replica.replicaEventLacksCommitOrder": {  };
+  "error.core.store.existingImmutableRecordDiffers": {  };
+  "error.api.captureApi.theRetainedDeviceIdentityIsNotQualifiedForThisCoreProfile": {  };
+  "error.api.captureApi.onlyAnAuthorRecoveryCheckpointIsDurableQueryTheOriginalOperation": {  };
+  "error.api.captureApi.noDurableOriginalCaptureRequest": {  };
+  "error.api.captureApi.thisRouteOnlyDispatchesTheOriginalLocalCaptureRequest": {  };
+  "error.api.captureApi.originalTargetMovedAfterFreezingRetainAndSettleThisOriginalAttempt": {  };
+  "error.api.dataApi.schemaSerializationFailed": {  };
+  "error.api.dataApi.theOriginalCaptureSchemaIdentityOrShapeChangedRawInputIs": {  };
+  "error.api.dataApi.typedCaptureRequiresItsOriginalSchemaIdentityAndSemanticDigest": {  };
+  "error.api.desktopApi.theActualDesktopStatusIsUnavailable": {  };
+  "error.api.desktopApi.theExactOriginalSessionIDIsRequired": {  };
+  "error.api.knowledgeApi.templateSettingsCouldNotBeEncoded": {  };
+  "error.api.lib.sessionLocationsAreUnavailable": {  };
+  "error.api.lib.sessionRenderProjectionsAreUnavailable": {  };
+  "error.api.lib.sessionEditorProjectionsAreUnavailable": {  };
+  "error.api.mod.ownerHeaderExceedsItsFixedBudget": {  };
+  "error.api.mod.ownerHeaderLengthIsInvalid": {  };
+  "error.api.mod.ownerBodyLengthCannotBeRepresented": {  };
+  "error.api.mod.ownerBodyExceedsItsFixedBudget": {  };
+  "error.api.windows.theOwnerResultDoesNotMatchTheOriginalRequest": {  };
+  "error.api.windows.theVerifiedOwnerHandshakeDoesNotMatchThisPhysicalProfileAnd": {  };
+  "error.api.windows.localListenerHasNoPort": {  };
+  "error.api.windows.localOwnerCredentialIsUnavailable": {  };
+  "error.api.windows.ownerRoleAndLocalServiceAuthorityDiffer": {  };
+  "error.api.windows.hostResultExceedsTheFixedOutputBudget": {  };
+  "error.api.windows.hostedOwnerHasNoLocalBusinessBridge": {  };
+  "error.api.windows.localAuthorityIsUnavailable": {  };
+  "error.api.windows.unknownLocalOperation": {  };
+  "error.api.windows.originalReplyExceedsTheFixedOutputBudget": {  };
+  "error.api.windows.hostedOwnerAcceptsOnlyItsExactLifecycleControl": {  };
+  "error.api.windows.hostControlDoesNotAcceptBusinessOrSecretBytes": {  };
+  "error.api.windows.secretSidebandIsForbiddenForThisOperation": {  };
+  "error.api.windows.transientSyncCredentialIsMissing": {  };
+  "error.api.windows.syncPureInputIsInvalid": {  };
+  "error.api.windows.syncConnectionPureInputIsMissing": {  };
+  "error.api.windows.syncPureInputCannotContainCredentials": {  };
+  "error.api.windows.credentialIsNotASCII": {  };
+  "error.api.structure.theOriginalCreationOperationIDMustBeACanonicalUUID": {  };
+  "error.api.structure.authorizedStructureSourcesExceedThe5000MemberBudget": {  };
+  "error.api.mod.theOriginalNotificationDeviceIsNotCurrent": {  };
+  "error.api.mod.theOriginalNotificationAddressDiffers": {  };
+  "error.api.mod.theOriginalStartupDeviceIsNotCurrent": {  };
+  "error.api.mod.theExactPreparedCaptureRecordDiffers": {  };
+  "error.api.scheduler.theDesktopStoppedAcceptingNotificationSubmissions": {  };
+  "error.api.capture.captureRequestKindDiffers": {  };
+  "error.api.capture.theOriginalCaptureRequestContainsUnfinishedAuthorInputOriginalTextAnd": {  };
+  "error.api.members.authorizedStructureMembersExceedThe5000MemberBudget": {  };
+  "error.capture.versionUnsupported": { actual: string; expected: string };
+  "error.sync.nativeCompileUnqualified": {  };
+  "error.capture.fieldIdentityRequired": { field: string };
+  "error.core.existingProfilePhysicalIdentityChanged": {  };
+  "error.core.existingProfileDeviceIdentityChanged": {  };
+  "error.api.data.frozenRequestInvalid": {  };
+  "error.notification.preparationFailed": {  };
+  "error.notification.submissionUnknown": {  };
+  "error.api.remoteSync.ownerClosing": {  };
+  "error.api.recognition.ownerClosing": {  };
+  "error.api.sync.nativeValidationNoteBudget": {  };
+  "error.api.sync.nativeInputMissing": {  };
+  "error.api.sync.nativeValidationWorkerBudget": {  };
+  "error.api.sync.nativeValidationTimedOut": {  };
+  "error.api.sync.nativeResultInvalid": {  };
+  "error.api.sync.nativeProductsInvalid": {  };
+  "error.api.sync.nativeProductByteBudget": {  };
+  "error.api.worker.deadline": {  };
+  "error.api.worker.inputBudget": {  };
+  "error.api.worker.nonzeroExit": {  };
+  "error.api.worker.outputRejected": {  };
+  "error.api.worker.supervisionLost": {  };
+  "error.api.worker.setupFailed": {  };
+  "error.api.worker.inputEncoding": {  };
+  "error.api.worker.transportFailed": {  };
+  "error.api.worker.streamBudget": {  };
+  "error.api.worker.processExitUnknown": {  };
+  "error.api.broker.originalResultUnknown": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -31737,7 +32125,206 @@ export const messageParamTypes = {
   "shell.closeDocumentSwitchFrozen": {},
   "shell.closeLateOpenFrozen": {},
   "shell.closeSaveFrozen": {},
-  "error.core.backend.sourceDescendantPlacementChanged": {}
+  "error.core.backend.sourceDescendantPlacementChanged": {},
+  "error.core.captureDraft.captureRawAuthorProofRevisionDiffers": {},
+  "error.core.captureDraft.retiredCaptureProofIdentityOrRevisionDiffers": {},
+  "error.core.captureDraft.captureRawInputAddressIsInvalid": {},
+  "error.core.captureDraft.captureLiveRawInputAddressIsDuplicated": {},
+  "error.core.captureDraft.captureRetiredRawIdentityIsDuplicated": {},
+  "error.core.captureDraft.captureAuthorProvenanceIsInvalid": {},
+  "error.core.captureDraft.captureAuthorInputAddressIsInvalid": {},
+  "error.core.captureDraft.captureAuthorInputAddressIsDuplicated": {},
+  "error.core.captureDraft.captureRetiredAuthorIdentityIsDuplicated": {},
+  "error.core.captureDraft.captureTopLevelAuthorIdentityIsDuplicated": {},
+  "error.core.captureDraft.captureAuthorProofRevisionDiffersFromRetainedInput": {},
+  "error.core.captureDraft.captureMetadataPrefixIsTruncated": {},
+  "error.core.captureDraft.captureVersionMustFollowScope": {},
+  "error.core.captureDraft.captureVersionMustBeTheSecondField": {},
+  "error.core.captureDraft.captureVersionMetadataIsInvalid": {},
+  "error.core.captureDraft.captureVersionRequiresAnUnsignedInteger": {},
+  "error.core.captureDraft.captureHasNoOriginalResultToDeliver": {},
+  "error.core.captureDraft.captureResultDiffersFromItsOriginalPendingRequest": {},
+  "error.core.captureDraft.originalCaptureRequestHasNoMatchingCanonicalPlan": {},
+  "error.core.captureDraft.unassignedCaptureCannotDeliverALibraryResult": {},
+  "error.core.captureDraft.captureHasNoOriginalLibraryTarget": {},
+  "error.core.captureDraft.hostedResultDeliveryRequiresItsActorWrapper": {},
+  "error.core.captureDraft.originalCaptureLibraryIsUnavailable": {},
+  "error.core.captureDraft.originalCapturePlanIsUnavailable": {},
+  "error.core.captureDraft.originalCaptureIsNotANodeTransaction": {},
+  "error.core.captureDraft.originalCaptureResultBelongsToAnotherKindOrLibrary": {},
+  "error.core.captureDraft.captureHasNoOriginalTarget": {},
+  "error.core.captureDraft.captureOriginalSlotDiffers": {},
+  "error.core.captureDraft.captureChangedBeforeOwnerInputPersistencePreserveBothInputs": {},
+  "error.core.captureDraft.captureChangedBeforePrivateProposalCheckpointQueryTheOriginalMutationAnd": {},
+  "error.core.captureDraft.originalFullInputMutationIdentityIsInvalid": {},
+  "error.core.captureDraft.noOriginalCaptureAttempt": {},
+  "error.core.captureDraft.captureOriginalOperationDiffers": {},
+  "error.core.captureDraft.captureOriginalActorSlotIsUnavailable": {},
+  "error.core.captureDraft.captureOriginalOperationIsStillUnknown": {},
+  "error.core.captureDraft.captureOriginalOperationIsNotTerminal": {},
+  "error.core.captureDraft.captureTargetIsUnavailable": {},
+  "error.core.captureDraft.captureOperationIsNotANewNoteTransaction": {},
+  "error.core.captureDraft.captureOriginalOperationBelongsToAnotherTargetOrKind": {},
+  "error.core.captureDraft.captureOriginalFenceBelongsToAnotherRequest": {},
+  "error.core.captureDraft.ownerOnlyRecoveryIsNotACompleteFormAcknowledgement": {},
+  "error.core.deviceState.clientPreferencesDisappearedDuringDeviceQualification": {},
+  "error.core.draftRecovery.draftLacksSupportedOriginalMetadataOriginalBytesRemainUnchanged": {},
+  "error.core.draftRecovery.draftInputProducerIsNotCanonical": {},
+  "error.core.draftRecovery.theActualSourceBasisChangedBeforeRecoveryContinuation": {},
+  "error.core.draftRecovery.theReviewedRecoveryRecordIsAbsent": {},
+  "error.core.draftRecovery.reviewTheCompleteCurrentRecoveryRecordAgain": {},
+  "error.core.draftRecovery.thisRecoveryRecordHasNoTransferableProducer": {},
+  "error.core.draftRecovery.thisSessionAlreadyAcknowledgedIndependentInput": {},
+  "error.core.draftRecovery.theOriginalInputProducerStillHasALiveCoreSession": {},
+  "error.core.draftRecovery.expectedSourceDigestIsNotCanonical": {},
+  "error.core.draftRecovery.theDocumentBaseChanged": {},
+  "error.core.draftRecovery.theCompleteDraftChangedDuringReadback": {},
+  "error.core.draftRecovery.thisInputProducerHasNoAcknowledgedDraft": {},
+  "error.core.draftRecovery.thePersistedDraftDoesNotContainThePreparedInput": {},
+  "error.core.draftRecovery.draftProducerDiffers": {},
+  "error.core.draftRecovery.draftOriginalInputScopeOrPhysicalIdentityDiffers": {},
+  "error.core.draftRecovery.draftMetadataChangedDuringItsQualifiedRead": {},
+  "error.core.history.protectedDraftMetadataChangedDuringItsQualifiedRead": {},
+  "error.core.history.originalRestoreExceeds128ProtectedDraftRecords": {},
+  "error.core.history.originalRestorePhysicalOwnerIsMissing": {},
+  "error.core.history.originalProtectedDraftIsMissing": {},
+  "error.core.history.protectedDraftByteCountOverflow": {},
+  "error.core.history.originalProtectedDraftsExceed16MiB": {},
+  "error.core.hosted.actorRecordHasNoSupportedOriginalMetadataOriginalBytesRemainUnchanged": {},
+  "error.core.hosted.invalidOriginalActorMetadata": {},
+  "error.core.hosted.theOriginalOperationResourceDiffers": {},
+  "error.core.hosted.theOriginalUnboundInputDoesNotBelongToTheTrustedActor": {},
+  "error.core.hosted.actorRecordMetadataChangedDuringItsQualifiedRead": {},
+  "error.core.hostedDefinition.definitionAdmissionMetadataIsMissing": {},
+  "error.core.hostedDefinition.invalidDefinitionAdmissionActor": {},
+  "error.core.hostedDefinition.definitionAdmissionMetadataChangedDuringItsQualifiedRead": {},
+  "error.core.hostedDefinition.definitionAdmissionReferencesAnotherPlanKind": {},
+  "error.core.hostedDestination.originalUniqueChildCapabilityIsUnavailable": {},
+  "error.core.hostedDestination.originalUniqueChildEvidenceExceedsItsByteBudget": {},
+  "error.core.hostedDestination.uniqueChildMemberMetadataExceedsItsBudget": {},
+  "error.core.hostedDestination.uniqueChildMemberBudgetIsExhausted": {},
+  "error.core.hostedDestination.retainedUniqueChildMembersExceedTheConfiguredBudget": {},
+  "error.core.hostedLibrary.incompletePrivateMetadataPrefix": {},
+  "error.core.hostedLibrary.invalidPrivateMetadataSeparator": {},
+  "error.core.hostedLibrary.privateRecordLacksTheRequiredOrderedOriginalMetadataOriginalBytesRemain": {},
+  "error.core.hostedLibrary.invalidPrivateMetadataValue": {},
+  "error.core.hostedLibrary.privateMetadataValueExceedsItsBudget": {},
+  "error.core.hostedLibrary.qualifiedPrivateRecordExceedsItsBodyBudget": {},
+  "error.core.hostedLibrary.actorProducerMetadataDiffers": {},
+  "error.core.hostedLibraryTests.exactOriginalResourceDiffers": {},
+  "error.core.lib.anotherProposalArrivedAfterThisRecoveryViewReopenAndCompareThe": {},
+  "error.core.lib.theOriginalLibraryActivationDoesNotIdentifyItsRetainedDecision": {},
+  "error.core.operations.theOpenedSourceObjectWasReplaced": {},
+  "error.core.operations.previewInputIsOutsideItsActualRoot": {},
+  "error.core.operations.previewPathIsNotUnicode": {},
+  "error.core.operations.previewInputPathsAreNotUnique": {},
+  "error.core.operations.theOpenedSourceIsOutsideItsActualRoot": {},
+  "error.core.operations.previewInputExceedsTheComplete64MiBBudget": {},
+  "error.core.operations.theOpenedSourceObjectChangedDuringCapture": {},
+  "error.core.fieldWire.incompleteFieldContainsDuplicateOrInvalidNativeMembers": {},
+  "error.core.fieldWire.incompleteFieldContainsUnknownOrMissingNativeMembers": {},
+  "error.core.fieldWire.nativeScalarInputMustBeAString": {},
+  "error.core.fieldWire.incompleteJSONEscape": {},
+  "error.core.fieldWire.invalidUTF16Escape": {},
+  "error.core.fieldWire.invalidJSONStringEscape": {},
+  "error.core.fieldWire.incompleteFieldIsNotAClosedNativeValue": {},
+  "error.core.fieldWire.nativeFieldKindIsMissing": {},
+  "error.core.fieldWire.nativeFieldKindMustBeAnIdentifier": {},
+  "error.core.fieldWire.nativeBooleanIsInvalid": {},
+  "error.core.fieldWire.incompleteNativeScalarHasNoExactOriginalControlAddress": {},
+  "error.core.fieldWire.nativeListIsInvalid": {},
+  "error.core.fieldWire.nativeRecordIsInvalid": {},
+  "error.core.fieldWire.nativeMemberIdentifiersMustBeCompleteRetainUnfinishedKeyInputSeparately": {},
+  "error.core.fieldWire.nativeRecordKeysAreDuplicated": {},
+  "error.core.fieldWire.incompleteFieldHasAnUnknownNativeKind": {},
+  "error.core.fieldWire.incompleteFieldWireIsInvalidJSON": {},
+  "error.core.fieldWire.aCompleteNativeFieldMustUseValidState": {},
+  "error.core.adopt.originalWorkspaceControlIsUnavailable": {},
+  "error.core.apply.theOriginalRetiredSourceIsUnavailable": {},
+  "error.core.apply.incomingFileEscapedRoot": {},
+  "error.core.replica.capturedReplicaFileDisappeared": {},
+  "error.core.replica.publicationLacksItsDurableCommitOrder": {},
+  "error.core.replica.replicaEventLacksCommitOrder": {},
+  "error.core.store.existingImmutableRecordDiffers": {},
+  "error.api.captureApi.theRetainedDeviceIdentityIsNotQualifiedForThisCoreProfile": {},
+  "error.api.captureApi.onlyAnAuthorRecoveryCheckpointIsDurableQueryTheOriginalOperation": {},
+  "error.api.captureApi.noDurableOriginalCaptureRequest": {},
+  "error.api.captureApi.thisRouteOnlyDispatchesTheOriginalLocalCaptureRequest": {},
+  "error.api.captureApi.originalTargetMovedAfterFreezingRetainAndSettleThisOriginalAttempt": {},
+  "error.api.dataApi.schemaSerializationFailed": {},
+  "error.api.dataApi.theOriginalCaptureSchemaIdentityOrShapeChangedRawInputIs": {},
+  "error.api.dataApi.typedCaptureRequiresItsOriginalSchemaIdentityAndSemanticDigest": {},
+  "error.api.desktopApi.theActualDesktopStatusIsUnavailable": {},
+  "error.api.desktopApi.theExactOriginalSessionIDIsRequired": {},
+  "error.api.knowledgeApi.templateSettingsCouldNotBeEncoded": {},
+  "error.api.lib.sessionLocationsAreUnavailable": {},
+  "error.api.lib.sessionRenderProjectionsAreUnavailable": {},
+  "error.api.lib.sessionEditorProjectionsAreUnavailable": {},
+  "error.api.mod.ownerHeaderExceedsItsFixedBudget": {},
+  "error.api.mod.ownerHeaderLengthIsInvalid": {},
+  "error.api.mod.ownerBodyLengthCannotBeRepresented": {},
+  "error.api.mod.ownerBodyExceedsItsFixedBudget": {},
+  "error.api.windows.theOwnerResultDoesNotMatchTheOriginalRequest": {},
+  "error.api.windows.theVerifiedOwnerHandshakeDoesNotMatchThisPhysicalProfileAnd": {},
+  "error.api.windows.localListenerHasNoPort": {},
+  "error.api.windows.localOwnerCredentialIsUnavailable": {},
+  "error.api.windows.ownerRoleAndLocalServiceAuthorityDiffer": {},
+  "error.api.windows.hostResultExceedsTheFixedOutputBudget": {},
+  "error.api.windows.hostedOwnerHasNoLocalBusinessBridge": {},
+  "error.api.windows.localAuthorityIsUnavailable": {},
+  "error.api.windows.unknownLocalOperation": {},
+  "error.api.windows.originalReplyExceedsTheFixedOutputBudget": {},
+  "error.api.windows.hostedOwnerAcceptsOnlyItsExactLifecycleControl": {},
+  "error.api.windows.hostControlDoesNotAcceptBusinessOrSecretBytes": {},
+  "error.api.windows.secretSidebandIsForbiddenForThisOperation": {},
+  "error.api.windows.transientSyncCredentialIsMissing": {},
+  "error.api.windows.syncPureInputIsInvalid": {},
+  "error.api.windows.syncConnectionPureInputIsMissing": {},
+  "error.api.windows.syncPureInputCannotContainCredentials": {},
+  "error.api.windows.credentialIsNotASCII": {},
+  "error.api.structure.theOriginalCreationOperationIDMustBeACanonicalUUID": {},
+  "error.api.structure.authorizedStructureSourcesExceedThe5000MemberBudget": {},
+  "error.api.mod.theOriginalNotificationDeviceIsNotCurrent": {},
+  "error.api.mod.theOriginalNotificationAddressDiffers": {},
+  "error.api.mod.theOriginalStartupDeviceIsNotCurrent": {},
+  "error.api.mod.theExactPreparedCaptureRecordDiffers": {},
+  "error.api.scheduler.theDesktopStoppedAcceptingNotificationSubmissions": {},
+  "error.api.capture.captureRequestKindDiffers": {},
+  "error.api.capture.theOriginalCaptureRequestContainsUnfinishedAuthorInputOriginalTextAnd": {},
+  "error.api.members.authorizedStructureMembersExceedThe5000MemberBudget": {},
+  "error.capture.versionUnsupported": {
+    "actual": "text",
+    "expected": "text"
+  },
+  "error.sync.nativeCompileUnqualified": {},
+  "error.capture.fieldIdentityRequired": {
+    "field": "text"
+  },
+  "error.core.existingProfilePhysicalIdentityChanged": {},
+  "error.core.existingProfileDeviceIdentityChanged": {},
+  "error.api.data.frozenRequestInvalid": {},
+  "error.notification.preparationFailed": {},
+  "error.notification.submissionUnknown": {},
+  "error.api.remoteSync.ownerClosing": {},
+  "error.api.recognition.ownerClosing": {},
+  "error.api.sync.nativeValidationNoteBudget": {},
+  "error.api.sync.nativeInputMissing": {},
+  "error.api.sync.nativeValidationWorkerBudget": {},
+  "error.api.sync.nativeValidationTimedOut": {},
+  "error.api.sync.nativeResultInvalid": {},
+  "error.api.sync.nativeProductsInvalid": {},
+  "error.api.sync.nativeProductByteBudget": {},
+  "error.api.worker.deadline": {},
+  "error.api.worker.inputBudget": {},
+  "error.api.worker.nonzeroExit": {},
+  "error.api.worker.outputRejected": {},
+  "error.api.worker.supervisionLost": {},
+  "error.api.worker.setupFailed": {},
+  "error.api.worker.inputEncoding": {},
+  "error.api.worker.transportFailed": {},
+  "error.api.worker.streamBudget": {},
+  "error.api.worker.processExitUnknown": {},
+  "error.api.broker.originalResultUnknown": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -41707,5 +42294,199 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "shell.closeDocumentSwitchFrozen": "Window close checking is frozen; the body object was not switched.",
   "shell.closeLateOpenFrozen": "Window close checking is frozen; the late open result did not replace the body.",
   "shell.closeSaveFrozen": "Body close checking is frozen; another save operation was not created.",
-  "error.core.backend.sourceDescendantPlacementChanged": "The retained source descendant no longer occupies its original parent entry"
+  "error.core.backend.sourceDescendantPlacementChanged": "The retained source descendant no longer occupies its original parent entry",
+  "error.core.captureDraft.captureRawAuthorProofRevisionDiffers": "Capture raw author proof revision differs",
+  "error.core.captureDraft.retiredCaptureProofIdentityOrRevisionDiffers": "Retired Capture proof identity or revision differs",
+  "error.core.captureDraft.captureRawInputAddressIsInvalid": "Capture raw-input address is invalid",
+  "error.core.captureDraft.captureLiveRawInputAddressIsDuplicated": "Capture live raw-input address is duplicated",
+  "error.core.captureDraft.captureRetiredRawIdentityIsDuplicated": "Capture retired raw identity is duplicated",
+  "error.core.captureDraft.captureAuthorProvenanceIsInvalid": "Capture author provenance is invalid",
+  "error.core.captureDraft.captureAuthorInputAddressIsInvalid": "Capture author-input address is invalid",
+  "error.core.captureDraft.captureAuthorInputAddressIsDuplicated": "Capture author-input address is duplicated",
+  "error.core.captureDraft.captureRetiredAuthorIdentityIsDuplicated": "Capture retired author identity is duplicated",
+  "error.core.captureDraft.captureTopLevelAuthorIdentityIsDuplicated": "Capture top-level author identity is duplicated",
+  "error.core.captureDraft.captureAuthorProofRevisionDiffersFromRetainedInput": "Capture author proof revision differs from retained input",
+  "error.core.captureDraft.captureMetadataPrefixIsTruncated": "Capture metadata prefix is truncated",
+  "error.core.captureDraft.captureVersionMustFollowScope": "Capture version must follow scope",
+  "error.core.captureDraft.captureVersionMustBeTheSecondField": "Capture version must be the second field",
+  "error.core.captureDraft.captureVersionMetadataIsInvalid": "Capture version metadata is invalid",
+  "error.core.captureDraft.captureVersionRequiresAnUnsignedInteger": "Capture version requires an unsigned integer",
+  "error.core.captureDraft.captureHasNoOriginalResultToDeliver": "Capture has no original result to deliver",
+  "error.core.captureDraft.captureResultDiffersFromItsOriginalPendingRequest": "Capture result differs from its original pending request",
+  "error.core.captureDraft.originalCaptureRequestHasNoMatchingCanonicalPlan": "Original capture request has no matching canonical Plan",
+  "error.core.captureDraft.unassignedCaptureCannotDeliverALibraryResult": "Unassigned capture cannot deliver a library result",
+  "error.core.captureDraft.captureHasNoOriginalLibraryTarget": "Capture has no original library target",
+  "error.core.captureDraft.hostedResultDeliveryRequiresItsActorWrapper": "Hosted result delivery requires its actor wrapper",
+  "error.core.captureDraft.originalCaptureLibraryIsUnavailable": "Original capture library is unavailable",
+  "error.core.captureDraft.originalCapturePlanIsUnavailable": "Original capture Plan is unavailable",
+  "error.core.captureDraft.originalCaptureIsNotANodeTransaction": "Original capture is not a node transaction",
+  "error.core.captureDraft.originalCaptureResultBelongsToAnotherKindOrLibrary": "Original capture result belongs to another kind or library",
+  "error.core.captureDraft.captureHasNoOriginalTarget": "Capture has no original target",
+  "error.core.captureDraft.captureOriginalSlotDiffers": "Capture original slot differs",
+  "error.core.captureDraft.captureChangedBeforeOwnerInputPersistencePreserveBothInputs": "Capture changed before owner input persistence; preserve both inputs",
+  "error.core.captureDraft.captureChangedBeforePrivateProposalCheckpointQueryTheOriginalMutationAnd": "Capture changed before private-proposal checkpoint; query the original mutation and preserve current input",
+  "error.core.captureDraft.originalFullInputMutationIdentityIsInvalid": "Original full-input mutation identity is invalid",
+  "error.core.captureDraft.noOriginalCaptureAttempt": "No original capture attempt",
+  "error.core.captureDraft.captureOriginalOperationDiffers": "Capture original operation differs",
+  "error.core.captureDraft.captureOriginalActorSlotIsUnavailable": "Capture original actor slot is unavailable",
+  "error.core.captureDraft.captureOriginalOperationIsStillUnknown": "Capture original operation is still unknown",
+  "error.core.captureDraft.captureOriginalOperationIsNotTerminal": "Capture original operation is not terminal",
+  "error.core.captureDraft.captureTargetIsUnavailable": "Capture target is unavailable",
+  "error.core.captureDraft.captureOperationIsNotANewNoteTransaction": "Capture operation is not a new-note transaction",
+  "error.core.captureDraft.captureOriginalOperationBelongsToAnotherTargetOrKind": "Capture original operation belongs to another target or kind",
+  "error.core.captureDraft.captureOriginalFenceBelongsToAnotherRequest": "Capture original fence belongs to another request",
+  "error.core.captureDraft.ownerOnlyRecoveryIsNotACompleteFormAcknowledgement": "Owner-only recovery is not a complete form acknowledgement",
+  "error.core.deviceState.clientPreferencesDisappearedDuringDeviceQualification": "Client preferences disappeared during device qualification",
+  "error.core.draftRecovery.draftLacksSupportedOriginalMetadataOriginalBytesRemainUnchanged": "Draft lacks supported original metadata; original bytes remain unchanged",
+  "error.core.draftRecovery.draftInputProducerIsNotCanonical": "Draft input producer is not canonical",
+  "error.core.draftRecovery.theActualSourceBasisChangedBeforeRecoveryContinuation": "The actual source basis changed before recovery continuation",
+  "error.core.draftRecovery.theReviewedRecoveryRecordIsAbsent": "The reviewed recovery record is absent",
+  "error.core.draftRecovery.reviewTheCompleteCurrentRecoveryRecordAgain": "Review the complete current recovery record again",
+  "error.core.draftRecovery.thisRecoveryRecordHasNoTransferableProducer": "This recovery record has no transferable producer",
+  "error.core.draftRecovery.thisSessionAlreadyAcknowledgedIndependentInput": "This session already acknowledged independent input",
+  "error.core.draftRecovery.theOriginalInputProducerStillHasALiveCoreSession": "The original input producer still has a live Core session",
+  "error.core.draftRecovery.expectedSourceDigestIsNotCanonical": "Expected source digest is not canonical",
+  "error.core.draftRecovery.theDocumentBaseChanged": "The document base changed",
+  "error.core.draftRecovery.theCompleteDraftChangedDuringReadback": "The complete draft changed during readback",
+  "error.core.draftRecovery.thisInputProducerHasNoAcknowledgedDraft": "This input producer has no acknowledged draft",
+  "error.core.draftRecovery.thePersistedDraftDoesNotContainThePreparedInput": "The persisted draft does not contain the prepared input",
+  "error.core.draftRecovery.draftProducerDiffers": "Draft producer differs",
+  "error.core.draftRecovery.draftOriginalInputScopeOrPhysicalIdentityDiffers": "Draft original input scope or physical identity differs",
+  "error.core.draftRecovery.draftMetadataChangedDuringItsQualifiedRead": "Draft metadata changed during its qualified read",
+  "error.core.history.protectedDraftMetadataChangedDuringItsQualifiedRead": "Protected draft metadata changed during its qualified read",
+  "error.core.history.originalRestoreExceeds128ProtectedDraftRecords": "Original restore exceeds 128 protected Draft records",
+  "error.core.history.originalRestorePhysicalOwnerIsMissing": "Original restore physical owner is missing",
+  "error.core.history.originalProtectedDraftIsMissing": "Original protected Draft is missing",
+  "error.core.history.protectedDraftByteCountOverflow": "Protected Draft byte count overflow",
+  "error.core.history.originalProtectedDraftsExceed16MiB": "Original protected Drafts exceed 16 MiB",
+  "error.core.hosted.actorRecordHasNoSupportedOriginalMetadataOriginalBytesRemainUnchanged": "Actor record has no supported original metadata; original bytes remain unchanged",
+  "error.core.hosted.invalidOriginalActorMetadata": "Invalid original actor metadata",
+  "error.core.hosted.theOriginalOperationResourceDiffers": "The original operation resource differs",
+  "error.core.hosted.theOriginalUnboundInputDoesNotBelongToTheTrustedActor": "The original unbound input does not belong to the trusted actor library",
+  "error.core.hosted.actorRecordMetadataChangedDuringItsQualifiedRead": "Actor record metadata changed during its qualified read",
+  "error.core.hostedDefinition.definitionAdmissionMetadataIsMissing": "Definition admission metadata is missing",
+  "error.core.hostedDefinition.invalidDefinitionAdmissionActor": "Invalid definition admission actor",
+  "error.core.hostedDefinition.definitionAdmissionMetadataChangedDuringItsQualifiedRead": "Definition admission metadata changed during its qualified read",
+  "error.core.hostedDefinition.definitionAdmissionReferencesAnotherPlanKind": "Definition admission references another Plan kind",
+  "error.core.hostedDestination.originalUniqueChildCapabilityIsUnavailable": "Original unique-child capability is unavailable",
+  "error.core.hostedDestination.originalUniqueChildEvidenceExceedsItsByteBudget": "Original unique-child evidence exceeds its byte budget",
+  "error.core.hostedDestination.uniqueChildMemberMetadataExceedsItsBudget": "Unique-child member metadata exceeds its budget",
+  "error.core.hostedDestination.uniqueChildMemberBudgetIsExhausted": "Unique-child member budget is exhausted",
+  "error.core.hostedDestination.retainedUniqueChildMembersExceedTheConfiguredBudget": "Retained unique-child members exceed the configured budget",
+  "error.core.hostedLibrary.incompletePrivateMetadataPrefix": "Incomplete private metadata prefix",
+  "error.core.hostedLibrary.invalidPrivateMetadataSeparator": "Invalid private metadata separator",
+  "error.core.hostedLibrary.privateRecordLacksTheRequiredOrderedOriginalMetadataOriginalBytesRemain": "Private record lacks the required ordered original metadata; original bytes remain unchanged",
+  "error.core.hostedLibrary.invalidPrivateMetadataValue": "Invalid private metadata value",
+  "error.core.hostedLibrary.privateMetadataValueExceedsItsBudget": "Private metadata value exceeds its budget",
+  "error.core.hostedLibrary.qualifiedPrivateRecordExceedsItsBodyBudget": "Qualified private record exceeds its body budget",
+  "error.core.hostedLibrary.actorProducerMetadataDiffers": "Actor producer metadata differs",
+  "error.core.hostedLibraryTests.exactOriginalResourceDiffers": "Exact original resource differs",
+  "error.core.lib.anotherProposalArrivedAfterThisRecoveryViewReopenAndCompareThe": "Another proposal arrived after this recovery view; reopen and compare the complete current record before resolving it",
+  "error.core.lib.theOriginalLibraryActivationDoesNotIdentifyItsRetainedDecision": "The original library activation does not identify its retained decision",
+  "error.core.operations.theOpenedSourceObjectWasReplaced": "The opened source object was replaced",
+  "error.core.operations.previewInputIsOutsideItsActualRoot": "Preview input is outside its actual root",
+  "error.core.operations.previewPathIsNotUnicode": "Preview path is not Unicode",
+  "error.core.operations.previewInputPathsAreNotUnique": "Preview input paths are not unique",
+  "error.core.operations.theOpenedSourceIsOutsideItsActualRoot": "The opened source is outside its actual root",
+  "error.core.operations.previewInputExceedsTheComplete64MiBBudget": "Preview input exceeds the complete 64 MiB budget",
+  "error.core.operations.theOpenedSourceObjectChangedDuringCapture": "The opened source object changed during capture",
+  "error.core.fieldWire.incompleteFieldContainsDuplicateOrInvalidNativeMembers": "Incomplete field contains duplicate or invalid native members",
+  "error.core.fieldWire.incompleteFieldContainsUnknownOrMissingNativeMembers": "Incomplete field contains unknown or missing native members",
+  "error.core.fieldWire.nativeScalarInputMustBeAString": "Native scalar input must be a string",
+  "error.core.fieldWire.incompleteJSONEscape": "Incomplete JSON escape",
+  "error.core.fieldWire.invalidUTF16Escape": "Invalid UTF-16 escape",
+  "error.core.fieldWire.invalidJSONStringEscape": "Invalid JSON string escape",
+  "error.core.fieldWire.incompleteFieldIsNotAClosedNativeValue": "Incomplete field is not a closed native value",
+  "error.core.fieldWire.nativeFieldKindIsMissing": "Native field kind is missing",
+  "error.core.fieldWire.nativeFieldKindMustBeAnIdentifier": "Native field kind must be an identifier",
+  "error.core.fieldWire.nativeBooleanIsInvalid": "Native boolean is invalid",
+  "error.core.fieldWire.incompleteNativeScalarHasNoExactOriginalControlAddress": "Incomplete native scalar has no exact original control address",
+  "error.core.fieldWire.nativeListIsInvalid": "Native list is invalid",
+  "error.core.fieldWire.nativeRecordIsInvalid": "Native record is invalid",
+  "error.core.fieldWire.nativeMemberIdentifiersMustBeCompleteRetainUnfinishedKeyInputSeparately": "Native member identifiers must be complete; retain unfinished key input separately",
+  "error.core.fieldWire.nativeRecordKeysAreDuplicated": "Native record keys are duplicated",
+  "error.core.fieldWire.incompleteFieldHasAnUnknownNativeKind": "Incomplete field has an unknown native kind",
+  "error.core.fieldWire.incompleteFieldWireIsInvalidJSON": "Incomplete field wire is invalid JSON",
+  "error.core.fieldWire.aCompleteNativeFieldMustUseValidState": "A complete native field must use Valid state",
+  "error.core.adopt.originalWorkspaceControlIsUnavailable": "Original workspace control is unavailable",
+  "error.core.apply.theOriginalRetiredSourceIsUnavailable": "The original retired source is unavailable",
+  "error.core.apply.incomingFileEscapedRoot": "Incoming file escaped root",
+  "error.core.replica.capturedReplicaFileDisappeared": "Captured replica file disappeared",
+  "error.core.replica.publicationLacksItsDurableCommitOrder": "Publication lacks its durable commit order",
+  "error.core.replica.replicaEventLacksCommitOrder": "Replica event lacks commit order",
+  "error.core.store.existingImmutableRecordDiffers": "Existing immutable record differs",
+  "error.api.captureApi.theRetainedDeviceIdentityIsNotQualifiedForThisCoreProfile": "The retained device identity is not qualified for this Core profile",
+  "error.api.captureApi.onlyAnAuthorRecoveryCheckpointIsDurableQueryTheOriginalOperation": "Only an author recovery checkpoint is durable; query the original operation without dispatching an effect",
+  "error.api.captureApi.noDurableOriginalCaptureRequest": "No durable original capture request",
+  "error.api.captureApi.thisRouteOnlyDispatchesTheOriginalLocalCaptureRequest": "This route only dispatches the original local capture request",
+  "error.api.captureApi.originalTargetMovedAfterFreezingRetainAndSettleThisOriginalAttempt": "Original target moved after freezing; retain and settle this original attempt before selecting another",
+  "error.api.dataApi.schemaSerializationFailed": "Schema serialization failed",
+  "error.api.dataApi.theOriginalCaptureSchemaIdentityOrShapeChangedRawInputIs": "The original capture Schema identity or shape changed; raw input is retained",
+  "error.api.dataApi.typedCaptureRequiresItsOriginalSchemaIdentityAndSemanticDigest": "Typed capture requires its original Schema identity and semantic digest",
+  "error.api.desktopApi.theActualDesktopStatusIsUnavailable": "The actual desktop status is unavailable",
+  "error.api.desktopApi.theExactOriginalSessionIDIsRequired": "The exact original Session ID is required",
+  "error.api.knowledgeApi.templateSettingsCouldNotBeEncoded": "Template settings could not be encoded",
+  "error.api.lib.sessionLocationsAreUnavailable": "Session locations are unavailable",
+  "error.api.lib.sessionRenderProjectionsAreUnavailable": "Session render projections are unavailable",
+  "error.api.lib.sessionEditorProjectionsAreUnavailable": "Session editor projections are unavailable",
+  "error.api.mod.ownerHeaderExceedsItsFixedBudget": "Owner header exceeds its fixed budget",
+  "error.api.mod.ownerHeaderLengthIsInvalid": "Owner header length is invalid",
+  "error.api.mod.ownerBodyLengthCannotBeRepresented": "Owner body length cannot be represented",
+  "error.api.mod.ownerBodyExceedsItsFixedBudget": "Owner body exceeds its fixed budget",
+  "error.api.windows.theOwnerResultDoesNotMatchTheOriginalRequest": "The owner result does not match the original request",
+  "error.api.windows.theVerifiedOwnerHandshakeDoesNotMatchThisPhysicalProfileAnd": "The verified owner handshake does not match this physical profile and process",
+  "error.api.windows.localListenerHasNoPort": "Local listener has no port",
+  "error.api.windows.localOwnerCredentialIsUnavailable": "Local owner credential is unavailable",
+  "error.api.windows.ownerRoleAndLocalServiceAuthorityDiffer": "Owner role and local service authority differ",
+  "error.api.windows.hostResultExceedsTheFixedOutputBudget": "Host result exceeds the fixed output budget",
+  "error.api.windows.hostedOwnerHasNoLocalBusinessBridge": "Hosted owner has no local business bridge",
+  "error.api.windows.localAuthorityIsUnavailable": "Local authority is unavailable",
+  "error.api.windows.unknownLocalOperation": "Unknown local operation",
+  "error.api.windows.originalReplyExceedsTheFixedOutputBudget": "Original reply exceeds the fixed output budget",
+  "error.api.windows.hostedOwnerAcceptsOnlyItsExactLifecycleControl": "Hosted owner accepts only its exact lifecycle control",
+  "error.api.windows.hostControlDoesNotAcceptBusinessOrSecretBytes": "Host control does not accept business or secret bytes",
+  "error.api.windows.secretSidebandIsForbiddenForThisOperation": "Secret sideband is forbidden for this operation",
+  "error.api.windows.transientSyncCredentialIsMissing": "Transient sync credential is missing",
+  "error.api.windows.syncPureInputIsInvalid": "Sync pure input is invalid",
+  "error.api.windows.syncConnectionPureInputIsMissing": "Sync connection pure input is missing",
+  "error.api.windows.syncPureInputCannotContainCredentials": "Sync pure input cannot contain credentials",
+  "error.api.windows.credentialIsNotASCII": "Credential is not ASCII",
+  "error.api.structure.theOriginalCreationOperationIDMustBeACanonicalUUID": "The original creation operation ID must be a canonical UUID",
+  "error.api.structure.authorizedStructureSourcesExceedThe5000MemberBudget": "Authorized structure sources exceed the 5000 member budget",
+  "error.api.mod.theOriginalNotificationDeviceIsNotCurrent": "The original notification device is not current",
+  "error.api.mod.theOriginalNotificationAddressDiffers": "The original notification address differs",
+  "error.api.mod.theOriginalStartupDeviceIsNotCurrent": "The original startup device is not current",
+  "error.api.mod.theExactPreparedCaptureRecordDiffers": "The exact prepared Capture record differs",
+  "error.api.scheduler.theDesktopStoppedAcceptingNotificationSubmissions": "The desktop stopped accepting notification submissions",
+  "error.api.capture.captureRequestKindDiffers": "Capture request kind differs",
+  "error.api.capture.theOriginalCaptureRequestContainsUnfinishedAuthorInputOriginalTextAnd": "The original capture request contains unfinished author input; original text and operation ID are retained",
+  "error.api.members.authorizedStructureMembersExceedThe5000MemberBudget": "Authorized structure members exceed the 5000 member budget",
+  "error.capture.versionUnsupported": "Capture record version {actual} is unsupported; expected {expected}. Original bytes were preserved.",
+  "error.sync.nativeCompileUnqualified": "The exact frozen native HTML compile did not qualify this product",
+  "error.capture.fieldIdentityRequired": "Capture requires stable FieldId {field}; field keys are not identities",
+  "error.core.existingProfilePhysicalIdentityChanged": "The original Core profile physical identity differs; no replacement profile was created or admitted",
+  "error.core.existingProfileDeviceIdentityChanged": "The original Core profile current device identity differs; original records were preserved",
+  "error.api.data.frozenRequestInvalid": "The exact frozen request is not valid author input",
+  "error.notification.preparationFailed": "Notification preparation failed before the system call",
+  "error.notification.submissionUnknown": "The system submission returned an unconfirmed result",
+  "error.api.remoteSync.ownerClosing": "The owner is closing; no new transfer was started",
+  "error.api.recognition.ownerClosing": "The owner is closing; no new recognition job was started",
+  "error.api.sync.nativeValidationNoteBudget": "The native Query validation exceeds 32 exact notes",
+  "error.api.sync.nativeInputMissing": "The exact native input is missing",
+  "error.api.sync.nativeValidationWorkerBudget": "The native Query validation exceeded its total worker budget",
+  "error.api.sync.nativeValidationTimedOut": "The native Query validation timed out",
+  "error.api.sync.nativeResultInvalid": "The native worker returned an invalid exact result",
+  "error.api.sync.nativeProductsInvalid": "Invalid native products",
+  "error.api.sync.nativeProductByteBudget": "The native product inputs exceed the original Query byte budget",
+  "error.api.worker.deadline": "The original compile attempt reached its deadline; the input is retained",
+  "error.api.worker.inputBudget": "The frozen compiler input exceeds its byte budget",
+  "error.api.worker.nonzeroExit": "The compiler stopped with a nonzero result; the original input is retained",
+  "error.api.worker.outputRejected": "The original compiler output does not satisfy its protocol",
+  "error.api.worker.supervisionLost": "The compiler supervisor did not return its actual completion",
+  "error.api.worker.setupFailed": "The contained compiler process could not be started",
+  "error.api.worker.inputEncoding": "The frozen compiler input could not be encoded",
+  "error.api.worker.transportFailed": "The original compiler transport did not complete",
+  "error.api.worker.streamBudget": "The compiler stream exceeded its byte budget; the original input is retained",
+  "error.api.worker.processExitUnknown": "The compiler's actual process exit is unconfirmed; the original input is retained",
+  "error.api.broker.originalResultUnknown": "The original result is unconfirmed; retain the original operation ID"
 };

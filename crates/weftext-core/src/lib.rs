@@ -135,15 +135,25 @@ pub const STORAGE_PROFILE: &str = "weftext.qualified-fs.v2";
 #[serde(rename_all = "camelCase")]
 pub struct CoreError {
     pub code: String,
-    pub explanation: UiMessage,
-    pub diagnostics: Vec<RawDiagnostic>,
-    pub causes: ErrorCauses,
+    #[serde(flatten)]
+    pub description: Box<ErrorDescription>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<CoreErrorDetails>,
     #[serde(skip)]
     os_error: Option<i32>,
+}
+impl std::ops::Deref for CoreError {
+    type Target = ErrorDescription;
+    fn deref(&self) -> &Self::Target {
+        &self.description
+    }
+}
+impl std::ops::DerefMut for CoreError {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.description
+    }
 }
 /// Independent problems stay independent of the bounded causal chain.
 /// All groups are produced from already bounded Core/data inputs, never decoded as requests.
@@ -223,6 +233,7 @@ impl From<ErrorDescription> for CoreDescription {
 }
 impl From<CoreError> for CoreDescription {
     fn from(error: CoreError) -> Self {
+        let description = *error.description;
         let mut groups = match error.details {
             Some(CoreErrorDetails::Aggregate { groups }) => groups,
             None => Vec::new(),
@@ -232,9 +243,9 @@ impl From<CoreError> for CoreDescription {
             diagnostics: Vec::new(),
         });
         Self {
-            explanation: error.explanation,
-            diagnostics: error.diagnostics,
-            causes: error.causes,
+            explanation: description.explanation,
+            diagnostics: description.diagnostics,
+            causes: description.causes,
             details: Some(CoreErrorDetails::Aggregate { groups }),
         }
     }
@@ -244,9 +255,7 @@ impl CoreError {
         let description = description.into();
         Self {
             code: code.into(),
-            explanation: description.explanation,
-            diagnostics: description.diagnostics,
-            causes: description.causes,
+            description: Box::new(description),
             current_source: None,
             details: None,
             os_error: None,
@@ -260,11 +269,7 @@ impl CoreError {
         self
     }
     fn into_description(self) -> ErrorDescription {
-        ErrorDescription {
-            explanation: self.explanation,
-            diagnostics: self.diagnostics,
-            causes: self.causes,
-        }
+        *self.description
     }
     pub fn from_data(code: &str, error: weftext_data::DataError) -> Self {
         let (classification, description, details) = error.into_parts();
@@ -611,23 +616,60 @@ impl Core {
         Self::with_backend(data_dir, BackendContext::local()?)
     }
     pub fn with_backend(data_dir: impl AsRef<Path>, backend: BackendContext) -> Result<Self> {
-        let data_dir = absolute_path(data_dir.as_ref())?;
+        Self::open_profile(data_dir.as_ref(), backend, None)
+    }
+    /// Reopen only the exact existing physical profile and already qualified
+    /// device. Missing roots, lock or private namespaces are never created.
+    pub fn open_existing(
+        data_dir: impl AsRef<Path>,
+        physical_identity: &str,
+        device_id: &str,
+    ) -> Result<Self> {
+        Self::open_profile(
+            data_dir.as_ref(),
+            BackendContext::local()?,
+            Some((physical_identity, device_id)),
+        )
+    }
+    fn open_profile(
+        data_dir: &Path,
+        backend: BackendContext,
+        expected: Option<(&str, &str)>,
+    ) -> Result<Self> {
+        let data_dir = absolute_path(data_dir)?;
+        let original = if let Some((physical_identity, _)) = expected {
+            let profile = profile_identity::qualify_existing_profile(&data_dir)?;
+            if profile.physical_identity() != physical_identity {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    UiMessage::error_core_existing_profile_physical_identity_changed(),
+                ));
+            }
+            Some(profile)
+        } else {
+            None
+        };
         backend.check_path(&data_dir)?;
-        backend.create_private_directory(&data_dir)?;
+        if expected.is_none() {
+            backend.create_private_directory(&data_dir)?;
+        }
         let data_guard = ParentGuard::acquire(&backend, &data_dir.join("instance.lock"))?;
-        let instance_lock = instance_lock(&backend, &data_dir)?;
-        backend.create_private_directory(&data_dir.join("journal"))?;
-        backend.create_private_directory(&data_dir.join("drafts"))?;
-        backend.create_private_directory(&data_dir.join("draft-history"))?;
-        backend.create_private_directory(&data_dir.join(device_state::DEVICE_STATE_ROOT))?;
-        backend.create_private_directory(&data_dir.join(capture_draft::CAPTURE_DIRECTORY))?;
-        backend
-            .create_private_directory(&data_dir.join(capture_draft::CAPTURE_STAGING_DIRECTORY))?;
-        backend.create_private_directory(
-            &data_dir
-                .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
-                .join("local"),
-        )?;
+        let instance_lock = instance_lock(&backend, &data_dir, expected.is_none())?;
+        if expected.is_none() {
+            backend.create_private_directory(&data_dir.join("journal"))?;
+            backend.create_private_directory(&data_dir.join("drafts"))?;
+            backend.create_private_directory(&data_dir.join("draft-history"))?;
+            backend.create_private_directory(&data_dir.join(device_state::DEVICE_STATE_ROOT))?;
+            backend.create_private_directory(&data_dir.join(capture_draft::CAPTURE_DIRECTORY))?;
+            backend.create_private_directory(
+                &data_dir.join(capture_draft::CAPTURE_STAGING_DIRECTORY),
+            )?;
+            backend.create_private_directory(
+                &data_dir
+                    .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
+                    .join("local"),
+            )?;
+        }
         let private_guards = [
             "journal",
             "drafts",
@@ -658,7 +700,17 @@ impl Core {
             admitted_cuts: HashMap::new(),
             compile_dependency_cuts: HashMap::new(),
         };
+        if let Some((_, device_id)) = expected {
+            let device = core.existing_device_identity()?;
+            if !device.is_current || device.id != device_id {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    UiMessage::error_core_existing_profile_device_identity_changed(),
+                ));
+            }
+        }
         core.load_journals()?;
+        drop(original);
         Ok(core)
     }
     pub fn open(
@@ -860,7 +912,7 @@ impl Core {
         if latest.map(Draft::witness).transpose()? != session.draft_witness {
             return Err(CoreError::new(
                 "draftChanged",
-                "Another proposal arrived after this recovery view; reopen and compare the complete current record before resolving it",
+                weftext_messages::UiMessage::error_core_lib_another_proposal_arrived_after_this_recovery_view_reopen_and_compare_the(),
             ));
         }
         let source = if action == "discardRecovered" {
@@ -1229,7 +1281,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "unsupportedStorageProfile",
-                "The workspace storage profile is unsupported; preserve its originals and use explicit import or conversion",
+                weftext_messages::UiMessage::error_core_backend_unsupported_storage_profile(),
             ));
         }
         let activation: serde_json::Value = serde_json::from_slice(
@@ -1241,7 +1293,7 @@ impl Core {
         let operation_id = activation["operationId"].as_str().ok_or_else(|| {
             CoreError::new(
                 "identityPending",
-                "The original library activation does not identify its retained decision",
+                weftext_messages::UiMessage::error_core_lib_the_original_library_activation_does_not_identify_its_retained_decision(),
             )
         })?;
         let Some(plan) = self.operations.get(operation_id) else {
@@ -1307,10 +1359,14 @@ fn default_note_source(node_id: &str, name: &str) -> Result<String> {
 fn known_base() -> bool {
     true
 }
-fn instance_lock(backend: &BackendContext, data_dir: &Path) -> Result<backend::BoundFile> {
+fn instance_lock(
+    backend: &BackendContext,
+    data_dir: &Path,
+    create: bool,
+) -> Result<backend::BoundFile> {
     let guard = ParentGuard::acquire(backend, &data_dir.join("instance.lock"))?;
     let opened = match guard.open_file(true, false) {
-        Err(error) if error.code == "missing" => guard.open_file(true, true),
+        Err(error) if error.code == "missing" && create => guard.open_file(true, true),
         other => other,
     };
     let file = opened.map_err(|mut error| {

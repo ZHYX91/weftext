@@ -599,7 +599,9 @@ async fn freeze(
             let actor = inner.actor(&auth)?;
             private_current(inner, &actor, &req.draft_id)?;
             if req.request.request_kind != "hostedStructure" {
-                return Err(ApiError::bad("捕获请求种类不符"));
+                return Err(ApiError::bad(
+                    weftext_messages::UiMessage::error_api_capture_capture_request_kind_differs(),
+                ));
             }
             let owner = scope(inner, &actor);
             let root = inner.config.root.clone();
@@ -705,7 +707,7 @@ async fn submit(
             }
             require_full_input(inner, &actor, &req.draft_id)?;
             let request: Prepare = serde_json::from_str(&original.wire)
-                .map_err(|_| ApiError::bad("原捕获请求含尚未完成的作者输入；原文和编号保留"))?;
+                .map_err(|_| ApiError::bad(weftext_messages::UiMessage::error_api_capture_the_original_capture_request_contains_unfinished_author_input_original_text_and()))?;
             if !matches!(request.kind.as_str(), "create" | "template")
                 || request.resource != slot
                 || request.destination.as_deref() != Some(slot.as_str())

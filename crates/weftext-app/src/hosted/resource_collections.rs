@@ -274,7 +274,7 @@ pub(super) fn qualify(
     collection: &str,
 ) -> Result<QualifiedResourceCollection, ApiError> {
     content_import::qualify_member(inner, collection).inspect_err(|error| {
-        resource_diagnostic("qualify_member", collection, &error.code, "");
+        resource_diagnostic("qualify_member", collection, &error.code, &[]);
     })?;
     let c = configured(inner, collection)?;
     let owner = inner.file(&c.owner).ok().ok_or_else(unavailable)?;
@@ -355,7 +355,7 @@ pub(super) fn expand_inputs(
                         "expand_new_unrecognized",
                         collection,
                         "unrecognized_entries",
-                        "",
+                        &[],
                     );
                     return Err(changed());
                 }
@@ -374,7 +374,7 @@ pub(super) fn expand_inputs(
                         "expand_cached_unrecognized",
                         collection,
                         "unrecognized_entries",
-                        "",
+                        &[],
                     );
                     return Err(changed());
                 }

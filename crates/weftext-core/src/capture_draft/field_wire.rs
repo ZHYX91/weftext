@@ -77,11 +77,11 @@ impl<'de> Deserialize<'de> for Members {
 }
 fn fields(raw: &str, expected: &[&str]) -> Result<Members> {
     let members: Members = serde_json::from_str(raw)
-        .map_err(|_| invalid("Incomplete field contains duplicate or invalid native members"))?;
+        .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_incomplete_field_contains_duplicate_or_invalid_native_members()))?;
     if members.0.len() != expected.len() || expected.iter().any(|key| !members.0.contains_key(*key))
     {
         return Err(invalid(
-            "Incomplete field contains unknown or missing native members",
+            weftext_messages::UiMessage::error_core_field_wire_incomplete_field_contains_unknown_or_missing_native_members(),
         ));
     }
     Ok(members)
@@ -89,7 +89,10 @@ fn fields(raw: &str, expected: &[&str]) -> Result<Members> {
 fn string_units(raw: &RawValue) -> Result<Vec<u16>> {
     let raw = raw.get();
     if !raw.starts_with('"') || !raw.ends_with('"') {
-        return Err(invalid("Native scalar input must be a string"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_core_field_wire_native_scalar_input_must_be_a_string(
+            ),
+        ));
     }
     // RawValue already checked JSON grammar. Decode escapes to code units so
     // an unpaired escaped surrogate is retained rather than replaced/rejected.
@@ -101,9 +104,9 @@ fn string_units(raw: &RawValue) -> Result<Vec<u16>> {
             result.extend_from_slice(ch.encode_utf16(&mut units));
             continue;
         }
-        let escaped = chars
-            .next()
-            .ok_or_else(|| invalid("Incomplete JSON escape"))?;
+        let escaped = chars.next().ok_or_else(|| {
+            invalid(weftext_messages::UiMessage::error_core_field_wire_incomplete_j_s_o_n_escape())
+        })?;
         if escaped == 'u' {
             let mut unit = 0u16;
             for _ in 0..4 {
@@ -111,7 +114,7 @@ fn string_units(raw: &RawValue) -> Result<Vec<u16>> {
                     | chars
                         .next()
                         .and_then(|ch| ch.to_digit(16))
-                        .ok_or_else(|| invalid("Invalid UTF-16 escape"))?
+                        .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_field_wire_invalid_u_t_f16_escape()))?
                         as u16;
             }
             result.push(unit);
@@ -125,7 +128,7 @@ fn string_units(raw: &RawValue) -> Result<Vec<u16>> {
                 'n' => 10,
                 'r' => 13,
                 't' => 9,
-                _ => return Err(invalid("Invalid JSON string escape")),
+                _ => return Err(invalid(weftext_messages::UiMessage::error_core_field_wire_invalid_j_s_o_n_string_escape())),
             });
         }
     }
@@ -149,15 +152,15 @@ fn native(
         return Err(budget());
     }
     let initial: Members = serde_json::from_str(raw.get())
-        .map_err(|_| invalid("Incomplete field is not a closed native value"))?;
+        .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_incomplete_field_is_not_a_closed_native_value()))?;
     let kind: String = serde_json::from_str(
         initial
             .0
             .get("kind")
-            .ok_or_else(|| invalid("Native field kind is missing"))?
+            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_field_wire_native_field_kind_is_missing()))?
             .get(),
     )
-    .map_err(|_| invalid("Native field kind must be an identifier"))?;
+    .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_native_field_kind_must_be_an_identifier()))?;
     if kind == "none" {
         fields(raw.get(), &["kind"])?;
         return Ok(());
@@ -167,7 +170,7 @@ fn native(
     match kind.as_str() {
         "bool" => {
             serde_json::from_str::<bool>(value.get())
-                .map_err(|_| invalid("Native boolean is invalid"))?;
+                .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_native_boolean_is_invalid()))?;
         }
         "text" | "int" | "float" | "decimal" | "date" | "time" | "localDatetime" | "duration" => {
             let units = string_units(value)?;
@@ -180,7 +183,7 @@ fn native(
                         && raw.text.utf16 == units
                 }) {
                     return Err(invalid(
-                        "Incomplete native scalar has no exact original control address",
+                        weftext_messages::UiMessage::error_core_field_wire_incomplete_native_scalar_has_no_exact_original_control_address(),
                     ));
                 }
                 context.incomplete = true;
@@ -188,7 +191,7 @@ fn native(
         }
         "array" => {
             let items: Vec<Box<RawValue>> =
-                serde_json::from_str(value.get()).map_err(|_| invalid("Native list is invalid"))?;
+                serde_json::from_str(value.get()).map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_native_list_is_invalid()))?;
             for (index, item) in items.iter().enumerate() {
                 path.push(weftext_data::ValuePath::Index { index });
                 native(item, path, depth + 1, context)?;
@@ -197,14 +200,14 @@ fn native(
         }
         "record" => {
             let items: Vec<Box<RawValue>> = serde_json::from_str(value.get())
-                .map_err(|_| invalid("Native record is invalid"))?;
+                .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_native_record_is_invalid()))?;
             let mut keys = BTreeSet::new();
             for item in items {
                 let entry = fields(item.get(), &["key", "value"])?;
                 let units = string_units(&entry.0["key"])?;
-                let key = String::from_utf16(&units).map_err(|_| invalid("Native member identifiers must be complete; retain unfinished key input separately"))?;
+                let key = String::from_utf16(&units).map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_native_member_identifiers_must_be_complete_retain_unfinished_key_input_separately()))?;
                 if !keys.insert(key.clone()) {
-                    return Err(invalid("Native record keys are duplicated"));
+                    return Err(invalid(weftext_messages::UiMessage::error_core_field_wire_native_record_keys_are_duplicated()));
                 }
                 add_input_bytes(context.bytes, key.len())?;
                 path.push(weftext_data::ValuePath::Member { key });
@@ -212,7 +215,7 @@ fn native(
                 path.pop();
             }
         }
-        _ => return Err(invalid("Incomplete field has an unknown native kind")),
+        _ => return Err(invalid(weftext_messages::UiMessage::error_core_field_wire_incomplete_field_has_an_unknown_native_kind())),
     }
     Ok(())
 }
@@ -227,7 +230,7 @@ pub(super) fn validate(
     add_input_bytes(bytes, wire.utf16.len() * 2)?;
     let source = wire.utf8()?;
     let value: Box<RawValue> = serde_json::from_str(&source)
-        .map_err(|_| invalid("Incomplete field wire is invalid JSON"))?;
+        .map_err(|_| invalid(weftext_messages::UiMessage::error_core_field_wire_incomplete_field_wire_is_invalid_j_s_o_n()))?;
     let mut context = Context {
         field,
         raw,
@@ -237,7 +240,7 @@ pub(super) fn validate(
     };
     native(&value, &mut Vec::new(), 0, &mut context)?;
     if !context.incomplete {
-        return Err(invalid("A complete native field must use Valid state"));
+        return Err(invalid(weftext_messages::UiMessage::error_core_field_wire_a_complete_native_field_must_use_valid_state()));
     }
     Ok(())
 }

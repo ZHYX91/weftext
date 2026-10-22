@@ -260,7 +260,7 @@ fn read_actor_operation_metadata(
     .ok_or_else(|| {
         CoreError::new(
             "unsupportedInputScope",
-            "Actor record has no supported original metadata; original bytes remain unchanged",
+            weftext_messages::UiMessage::error_core_hosted_actor_record_has_no_supported_original_metadata_original_bytes_remain_unchanged(),
         )
     })?;
     decode_metadata(fields)
@@ -483,7 +483,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Invalid original actor metadata",
+                weftext_messages::UiMessage::error_core_hosted_invalid_original_actor_metadata(),
             ));
         }
         if let Some(library) = &metadata.library {
@@ -569,7 +569,7 @@ impl Core {
             if metadata.resource != resource && !skip_foreign_resource {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The original operation resource differs",
+                    weftext_messages::UiMessage::error_core_hosted_the_original_operation_resource_differs(),
                 ));
             }
             if !skip_foreign_resource || metadata.resource == resource {
@@ -583,7 +583,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "The original unbound input does not belong to the trusted actor library",
+                        weftext_messages::UiMessage::error_core_hosted_the_original_unbound_input_does_not_belong_to_the_trusted_actor(),
                     ));
                 }
             }
@@ -598,7 +598,7 @@ impl Core {
         if ActorOperationMetadata::from(&record) != metadata {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Actor record metadata changed during its qualified read",
+                weftext_messages::UiMessage::error_core_hosted_actor_record_metadata_changed_during_its_qualified_read(),
             ));
         }
         self.validate_actor_input_record(&record)?;

@@ -163,7 +163,7 @@ pub fn project_bibliography(
         work.work
             .publication
             .to_typst()
-            .map_err(|e| ExportError::from_data(e))?;
+            .map_err(ExportError::from_data)?;
         rows.push(project_work(work, &mut losses)?);
     }
     let bytes = match format {
@@ -742,7 +742,7 @@ pub fn import_bibliography(
         record
             .publication
             .to_typst()
-            .map_err(|e| ExportError::from_data(e))?;
+            .map_err(ExportError::from_data)?;
     }
     Ok(ImportBibliographyProposal {
         format,
@@ -1695,9 +1695,7 @@ fn exact_extension(
             ),
         ))
     })?;
-    publication
-        .to_typst()
-        .map_err(|e| ExportError::from_data(e))?;
+    publication.to_typst().map_err(ExportError::from_data)?;
     loss(
         losses,
         "exactExtension",

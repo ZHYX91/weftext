@@ -51,7 +51,7 @@ fn error(message: impl Into<weftext_messages::ErrorDescription>) -> ExportError 
     ExportError::new(message)
 }
 fn quoted(value: &str) -> Result<String> {
-    weftext_engine::encode_string(value).map_err(|e| ExportError::from_engine(e))
+    weftext_engine::encode_string(value).map_err(ExportError::from_engine)
 }
 fn insert(
     p: &mut NativePackage,
@@ -143,7 +143,7 @@ fn mapped_value(schema: &Schema, mapping: &ReviewField) -> Result<NativeValue> {
             weftext_messages::UiMessage::error_export_recognition_confirmed_value_shape_mismatch(),
         )));
     }
-    value.to_typst().map_err(|e| ExportError::from_data(e))?;
+    value.to_typst().map_err(ExportError::from_data)?;
     Ok(value)
 }
 /// Evidence contains exact worker result, scheme proposal, settings and digests.
@@ -212,7 +212,7 @@ pub fn build_recognition_package(
             weftext_messages::UiMessage::error_export_recognition_partial_acceptance_required(),
         )));
     }
-    let schema = Schema::from_author_json(schema_json).map_err(|e| ExportError::from_data(e))?;
+    let schema = Schema::from_author_json(schema_json).map_err(ExportError::from_data)?;
     let id = |role: &str| {
         let hash = exchange::digest(format!("{operation}:{role}").as_bytes());
         let mut bytes = u128::from_str_radix(&hash[..32], 16).unwrap().to_be_bytes();
@@ -585,7 +585,7 @@ pub fn build_recognition_package(
     package.manifest.losses.push(exchange::NativeLoss{path:"recognition".into(),code:"recognition-layout".into(),description:weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_editable_recognition_with_original_retained()),
 product_diagnostics: Vec::new(),
 });
-    exchange::validate_native_package(&package).map_err(|e| ExportError::from_native(e))?;
+    exchange::validate_native_package(&package).map_err(ExportError::from_native)?;
     Ok(package)
 }
 

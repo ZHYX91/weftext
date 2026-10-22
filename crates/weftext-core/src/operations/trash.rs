@@ -240,7 +240,7 @@ impl Core {
         let source = entry.path.join(&entry.leaf);
         self.check_pending(&source)?;
         let file = capture_optional(&self.backend, &source)?.ok_or_else(|| {
-            CoreError::new("missingNode", "The retained canonical source is missing")
+            CoreError::new("missingNode", weftext_messages::UiMessage::error_core_operations_retained_canonical_source_missing())
         })?;
         if file.stamp.identity != entry.leaf_identity
             || self

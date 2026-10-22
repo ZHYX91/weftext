@@ -1,6 +1,6 @@
 //! Desktop intent and actual document-draft readback on the same local Core.
 //! No OS permit, notification submission or arbitrary host command is an HTTP API.
-use crate::{ApiResult, AppState, core_call, value};
+use crate::{ApiResult, AppState, RequestJson, core_call, value};
 use axum::{
     Json, Router,
     extract::State,
@@ -61,7 +61,7 @@ async fn status(State(state): State<AppState>) -> ApiResult {
     let observed = state
         .native_status
         .lock()
-        .map_err(|_| crate::ApiError::internal("The actual desktop status is unavailable"))?
+        .map_err(|_| crate::ApiError::internal(weftext_messages::UiMessage::error_api_desktop_api_the_actual_desktop_status_is_unavailable()))?
         .clone();
     Ok(Json(value(observed)?))
 }
@@ -81,7 +81,7 @@ struct UpdatePreferences {
 
 async fn update_preferences(
     State(state): State<AppState>,
-    Json(request): Json<UpdatePreferences>,
+    RequestJson(request): RequestJson<UpdatePreferences>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
@@ -93,7 +93,7 @@ async fn update_preferences(
 
 async fn document_flush(
     State(state): State<AppState>,
-    Json(request): Json<weftext_core::DocumentDraftFlush>,
+    RequestJson(request): RequestJson<weftext_core::DocumentDraftFlush>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.flush_document_draft(request)).await?,
@@ -107,11 +107,11 @@ struct ReleaseSession {
 }
 async fn release_session(
     State(state): State<AppState>,
-    Json(request): Json<ReleaseSession>,
+    RequestJson(request): RequestJson<ReleaseSession>,
 ) -> ApiResult {
     if !crate::broker::canonical_uuid(&request.session_id) {
         return Err(crate::ApiError::bad(
-            "The exact original Session ID is required",
+            weftext_messages::UiMessage::error_api_desktop_api_the_exact_original_session_i_d_is_required(),
         ));
     }
     let id = request.session_id.clone();
@@ -126,7 +126,6 @@ async fn release_session(
 
 #[cfg(all(test, windows))]
 mod tests {
-    use super::*;
     use crate::local_service::{LocalService, LocalServiceOptions};
 
     #[tokio::test]

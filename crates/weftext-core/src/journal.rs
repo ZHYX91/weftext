@@ -352,31 +352,7 @@ impl Core {
                 UiMessage::error_core_journal_original_commit_evidence_invalid(),
             )
         })?;
-        validate_original_commit_bytes(original_plan, &bytes)?;
-        let record: CommitRecord = serde_json::from_slice(&bytes)?;
-        if record.storage_profile != STORAGE_PROFILE {
-            return Err(CoreError::new(
-                "unsupportedStorageProfile",
-                "The committed storage profile is unsupported; preserve the original decision",
-            ));
-        }
-        let plan = self.operations.get(id).ok_or_else(|| {
-            CoreError::new(
-                "resolutionUnavailable",
-                "An original committed decision has no retained Plan",
-            )
-        })?;
-        if record.operation_id != id
-            || record.fingerprint != plan.fingerprint
-            || serde_json::to_value(&record.file_save)? != serde_json::to_value(&plan.file_save)?
-            || record.commit_sequence == 0
-            || serde_json::to_value(&record.receipt)? != serde_json::to_value(&plan.receipt)?
-        {
-            return Err(CoreError::new(
-                "resolutionUnavailable",
-                "The original committed decision no longer matches its exact Plan",
-            ));
-        }
+        let record = decode_original_commit(original_plan, &bytes)?;
         Ok(Some(record))
     }
     pub(crate) fn commit(&self, plan: &Plan) -> Result<()> {
@@ -410,7 +386,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "The original accepted decision is missing",
+                    weftext_messages::UiMessage::error_core_backend_accepted_decision_missing(),
                 )
             })
     }
@@ -905,7 +881,7 @@ impl Core {
                 } else {
                     return Err(CoreError::new(
                         "identityPending",
-                        "The committed Node Plan has no original Node identity",
+                        weftext_messages::UiMessage::error_core_backend_committed_node_identity_missing(),
                     ));
                 }
             }
@@ -928,7 +904,8 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "identityPending",
-                        "The committed Node birth evidence is incomplete; preserve the original source",
+                        weftext_messages::UiMessage::error_core_backend_committed_birth_incomplete(
+                        ),
                     ));
                 }
             }
@@ -937,39 +914,30 @@ impl Core {
     }
 }
 pub(crate) fn validate_original_commit_bytes(plan: &Plan, bytes: &[u8]) -> Result<()> {
+    decode_original_commit(plan, bytes).map(|_| ())
+}
+fn decode_original_commit(plan: &Plan, bytes: &[u8]) -> Result<CommitRecord> {
     let invalid = || {
         CoreError::new(
             "invalidState",
             UiMessage::error_core_journal_original_commit_evidence_invalid(),
         )
     };
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase", deny_unknown_fields)]
-    struct CommitFact {
-        operation_id: String,
-        fingerprint: String,
-        receipt: Option<Receipt>,
-        file_save: Option<FileSaveData>,
-        storage_profile: String,
-        saved_at_unix_ms: Option<u64>,
-        commit_sequence: Option<u64>,
-    }
     if bytes.len() > 65536 {
         return Err(invalid());
     }
-    let fact: CommitFact = serde_json::from_slice(bytes)
+    let fact: CommitRecord = serde_json::from_slice(bytes)
         .map_err(|error| invalid().caused_by(CoreError::from(error)))?;
     if fact.operation_id != plan.operation_id
         || fact.fingerprint != plan.fingerprint
         || fact.storage_profile != STORAGE_PROFILE
         || serde_json::to_value(&fact.receipt)? != serde_json::to_value(&plan.receipt)?
         || serde_json::to_value(&fact.file_save)? != serde_json::to_value(&plan.file_save)?
-        || fact.commit_sequence == Some(0)
+        || fact.commit_sequence == 0
     {
         return Err(invalid());
     }
-    let _ = fact.saved_at_unix_ms;
-    Ok(())
+    Ok(fact)
 }
 pub(crate) fn private_create(
     backend: &crate::BackendContext,

@@ -214,7 +214,7 @@ fn bounded_record(
         .ok_or_else(|| {
             CoreError::new(
                 "privateEvidence",
-                "Definition admission metadata is missing",
+                weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_metadata_is_missing(),
             )
         })?;
         let metadata: DefinitionSaveMetadata = decode_metadata(fields)?;
@@ -224,7 +224,7 @@ fn bounded_record(
         if metadata.actor.is_empty() || metadata.actor.len() > 256 {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Invalid definition admission actor",
+                weftext_messages::UiMessage::error_core_hosted_definition_invalid_definition_admission_actor(),
             ));
         }
         if !accept(&metadata)? {
@@ -239,7 +239,7 @@ fn bounded_record(
     if DefinitionSaveMetadata::from(&record) != metadata {
         return Err(CoreError::new(
             "privateEvidence",
-            "Definition admission metadata changed during its qualified read",
+            weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_metadata_changed_during_its_qualified_read(),
         ));
     }
     Ok(Some((record, bytes)))
@@ -846,7 +846,7 @@ impl Core {
             if path.try_exists()? {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Definition admission references another Plan kind",
+                    weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_references_another_plan_kind(),
                 ));
             }
             return Ok(None);

@@ -16,6 +16,23 @@ fn compile(inputs: &SyncNativeRenderInputs) -> Vec<SyncNativeRenderOutput> {
         })
         .collect()
 }
+#[test]
+fn native_adapter_retains_actual_failed_compiler_diagnostics_and_origins() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = engine()
+        .render(
+            "#missing-convergence-function()",
+            &temp.path().join("original.typ"),
+            temp.path(),
+        )
+        .unwrap();
+    assert!(!output.ok);
+    assert!(!output.diagnostics.is_empty());
+    let original = serde_json::to_value(&output.diagnostics).unwrap();
+    let adapted = SyncNativeRenderOutput::from(output);
+    assert_eq!(serde_json::to_value(adapted.diagnostics).unwrap(), original);
+    assert!(!adapted.ok);
+}
 struct Fixture {
     _temp: tempfile::TempDir,
     a: Core,

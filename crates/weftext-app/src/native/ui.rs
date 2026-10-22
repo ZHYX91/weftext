@@ -393,10 +393,10 @@ impl Reducer {
                 self.admission_epoch = admission_epoch;
                 let key = id(kind);
                 if let Some(surface) = self.surfaces.get_mut(&key) {
-                    if surface.gate.reactivate() {
-                        if let Some(view) = &surface.view {
-                            view.post(&serde_json::json!({"type":"close-cancelled"}))?;
-                        }
+                    if surface.gate.reactivate()
+                        && let Some(view) = &surface.view
+                    {
+                        view.post(&serde_json::json!({"type":"close-cancelled"}))?;
                     }
                     // Repeated launch must not expose an unready controller
                     // before its real producer barriers have registered.
@@ -681,17 +681,17 @@ impl Reducer {
                 }
             }
             Event::Focus(weak) => {
-                if let Some(key) = self.live_key(&weak) {
-                    if let Some(view) = &self.surfaces[&key].view {
-                        view.focus()?;
-                    }
+                if let Some(key) = self.live_key(&weak)
+                    && let Some(view) = &self.surfaces[&key].view
+                {
+                    view.focus()?;
                 }
             }
             Event::ParentMoved(weak) => {
-                if let Some(key) = self.live_key(&weak) {
-                    if let Some(view) = &self.surfaces[&key].view {
-                        view.parent_moved()?;
-                    }
+                if let Some(key) = self.live_key(&weak)
+                    && let Some(view) = &self.surfaces[&key].view
+                {
+                    view.parent_moved()?;
                 }
             }
             Event::Message(weak, source, json) => {
@@ -854,8 +854,11 @@ impl Reducer {
                         surface_id,
                         surface_epoch,
                         close_attempt_id,
-                        ..
+                        reason,
                     } => {
+                        if reason.is_empty() || reason.len() > 64 * 1024 {
+                            return Err(failed());
+                        }
                         if surface.gate.owns_attempt(&Request {
                             surface_id,
                             surface_epoch,
@@ -882,7 +885,11 @@ impl Reducer {
                     return Err(failed());
                 }
             }
-            Event::ViewFailed(_) => return Err(failed()),
+            Event::ViewFailed(weak) => {
+                if self.live_key(&weak).is_some() {
+                    return Err(failed());
+                }
+            }
             Event::ExternalUrl(uri) => self.notice(Notice::ExternalUrl(uri))?,
             Event::Tray(code) => {
                 // shellapi.h defines NIN_KEYSELECT as NIN_SELECT | NINF_KEY(1).

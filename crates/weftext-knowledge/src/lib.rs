@@ -30,19 +30,19 @@ pub type Result<T> = std::result::Result<T, KnowledgeError>;
 pub struct KnowledgeError {
     pub code: String,
     #[serde(flatten)]
-    pub description: ErrorDescription,
+    pub description: Box<ErrorDescription>,
     pub product_diagnostics: Vec<ErrorDescription>,
 }
 impl KnowledgeError {
     pub fn new(code: &str, description: impl Into<ErrorDescription>) -> Self {
         Self {
             code: code.into(),
-            description: description.into(),
+            description: Box::new(description.into()),
             product_diagnostics: Vec::new(),
         }
     }
     pub fn into_parts(self) -> (ErrorDescription, Vec<ErrorDescription>) {
-        (self.description, self.product_diagnostics)
+        (*self.description, self.product_diagnostics)
     }
     pub fn with_diagnostics(mut self, diagnostics: Vec<ErrorDescription>) -> Self {
         self.product_diagnostics.extend(diagnostics);
@@ -95,7 +95,7 @@ impl KnowledgeError {
         };
         Self {
             code: code.into(),
-            description,
+            description: Box::new(description),
             product_diagnostics: diagnostics,
         }
     }

@@ -127,7 +127,7 @@ impl Drop for Attributes {
     }
 }
 
-async fn stdio(stdio: Stdio, input: bool, sid: &str) -> io::Result<(OwnedHandle, Option<Pipe>)> {
+fn stdio_handles(stdio: Stdio, input: bool, sid: &str) -> io::Result<(OwnedHandle, Option<Pipe>)> {
     let attrs = SECURITY_ATTRIBUTES {
         nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
         lpSecurityDescriptor: std::ptr::null_mut(),
@@ -191,10 +191,17 @@ async fn stdio(stdio: Stdio, input: bool, sid: &str) -> io::Result<(OwnedHandle,
             }
             .map_err(error)?;
             let file = own(file);
-            server.connect().await?;
             Ok((file, Some(server)))
         }
     }
+}
+
+async fn stdio(stdio: Stdio, input: bool, sid: &str) -> io::Result<(OwnedHandle, Option<Pipe>)> {
+    let (file, server) = stdio_handles(stdio, input, sid)?;
+    if let Some(server) = &server {
+        server.connect().await?;
+    }
+    Ok((file, server))
 }
 
 pub(super) async fn spawn(command: &mut Command) -> io::Result<Child> {

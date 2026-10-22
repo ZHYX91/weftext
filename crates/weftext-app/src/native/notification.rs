@@ -174,22 +174,20 @@ pub(super) async fn submit(
             Ok((apartment, prepared, profile))
         })();
         let outcome = match prepared {
-            Err(_) => ReminderSubmissionOutcome::FailedBeforeCall("Notification preparation failed before the system call".into()),
+            Err(error) => ReminderSubmissionOutcome::FailedBeforeCall(weftext_core::CoreDescription::from(weftext_core::CoreError::new("notificationPreparationFailed", weftext_messages::UiMessage::error_notification_preparation_failed()).caused_by(weftext_core::CoreError::from(error)))),
             Ok((_apartment, prepared, _profile)) => {
                 let admitted = core.lock().map_err(|_| io::Error::other("The original Core is unavailable"))?
                     .check_reminder_permit(&permit);
                 match admitted {
                     Err(error) if error.code == "reminderPermitUsed" => ReminderSubmissionOutcome::Unknown(
-                        "The original one-use permit was already admitted; its system result remains unknown".into()),
-                    Err(_) => ReminderSubmissionOutcome::FailedBeforeCall(
-                        "The original reminder lost qualification before the system call".into()),
+                        weftext_core::CoreDescription::from(error)),
+                    Err(error) => ReminderSubmissionOutcome::FailedBeforeCall(weftext_core::CoreDescription::from(error)),
                     Ok(()) => {
                         // No await, preparation, catalog write or retained Core
                         // lock occurs between final one-use admission and Show.
                         match prepared.show() {
                             Ok(()) => ReminderSubmissionOutcome::SubmittedToSystem,
-                            Err(_) => ReminderSubmissionOutcome::Unknown(
-                                "The one system submission returned an unconfirmed result".into()),
+                            Err(error) => ReminderSubmissionOutcome::Unknown(weftext_core::CoreDescription::from(weftext_core::CoreError::new("notificationResultUnknown", weftext_messages::UiMessage::error_notification_submission_unknown()).caused_by(weftext_core::CoreError::from(std::io::Error::other(error))))),
                         }
                     }
                 }
@@ -213,8 +211,7 @@ pub(super) async fn in_history(original: &ReminderOriginalNotification) -> io::R
         }
         for index in 0..history.Size()? {
             let item = history.GetAt(index)?;
-            if item.Tag()?.to_string() != request.tag || item.Group()?.to_string() != request.group
-            {
+            if item.Tag()? != request.tag || item.Group()? != request.group {
                 continue;
             }
             let xml = item.Content()?.GetXml()?.to_string();

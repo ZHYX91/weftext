@@ -94,7 +94,7 @@ fn pe_subsystem(file: &mut File, bytes: u64) -> io::Result<u16> {
         return Err(invalid());
     }
     let offset = u32::from_le_bytes(dos[60..64].try_into().unwrap()) as u64;
-    if offset < 64 || offset > 1024 * 1024 || offset + 24 + 70 > bytes {
+    if !(64..=1024 * 1024).contains(&offset) || offset + 24 + 70 > bytes {
         return Err(invalid());
     }
     file.seek(SeekFrom::Start(offset))?;

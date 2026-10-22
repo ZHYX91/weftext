@@ -851,9 +851,9 @@ mod integration_tests {
             let current = (
                 error.status,
                 error.code,
-                error.explanation,
-                error.diagnostics,
-                error.causes,
+                error.description.explanation,
+                error.description.diagnostics,
+                error.description.causes,
             );
             assert_eq!(refusal.get_or_insert(current.clone()), &current);
             let mut inner = state.inner.lock().unwrap();

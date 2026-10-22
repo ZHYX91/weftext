@@ -56,8 +56,8 @@ pub fn build_bibliography_native_package(
     {
         return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_exact_publication_fields_conflict())));
     }
-    let schema = Schema::from_author_json(destination_schema_author_json)
-        .map_err(|e| ExportError::from_data(e))?;
+    let schema =
+        Schema::from_author_json(destination_schema_author_json).map_err(ExportError::from_data)?;
     if !schema
         .types
         .iter()
@@ -156,8 +156,8 @@ pub fn build_bibliography_native_package(
         // Unknown schema members are preserved author bytes; only proved typed
         // reference slots require explicit mapping before a new-note import.
         let mut authored = metadata(&node_id, &publication_field.key, &publication)?;
-        let closure = weftext_data::typed_ref_closure(&authored, &schema)
-            .map_err(|e| ExportError::from_data(e))?;
+        let closure =
+            weftext_data::typed_ref_closure(&authored, &schema).map_err(ExportError::from_data)?;
         if !closure.complete || !closure.slots.is_empty() {
             return Err(ExportError::new(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_import_reference_mapping_unavailable(weftext_messages::params::ErrorExportBibliographyImportReferenceMappingUnavailable { record: weftext_messages::UiInteger::new(i64::try_from(ordinal + 1).expect("bounded product count")).expect("bounded product count") }))));
         }
@@ -263,7 +263,7 @@ pub fn build_bibliography_native_package(
         }
         // The displayed title derives from the formal publication field once.
         let field_key = weftext_engine::encode_string(&publication_field.key)
-            .map_err(|e| ExportError::from_engine(e))?;
+            .map_err(ExportError::from_engine)?;
         authored.push_str(&format!("\n#context {{\n  let publication = query(label(\"weftext\")).first().value.at({field_key})\n  if \"title\" in publication {{ title(publication.title) }}\n}}\n"));
         insert(
             &mut package,
@@ -282,7 +282,7 @@ pub fn build_bibliography_native_package(
             None,
         )?;
     }
-    validate_native_package(&package).map_err(|e| ExportError::from_native(e))?;
+    validate_native_package(&package).map_err(ExportError::from_native)?;
     Ok(package)
 }
 

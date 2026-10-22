@@ -92,7 +92,7 @@ pub struct HostedUniqueMember {
 fn unavailable() -> CoreError {
     CoreError::new(
         "slotUnavailable",
-        "Original unique-child capability is unavailable",
+        weftext_messages::UiMessage::error_core_hosted_destination_original_unique_child_capability_is_unavailable(),
     )
 }
 fn same_path(a: &Path, b: &Path) -> bool {
@@ -106,10 +106,11 @@ fn prefix_valid(prefix: &str) -> bool {
         && !prefix.chars().any(char::is_control)
         && !matches!(prefix, "." | "..")
 }
-fn parent_identity(parent: &Path) -> Result<FileIdentity> {
+fn parent_identity(backend: &BackendContext, parent: &Path) -> Result<FileIdentity> {
     // The leaf is not opened or created. Its placement guard binds the actual
     // parent directory and does not adopt a path-equivalent replacement.
-    ParentGuard::acquire(&parent.join(".weftext-unique-child-placement"))?.directory_identity()
+    ParentGuard::acquire(backend, &parent.join(".weftext-unique-child-placement"))?
+        .directory_identity()
 }
 
 impl Core {
@@ -120,7 +121,7 @@ impl Core {
         max_bytes: usize,
     ) -> Result<Option<Vec<u8>>> {
         let path = self.journal_path(operation, suffix);
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = match guard.open_read_guard_file() {
             Ok(file) => file,
             Err(error) if error.code == "missing" => return Ok(None),
@@ -129,7 +130,7 @@ impl Core {
         if file.metadata()?.len() > max_bytes as u64 {
             return Err(CoreError::new(
                 "budget",
-                "Original unique-child evidence exceeds its byte budget",
+                weftext_messages::UiMessage::error_core_hosted_destination_original_unique_child_evidence_exceeds_its_byte_budget(),
             ));
         }
         let mut bytes = Vec::new();
@@ -205,7 +206,7 @@ impl Core {
         Ok(HostedDestination::UniqueChild(HostedUniqueChild {
             slot: slot.into(),
             parent: display(&parent),
-            parent_identity: parent_identity(&parent)?,
+            parent_identity: parent_identity(&self.backend, &parent)?,
             workspace_id: workspace.workspace_id,
             prefix: prefix.into(),
             max_members,
@@ -299,7 +300,7 @@ impl Core {
                 if members.len() == 5000 || metadata > MAX_SOURCE_BYTES {
                     return Err(CoreError::new(
                         "budget",
-                        "Unique-child member metadata exceeds its budget",
+                        weftext_messages::UiMessage::error_core_hosted_destination_unique_child_member_metadata_exceeds_its_budget(),
                     ));
                 }
                 members.push(HostedUniqueMember {
@@ -357,7 +358,7 @@ impl Core {
         let parent = Path::new(&binding.parent);
         if self.require_workspace(root)?.workspace_id != binding.workspace_id
             || crate::history::history_relative_path(parent, root).is_none()
-            || parent_identity(parent)? != binding.parent_identity
+            || parent_identity(&self.backend, parent)? != binding.parent_identity
         {
             return Err(unavailable());
         }
@@ -380,7 +381,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Unique-child member budget is exhausted",
+                weftext_messages::UiMessage::error_core_hosted_destination_unique_child_member_budget_is_exhausted(),
             ));
         }
         Ok(())
@@ -406,7 +407,7 @@ impl Core {
             return Err(unavailable());
         }
         let workspace = self.require_workspace(&root)?;
-        let identity = parent_identity(&parent)?;
+        let identity = parent_identity(&self.backend, &parent)?;
         let parent = display(&parent);
         let selector = UniqueMemberScope {
             slot,
@@ -419,7 +420,7 @@ impl Core {
         if all.len() > max_members as usize {
             return Err(CoreError::new(
                 "budget",
-                "Retained unique-child members exceed the configured budget",
+                weftext_messages::UiMessage::error_core_hosted_destination_retained_unique_child_members_exceed_the_configured_budget(),
             ));
         }
         if selected_prefix {
@@ -468,7 +469,9 @@ impl Core {
             .find(|m| m.owner.node_id == node_id)
             .ok_or_else(unavailable)?;
         let path = parent.join(&member.relative_path);
-        let identity = stamp(&ParentGuard::acquire(&path)?.open_placement_file()?)?.identity;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
+        let file = guard.open_placement_file()?;
+        let identity = stamp(&file)?.identity;
         let mut matches = 0usize;
         for plan in self.operations.values() {
             let Some(transaction) = &plan.transaction else {

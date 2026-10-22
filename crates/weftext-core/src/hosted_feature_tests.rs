@@ -1145,14 +1145,11 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
     let (record_path, original_bytes, frozen) = f
         .core
         .with_actor(IMPORT_ACTOR, |core| {
-            let mut record = core.actor_feature_record("Imported", &op)?.unwrap();
-            assert!(record.feature.as_ref().unwrap().import_losses.is_some());
-            record.feature.as_mut().unwrap().import_losses = Some(original.clone());
-            private_replace(
-                &crate::BackendContext::local().unwrap(),
-                &core.actor_record(&op)?,
-                &serde_json::to_vec(&record)?,
-            )
+            let path = core.actor_record(&op)?;
+            let record = core.actor_feature_record("Imported", &op)?.unwrap();
+            let frozen = record.feature.unwrap().import_losses.unwrap();
+            let bytes = core.backend.read_bytes(&path)?;
+            Ok((path, bytes, frozen))
         })
         .unwrap();
     for loss in &frozen {
@@ -1194,7 +1191,7 @@ fn hosted_feature_rejects_old_loss_wording_without_rewriting_the_original_record
                 {"code":"word-layout","message":"Original retained wording"}
             ]);
             let bytes = serde_json::to_vec(&old)?;
-            private_replace(&path, &bytes)?;
+            private_replace(&core.backend, &path, &bytes)?;
             Ok((path, bytes))
         })
         .unwrap();

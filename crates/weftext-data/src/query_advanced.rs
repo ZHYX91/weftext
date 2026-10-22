@@ -1751,7 +1751,7 @@ fn mark_partial_error(result: &mut QueryResult, error: DataError) {
 fn mark_partial(result: &mut QueryResult, reason: ErrorDescription) {
     result.coverage = "partial".into();
     result.aggregate_exact = false;
-    result.diagnostics.push(reason.into());
+    result.diagnostics.push(reason);
 }
 
 fn related_notes(

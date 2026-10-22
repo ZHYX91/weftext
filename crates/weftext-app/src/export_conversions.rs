@@ -80,7 +80,7 @@ pub(crate) fn template_slots(format: &str, bytes: &[u8]) -> Result<Value, ApiErr
         "xlsx"=>weftext_export::xlsx::inspect_xlsx_template(bytes).map_err(convert_error)?.anchors.into_iter().map(|a|{
             let kind=if a.kind=="table"{"table"}else if a.rows==1&&a.columns==1{"cell"}else{"range"};
             let description=a.sheet.as_ref().map(|sheet| UiMessage::error_api_export_conversion_xlsx_anchor_description(weftext_messages::params::ErrorApiExportConversionXlsxAnchorDescription {
-                name:a.name.clone(),sheet:sheet.clone(),columns:weftext_messages::UiInteger::new(i64::try_from(a.columns).expect("template column count fits i64")).expect("template column budget fits safe integer"),capacity:weftext_messages::UiInteger::new(i64::try_from(a.capacity).expect("template row count fits i64")).expect("template row budget fits safe integer")}));
+                name:a.name.clone(),sheet:sheet.clone(),columns:weftext_messages::UiInteger::new(i64::from(a.columns)).expect("template column budget fits safe integer"),capacity:weftext_messages::UiInteger::new(i64::from(a.capacity)).expect("template row budget fits safe integer")}));
             let label=a.name.clone();
             json!({"name":a.name,"kind":kind,"label":label,"description":description,"supported":a.supported,"reason":a.reason,"rows":a.rows,"columns":a.columns,"capacity":a.capacity})
         }).collect::<Vec<_>>(),
@@ -1649,6 +1649,7 @@ mod tests {
     fn unsupported_binding_and_template_formats_refuse() {
         let projection = NoteProjection {
             qualification: "qualified".into(),
+            budget_exhausted: false,
             id: None,
             types: vec![],
             resolved_types: vec![],

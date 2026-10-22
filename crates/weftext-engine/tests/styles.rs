@@ -216,6 +216,16 @@ fn native_library_note_local_effective_styles_use_original_source() {
 fn style_controls_certify_unique_direct_native_default_slots() {
     let map = inspect_library_style(DEFAULT_LIBRARY_STYLE);
     assert!(map.syntax_valid);
+    assert_eq!(map.entry_count, 1);
+    assert_eq!(
+        inspect_library_style("#let another-function(body) = body").entry_count,
+        0
+    );
+    assert_eq!(
+        inspect_library_style(&(DEFAULT_LIBRARY_STYLE.to_owned() + "\n" + DEFAULT_LIBRARY_STYLE))
+            .entry_count,
+        2
+    );
     assert_eq!(
         map.controls.iter().filter(|c| c.editable).count(),
         7,

@@ -51671,6 +51671,981 @@
       "zh-CN": "保留的源后代目录已不在原父目录条目中",
       "en-US": "The retained source descendant no longer occupies its original parent entry",
       "params": {}
+    },
+    "error.core.captureDraft.captureRawAuthorProofRevisionDiffers": {
+      "zh-CN": "捕获原始输入的作者证明修订不一致",
+      "en-US": "Capture raw author proof revision differs",
+      "params": {}
+    },
+    "error.core.captureDraft.retiredCaptureProofIdentityOrRevisionDiffers": {
+      "zh-CN": "已退休的捕获证明身份或修订不一致",
+      "en-US": "Retired Capture proof identity or revision differs",
+      "params": {}
+    },
+    "error.core.captureDraft.captureRawInputAddressIsInvalid": {
+      "zh-CN": "捕获原始输入的控件地址无效",
+      "en-US": "Capture raw-input address is invalid",
+      "params": {}
+    },
+    "error.core.captureDraft.captureLiveRawInputAddressIsDuplicated": {
+      "zh-CN": "捕获的当前原始输入地址重复",
+      "en-US": "Capture live raw-input address is duplicated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureRetiredRawIdentityIsDuplicated": {
+      "zh-CN": "捕获的已退休原始输入身份重复",
+      "en-US": "Capture retired raw identity is duplicated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureAuthorProvenanceIsInvalid": {
+      "zh-CN": "捕获作者输入的来源证明无效",
+      "en-US": "Capture author provenance is invalid",
+      "params": {}
+    },
+    "error.core.captureDraft.captureAuthorInputAddressIsInvalid": {
+      "zh-CN": "捕获作者输入的控件地址无效",
+      "en-US": "Capture author-input address is invalid",
+      "params": {}
+    },
+    "error.core.captureDraft.captureAuthorInputAddressIsDuplicated": {
+      "zh-CN": "捕获作者输入的控件地址重复",
+      "en-US": "Capture author-input address is duplicated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureRetiredAuthorIdentityIsDuplicated": {
+      "zh-CN": "捕获的已退休作者身份重复",
+      "en-US": "Capture retired author identity is duplicated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureTopLevelAuthorIdentityIsDuplicated": {
+      "zh-CN": "捕获顶层作者输入身份重复",
+      "en-US": "Capture top-level author identity is duplicated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureAuthorProofRevisionDiffersFromRetainedInput": {
+      "zh-CN": "捕获作者证明的修订与保留输入不一致",
+      "en-US": "Capture author proof revision differs from retained input",
+      "params": {}
+    },
+    "error.core.captureDraft.captureMetadataPrefixIsTruncated": {
+      "zh-CN": "捕获元数据前缀不完整",
+      "en-US": "Capture metadata prefix is truncated",
+      "params": {}
+    },
+    "error.core.captureDraft.captureVersionMustFollowScope": {
+      "zh-CN": "捕获版本必须紧随作用域",
+      "en-US": "Capture version must follow scope",
+      "params": {}
+    },
+    "error.core.captureDraft.captureVersionMustBeTheSecondField": {
+      "zh-CN": "捕获版本必须是第二个字段",
+      "en-US": "Capture version must be the second field",
+      "params": {}
+    },
+    "error.core.captureDraft.captureVersionMetadataIsInvalid": {
+      "zh-CN": "捕获版本元数据无效",
+      "en-US": "Capture version metadata is invalid",
+      "params": {}
+    },
+    "error.core.captureDraft.captureVersionRequiresAnUnsignedInteger": {
+      "zh-CN": "捕获版本必须是无符号整数",
+      "en-US": "Capture version requires an unsigned integer",
+      "params": {}
+    },
+    "error.core.captureDraft.captureHasNoOriginalResultToDeliver": {
+      "zh-CN": "捕获没有可交付的原始结果",
+      "en-US": "Capture has no original result to deliver",
+      "params": {}
+    },
+    "error.core.captureDraft.captureResultDiffersFromItsOriginalPendingRequest": {
+      "zh-CN": "捕获结果与原待决请求不一致",
+      "en-US": "Capture result differs from its original pending request",
+      "params": {}
+    },
+    "error.core.captureDraft.originalCaptureRequestHasNoMatchingCanonicalPlan": {
+      "zh-CN": "原捕获请求没有匹配的规范 Plan",
+      "en-US": "Original capture request has no matching canonical Plan",
+      "params": {}
+    },
+    "error.core.captureDraft.unassignedCaptureCannotDeliverALibraryResult": {
+      "zh-CN": "未绑定库的捕获不能交付库结果",
+      "en-US": "Unassigned capture cannot deliver a library result",
+      "params": {}
+    },
+    "error.core.captureDraft.captureHasNoOriginalLibraryTarget": {
+      "zh-CN": "捕获没有原始库目标",
+      "en-US": "Capture has no original library target",
+      "params": {}
+    },
+    "error.core.captureDraft.hostedResultDeliveryRequiresItsActorWrapper": {
+      "zh-CN": "托管结果交付必须通过原 Actor 包装",
+      "en-US": "Hosted result delivery requires its actor wrapper",
+      "params": {}
+    },
+    "error.core.captureDraft.originalCaptureLibraryIsUnavailable": {
+      "zh-CN": "原捕获库不可用",
+      "en-US": "Original capture library is unavailable",
+      "params": {}
+    },
+    "error.core.captureDraft.originalCapturePlanIsUnavailable": {
+      "zh-CN": "原捕获 Plan 不可用",
+      "en-US": "Original capture Plan is unavailable",
+      "params": {}
+    },
+    "error.core.captureDraft.originalCaptureIsNotANodeTransaction": {
+      "zh-CN": "原捕获不是节点事务",
+      "en-US": "Original capture is not a node transaction",
+      "params": {}
+    },
+    "error.core.captureDraft.originalCaptureResultBelongsToAnotherKindOrLibrary": {
+      "zh-CN": "原捕获结果属于其他种类或库",
+      "en-US": "Original capture result belongs to another kind or library",
+      "params": {}
+    },
+    "error.core.captureDraft.captureHasNoOriginalTarget": {
+      "zh-CN": "捕获没有原始目标",
+      "en-US": "Capture has no original target",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalSlotDiffers": {
+      "zh-CN": "捕获原目标槽位不一致",
+      "en-US": "Capture original slot differs",
+      "params": {}
+    },
+    "error.core.captureDraft.captureChangedBeforeOwnerInputPersistencePreserveBothInputs": {
+      "zh-CN": "持久化本人输入前捕获已变化；两份输入均保留",
+      "en-US": "Capture changed before owner input persistence; preserve both inputs",
+      "params": {}
+    },
+    "error.core.captureDraft.captureChangedBeforePrivateProposalCheckpointQueryTheOriginalMutationAnd": {
+      "zh-CN": "私有草稿检查点写入前捕获已变化；请查询原变更编号并保留当前输入",
+      "en-US": "Capture changed before private-proposal checkpoint; query the original mutation and preserve current input",
+      "params": {}
+    },
+    "error.core.captureDraft.originalFullInputMutationIdentityIsInvalid": {
+      "zh-CN": "原完整输入变更身份无效",
+      "en-US": "Original full-input mutation identity is invalid",
+      "params": {}
+    },
+    "error.core.captureDraft.noOriginalCaptureAttempt": {
+      "zh-CN": "没有原捕获尝试",
+      "en-US": "No original capture attempt",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalOperationDiffers": {
+      "zh-CN": "捕获原操作不一致",
+      "en-US": "Capture original operation differs",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalActorSlotIsUnavailable": {
+      "zh-CN": "捕获原 Actor 槽位不可用",
+      "en-US": "Capture original actor slot is unavailable",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalOperationIsStillUnknown": {
+      "zh-CN": "捕获原操作结果仍未知",
+      "en-US": "Capture original operation is still unknown",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalOperationIsNotTerminal": {
+      "zh-CN": "捕获原操作尚未终结",
+      "en-US": "Capture original operation is not terminal",
+      "params": {}
+    },
+    "error.core.captureDraft.captureTargetIsUnavailable": {
+      "zh-CN": "捕获目标不可用",
+      "en-US": "Capture target is unavailable",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOperationIsNotANewNoteTransaction": {
+      "zh-CN": "捕获操作不是新建笔记事务",
+      "en-US": "Capture operation is not a new-note transaction",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalOperationBelongsToAnotherTargetOrKind": {
+      "zh-CN": "捕获原操作属于其他目标或种类",
+      "en-US": "Capture original operation belongs to another target or kind",
+      "params": {}
+    },
+    "error.core.captureDraft.captureOriginalFenceBelongsToAnotherRequest": {
+      "zh-CN": "捕获原终止记录属于其他请求",
+      "en-US": "Capture original fence belongs to another request",
+      "params": {}
+    },
+    "error.core.captureDraft.ownerOnlyRecoveryIsNotACompleteFormAcknowledgement": {
+      "zh-CN": "仅含本人输入的恢复记录不能证明完整表单已确认",
+      "en-US": "Owner-only recovery is not a complete form acknowledgement",
+      "params": {}
+    },
+    "error.core.deviceState.clientPreferencesDisappearedDuringDeviceQualification": {
+      "zh-CN": "设备核验期间客户端偏好记录消失",
+      "en-US": "Client preferences disappeared during device qualification",
+      "params": {}
+    },
+    "error.core.draftRecovery.draftLacksSupportedOriginalMetadataOriginalBytesRemainUnchanged": {
+      "zh-CN": "草稿缺少受支持的原始元数据；原字节保持不变",
+      "en-US": "Draft lacks supported original metadata; original bytes remain unchanged",
+      "params": {}
+    },
+    "error.core.draftRecovery.draftInputProducerIsNotCanonical": {
+      "zh-CN": "草稿输入生产者身份不是规范格式",
+      "en-US": "Draft input producer is not canonical",
+      "params": {}
+    },
+    "error.core.draftRecovery.theActualSourceBasisChangedBeforeRecoveryContinuation": {
+      "zh-CN": "继续恢复前实际源基线已变化",
+      "en-US": "The actual source basis changed before recovery continuation",
+      "params": {}
+    },
+    "error.core.draftRecovery.theReviewedRecoveryRecordIsAbsent": {
+      "zh-CN": "已审阅的恢复记录不存在",
+      "en-US": "The reviewed recovery record is absent",
+      "params": {}
+    },
+    "error.core.draftRecovery.reviewTheCompleteCurrentRecoveryRecordAgain": {
+      "zh-CN": "请重新审阅完整的当前恢复记录",
+      "en-US": "Review the complete current recovery record again",
+      "params": {}
+    },
+    "error.core.draftRecovery.thisRecoveryRecordHasNoTransferableProducer": {
+      "zh-CN": "此恢复记录没有可移交的输入生产者",
+      "en-US": "This recovery record has no transferable producer",
+      "params": {}
+    },
+    "error.core.draftRecovery.thisSessionAlreadyAcknowledgedIndependentInput": {
+      "zh-CN": "此会话已确认另一份独立输入",
+      "en-US": "This session already acknowledged independent input",
+      "params": {}
+    },
+    "error.core.draftRecovery.theOriginalInputProducerStillHasALiveCoreSession": {
+      "zh-CN": "原输入生产者仍有活动的 Core 会话",
+      "en-US": "The original input producer still has a live Core session",
+      "params": {}
+    },
+    "error.core.draftRecovery.expectedSourceDigestIsNotCanonical": {
+      "zh-CN": "预期源摘要不是规范格式",
+      "en-US": "Expected source digest is not canonical",
+      "params": {}
+    },
+    "error.core.draftRecovery.theDocumentBaseChanged": {
+      "zh-CN": "文档基线已变化",
+      "en-US": "The document base changed",
+      "params": {}
+    },
+    "error.core.draftRecovery.theCompleteDraftChangedDuringReadback": {
+      "zh-CN": "读回期间完整草稿已变化",
+      "en-US": "The complete draft changed during readback",
+      "params": {}
+    },
+    "error.core.draftRecovery.thisInputProducerHasNoAcknowledgedDraft": {
+      "zh-CN": "此输入生产者没有已确认的草稿",
+      "en-US": "This input producer has no acknowledged draft",
+      "params": {}
+    },
+    "error.core.draftRecovery.thePersistedDraftDoesNotContainThePreparedInput": {
+      "zh-CN": "持久草稿没有包含已准备的输入",
+      "en-US": "The persisted draft does not contain the prepared input",
+      "params": {}
+    },
+    "error.core.draftRecovery.draftProducerDiffers": {
+      "zh-CN": "草稿输入生产者不一致",
+      "en-US": "Draft producer differs",
+      "params": {}
+    },
+    "error.core.draftRecovery.draftOriginalInputScopeOrPhysicalIdentityDiffers": {
+      "zh-CN": "草稿原输入作用域或物理身份不一致",
+      "en-US": "Draft original input scope or physical identity differs",
+      "params": {}
+    },
+    "error.core.draftRecovery.draftMetadataChangedDuringItsQualifiedRead": {
+      "zh-CN": "核验读取期间草稿元数据已变化",
+      "en-US": "Draft metadata changed during its qualified read",
+      "params": {}
+    },
+    "error.core.history.protectedDraftMetadataChangedDuringItsQualifiedRead": {
+      "zh-CN": "核验读取期间受保护草稿元数据已变化",
+      "en-US": "Protected draft metadata changed during its qualified read",
+      "params": {}
+    },
+    "error.core.history.originalRestoreExceeds128ProtectedDraftRecords": {
+      "zh-CN": "原恢复超过 128 份受保护草稿的预算",
+      "en-US": "Original restore exceeds 128 protected Draft records",
+      "params": {}
+    },
+    "error.core.history.originalRestorePhysicalOwnerIsMissing": {
+      "zh-CN": "原恢复的物理对象缺失",
+      "en-US": "Original restore physical owner is missing",
+      "params": {}
+    },
+    "error.core.history.originalProtectedDraftIsMissing": {
+      "zh-CN": "原受保护草稿缺失",
+      "en-US": "Original protected Draft is missing",
+      "params": {}
+    },
+    "error.core.history.protectedDraftByteCountOverflow": {
+      "zh-CN": "受保护草稿字节计数溢出",
+      "en-US": "Protected Draft byte count overflow",
+      "params": {}
+    },
+    "error.core.history.originalProtectedDraftsExceed16MiB": {
+      "zh-CN": "原受保护草稿超过 16 MiB",
+      "en-US": "Original protected Drafts exceed 16 MiB",
+      "params": {}
+    },
+    "error.core.hosted.actorRecordHasNoSupportedOriginalMetadataOriginalBytesRemainUnchanged": {
+      "zh-CN": "Actor 记录缺少受支持的原始元数据；原字节保持不变",
+      "en-US": "Actor record has no supported original metadata; original bytes remain unchanged",
+      "params": {}
+    },
+    "error.core.hosted.invalidOriginalActorMetadata": {
+      "zh-CN": "原 Actor 元数据无效",
+      "en-US": "Invalid original actor metadata",
+      "params": {}
+    },
+    "error.core.hosted.theOriginalOperationResourceDiffers": {
+      "zh-CN": "原操作资源不一致",
+      "en-US": "The original operation resource differs",
+      "params": {}
+    },
+    "error.core.hosted.theOriginalUnboundInputDoesNotBelongToTheTrustedActor": {
+      "zh-CN": "原未绑定输入不属于受信任的 Actor 库",
+      "en-US": "The original unbound input does not belong to the trusted actor library",
+      "params": {}
+    },
+    "error.core.hosted.actorRecordMetadataChangedDuringItsQualifiedRead": {
+      "zh-CN": "核验读取期间 Actor 记录元数据已变化",
+      "en-US": "Actor record metadata changed during its qualified read",
+      "params": {}
+    },
+    "error.core.hostedDefinition.definitionAdmissionMetadataIsMissing": {
+      "zh-CN": "定义接纳元数据缺失",
+      "en-US": "Definition admission metadata is missing",
+      "params": {}
+    },
+    "error.core.hostedDefinition.invalidDefinitionAdmissionActor": {
+      "zh-CN": "定义接纳的 Actor 无效",
+      "en-US": "Invalid definition admission actor",
+      "params": {}
+    },
+    "error.core.hostedDefinition.definitionAdmissionMetadataChangedDuringItsQualifiedRead": {
+      "zh-CN": "核验读取期间定义接纳元数据已变化",
+      "en-US": "Definition admission metadata changed during its qualified read",
+      "params": {}
+    },
+    "error.core.hostedDefinition.definitionAdmissionReferencesAnotherPlanKind": {
+      "zh-CN": "定义接纳引用了另一种 Plan",
+      "en-US": "Definition admission references another Plan kind",
+      "params": {}
+    },
+    "error.core.hostedDestination.originalUniqueChildCapabilityIsUnavailable": {
+      "zh-CN": "原唯一子项权限不可用",
+      "en-US": "Original unique-child capability is unavailable",
+      "params": {}
+    },
+    "error.core.hostedDestination.originalUniqueChildEvidenceExceedsItsByteBudget": {
+      "zh-CN": "原唯一子项证据超过字节预算",
+      "en-US": "Original unique-child evidence exceeds its byte budget",
+      "params": {}
+    },
+    "error.core.hostedDestination.uniqueChildMemberMetadataExceedsItsBudget": {
+      "zh-CN": "唯一子项成员元数据超过预算",
+      "en-US": "Unique-child member metadata exceeds its budget",
+      "params": {}
+    },
+    "error.core.hostedDestination.uniqueChildMemberBudgetIsExhausted": {
+      "zh-CN": "唯一子项成员预算已用尽",
+      "en-US": "Unique-child member budget is exhausted",
+      "params": {}
+    },
+    "error.core.hostedDestination.retainedUniqueChildMembersExceedTheConfiguredBudget": {
+      "zh-CN": "保留的唯一子项成员超过配置预算",
+      "en-US": "Retained unique-child members exceed the configured budget",
+      "params": {}
+    },
+    "error.core.hostedLibrary.incompletePrivateMetadataPrefix": {
+      "zh-CN": "私有元数据前缀不完整",
+      "en-US": "Incomplete private metadata prefix",
+      "params": {}
+    },
+    "error.core.hostedLibrary.invalidPrivateMetadataSeparator": {
+      "zh-CN": "私有元数据分隔符无效",
+      "en-US": "Invalid private metadata separator",
+      "params": {}
+    },
+    "error.core.hostedLibrary.privateRecordLacksTheRequiredOrderedOriginalMetadataOriginalBytesRemain": {
+      "zh-CN": "私有记录缺少规定顺序的原始元数据；原字节保持不变",
+      "en-US": "Private record lacks the required ordered original metadata; original bytes remain unchanged",
+      "params": {}
+    },
+    "error.core.hostedLibrary.invalidPrivateMetadataValue": {
+      "zh-CN": "私有元数据值无效",
+      "en-US": "Invalid private metadata value",
+      "params": {}
+    },
+    "error.core.hostedLibrary.privateMetadataValueExceedsItsBudget": {
+      "zh-CN": "私有元数据值超过预算",
+      "en-US": "Private metadata value exceeds its budget",
+      "params": {}
+    },
+    "error.core.hostedLibrary.qualifiedPrivateRecordExceedsItsBodyBudget": {
+      "zh-CN": "已核验私有记录的正文超过预算",
+      "en-US": "Qualified private record exceeds its body budget",
+      "params": {}
+    },
+    "error.core.hostedLibrary.actorProducerMetadataDiffers": {
+      "zh-CN": "Actor 生产者元数据不一致",
+      "en-US": "Actor producer metadata differs",
+      "params": {}
+    },
+    "error.core.hostedLibraryTests.exactOriginalResourceDiffers": {
+      "zh-CN": "准确的原资源不一致",
+      "en-US": "Exact original resource differs",
+      "params": {}
+    },
+    "error.core.lib.anotherProposalArrivedAfterThisRecoveryViewReopenAndCompareThe": {
+      "zh-CN": "此恢复视图建立后出现了另一份提案；请重新打开并比较完整当前记录，再处理恢复",
+      "en-US": "Another proposal arrived after this recovery view; reopen and compare the complete current record before resolving it",
+      "params": {}
+    },
+    "error.core.lib.theOriginalLibraryActivationDoesNotIdentifyItsRetainedDecision": {
+      "zh-CN": "原库激活没有标识其保留的决定记录",
+      "en-US": "The original library activation does not identify its retained decision",
+      "params": {}
+    },
+    "error.core.operations.theOpenedSourceObjectWasReplaced": {
+      "zh-CN": "已打开的源对象被替换",
+      "en-US": "The opened source object was replaced",
+      "params": {}
+    },
+    "error.core.operations.previewInputIsOutsideItsActualRoot": {
+      "zh-CN": "预览输入位于其实际根目录之外",
+      "en-US": "Preview input is outside its actual root",
+      "params": {}
+    },
+    "error.core.operations.previewPathIsNotUnicode": {
+      "zh-CN": "预览路径不是有效 Unicode",
+      "en-US": "Preview path is not Unicode",
+      "params": {}
+    },
+    "error.core.operations.previewInputPathsAreNotUnique": {
+      "zh-CN": "预览输入路径不唯一",
+      "en-US": "Preview input paths are not unique",
+      "params": {}
+    },
+    "error.core.operations.theOpenedSourceIsOutsideItsActualRoot": {
+      "zh-CN": "已打开的源位于其实际根目录之外",
+      "en-US": "The opened source is outside its actual root",
+      "params": {}
+    },
+    "error.core.operations.previewInputExceedsTheComplete64MiBBudget": {
+      "zh-CN": "预览输入超过完整的 64 MiB 预算",
+      "en-US": "Preview input exceeds the complete 64 MiB budget",
+      "params": {}
+    },
+    "error.core.operations.theOpenedSourceObjectChangedDuringCapture": {
+      "zh-CN": "捕获期间已打开的源对象发生变化",
+      "en-US": "The opened source object changed during capture",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteFieldContainsDuplicateOrInvalidNativeMembers": {
+      "zh-CN": "未完成字段包含重复或无效的原生成员",
+      "en-US": "Incomplete field contains duplicate or invalid native members",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteFieldContainsUnknownOrMissingNativeMembers": {
+      "zh-CN": "未完成字段包含未知成员或缺少原生成员",
+      "en-US": "Incomplete field contains unknown or missing native members",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeScalarInputMustBeAString": {
+      "zh-CN": "原生标量输入必须是字符串",
+      "en-US": "Native scalar input must be a string",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteJSONEscape": {
+      "zh-CN": "JSON 转义不完整",
+      "en-US": "Incomplete JSON escape",
+      "params": {}
+    },
+    "error.core.fieldWire.invalidUTF16Escape": {
+      "zh-CN": "UTF-16 转义无效",
+      "en-US": "Invalid UTF-16 escape",
+      "params": {}
+    },
+    "error.core.fieldWire.invalidJSONStringEscape": {
+      "zh-CN": "JSON 字符串转义无效",
+      "en-US": "Invalid JSON string escape",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteFieldIsNotAClosedNativeValue": {
+      "zh-CN": "未完成字段不是封闭的原生值",
+      "en-US": "Incomplete field is not a closed native value",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeFieldKindIsMissing": {
+      "zh-CN": "原生字段种类缺失",
+      "en-US": "Native field kind is missing",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeFieldKindMustBeAnIdentifier": {
+      "zh-CN": "原生字段种类必须是标识符",
+      "en-US": "Native field kind must be an identifier",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeBooleanIsInvalid": {
+      "zh-CN": "原生布尔值无效",
+      "en-US": "Native boolean is invalid",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteNativeScalarHasNoExactOriginalControlAddress": {
+      "zh-CN": "未完成的原生标量没有准确的原控件地址",
+      "en-US": "Incomplete native scalar has no exact original control address",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeListIsInvalid": {
+      "zh-CN": "原生列表无效",
+      "en-US": "Native list is invalid",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeRecordIsInvalid": {
+      "zh-CN": "原生记录无效",
+      "en-US": "Native record is invalid",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeMemberIdentifiersMustBeCompleteRetainUnfinishedKeyInputSeparately": {
+      "zh-CN": "原生成员标识符必须完整；请单独保留未完成的键输入",
+      "en-US": "Native member identifiers must be complete; retain unfinished key input separately",
+      "params": {}
+    },
+    "error.core.fieldWire.nativeRecordKeysAreDuplicated": {
+      "zh-CN": "原生记录键重复",
+      "en-US": "Native record keys are duplicated",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteFieldHasAnUnknownNativeKind": {
+      "zh-CN": "未完成字段含未知的原生种类",
+      "en-US": "Incomplete field has an unknown native kind",
+      "params": {}
+    },
+    "error.core.fieldWire.incompleteFieldWireIsInvalidJSON": {
+      "zh-CN": "未完成字段的传输内容不是有效 JSON",
+      "en-US": "Incomplete field wire is invalid JSON",
+      "params": {}
+    },
+    "error.core.fieldWire.aCompleteNativeFieldMustUseValidState": {
+      "zh-CN": "完整的原生字段必须使用 Valid 状态",
+      "en-US": "A complete native field must use Valid state",
+      "params": {}
+    },
+    "error.core.adopt.originalWorkspaceControlIsUnavailable": {
+      "zh-CN": "原工作区控制记录不可用",
+      "en-US": "Original workspace control is unavailable",
+      "params": {}
+    },
+    "error.core.apply.theOriginalRetiredSourceIsUnavailable": {
+      "zh-CN": "原退役源不可用",
+      "en-US": "The original retired source is unavailable",
+      "params": {}
+    },
+    "error.core.apply.incomingFileEscapedRoot": {
+      "zh-CN": "传入文件越出根目录",
+      "en-US": "Incoming file escaped root",
+      "params": {}
+    },
+    "error.core.replica.capturedReplicaFileDisappeared": {
+      "zh-CN": "已捕获的副本文件消失",
+      "en-US": "Captured replica file disappeared",
+      "params": {}
+    },
+    "error.core.replica.publicationLacksItsDurableCommitOrder": {
+      "zh-CN": "发布缺少其持久提交次序",
+      "en-US": "Publication lacks its durable commit order",
+      "params": {}
+    },
+    "error.core.replica.replicaEventLacksCommitOrder": {
+      "zh-CN": "副本事件缺少提交次序",
+      "en-US": "Replica event lacks commit order",
+      "params": {}
+    },
+    "error.core.store.existingImmutableRecordDiffers": {
+      "zh-CN": "已有不可变记录不一致",
+      "en-US": "Existing immutable record differs",
+      "params": {}
+    },
+    "error.api.captureApi.theRetainedDeviceIdentityIsNotQualifiedForThisCoreProfile": {
+      "zh-CN": "保留的设备身份未获此 Core 配置的核验",
+      "en-US": "The retained device identity is not qualified for this Core profile",
+      "params": {}
+    },
+    "error.api.captureApi.onlyAnAuthorRecoveryCheckpointIsDurableQueryTheOriginalOperation": {
+      "zh-CN": "仅本人恢复检查点已持久化；请查询原操作，不派发新效果",
+      "en-US": "Only an author recovery checkpoint is durable; query the original operation without dispatching an effect",
+      "params": {}
+    },
+    "error.api.captureApi.noDurableOriginalCaptureRequest": {
+      "zh-CN": "没有持久化的原捕获请求",
+      "en-US": "No durable original capture request",
+      "params": {}
+    },
+    "error.api.captureApi.thisRouteOnlyDispatchesTheOriginalLocalCaptureRequest": {
+      "zh-CN": "此路由只能派发原本地捕获请求",
+      "en-US": "This route only dispatches the original local capture request",
+      "params": {}
+    },
+    "error.api.captureApi.originalTargetMovedAfterFreezingRetainAndSettleThisOriginalAttempt": {
+      "zh-CN": "冻结后原目标已移动；请保留并处理原尝试后再选择其他目标",
+      "en-US": "Original target moved after freezing; retain and settle this original attempt before selecting another",
+      "params": {}
+    },
+    "error.api.dataApi.schemaSerializationFailed": {
+      "zh-CN": "Schema 序列化失败",
+      "en-US": "Schema serialization failed",
+      "params": {}
+    },
+    "error.api.dataApi.theOriginalCaptureSchemaIdentityOrShapeChangedRawInputIs": {
+      "zh-CN": "原捕获 Schema 身份或结构已变化；原始输入保留",
+      "en-US": "The original capture Schema identity or shape changed; raw input is retained",
+      "params": {}
+    },
+    "error.api.dataApi.typedCaptureRequiresItsOriginalSchemaIdentityAndSemanticDigest": {
+      "zh-CN": "类型化捕获必须提供原 Schema 身份和语义摘要",
+      "en-US": "Typed capture requires its original Schema identity and semantic digest",
+      "params": {}
+    },
+    "error.api.desktopApi.theActualDesktopStatusIsUnavailable": {
+      "zh-CN": "实际桌面状态不可用",
+      "en-US": "The actual desktop status is unavailable",
+      "params": {}
+    },
+    "error.api.desktopApi.theExactOriginalSessionIDIsRequired": {
+      "zh-CN": "必须提供准确的原 Session ID",
+      "en-US": "The exact original Session ID is required",
+      "params": {}
+    },
+    "error.api.knowledgeApi.templateSettingsCouldNotBeEncoded": {
+      "zh-CN": "无法编码模板设置",
+      "en-US": "Template settings could not be encoded",
+      "params": {}
+    },
+    "error.api.lib.sessionLocationsAreUnavailable": {
+      "zh-CN": "会话位置状态不可用",
+      "en-US": "Session locations are unavailable",
+      "params": {}
+    },
+    "error.api.lib.sessionRenderProjectionsAreUnavailable": {
+      "zh-CN": "会话渲染投影不可用",
+      "en-US": "Session render projections are unavailable",
+      "params": {}
+    },
+    "error.api.lib.sessionEditorProjectionsAreUnavailable": {
+      "zh-CN": "会话编辑器投影不可用",
+      "en-US": "Session editor projections are unavailable",
+      "params": {}
+    },
+    "error.api.mod.ownerHeaderExceedsItsFixedBudget": {
+      "zh-CN": "所有者消息头超过固定预算",
+      "en-US": "Owner header exceeds its fixed budget",
+      "params": {}
+    },
+    "error.api.mod.ownerHeaderLengthIsInvalid": {
+      "zh-CN": "所有者消息头长度无效",
+      "en-US": "Owner header length is invalid",
+      "params": {}
+    },
+    "error.api.mod.ownerBodyLengthCannotBeRepresented": {
+      "zh-CN": "所有者消息体长度无法表示",
+      "en-US": "Owner body length cannot be represented",
+      "params": {}
+    },
+    "error.api.mod.ownerBodyExceedsItsFixedBudget": {
+      "zh-CN": "所有者消息体超过固定预算",
+      "en-US": "Owner body exceeds its fixed budget",
+      "params": {}
+    },
+    "error.api.windows.theOwnerResultDoesNotMatchTheOriginalRequest": {
+      "zh-CN": "所有者结果与原请求不匹配",
+      "en-US": "The owner result does not match the original request",
+      "params": {}
+    },
+    "error.api.windows.theVerifiedOwnerHandshakeDoesNotMatchThisPhysicalProfileAnd": {
+      "zh-CN": "已核验的所有者握手与此物理配置及进程不匹配",
+      "en-US": "The verified owner handshake does not match this physical profile and process",
+      "params": {}
+    },
+    "error.api.windows.localListenerHasNoPort": {
+      "zh-CN": "本地监听没有端口",
+      "en-US": "Local listener has no port",
+      "params": {}
+    },
+    "error.api.windows.localOwnerCredentialIsUnavailable": {
+      "zh-CN": "本地所有者凭据不可用",
+      "en-US": "Local owner credential is unavailable",
+      "params": {}
+    },
+    "error.api.windows.ownerRoleAndLocalServiceAuthorityDiffer": {
+      "zh-CN": "所有者角色与本地服务权限不一致",
+      "en-US": "Owner role and local service authority differ",
+      "params": {}
+    },
+    "error.api.windows.hostResultExceedsTheFixedOutputBudget": {
+      "zh-CN": "宿主结果超过固定输出预算",
+      "en-US": "Host result exceeds the fixed output budget",
+      "params": {}
+    },
+    "error.api.windows.hostedOwnerHasNoLocalBusinessBridge": {
+      "zh-CN": "托管所有者没有本地业务桥接",
+      "en-US": "Hosted owner has no local business bridge",
+      "params": {}
+    },
+    "error.api.windows.localAuthorityIsUnavailable": {
+      "zh-CN": "本地权限不可用",
+      "en-US": "Local authority is unavailable",
+      "params": {}
+    },
+    "error.api.windows.unknownLocalOperation": {
+      "zh-CN": "本地操作未知",
+      "en-US": "Unknown local operation",
+      "params": {}
+    },
+    "error.api.windows.originalReplyExceedsTheFixedOutputBudget": {
+      "zh-CN": "原回复超过固定输出预算",
+      "en-US": "Original reply exceeds the fixed output budget",
+      "params": {}
+    },
+    "error.api.windows.hostedOwnerAcceptsOnlyItsExactLifecycleControl": {
+      "zh-CN": "托管所有者只接受其准确的生命周期控制",
+      "en-US": "Hosted owner accepts only its exact lifecycle control",
+      "params": {}
+    },
+    "error.api.windows.hostControlDoesNotAcceptBusinessOrSecretBytes": {
+      "zh-CN": "宿主控制不接受业务或秘密字节",
+      "en-US": "Host control does not accept business or secret bytes",
+      "params": {}
+    },
+    "error.api.windows.secretSidebandIsForbiddenForThisOperation": {
+      "zh-CN": "此操作禁止秘密旁路数据",
+      "en-US": "Secret sideband is forbidden for this operation",
+      "params": {}
+    },
+    "error.api.windows.transientSyncCredentialIsMissing": {
+      "zh-CN": "临时同步凭据缺失",
+      "en-US": "Transient sync credential is missing",
+      "params": {}
+    },
+    "error.api.windows.syncPureInputIsInvalid": {
+      "zh-CN": "同步纯输入无效",
+      "en-US": "Sync pure input is invalid",
+      "params": {}
+    },
+    "error.api.windows.syncConnectionPureInputIsMissing": {
+      "zh-CN": "同步连接纯输入缺失",
+      "en-US": "Sync connection pure input is missing",
+      "params": {}
+    },
+    "error.api.windows.syncPureInputCannotContainCredentials": {
+      "zh-CN": "同步纯输入不能包含凭据",
+      "en-US": "Sync pure input cannot contain credentials",
+      "params": {}
+    },
+    "error.api.windows.credentialIsNotASCII": {
+      "zh-CN": "凭据不是 ASCII",
+      "en-US": "Credential is not ASCII",
+      "params": {}
+    },
+    "error.api.structure.theOriginalCreationOperationIDMustBeACanonicalUUID": {
+      "zh-CN": "创建原操作编号须为规范 UUID",
+      "en-US": "The original creation operation ID must be a canonical UUID",
+      "params": {}
+    },
+    "error.api.structure.authorizedStructureSourcesExceedThe5000MemberBudget": {
+      "zh-CN": "获权结构来源超过 5000 项预算",
+      "en-US": "Authorized structure sources exceed the 5000 member budget",
+      "params": {}
+    },
+    "error.api.mod.theOriginalNotificationDeviceIsNotCurrent": {
+      "zh-CN": "原通知设备不是当前设备",
+      "en-US": "The original notification device is not current",
+      "params": {}
+    },
+    "error.api.mod.theOriginalNotificationAddressDiffers": {
+      "zh-CN": "原通知地址不一致",
+      "en-US": "The original notification address differs",
+      "params": {}
+    },
+    "error.api.mod.theOriginalStartupDeviceIsNotCurrent": {
+      "zh-CN": "原启动设备不是当前设备",
+      "en-US": "The original startup device is not current",
+      "params": {}
+    },
+    "error.api.mod.theExactPreparedCaptureRecordDiffers": {
+      "zh-CN": "准备的准确 Capture 记录不一致",
+      "en-US": "The exact prepared Capture record differs",
+      "params": {}
+    },
+    "error.api.scheduler.theDesktopStoppedAcceptingNotificationSubmissions": {
+      "zh-CN": "桌面已停止接收通知提交",
+      "en-US": "The desktop stopped accepting notification submissions",
+      "params": {}
+    },
+    "error.api.capture.captureRequestKindDiffers": {
+      "zh-CN": "捕获请求种类不符",
+      "en-US": "Capture request kind differs",
+      "params": {}
+    },
+    "error.api.capture.theOriginalCaptureRequestContainsUnfinishedAuthorInputOriginalTextAnd": {
+      "zh-CN": "原捕获请求含尚未完成的作者输入；原文和编号保留",
+      "en-US": "The original capture request contains unfinished author input; original text and operation ID are retained",
+      "params": {}
+    },
+    "error.api.members.authorizedStructureMembersExceedThe5000MemberBudget": {
+      "zh-CN": "获权结构成员超过 5000 项预算",
+      "en-US": "Authorized structure members exceed the 5000 member budget",
+      "params": {}
+    },
+    "error.capture.versionUnsupported": {
+      "zh-CN": "不支持捕获记录版本 {actual}；需要版本 {expected}，原字节已保留",
+      "en-US": "Capture record version {actual} is unsupported; expected {expected}. Original bytes were preserved.",
+      "params": {
+        "actual": "text",
+        "expected": "text"
+      }
+    },
+    "error.sync.nativeCompileUnqualified": {
+      "zh-CN": "准确冻结的原生 HTML 编译未能核验此产物",
+      "en-US": "The exact frozen native HTML compile did not qualify this product",
+      "params": {}
+    },
+    "error.capture.fieldIdentityRequired": {
+      "zh-CN": "捕获必须使用稳定 FieldId {field}；字段键不能替代身份",
+      "en-US": "Capture requires stable FieldId {field}; field keys are not identities",
+      "params": {
+        "field": "text"
+      }
+    },
+    "error.core.existingProfilePhysicalIdentityChanged": {
+      "zh-CN": "原 Core 配置的物理身份不一致；没有创建或接纳替代配置",
+      "en-US": "The original Core profile physical identity differs; no replacement profile was created or admitted",
+      "params": {}
+    },
+    "error.core.existingProfileDeviceIdentityChanged": {
+      "zh-CN": "原 Core 配置的当前设备身份不一致；原记录已保留",
+      "en-US": "The original Core profile current device identity differs; original records were preserved",
+      "params": {}
+    },
+    "error.api.data.frozenRequestInvalid": {
+      "zh-CN": "准确冻结的请求不是有效作者输入",
+      "en-US": "The exact frozen request is not valid author input",
+      "params": {}
+    },
+    "error.notification.preparationFailed": {
+      "zh-CN": "通知在系统调用前准备失败",
+      "en-US": "Notification preparation failed before the system call",
+      "params": {}
+    },
+    "error.notification.submissionUnknown": {
+      "zh-CN": "系统提交返回的结果尚未确认",
+      "en-US": "The system submission returned an unconfirmed result",
+      "params": {}
+    },
+    "error.api.remoteSync.ownerClosing": {
+      "zh-CN": "所有者正在关闭；没有启动新的传输",
+      "en-US": "The owner is closing; no new transfer was started",
+      "params": {}
+    },
+    "error.api.recognition.ownerClosing": {
+      "zh-CN": "所有者正在关闭；没有启动新的识别任务",
+      "en-US": "The owner is closing; no new recognition job was started",
+      "params": {}
+    },
+    "error.api.sync.nativeValidationNoteBudget": {
+      "zh-CN": "原生 Query 核验超过 32 篇准确笔记",
+      "en-US": "The native Query validation exceeds 32 exact notes",
+      "params": {}
+    },
+    "error.api.sync.nativeInputMissing": {
+      "zh-CN": "准确的原生输入缺失",
+      "en-US": "The exact native input is missing",
+      "params": {}
+    },
+    "error.api.sync.nativeValidationWorkerBudget": {
+      "zh-CN": "原生 Query 核验超过总 worker 预算",
+      "en-US": "The native Query validation exceeded its total worker budget",
+      "params": {}
+    },
+    "error.api.sync.nativeValidationTimedOut": {
+      "zh-CN": "原生 Query 核验超时",
+      "en-US": "The native Query validation timed out",
+      "params": {}
+    },
+    "error.api.sync.nativeResultInvalid": {
+      "zh-CN": "原生 worker 返回的准确结果无效",
+      "en-US": "The native worker returned an invalid exact result",
+      "params": {}
+    },
+    "error.api.sync.nativeProductsInvalid": {
+      "zh-CN": "原生产物无效",
+      "en-US": "Invalid native products",
+      "params": {}
+    },
+    "error.api.sync.nativeProductByteBudget": {
+      "zh-CN": "原生产物输入超过原 Query 字节预算",
+      "en-US": "The native product inputs exceed the original Query byte budget",
+      "params": {}
+    },
+    "error.api.worker.deadline": {
+      "zh-CN": "原编译尝试已达时限；原输入保留",
+      "en-US": "The original compile attempt reached its deadline; the input is retained",
+      "params": {}
+    },
+    "error.api.worker.inputBudget": {
+      "zh-CN": "冻结的编译输入超过其字节预算",
+      "en-US": "The frozen compiler input exceeds its byte budget",
+      "params": {}
+    },
+    "error.api.worker.nonzeroExit": {
+      "zh-CN": "编译器以非零结果停止；原输入保留",
+      "en-US": "The compiler stopped with a nonzero result; the original input is retained",
+      "params": {}
+    },
+    "error.api.worker.outputRejected": {
+      "zh-CN": "原编译器输出不符合其协议",
+      "en-US": "The original compiler output does not satisfy its protocol",
+      "params": {}
+    },
+    "error.api.worker.supervisionLost": {
+      "zh-CN": "编译器监督器没有返回实际完成结果",
+      "en-US": "The compiler supervisor did not return its actual completion",
+      "params": {}
+    },
+    "error.api.worker.setupFailed": {
+      "zh-CN": "受控编译器进程无法启动",
+      "en-US": "The contained compiler process could not be started",
+      "params": {}
+    },
+    "error.api.worker.inputEncoding": {
+      "zh-CN": "冻结的编译输入无法编码",
+      "en-US": "The frozen compiler input could not be encoded",
+      "params": {}
+    },
+    "error.api.worker.transportFailed": {
+      "zh-CN": "原编译器传输未完成",
+      "en-US": "The original compiler transport did not complete",
+      "params": {}
+    },
+    "error.api.worker.streamBudget": {
+      "zh-CN": "编译器流超过字节预算；原输入保留",
+      "en-US": "The compiler stream exceeded its byte budget; the original input is retained",
+      "params": {}
+    },
+    "error.api.worker.processExitUnknown": {
+      "zh-CN": "编译器进程的实际退出尚未确认；原输入保留",
+      "en-US": "The compiler's actual process exit is unconfirmed; the original input is retained",
+      "params": {}
+    },
+    "error.api.broker.originalResultUnknown": {
+      "zh-CN": "原结果尚未确认；请保留原操作编号",
+      "en-US": "The original result is unconfirmed; retain the original operation ID",
+      "params": {}
     }
   }
 }

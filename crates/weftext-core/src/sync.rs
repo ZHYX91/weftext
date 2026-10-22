@@ -1,7 +1,7 @@
 //! Same-owner portable content history. Admission is not installation: this
 //! module never writes the author tree, grants hosted access, or copies jobs.
 //! A receiving Core must separately qualify and journal the selected changes.
-use super::{CoreError, Result, hash};
+use super::{CoreDescription, CoreError, Result, hash};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use weftext_messages::UiMessage;

@@ -174,7 +174,7 @@ class DiagramDocx(features.LocalFeatures):
         (self.root / 'stale.typ').write_text(stale, encoding='utf-8')
         rejected = self.compile(stale, 'stale-html')
         self.assertFalse(rejected['ok'])
-        self.assertTrue(any('Mermaid 图源已改变' in item['message'] for item in rejected['diagnostics']))
+        self.assertTrue(any('Mermaid 图源已改变' in raw['text'] for item in rejected['diagnostics'] for raw in item['diagnostics']))
         bad_request = {**request, 'requestId': features.uid(), 'source': stale, 'serial': 2}
         status, payload, _ = self.raw('/api/export/prepare', bad_request, status=(200, 400, 409, 422))
         failed = json.loads(payload)

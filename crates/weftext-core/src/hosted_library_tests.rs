@@ -54,15 +54,17 @@ fn qualified_private_reader_never_touches_foreign_body_and_rewinds_strict_metada
     .unwrap();
     assert!(result.is_none());
     assert_eq!(reader.bytes.position(), 1);
-    let rejected =
-        read_qualified_private_record(&mut reader, |reader| -> Result<Option<((), usize)>> {
+    let rejected = read_qualified_private_record(
+        &mut reader,
+        |reader| -> Result<Option<((), usize)>> {
             let metadata = read_actor_operation_metadata(reader)?;
             core.validate_actor_operation_metadata(&metadata)?;
             Err(CoreError::new(
                 "operationConflict",
-                "Exact original resource differs",
+                weftext_messages::UiMessage::error_core_hosted_library_tests_exact_original_resource_differs(),
             ))
-        });
+        },
+    );
     assert_eq!(rejected.err().unwrap().code, "operationConflict");
     assert_eq!(reader.bytes.position(), 1);
 }

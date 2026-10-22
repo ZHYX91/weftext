@@ -308,7 +308,7 @@ impl Core {
         };
         let scope = original.file_scope.clone()?;
         self.validate_current_file_save_scope(&scope, &original.path)?;
-        let guard = ParentGuard::acquire(&original.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &original.path)?;
         let file = guard.open_file(false, false)?;
         if stamp(&file)?.identity != original.stamp.identity {
             return Err(unavailable());
@@ -456,7 +456,7 @@ impl Core {
                 }
                 _ => return Err(unavailable()),
             };
-            self.admitted_binding(&identity)
+            self.admitted_binding(&identity)?
                 .filter(|birth| &birth.workspace_id == workspace)
                 .ok_or_else(unavailable)?
         } else {

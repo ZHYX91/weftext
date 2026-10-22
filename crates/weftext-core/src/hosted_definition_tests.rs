@@ -35,7 +35,7 @@ fn definition_enumeration_and_admission_status_skip_other_resources_before_priva
                     &QueryPlan::default(),
                     &f.schema,
                 )
-                .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))
+                .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))
             })
         })
         .unwrap();

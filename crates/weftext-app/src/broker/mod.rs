@@ -76,8 +76,11 @@ pub(crate) fn canonical_uuid(value: &str) -> bool {
         .is_ok_and(|id| id.get_version_num() == 4 && id.to_string() == value)
 }
 
-pub(crate) fn invalid(message: &'static str) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, message)
+pub(crate) fn invalid(message: weftext_messages::UiMessage) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        weftext_messages::ErrorDescription::new(message),
+    )
 }
 
 pub(crate) async fn write_header<W: AsyncWrite + Unpin, T: Serialize>(
@@ -86,7 +89,9 @@ pub(crate) async fn write_header<W: AsyncWrite + Unpin, T: Serialize>(
 ) -> io::Result<()> {
     let bytes = serde_json::to_vec(value).map_err(io::Error::other)?;
     if bytes.is_empty() || bytes.len() > MAX_HEADER {
-        return Err(invalid("Owner header exceeds its fixed budget"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_api_mod_owner_header_exceeds_its_fixed_budget(),
+        ));
     }
     writer
         .write_u32_le(u32::try_from(bytes.len()).map_err(io::Error::other)?)
@@ -99,7 +104,9 @@ pub(crate) async fn read_header<R: AsyncRead + Unpin, T: DeserializeOwned>(
 ) -> io::Result<T> {
     let length = reader.read_u32_le().await? as usize;
     if length == 0 || length > MAX_HEADER {
-        return Err(invalid("Owner header length is invalid"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_api_mod_owner_header_length_is_invalid(),
+        ));
     }
     let mut bytes = vec![0; length];
     reader.read_exact(&mut bytes).await?;
@@ -111,10 +118,15 @@ pub(crate) async fn read_body<R: AsyncRead + Unpin>(
     length: u64,
     maximum: usize,
 ) -> io::Result<Vec<u8>> {
-    let length =
-        usize::try_from(length).map_err(|_| invalid("Owner body length cannot be represented"))?;
+    let length = usize::try_from(length).map_err(|_| {
+        invalid(
+            weftext_messages::UiMessage::error_api_mod_owner_body_length_cannot_be_represented(),
+        )
+    })?;
     if length > maximum {
-        return Err(invalid("Owner body exceeds its fixed budget"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_api_mod_owner_body_exceeds_its_fixed_budget(),
+        ));
     }
     let mut bytes = vec![0; length];
     reader.read_exact(&mut bytes).await?;

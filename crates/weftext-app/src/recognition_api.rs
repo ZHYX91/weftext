@@ -297,7 +297,7 @@ impl Store {
             return Err(ApiError::new(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "hostClosing",
-                "The owner is closing; no new recognition job was started",
+                weftext_messages::UiMessage::error_api_recognition_owner_closing(),
             ));
         }
         uuid(&req.job_id)?;

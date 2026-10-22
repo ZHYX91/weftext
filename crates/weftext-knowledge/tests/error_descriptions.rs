@@ -90,7 +90,7 @@ fn annotation_duplicate_validation_is_typed_while_json_syntax_remains_original()
     let bytes = br#"{"version":1,"annotations":[],"version":1}"#;
     let original = bytes.to_vec();
     let error = decode_annotations(bytes).unwrap_err();
-    assert_eq!(bytes, original);
+    assert_eq!(bytes.as_slice(), original);
     assert_eq!(error.code, "damagedAnnotations");
     assert!(error.description.diagnostics.is_empty());
     assert!(

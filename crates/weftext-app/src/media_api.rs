@@ -596,19 +596,22 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
     if bytes.len() > 16 * 1024 * 1024 || pdf_structural_stream(bytes) {
         return Err(ErrorDescription::new(
             UiMessage::error_api_media_pdf_structural_profile_unsupported(),
-        )
-        .into());
+        ));
     }
     let document = lopdf::Document::load_mem(bytes).map_err(|error| {
         ErrorDescription::new(UiMessage::error_api_media_pdf_unreadable())
             .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
     })?;
     if document.is_encrypted() {
-        return Err(ErrorDescription::new(UiMessage::error_api_media_pdf_encrypted()).into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_encrypted(),
+        ));
     }
     let pages = document.get_pages();
     if pages.is_empty() || pages.len() > 2000 {
-        return Err(ErrorDescription::new(UiMessage::error_api_media_pdf_page_budget()).into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_page_budget(),
+        ));
     }
     let mut facts = Vec::with_capacity(pages.len());
     for id in pages.values() {
@@ -622,8 +625,7 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             if !visited.insert(cursor) || visited.len() > 64 {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_pdf_inheritance_cycle(),
-                )
-                .into());
+                ));
             }
             let dictionary = document.get_dictionary(cursor).map_err(|error| {
                 ErrorDescription::new(UiMessage::error_api_media_pdf_page_dictionary_invalid())
@@ -678,9 +680,9 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
         })?;
         if array.len() != 4 {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_pdf_rectangle_invalid()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rectangle_invalid(),
+            ));
         }
         let values: Option<Vec<_>> = array.iter().map(numeric).collect();
         let values = values.ok_or(ErrorDescription::new(
@@ -688,24 +690,23 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         ))?;
         if values.iter().any(|n| !n.is_finite()) || values[2] <= values[0] || values[3] <= values[1]
         {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_pdf_page_size_invalid()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_page_size_invalid(),
+            ));
         }
         if let Some(crop) = crop
             && resolve(crop)? != media
         {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_pdf_crop_unsupported()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_crop_unsupported(),
+            ));
         }
         if let Some(unit) = unit
             && numeric(&resolve(unit)?) != Some(1.0)
         {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_pdf_user_unit_unsupported(),
-            )
-            .into());
+            ));
         }
         let rotation = rotation
             .map(resolve)
@@ -714,15 +715,15 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             .and_then(numeric)
             .unwrap_or(0.0);
         if rotation.fract() != 0.0 {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_pdf_rotation_invalid()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rotation_invalid(),
+            ));
         }
         let rotation = (rotation as i32).rem_euclid(360);
         if !matches!(rotation, 0 | 90 | 180 | 270) {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_pdf_rotation_invalid()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rotation_invalid(),
+            ));
         }
         facts.push(PdfPageFacts {
             width: values[2] - values[0],
@@ -785,13 +786,15 @@ fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 UiMessage::error_api_media_wav_header_incomplete(),
             ))?
             .try_into()
-            .map_err(|error| {
+            .map_err(|error: std::array::TryFromSliceError| {
                 ErrorDescription::new(UiMessage::error_api_media_wav_header_incomplete())
                     .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
             })?,
     ) as usize;
     if declared.checked_add(8) != Some(bytes.len()) {
-        return Err(ErrorDescription::new(UiMessage::error_api_media_wav_length_mismatch()).into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_length_mismatch(),
+        ));
     }
     let mut position = 12usize;
     let mut format = None;
@@ -817,14 +820,13 @@ fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 if format.replace(block).is_some() {
                     return Err(ErrorDescription::new(
                         UiMessage::error_api_media_wav_format_ambiguous(),
-                    )
-                    .into());
+                    ));
                 }
             }
             b"data" if data.replace(block).is_some() => {
-                return Err(
-                    ErrorDescription::new(UiMessage::error_api_media_wav_data_ambiguous()).into(),
-                );
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_wav_data_ambiguous(),
+                ));
             }
             _ => {}
         }
@@ -839,9 +841,9 @@ fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         UiMessage::error_api_media_wav_data_missing(),
     ))?;
     if format.len() < 16 {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_wav_format_incomplete()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_format_incomplete(),
+        ));
     }
     let u16_at = |offset| u16::from_le_bytes(format[offset..offset + 2].try_into().unwrap());
     let u32_at = |offset| u32::from_le_bytes(format[offset..offset + 4].try_into().unwrap());
@@ -867,13 +869,15 @@ fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 ))?
         || data.len() % usize::from(align) != 0
     {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_wav_sampling_unsupported()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_sampling_unsupported(),
+        ));
     }
     let duration_tick = (data.len() / usize::from(align)) as u64;
     if duration_tick == 0 {
-        return Err(ErrorDescription::new(UiMessage::error_api_media_wav_audio_empty()).into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_audio_empty(),
+        ));
     }
     Ok(ResourceMetadata::Audio {
         timebase: Timebase {
@@ -895,8 +899,7 @@ fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, ErrorDescription> {
         if bytes.len() < 8 || output.len() > 10000 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_chunk_header_invalid(),
-            )
-            .into());
+            ));
         }
         let small = u32::from_be_bytes(bytes[..4].try_into().unwrap());
         let kind = bytes[4..8].try_into().unwrap();
@@ -906,8 +909,7 @@ fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, ErrorDescription> {
                 if bytes.len() < 16 {
                     return Err(ErrorDescription::new(
                         UiMessage::error_api_media_mp4_extended_header_incomplete(),
-                    )
-                    .into());
+                    ));
                 }
                 (
                     usize::try_from(u64::from_be_bytes(bytes[8..16].try_into().unwrap())).map_err(
@@ -924,9 +926,9 @@ fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, ErrorDescription> {
             n => (n as usize, 8),
         };
         if size < header || size > bytes.len() {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_mp4_chunk_outside_bytes()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_chunk_outside_bytes(),
+            ));
         }
         output.push(Mp4Box {
             kind,
@@ -983,7 +985,9 @@ fn verify_mp4_samples(
     samples: u64,
 ) -> Result<(), ErrorDescription> {
     if samples > 1_000_000 {
-        return Err(ErrorDescription::new(UiMessage::error_api_media_mp4_sample_budget()).into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_budget(),
+        ));
     }
     if stbl.iter().any(|item| item.kind == *b"ctts") {
         let ctts = one(stbl, b"ctts")?;
@@ -997,8 +1001,7 @@ fn verify_mp4_samples(
         {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_composition_offset_unsupported(),
-            )
-            .into());
+            ));
         }
     }
     let size = one(stbl, b"stsz")?;
@@ -1007,22 +1010,19 @@ fn verify_mp4_samples(
     if (fixed == 0 && size.body.len() != 12 + count * 4) || (fixed != 0 && size.body.len() != 12) {
         return Err(ErrorDescription::new(
             UiMessage::error_api_media_mp4_sample_size_table_invalid(),
-        )
-        .into());
+        ));
     }
     let offsets: Vec<u64> = if let Ok(stco) = one(stbl, b"stco") {
         if stbl.iter().any(|item| item.kind == *b"co64") {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_chunk_offsets_ambiguous(),
-            )
-            .into());
+            ));
         }
         let count = be32(stco.body, 4)? as usize;
         if count > 1_000_000 || stco.body.len() != 8 + count * 4 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_chunk_offsets_invalid(),
-            )
-            .into());
+            ));
         }
         stco.body[8..]
             .as_chunks::<4>()
@@ -1036,8 +1036,7 @@ fn verify_mp4_samples(
         if count > 1_000_000 || co64.body.len() != 8 + count * 8 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_extended_offsets_invalid(),
-            )
-            .into());
+            ));
         }
         co64.body[8..]
             .as_chunks::<8>()
@@ -1049,9 +1048,9 @@ fn verify_mp4_samples(
     let map = one(stbl, b"stsc")?;
     let entries = be32(map.body, 4)? as usize;
     if entries == 0 || entries > offsets.len() || map.body.len() != 8 + entries * 12 {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_mp4_sample_chunks_invalid()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_chunks_invalid(),
+        ));
     }
     let mut mappings = Vec::new();
     let mut prior = 0u32;
@@ -1065,16 +1064,15 @@ fn verify_mp4_samples(
         {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_sample_chunks_discontinuous(),
-            )
-            .into());
+            ));
         }
         mappings.push((first as usize, per_chunk));
         prior = first;
     }
     if mappings[0].0 != 1 {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_mp4_first_chunk_missing()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_first_chunk_missing(),
+        ));
     }
     let media: Vec<_> = root
         .iter()
@@ -1098,8 +1096,7 @@ fn verify_mp4_samples(
             if sample >= count {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_chunks_exceed_samples(),
-                )
-                .into());
+                ));
             }
             let length = if fixed == 0 {
                 be32(size.body, 12 + sample * 4)?
@@ -1109,8 +1106,7 @@ fn verify_mp4_samples(
             if length == 0 {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_media_sample_empty(),
-                )
-                .into());
+                ));
             }
             total = total
                 .checked_add(u64::from(length))
@@ -1128,15 +1124,13 @@ fn verify_mp4_samples(
         {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_samples_outside_media(),
-            )
-            .into());
+            ));
         }
     }
     if sample != count || sample as u64 != samples {
         return Err(ErrorDescription::new(
             UiMessage::error_api_media_mp4_sample_timeline_incomplete(),
-        )
-        .into());
+        ));
     }
     Ok(())
 }
@@ -1147,17 +1141,17 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
     if root.iter().any(|item| item.kind == *b"moof")
         || moov.iter().any(|item| item.kind == *b"mvex")
     {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_mp4_fragmented_unsupported()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_fragmented_unsupported(),
+        ));
     }
     if !root
         .iter()
         .any(|item| item.kind == *b"mdat" && !item.body.is_empty())
     {
-        return Err(
-            ErrorDescription::new(UiMessage::error_api_media_mp4_media_data_missing()).into(),
-        );
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_media_data_missing(),
+        ));
     }
     let mut audio = None;
     let mut video = None;
@@ -1168,8 +1162,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         if track.iter().any(|item| item.kind == *b"edts") {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_edited_timeline_unsupported(),
-            )
-            .into());
+            ));
         }
         let mdia = boxes(one(&track, b"mdia")?.body)?;
         let handler = one(&mdia, b"hdlr")?;
@@ -1186,14 +1179,13 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             _ => {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_time_header_version_invalid(),
-                )
-                .into());
+                ));
             }
         };
         if rate == 0 || duration == 0 || duration > 9_007_199_254_740_991 {
-            return Err(
-                ErrorDescription::new(UiMessage::error_api_media_mp4_time_range_invalid()).into(),
-            );
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_time_range_invalid(),
+            ));
         }
         let minf = boxes(one(&mdia, b"minf")?.body)?;
         let dinf = boxes(one(&minf, b"dinf")?.body)?;
@@ -1201,8 +1193,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         if be32(dref.body, 4)? != 1 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_external_sources_unsupported(),
-            )
-            .into());
+            ));
         }
         let references = boxes(dref.body.get(8..).ok_or(ErrorDescription::new(
             UiMessage::error_api_media_mp4_data_reference_invalid(),
@@ -1213,8 +1204,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_media_must_be_internal(),
-            )
-            .into());
+            ));
         }
         let stbl = boxes(one(&minf, b"stbl")?.body)?;
         let stts = one(&stbl, b"stts")?;
@@ -1222,8 +1212,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         if entries > 100000 || stts.body.len() != 8 + entries * 8 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_sample_timeline_invalid(),
-            )
-            .into());
+            ));
         }
         let mut sample_count = 0u64;
         let mut sample_duration = 0u64;
@@ -1233,8 +1222,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             if count == 0 || delta == 0 {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_sample_time_invalid(),
-                )
-                .into());
+                ));
             }
             sample_count = sample_count
                 .checked_add(count)
@@ -1252,23 +1240,20 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         if sample_duration != duration || sample_count == 0 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_time_header_mismatch(),
-            )
-            .into());
+            ));
         }
         let stsz = one(&stbl, b"stsz")?;
         if u64::from(be32(stsz.body, 8)?) != sample_count {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_sample_counts_mismatch(),
-            )
-            .into());
+            ));
         }
         verify_mp4_samples(bytes, &root, &stbl, sample_count)?;
         let stsd = one(&stbl, b"stsd")?;
         if be32(stsd.body, 4)? != 1 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_multiple_formats_unsupported(),
-            )
-            .into());
+            ));
         }
         let descriptions = boxes(stsd.body.get(8..).ok_or(ErrorDescription::new(
             UiMessage::error_api_media_mp4_sample_description_invalid(),
@@ -1276,15 +1261,13 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
         if descriptions.len() != 1 {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_sample_description_ambiguous(),
-            )
-            .into());
+            ));
         }
         let description = descriptions[0];
         if description.body.get(6..8) != Some(&[0, 1]) {
             return Err(ErrorDescription::new(
                 UiMessage::error_api_media_mp4_sample_reference_ambiguous(),
-            )
-            .into());
+            ));
         }
         let timebase = Timebase {
             numerator: u64::from(rate),
@@ -1298,8 +1281,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_video_format_unsupported(),
-                )
-                .into());
+                ));
             }
             let width = u64::from(u16::from_be_bytes(
                 description.body[24..26].try_into().unwrap(),
@@ -1310,8 +1292,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             if width == 0 || height == 0 {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_video_dimensions_empty(),
-                )
-                .into());
+                ));
             }
             let tkhd = one(&track, b"tkhd")?;
             let matrix = match tkhd.body.first() {
@@ -1320,8 +1301,7 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 _ => {
                     return Err(ErrorDescription::new(
                         UiMessage::error_api_media_mp4_track_header_version_invalid(),
-                    )
-                    .into());
+                    ));
                 }
             };
             let identity = [65536u32, 0, 0, 0, 65536, 0, 0, 0, 1073741824];
@@ -1329,23 +1309,20 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
                 if be32(tkhd.body, matrix + index * 4)? != *expected {
                     return Err(ErrorDescription::new(
                         UiMessage::error_api_media_mp4_video_transform_unsupported(),
-                    )
-                    .into());
+                    ));
                 }
             }
             let child = boxes(&description.body[78..])?;
             if child.iter().any(|item| item.kind == *b"clap") {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_video_crop_unsupported(),
-                )
-                .into());
+                ));
             }
             for aspect in child.iter().filter(|item| item.kind == *b"pasp") {
                 if be32(aspect.body, 0)? != be32(aspect.body, 4)? {
                     return Err(ErrorDescription::new(
                         UiMessage::error_api_media_mp4_pixel_aspect_unsupported(),
-                    )
-                    .into());
+                    ));
                 }
             }
             if video
@@ -1359,15 +1336,13 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_multiple_video_tracks_unsupported(),
-                )
-                .into());
+                ));
             }
         } else {
             if description.kind != *b"mp4a" {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_audio_format_unsupported(),
-                )
-                .into());
+                ));
             }
             if audio
                 .replace(ResourceMetadata::Audio {
@@ -1378,14 +1353,13 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
             {
                 return Err(ErrorDescription::new(
                     UiMessage::error_api_media_mp4_multiple_audio_tracks_unsupported(),
-                )
-                .into());
+                ));
             }
         }
     }
-    video.or(audio).ok_or(
-        ErrorDescription::new(UiMessage::error_api_media_mp4_supported_track_missing()).into(),
-    )
+    video.or(audio).ok_or(ErrorDescription::new(
+        UiMessage::error_api_media_mp4_supported_track_missing(),
+    ))
 }
 
 #[cfg(test)]
@@ -1700,10 +1674,7 @@ mod tests {
         )
         .ok()
         .unwrap();
-        let mut set = resource_set(&state, &opened.session_id)
-            .await
-            .map_err(ApiError::into_description)
-            .unwrap();
+        let mut set = resource_set(&state, &opened.session_id).await.unwrap();
         assert_eq!(set.resources.len(), 1);
         let selected = set.resources.remove(0);
         let revision = selected.file.revision.clone().unwrap();
@@ -1724,7 +1695,6 @@ mod tests {
             }),
         )
         .await
-        .map_err(ApiError::into_description)
         .unwrap();
         let delivered = axum::body::to_bytes(response.into_body(), 64 * 1024 * 1024)
             .await
@@ -1831,7 +1801,6 @@ mod tests {
         };
         let ready = query_preview(State(state.clone()), crate::RequestJson(request.clone()))
             .await
-            .map_err(ApiError::into_description)
             .unwrap()
             .0;
         assert_eq!(ready["state"], "ready");
@@ -1849,7 +1818,6 @@ mod tests {
         };
         let response = query_preview_resource(State(state.clone()), crate::RequestJson(raw))
             .await
-            .map_err(ApiError::into_description)
             .unwrap();
         let delivered = axum::body::to_bytes(response.into_body(), 64 * 1024 * 1024)
             .await
@@ -1863,7 +1831,6 @@ mod tests {
             }),
         )
         .await
-        .map_err(ApiError::into_description)
         .unwrap()
         .0;
         assert_eq!(stale["state"], "unavailable");
@@ -1891,7 +1858,6 @@ mod tests {
             crate::RequestJson(observed_request.clone()),
         )
         .await
-        .map_err(ApiError::into_description)
         .unwrap()
         .0;
         assert_eq!(ready["state"], "ready");
@@ -1905,7 +1871,6 @@ mod tests {
         .unwrap();
         let stale = query_preview(State(state.clone()), crate::RequestJson(observed_request))
             .await
-            .map_err(ApiError::into_description)
             .unwrap()
             .0;
         assert_eq!(stale["state"], "unavailable");

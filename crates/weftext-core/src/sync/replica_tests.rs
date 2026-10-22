@@ -61,7 +61,7 @@ fn current_sync_file_readers_reject_missing_original_participant_without_affecti
     let old_commit = serde_json::to_vec(&old).unwrap();
     fs::write(&commit_path, &old_commit).unwrap();
     core.operations.get_mut(&id).unwrap().file_save = None;
-    assert!(core.committed(&id));
+    assert!(core.committed(&id).unwrap());
     assert_eq!(
         core.sync_publications(&display(&a)).unwrap_err().code,
         "unsupportedFileSaveEvidence"

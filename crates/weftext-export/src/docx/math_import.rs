@@ -501,7 +501,7 @@ impl Builder {
         } else {
             weftext_data::NativeValue::Text(value.into())
                 .to_typst()
-                .map_err(|e| DocxError::from_data(e))?
+                .map_err(DocxError::from_data)?
         };
         if !family.is_empty() {
             self.decoration(family)?;

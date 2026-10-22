@@ -256,7 +256,7 @@ async fn start(State(state): State<AppState>, RequestJson(req): RequestJson<Star
             return Err(ApiError::new(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "hostClosing",
-                "The owner is closing; no new transfer was started",
+                weftext_messages::UiMessage::error_api_remote_sync_owner_closing(),
             ));
         }
         if store.jobs.values().any(|v| v.info.status == "running") {

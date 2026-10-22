@@ -17,7 +17,7 @@ pub(super) fn read_draft_metadata(file: &mut (impl Read + std::io::Seek)) -> Res
             .ok_or_else(|| {
                 CoreError::new(
                     "unsupportedInputScope",
-                    "Draft lacks supported original metadata; original bytes remain unchanged",
+                    weftext_messages::UiMessage::error_core_draft_recovery_draft_lacks_supported_original_metadata_original_bytes_remain_unchanged(),
                 )
             })?;
     hosted::decode_metadata(fields)
@@ -72,7 +72,7 @@ impl Draft {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Draft input producer is not canonical",
+                    weftext_messages::UiMessage::error_core_draft_recovery_draft_input_producer_is_not_canonical(),
                 ));
             }
         }
@@ -133,13 +133,13 @@ impl Core {
         {
             return Err(CoreError::new(
                 "draftChanged",
-                "The actual source basis changed before recovery continuation",
+                weftext_messages::UiMessage::error_core_draft_recovery_the_actual_source_basis_changed_before_recovery_continuation(),
             ));
         }
         let draft = self
             .current_session_draft(&request.session_id)?
             .ok_or_else(|| {
-                CoreError::new("draftChanged", "The reviewed recovery record is absent")
+                CoreError::new("draftChanged", weftext_messages::UiMessage::error_core_draft_recovery_the_reviewed_recovery_record_is_absent())
             })?;
         let witness = draft.witness()?;
         if witness != request.record_witness
@@ -148,13 +148,13 @@ impl Core {
         {
             return Err(CoreError::new(
                 "draftChanged",
-                "Review the complete current recovery record again",
+                weftext_messages::UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again(),
             ));
         }
         let producer = draft.producer_id.clone().ok_or_else(|| {
             CoreError::new(
                 "draftProducerUnavailable",
-                "This recovery record has no transferable producer",
+                weftext_messages::UiMessage::error_core_draft_recovery_this_recovery_record_has_no_transferable_producer(),
             )
         })?;
         if session.draft_producer_id == producer
@@ -168,7 +168,7 @@ impl Core {
         if session.draft_input.is_some() {
             return Err(CoreError::new(
                 "draftProducerUnavailable",
-                "This session already acknowledged independent input",
+                weftext_messages::UiMessage::error_core_draft_recovery_this_session_already_acknowledged_independent_input(),
             ));
         }
         if self
@@ -178,7 +178,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "draftProducerActive",
-                "The original input producer still has a live Core session",
+                weftext_messages::UiMessage::error_core_draft_recovery_the_original_input_producer_still_has_a_live_core_session(),
             ));
         }
         let session = self.sessions.get_mut(&request.session_id).unwrap();
@@ -200,7 +200,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "draftFlushMismatch",
-                "Expected source digest is not canonical",
+                weftext_messages::UiMessage::error_core_draft_recovery_expected_source_digest_is_not_canonical(),
             ));
         }
         let session = self
@@ -210,7 +210,7 @@ impl Core {
         if session.base_id != request.base_id {
             return Err(CoreError::new(
                 "draftFlushMismatch",
-                "The document base changed",
+                weftext_messages::UiMessage::error_core_draft_recovery_the_document_base_changed(),
             ));
         }
         let scope =
@@ -240,7 +240,7 @@ impl Core {
         if bytes.len() > MAX_DRAFT_RECORD_BYTES || stamp(&file)? != before {
             return Err(CoreError::new(
                 "draftFlushMismatch",
-                "The complete draft changed during readback",
+                weftext_messages::UiMessage::error_core_draft_recovery_the_complete_draft_changed_during_readback(),
             ));
         }
         let draft: Draft = serde_json::from_slice(&bytes)?;
@@ -249,7 +249,7 @@ impl Core {
         let input = session.draft_input.as_ref().ok_or_else(|| {
             CoreError::new(
                 "draftFlushMismatch",
-                "This input producer has no acknowledged draft",
+                weftext_messages::UiMessage::error_core_draft_recovery_this_input_producer_has_no_acknowledged_draft(),
             )
         })?;
         if draft.scope != scope
@@ -261,7 +261,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "draftFlushMismatch",
-                "The persisted draft does not contain the prepared input",
+                weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input(),
             ));
         }
         self.check_committed_draft_paths(
@@ -289,10 +289,11 @@ impl Core {
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         let scope = self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
-        let Some(bytes) = self.read_draft_record(&path, &scope)? else {
+        let Some((draft, bytes)) =
+            self.read_draft_record(&path, &scope, &session.stamp.identity)?
+        else {
             return Ok(None);
         };
-        let draft: Draft = serde_json::from_slice(&bytes)?;
         if draft.identity != session.stamp.identity || draft.scope != scope {
             return Err(CoreError::new(
                 "privateEvidence",
@@ -325,7 +326,10 @@ impl Core {
                 CoreError::new("sessionMissing", UiMessage::error_reopen_source())
             })?;
         if draft.producer_id.as_deref() != Some(&session.draft_producer_id) {
-            return Err(CoreError::new("privateEvidence", "Draft producer differs"));
+            return Err(CoreError::new(
+                "privateEvidence",
+                weftext_messages::UiMessage::error_core_draft_recovery_draft_producer_differs(),
+            ));
         }
         let latest = self.current_session_draft(session_id)?;
         let previous_witness = latest.as_ref().map(Draft::witness).transpose()?;
@@ -453,11 +457,7 @@ impl Core {
         let mut lineage = BTreeSet::from([display(path)]);
         loop {
             let before = lineage.len();
-            for plan in self
-                .operations
-                .values()
-                .filter(|plan| self.committed(&plan.operation_id))
-            {
+            for plan in self.committed_plans()?.into_iter() {
                 if !matches!(scope, QualifiedInputScope::Library { binding }
                     if plan.workspace_id.as_ref() == Some(&binding.workspace_id))
                 {
@@ -555,7 +555,7 @@ impl Core {
             if metadata.scope != *scope || metadata.identity != *identity {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Draft original input scope or physical identity differs",
+                    weftext_messages::UiMessage::error_core_draft_recovery_draft_original_input_scope_or_physical_identity_differs(),
                 ));
             }
             Ok(Some((metadata, MAX_DRAFT_RECORD_BYTES)))
@@ -567,7 +567,7 @@ impl Core {
         if draft.scope != metadata.scope || draft.identity != metadata.identity {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft metadata changed during its qualified read",
+                weftext_messages::UiMessage::error_core_draft_recovery_draft_metadata_changed_during_its_qualified_read(),
             ));
         }
         Ok(Some((draft, bytes)))

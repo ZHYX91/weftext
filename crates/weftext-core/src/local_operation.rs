@@ -284,7 +284,7 @@ impl Core {
                         UiMessage::error_core_original_scope_save_original_library_unavailable(),
                     ));
                 }
-                let path = if let Some(birth) = self.admitted_binding(&identity) {
+                let path = if let Some(birth) = self.admitted_binding(&identity)? {
                     if birth.workspace_id != binding.workspace_id {
                         return Err(CoreError::new(
                             "committedResultUnavailable",
@@ -324,13 +324,15 @@ impl Core {
         };
         self.validate_current_file_save_scope(scope, &path)?;
         let guard = ParentGuard::acquire(&self.backend, &path)?;
-        if stamp(&guard.open_file(false, false)?)?.identity != identity {
+        let file = guard.open_file(false, false)?;
+        if stamp(&file)?.identity != identity {
             return Err(CoreError::new(
                 "committedResultUnavailable",
                 UiMessage::error_core_local_operation_saved_path_now_names_another_physical_object(
                 ),
             ));
         }
+        drop(file);
         drop(guard);
         let document = self.open(&path, root)?;
         let reopened = &self.sessions[&document.session_id];

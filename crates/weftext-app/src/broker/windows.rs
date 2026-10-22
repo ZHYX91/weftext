@@ -135,7 +135,7 @@ impl Connection {
             let reply: ReplyHeader = read_header(&mut self.pipe).await?;
             if reply.request_id != request_id || reply.owner_incarnation != self.welcome.owner_incarnation
                 || !(100..=599).contains(&reply.http_status) || reply.content_type.len() > 256 {
-                return Err(invalid("The owner result does not match the original request"));
+                return Err(invalid(weftext_messages::UiMessage::error_api_windows_the_owner_result_does_not_match_the_original_request()));
             }
             let body = read_body(&mut self.pipe, reply.body_bytes, MAX_REPLY_BYTES).await?;
             Ok(LocalReply {request_id:reply.request_id,owner_incarnation:reply.owner_incarnation,http_status:reply.http_status,content_type:reply.content_type,body})
@@ -451,7 +451,7 @@ async fn establish(
             || !canonical_uuid(&welcome.owner_incarnation)
         {
             return Err(invalid(
-                "The verified owner handshake does not match this physical profile and process",
+                weftext_messages::UiMessage::error_api_windows_the_verified_owner_handshake_does_not_match_this_physical_profile_and(),
             ));
         }
         Ok(welcome)
@@ -521,7 +521,7 @@ impl OwnerPipe {
     /// retirement, until its supervisor has actually released Core. During
     /// drain another launch sees occupied/busy, never an absent owner name.
     pub(crate) fn retain_name(&self) -> io::Result<OwnedHandle> {
-        use windows::Win32::{
+        use ::windows::Win32::{
             Foundation::{DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE},
             System::Threading::GetCurrentProcess,
         };
@@ -556,12 +556,12 @@ impl OwnerPipe {
                     "http://127.0.0.1:{}",
                     parsed
                         .port()
-                        .ok_or_else(|| invalid("Local listener has no port"))?
+                        .ok_or_else(|| invalid(weftext_messages::UiMessage::error_api_windows_local_listener_has_no_port()))?
                 );
                 let token = parsed
                     .fragment()
                     .and_then(|fragment| fragment.strip_prefix("token="))
-                    .ok_or_else(|| invalid("Local owner credential is unavailable"))?
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_api_windows_local_owner_credential_is_unavailable()))?
                     .to_owned();
                 let http = reqwest::Client::builder()
                     .no_proxy()
@@ -576,7 +576,7 @@ impl OwnerPipe {
                 })
             }
             (OwnerRole::Hosted, None) => None,
-            _ => return Err(invalid("Owner role and local service authority differ")),
+            _ => return Err(invalid(weftext_messages::UiMessage::error_api_windows_owner_role_and_local_service_authority_differ())),
         };
         let authority = Arc::new(Authority {
             profile: self.profile.physical_identity().into(),
@@ -756,12 +756,27 @@ async fn connection(
         // Once a complete request is accepted, do not select cancellation over
         // its result. HTTP/Core and durable bookkeeping must finish independently
         // of a later pipe disconnect or host shutdown signal.
-        let (status, content_type, output) = match dispatch(&owner, header.command, body, secret).await {
-            Ok(value)=>value,
-            Err(_)=>(500,"application/json".into(),br#"{"error":{"code":"ownerResultUnknown","message":"The original result is unconfirmed; retain the original operation ID"}}"#.to_vec()),
-        };
+        let (status, content_type, output) =
+            match dispatch(&owner, header.command, body, secret).await {
+                Ok(value) => value,
+                Err(error) => {
+                    let error = crate::ApiError::from(
+                        weftext_core::CoreError::new(
+                            "ownerResultUnknown",
+                            weftext_messages::UiMessage::error_api_broker_original_result_unknown(),
+                        )
+                        .caused_by(weftext_core::CoreError::from(error)),
+                    );
+                    (
+                        500,
+                        "application/json".into(),
+                        serde_json::to_vec(&serde_json::json!({"error": error}))
+                            .map_err(io::Error::other)?,
+                    )
+                }
+            };
         if output.len() > MAX_REPLY_BYTES {
-            return Err(invalid("Host result exceeds the fixed output budget"));
+            return Err(invalid(weftext_messages::UiMessage::error_api_windows_host_result_exceeds_the_fixed_output_budget()));
         }
         let reply = ReplyHeader {
             request_id: header.request_id,
@@ -796,15 +811,16 @@ async fn dispatch(
     match command {
         Command::Business { kind } => {
             if owner.role != OwnerRole::Local {
-                return Err(invalid("Hosted owner has no local business bridge"));
+                return Err(invalid(weftext_messages::UiMessage::error_api_windows_hosted_owner_has_no_local_business_bridge()));
             }
-            let bridge = owner
-                .bridge
-                .as_ref()
-                .ok_or_else(|| invalid("Local authority is unavailable"))?;
-            let (method, route) = kind
-                .local_route()
-                .ok_or_else(|| invalid("Unknown local operation"))?;
+            let bridge = owner.bridge.as_ref().ok_or_else(|| {
+                invalid(
+                    weftext_messages::UiMessage::error_api_windows_local_authority_is_unavailable(),
+                )
+            })?;
+            let (method, route) = kind.local_route().ok_or_else(|| {
+                invalid(weftext_messages::UiMessage::error_api_windows_unknown_local_operation())
+            })?;
             let body = inject_secret(kind, body, secret)?;
             if !owner.continuation.admit_cli() {
                 return Ok((
@@ -836,7 +852,7 @@ async fn dispatch(
             let mut bytes = Vec::new();
             while let Some(chunk) = response.chunk().await.map_err(io::Error::other)? {
                 if chunk.len() > MAX_REPLY_BYTES.saturating_sub(bytes.len()) {
-                    return Err(invalid("Original reply exceeds the fixed output budget"));
+                    return Err(invalid(weftext_messages::UiMessage::error_api_windows_original_reply_exceeds_the_fixed_output_budget()));
                 }
                 bytes.extend_from_slice(&chunk);
             }
@@ -852,12 +868,12 @@ async fn dispatch(
             }
             if owner.role == OwnerRole::Hosted && !matches!(&command, Command::Shutdown) {
                 return Err(invalid(
-                    "Hosted owner accepts only its exact lifecycle control",
+                    weftext_messages::UiMessage::error_api_windows_hosted_owner_accepts_only_its_exact_lifecycle_control(),
                 ));
             }
             if !body.is_empty() || secret.is_some() {
                 return Err(invalid(
-                    "Host control does not accept business or secret bytes",
+                    weftext_messages::UiMessage::error_api_windows_host_control_does_not_accept_business_or_secret_bytes(),
                 ));
             }
             let (reply, result) = oneshot::channel();
@@ -884,28 +900,42 @@ fn inject_secret(
         CallKind::RemoteSyncInspect | CallKind::RemoteSyncStart
     ) {
         if secret.is_some() {
-            return Err(invalid("Secret sideband is forbidden for this operation"));
+            return Err(invalid(weftext_messages::UiMessage::error_api_windows_secret_sideband_is_forbidden_for_this_operation()));
         }
         return Ok(body);
     }
-    let secret = secret.ok_or_else(|| invalid("Transient sync credential is missing"))?;
-    let mut value: serde_json::Value =
-        serde_json::from_slice(&body).map_err(|_| invalid("Sync pure input is invalid"))?;
+    let secret = secret.ok_or_else(|| {
+        invalid(
+            weftext_messages::UiMessage::error_api_windows_transient_sync_credential_is_missing(),
+        )
+    })?;
+    let mut value: serde_json::Value = serde_json::from_slice(&body).map_err(|_| {
+        invalid(weftext_messages::UiMessage::error_api_windows_sync_pure_input_is_invalid())
+    })?;
     let connection = if kind == CallKind::RemoteSyncStart {
         value.get_mut("connection")
     } else {
         Some(&mut value)
     }
     .and_then(serde_json::Value::as_object_mut)
-    .ok_or_else(|| invalid("Sync connection pure input is missing"))?;
+    .ok_or_else(|| {
+        invalid(
+            weftext_messages::UiMessage::error_api_windows_sync_connection_pure_input_is_missing(),
+        )
+    })?;
     if connection.contains_key("token") {
-        return Err(invalid("Sync pure input cannot contain credentials"));
+        return Err(invalid(weftext_messages::UiMessage::error_api_windows_sync_pure_input_cannot_contain_credentials()));
     }
     connection.insert(
         "token".into(),
         serde_json::Value::String(
             std::str::from_utf8(secret.bytes())
-                .map_err(|_| invalid("Credential is not ASCII"))?
+                .map_err(|_| {
+                    invalid(
+                        weftext_messages::UiMessage::error_api_windows_credential_is_not_a_s_c_i_i(
+                        ),
+                    )
+                })?
                 .into(),
         ),
     );

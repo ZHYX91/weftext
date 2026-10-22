@@ -13,7 +13,7 @@ async fn original_status(
     status(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(OperationStatus {
+        crate::RequestJson(OperationStatus {
             resource: resource.into(),
             operation_id: operation.into(),
         }),
@@ -33,7 +33,7 @@ async fn original_save_status_authorizes_frozen_resource_before_reading_private_
     let Json(saved) = save(
         State(state.clone()),
         Extension(auth.clone()),
-        Json(SourceSaveRequest {
+        crate::RequestJson(SourceSaveRequest {
             session_id: session_id(&doc),
             base_id: doc["baseId"].as_str().unwrap().into(),
             source: source.clone(),
