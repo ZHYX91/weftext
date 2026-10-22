@@ -49268,16 +49268,6 @@
       "en-US": "The enrollment names a different physical root",
       "params": {}
     },
-    "error.core.posix.rootRegistryUnavailable": {
-      "zh-CN": "受控根目录登记表暂不可用",
-      "en-US": "Controlled root registry is unavailable",
-      "params": {}
-    },
-    "error.core.posix.overlappingWriter": {
-      "zh-CN": "受控根目录与现有 writer 权限范围重叠",
-      "en-US": "This controlled root overlaps an existing writer authority",
-      "params": {}
-    },
     "error.core.posix.authorityChanged": {
       "zh-CN": "原受控根目录的权限资格已改变",
       "en-US": "The original controlled root authority changed",
@@ -49326,11 +49316,6 @@
     "error.core.posix.symbolicOrSpecialEntry": {
       "zh-CN": "不支持符号链接或特殊文件系统项",
       "en-US": "The controlled root contains a symbolic link or special filesystem entry",
-      "params": {}
-    },
-    "error.core.posix.controlledAuthorityRequired": {
-      "zh-CN": "路径没有已接纳的受控服务写入资格",
-      "en-US": "The path has no admitted controlled-service authority",
       "params": {}
     },
     "error.core.posix.descriptorAuthorityRequired": {
@@ -49411,11 +49396,6 @@
     "error.core.posix.participantBudget": {
       "zh-CN": "namespace 参与者超出有效预算",
       "en-US": "Invalid namespace participant budget",
-      "params": {}
-    },
-    "error.core.posix.crossRootParticipants": {
-      "zh-CN": "namespace 参与者属于不同的根目录权限范围",
-      "en-US": "Namespace participants have different root authorities",
       "params": {}
     },
     "error.core.posix.independentRootsRequired": {
@@ -50716,6 +50696,448 @@
     "error.reminder.stateVersionUnsupported": {
       "zh-CN": "提醒设备记录版本不受支持；此构建只读取版本 2。请保留原件。",
       "en-US": "The reminder device-record version is unsupported; this build reads version 2 only. Retain the original.",
+      "params": {}
+    },
+    "error.api.jsonDataInvalid": {
+      "zh-CN": "请求 JSON 的字段或类型无效。",
+      "en-US": "The request JSON has invalid fields or types.",
+      "params": {}
+    },
+    "error.api.jsonSyntaxInvalid": {
+      "zh-CN": "请求正文不是完整有效的 JSON。",
+      "en-US": "The request body is not complete valid JSON.",
+      "params": {}
+    },
+    "error.api.jsonContentTypeRequired": {
+      "zh-CN": "请求必须使用 application/json 内容类型。",
+      "en-US": "The request must use an application/json content type.",
+      "params": {}
+    },
+    "error.api.requestBodyBudget": {
+      "zh-CN": "请求正文超过允许的字节预算。",
+      "en-US": "The request body exceeds the allowed byte budget.",
+      "params": {}
+    },
+    "error.api.requestBodyUnavailable": {
+      "zh-CN": "无法完整读取请求正文。",
+      "en-US": "The request body could not be read completely.",
+      "params": {}
+    },
+    "error.localService.bindFailed": {
+      "zh-CN": "无法在端口 {port} 绑定 Weftext 本地服务。",
+      "en-US": "Cannot bind the Weftext local service on port {port}.",
+      "params": {
+        "port": "text"
+      }
+    },
+    "error.localService.documentEncodingFailed": {
+      "zh-CN": "无法编码本地服务的原始文档结果。",
+      "en-US": "The local service could not encode the original document result.",
+      "params": {}
+    },
+    "error.core.originalScope.draft.retainedScopeDiffers": {
+      "zh-CN": "保留的 Draft 属于另一个原始范围。",
+      "en-US": "Retained Draft has another original scope",
+      "params": {}
+    },
+    "error.core.originalScope.draft.inputScopeDiffers": {
+      "zh-CN": "Draft 的原始输入范围不一致。",
+      "en-US": "Draft original input scope differs",
+      "params": {}
+    },
+    "error.core.originalScope.draft.participantDiffers": {
+      "zh-CN": "Draft 的原始参与对象不一致。",
+      "en-US": "Draft original participant differs",
+      "params": {}
+    },
+    "error.core.originalScope.actor.unsupportedOriginalScope": {
+      "zh-CN": "执行者提案缺少受支持的原始输入范围；原始字节保持不变。",
+      "en-US": "Actor proposal has no supported original input scope; original bytes remain unchanged",
+      "params": {}
+    },
+    "error.core.originalScope.actor.noInputReferencesPlan": {
+      "zh-CN": "无输入的执行者隔离记录引用了实际的 Core Plan。",
+      "en-US": "A no-input actor fence references an actual Core Plan",
+      "params": {}
+    },
+    "error.core.originalScope.actor.qualifiedLibraryRequired": {
+      "zh-CN": "库中的作者提案必须绑定其原始且已资格确认的库所有者。",
+      "en-US": "A library author proposal requires its original qualified library owner",
+      "params": {}
+    },
+    "error.core.originalScope.actor.proposalOwnerDiffers": {
+      "zh-CN": "执行者提案与原始输入的所有者不一致。",
+      "en-US": "Typed actor proposal and original input owners differ",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fileSaveScopeDiffers": {
+      "zh-CN": "执行者输入与原始文件保存 Plan 的范围不一致。",
+      "en-US": "Actor input and original file-save Plan scopes differ",
+      "params": {}
+    },
+    "error.core.originalScope.actor.transactionOwnerDiffers": {
+      "zh-CN": "执行者输入与原始事务的所有者不一致。",
+      "en-US": "Actor input and original transaction owners differ",
+      "params": {}
+    },
+    "error.core.originalScope.actor.noInputRequiresEmptyCancelledFence": {
+      "zh-CN": "只有实际为空且已取消的执行者隔离记录才可以没有输入范围。",
+      "en-US": "Only an actual empty cancelled actor fence can have no input scope",
+      "params": {}
+    },
+    "error.core.originalScope.actor.noInputMetadataBudget": {
+      "zh-CN": "无输入的执行者隔离记录超过元数据预算。",
+      "en-US": "No-input actor fence exceeds its metadata budget",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fenceScopeChanged": {
+      "zh-CN": "执行者隔离记录的范围已改变。",
+      "en-US": "Actor fence scope changed",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fenceOutsideNamespace": {
+      "zh-CN": "执行者隔离记录不在其私有命名空间内。",
+      "en-US": "Actor fence is outside its private namespace",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fenceNamespaceInvalid": {
+      "zh-CN": "执行者隔离记录的命名空间无效。",
+      "en-US": "Invalid actor fence namespace",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fenceNamespaceDiffers": {
+      "zh-CN": "执行者隔离记录的命名空间不一致。",
+      "en-US": "Actor fence namespace differs",
+      "params": {}
+    },
+    "error.core.originalScope.actor.fenceLeafInvalid": {
+      "zh-CN": "执行者隔离记录的文件名无效。",
+      "en-US": "Invalid actor fence leaf",
+      "params": {}
+    },
+    "error.core.originalScope.actor.originalOwnerUnqualified": {
+      "zh-CN": "原始作者输入没有已资格确认的所有者。",
+      "en-US": "Original author input has no qualified owner",
+      "params": {}
+    },
+    "error.core.originalScope.actor.noInputBackupOwnerAbsent": {
+      "zh-CN": "无输入的设备隔离记录没有库备份所有者。",
+      "en-US": "A no-input device fence has no library backup owner",
+      "params": {}
+    },
+    "error.core.originalScope.actor.unboundBackupOwnerDiffers": {
+      "zh-CN": "未绑定的执行者输入属于另一个原始备份所有者。",
+      "en-US": "Unbound actor input has a different original backup owner",
+      "params": {}
+    },
+    "error.core.originalScope.actor.planInputOwnerDiffers": {
+      "zh-CN": "原始执行者 Plan 与输入的所有者不一致。",
+      "en-US": "Original actor Plan and input owners differ",
+      "params": {}
+    },
+    "error.core.originalScope.creation.physicalResultUnavailable": {
+      "zh-CN": "原始库的物理结果不可用。",
+      "en-US": "The original physical library result is unavailable",
+      "params": {}
+    },
+    "error.core.originalScope.creation.originalNotRetained": {
+      "zh-CN": "未保留原始的库创建操作。",
+      "en-US": "No original library creation is retained",
+      "params": {}
+    },
+    "error.core.originalScope.creation.originalNotCommittedCreation": {
+      "zh-CN": "此原始操作不是已提交的库创建操作。",
+      "en-US": "This original operation is not a committed library creation",
+      "params": {}
+    },
+    "error.core.originalScope.save.originalNotFileSave": {
+      "zh-CN": "原始操作不是文件保存。",
+      "en-US": "The original operation is not a file save",
+      "params": {}
+    },
+    "error.core.originalScope.save.requestParticipantsDiffer": {
+      "zh-CN": "原始文件保存请求的参与对象不一致。",
+      "en-US": "Original file-save request participants differ",
+      "params": {}
+    },
+    "error.core.originalScope.save.frozenFingerprintDiffers": {
+      "zh-CN": "原始文件保存的范围或请求与冻结的指纹不一致。",
+      "en-US": "Original file-save scope or request differs from its frozen fingerprint",
+      "params": {}
+    },
+    "error.core.originalScope.save.syncOwnerDiffers": {
+      "zh-CN": "文件保存与同步发布的所有者不一致。",
+      "en-US": "File-save and sync publication owners differ",
+      "params": {}
+    },
+    "error.core.originalScope.save.planParticipantsOrReceiptInvalid": {
+      "zh-CN": "原始文件保存 Plan 的参与对象或回执无效。",
+      "en-US": "Original file-save Plan has invalid participants or receipt",
+      "params": {}
+    },
+    "error.core.originalScope.operation.transactionIdentityOrKindDiffers": {
+      "zh-CN": "原始事务的身份或种类不一致。",
+      "en-US": "Original transaction identity or kind is inconsistent",
+      "params": {}
+    },
+    "error.core.originalScope.operation.planResultContractUnsupported": {
+      "zh-CN": "未知种类的原始 Plan 没有已资格确认的结果合同。",
+      "en-US": "Unknown original Plan kind has no qualified result contract",
+      "params": {}
+    },
+    "error.core.originalScope.save.saveAsBirthUnavailable": {
+      "zh-CN": "原始另存为操作的物理创建记录不可用。",
+      "en-US": "The original Save As physical birth is unavailable",
+      "params": {}
+    },
+    "error.core.originalScope.save.physicalIdentityMissing": {
+      "zh-CN": "原始保存操作缺少物理身份。",
+      "en-US": "The original save has no physical identity",
+      "params": {}
+    },
+    "error.core.originalScope.save.originalLibraryUnavailable": {
+      "zh-CN": "原始文件保存所属的库不可用。",
+      "en-US": "The original file-save library is unavailable",
+      "params": {}
+    },
+    "error.core.originalScope.save.physicalOwnerLibraryDiffers": {
+      "zh-CN": "已保存的物理所有者属于另一个原始库。",
+      "en-US": "Saved physical owner belongs to another original library",
+      "params": {}
+    },
+    "error.core.originalScope.save.admittedLocationNotUnique": {
+      "zh-CN": "原始保存对象没有唯一的当前已接纳位置。",
+      "en-US": "Original saved owner has no unique current admitted location",
+      "params": {}
+    },
+    "error.core.originalScope.save.physicalObjectDiffers": {
+      "zh-CN": "保存对象是另一个物理对象。",
+      "en-US": "Saved owner is a different physical object",
+      "params": {}
+    },
+    "error.core.originalScope.save.deliveryOwnerOrScopeChanged": {
+      "zh-CN": "交付过程中，保存对象的物理身份或原始范围已改变。",
+      "en-US": "Saved physical owner or original scope changed during delivery",
+      "params": {}
+    },
+    "error.core.originalScope.backup.libraryIdentityDiffers": {
+      "zh-CN": "原始私有库的身份与此备份不一致。",
+      "en-US": "Original private library identity differs from this backup",
+      "params": {}
+    },
+    "error.core.originalScope.backup.unqualifiedScopeDiffers": {
+      "zh-CN": "未资格确认的原始库范围与此备份不一致。",
+      "en-US": "Unqualified original library scope differs from this backup",
+      "params": {}
+    },
+    "error.core.originalScope.backup.logicalPhysicalIdentityConflict": {
+      "zh-CN": "原始私有库的逻辑身份和物理身份与此备份相矛盾。",
+      "en-US": "Original private logical and physical library identities contradict this backup",
+      "params": {}
+    },
+    "error.api.launchSessionUnavailable": {
+      "zh-CN": "原始启动会话不可用。",
+      "en-US": "The original launch Session is unavailable.",
+      "params": {}
+    },
+    "error.core.captureDraft.qualifiedLibraryOwnerRequired": {
+      "zh-CN": "捕获需要已核实的库所有者。",
+      "en-US": "Capture requires a qualified library owner",
+      "params": {}
+    },
+    "error.core.fileSaveScope.qualifiedMetadataBudgetExceeded": {
+      "zh-CN": "已核实的输入元数据超过有界头部预算。",
+      "en-US": "Qualified input metadata exceeds its bounded header budget",
+      "params": {}
+    },
+    "error.core.fileSaveScope.originalLibraryRootNotAbsolute": {
+      "zh-CN": "原始已核实库根路径不是绝对路径。",
+      "en-US": "Original qualified library root is not absolute",
+      "params": {}
+    },
+    "error.core.fileSaveScope.retainedInputScopeUnsupported": {
+      "zh-CN": "保留输入缺少受支持的原始范围；原始字节保持不变。",
+      "en-US": "Retained input has no supported original scope; its original bytes remain unchanged",
+      "params": {}
+    },
+    "error.core.fileSaveScope.retainedFileSaveScopeUnsupported": {
+      "zh-CN": "这份保留的文件保存记录缺少受支持的原始范围；其回执仅作为历史证据，不能据此取得写入或备份资格。",
+      "en-US": "This retained file save has no supported original scope; its receipt is historical evidence, not writer or backup qualification",
+      "params": {}
+    },
+    "error.core.fileSaveScope.originalLocatorContradictsAdmission": {
+      "zh-CN": "原始输入库定位信息与其接纳证据矛盾。",
+      "en-US": "Original input library locator contradicts its admission",
+      "params": {}
+    },
+    "error.core.fileSaveScope.fileParentMissing": {
+      "zh-CN": "文件缺少父目录。",
+      "en-US": "Missing file parent",
+      "params": {}
+    },
+    "error.core.fileSaveScope.ancestorOwnerUnproven": {
+      "zh-CN": "现有上级目录控制文件不能证明文件的原始所有者。",
+      "en-US": "Existing ancestor controls do not prove an original file owner",
+      "params": {}
+    },
+    "error.core.fileSaveScope.physicalOwnerChanged": {
+      "zh-CN": "原文件的物理所有者已变化；输入和原会话均予保留。",
+      "en-US": "The original file's physical owner changed; its input and original Session are retained",
+      "params": {}
+    },
+    "error.core.fileSaveScope.targetContradictsScope": {
+      "zh-CN": "原始文件保存的库范围与其原始目标矛盾。",
+      "en-US": "Original file-save library scope contradicts its original target",
+      "params": {}
+    },
+    "error.core.history.retainedSaveDifferentScope": {
+      "zh-CN": "原始保留保存记录属于另一个输入范围。",
+      "en-US": "Original retained save belongs to another input scope",
+      "params": {}
+    },
+    "error.core.history.protectedDraftReadBudgetExceeded": {
+      "zh-CN": "受保护草稿的字节数增长并超过读取预算。",
+      "en-US": "Protected draft bytes grew beyond their read budget",
+      "params": {}
+    },
+    "error.core.history.restoreDifferentOwner": {
+      "zh-CN": "原始恢复操作属于另一个已核实的输入所有者。",
+      "en-US": "Original restore has another qualified input owner",
+      "params": {}
+    },
+    "error.core.history.protectedDraftDifferentOwnerOrScope": {
+      "zh-CN": "受保护草稿属于另一个原始物理所有者或输入范围。",
+      "en-US": "Protected Draft belongs to another original physical owner or input scope",
+      "params": {}
+    },
+    "error.core.journal.originalCommitEvidenceInvalid": {
+      "zh-CN": "原始提交证据无效；请保留原件，不推测操作结果。",
+      "en-US": "Original commit evidence is invalid; preserve it without guessing its outcome",
+      "params": {}
+    },
+    "error.core.originalDelivery.originalOpenFileUnavailable": {
+      "zh-CN": "原先打开的文件不可用；当前路径不能替换它的写入会话。",
+      "en-US": "The original open file is unavailable; the current path cannot replace its writer",
+      "params": {}
+    },
+    "error.core.originalDelivery.saveRetryDiffers": {
+      "zh-CN": "这次重试与完整的原始保存请求不同。",
+      "en-US": "This retry differs from the complete original save request",
+      "params": {}
+    },
+    "error.core.originalDelivery.physicalResultUnavailable": {
+      "zh-CN": "当前无法交付准确的原始物理结果。",
+      "en-US": "The exact original physical result is not currently deliverable",
+      "params": {}
+    },
+    "error.core.originalDelivery.producerMemberMismatch": {
+      "zh-CN": "请求的节点不是原始生产操作中的准确成员。",
+      "en-US": "The requested node is not an exact original producer member",
+      "params": {}
+    },
+    "error.core.sync.originalSetupEvidenceInvalid": {
+      "zh-CN": "原始同步设置证据无效。",
+      "en-US": "Original sync setup evidence is invalid",
+      "params": {}
+    },
+    "error.reminder.summaryCooldownInvalid": {
+      "zh-CN": "提醒摘要的固定时间或900秒冷却记录无效。",
+      "en-US": "The reminder summary has an invalid fixed time or 900-second cooldown record.",
+      "params": {}
+    },
+    "error.reminder.summaryClockRollback": {
+      "zh-CN": "系统时钟早于原提醒摘要，暂不准入新摘要。",
+      "en-US": "The system clock is earlier than the original reminder summary; a new summary is not admitted.",
+      "params": {}
+    },
+    "error.reminder.summaryOverflowInvalid": {
+      "zh-CN": "仅应用内提醒未关联原摘要或错误占用系统成员。",
+      "en-US": "An in-app-only reminder is not linked to its original summary or incorrectly occupies an OS member.",
+      "params": {}
+    },
+    "error.reminder.summaryPrepareCapacity": {
+      "zh-CN": "完整错过项集合超过提醒账本容量，本批未提交系统。",
+      "en-US": "The complete missed set exceeds reminder-ledger capacity; this batch was not submitted to the system.",
+      "params": {}
+    },
+    "reminder.inAppOnly": {
+      "zh-CN": "仅在应用内显示（本批摘要超额，未提交系统）",
+      "en-US": "In app only (summary overflow; not submitted to the system)",
+      "params": {}
+    },
+    "error.core.backend.entryLeafRequired": {
+      "zh-CN": "目录项路径必须含叶名称",
+      "en-US": "An entry path requires a leaf name",
+      "params": {}
+    },
+    "error.core.backend.entryParentRequired": {
+      "zh-CN": "目录项路径必须含原父目录",
+      "en-US": "An entry path requires its original parent",
+      "params": {}
+    },
+    "error.core.backend.privateRecordChanged": {
+      "zh-CN": "原私有记录在受保护读取期间发生变化",
+      "en-US": "The original private record changed during its guarded read",
+      "params": {}
+    },
+    "error.core.backend.privateNamespaceBudget": {
+      "zh-CN": "私有命名空间的完整枚举超出预算",
+      "en-US": "Private namespace enumeration exceeds its complete inventory budget",
+      "params": {}
+    },
+    "error.core.backend.unsupportedPrivateEntry": {
+      "zh-CN": "私有命名空间包含不支持的文件系统目录项",
+      "en-US": "The private namespace contains an unsupported filesystem entry",
+      "params": {}
+    },
+    "error.core.backend.committedStorageProfileUnsupported": {
+      "zh-CN": "已提交记录的存储档位不受支持；请保留原决议",
+      "en-US": "The committed storage profile is unsupported; preserve the original decision",
+      "params": {}
+    },
+    "error.core.backend.committedPlanMissing": {
+      "zh-CN": "原已提交决议缺少保留的 Plan",
+      "en-US": "An original committed decision has no retained Plan",
+      "params": {}
+    },
+    "error.core.backend.committedPlanChanged": {
+      "zh-CN": "原已提交决议不再匹配其准确 Plan",
+      "en-US": "The original committed decision no longer matches its exact Plan",
+      "params": {}
+    },
+    "error.core.backend.acceptedDecisionMissing": {
+      "zh-CN": "原已接纳决议缺失",
+      "en-US": "The original accepted decision is missing",
+      "params": {}
+    },
+    "error.core.backend.committedNodeIdentityMissing": {
+      "zh-CN": "已提交 Node 的 Plan 缺少原 Node 身份",
+      "en-US": "The committed Node Plan has no original Node identity",
+      "params": {}
+    },
+    "error.core.backend.committedBirthIncomplete": {
+      "zh-CN": "已提交 Node 的出生证据不完整；请保留原源文件",
+      "en-US": "The committed Node birth evidence is incomplete; preserve the original source",
+      "params": {}
+    },
+    "error.core.backend.committedObservationsMissing": {
+      "zh-CN": "原已提交物理版本观察记录缺失",
+      "en-US": "Original committed physical revision observations are missing",
+      "params": {}
+    },
+    "error.core.backend.ambiguousRevisionFacts": {
+      "zh-CN": "同一耐久提交顺序的原已接纳版本事实不一致",
+      "en-US": "Original accepted revision facts disagree at the same durable commit sequence",
+      "params": {}
+    },
+    "error.core.backend.resourceBirthIncomplete": {
+      "zh-CN": "原资源出生证据不完整",
+      "en-US": "Original resource birth evidence is incomplete",
+      "params": {}
+    },
+    "desktop.cliServiceActive": {
+      "zh-CN": "后台命令行服务正在运行",
+      "en-US": "Command-line service is running in the background",
       "params": {}
     }
   }
