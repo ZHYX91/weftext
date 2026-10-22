@@ -1409,3 +1409,109 @@ fn history_raced_external_write_never_rebases_the_protected_buffer() {
     assert!(buffer_draft.base_known);
     assert_ne!(buffer_draft.base_source, external);
 }
+
+#[test]
+fn retained_history_keeps_independent_unknown_and_known_producers() {
+    let mut f = HistoryFixture::new();
+    f.core
+        .persist_draft(&f.doc.session_id, "Same retained input")
+        .unwrap();
+    let mut draft = f
+        .core
+        .current_session_draft(&f.doc.session_id)
+        .unwrap()
+        .unwrap();
+    draft.producer_id = None;
+    let bytes = serde_json::to_vec(&draft).unwrap();
+    for _ in 0..2 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+            &bytes,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        2
+    );
+    let mut known = draft.clone();
+    known.producer_id = Some(fresh());
+    for _ in 0..2 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+            serde_json::to_vec(&known).unwrap(),
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        3
+    );
+    known.producer_id = Some(fresh());
+    fs::write(
+        f.core
+            .draft_directory("draft-history")
+            .join(format!("{}.json", fresh())),
+        serde_json::to_vec(&known).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn restore_retains_equal_text_buffer_independently_from_acknowledged_producer() {
+    let mut f = HistoryFixture::new();
+    let version = f.initial_version();
+    f.save("Saved S");
+    f.core
+        .persist_draft(&f.doc.session_id, "Shared pending buffer")
+        .unwrap();
+    let request = f.restore_request(&version, "retain", Some("Shared pending buffer"));
+    f.core.restore_history(request.clone()).unwrap();
+    let records = &f.core.operations[&request.operation_id]
+        .history_restore
+        .as_ref()
+        .unwrap()
+        .draft_records;
+    assert_eq!(records.len(), 2);
+    let retained: Vec<Draft> = records
+        .iter()
+        .map(|name| {
+            serde_json::from_slice(
+                &fs::read(
+                    f.core
+                        .draft_directory("draft-history")
+                        .join(format!("{name}.json")),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    assert!(retained.iter().any(|draft| draft.producer_id.is_some()));
+    assert!(retained.iter().any(|draft| draft.producer_id.is_none()));
+    assert!(
+        retained
+            .iter()
+            .all(|draft| draft.source == "Shared pending buffer")
+    );
+}

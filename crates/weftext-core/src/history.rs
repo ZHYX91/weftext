@@ -1234,7 +1234,9 @@ impl Core {
                 .collect::<Vec<_>>();
             if let Some(source) = &request.draft_source {
                 check_size(source.as_bytes())?;
-                if dirty_buffer && !to_protect.iter().any(|d| d.source == *source) {
+                // Equal text does not identify an unacknowledged buffer's
+                // producer. Retain this explicit input independently.
+                if dirty_buffer {
                     to_protect.push(Draft {
                         scope: self.draft_session_scope(&request.session_id)?,
                         path: context.current.path.clone(),

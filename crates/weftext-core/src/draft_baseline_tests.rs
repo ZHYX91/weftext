@@ -227,3 +227,126 @@ fn baseline_requires_original_durable_evidence_and_never_acks_over_the_retained_
         assert_eq!(fs::read(&path).unwrap(), b"S");
     }
 }
+
+#[test]
+fn saved_descendant_baselines_follow_original_directory_members_across_restart() {
+    for parent_node in [false, true] {
+        for restart_before in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("library");
+            let data = temp.path().join("private");
+            let mut core = Core::new(&data).unwrap();
+            core.create_library(&root).unwrap();
+            if parent_node {
+                core.create_note_fixture(&root, &root, "Folder").unwrap();
+            } else {
+                fs::create_dir(root.join("Folder")).unwrap();
+                let admitted = core
+                    .prepare_directory_admission(&root, root.join("Folder"), &fresh())
+                    .unwrap();
+                core.execute_operation(&admitted.preview.operation_id, &admitted.preview.plan_id)
+                    .unwrap();
+            }
+            let doc = core
+                .create_note_fixture(&root, root.join("Folder"), "Child")
+                .unwrap();
+            let source = format!("{}\nSaved descendant 中文😀", doc.source);
+            let receipt = save(&mut core, &doc, &source);
+            core.close_session(&doc.session_id).unwrap();
+            if restart_before {
+                drop(core);
+                core = Core::new(&data).unwrap();
+            }
+            let preview = core
+                .prepare_operation(OperationRequest {
+                    operation_id: fresh(),
+                    root: display(&root),
+                    intent: if parent_node {
+                        OperationIntent::RenameNode {
+                            source: display(&root.join("Folder")),
+                            name: "Moved".into(),
+                        }
+                    } else {
+                        OperationIntent::RelocateDirectory {
+                            source: display(&root.join("Folder")),
+                            parent: display(&root),
+                            name: "Moved".into(),
+                        }
+                    },
+                })
+                .unwrap();
+            core.execute_operation(&preview.operation_id, &preview.plan_id)
+                .unwrap();
+            let path = root.join("Moved/Child/Child.typ");
+            for _ in 0..3 {
+                let moved = core.open(&path, Some(root.clone())).unwrap();
+                assert_eq!(moved.source, source);
+                assert!(moved.recovered_draft.is_none());
+                assert!(!moved.recovered_draft_conflict);
+                core.close_session(&moved.session_id).unwrap();
+            }
+            let history_before = fs::read_dir(core.draft_directory("draft-history"))
+                .unwrap()
+                .count();
+            drop(core);
+            let mut core = Core::new(&data).unwrap();
+            let moved = core.open(&path, Some(root.clone())).unwrap();
+            assert_eq!(
+                core.operation_status(&receipt.operation_id).unwrap().status,
+                "committed"
+            );
+            let next = format!("{source}\nFurther input");
+            core.persist_draft(&moved.session_id, &next).unwrap();
+            core.flush_document_draft(DocumentDraftFlush {
+                session_id: moved.session_id.clone(),
+                base_id: moved.base_id.clone(),
+                source_digest: hash(next.as_bytes()),
+            })
+            .unwrap();
+            save(&mut core, &moved, &next);
+            assert_eq!(
+                fs::read_dir(core.draft_directory("draft-history"))
+                    .unwrap()
+                    .count(),
+                history_before
+            );
+        }
+    }
+}
+
+#[test]
+fn close_readback_qualifies_foreign_fi_before_malformed_or_oversized_body() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("own.typ");
+    let other = temp.path().join("other.typ");
+    fs::write(&path, "original").unwrap();
+    fs::write(&other, "foreign").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let own = core.open(&path, None).unwrap();
+    let foreign = core.open(&other, None).unwrap();
+    core.persist_draft(&own.session_id, "Own pending").unwrap();
+    let record = core.draft_path(&path);
+    let scope = core.draft_session_scope(&own.session_id).unwrap();
+    let identity = &core.sessions[&foreign.session_id].stamp.identity;
+    let header = format!(
+        "{{\"scope\":{},\"identity\":{},\"source\":",
+        serde_json::to_string(&scope).unwrap(),
+        serde_json::to_string(identity).unwrap()
+    );
+    for bytes in [
+        format!("{header}NOT_JSON").into_bytes(),
+        [header.as_bytes(), &vec![b'x'; 16 * 1024 * 1024 + 1]].concat(),
+    ] {
+        fs::write(&record, &bytes).unwrap();
+        let error = core
+            .flush_document_draft(DocumentDraftFlush {
+                session_id: own.session_id.clone(),
+                base_id: own.base_id.clone(),
+                source_digest: hash(b"Own pending"),
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "privateEvidence");
+        assert_eq!(fs::read(&record).unwrap(), bytes);
+    }
+    assert_eq!(fs::read(&path).unwrap(), b"original");
+}

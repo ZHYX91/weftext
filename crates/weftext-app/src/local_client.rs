@@ -201,17 +201,14 @@ pub async fn shutdown_existing(
     }
 }
 
-pub async fn inspect_existing(
-    profile: &ProfileLocator,
-    limit: Duration,
-) -> Result<OwnerIdentity, LocalClientError> {
+pub async fn inspect_existing(profile: &ProfileLocator) -> Result<OwnerIdentity, LocalClientError> {
     #[cfg(windows)]
     {
-        crate::broker::windows::inspect_existing(profile, limit).await
+        crate::broker::windows::inspect_existing(profile).await
     }
     #[cfg(not(windows))]
     {
-        let _ = (profile, limit);
+        let _ = profile;
         Err(LocalClientError::not_submitted(
             "unsupportedPlatform",
             "Existing owner inspection requires Windows",

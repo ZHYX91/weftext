@@ -59,9 +59,85 @@ impl Catalog {
         &self.spec.build_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn image(marker: u8) -> Vec<u8> {
+        let mut bytes = vec![0; 256];
+        bytes[..2].copy_from_slice(b"MZ");
+        bytes[60..64].copy_from_slice(&64u32.to_le_bytes());
+        bytes[64..68].copy_from_slice(b"PE\0\0");
+        bytes[68..70].copy_from_slice(&0x8664u16.to_le_bytes());
+        bytes[84..86].copy_from_slice(&70u16.to_le_bytes());
+        bytes[88..90].copy_from_slice(&0x20bu16.to_le_bytes());
+        bytes[156..158].copy_from_slice(&3u16.to_le_bytes());
+        bytes[255] = marker;
+        bytes
+    }
+
+    #[test]
+    fn delayed_qualification_hashes_the_original_protected_file_not_a_path_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("original");
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("owner.exe");
+        let original = image(1);
+        let qualified = image(2);
+        fs::write(&path, &original).unwrap();
+        let spec = Spec {
+            schema_version: 1,
+            build_id: String::new(),
+            source_sha256: String::new(),
+            host_contract_sha256: String::new(),
+            architecture: "x64".into(),
+            roles: Roles {
+                desktop: Role {
+                    filename: "desktop.exe".into(),
+                    sha256: sha(&qualified),
+                    bytes: 256,
+                    pe_subsystem: 2,
+                },
+                cli: Role {
+                    filename: "owner.exe".into(),
+                    sha256: sha(&qualified),
+                    bytes: 256,
+                    pe_subsystem: 3,
+                },
+            },
+        };
+        let observed = spec.observe(&path).unwrap();
+        let before = identity(&observed.file).unwrap();
+        // On hosts that allow moving the ancestor, replace the original
+        // pathname. Otherwise the protected share itself prevents replacement.
+        if fs::rename(&directory, temp.path().join("moved")).is_ok() {
+            fs::create_dir(&directory).unwrap();
+            fs::write(&path, &qualified).unwrap();
+            assert_ne!(identity(&File::open(&path).unwrap()).unwrap(), before);
+            assert!(spec.verify(&path).is_ok());
+        } else {
+            assert!(fs::write(&path, &qualified).is_err());
+            assert_eq!(fs::read(&path).unwrap(), original);
+        }
+        assert!(spec.qualify(observed).is_err());
+        let valid = temp.path().join("qualified.exe");
+        fs::write(&valid, &qualified).unwrap();
+        let observed = spec.observe(&valid).unwrap();
+        assert!(spec.qualify(observed).is_ok());
+    }
+}
 pub(crate) struct VerifiedImage {
     _file: File,
     _identity: (u64, [u8; 16]),
+}
+/// A protected original file observation; it has not passed the full digest yet.
+pub(crate) struct ObservedImage {
+    file: File,
+    identity: (u64, [u8; 16]),
+    bytes: u64,
+    subsystem: u16,
 }
 
 fn sha(value: &[u8]) -> String {
@@ -152,6 +228,10 @@ impl Spec {
     }
 
     fn verify(&self, path: &Path) -> io::Result<VerifiedImage> {
+        self.qualify(self.observe(path)?)
+    }
+
+    fn observe(&self, path: &Path) -> io::Result<ObservedImage> {
         // Deny write/delete sharing for the lifetime of the observation. The
         // process handle independently binds PID/creation time; an argv path,
         // a same-folder name or a peer's claimed version is never authority.
@@ -165,13 +245,27 @@ impl Spec {
             return Err(invalid());
         }
         let subsystem = pe_subsystem(&mut file, meta.len())?;
-        let candidates = [&self.roles.desktop, &self.roles.cli]
-            .into_iter()
-            .filter(|r| r.bytes == meta.len() && r.pe_subsystem == subsystem)
-            .collect::<Vec<_>>();
-        if candidates.is_empty() {
+        if ![&self.roles.desktop, &self.roles.cli]
+            .iter()
+            .any(|r| r.bytes == meta.len() && r.pe_subsystem == subsystem)
+        {
             return Err(invalid());
         }
+        Ok(ObservedImage {
+            file,
+            identity: before,
+            bytes: meta.len(),
+            subsystem,
+        })
+    }
+
+    fn qualify(&self, observed: ObservedImage) -> io::Result<VerifiedImage> {
+        let ObservedImage {
+            mut file,
+            identity: before,
+            bytes,
+            subsystem,
+        } = observed;
         file.seek(SeekFrom::Start(0))?;
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 64 * 1024];
@@ -182,15 +276,18 @@ impl Spec {
                 break;
             }
             length += count as u64;
-            if length > meta.len() {
+            if length > bytes {
                 return Err(invalid());
             }
             hasher.update(&buffer[..count]);
         }
         let digest = format!("{:x}", hasher.finalize());
-        if length != meta.len()
+        if length != bytes
+            || file.metadata()?.len() != bytes
             || identity(&file)? != before
-            || !candidates.iter().any(|r| r.sha256 == digest)
+            || ![&self.roles.desktop, &self.roles.cli]
+                .iter()
+                .any(|r| r.bytes == bytes && r.pe_subsystem == subsystem && r.sha256 == digest)
         {
             return Err(invalid());
         }
@@ -233,8 +330,12 @@ impl Catalog {
             .map_err(|e| io::Error::other(e.clone()))
     }
 
-    pub(crate) fn verify_image(&self, path: &Path) -> io::Result<VerifiedImage> {
-        self.spec.verify(path)
+    pub(crate) fn observe_image(&self, path: &Path) -> io::Result<ObservedImage> {
+        self.spec.observe(path)
+    }
+
+    pub(crate) fn qualify_image(&self, image: ObservedImage) -> io::Result<VerifiedImage> {
+        self.spec.qualify(image)
     }
 
     pub(crate) fn desktop_executable(&self) -> io::Result<(PathBuf, VerifiedImage)> {

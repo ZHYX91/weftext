@@ -174,6 +174,76 @@ fn placements(core: &Core, id: &str) -> Vec<(String, String)> {
         .map(|step| (step.source.into(), step.target.into()))
         .collect()
 }
+
+#[test]
+fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
+    let mut pair = fixture();
+    let old = pair.br.join("Left/Child/Child.typ");
+    let doc = pair.b.open(&old, Some(pair.br.clone())).unwrap();
+    let receipt = pair
+        .b
+        .save(SaveRequest {
+            session_id: doc.session_id.clone(),
+            base_id: doc.base_id.clone(),
+            operation_id: fresh(),
+            source: doc.source.clone(),
+        })
+        .unwrap()
+        .receipt;
+    pair.b.close_session(&doc.session_id).unwrap();
+    drop(pair.b);
+    pair.b = Core::new(&pair.bd).unwrap();
+    let preview = pair.b.prepare_operation(request(&pair)).unwrap();
+    assert!(placements(&pair.b, &preview.operation_id).len() >= 2);
+    pair.b
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    drop(pair.b);
+    pair.b = Core::new(&pair.bd).unwrap();
+    let moved = pair.br.join("新名/Child/Child.typ");
+    let history_before = fs::read_dir(pair.b.draft_directory("draft-history"))
+        .unwrap()
+        .count();
+    for _ in 0..3 {
+        let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+        assert_eq!(reopened.source, doc.source);
+        assert!(reopened.recovered_draft.is_none());
+        assert!(!reopened.recovered_draft_conflict);
+        pair.b.close_session(&reopened.session_id).unwrap();
+    }
+    assert_eq!(
+        pair.b
+            .operation_status(&receipt.operation_id)
+            .unwrap()
+            .status,
+        "committed"
+    );
+    let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+    let source = format!("{}\nFurther descendant input", reopened.source);
+    pair.b.persist_draft(&reopened.session_id, &source).unwrap();
+    pair.b
+        .flush_document_draft(crate::DocumentDraftFlush {
+            session_id: reopened.session_id.clone(),
+            base_id: reopened.base_id.clone(),
+            source_digest: crate::hash(source.as_bytes()),
+        })
+        .unwrap();
+    pair.b
+        .save(SaveRequest {
+            session_id: reopened.session_id,
+            base_id: reopened.base_id,
+            operation_id: fresh(),
+            source,
+        })
+        .unwrap();
+    assert_eq!(
+        fs::read_dir(pair.b.draft_directory("draft-history"))
+            .unwrap()
+            .count(),
+        history_before
+    );
+}
+
 fn assert_installed(pair: &mut Pair, operation: &str) {
     assert_eq!(
         pair.a

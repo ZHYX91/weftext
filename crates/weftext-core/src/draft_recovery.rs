@@ -311,51 +311,20 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_the_document_base_changed(),
             ));
         }
-        let scope =
-            self.draft_scope_for_session(&request.session_id, session.conflicting_draft.as_ref())?;
-        let path = self.object_draft_path(&session.stamp.identity, &scope)?;
-        let guard = ParentGuard::acquire(&self.backend, &path)?;
-        let mut file = guard.open_file(false, false)?;
-        // Read only original scope metadata before buffering author payload.
-        if file_save_scope::read_input_scope(&mut file)? != scope {
-            return Err(CoreError::new(
-                "privateEvidence",
-                UiMessage::error_core_original_scope_draft_input_scope_differs(),
-            ));
-        }
-        self.validate_original_input_scope(&scope)?;
-        let before = stamp(&file)?;
-        if before.size > MAX_DRAFT_RECORD_BYTES as u64 {
-            return Err(CoreError::new(
-                "budget",
-                UiMessage::error_core_draft_recovery_draft_record_exceeds_byte_budget(),
-            ));
-        }
-        let mut bytes = Vec::new();
-        Read::by_ref(&mut file)
-            .take(MAX_DRAFT_RECORD_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_DRAFT_RECORD_BYTES || stamp(&file)? != before {
-            return Err(CoreError::new(
+        // Use the single qualified reader: both original scope and FI are
+        // admitted on the retained handle before any author payload is read.
+        let (draft, bytes) = self.current_session_draft_record(&request.session_id)?
+            .ok_or_else(|| CoreError::new(
                 "draftFlushMismatch",
-                weftext_messages::UiMessage::error_core_draft_recovery_the_complete_draft_changed_during_readback(),
-            ));
-        }
-        let draft: Draft = serde_json::from_slice(&bytes)?;
-        draft.validate_producers()?;
-        self.validate_original_input_scope(&draft.scope)?;
-        for entry in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
-            self.qualify_committed_baseline(&draft.scope, &draft.identity, &entry)?;
-        }
+                weftext_messages::UiMessage::error_core_draft_recovery_this_input_producer_has_no_acknowledged_draft(),
+            ))?;
         let input = session.draft_input.as_ref().ok_or_else(|| {
             CoreError::new(
                 "draftFlushMismatch",
                 weftext_messages::UiMessage::error_core_draft_recovery_this_input_producer_has_no_acknowledged_draft(),
             )
         })?;
-        if draft.scope != scope
-            || draft.identity != session.stamp.identity
-            || hash(input.source.as_bytes()) != request.source_digest
+        if hash(input.source.as_bytes()) != request.source_digest
             || !std::iter::once(draft.proposal())
                 .chain(draft.alternatives.iter().cloned())
                 .any(|p| same_proposal(&p, input))
@@ -365,12 +334,6 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input(),
             ));
         }
-        self.check_committed_draft_paths(
-            &scope,
-            &session.stamp.identity,
-            &draft.path,
-            &display(&session.path),
-        )?;
         Ok(DocumentDraftReceipt {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -566,16 +529,31 @@ impl Core {
                 // These are original committed before/after coordinates for
                 // this exact captured file. An old session's slot may now hold
                 // a different participant, so never borrow its current FI.
-                for file in transaction
+                let mut originals: BTreeSet<String> = transaction
                     .files
                     .iter()
-                    .filter(|f| &f.stamp.identity == identity)
-                {
-                    let after = transaction.relocated_path(&file.path);
-                    if paths.iter().any(|path| {
-                        same_draft_path(path, &file.path) || same_draft_path(path, &after)
-                    }) {
-                        paths.insert(file.path.clone());
+                    .filter(|file| &file.stamp.identity == identity)
+                    .map(|file| file.path.clone())
+                    .collect();
+                for step in transaction.relocations() {
+                    for member in step
+                        .members
+                        .iter()
+                        .filter(|member| &member.identity == identity)
+                    {
+                        originals
+                            .insert(display(&Path::new(step.source).join(&member.relative_path)));
+                    }
+                }
+                for before in originals {
+                    // Compound nested moves use the most specific original
+                    // relocation, just like the namespace writer itself.
+                    let after = transaction.relocated_path(&before);
+                    if paths
+                        .iter()
+                        .any(|path| same_draft_path(path, &before) || same_draft_path(path, &after))
+                    {
+                        paths.insert(before);
                         paths.insert(after);
                     }
                 }
@@ -773,6 +751,11 @@ impl Core {
             let mut next = draft.clone();
             next.path = display(path);
             let _ = encode_draft_record(&next)?;
+            // Qualify the complete replacement before an archival side effect.
+            // A rejected baseline/member must not grow history on every open.
+            for input in std::iter::once(next.proposal()).chain(next.alternatives.iter().cloned()) {
+                self.qualify_committed_baseline(&next.scope, &next.identity, &input)?;
+            }
             // Preserve the original before rebinding the unique current record.
             journal::private_create(
                 &self.backend,
@@ -803,7 +786,9 @@ pub(super) fn same_proposal(a: &DraftAlternative, b: &DraftAlternative) -> bool 
     a.role == b.role && same_input(a, b)
 }
 fn same_input(a: &DraftAlternative, b: &DraftAlternative) -> bool {
-    a.producer_id == b.producer_id
+    a.producer_id
+        .as_ref()
+        .is_some_and(|producer| b.producer_id.as_ref() == Some(producer))
         && a.source == b.source
         && a.base_source == b.base_source
         && a.base_known == b.base_known

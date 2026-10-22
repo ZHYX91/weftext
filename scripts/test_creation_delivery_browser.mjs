@@ -93,7 +93,11 @@ async function api(route, request, expected = 200) {
 }
 async function save(doc, source) {
   const receipt = await api("/api/save", { sessionId: doc.sessionId, baseId: doc.baseId, source, operationId: randomUUID() });
-  assert.equal(receipt.status, "saved"); return api("/api/open", { root: doc.root, path: doc.path });
+  assert.equal(receipt.status, "saved");
+  assert.equal(receipt.documentError, undefined); assert.ok(receipt.document);
+  assert.equal(receipt.document.sessionId, doc.sessionId);
+  assert.equal(receipt.document.source, source);
+  return receipt.document;
 }
 async function seed() {
   const root = path.join(out, caseName + "-library");

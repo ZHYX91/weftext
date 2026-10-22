@@ -55,7 +55,7 @@ fn deliver(args: &Args, locale: UiLocale, value: Value, exit: u8) -> Result<u8, 
 }
 pub(super) async fn status(args: &Args, locale: UiLocale) -> Result<u8, Failure> {
     let profile = profile(args)?;
-    let identity = local_client::inspect_existing(&profile, Duration::from_secs(10))
+    let identity = local_client::inspect_existing(&profile)
         .await
         .map_err(|e| Failure::new(e.code, UNAVAILABLE))?;
     deliver(

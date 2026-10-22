@@ -167,11 +167,20 @@ pub(crate) fn self_created() -> io::Result<u64> {
     process_identity(unsafe { GetCurrentProcess() }).map(|(_, created, _)| created)
 }
 
-pub(crate) fn verify_server(
+/// OS-derived peer coordinates retained before exchanging identification.
+/// This is not a qualified product connection and cannot carry business data.
+pub(crate) struct ObservedPeer {
+    process: OwnedHandle,
+    image: crate::artifact_catalog::ObservedImage,
+    pub(crate) pid: u32,
+    pub(crate) created: u64,
+}
+
+pub(crate) fn inspect_server(
     pipe: &impl AsRawHandle,
-    expected: &crate::artifact_catalog::Catalog,
     sid: &str,
-) -> io::Result<Peer> {
+    expected: &crate::artifact_catalog::Catalog,
+) -> io::Result<ObservedPeer> {
     let mut pid = 0;
     unsafe { GetNamedPipeServerProcessId(HANDLE(pipe.as_raw_handle()), &mut pid) }
         .map_err(error)?;
@@ -184,21 +193,38 @@ pub(crate) fn verify_server(
     }
     .map_err(error)?);
     let (actual_sid, created, image) = process_identity(raw(&process))?;
-    let image = expected.verify_image(&image)?;
-    // WAIT_TIMEOUT is the only live result. Keep the process handle through the
-    // connection so PID reuse cannot stand in for the verified owner instance.
     if actual_sid != sid || unsafe { WaitForSingleObject(raw(&process), 0) }.0 != 258 {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "The pipe owner is not the expected live product process",
+            "The pipe owner is not the expected live user process",
         ));
     }
-    Ok(Peer {
-        _process: process,
-        _image: image,
+    Ok(ObservedPeer {
+        process,
+        image: expected.observe_image(&image)?,
         pid,
         created,
     })
+}
+
+impl ObservedPeer {
+    /// Full executable qualification uses this original process observation,
+    /// never a PID supplied by Welcome or a later reopened process handle.
+    pub(crate) fn qualify(self, expected: &crate::artifact_catalog::Catalog) -> io::Result<Peer> {
+        let image = expected.qualify_image(self.image)?;
+        if unsafe { WaitForSingleObject(raw(&self.process), 0) }.0 != 258 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "The original pipe owner exited during executable qualification",
+            ));
+        }
+        Ok(Peer {
+            _process: self.process,
+            _image: image,
+            pid: self.pid,
+            created: self.created,
+        })
+    }
 }
 
 /// Identification is a synchronous section on a dedicated, short-lived OS

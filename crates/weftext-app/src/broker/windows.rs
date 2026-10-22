@@ -25,6 +25,7 @@ use tokio::{
 use weftext_core::QualifiedProfile;
 
 const HANDSHAKE_LIMIT: Duration = Duration::from_secs(15);
+const QUALIFICATION_LIMIT: Duration = Duration::from_secs(60);
 const CALL_LIMIT: Duration = Duration::from_secs(180);
 
 pub(crate) struct HostRequest {
@@ -162,18 +163,13 @@ pub(crate) async fn shutdown_existing(
     }
     let sid = security::current_sid()
         .map_err(|error| LocalClientError::not_submitted("ownerIdentity", error.to_string()))?;
+    let catalog = owner_catalog().map_err(|error| {
+        LocalClientError::not_submitted("desktopRoleMissing", error.to_string())
+    })?;
     let pipe = ClientOptions::new()
         .open(pipe_name(&qualified, &sid))
         .map_err(|error| LocalClientError::not_submitted("ownerUnavailable", error.to_string()))?;
-    let mut connection = establish(
-        pipe,
-        qualified,
-        owner_catalog().map_err(|error| {
-            LocalClientError::not_submitted("desktopRoleMissing", error.to_string())
-        })?,
-        &sid,
-    )
-    .await?;
+    let mut connection = establish(pipe, qualified, catalog, &sid).await?;
     if connection.owner_identity() != *expected {
         return Err(LocalClientError::not_submitted(
             "ownerChanged",
@@ -215,38 +211,20 @@ pub(crate) async fn shutdown_existing(
 
 pub(crate) async fn inspect_existing(
     profile: &ProfileLocator,
-    limit: Duration,
 ) -> Result<OwnerIdentity, LocalClientError> {
-    tokio::time::timeout(limit, async {
-        let qualified =
-            weftext_core::qualify_existing_profile(&profile.data_dir).map_err(|error| {
-                LocalClientError::not_submitted("profileQualification", error.to_string())
-            })?;
-        let sid = security::current_sid()
-            .map_err(|error| LocalClientError::not_submitted("ownerIdentity", error.to_string()))?;
-        let pipe = ClientOptions::new()
-            .open(pipe_name(&qualified, &sid))
-            .map_err(|error| {
-                LocalClientError::not_submitted("ownerUnavailable", error.to_string())
-            })?;
-        let connection = establish(
-            pipe,
-            qualified,
-            owner_catalog().map_err(|error| {
-                LocalClientError::not_submitted("desktopRoleMissing", error.to_string())
-            })?,
-            &sid,
-        )
-        .await?;
-        Ok(connection.owner_identity())
-    })
-    .await
-    .map_err(|_| {
-        LocalClientError::not_submitted(
-            "ownerInspectionUnknown",
-            "The existing owner handshake was not confirmed; no request was sent",
-        )
-    })?
+    let catalog = owner_catalog().map_err(|error| {
+        LocalClientError::not_submitted("desktopRoleMissing", error.to_string())
+    })?;
+    let qualified = weftext_core::qualify_existing_profile(&profile.data_dir).map_err(|error| {
+        LocalClientError::not_submitted("profileQualification", error.to_string())
+    })?;
+    let sid = security::current_sid()
+        .map_err(|error| LocalClientError::not_submitted("ownerIdentity", error.to_string()))?;
+    let pipe = ClientOptions::new()
+        .open(pipe_name(&qualified, &sid))
+        .map_err(|error| LocalClientError::not_submitted("ownerUnavailable", error.to_string()))?;
+    let connection = establish(pipe, qualified, catalog, &sid).await?;
+    Ok(connection.owner_identity())
 }
 
 /// Existing-owner activation never launches a fallback owner or opens Core.
@@ -424,51 +402,31 @@ async fn connect_qualified(
 async fn establish(
     mut pipe: NamedPipeClient,
     profile: QualifiedProfile,
-    executables: &crate::artifact_catalog::Catalog,
+    executables: &'static crate::artifact_catalog::Catalog,
     sid: &str,
 ) -> Result<Connection, LocalClientError> {
-    let peer = security::verify_server(&pipe, executables, sid).map_err(|error| {
+    let observed = security::inspect_server(&pipe, sid, executables).map_err(|error| {
         LocalClientError::not_submitted("ownerIdentityMismatch", error.to_string())
     })?;
-    let challenge = uuid::Uuid::new_v4().to_string();
-    let welcome = tokio::time::timeout(HANDSHAKE_LIMIT, async {
-        write_header(
-            &mut pipe,
-            &Hello {
-                version: VERSION,
-                profile_identity: profile.physical_identity().into(),
-                challenge: challenge.clone(),
-            },
-        )
-        .await?;
-        pipe.flush().await?;
-        let welcome: Welcome = read_header(&mut pipe).await?;
-        if welcome.version != VERSION
-            || welcome.profile_identity != profile.physical_identity()
-            || welcome.challenge != challenge
-            || welcome.owner_pid != peer.pid
-            || welcome.owner_created != peer.created
-            || !canonical_uuid(&welcome.owner_incarnation)
-        {
-            return Err(invalid(
-                weftext_messages::UiMessage::error_api_windows_the_verified_owner_handshake_does_not_match_this_physical_profile_and(),
-            ));
-        }
-        Ok(welcome)
-    })
-    .await
-    .map_err(|_| {
-        LocalClientError::not_submitted(
-            "ownerHandshakeUnknown",
-            "Owner readiness was not confirmed; no business request was sent",
-        )
-    })?
-    .map_err(|_| {
-        LocalClientError::not_submitted(
-            "ownerHandshakeRejected",
-            "The owner handshake was rejected; no business request was sent",
-        )
-    })?;
+    let expected = HelloPeer {
+        profile: profile.physical_identity().into(),
+        pid: observed.pid,
+        created: observed.created,
+    };
+    // Only identification crosses the pipe before full product qualification.
+    // Hashing a large, retained executable cannot consume the peer's Hello
+    // deadline, and it never blocks Tokio's I/O thread.
+    let (welcome, peer) = identify_then_qualify(
+        &mut pipe,
+        expected,
+        (HANDSHAKE_LIMIT, QUALIFICATION_LIMIT),
+        move || async move {
+            crate::work::spawn_blocking(move || observed.qualify(executables))
+                .await
+                .map_err(io::Error::other)?
+        },
+    )
+    .await?;
     Ok(Connection {
         pipe,
         _profile: profile,
@@ -477,6 +435,47 @@ async fn establish(
         sent: HashSet::new(),
         poisoned: false,
     })
+}
+
+struct HelloPeer {
+    profile: String,
+    pid: u32,
+    created: u64,
+}
+
+/// Shared framing and admission boundary. The qualification closure has no
+/// transport access; callers receive no usable connection until it succeeds.
+async fn identify_then_qualify<S, P, Q, F>(
+    pipe: &mut S,
+    peer: HelloPeer,
+    limits: (Duration, Duration),
+    qualify: Q,
+) -> Result<(Welcome, P), LocalClientError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    Q: FnOnce() -> F,
+    F: std::future::Future<Output = io::Result<P>>,
+{
+    let challenge = uuid::Uuid::new_v4().to_string();
+    let welcome = tokio::time::timeout(limits.0, async {
+        write_header(pipe, &Hello {
+            version: VERSION, profile_identity: peer.profile.clone(), challenge: challenge.clone(),
+        }).await?;
+        pipe.flush().await?;
+        let welcome: Welcome = read_header(pipe).await?;
+        if welcome.version != VERSION || welcome.profile_identity != peer.profile
+            || welcome.challenge != challenge || welcome.owner_pid != peer.pid
+            || welcome.owner_created != peer.created || !canonical_uuid(&welcome.owner_incarnation)
+        {
+            return Err(invalid(weftext_messages::UiMessage::error_api_windows_the_verified_owner_handshake_does_not_match_this_physical_profile_and()));
+        }
+        Ok(welcome)
+    }).await.map_err(|_| LocalClientError::not_submitted("ownerHandshakeUnknown", "Owner readiness was not confirmed; no business request was sent"))?
+      .map_err(|_| LocalClientError::not_submitted("ownerHandshakeRejected", "The owner handshake was rejected; no business request was sent"))?;
+    let qualified = tokio::time::timeout(limits.1, qualify()).await
+        .map_err(|_| LocalClientError::not_submitted("ownerIdentityUnknown", "Original owner executable qualification did not finish; no business request was sent"))?
+        .map_err(|error| LocalClientError::not_submitted("ownerIdentityMismatch", error.to_string()))?;
+    Ok((welcome, qualified))
 }
 
 pub(crate) struct OwnerPipe {
@@ -1045,5 +1044,164 @@ mod continuation_tests {
             assert!(received.try_recv().is_err());
         }
         assert!(!owner.continuation.has_takeover());
+    }
+}
+
+#[cfg(test)]
+mod handshake_tests {
+    use super::*;
+    use crate::local_client::SubmissionEffect;
+    fn expected() -> HelloPeer {
+        HelloPeer {
+            profile: "fixture-physical-profile".into(),
+            pid: 17,
+            created: 9,
+        }
+    }
+    fn welcome(hello: Hello) -> Welcome {
+        Welcome {
+            version: VERSION,
+            profile_identity: hello.profile_identity,
+            challenge: hello.challenge,
+            owner_incarnation: uuid::Uuid::new_v4().to_string(),
+            owner_pid: 17,
+            owner_created: 9,
+            owner_role: OwnerRole::Local,
+        }
+    }
+    #[tokio::test]
+    async fn slow_image_qualification_never_occupies_hello_budget_or_sends_early_control() {
+        let (mut client, mut server) = tokio::io::duplex(4096);
+        let (started, waiting) = oneshot::channel();
+        let (release, released) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            let (welcome, ()) = identify_then_qualify(
+                &mut client,
+                expected(),
+                (Duration::from_millis(250), Duration::from_secs(5)),
+                || async {
+                    started.send(()).unwrap();
+                    released.await.unwrap();
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+            write_header(
+                &mut client,
+                &RequestHeader {
+                    request_id: uuid::Uuid::new_v4().to_string(),
+                    owner_incarnation: welcome.owner_incarnation,
+                    command: Command::Shutdown,
+                    body_bytes: 0,
+                    secret_bytes: 0,
+                },
+            )
+            .await
+            .unwrap();
+        });
+        let hello: Hello = read_header(&mut server).await.unwrap();
+        write_header(&mut server, &welcome(hello)).await.unwrap();
+        waiting.await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), server.read_u8())
+                .await
+                .is_err()
+        );
+        release.send(()).unwrap();
+        let request: RequestHeader = read_header(&mut server).await.unwrap();
+        assert!(matches!(request.command, Command::Shutdown));
+        assert_eq!(request.body_bytes, 0);
+        assert_eq!(request.secret_bytes, 0);
+        task.await.unwrap();
+        let mut tail = Vec::new();
+        server.read_to_end(&mut tail).await.unwrap();
+        assert!(tail.is_empty());
+    }
+    #[tokio::test]
+    async fn failed_or_expired_qualification_never_sends_any_business_bytes() {
+        for expires in [false, true] {
+            let (mut client, mut server) = tokio::io::duplex(4096);
+            let task = tokio::spawn(async move {
+                identify_then_qualify(
+                    &mut client,
+                    expected(),
+                    (Duration::from_secs(2), Duration::from_millis(20)),
+                    || async {
+                        if expires {
+                            std::future::pending::<()>().await;
+                        }
+                        Err::<(), _>(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "fixture image rejection",
+                        ))
+                    },
+                )
+                .await
+                .err()
+                .unwrap()
+            });
+            let hello: Hello = read_header(&mut server).await.unwrap();
+            write_header(&mut server, &welcome(hello)).await.unwrap();
+            let error = task.await.unwrap();
+            assert_eq!(error.effect, SubmissionEffect::NotSubmitted);
+            assert_eq!(
+                error.code,
+                if expires {
+                    "ownerIdentityUnknown"
+                } else {
+                    "ownerIdentityMismatch"
+                }
+            );
+            let mut bytes = Vec::new();
+            server.read_to_end(&mut bytes).await.unwrap();
+            assert!(bytes.is_empty());
+        }
+    }
+    #[tokio::test]
+    async fn untrusted_welcome_cannot_replace_original_os_tuple_or_start_qualification() {
+        for field in [
+            "version",
+            "profile",
+            "challenge",
+            "pid",
+            "created",
+            "incarnation",
+        ] {
+            let (mut client, mut server) = tokio::io::duplex(4096);
+            let task = tokio::spawn(async move {
+                identify_then_qualify(
+                    &mut client,
+                    expected(),
+                    (Duration::from_secs(2), Duration::from_secs(2)),
+                    || async {
+                        Err::<(), _>(io::Error::other(
+                            "invalid Welcome must never enter qualification",
+                        ))
+                    },
+                )
+                .await
+                .err()
+                .unwrap()
+            });
+            let hello: Hello = read_header(&mut server).await.unwrap();
+            let mut reply = welcome(hello);
+            match field {
+                "version" => reply.version += 1,
+                "profile" => reply.profile_identity.push('x'),
+                "challenge" => reply.challenge = uuid::Uuid::new_v4().to_string(),
+                "pid" => reply.owner_pid += 1,
+                "created" => reply.owner_created += 1,
+                "incarnation" => reply.owner_incarnation = "not-an-original-incarnation".into(),
+                _ => unreachable!(),
+            }
+            write_header(&mut server, &reply).await.unwrap();
+            let error = task.await.unwrap();
+            assert_eq!(error.code, "ownerHandshakeRejected");
+            assert_eq!(error.effect, SubmissionEffect::NotSubmitted);
+            let mut bytes = Vec::new();
+            server.read_to_end(&mut bytes).await.unwrap();
+            assert!(bytes.is_empty());
+        }
     }
 }
