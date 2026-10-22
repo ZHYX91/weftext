@@ -43,12 +43,12 @@ impl FileLease {
         let mut leases = root
             .leases
             .lock()
-            .map_err(|_| error("busy", "File scope leases are unavailable"))?;
+            .map_err(|_| error("busy", UiMessage::error_core_posix_file_scope_unavailable()))?;
         let state = leases.entry(identity.clone()).or_default();
         if state.1 || (write && state.0 != 0) {
             return Err(error(
                 "busy",
-                "The original file has a retained incompatible read or write scope",
+                UiMessage::error_core_posix_incompatible_file_scope(),
             ));
         }
         state.0 += 1;
@@ -76,7 +76,7 @@ impl Drop for FileLease {
     }
 }
 
-fn error(code: &str, message: &str) -> CoreError {
+fn error(code: &str, message: UiMessage) -> CoreError {
     CoreError::new(code, message)
 }
 fn os_error() -> CoreError {
@@ -84,15 +84,15 @@ fn os_error() -> CoreError {
 }
 fn cstring(name: &OsStr) -> Result<CString> {
     name.to_str()
-        .ok_or_else(|| error("invalidPath", "Non-UTF8 filesystem names are unsupported"))?;
+        .ok_or_else(|| error("invalidPath", UiMessage::error_core_posix_non_utf8_name()))?;
     CString::new(name.as_bytes())
-        .map_err(|_| error("invalidPath", "A filesystem name contains NUL"))
+        .map_err(|_| error("invalidPath", UiMessage::error_core_posix_nul_name()))
 }
 fn basename(name: &OsStr) -> Result<CString> {
     if name.is_empty() || name == "." || name == ".." || name.as_bytes().contains(&b'/') {
         return Err(error(
             "invalidPath",
-            "An exact filesystem basename is required",
+            UiMessage::error_core_posix_basename_required(),
         ));
     }
     cstring(name)
@@ -134,92 +134,95 @@ fn enrollment_error(value: weftext_enrollment::EnrollmentError) -> CoreError {
     let (code, message) = match reason {
         Reject::AbsoluteAdministratorPathRequired => (
             "controlledRootAuthority",
-            "Enrollment must use an absolute administrator-owned path",
+            UiMessage::error_core_posix_absolute_enrollment_required(),
         ),
-        Reject::PathTraversal => ("invalidPath", "Enrollment path contains traversal"),
+        Reject::PathTraversal => (
+            "invalidPath",
+            UiMessage::error_core_posix_traversal_forbidden(),
+        ),
         Reject::InvalidName => (
             "invalidPath",
-            "An exact UTF-8 filesystem basename is required",
+            UiMessage::error_core_posix_exact_utf8_basename_required(),
         ),
         Reject::UntrustedAdministratorPath => (
             "controlledRootAuthority",
-            "Enrollment and every ancestor must be administrator-owned and not writable by the service or other users",
+            UiMessage::error_core_posix_administrator_enrollment_required(),
         ),
         Reject::FreshRootBirthRequired => (
             "controlledRootAuthority",
-            "The controlled root requires current administrator evidence of fresh isolated creation",
+            UiMessage::error_core_posix_fresh_root_birth_required(),
         ),
         Reject::DistinctIdentitiesRequired => (
             "controlledRootAuthority",
-            "Service, client and worker require distinct non-root OS identities",
+            UiMessage::error_core_posix_distinct_os_identities_required(),
         ),
         Reject::ServiceAccountRequired => (
             "controlledRootAuthority",
-            "The service account must be a dedicated non-login account",
+            UiMessage::error_core_posix_non_login_service_required(),
         ),
         Reject::WorkerAccountRequired => (
             "controlledRootAuthority",
-            "The worker account must be a dedicated non-login account",
+            UiMessage::error_core_posix_worker_account_required(),
         ),
         Reject::ExclusiveServiceGroupRequired => (
             "controlledRootAuthority",
-            "The service primary group must exclude every other account",
+            UiMessage::error_core_posix_exclusive_service_group_required(),
         ),
         Reject::EnrollmentIdentityRequired => (
             "controlledRootAuthority",
-            "Enrollment identity requires a canonical random UUID",
+            UiMessage::error_core_posix_enrollment_uuid_required(),
         ),
         Reject::MachineMismatch => (
             "controlledRootAuthority",
-            "Enrollment belongs to a different OS machine identity",
+            UiMessage::error_core_posix_foreign_machine(),
         ),
         Reject::KeyPermissions => (
             "controlledRootAuthority",
-            "Device key requires a 32-byte root-owned service-group-readable private record outside the profile",
+            UiMessage::error_core_posix_device_key_protection_required(),
         ),
         Reject::ExtendedKeyAcl => (
             "controlledRootAuthority",
-            "Extended ACLs cannot qualify the private service authentication key",
+            UiMessage::error_core_posix_extended_key_acl_forbidden(),
         ),
         Reject::KeyInsideRoot => (
             "controlledRootAuthority",
-            "Device key cannot reside inside the controlled library or private profile tree",
+            UiMessage::error_core_posix_device_key_outside_profile_required(),
         ),
         Reject::RootPath => (
             "invalidPath",
-            "The controlled root requires an absolute path with an administrator-owned parent",
+            UiMessage::error_core_posix_root_path_required(),
         ),
         Reject::RootIdentity => (
             "controlledRootAuthority",
-            "The enrollment names a different physical root",
+            UiMessage::error_core_posix_physical_root_mismatch(),
         ),
         Reject::RootPermissions => (
             "controlledRootAuthority",
-            "The controlled root requires service ownership and private directory permissions",
+            UiMessage::error_core_posix_root_permissions_required(),
         ),
         Reject::AuthorityChanged => (
             "controlledRootAuthority",
-            "The original controlled root authority changed",
+            UiMessage::error_core_posix_authority_changed(),
         ),
         Reject::EnrollmentChanged => (
             "controlledRootAuthority",
-            "The administrator enrollment changed after admission",
+            UiMessage::error_core_posix_enrollment_changed(),
         ),
         Reject::ServiceCredentials => (
             "controlledRootAuthority",
-            "The service requires its enrolled non-root UID and primary GID, empty supplementary groups and no capabilities",
+            UiMessage::error_core_posix_service_credentials_required(),
         ),
         Reject::PrivilegeGainAllowed => (
             "controlledRootAuthority",
-            "The service must have an empty capability bounding set and disable privilege gain on exec",
+            UiMessage::error_core_posix_privilege_boundary_required(),
         ),
         Reject::UnsupportedFilesystem => (
             "unsupportedVolume",
-            "The Linux profile requires native ext4 or XFS with opaque file handles",
+            UiMessage::error_core_posix_native_filesystem_required(),
         ),
         Reject::OpaqueHandleSize => (
             "unsupportedVolume",
-            "The filesystem returned an unsupported opaque handle size",
+            UiMessage::error_core_posix_opaque_handle_size_unsupported(),
         ),
     };
     error(code, message)
@@ -283,7 +286,7 @@ impl ControlledRoot {
         {
             return Err(error(
                 "controlledRootAuthority",
-                "The original controlled root authority changed",
+                UiMessage::error_core_posix_authority_changed(),
             ));
         }
         if unsafe {
@@ -310,7 +313,7 @@ impl ControlledRoot {
         {
             return Err(error(
                 "outsideRoot",
-                "The path is outside its admitted controlled-service root",
+                UiMessage::error_core_posix_outside_controlled_root(),
             ));
         }
         cstring(path.as_os_str())?;
@@ -331,7 +334,7 @@ impl ControlledRoot {
         {
             return Err(error(
                 "unsupportedPath",
-                "Controlled entries require service ownership, private permissions and ordinary single-link files or directories",
+                UiMessage::error_core_posix_private_ordinary_entry_required(),
             ));
         }
         if fsid(file)?
@@ -342,7 +345,7 @@ impl ControlledRoot {
         {
             return Err(error(
                 "crossVolume",
-                "The entry crossed its qualified filesystem",
+                UiMessage::error_core_posix_filesystem_changed(),
             ));
         }
         opaque_identity(file)?;
@@ -350,10 +353,12 @@ impl ControlledRoot {
     }
     fn check_namespace_mutation(&self, file: &BoundFile) -> Result<()> {
         let identity = opaque_identity(file)?;
-        let mut readers = self
-            .namespace_readers
-            .lock()
-            .map_err(|_| error("busy", "Namespace read scopes are unavailable"))?;
+        let mut readers = self.namespace_readers.lock().map_err(|_| {
+            error(
+                "busy",
+                UiMessage::error_core_posix_namespace_reads_unavailable(),
+            )
+        })?;
         readers.retain(|reader| reader.strong_count() != 0);
         for reader in readers.iter().filter_map(Weak::upgrade) {
             if Arc::ptr_eq(&reader, &file.binding) {
@@ -364,13 +369,18 @@ impl ControlledRoot {
                 if opaque_identity(&current.file)? == identity {
                     return Err(error(
                         "busy",
-                        "A retained source or dependency read scope excludes this namespace mutation",
+                        UiMessage::error_core_posix_namespace_read_conflict(),
                     ));
                 }
                 entry = current
                     .parent
                     .lock()
-                    .map_err(|_| error("busy", "Read scope parent is unavailable"))?
+                    .map_err(|_| {
+                        error(
+                            "busy",
+                            UiMessage::error_core_posix_read_parent_unavailable(),
+                        )
+                    })?
                     .clone();
             }
         }
@@ -379,16 +389,13 @@ impl ControlledRoot {
     fn validate_tree(&self, directory: &File, depth: usize, used: &mut usize) -> Result<()> {
         self.verify_object(directory, true)?;
         if depth > 128 {
-            return Err(error(
-                "budget",
-                "Controlled root exceeds the directory-depth budget",
-            ));
+            return Err(error("budget", UiMessage::error_core_posix_depth_budget()));
         }
         let (entries, complete) = directory_entries(directory, 5000usize.saturating_sub(*used))?;
         if !complete {
             return Err(error(
                 "budget",
-                "Controlled root admission requires complete enumeration within 5000 entries",
+                UiMessage::error_core_posix_admission_budget(),
             ));
         }
         *used += entries.len();
@@ -396,7 +403,7 @@ impl ControlledRoot {
             if entry.is_unsupported() {
                 return Err(error(
                     "unsupportedPath",
-                    "The controlled root contains a symbolic link or special filesystem entry",
+                    UiMessage::error_core_posix_symbolic_or_special_entry(),
                 ));
             }
             let file = open_at(
@@ -428,7 +435,7 @@ fn root_for(file: &BoundFile) -> Result<&Arc<ControlledRoot>> {
     file.binding.root.as_ref().ok_or_else(|| {
         error(
             "controlledRootRequired",
-            "The descriptor has no controlled-root authority",
+            UiMessage::error_core_posix_descriptor_authority_required(),
         )
     })
 }
@@ -444,7 +451,10 @@ pub(super) fn create_private_directory(root: &Arc<ControlledRoot>, path: &Path) 
     let mut current = bound_root(root)?;
     for part in path.strip_prefix(&root.path).unwrap().components() {
         let std::path::Component::Normal(name) = part else {
-            return Err(error("invalidPath", "Private directory contains traversal"));
+            return Err(error(
+                "invalidPath",
+                UiMessage::error_core_posix_private_traversal(),
+            ));
         };
         current = match open_bound(&current, name, true, false, false) {
             Ok(directory) => directory,
@@ -515,7 +525,7 @@ fn open_bound_role(
     {
         return Err(error(
             "thirdState",
-            "The inspected original entry changed before data access",
+            UiMessage::error_core_posix_original_entry_changed_before_open(),
         ));
     }
     let mut bound = BoundFile::bind(file, Some(parent), name)?;
@@ -524,7 +534,12 @@ fn open_bound_role(
         if !write {
             root.namespace_readers
                 .lock()
-                .map_err(|_| error("busy", "Namespace read scopes are unavailable"))?
+                .map_err(|_| {
+                    error(
+                        "busy",
+                        UiMessage::error_core_posix_namespace_reads_unavailable(),
+                    )
+                })?
                 .push(Arc::downgrade(&bound.binding));
         }
     }
@@ -542,7 +557,7 @@ fn raw_stamp(file: &File) -> Result<FileStamp> {
     let seconds = u64::try_from(m.mtime()).map_err(|_| {
         error(
             "unsupportedPath",
-            "Negative filesystem modification times are unsupported",
+            UiMessage::error_core_posix_negative_modified_time(),
         )
     })?;
     let modified = seconds
@@ -551,7 +566,7 @@ fn raw_stamp(file: &File) -> Result<FileStamp> {
         .ok_or_else(|| {
             error(
                 "unsupportedPath",
-                "Filesystem modification time is outside the supported range",
+                UiMessage::error_core_posix_modified_time_range(),
             )
         })?;
     Ok(FileStamp {
@@ -591,7 +606,7 @@ fn raw_file_coordinates(file: &File) -> Result<PathBuf> {
     if !path.is_absolute() || file.metadata()?.nlink() == 0 {
         return Err(error(
             "identityPending",
-            "The retained file has no current filesystem coordinate",
+            UiMessage::error_core_posix_current_coordinate_unavailable(),
         ));
     }
     Ok(path)
@@ -625,7 +640,7 @@ fn directory_entries(
         if n as usize > buffer.len() {
             return Err(error(
                 "inventoryUnavailable",
-                "Invalid Linux directory entry length",
+                UiMessage::error_core_posix_invalid_directory_entry(),
             ));
         }
         if n == 0 {
@@ -636,7 +651,7 @@ fn directory_entries(
             if offset + 20 > n as usize {
                 return Err(error(
                     "inventoryUnavailable",
-                    "Truncated Linux directory entry",
+                    UiMessage::error_core_posix_truncated_directory_entry(),
                 ));
             }
             let len =
@@ -644,12 +659,15 @@ fn directory_entries(
             if len < 20 || !len.is_multiple_of(8) || offset + len > n as usize {
                 return Err(error(
                     "inventoryUnavailable",
-                    "Invalid Linux directory entry length",
+                    UiMessage::error_core_posix_invalid_directory_entry(),
                 ));
             }
             let name = &buffer[offset + 19..offset + len];
             let end = name.iter().position(|b| *b == 0).ok_or_else(|| {
-                error("inventoryUnavailable", "Unterminated Linux directory entry")
+                error(
+                    "inventoryUnavailable",
+                    UiMessage::error_core_posix_unterminated_directory_entry(),
+                )
             })?;
             let name = OsString::from_vec(name[..end].to_vec());
             offset += len;
@@ -678,7 +696,7 @@ fn directory_entries(
             if metadata.is_unsupported() {
                 return Err(error(
                     "unsupportedPath",
-                    "Symbolic links and special filesystem entries are unsupported",
+                    UiMessage::error_core_posix_ordinary_entry_required(),
                 ));
             }
             let qualified = open_at(
@@ -707,18 +725,24 @@ impl ParentGuard {
         let absolute = crate::absolute_path(path)?;
         backend.check_path(&absolute)?;
         let root = backend.root.clone();
-        let relative = absolute
-            .strip_prefix(&root.path)
-            .map_err(|_| error("outsideRoot", "Path is outside the controlled root"))?;
+        let relative = absolute.strip_prefix(&root.path).map_err(|_| {
+            error(
+                "outsideRoot",
+                UiMessage::error_core_posix_path_outside_root(),
+            )
+        })?;
         let name = relative
             .file_name()
-            .ok_or_else(|| error("invalidPath", "A leaf path is required"))?
+            .ok_or_else(|| error("invalidPath", UiMessage::error_core_posix_leaf_required()))?
             .to_owned();
         basename(&name)?;
         let mut dirs = vec![bound_root(&root)?];
         for component in relative.parent().unwrap().components() {
             let std::path::Component::Normal(component) = component else {
-                return Err(error("invalidPath", "Path contains traversal"));
+                return Err(error(
+                    "invalidPath",
+                    UiMessage::error_core_posix_path_traversal(),
+                ));
             };
             let next = open_bound(dirs.last().unwrap(), component, true, false, false)?;
             dirs.push(next);
@@ -770,7 +794,7 @@ fn rename_bound(
     if !Arc::ptr_eq(root, root_for(target_parent)?) {
         return Err(error(
             "crossVolume",
-            "A move cannot cross controlled-root authority",
+            UiMessage::error_core_posix_cross_root_move(),
         ));
     }
     root.check_fence()?;
@@ -779,14 +803,25 @@ fn rename_bound(
         .binding
         .parent
         .lock()
-        .map_err(|_| error("busy", "Entry parent binding is unavailable"))?
+        .map_err(|_| {
+            error(
+                "busy",
+                UiMessage::error_core_posix_entry_parent_unavailable(),
+            )
+        })?
         .clone()
-        .ok_or_else(|| error("invalidPath", "The controlled root itself cannot move"))?;
-    let mut old_name = file
-        .binding
-        .name
-        .lock()
-        .map_err(|_| error("busy", "Entry binding is unavailable"))?;
+        .ok_or_else(|| {
+            error(
+                "invalidPath",
+                UiMessage::error_core_posix_root_move_forbidden(),
+            )
+        })?;
+    let mut old_name = file.binding.name.lock().map_err(|_| {
+        error(
+            "busy",
+            UiMessage::error_core_posix_entry_binding_unavailable(),
+        )
+    })?;
     let old = basename(&old_name)?;
     let new = basename(name)?;
     // Service DAC isolation plus the retained root writer fence excludes
@@ -796,7 +831,7 @@ fn rename_bound(
     if opaque_identity(&original)? != opaque_identity(file)? {
         return Err(error(
             "thirdState",
-            "The original namespace entry changed before movement",
+            UiMessage::error_core_posix_original_entry_changed(),
         ));
     }
     if unsafe {
@@ -812,12 +847,12 @@ fn rename_bound(
     {
         return Err(os_error());
     }
-    *file
-        .binding
-        .parent
-        .lock()
-        .map_err(|_| error("busy", "Entry parent binding is unavailable"))? =
-        Some(target_parent.binding.clone());
+    *file.binding.parent.lock().map_err(|_| {
+        error(
+            "busy",
+            UiMessage::error_core_posix_entry_parent_unavailable(),
+        )
+    })? = Some(target_parent.binding.clone());
     *old_name = name.to_owned();
     // A successful syscall changes the retained binding even if a following
     // fsync reports an unknown durable outcome. Recovery keeps the operation.
@@ -882,7 +917,7 @@ impl NamespaceGuard {
             let std::path::Component::Normal(name) = component else {
                 return Err(error(
                     "invalidPath",
-                    "Relative source path contains traversal",
+                    UiMessage::error_core_posix_relative_traversal(),
                 ));
             };
             let next = path.join(name);
@@ -895,7 +930,7 @@ impl NamespaceGuard {
             {
                 return Err(error(
                     "thirdState",
-                    "The retained source descendant no longer occupies its original parent entry",
+                    UiMessage::error_core_backend_source_descendant_placement_changed(),
                 ));
             }
             path = next;
@@ -918,9 +953,12 @@ impl NamespaceGuard {
         self.open_source_output(relative, false, false)
     }
     pub(crate) fn open_source_placement(&mut self, relative: &Path) -> Result<BoundFile> {
-        let name = relative
-            .file_name()
-            .ok_or_else(|| error("invalidPath", "Source lacks a basename"))?;
+        let name = relative.file_name().ok_or_else(|| {
+            error(
+                "invalidPath",
+                UiMessage::error_core_posix_source_basename_required(),
+            )
+        })?;
         open_bound_role(
             self.source_directory(relative.parent().unwrap())?,
             name,
@@ -931,14 +969,12 @@ impl NamespaceGuard {
         )
     }
     pub(crate) fn source_parent_identity(&mut self, relative: &Path) -> Result<FileIdentity> {
-        Ok(stamp(
-            self.source_directory(
-                relative
-                    .parent()
-                    .ok_or_else(|| error("invalidPath", "Source lacks a parent"))?,
-            )?,
-        )?
-        .identity)
+        Ok(
+            stamp(self.source_directory(relative.parent().ok_or_else(|| {
+                error("invalidPath", UiMessage::error_core_posix_parent_required())
+            })?)?)?
+            .identity,
+        )
     }
     pub fn open_source_output(
         &mut self,
@@ -946,9 +982,12 @@ impl NamespaceGuard {
         write: bool,
         create: bool,
     ) -> Result<BoundFile> {
-        let name = relative
-            .file_name()
-            .ok_or_else(|| error("invalidPath", "Source lacks a basename"))?;
+        let name = relative.file_name().ok_or_else(|| {
+            error(
+                "invalidPath",
+                UiMessage::error_core_posix_source_basename_required(),
+            )
+        })?;
         open_bound(
             self.source_directory(relative.parent().unwrap())?,
             name,
@@ -1031,7 +1070,10 @@ impl MultiNamespaceGuard {
         if (participants.is_empty() && ancestors.is_empty())
             || participants.len() + planned.len() + ancestors.len() > 5000
         {
-            return Err(error("budget", "Invalid namespace participant budget"));
+            return Err(error(
+                "budget",
+                UiMessage::error_core_posix_participant_budget(),
+            ));
         }
         let sources = participants
             .iter()
@@ -1061,7 +1103,7 @@ impl MultiNamespaceGuard {
         {
             return Err(error(
                 "recursiveMove",
-                "Namespace roots and parents must be independent",
+                UiMessage::error_core_posix_independent_roots_required(),
             ));
         }
         let mut dirs = BTreeMap::new();
@@ -1071,7 +1113,10 @@ impl MultiNamespaceGuard {
             let mut current = root.path.clone();
             for part in leaf.strip_prefix(&root.path).unwrap().components() {
                 let std::path::Component::Normal(name) = part else {
-                    return Err(error("invalidPath", "Namespace path contains traversal"));
+                    return Err(error(
+                        "invalidPath",
+                        UiMessage::error_core_posix_namespace_traversal(),
+                    ));
                 };
                 let next = current.join(name);
                 if !dirs.contains_key(&next) {
@@ -1108,17 +1153,24 @@ impl MultiNamespaceGuard {
         self.inner.source = self
             .sources
             .get(index)
-            .ok_or_else(|| error("invalidPlan", "Missing namespace participant"))?
+            .ok_or_else(|| {
+                error(
+                    "invalidPlan",
+                    UiMessage::error_core_posix_participant_missing(),
+                )
+            })?
             .clone();
         self.inner.target_parent = self.parents[index].clone();
         self.inner.root.check_fence()?;
         Ok(&mut self.inner)
     }
     pub(crate) fn release_source_descendants(&mut self, index: usize) -> Result<()> {
-        let source = self
-            .sources
-            .get(index)
-            .ok_or_else(|| error("invalidPlan", "Missing namespace participant"))?;
+        let source = self.sources.get(index).ok_or_else(|| {
+            error(
+                "invalidPlan",
+                UiMessage::error_core_posix_participant_missing(),
+            )
+        })?;
         self.inner
             .dirs
             .retain(|path, _| self.sources.contains(path) || !path.starts_with(source));
@@ -1134,7 +1186,12 @@ impl MultiNamespaceGuard {
         let source = self
             .sources
             .get(index)
-            .ok_or_else(|| error("invalidPlan", "Missing namespace participant"))?
+            .ok_or_else(|| {
+                error(
+                    "invalidPlan",
+                    UiMessage::error_core_posix_participant_missing(),
+                )
+            })?
             .clone();
         let parent = self.parents[index].clone();
         let original = &self.inner.dirs[&source];
@@ -1142,7 +1199,7 @@ impl MultiNamespaceGuard {
         if &stamp(&witness)?.identity != expected {
             return Err(error(
                 "thirdState",
-                "Final source canonical witness changed",
+                UiMessage::error_core_posix_canonical_witness_changed(),
             ));
         }
         let reopened = open_bound(
@@ -1155,7 +1212,7 @@ impl MultiNamespaceGuard {
         if stamp(&reopened)?.identity != stamp(original)?.identity {
             return Err(error(
                 "thirdState",
-                "Final source directory witness changed",
+                UiMessage::error_core_posix_directory_witness_changed(),
             ));
         }
         self.inner.dirs.insert(source, reopened);
@@ -1166,21 +1223,30 @@ impl MultiNamespaceGuard {
             .sources
             .get(index)
             .and_then(|p| self.inner.dirs.get(p))
-            .ok_or_else(|| error("invalidPlan", "Original moving root is not retained"))?;
+            .ok_or_else(|| {
+                error(
+                    "invalidPlan",
+                    UiMessage::error_core_posix_moving_root_missing(),
+                )
+            })?;
         self.move_file_to(source, target)
     }
     pub(crate) fn move_file_to(&self, file: &BoundFile, target: &Path) -> Result<()> {
-        let parent = self.directory_file(
-            target
-                .parent()
-                .ok_or_else(|| error("invalidPath", "Moving target lacks a parent"))?,
-        )?;
+        let parent = self.directory_file(target.parent().ok_or_else(|| {
+            error(
+                "invalidPath",
+                UiMessage::error_core_posix_moving_parent_required(),
+            )
+        })?)?;
         rename_bound(
             file,
             parent,
-            target
-                .file_name()
-                .ok_or_else(|| error("invalidPath", "Moving target lacks a basename"))?,
+            target.file_name().ok_or_else(|| {
+                error(
+                    "invalidPath",
+                    UiMessage::error_core_posix_moving_basename_required(),
+                )
+            })?,
             false,
         )
     }
@@ -1189,7 +1255,12 @@ impl MultiNamespaceGuard {
             .sources
             .get(index)
             .and_then(|p| p.parent())
-            .ok_or_else(|| error("invalidPlan", "Missing source parent"))?;
+            .ok_or_else(|| {
+                error(
+                    "invalidPlan",
+                    UiMessage::error_core_posix_source_parent_missing(),
+                )
+            })?;
         Ok(stamp(self.directory_file(parent)?)?.identity)
     }
     pub(crate) fn directory_identity(&self, path: &Path) -> Result<Option<FileIdentity>> {
@@ -1205,20 +1276,24 @@ impl MultiNamespaceGuard {
     }
     pub(crate) fn directory_file(&self, path: &Path) -> Result<&BoundFile> {
         self.inner.root.check_fence()?;
-        let file = self
-            .inner
-            .dirs
-            .get(path)
-            .ok_or_else(|| error("missing", "Directory is not retained"))?;
+        let file = self.inner.dirs.get(path).ok_or_else(|| {
+            error(
+                "missing",
+                UiMessage::error_core_posix_directory_not_retained(),
+            )
+        })?;
         self.inner.root.check_fence()?;
         Ok(file)
     }
     pub(crate) fn retain_directory(&mut self, path: &Path) -> Result<&BoundFile> {
         self.inner.root.check_fence()?;
         if !self.inner.dirs.contains_key(path) {
-            let parent = path
-                .parent()
-                .ok_or_else(|| error("invalidPath", "Directory has no parent"))?;
+            let parent = path.parent().ok_or_else(|| {
+                error(
+                    "invalidPath",
+                    UiMessage::error_core_posix_directory_parent_required(),
+                )
+            })?;
             self.retain_directory(parent)?;
             let file = open_bound(
                 &self.inner.dirs[parent],
@@ -1235,7 +1310,12 @@ impl MultiNamespaceGuard {
         let parent = self
             .parents
             .get(index)
-            .ok_or_else(|| error("invalidPlan", "Missing target parent"))?
+            .ok_or_else(|| {
+                error(
+                    "invalidPlan",
+                    UiMessage::error_core_posix_target_parent_missing(),
+                )
+            })?
             .clone();
         self.retain_directory(&parent)?;
         Ok(())
@@ -1243,31 +1323,43 @@ impl MultiNamespaceGuard {
     pub(crate) fn create_directory(&mut self, path: &Path) -> Result<&BoundFile> {
         self.inner.root.check_fence()?;
         if self.inner.dirs.contains_key(path) {
-            return Err(error("exists", "Directory is already retained"));
+            return Err(error(
+                "exists",
+                UiMessage::error_core_posix_directory_already_retained(),
+            ));
         }
-        let parent = self.directory_file(
-            path.parent()
-                .ok_or_else(|| error("invalidPath", "Created directory has no parent"))?,
-        )?;
+        let parent = self.directory_file(path.parent().ok_or_else(|| {
+            error(
+                "invalidPath",
+                UiMessage::error_core_posix_created_parent_required(),
+            )
+        })?)?;
         let file = open_bound(parent, path.file_name().unwrap(), true, true, true)?;
         self.inner.dirs.insert(path.to_owned(), file);
         self.directory_file(path)
     }
     pub(crate) fn target_parent_identity(&self, index: usize) -> Result<Option<FileIdentity>> {
-        self.directory_identity(
-            self.parents
-                .get(index)
-                .ok_or_else(|| error("invalidPlan", "Missing target parent"))?,
-        )
+        self.directory_identity(self.parents.get(index).ok_or_else(|| {
+            error(
+                "invalidPlan",
+                UiMessage::error_core_posix_target_parent_missing(),
+            )
+        })?)
     }
     pub(crate) fn open_output(&self, path: &Path, write: bool, create: bool) -> Result<BoundFile> {
         open_bound(
-            self.directory_file(
-                path.parent()
-                    .ok_or_else(|| error("invalidPath", "Output has no parent"))?,
-            )?,
-            path.file_name()
-                .ok_or_else(|| error("invalidPath", "Output has no basename"))?,
+            self.directory_file(path.parent().ok_or_else(|| {
+                error(
+                    "invalidPath",
+                    UiMessage::error_core_posix_output_parent_required(),
+                )
+            })?)?,
+            path.file_name().ok_or_else(|| {
+                error(
+                    "invalidPath",
+                    UiMessage::error_core_posix_output_basename_required(),
+                )
+            })?,
             false,
             write,
             create,

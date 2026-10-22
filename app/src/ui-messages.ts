@@ -10160,7 +10160,22 @@ export const zhCN = {
   "error.api.worker.transportFailed": "原编译器传输未完成",
   "error.api.worker.streamBudget": "编译器流超过字节预算；原输入保留",
   "error.api.worker.processExitUnknown": "编译器进程的实际退出尚未确认；原输入保留",
-  "error.api.broker.originalResultUnknown": "原结果尚未确认；请保留原操作编号"
+  "error.api.broker.originalResultUnknown": "原结果尚未确认；请保留原操作编号",
+  "error.core.posix.pathOutsideRoot": "路径位于已授权的受控根目录之外。",
+  "error.core.posix.privilegeBoundaryRequired": "服务必须清空能力边界集，并禁止执行时获取更高权限。",
+  "error.core.posix.namespaceTraversal": "命名空间路径包含越级路径。",
+  "error.core.posix.sourceBasenameRequired": "源路径缺少文件名。",
+  "error.core.posix.movingBasenameRequired": "移动目标缺少文件名。",
+  "error.core.posix.relativeTraversal": "相对源路径包含越级路径。",
+  "error.core.posix.movingParentRequired": "移动目标缺少父目录。",
+  "error.core.posix.directoryParentRequired": "目录缺少父目录。",
+  "error.core.posix.privateTraversal": "私有目录路径包含越级路径。",
+  "error.core.posix.outputParentRequired": "输出路径缺少父目录。",
+  "error.core.posix.pathTraversal": "路径包含越级路径。",
+  "error.core.posix.createdParentRequired": "新建目录缺少父目录。",
+  "error.core.posix.enrollmentUuidRequired": "注册身份需要规范的随机 UUID。",
+  "error.core.posix.outputBasenameRequired": "输出路径缺少文件名。",
+  "error.core.posix.ordinaryEntryRequired": "不支持符号链接和特殊文件系统条目。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -20326,6 +20341,21 @@ export interface MessageParamsMap {
   "error.api.worker.streamBudget": {  };
   "error.api.worker.processExitUnknown": {  };
   "error.api.broker.originalResultUnknown": {  };
+  "error.core.posix.pathOutsideRoot": {  };
+  "error.core.posix.privilegeBoundaryRequired": {  };
+  "error.core.posix.namespaceTraversal": {  };
+  "error.core.posix.sourceBasenameRequired": {  };
+  "error.core.posix.movingBasenameRequired": {  };
+  "error.core.posix.relativeTraversal": {  };
+  "error.core.posix.movingParentRequired": {  };
+  "error.core.posix.directoryParentRequired": {  };
+  "error.core.posix.privateTraversal": {  };
+  "error.core.posix.outputParentRequired": {  };
+  "error.core.posix.pathTraversal": {  };
+  "error.core.posix.createdParentRequired": {  };
+  "error.core.posix.enrollmentUuidRequired": {  };
+  "error.core.posix.outputBasenameRequired": {  };
+  "error.core.posix.ordinaryEntryRequired": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -32324,7 +32354,22 @@ export const messageParamTypes = {
   "error.api.worker.transportFailed": {},
   "error.api.worker.streamBudget": {},
   "error.api.worker.processExitUnknown": {},
-  "error.api.broker.originalResultUnknown": {}
+  "error.api.broker.originalResultUnknown": {},
+  "error.core.posix.pathOutsideRoot": {},
+  "error.core.posix.privilegeBoundaryRequired": {},
+  "error.core.posix.namespaceTraversal": {},
+  "error.core.posix.sourceBasenameRequired": {},
+  "error.core.posix.movingBasenameRequired": {},
+  "error.core.posix.relativeTraversal": {},
+  "error.core.posix.movingParentRequired": {},
+  "error.core.posix.directoryParentRequired": {},
+  "error.core.posix.privateTraversal": {},
+  "error.core.posix.outputParentRequired": {},
+  "error.core.posix.pathTraversal": {},
+  "error.core.posix.createdParentRequired": {},
+  "error.core.posix.enrollmentUuidRequired": {},
+  "error.core.posix.outputBasenameRequired": {},
+  "error.core.posix.ordinaryEntryRequired": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -42488,5 +42533,20 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.api.worker.transportFailed": "The original compiler transport did not complete",
   "error.api.worker.streamBudget": "The compiler stream exceeded its byte budget; the original input is retained",
   "error.api.worker.processExitUnknown": "The compiler's actual process exit is unconfirmed; the original input is retained",
-  "error.api.broker.originalResultUnknown": "The original result is unconfirmed; retain the original operation ID"
+  "error.api.broker.originalResultUnknown": "The original result is unconfirmed; retain the original operation ID",
+  "error.core.posix.pathOutsideRoot": "Path is outside the controlled root",
+  "error.core.posix.privilegeBoundaryRequired": "The service must have an empty capability bounding set and disable privilege gain on exec",
+  "error.core.posix.namespaceTraversal": "Namespace path contains traversal",
+  "error.core.posix.sourceBasenameRequired": "Source lacks a basename",
+  "error.core.posix.movingBasenameRequired": "Moving target lacks a basename",
+  "error.core.posix.relativeTraversal": "Relative source path contains traversal",
+  "error.core.posix.movingParentRequired": "Moving target lacks a parent",
+  "error.core.posix.directoryParentRequired": "Directory has no parent",
+  "error.core.posix.privateTraversal": "Private directory contains traversal",
+  "error.core.posix.outputParentRequired": "Output has no parent",
+  "error.core.posix.pathTraversal": "Path contains traversal",
+  "error.core.posix.createdParentRequired": "Created directory has no parent",
+  "error.core.posix.enrollmentUuidRequired": "Enrollment identity requires a canonical random UUID",
+  "error.core.posix.outputBasenameRequired": "Output has no basename",
+  "error.core.posix.ordinaryEntryRequired": "Symbolic links and special filesystem entries are unsupported"
 };

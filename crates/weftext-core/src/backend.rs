@@ -182,8 +182,8 @@ impl BackendContext {
             })
             .collect())
     }
-    /// Test presence only after checking this Core's authority and a complete,
-    /// qualified parent inventory. Read/permission/unsupported failures remain
+    /// Test presence only after checking this Core's authority and a qualified
+    /// parent handle. Read/permission/unsupported failures remain
     /// failures; only an actually missing path is absence.
     pub(crate) fn entry_exists(&self, path: impl AsRef<Path>) -> Result<bool> {
         let path = crate::absolute_path(path.as_ref())?;
@@ -209,8 +209,15 @@ impl BackendContext {
             Err(error) if error.code == "missing" => return Ok(false),
             Err(error) => return Err(error),
         };
-        let (entries, complete) = guard.directory_entries(5000)?;
-        qualified_entry_exists(entries, complete, name)
+        #[cfg(windows)]
+        {
+            guard.selected_entry_exists(name)
+        }
+        #[cfg(not(windows))]
+        {
+            let (entries, complete) = guard.directory_entries(5000)?;
+            qualified_entry_exists(entries, complete, name)
+        }
     }
     pub(crate) fn read_bytes(&self, path: impl AsRef<Path>) -> Result<Vec<u8>> {
         use std::io::Read;
@@ -797,8 +804,28 @@ mod platform {
         directory: &File,
         max: usize,
     ) -> Result<(Vec<(std::ffi::OsString, EntryMetadata)>, bool)> {
+        directory_entries_matching(directory, max, None)
+    }
+    fn directory_entries_matching(
+        directory: &File,
+        max: usize,
+        selected: Option<&std::ffi::OsStr>,
+    ) -> Result<(Vec<(std::ffi::OsString, EntryMetadata)>, bool)> {
         // Enumerate the actual protected directory handle. A concurrent reparse
         // attribute edit cannot redirect this enumeration through a path string.
+        let mut wide: Vec<u16> =
+            selected.map_or_else(Vec::new, |name| name.encode_wide().collect());
+        if wide.len() > 16000 {
+            return Err(CoreError::new(
+                "invalidPath",
+                UiMessage::error_core_backend_path_too_long(),
+            ));
+        }
+        let filter = UnicodeString {
+            length: (wide.len() * 2) as u16,
+            maximum_length: (wide.len() * 2) as u16,
+            buffer: wide.as_mut_ptr(),
+        };
         let mut names = Vec::new();
         let mut buffer = vec![0u64; 8192]; // aligned 64 KiB kernel output buffer
         let mut restart = 1;
@@ -818,12 +845,12 @@ mod platform {
                     (buffer.len() * 8) as u32,
                     1,
                     0,
-                    null(),
+                    selected.map_or(null(), |_| &filter),
                     restart,
                 )
             };
             restart = 0;
-            if status as u32 == 0x80000006 {
+            if status as u32 == 0x80000006 || (selected.is_some() && status as u32 == 0xc000000f) {
                 break;
             }
             if status < 0 {
@@ -893,6 +920,14 @@ mod platform {
         pub name: std::ffi::OsString,
     }
     impl ParentGuard {
+        pub(super) fn selected_entry_exists(&self, name: &std::ffi::OsStr) -> Result<bool> {
+            // This guard owns a fresh parent handle, so this is its first
+            // enumeration. NtQueryDirectoryFile retains that name filter for
+            // the handle's lifetime. Unrelated siblings consume no budget.
+            let (entries, complete) =
+                directory_entries_matching(self.dirs.last().unwrap(), 1, Some(name))?;
+            qualified_entry_exists(entries, complete, name)
+        }
         pub fn directory_identity(&self) -> Result<FileIdentity> {
             Ok(stamp(self.dirs.last().unwrap())?.identity)
         }
@@ -1850,6 +1885,31 @@ mod platform {
         use super::*;
         use std::fs;
         use std::os::windows::fs::OpenOptionsExt;
+
+        #[test]
+        fn selected_presence_does_not_charge_unrelated_siblings_to_private_budget() {
+            let temp = tempfile::tempdir().unwrap();
+            for index in 0..5001 {
+                fs::write(temp.path().join(format!("unrelated-{index}")), []).unwrap();
+            }
+            let selected = temp.path().join("Selected.typ");
+            fs::write(&selected, b"original").unwrap();
+            let backend = BackendContext::local().unwrap();
+            assert!(backend.entry_exists(&selected).unwrap());
+            assert!(
+                backend
+                    .entry_exists(temp.path().join("selected.TYP"))
+                    .unwrap()
+            );
+            assert!(
+                !backend
+                    .entry_exists(temp.path().join("Missing.typ"))
+                    .unwrap()
+            );
+            // Full private inventories still enforce their original bound.
+            assert_eq!(backend.read_dir(temp.path()).err().unwrap().code, "budget");
+            assert_eq!(fs::read(selected).unwrap(), b"original");
+        }
 
         #[test]
         fn source_presence_uses_retained_delete_closure_and_keeps_external_rename_blocked() {

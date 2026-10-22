@@ -52646,6 +52646,81 @@
       "zh-CN": "原结果尚未确认；请保留原操作编号",
       "en-US": "The original result is unconfirmed; retain the original operation ID",
       "params": {}
+    },
+    "error.core.posix.pathOutsideRoot": {
+      "zh-CN": "路径位于已授权的受控根目录之外。",
+      "en-US": "Path is outside the controlled root",
+      "params": {}
+    },
+    "error.core.posix.privilegeBoundaryRequired": {
+      "zh-CN": "服务必须清空能力边界集，并禁止执行时获取更高权限。",
+      "en-US": "The service must have an empty capability bounding set and disable privilege gain on exec",
+      "params": {}
+    },
+    "error.core.posix.namespaceTraversal": {
+      "zh-CN": "命名空间路径包含越级路径。",
+      "en-US": "Namespace path contains traversal",
+      "params": {}
+    },
+    "error.core.posix.sourceBasenameRequired": {
+      "zh-CN": "源路径缺少文件名。",
+      "en-US": "Source lacks a basename",
+      "params": {}
+    },
+    "error.core.posix.movingBasenameRequired": {
+      "zh-CN": "移动目标缺少文件名。",
+      "en-US": "Moving target lacks a basename",
+      "params": {}
+    },
+    "error.core.posix.relativeTraversal": {
+      "zh-CN": "相对源路径包含越级路径。",
+      "en-US": "Relative source path contains traversal",
+      "params": {}
+    },
+    "error.core.posix.movingParentRequired": {
+      "zh-CN": "移动目标缺少父目录。",
+      "en-US": "Moving target lacks a parent",
+      "params": {}
+    },
+    "error.core.posix.directoryParentRequired": {
+      "zh-CN": "目录缺少父目录。",
+      "en-US": "Directory has no parent",
+      "params": {}
+    },
+    "error.core.posix.privateTraversal": {
+      "zh-CN": "私有目录路径包含越级路径。",
+      "en-US": "Private directory contains traversal",
+      "params": {}
+    },
+    "error.core.posix.outputParentRequired": {
+      "zh-CN": "输出路径缺少父目录。",
+      "en-US": "Output has no parent",
+      "params": {}
+    },
+    "error.core.posix.pathTraversal": {
+      "zh-CN": "路径包含越级路径。",
+      "en-US": "Path contains traversal",
+      "params": {}
+    },
+    "error.core.posix.createdParentRequired": {
+      "zh-CN": "新建目录缺少父目录。",
+      "en-US": "Created directory has no parent",
+      "params": {}
+    },
+    "error.core.posix.enrollmentUuidRequired": {
+      "zh-CN": "注册身份需要规范的随机 UUID。",
+      "en-US": "Enrollment identity requires a canonical random UUID",
+      "params": {}
+    },
+    "error.core.posix.outputBasenameRequired": {
+      "zh-CN": "输出路径缺少文件名。",
+      "en-US": "Output has no basename",
+      "params": {}
+    },
+    "error.core.posix.ordinaryEntryRequired": {
+      "zh-CN": "不支持符号链接和特殊文件系统条目。",
+      "en-US": "Symbolic links and special filesystem entries are unsupported",
+      "params": {}
     }
   }
 }
