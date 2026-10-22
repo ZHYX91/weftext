@@ -351,8 +351,15 @@ print(json.dumps({"forced":result["forced"]}),flush=True)
             for path in directory.rglob('*'):
                 if path.is_file() and ('cache_fixture_data' in path.name or 'cache-fixture-data' in path.as_posix()):
                     target = original / path.relative_to(fixture.target)
+                    if os.name == 'nt':
+                        # The owned fixture paths are absolute local paths.
+                        # Explicit extended paths also work when the host has
+                        # not enabled the process-wide long-path policy.
+                        path = Path('\\\\?\\' + str(path))
+                        target = Path('\\\\?\\' + str(target))
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(path, target)
+                    self.assertEqual(target.read_bytes(), path.read_bytes())
         result = fixture.run()
         self.assertIn('data/Cargo.toml', result['forced'])
         self.assertEqual(fixture.value(), '23:owned-build-asset-b')

@@ -24,7 +24,8 @@ from package_inputs import is_reparse, parse_json, read_checked, sha256, snapsho
 EXTRA_INPUTS = {
     'weftext-messages': ('assets/ui-messages.json',),
     'weftext-data': ('docs/design/examples/schema.authoring.json', 'docs/design/examples/native-cases/saved-query.typ'),
-    'weftext-core': ('docs/design/examples/schema.authoring.json',),
+    'weftext-core': ('docs/design/examples/schema.authoring.json',
+                     'app/src/capture-author-wire.fixture.json'),
     'weftext-engine': ('resources/fonts', 'crates/weftext-export/assets'),
     'weftext-export': ('docs/design/examples/schema.authoring.json',),
     'weftext-app': ('app/dist', 'packaging/windows/host-contract.json',
