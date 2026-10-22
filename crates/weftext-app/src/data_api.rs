@@ -172,20 +172,7 @@ struct TypeEdit {
     types: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CaptureRequest {
-    root: String,
-    parent: String,
-    name: String,
-    types: Vec<String>,
-    title: Option<String>,
-    #[serde(default, deserialize_with = "unique_fields")]
-    fields: BTreeMap<String, NativeValue>,
-    #[serde(default)]
-    body: String,
-    operation_id: String,
-}
+pub(crate) use weftext_core::CaptureCreationRequest as CaptureRequest;
 
 /// Preserve duplicate-key failure rather than allowing JSON map last-wins.
 pub(crate) fn unique_fields<'de, D>(
@@ -342,8 +329,14 @@ async fn schema(State(state): State<AppState>, Json(req): Json<RootRequest>) -> 
         error
     })?;
     Ok(Json(
-        json!({"schema":resolved,"source":config.source,"roleRef":config.role_ref,
+        json!({"semanticDigest":schema_semantic_digest(&resolved)?,"schema":resolved,"source":config.source,"roleRef":config.role_ref,
         "revision":config.revision,"builtinDefault":config.before.is_none(),"canInstall":config.can_install}),
+    ))
+}
+fn schema_semantic_digest(schema: &Schema) -> Result<String, ApiError> {
+    Ok(weftext_engine::source_hash(
+        &serde_json::to_string(schema)
+            .map_err(|_| ApiError::internal("Schema serialization failed"))?,
     ))
 }
 
@@ -711,6 +704,12 @@ fn capture_template(
         let field = resolved
             .field(key)
             .ok_or_else(|| weftext_data::DataError(format!("Unknown capture field {key}")))?;
+        if field.id != *key {
+            return Err(weftext_data::DataError(format!(
+                "Capture requires stable FieldId {}; field keys are not identities",
+                field.id
+            )));
+        }
         if !seen.insert(&field.id) {
             return Err(weftext_data::DataError(format!(
                 "One capture supplies {} twice using id and key",
@@ -723,14 +722,19 @@ fn capture_template(
 }
 
 fn capture_body(req: &CaptureRequest) -> Result<String, weftext_data::DataError> {
+    let body = match &req.body_mode {
+        weftext_core::CaptureBodyMode::Text => weftext_engine::encode_literal(&req.body)
+            .map_err(|error| weftext_data::DataError(error.to_string()))?,
+        weftext_core::CaptureBodyMode::Markup => req.body.clone(),
+    };
     Ok(match &req.title {
         Some(title) => format!(
             "\n#set document(title: [{}])\n#title()\n\n{}",
             weftext_engine::encode_literal(title)
                 .map_err(|error| weftext_data::DataError(error.to_string()))?,
-            req.body
+            body
         ),
-        None => req.body.clone(),
+        None => body,
     })
 }
 
@@ -759,15 +763,49 @@ fn original_creation(
     let receipt = core.execute_operation(id, &preview.plan_id)?;
     Ok(Some((preview, receipt)))
 }
-fn capture_document(core: &mut Core, req: &CaptureRequest) -> Result<CreationCommit, CoreError> {
+pub(crate) fn capture_document(
+    core: &mut Core,
+    req: &CaptureRequest,
+) -> Result<CreationCommit, CoreError> {
     let intent = capture_intent(req)?;
     if let Some(original) = original_creation(core, &req.operation_id, &intent)? {
         return Ok(original);
     }
     let frozen = query_snapshot(core, &req.root, weftext_data::QueryPlan::default())?;
     with_temporary_frozen_query(core, frozen, |core, frozen| {
+        if let Some(basis) = &req.form_basis {
+            let actual_ref = frozen.versions[0]["roleRef"].as_str();
+            let actual_digest =
+                weftext_engine::source_hash(&serde_json::to_string(&frozen.schema)?);
+            if actual_ref != Some(basis.schema_ref.as_str())
+                || actual_digest != basis.semantic_digest
+            {
+                return Err(CoreError::new(
+                    "captureSchemaChanged",
+                    "The original capture Schema identity or shape changed; raw input is retained",
+                ));
+            }
+        }
         capture_from_frozen_inner(core, req, frozen, &intent)
     })
+}
+pub(crate) fn capture_frozen_wire(
+    core: &mut Core,
+    wire: &str,
+) -> Result<CreationCommit, CoreError> {
+    let request: CaptureRequest = serde_json::from_str(wire).map_err(|error| {
+        CoreError::new(
+            "captureRequestInvalid",
+            format!("The exact frozen request is not valid UTF-8 author input: {error}"),
+        )
+    })?;
+    if (!request.types.is_empty() || !request.fields.is_empty()) && request.form_basis.is_none() {
+        return Err(CoreError::new(
+            "captureSchemaRequired",
+            "Typed capture requires its original Schema identity and semantic digest",
+        ));
+    }
+    capture_document(core, &request)
 }
 
 fn capture_from_frozen_inner(
@@ -783,7 +821,11 @@ fn capture_from_frozen_inner(
         root: frozen.root.clone(),
         intent: OperationIntent::NewNode {
             parent: req.parent.clone(),
-            name: req.name.clone(),
+            name: if req.name.is_empty() {
+                format!("碎片-{}", req.operation_id)
+            } else {
+                req.name.clone()
+            },
             source: Some(source),
         },
     };
@@ -1117,6 +1159,8 @@ async fn create_period(
                 title: req.title,
                 fields: BTreeMap::from([("calendar/period".into(), period)]),
                 body: req.body,
+                body_mode: weftext_core::CaptureBodyMode::Markup,
+                form_basis: None,
                 operation_id: req.operation_id,
             };
             capture_from_frozen_inner(core, &capture, frozen, &intent)
@@ -3569,10 +3613,28 @@ mod tests {
             types: vec!["task".into()],
             title: Some("精确记录 😀".into()),
             fields: BTreeMap::from([
-                ("status".into(), NativeValue::Text("open".into())),
-                ("start".into(), NativeValue::Date("2026-10-13".into())),
+                (
+                    Schema::from_author_json(BUNDLED_SCHEMA_SOURCE)
+                        .unwrap()
+                        .field("status")
+                        .unwrap()
+                        .id
+                        .clone(),
+                    NativeValue::Text("open".into()),
+                ),
+                (
+                    Schema::from_author_json(BUNDLED_SCHEMA_SOURCE)
+                        .unwrap()
+                        .field("start")
+                        .unwrap()
+                        .id
+                        .clone(),
+                    NativeValue::Date("2026-10-13".into()),
+                ),
             ]),
             body: "作者正文与注释 // retained\n".into(),
+            body_mode: weftext_core::CaptureBodyMode::Markup,
+            form_basis: None,
             operation_id: operation_id.into(),
         }
     }
@@ -4273,6 +4335,8 @@ mod tests {
                     serde_json::from_value(found["period"].clone()).unwrap(),
                 )]),
                 body: String::new(),
+                body_mode: weftext_core::CaptureBodyMode::Markup,
+                form_basis: None,
                 operation_id: uuid::Uuid::new_v4().to_string(),
             }),
         )

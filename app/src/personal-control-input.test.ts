@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PersonalControlInput } from "./personal-control-input";
 import { captureAuthorInput, type AuthorInputSnapshot, type AuthorInputOwner } from "./author-input";
+import { captureAuthorInput as pureCaptureInput, captureString, captureText, captureTextSlots, emptyCaptureInput, observeCaptureText } from "./capture-draft-state";
 
 function fixture(run: (f: ReturnType<typeof setup>) => void) {
   class Control { value = "A"; dataset = {}; isConnected = true; readOnly = false; disabled = false; id = ""; type = "text"; selectionStart = 1; selectionEnd = 1; matches() { return false; } }
@@ -32,3 +33,75 @@ test("password, disabled and old actor controls never publish even if mistakenly
 test("capture owner requires its own Core sink rather than borrowing current body recovery", () => fixture(f => { assert.throws(() => f.session({ kind: "capture", draftId: "actual" }), /Core/); }));
 
 test("a completed composition still requires a new DOM node for another owner before its terminal input", () => fixture(f => { const input = f.control(), first = f.session(); first.bind(input, "one"); f.fire(input, "compositionstart"); input.value = "A中文"; f.fire(input, "compositionend", "中文"); const count = f.saved.length; input.value = "PROTECTED-B"; assert.throws(() => f.session({kind:"body",resource:"B"}).bind(input, "other"), /新控件/); f.fire(input, "input", "中文"); assert.equal(f.saved.length, count); }));
+
+test("retired unapplied producer remains visible until its exact owner action acknowledges it", () => fixture(f => {
+  const input = f.control("PRIVATE"), session = f.session({ kind: "library", role: "schema" }); session.bind(input, "source");
+  const old = session.inspect(); f.type(input, "OWN"); const current = session.inspect();
+  assert.equal(current.unapplied, true); assert.equal(current.hasObservedChanges, true);
+  assert.equal(session.acknowledge({ producerId: "another", revision: current.revision }, "applied"), false);
+  assert.equal(session.acknowledge(old, "applied"), true); assert.equal(session.inspect().unapplied, true);
+  session.retire();
+  const retained = f.collector.inspect().producers.find(item => item.producerId === current.producerId)!;
+  assert.equal(retained.retired, true); assert.equal(retained.unapplied, true);
+  assert.equal(session.acknowledge(current, "applied"), true);
+  assert.equal(f.collector.inspect().producers.length, 0);
+}));
+test("collection freeze compares the complete actual producer set and stops real controls", () => fixture(f => {
+  const first = f.session(), input = f.control(); first.bind(input, "one");
+  const incomplete = f.collector.inspect(); const second = f.session({ kind: "library", role: "style" }); second.bind(f.control(), "source");
+  assert.equal(f.collector.freeze(incomplete), false);
+  const exact = f.collector.inspect(); assert.equal(f.collector.freeze(exact), true); assert.equal(input.readOnly, true);
+  assert.throws(() => f.session(), /冻结/); assert.throws(() => first.bind(f.control(), "late"), /冻结/);
+  f.collector.thaw(); assert.equal(input.readOnly, false);
+}));
+test("pending native input and clipboard deliveries cannot pass the producer freeze", () => fixture(f => {
+  const session = f.session(), input = f.control(); session.bind(input, "one");
+  f.fire(input, "compositionstart"); assert.equal(session.inspect().nativePending, true); assert.equal(session.freeze(session.inspect()), false);
+  f.fire(input, "compositionend", "");
+  const lease = session.capture(input)!; assert.equal(session.inspect().pendingDeliveries, 1);
+  assert.equal(session.freeze(session.inspect()), false); lease.release(); assert.equal(session.inspect().pendingDeliveries, 0);
+  assert.equal(session.freeze(session.inspect()), true); assert.equal(lease.apply("LATE"), false); assert.equal(input.readOnly, true);
+  session.thaw(); assert.equal(input.readOnly, false);
+}));
+test("retirement during IME keeps an explicit pending producer without retaining old DOM/base", () => fixture(f => {
+  const session = f.session(), input = f.control("PRIVATE"); session.bind(input, "one"); f.fire(input, "compositionstart"); session.retire();
+  const state = session.inspect(); assert.equal(state.retired, true); assert.equal(state.nativePending, true);
+  assert.equal(f.collector.freeze(f.collector.inspect()), false);
+  assert.equal(session.acknowledge(state, "applied"), false);
+  assert.equal(session.acknowledge(state, "discarded"), true); assert.equal(f.collector.inspect().producers.length, 0);
+}));
+test("actual choices track unapplied intent but only an explicit capture sink receives chosen raw", () => fixture(f => {
+  const field = f.session({ kind: "field", resource: "other", fieldId: "tasks/enabled" }), input = f.control(); input.type = "checkbox"; field.bindChoice(input, "enabled");
+  input.checked = true; f.fire(input, "change"); assert.equal(field.inspect().unapplied, true); assert.equal(f.saved.length, 0);
+  const capture = f.collector.session("alice", 1, { kind: "capture", draftId: crypto.randomUUID() }, () => true, value => f.saved.push(value));
+  const choice = f.control(); choice.type = "checkbox"; capture.bindChoice(choice, "enabled"); choice.checked = true; f.fire(choice, "change");
+  assert.equal(f.saved[0].kind, "choice"); assert.equal(f.saved[0].text, ""); assert.equal(f.saved[0].rawValue, "true");
+}));
+
+test("all six Capture text roles keep programmatic defaults private and retain actual proofs across producer/IME changes", () => fixture(f => {
+  for(const slot of captureTextSlots) {
+    const input=emptyCaptureInput(), draftId=crypto.randomUUID();
+    input[slot]=captureText("PRIVATE DEFAULT");
+    assert.deepEqual(pureCaptureInput(input).texts[slot],[]);
+    const sink=(snapshot:AuthorInputSnapshot)=>{if(snapshot.kind==="text")observeCaptureText(input,slot,snapshot);};
+    const first=f.collector.session("alice",1,{kind:"capture",draftId},()=>true,sink);
+    const control=f.control("PRIVATE DEFAULT");first.bind(control,slot);f.type(control,"X\ud800\0");
+    const original=structuredClone(input.authorTexts[slot][0]);
+    assert.equal(captureString(original.text),"X\ud800\0");
+    assert.match(captureString(input[slot]),/PRIVATE DEFAULT/);
+    control.value="PROGRAM RESTORE";control.selectionStart=control.selectionEnd=control.value.length;f.type(control,"Y");
+    assert.doesNotMatch(JSON.stringify(pureCaptureInput(input)),/PRIVATE DEFAULT|PROGRAM RESTORE/);
+    const retiredProof=structuredClone(input.authorTexts[slot][0]);first.retire();
+    const second=f.collector.session("alice",1,{kind:"capture",draftId},()=>true,sink), next=f.control(control.value);second.bind(next,slot);f.type(next,"Z");
+    assert.equal(input.authorTexts[slot].length,2);assert.deepEqual(input.authorTexts[slot][0],retiredProof);
+    assert.equal(captureString(input.authorTexts[slot][1].text),"Z");
+    // A restored full candidate is protected on a new IME producer as well.
+    second.retire();const third=f.collector.session("alice",1,{kind:"capture",draftId},()=>true,sink), ime=f.control("PRIVATE IME");third.bind(ime,slot);
+    f.fire(ime,"compositionstart");ime.value="PRIVATE IME中";f.fire(ime,"input","中","insertCompositionText");f.fire(ime,"compositionend","中");
+    assert.equal(captureString(input.authorTexts[slot][2].text),"中");
+    const restored=JSON.parse(JSON.stringify(input)) as typeof input;
+    assert.deepEqual(pureCaptureInput(restored).texts[slot],input.authorTexts[slot]);
+    assert.doesNotMatch(JSON.stringify(pureCaptureInput(restored)),/PRIVATE|PROGRAM/);
+    third.retire();
+  }
+}));

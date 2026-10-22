@@ -1,0 +1,140 @@
+{
+  "expectedRevision": 7,
+  "input": {
+    "texts": {
+      "name": [],
+      "title": [],
+      "body": [
+        {
+          "text": {
+            "utf16": [
+              79,
+              87,
+              78,
+              55296,
+              0
+            ]
+          },
+          "provenance": {
+            "producerId": "00000000-0000-4000-8000-000000000001",
+            "inputId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "revision": 2
+          }
+        }
+      ],
+      "rootInput": [],
+      "parentInput": [],
+      "parametersText": []
+    },
+    "bodyMode": "text",
+    "rawInputs": [
+      {
+        "fieldId": "tasks/text",
+        "valuePath": [
+          {
+            "kind": "member",
+            "key": "name"
+          }
+        ],
+        "controlRole": "plain",
+        "text": {
+          "utf16": [
+            88,
+            55296,
+            0
+          ]
+        },
+        "provenance": {
+          "producerId": "00000000-0000-4000-8000-000000000001",
+          "inputId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "revision": 4
+        }
+      }
+    ],
+    "detachedRawInputs": []
+  },
+  "fingerprint": "20aa619d3c053e5f3113e3c15b8f75096657b6a1a0b192e4c909e7419b489594",
+  "fullInput": {
+    "expectedRevision": 7,
+    "input": {
+      "name": {
+        "utf16": []
+      },
+      "title": {
+        "utf16": [
+          20013,
+          25991
+        ]
+      },
+      "body": {
+        "utf16": [
+          65,
+          55296,
+          0
+        ]
+      },
+      "bodyMode": "text",
+      "rootInput": {
+        "utf16": []
+      },
+      "parentInput": {
+        "utf16": []
+      },
+      "parametersText": {
+        "utf16": []
+      },
+      "templateId": null,
+      "authorTexts": {
+        "name": [],
+        "title": [],
+        "body": [
+          {
+            "text": {
+              "utf16": [
+                79,
+                87,
+                78,
+                55296,
+                0
+              ]
+            },
+            "provenance": {
+              "producerId": "00000000-0000-4000-8000-000000000001",
+              "inputId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "revision": 2
+            }
+          }
+        ],
+        "rootInput": [],
+        "parentInput": [],
+        "parametersText": []
+      },
+      "authorBodyMode": "text",
+      "typeIds": [],
+      "fields": [
+        {
+          "fieldId": "own/field",
+          "valueState": {
+            "kind": "valid",
+            "value": {
+              "kind": "record",
+              "value": [
+                {
+                  "key": "中文",
+                  "value": {
+                    "kind": "text",
+                    "value": "native 🌱"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "rawInputs": [],
+      "detachedRawInputs": [],
+      "formBasis": null
+    },
+    "fingerprint": "8110b41986dec9882cb75f9416725fa40f46808a93f31f1e59ed9c6d222dd610"
+  }
+}

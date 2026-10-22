@@ -106,7 +106,11 @@ impl Core {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(resource) {
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(resource))
+            {
                 continue;
             }
             let node = match (&transaction.request.intent, &transaction.mutation) {

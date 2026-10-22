@@ -10,6 +10,266 @@ struct Fixture {
     root: PathBuf,
     core: Core,
 }
+
+fn unique_prepare(
+    f: &mut Fixture,
+    operation: &str,
+    max_members: u32,
+) -> Result<ActorFeatureStatus> {
+    let binding = f.core.hosted_unique_child_destination(
+        &f.root,
+        &f.root,
+        "captures",
+        "fragment-",
+        max_members,
+        operation,
+    )?;
+    let request = f.request(OperationIntent::NewNode {
+        parent: display(&f.root),
+        name: format!("fragment-{operation}"),
+        source: Some("Authored fragment".into()),
+    });
+    f.core.with_actor(ACTOR, |core| {
+        core.actor_feature_prepare_structure(
+            "captures",
+            operation,
+            FP,
+            request,
+            serde_json::json!({}),
+            &[],
+            &[],
+            &[],
+            Some(&binding),
+            None,
+        )
+    })
+}
+
+#[test]
+fn unique_child_original_births_survive_restart_and_unavailable_members_consume_the_bound() {
+    let mut f = Fixture::new();
+    let first = fresh();
+    let prepared = unique_prepare(&mut f, &first, 1).unwrap();
+    let second = fresh();
+    let pending_second = unique_prepare(&mut f, &second, 1).unwrap();
+    let committed = f.commit("captures", &first, &prepared);
+    assert_eq!(committed.status, "committed");
+    let original = f
+        .root
+        .join(format!("fragment-{first}/fragment-{first}.typ"));
+    let bytes = fs::read(&original).unwrap();
+    let member = f
+        .core
+        .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 1)
+        .unwrap()
+        .remove(0);
+    let qualified = f
+        .core
+        .qualified_hosted_unique_child_at(
+            &f.root,
+            &f.root,
+            "captures",
+            "fragment-",
+            1,
+            &member.owner.node_id,
+        )
+        .unwrap();
+    assert_eq!(qualified.owner, member.owner);
+    let budget = f
+        .core
+        .with_actor(ACTOR, |core| {
+            core.actor_feature_commit(
+                "captures",
+                &second,
+                pending_second.plan_id.as_deref().unwrap(),
+            )
+        })
+        .unwrap_err();
+    assert_eq!(budget.code, "budget");
+    f.restart();
+    assert_eq!(
+        unique_prepare(&mut f, &first, 1).unwrap().status,
+        "committed"
+    );
+    assert_eq!(fs::read(&original).unwrap(), bytes);
+    fs::rename(
+        original.parent().unwrap(),
+        f.root.join("moved-private-fragment"),
+    )
+    .unwrap();
+    f.restart();
+    assert_eq!(
+        f.core
+            .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 1)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        f.core
+            .qualified_hosted_unique_child_at(
+                &f.root,
+                &f.root,
+                "captures",
+                "fragment-",
+                1,
+                &member.owner.node_id
+            )
+            .is_err()
+    );
+    assert_eq!(
+        unique_prepare(&mut f, &fresh(), 1).unwrap_err().code,
+        "budget"
+    );
+    assert_eq!(
+        fs::read(
+            f.root
+                .join("moved-private-fragment")
+                .join(original.file_name().unwrap())
+        )
+        .unwrap(),
+        bytes
+    );
+}
+
+#[test]
+fn unique_child_cannot_adopt_a_local_name_or_bind_receive_or_another_external_operation() {
+    let mut f = Fixture::new();
+    let operation = fresh();
+    let name = format!("fragment-{operation}");
+    let local_owner = f.node(&name);
+    assert!(unique_prepare(&mut f, &operation, 2).is_err());
+    assert!(
+        f.core
+            .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 2)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        f.core
+            .qualified_hosted_unique_child_at(
+                &f.root,
+                &f.root,
+                "captures",
+                "fragment-",
+                2,
+                &local_owner.node_id
+            )
+            .is_err()
+    );
+    let other = fresh();
+    let binding = f
+        .core
+        .hosted_unique_child_destination(&f.root, &f.root, "captures", "fragment-", 2, &other)
+        .unwrap();
+    let request = f.request(OperationIntent::CopyNode {
+        source: display(&f.root.join(&name)),
+        parent: display(&f.root),
+        name: format!("fragment-{other}"),
+        allow_losses: false,
+    });
+    assert!(
+        f.core
+            .with_actor(ACTOR, |core| core.actor_feature_prepare_structure(
+                "captures",
+                &other,
+                FP,
+                request,
+                serde_json::json!({}),
+                &[],
+                &[],
+                &[],
+                Some(&binding),
+                None,
+            ))
+            .is_err()
+    );
+    let mismatch = fresh();
+    let request = f.request(OperationIntent::NewNode {
+        parent: display(&f.root),
+        name: format!("fragment-{other}"),
+        source: None,
+    });
+    assert!(
+        f.core
+            .with_actor(ACTOR, |core| core.actor_feature_prepare_structure(
+                "captures",
+                &mismatch,
+                FP,
+                request,
+                serde_json::json!({}),
+                &[],
+                &[],
+                &[],
+                Some(&binding),
+                None,
+            ))
+            .is_err()
+    );
+    assert_eq!(
+        f.core
+            .qualified_node_at(&f.root, &f.root.join(&name).join(format!("{name}.typ")))
+            .unwrap()
+            .owner,
+        local_owner
+    );
+}
+
+#[test]
+fn unique_child_unknown_or_over_budget_original_evidence_never_becomes_an_empty_member_set() {
+    let mut f = Fixture::new();
+    let operation = fresh();
+    let prepared = unique_prepare(&mut f, &operation, 2).unwrap();
+    f.commit("captures", &operation, &prepared);
+    let record = f
+        .core
+        .with_actor(ACTOR, |core| {
+            core.actor_feature_record("captures", &operation)
+        })
+        .unwrap()
+        .unwrap();
+    let commit = f.core.journal_path(&record.core_operation_id, "commit");
+    let births = f.core.journal_path(&record.core_operation_id, "births");
+    let original_commit = fs::read(&commit).unwrap();
+    let original_births = fs::read(&births).unwrap();
+    let note = f
+        .root
+        .join(format!("fragment-{operation}/fragment-{operation}.typ"));
+    let original_note = fs::read(&note).unwrap();
+    fs::write(&commit, b"{controlled broken original commit").unwrap();
+    assert!(
+        f.core
+            .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 2)
+            .is_err()
+    );
+    assert!(unique_prepare(&mut f, &fresh(), 2).is_err());
+    assert_eq!(
+        fs::read(&commit).unwrap(),
+        b"{controlled broken original commit"
+    );
+    assert_eq!(fs::read(&note).unwrap(), original_note);
+    fs::write(&commit, &original_commit).unwrap();
+    let oversized = vec![b' '; MAX_SOURCE_BYTES + 1];
+    fs::write(&births, &oversized).unwrap();
+    assert_eq!(
+        f.core
+            .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 2)
+            .unwrap_err()
+            .code,
+        "budget"
+    );
+    assert_eq!(fs::read(&births).unwrap(), oversized);
+    assert_eq!(fs::read(&note).unwrap(), original_note);
+    fs::write(&births, original_births).unwrap();
+    f.restart();
+    assert_eq!(
+        f.core
+            .hosted_unique_child_members_at(&f.root, &f.root, "captures", "fragment-", 2)
+            .unwrap()
+            .len(),
+        1
+    );
+}
 impl Fixture {
     fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
@@ -56,7 +316,10 @@ impl Fixture {
                     &[],
                     &[],
                     &[],
-                    destination.as_deref(),
+                    destination
+                        .as_deref()
+                        .map(HostedDestination::fixed)
+                        .as_ref(),
                     None,
                 )
             })
@@ -107,7 +370,7 @@ impl Fixture {
                     &[],
                     &[],
                     &[],
-                    Some("Destination"),
+                    Some(&HostedDestination::fixed("Destination")),
                     Some(witness),
                 )
             })
@@ -411,7 +674,7 @@ fn hosted_structure_namespace_parent_is_not_a_transfer_source_and_explicit_conte
                 &[],
                 &namespace_refs,
                 &[],
-                Some("Unresolved"),
+                Some(&HostedDestination::fixed("Unresolved")),
                 Some(&tree),
             )
         })
@@ -450,7 +713,7 @@ fn hosted_structure_namespace_parent_is_not_a_transfer_source_and_explicit_conte
                 &[],
                 &[],
                 &[&transfer],
-                Some("Explicit"),
+                Some(&HostedDestination::fixed("Explicit")),
                 Some(&tree),
             )
         })
@@ -603,7 +866,7 @@ fn hosted_structure_template_freezes_original_source_and_instantiates_fresh_iden
                 &[],
                 &[],
                 &[],
-                Some("Instance"),
+                Some(&HostedDestination::fixed("Instance")),
                 Some(&tree),
             )
         })

@@ -123,7 +123,7 @@ pub(super) struct FeatureOperation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     intent_kind: Option<FeatureIntentKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    destination_slot: Option<String>,
+    destination_slot: Option<HostedDestination>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     navigation: Option<NavigationFeature>,
 }
@@ -250,7 +250,7 @@ pub(super) fn conflict() -> CoreError {
     )
 }
 
-pub(super) fn valid_resource(resource: &str) -> Result<()> {
+pub(crate) fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
@@ -488,6 +488,12 @@ impl Core {
         let Some(mut record) = self.actor_feature_record(resource, operation)? else {
             return Ok(None);
         };
+        if let Some(HostedDestination::UniqueChild(binding)) =
+            record.feature.as_ref().unwrap().destination_slot.as_ref()
+            && binding.external_operation_id() != operation
+        {
+            return Err(conflict());
+        }
         let detail = match self.operation_details(&record.core_operation_id) {
             Ok(detail) => {
                 let transaction = self.operations[&record.core_operation_id]
@@ -750,7 +756,7 @@ impl Core {
         dependencies: &[String],
         witnesses: &[&SnapshotWitness],
         transfer_witnesses: &[&SnapshotWitness],
-        destination_slot: Option<&str>,
+        destination_slot: Option<&HostedDestination>,
         tree: Option<&FeatureTreeWitness>,
     ) -> Result<ActorFeatureStatus> {
         let kind = FeatureIntentKind::from_intent(&request.intent)?;
@@ -776,7 +782,12 @@ impl Core {
             ));
         }
         if let Some(destination) = destination_slot {
-            valid_resource(destination)?;
+            valid_resource(destination.slot())?;
+        }
+        if let Some(HostedDestination::UniqueChild(binding)) = destination_slot
+            && binding.external_operation_id() != external_operation_id
+        {
+            return Err(conflict());
         }
         self.actor_feature_prepare_inner(
             resource,
@@ -803,14 +814,14 @@ impl Core {
         witnesses: &[&SnapshotWitness],
         transfer_witnesses: &[&SnapshotWitness],
         tree: Option<&FeatureTreeWitness>,
-        destination_slot: Option<&str>,
+        destination_slot: Option<&HostedDestination>,
     ) -> Result<ActorFeatureStatus> {
         self.actor_library_for_root(Path::new(&request.root))?;
         let intent_kind = FeatureIntentKind::from_intent(&request.intent)?;
         if let Some(record) = self.actor_feature_record(resource, external_operation_id)?
             && !(record.cancelled && record.fingerprint.is_empty())
             && (record.feature.as_ref().unwrap().kind() != intent_kind
-                || record.feature.as_ref().unwrap().destination_slot.as_deref() != destination_slot)
+                || record.feature.as_ref().unwrap().destination_slot.as_ref() != destination_slot)
         {
             return Err(conflict());
         }
@@ -1045,7 +1056,7 @@ impl Core {
                 docx_import,
                 import_losses: None,
                 intent_kind: Some(intent_kind),
-                destination_slot: destination_slot.map(str::to_owned),
+                destination_slot: destination_slot.cloned(),
                 navigation: None,
             }),
             definition: None,
@@ -1062,7 +1073,7 @@ impl Core {
             "kind":"hostedReviewedFeature","actor":record.actor,"resource":record.resource,"fingerprint":record.fingerprint,
         });
         if let Some(destination) = destination_slot {
-            canonical["destinationSlot"] = destination.into();
+            canonical["destination"] = serde_json::to_value(destination)?;
         }
         if tree.is_none() && destination_slot.is_none() {
             self.prepare_dependent_feature_operation_with_witnesses(

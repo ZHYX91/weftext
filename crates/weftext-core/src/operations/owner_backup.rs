@@ -645,18 +645,19 @@ fn classify_record(
 ) -> Result<(bool, String)> {
     let (remaining, size) = bounds;
     if record_kind(core, path)? == RecordKind::Capture {
-        let header = capture_draft::read_capture_header(file)?;
-        capture_draft::validate_capture_header_path(path, &core.data_dir, &header)?;
-        let selected = match &header.library {
+        let prefix = capture_draft::read_capture_prefix(file)?;
+        capture_draft::validate_capture_header_path(path, &core.data_dir, &prefix.scope)?;
+        let selected = match &prefix.scope.library {
             CaptureLibrary::DeviceUnassigned => false,
             CaptureLibrary::Bound { binding } => selected_library_scope(Some(binding), expected)?,
         };
-        if selected
-            && (size > remaining as u64 || size > capture_draft::MAX_CAPTURE_RECORD_BYTES as u64)
-        {
-            return Err(backup_budget());
+        if selected {
+            prefix.require_supported_version()?;
+            if size > remaining as u64 || size > capture_draft::MAX_CAPTURE_RECORD_BYTES as u64 {
+                return Err(backup_budget());
+            }
         }
-        return Ok((selected, serde_json::to_string(&header)?));
+        return Ok((selected, serde_json::to_string(&prefix)?));
     }
     if record_kind(core, path)? == RecordKind::Draft {
         let scope = file_save_scope::read_input_scope(file)?;
@@ -704,16 +705,17 @@ fn route_selected_bytes(
     selected_plans: &BTreeSet<&str>,
 ) -> Result<String> {
     if record_kind(core, path)? == RecordKind::Capture {
-        let header = capture_draft::read_capture_header(&mut std::io::Cursor::new(bytes))?;
-        capture_draft::validate_capture_header_path(path, &core.data_dir, &header)?;
-        if header.library
+        let prefix = capture_draft::read_capture_prefix(&mut std::io::Cursor::new(bytes))?;
+        capture_draft::validate_capture_header_path(path, &core.data_dir, &prefix.scope)?;
+        if prefix.scope.library
             != (CaptureLibrary::Bound {
                 binding: expected.clone(),
             })
         {
             return Err(private_evidence());
         }
-        return Ok(serde_json::to_string(&header)?);
+        prefix.require_supported_version()?;
+        return Ok(serde_json::to_string(&prefix)?);
     }
     if record_kind(core, path)? == RecordKind::Journal {
         if !selected_plans.iter().any(|id| {
@@ -796,16 +798,19 @@ fn validate_selected_record(
         return Ok(());
     }
     if kind == RecordKind::Capture {
-        let draft = capture_draft::validate_capture_record(path, &core.data_dir, bytes)?;
         let guard = ParentGuard::acquire(&root.join(".backup-capture-prospective"))?;
         let expected = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),
             root_identity: guard.directory_identity()?,
             workspace_id: Some(workspace_id.into()),
         };
-        if draft.scope.library != (CaptureLibrary::Bound { binding: expected }) {
+        let prefix = capture_draft::read_capture_prefix(&mut std::io::Cursor::new(bytes))?;
+        capture_draft::validate_capture_header_path(path, &core.data_dir, &prefix.scope)?;
+        if prefix.scope.library != (CaptureLibrary::Bound { binding: expected }) {
             return Err(private_evidence());
         }
+        prefix.require_supported_version()?;
+        capture_draft::validate_capture_record(path, &core.data_dir, bytes)?;
         return Ok(());
     }
     let value: UniqueValue = serde_json::from_slice(bytes)?;

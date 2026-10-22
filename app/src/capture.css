@@ -1,0 +1,12 @@
+body:has(> #capture) { margin: 0; min-width: 320px; background: #f5f4ef; color: #24241f; }
+#capture { max-width: 880px; margin: 0 auto; padding: 24px; }
+.capture-surface { display: grid; gap: 16px; }
+.capture-surface h1 { margin: 0; font-size: 1.5rem; }
+.capture-surface label { display: grid; gap: 6px; }
+.capture-surface textarea, .capture-target input { box-sizing: border-box; width: 100%; }
+.capture-target, .capture-field, .capture-recovery { display: grid; gap: 8px; }
+.capture-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.capture-field { padding: 12px 0; border-bottom: 1px solid #d6d4c9; }
+.capture-diagnostic { white-space: pre-wrap; overflow-wrap: anywhere; color: #9b342a; }
+.capture-field-recovery:empty, .capture-recovery:empty, .capture-diagnostic:empty { display: none; }
+.capture-surface input:focus-visible, .capture-surface textarea:focus-visible, .capture-surface select:focus-visible, .capture-surface button:focus-visible { outline: 2px solid #395f85; outline-offset: 2px; }

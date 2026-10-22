@@ -2,7 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { canCommitStructure, clearStructureCapture, decodeStructureCatalog, decodeStructureDraft, freezeStructureRequest, initialStructureDraft, structureEnded, structureInput, structureReceipt, structureSelectors, type StructureCatalog, type StructureDraft, type StructureReceipt } from "./hosted-structure-state";
 
-const catalog: StructureCatalog = { scope: "configuredAuthorizedStructure", coverage: "complete", sources: [{ resource: "source", title: "Original", actions: ["rename", "move", "trash", "restore", "copy", "template"], status: "ready" }], slots: [{ resource: "slot", title: "Destination", name: "Fixed", parent: "approved-parent", create: true, receive: true, status: "ready", types: ["tasks/task"], capture: { types: [{ id: "tasks/task", fields: [{ id: "tasks/status", required: true }], requires: [], conflicts: [] }], fields: [{ id: "tasks/status", key: "status", shape: { kind: "enum", values: ["open", "done"], open: false }, nullable: false }], definitions: {}, aliases: {} } }], templates: [{ id: "native-note", title: "Native", builtin: true, status: "ready" }] };
+const catalog: StructureCatalog = { scope: "configuredAuthorizedStructure", coverage: "complete", sources: [{ resource: "source", title: "Original", actions: ["rename", "move", "trash", "restore", "copy", "template"], status: "ready" }], slots: [{ resource: "slot", title: "Destination", namePolicy: {kind: "fixed", name:"Fixed"}, parent: "approved-parent", create: true, receive: true, status: "ready", types: ["tasks/task"], capture: { roleRef: "schema-fixture", semanticDigest: "a".repeat(64), types: [{ id: "tasks/task", fields: [{ id: "tasks/status", required: true }], requires: [], conflicts: [] }], fields: [{ id: "tasks/status", key: "status", shape: { kind: "enum", values: ["open", "done"], open: false }, nullable: false }], definitions: {}, aliases: {} } }], templates: [{ id: "native-note", title: "Native", builtin: true, status: "ready" }] };
+
+test("unique-child policy is explicit and cannot authorize a receive action", () => {
+  const unique: StructureCatalog = {...catalog,slots:[{...catalog.slots[0],receive:false,namePolicy:{kind:"uniqueChildren",prefix:"fragment-",maxMembers:2}}]};
+  assert.equal(decodeStructureCatalog(unique).slots[0].namePolicy.kind,"uniqueChildren");
+  const create={...initialStructureDraft(),destination:"slot",body:"Own current body"};
+  const original=freezeStructureRequest(create,unique,"original-capture-id");
+  assert.equal(original.destination,"slot");
+  assert.equal("name" in original,false);
+  for(const kind of ["copy","move","rename","restore"] as const) assert.throws(()=>freezeStructureRequest({...create,kind,source:"source"},unique,"not-created"),/唯一子项/);
+  assert.throws(()=>decodeStructureCatalog({...unique,slots:[{...unique.slots[0],receive:true}]}),/命名授权/);
+  assert.throws(()=>decodeStructureCatalog({...unique,slots:[{...unique.slots[0],namePolicy:{kind:"uniqueChildren",prefix:"fragment-",maxMembers:5001}}]}),/命名授权/);
+  const legacy=structuredClone(unique) as unknown as {slots:Record<string,unknown>[]};
+  delete legacy.slots[0].namePolicy; legacy.slots[0].name="legacy-fixed";
+  assert.throws(()=>decodeStructureCatalog(legacy as unknown as StructureCatalog),/命名/);
+});
 function prepared(): StructureDraft {
   const draft = { ...initialStructureDraft(), kind: "move" as const, source: "source", destination: "slot" };
   const request = freezeStructureRequest(draft, catalog, "original");
@@ -14,7 +29,7 @@ test("structure capture freezes native trees and explicit inputs, leaving source
   const draft = { ...initialStructureDraft(), destination: "slot", title: "中文😀", body: "#literal text", types: ["tasks/task"], fields: { "tasks/status": { kind: "text" as const, value: "done" } }, inputs: ["explicit-read"] };
   const original = freezeStructureRequest(draft, catalog, "original");
   draft.fields["tasks/status"].value = "open"; draft.inputs.push("later"); draft.body = "later source";
-  assert.deepEqual(original, { resource: "slot", operationId: "original", kind: "create", destination: "slot", inputs: ["explicit-read"], capture: { title: "中文😀", body: "#literal text", bodyMode: "text", types: ["tasks/task"], fields: { "tasks/status": { kind: "text", value: "done" } } } });
+  assert.deepEqual(original, { resource: "slot", operationId: "original", kind: "create", destination: "slot", inputs: ["explicit-read"], capture: { title: "中文😀", body: "#literal text", bodyMode: "text", types: ["tasks/task"], fields: { "tasks/status": { kind: "text", value: "done" } }, formBasis: { schemaRef: "schema-fixture", semanticDigest: "a".repeat(64) } } });
   assert.equal("name" in original, false); assert.equal("parent" in original, false);
   assert.throws(() => freezeStructureRequest({ ...draft, rawInputs: { "unmapped-shape": "invalid number" } }, catalog, "never-sent"), /原文/);
   assert.throws(() => freezeStructureRequest(draft, { ...catalog, slots: [{ ...catalog.slots[0], capture: undefined }] }, "no-schema"), /表单权限/);

@@ -8,7 +8,7 @@ license = "AGPL-3.0-or-later"
 weftext-messages = { path = "../weftext-messages" }
 weftext-export = { path = "../weftext-export" }
 serde = { version = "1", features = ["derive"] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4", "serde"] }
 weftext-engine = { path = "../weftext-engine" }

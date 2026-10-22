@@ -447,12 +447,15 @@ impl HostedInner {
     /// Effective author locators are private projections of original producer
     /// facts. They are never written back into operator configuration.
     fn file(&self, resource: &str) -> Result<FileEntry, ApiError> {
-        self.config
-            .files
-            .get(resource)
-            .cloned()
-            .map(Ok)
-            .unwrap_or_else(|| content_import::member_file(self, resource)?.ok_or_else(unavailable))
+        self.config.files.get(resource).cloned().map_or_else(
+            || {
+                if let Some(file) = content_import::member_file(self, resource)? {
+                    return Ok(file);
+                }
+                structure::member_file(self, resource)?.ok_or_else(unavailable)
+            },
+            Ok,
+        )
     }
     fn grant(&self, actor: &str, resource: &str) -> Result<Rights, ApiError> {
         let user = self
@@ -465,11 +468,15 @@ impl HostedInner {
             .get(resource)
             .cloned()
             .or_else(|| content_import::member_rights(self, actor, resource))
+            .or_else(|| structure::member_rights(self, actor, resource))
             .ok_or_else(unavailable)
     }
     fn files_view(&self, actor: &str) -> Result<BTreeMap<String, FileEntry>, ApiError> {
         let mut files = self.config.files.clone();
-        for id in content_import::member_ids(self, actor)? {
+        for id in content_import::member_ids(self, actor)?
+            .into_iter()
+            .chain(structure::member_ids(self, actor)?)
+        {
             files.insert(id.clone(), self.file(&id)?);
         }
         Ok(files)
@@ -483,7 +490,10 @@ impl HostedInner {
             .ok_or_else(expired)?
             .grants
             .clone();
-        for id in content_import::member_ids(self, actor)? {
+        for id in content_import::member_ids(self, actor)?
+            .into_iter()
+            .chain(structure::member_ids(self, actor)?)
+        {
             grants.insert(id.clone(), self.grant(actor, &id)?);
         }
         Ok(grants)

@@ -28,7 +28,7 @@ try:
  c.prepare_structure()
  def provision(api):
   for key in ['Builtin','CopyTree','Late','Storage','Fence','Opaque','Revoke','ActorLate']:
-   c.config['structureSlots'][key]={'parent':'root','name':key}
+   c.config['structureSlots'][key]={'parent':'root','namePolicy':{'kind':'fixed','name':key}}
    c.config['files'][key]={'path':key+'/'+key+'.typ','title':key,'editable':True}
   c.config['structureSlots']['Created']['types']=['tasks/task']
   doc=api('/api/open',{'root':str(c.root),'path':str(c.root/'Shared/Shared.typ')})
