@@ -28,7 +28,7 @@ import "./hosted-editor.css";
 import "./embedded-query.css";
 import type { HostedQueryDependencies } from "./hosted-query-state";
 import type { PersonalInputRecord } from "./personal-input-recovery";
-import type { InputOrigin } from "./source-input-origin";
+import { personalInputId, type InputOrigin } from "./source-input-origin";
 interface Projection {
     ok: boolean;
     tree: RenderNode | null;
@@ -103,6 +103,8 @@ export class HostedEditor {
     private personalReferences = new Map<string, string>();
     private editorIdentities = new WeakMap<SourceEditor, { resource: string }>();
     private literalPersonal = new Map<string, {
+        recordId: string;
+        inputId: string;
         resource: string;
         text: string;
         revision: number;
@@ -138,7 +140,7 @@ export class HostedEditor {
             editors.push({ resource: this.resource, editor: this.editor });
         return [
             ...editors.map(({ resource, editor }) => { const input = editor.personalInput(); return { ...input, owner: { kind: "body" as const, resource, reference: this.personalReferences.get(resource) }, ...(input.candidate ? { pending: { operationId: input.candidate.operationId, status: "unresolved" as const } } : {}) }; }),
-            ...[...this.literalPersonal].map(([id, value]) => ({ id, owner: { kind: "body" as const, resource: value.resource, reference: this.personalReferences.get(value.resource) }, slot: "literal-pending", origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id, revision: value.revision, text: value.text }] : [], revision: value.revision } })),
+            ...[...this.literalPersonal.values()].map(value => ({ id: value.recordId, owner: { kind: "body" as const, resource: value.resource, reference: this.personalReferences.get(value.resource) }, slot: "literal-pending", origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id: value.inputId, revision: value.revision, text: value.text }] : [], revision: value.revision } })),
         ];
     }
     personalInputReference(resource: string, reference: string): void { this.personalReferences.set(resource, reference); this.queryHost?.personalInputChanged?.(); }
@@ -334,7 +336,8 @@ export class HostedEditor {
                     onPersonalInput: (id, text, revision) => {
                         const resource = identity.resource, key = JSON.stringify([resource, id]);
                         // A new authorized alias owns new input; earlier records retain their original owner.
-                        this.literalPersonal.set(key, { resource, text, revision });
+                        const recordId = this.literalPersonal.get(key)?.recordId ?? personalInputId();
+                        this.literalPersonal.set(key, { recordId, inputId: id, resource, text, revision });
                         try {
                             this.queryHost?.personalInputChanged?.();
                         }
