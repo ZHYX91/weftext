@@ -4669,7 +4669,10 @@ mod tests {
         assert_eq!(raw["coverage"], "complete");
         assert_eq!(raw["externalPending"], true);
         assert_eq!(raw["rawScope"]["pendingCount"], 1);
-        assert_eq!(raw["snapshotLabel"], "已纳管笔记快照");
+        assert_eq!(
+            raw["snapshotLabel"],
+            serde_json::to_value(UiMessage::error_api_data_admitted_snapshot_label()).unwrap()
+        );
     }
 
     #[cfg(windows)]
