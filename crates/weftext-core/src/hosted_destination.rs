@@ -34,17 +34,6 @@ struct UniqueMemberScope<'a> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct UniqueCommit {
-    operation_id: String,
-    fingerprint: String,
-    receipt: Option<Receipt>,
-    storage_profile: String,
-    saved_at_unix_ms: Option<u64>,
-    commit_sequence: u64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct UniqueBirth {
     node_id: String,
     workspace_id: String,
@@ -143,7 +132,7 @@ impl Core {
         Ok(Some(bytes))
     }
     fn unique_committed(&self, plan: &journal::Plan) -> Result<bool> {
-        let Some(bytes) = self.unique_evidence(&plan.operation_id, "commit", 16 * 1024)? else {
+        let Some(bytes) = self.unique_evidence(&plan.operation_id, "commit", 64 * 1024)? else {
             if self
                 .unique_evidence(&plan.operation_id, "install", MAX_SOURCE_BYTES)?
                 .is_some()
@@ -152,16 +141,8 @@ impl Core {
             }
             return Ok(false);
         };
-        let fact: UniqueCommit = serde_json::from_slice(&bytes).map_err(|_| unavailable())?;
-        let _ = fact.saved_at_unix_ms;
-        if fact.operation_id != plan.operation_id
-            || fact.fingerprint != plan.fingerprint
-            || fact.storage_profile != STORAGE_PROFILE
-            || fact.commit_sequence == 0
-            || serde_json::to_vec(&fact.receipt)? != serde_json::to_vec(&plan.receipt)?
-        {
-            return Err(unavailable());
-        }
+        journal::validate_original_commit_bytes(plan, &bytes)
+            .map_err(|cause| unavailable().caused_by(cause))?;
         Ok(true)
     }
     fn unique_births(&self, operation: &str) -> Result<Vec<UniqueBirth>> {

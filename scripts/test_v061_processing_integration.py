@@ -164,7 +164,9 @@ class SharedProcessingIntegration(HostedLibrary):
                    if finding['ruleId'] == 'owned.shared.dictionary']
         self.assertEqual(len(matches), 1, result)
         finding = matches[0]
-        self.assertEqual(finding['message'], options['rules'][0]['message'])
+        self.assertEqual(finding['messageOrigin'], 'author')
+        self.assertEqual(finding['authorMessage'], options['rules'][0]['message'])
+        self.assertNotIn('message', finding)
         self.assertEqual(finding['replacement'], 'LC_REVIEWED')
         self.assertTrue(finding['sourceRange'], finding)
         self.assertTrue(finding['executable'], finding)

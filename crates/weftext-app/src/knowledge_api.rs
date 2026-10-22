@@ -4401,9 +4401,17 @@ mod tests {
     }
     #[test]
     fn settings_and_integer_parameters_keep_unambiguous_author_facts() {
-        assert!(
+        let parsed =
             serde_json::from_slice::<UniqueJson>(br#"{"templates":{"entries":[],"entries":[]}}"#)
-                .is_err()
+                .unwrap();
+        assert_eq!(parsed.1.len(), 1);
+        assert_eq!(
+            parsed.1[0].explanation,
+            UiMessage::error_api_knowledge_template_member_duplicate(
+                weftext_messages::params::ErrorApiKnowledgeTemplateMemberDuplicate {
+                    member: "entries".into()
+                }
+            )
         );
         let value = parse_template_value(
             &json!("9223372036854775807"),

@@ -363,6 +363,17 @@ impl Core {
     ) -> Result<OpenedDocument> {
         self.sync_local_owner()?;
         self.reopen_original_operation_node(id, original_path)
+            .map_err(|cause| {
+                if cause.code == "missing" {
+                    CoreError::new(
+                        "committedResultUnavailable",
+                        UiMessage::error_core_original_delivery_physical_result_unavailable(),
+                    )
+                    .caused_by(cause)
+                } else {
+                    cause
+                }
+            })
     }
     /// Internal actor callers must first qualify their original category,
     /// actor, resource and physical library binding.
