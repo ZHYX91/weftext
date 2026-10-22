@@ -46,9 +46,19 @@ public final class NativeWebSurface: NSObject, WKScriptMessageHandlerWithReply, 
         controller.removeAllUserScripts()
         controller.addScriptMessageHandler(self, contentWorld: .page, name: Self.handler)
         let script = """
-        Object.defineProperty(window, 'weftextNative', { configurable: false, writable: false,
-          value: Object.freeze({ call: (wireBase64) => window.webkit.messageHandlers.weftext.postMessage({
-            generation: '\(generation)', wireBase64 }) }) });
+        (() => {
+          const originalDocument = window.document;
+          Object.defineProperty(window, 'weftextNative', { configurable: false, writable: false,
+            value: Object.freeze({ call: (wireBase64) => new Promise((resolve, reject) => {
+              // WindowProxy can refer to a replacement document even while an
+              // original Promise callback is still runnable. Fence both paths.
+              if (window.document !== originalDocument) return;
+              window.webkit.messageHandlers.weftext.postMessage({
+                generation: '\(generation)', wireBase64 }).then(
+                  value => { if (window.document === originalDocument) resolve(value); },
+                  error => { if (window.document === originalDocument) reject(error); });
+            }) }) });
+        })();
         """
         controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart,
                                                forMainFrameOnly: true, in: .page))

@@ -12,7 +12,7 @@ translation_status: source
 
 `NativeWebSurface` 必须由实际 composition root 注入 `AppleHostPort` 和同次产品构建的完整 `app/dist` 字节，且显式选择准确的 WebKit data store。库没有默认业务执行器、HTTP 代理、占位 Core 或替代编辑器。Swift 不解码或重新编码业务 JSON，不维护第二份 CallKind 路由表；正式适配器仍须进入同一个 Rust Host、固定业务注册表和严格原请求解码，获权在正文解析前。响应同样保留原 typed bytes。
 
-桥仅接受准确 WebView 的 main frame、`weftext-bundle://app` origin 和当前 surface generation；失效或重开后的晚回包不能进入新页面。最多 64 个在途交付，输入 96 MiB、响应 256 MiB。该门只控制 UI 交付，不证明 Core 获权、持久化或关闭保稿。页面退役不取消已接受提交；窗口关闭／重载仍须实际 owner 的作者输入切面证明。只有同一个 owner 接齐这些合同后才能交付 AppKit／UIKit 应用。
+桥仅接受准确 WebView 的 main frame、`weftext-bundle://app` origin 和当前 surface generation；失效或重开后的晚回包不能进入新页面。JavaScript 桥还将 Promise 的成功和失败交付同时绑定到原 Document 身份，防止旧回调借 WindowProxy 写入替换后的页面；原页面仍可观察时，退役继续明确拒绝为 `retiredSurface`。最多 64 个在途交付，输入 96 MiB、响应 256 MiB。该门只控制 UI 交付，不证明 Core 获权、持久化或关闭保稿。页面退役不取消已接受提交；窗口关闭／重载仍须实际 owner 的作者输入切面证明。只有同一个 owner 接齐这些合同后才能交付 AppKit／UIKit 应用。
 
 包内 scheme 只读取构造时给定的不可变 allowlist，无文件路径、查询参数、百分号路径、外网或作者目录访问。每个明确创建的 document 只消费一次准确入口导航资格；reload、后退前进、JS 导航和任意 query／fragment 不能越过实际关闭流程重建页面。CSP 拒绝网络及 frame；实际 WebKit 上的导航、module／字体／worker 行为仍须测试，不以政策源码代替运行结果。
 
