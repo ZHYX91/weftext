@@ -16,6 +16,7 @@ mod content_import;
 pub use content_import::{ActorContentImportReceipt, ContentImportMember};
 #[path = "hosted_feature.rs"]
 mod feature;
+pub(crate) use feature::valid_resource;
 pub use feature::{
     ActorFeatureStatus, ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness,
     HostedNavigationIntent,

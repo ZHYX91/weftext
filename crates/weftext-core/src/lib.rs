@@ -8,11 +8,14 @@ pub use author_order::{
 mod capture_draft;
 mod compile_dependencies;
 pub use capture_draft::{
-    CaptureBodyMode, CaptureDraft, CaptureFieldInput, CaptureFlushReceipt, CaptureFormBasis,
-    CaptureInput, CaptureMutation, CaptureMutationCommand, CaptureMutationLookup,
-    CaptureMutationTarget, CaptureParent, CaptureRawInput, CaptureResolvedTarget,
-    CaptureStorageStatus, CaptureTarget, CaptureText, FrozenCaptureRequest,
-    MAX_CAPTURE_DOMAIN_BYTES, MAX_CAPTURE_RECORD_BYTES, MAX_CAPTURE_RECORDS,
+    CaptureAuthorInput, CaptureAuthorRawInput, CaptureAuthorRecovery, CaptureAuthorTexts,
+    CaptureBodyMode, CaptureCreationRequest, CaptureDetachedAuthorInput, CaptureDetachedRawInput,
+    CaptureDraft, CaptureFieldInput, CaptureFieldValueState, CaptureFlushReceipt, CaptureFormBasis,
+    CaptureInput, CaptureInputCut, CaptureMutation, CaptureMutationCommand, CaptureMutationKind,
+    CaptureMutationLookup, CaptureMutationTarget, CaptureParent, CapturePendingIdentity,
+    CaptureRawAuthor, CaptureRawBinding, CaptureRawInput, CaptureRawProvenance,
+    CaptureRawRetirement, CaptureResolvedTarget, CaptureStorageStatus, CaptureTarget, CaptureText,
+    FrozenCaptureRequest, MAX_CAPTURE_DOMAIN_BYTES, MAX_CAPTURE_RECORD_BYTES, MAX_CAPTURE_RECORDS,
 };
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
@@ -33,6 +36,8 @@ mod file_save_scope;
 use file_save_scope::{FileSaveData, QualifiedInputScope};
 mod history;
 mod hosted;
+mod hosted_destination;
+pub use hosted_destination::{HostedDestination, HostedUniqueChild, HostedUniqueMember};
 mod recognition;
 #[cfg(all(test, windows))]
 mod tag_write_guard_tests;

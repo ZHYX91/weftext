@@ -101,11 +101,27 @@ v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.js
 
 ### 2.5 私有捕获稿与关闭确认
 
-尚未创建的捕获输入由 Core 私有 `capture-drafts/<draftId>.json` 保存，不能伪造已有文件的 FileIdentity 塞进普通 Draft。记录只有 v1：首字段 `scope` 固定设备本人或服务端推导的 actor，以及准确库绑定或明确 `deviceUnassigned`；后者不属于当前打开的库。已选库固定 root 物理身份和 WorkspaceId，父容器保实际稳定引用及其真实目录身份摘要。路径仅用于重新定位；同路径替换库／目录不得复用旧资格，合法同对象移动须重新解析原引用。一条已绑定捕获稿不改绑另一库。
+尚未创建的捕获输入由 Core 私有 `capture-drafts/<draftId>.json` 保存，不能伪造已有文件的 FileIdentity 塞进普通 Draft。记录只有 v2：首字段 `scope` 固定设备本人或服务端推导的 actor，以及准确库绑定或明确 `deviceUnassigned`；后者不属于当前打开的库。已选库固定 root 物理身份和 WorkspaceId，父容器保实际稳定引用及其真实目录身份摘要。路径仅用于重新定位；同路径替换库／目录不得复用旧资格，合法同对象移动须重新解析原引用。一条已绑定捕获稿不改绑另一库。
 
 `currentInput` 与不可变 `pending` 同一记录原子替换。名称、标题、正文、位置／参数原文和所有字段控件原文使用显式 UTF-16 code units，保留 lone surrogate、NUL、组合中间输入；标识符仍为合法字符串。合法 native value 仅为可选候选，不能替代所有控件原文，DOM validity 也不能证明字符串可转 UTF-8。形成真实作者源时才严格转换，失败保原 code units，不使用替换字符。类型／字段用稳定 ID，控件地址用 FieldId、值路径和 controlRole，不用 ARIA 文案。恢复稿不附旧 Base、Schema 全文、目录／预览或权限能力。
 
 `revision` 是整记录 CAS，`inputRevision` 单独记录输入变化和同值 ABA，均限制在 JavaScript 准确整数范围。`mutationId` 及命令指纹使最后一笔持久写丢回执后可同号查询／重放；只读恢复查询必须携已冻结的原 typed command 及原 expected revision，不能仅凭同 ID 证明另一命令已保存。同 ID 换命令或旧 revision 不覆盖新稿。负查询仅表示已被后续写替代或未知，不能证明该写从未发生。更新不存在的记录不隐式新建。
+
+字段原文明确区分私有 exact raw 与已证实的本人片段：`CaptureRawInput.text` 是当前字段完整 UTF-16 原值，可含程序预填或保护默认值；只有独立 `author.text/provenance` 才能进入本人纯投影。provenance 固定真实 producer、inputId 和观测修订，不是权限能力。没有本人证据的 raw 不进入该投影；有证据的恢复片段标为 copyOnly，不能自动拼成旧完整字段。结构／Schema 变化在控件退休前将原地址和 UTF-16 原文移入同一 `currentInput.detachedRawInputs`，带独立 retirementId 和原因；旧 list index、union 分支或同名新字段不能继承该绑定。live 与 detached 原文共用 1024 项及原记录预算，detached 不是第二本历史账。资料库授权退休后，服务端按仍有效 actor 身份只返回本人纯投影，不返回私有完整 raw、旧 Schema 候选、模板、私有目标路径或 frozen wire；纯输入更新保留原 scope/pending，不能修改这些保护字段或产生作者效果。
+
+顶层 name/title/body/rootInput/parentInput/parametersText 同样区分六份私有完整原值与同一记录中的 `authorTexts`。每槽保留按真实 producer/inputId 区分的本人证明片段数组，总计最多 1024 项；只更新同身份的较新修订，同修订变字节或倒退均拒绝。新窗口的证明不覆盖旧 producer，不把旧片段拼接后套上新 provenance；空文本仍是原身份的新删除证明。程序预填、DOM 采样和恢复只更新私有完整值，不造本人证明。纯 author checkpoint 只合并 own overlay；字段换 producer 时把旧证明保留为 detached，不能覆盖原私有候选。获权 hosted active 另返六份完整原值和正文模式，撤权纯投影不能自动拼回可提交正文。
+
+字段结构只使用 `valueState = valid {value: NativeValue} | incomplete {wire: CaptureText}`。后者仅保存一棵私有原生字段树的准确 JSON/UTF-16，保留无效标量旁的 siblings、union 标记和 list 位置，不含 Schema/Base 或整个业务表单。两态均严格拒绝重复／未知原生成员；未完成标量必须匹配同 FieldId、原 ValuePath 的 live exact raw。完整树必须用 valid，提交只接 valid。恢复须重新核原 FieldId、Schema 身份和语义摘要，过期／未知地址保原件为未绑定材料，不派发作者 input/proof。旧 value/null 格式明确不支持，不保兼容双轨。
+
+正常获权编辑用一次完整 input 原子持久化其本人证据。唯一原记录持久标明 inputCut 为 full 或 authorOnly，既有 lastMutation 明确封闭命令种类。显式本人检查点不能确认完整表单、冻结或发起新作者效果，也不能给完整表单关闭证明；目标选择和中性检查点保留原 cut。重启时若无 full cut，仅本人片段可取回为 copyOnly，不以 RAM 标记或旧私有候选恢复 formReady。完整请求响应未知时先按同一原 mutation／expectedRevision／规范完整 digest 查询，浏览器 transport 不存该候选，绝不另写 pure mutation 覆盖可能成功的结果。只有重新获权的完整输入 mutation 才建立 full。digest-only reader 必须核原命令确为 Input，其他真实命令的 digest 也不能冒充完整输入 ACK。新修订中的空本人文字仍是明确删除证据。
+
+前端只使用一份 Records v3 纯输入恢复存储与单一 IndexedDB transaction-CAS。捕获项按 deployment／本人 actor／真实 draftId／producer 隔离，同一项分别保 current 本人 UTF-16 输入和待确认 mutation 的冻结本人 cut／expectedRevision／原号／指纹；旧 A 丢响应时的新 B 不能被 A 的 ACK 删除。它不保存 Schema、default、template、target、typed candidate、私有完整 raw 或 frozen 作者效果 wire，不另建 Capture raw ledger。浏览器 stage/flush/ACK 仅证明 transport proposal，不能冒充 Core ACK、完整表单持久化或关闭许可。真实结构选择及 typed candidate 未得到 Core ACK 时仍阻止提交／关闭。IndexedDB 故障保内存与原磁盘项；同 origin 的正常浏览器进程恢复不能自动外推不同随机端口或 Core 进程的恢复。
+
+明确处置未知 private input mutation 必须先查原 mutation。只有同一记录 revision 仍等于其原 expectedRevision，才可用独立稳定原号做 `checkpoint_capture_input`：只 CAS 前进记录修订并耐久发布，不改 currentInput、inputRevision 或真正 frozen 创建 pending。旧 input 先提交则 checkpoint 冲突并查询真实原结果；checkpoint 先提交则迟到旧 expectedRevision 永久拒绝。checkpoint 自身丢 ACK 仍查原号，不盲换号／rebase 旧请求；浏览器项只在确认原 mutation 或 checkpoint 原记录后明确处置。该 fence 不是作者操作终结或完整 Form ACK。
+
+显式继续下一条时，`advance_capture_submission` 必须重查同一 journal 的原 committed/resolved/cancelled 决议；unknown/prepared/installing 不能凭前端标志释放原号。缺 Plan 的本地终结还须匹配原 requestKind 和 wireDigest。只有成功提交且 current inputRevision 仍等于提交 cut，才清空消费过的输入；新输入和 detached 原文保留。捕获稿不另存 Receipt，结果重新打开始终查询原操作。名称留空时由原 operationId 确定默认碎片名称，不要求作者标题。
+
+本地 Capture 创建提交只返回原提交事实，另行交付原结果。HTTP 与 Core 共用单一 `CaptureCreationRequest`；`open_capture_result` 严格读取同一 frozen wire，按原 canonical intent 核已有 feature Plan，再从原唯一 Birth／materialized 身份重开当前节点。它不 prepare/execute，不借同库其他 NewNode、旧 receipt.path 或原 Session 推断结果。打开或界面接纳失败保 pending 原号，下一条无需先建立文档 Session；无效原请求的终结仍只使用 wireDigest。
 
 首次作者请求发送前可靠固定 pending 的原 operationId、requestKind、准确 JSON wire、该 wire 的 SHA-256 及输入修订；不按新 currentInput 重采原请求。读取顶层身份时只解码操作／目标字段，其余载荷用 serde 的 IgnoredAny 校验语法，原 wire 不转成 Value；因此含 escaped lone surrogate 的原被拒请求仍能保留准确摘要。原提交、原号 status／settle 和 typed resolution 继续归 journal，捕获稿不保存第二份 Receipt 账本。hosted 必须另核当前 actor／原库／批准槽，私有记录或摘要均不授予权限。
 
@@ -206,7 +222,7 @@ Compound root 已到达原计划最终位置，且将作为另一参与者的目
 
 托管 copy/template 的完整子树读取与导出由 Server 在捕获前分别授权。Core 的不透明 FeatureTreeWitness 固定准确所有者、源树文件／目录成员、物理身份、父对象、字节和原 Schema／根控制文件；成员和保留字节有界。传输 inventory 仅从该已获权 cut 和显式 inputs 的原获权上下文建立，不调用全库 inventory 读取其他正文，也不将目标父对象的命名空间证据当成引用读取授权。没有证明的普通外部路径链接保原值并报告复制损失；需要目标证明的 typed ref 缺少该上下文时拒绝 copyRef，不能仅凭稳定引用读取目标。原 Plan 仍承担保存、提交和恢复，见证本身不授予新权限。
 
-预先配置的托管目标槽位通过原 FrozenOperation 的可选 hosted_destination 绑定实际目标选择器，不从来源锚点推断。只有原托管结构准备写入该字段；本地、旧记录及其他生产者保持缺省，不回填历史。新建／复制／模板的原出生证据，或改名／移动／恢复的原 Relocate 叶身份，与当前已纳管对象和准确位置共同证明槽位资格。名字相同、字节相同或另一次本地创建不足以认领该槽位；读取结果还需 Server 当前独立读取授权。
+托管目的能力由原 FeatureOperation 和 FrozenOperation 的同一个闭合 `HostedDestination` 绑定：Fixed 固定槽 ID；UniqueChild 另固定真实父目录 FileIdentity／WorkspaceId、prefix、maxMembers 和原外部 operationId。固定槽的新建／复制／模板 Birth 或改名／移动／恢复 Relocate 身份继续确认准确预留位置。UniqueChild 只接 NewNode／TemplateNode，以 prefix＋原号 no-replace 命名，不把 receive 扩给其他结构动作。其成员从同一原 Plan/Birth 派生；准备和提交都核包含 unavailable 及旧 prefix 的保留成员额度，读取另核原 Birth 的 FileIdentity。所选原 commit／Birth 证据损坏、读失败或超预算须 unavailable，不能当空集合或零成员；不建立额外成员账本、不按目录同名收养。本地 producer 没有 hosted destination，不能取得预授权；读取所有结果仍须 Server 当前独立读取授权。
 
 安装算法：
 

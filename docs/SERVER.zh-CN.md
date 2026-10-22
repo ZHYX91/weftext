@@ -257,15 +257,17 @@ Query 静态读取分析识别 FEATURES §5.6 的结构谓词及完整 callee �
 
 ## 创建、模板与笔记结构操作
 
-托管结构入口复用 Core 原有新建、改名、移动、完整复制、模板、回收与恢复计划。部署者配置 `structureSlots.<id> = {parent, name, types?}`；parent 指向已配置且实际纳管的目录 ID，name 固定目标名称。同 ID 的 files 项必须准确指向 `PARENT/NAME/NAME.typ`，且为 live、editable、非 importable。客户端仅提交这些选择器，不提交服务器路径。预留位置由原已提交的托管生产操作、目标槽位和当前物理身份共同确认；普通本地新建、原始复制或后来占用相同路径的其他对象不会自动获得预授权。
+托管结构入口复用 Core 原有新建、改名、移动、完整复制、模板、回收与恢复计划。部署者配置 `structureSlots.<id> = {parent, namePolicy, types?}`；parent 指向已配置且实际纳管的目录 ID。`namePolicy` 必须显式为 `{kind:"fixed",name}` 或 `{kind:"uniqueChildren",prefix,maxMembers}`，不接受旧 name 字段或缺省策略。fixed 的同 ID files 项必须准确指向 `PARENT/NAME/NAME.typ`，且为 live、editable、非 importable。uniqueChildren 不配置同 ID files；非空 prefix 最多 180 UTF-8 字节，maxMembers 为 1–5000。客户端只提交选择器，不提交服务器路径、名称策略或物理身份。
 
-用户的 `structure.sources.<fileId>` 分别设置 rename、move、trash、restore、copy、template、treeRead、treeExport；`structure.destinations.<slotId>` 分别设置 create、receive，全部默认拒绝。正文 read/write 不隐含结构权限，创建也不自动获得新对象的正文、字段、批注或资源权限。改名必须同父目录，移动保持原名称；复制和注册模板另需明确的整个源子树 treeRead/treeExport 及 Schema read。这项完整子树授权包括其未单列配置的成员，必须在首次读取之前成立；实现不扫描其他库对象来补全传输引用。
+uniqueChildren 仅允许新建和已独立获权的模板创建；名称固定为 `prefix + 原外部 operationId`，使用同一 Core no-replace producer。原号重试不改名、不另分配编号；同名普通对象、原始复制或其他 producer 不会被收养。原 FeatureOperation 与 FrozenOperation 共同固定槽 ID、真实父目录 FileIdentity、WorkspaceId、位置提示、prefix、maxMembers 及原外部编号；原记录的 qualified inputScope 与 Plan 仍须匹配。成员 `slotId/nodeUUID` 仅由原已提交 Plan/Birth 派生，读取时另核原 Birth 的物理身份，不扫描目录或新建成员账本。准备与提交都累计该槽／物理父目录下保留的原成员，包括不可用成员和旧 prefix；预算耗尽不删除原件或绕过限制。当前 prefix 变化使旧 prefix 成员不再获得此配置的读取入口。
+
+用户的 `structure.sources.<fileId>` 分别设置 rename、move、trash、restore、copy、template、treeRead、treeExport；uniqueChildren 的 `slotId/*` 可显式选择其原成员。`structure.destinations.<slotId>` 的 create、receive 默认拒绝；uniqueChildren 必须 receive=false，不能扩大改名、移动、复制或恢复的目的能力。其 `members` 显式使用文档正文、字段、历史、批注、查询等既有权限，未授予项拒绝，create 不隐授 read；fixed 的 members 必须为空，继续使用准确 files 授权。创建字段与实际默认值仍分别按准确 FieldId 核 members.fields 的读写资格，不因允许创建就读取旧 Schema 或模板。资源集合权限继续独立配置。改名必须同父目录，移动保持原名称；复制和注册模板另需明确的整个源子树 treeRead/treeExport 及 Schema read。这项完整子树授权包括其未单列配置的成员，必须在首次读取之前成立；实现不扫描其他库对象来补全传输引用。
 
 `GET structure` 只列获权来源、位置、模板和可用状态。`structure/prepare|commit|operation|settle` 使用原 resource、operationId 和 planId。create/copy/template 以目标槽位为请求锚；rename/move/trash/restore 以原来源为锚。恢复须提供该用户原回收操作的准确外部编号，不提供任意回收站目录枚举。预览保留原意图、身份映射及明确损失；commit 的 acceptLosses 不得替代未展示的损失确认。未知结果查询和结束沿用原持久操作，重启不另建编号，已结束请求不能迟到生效。原计划按当前授权代次、配置和实际来源、成员、父目录及 Schema 复验。
 
-create 可带 `capture = {title?, body?, bodyMode?, types?, fields?}`。默认 text 将正文与标题按字面原生编码；markup 只接受可证明不会执行任意代码或追加身份／字段声明的排版内容。types 必须来自该槽位的明确允许集；fields 使用准确 FieldId 和原生值，显式值、必填值与实际原生默认值分别要求字段 read/write，并按原 Schema、提供者及约束验证。没有值的可选字段不因 absent 默认而要求写权。Core 分配唯一新身份，不由表单提供。内置 native-note 模板使用字面 title/body；`structureTemplates.<id> = {source, templateId}` 则选择已登记的准确原生模板，固定原设置、来源、参数槽和完整子树。
+create 可带 `capture = {title?, body?, bodyMode?, types?, fields?, formBasis?}`。默认 text 将正文与标题按字面原生编码；markup 只接受可证明不会执行任意代码或追加身份／字段声明的排版内容。types 必须来自该槽位的明确允许集；fields 使用准确 FieldId 和原生值，显式值、必填值与实际原生默认值分别要求字段 read/write，并按原 Schema、提供者及约束验证。没有值的可选字段不因 absent 默认而要求写权。typed fields/types 须携准确 Schema roleRef 与 semanticDigest 的 formBasis；当前 Schema 不同则保留原输入并拒绝旧解释。Core 分配唯一新身份，不由表单提供。内置 native-note 模板使用字面 title/body；`structureTemplates.<id> = {source, templateId}` 则选择已登记的准确原生模板，固定原设置、来源、参数槽和完整子树。
 
-成功回执中的 result.resource 指向准确目标槽位；canOpen 另核当前独立正文读取权。WebUI 仅在用户明确选择时打开该入口。当前编辑器受到移动或回收影响时，保留个人草稿和撤销，停止把旧会话当作新位置；结果回执不替换后来输入，也不自动换 Base。复制产生独立身份，改名、移动与恢复继续原身份。该接口接通与实际测试范围沿用同一候选记录；完整 v0.6 的剩余消费者仍须单独完成。
+成功回执中的 result.resource 指向准确 fixed 目标槽位或原 uniqueChildren 成员 `slotId/nodeUUID`；canOpen 另核当前独立正文读取权。WebUI 仅在用户明确选择时打开该入口。当前编辑器受到移动或回收影响时，保留个人草稿和撤销，停止把旧会话当作新位置；结果回执不替换后来输入，也不自动换 Base。复制产生独立身份，改名、移动与恢复继续原身份。该接口接通与实际测试范围沿用同一候选记录；完整 v0.6 的剩余消费者仍须单独完成。
 
 结构创建的资源集合可预先使用 `fromStructureSlot: true`，owner 指向准确槽位；它与 expectedOwner、fromImportSlot 互斥。集合所有者仍须通过原托管结构生产记录及当前物理身份证明，不能读取未由该槽位产生的占位对象。集合 read/download/import 继续分别授权，原生资源登记仍是成员依据；`files.<id>.inputs` 可预选该集合，创建成功后直接使用原有媒体与编译消费者。结构请求的可选 inputs 列出额外独立获权的文件选择器，固定它们的原依据以验证明确引用，不自动扫描或展开全库。
 

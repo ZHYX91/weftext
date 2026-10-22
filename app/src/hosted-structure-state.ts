@@ -1,10 +1,11 @@
 import type { DataSchema, NativeValue } from "./data-panel";
 export type StructureKind = "create" | "rename" | "move" | "trash" | "restore" | "copy" | "template";
 export interface StructureSource { resource: string; title: string; actions: StructureKind[]; status: "ready" | "unavailable" }
-export interface StructureSlot { resource: string; title: string; name: string; parent: string; parentTitle?: string; create: boolean; receive: boolean; status: "ready" | "unavailable"; types?: string[]; capture?: DataSchema; captureStatus?: "available" | "unavailable" }
+export type StructureNamePolicy = {kind:"fixed";name:string}|{kind:"uniqueChildren";prefix:string;maxMembers:number};
+export interface StructureSlot { resource: string; title: string; namePolicy: StructureNamePolicy; parent: string; parentTitle?: string; create: boolean; receive: boolean; status: "ready" | "unavailable"; types?: string[]; capture?: DataSchema & { roleRef: string; semanticDigest: string }; captureStatus?: "available" | "unavailable" }
 export interface StructureTemplate { id: string; title: string; source?: string; builtin?: boolean; status: "ready" | "unavailable"; parameters?: { name: string; kind: string; nullable?: boolean; default?: unknown }[] }
 export interface StructureCatalog { sources: StructureSource[]; slots: StructureSlot[]; templates: StructureTemplate[]; scope: "configuredAuthorizedStructure"; coverage: "complete" | "partial" }
-export interface StructureCapture { title?: string; body?: string; bodyMode?: "text" | "markup"; types?: string[]; fields?: Record<string, NativeValue> }
+export interface StructureCapture { title?: string; body?: string; bodyMode?: "text" | "markup"; types?: string[]; fields?: Record<string, NativeValue>; formBasis?: { schemaRef: string; semanticDigest: string } }
 export interface StructureRequest { resource: string; operationId: string; kind: StructureKind; source?: string; destination?: string; trashOperationId?: string; template?: string; parameters?: Record<string, unknown>; capture?: StructureCapture; inputs?: string[] }
 export interface StructureReceipt { resource: string; operationId: string; status: string; planId?: string | null; preview?: { summary?: string | string[]; losses?: { code?: string; message: string }[]; [key: string]: unknown }; nodeRefs?: { workspaceId: string; nodeId: string }[]; resourceRefs?: string[]; commitAllowed: boolean; result?: { resource: string; nodeRef: { workspaceId: string; nodeId: string }; canOpen: boolean; status: string } }
 export interface StructureDraft { kind: StructureKind; source: string; destination: string; template: string; trashOperationId: string; title: string; body: string; bodyMode: "text" | "markup"; parametersText: string; types: string[]; fields: Record<string, NativeValue>; rawInputs: Record<string, string>; inputs: string[]; revision: number; pending?: { request: StructureRequest; input: string; revision: number; selector: string; receipt?: StructureReceipt; acceptLosses: boolean; commit?: { resource: string; operationId: string; planId: string; acceptLosses: boolean } } }
@@ -17,7 +18,15 @@ export function clearStructureCapture(draft: StructureDraft): StructureDraft { r
 export function decodeStructureCatalog(value: StructureCatalog): StructureCatalog {
   if (!value || value.scope !== "configuredAuthorizedStructure" || !["complete", "partial"].includes(value.coverage) || !Array.isArray(value.sources) || !Array.isArray(value.slots) || !Array.isArray(value.templates)) throw new Error("结构目录缺少获权范围或完整性状态。");
   for (const item of value.sources) if (!item.resource || typeof item.title !== "string" || !["ready", "unavailable"].includes(item.status) || !Array.isArray(item.actions) || item.actions.some(kind => !kinds.includes(kind))) throw new Error("结构源没有准确动作资格。");
-  for (const item of value.slots) if (![item.resource, item.title, item.name, item.parent].every(part => typeof part === "string" && !!part) || !["ready", "unavailable"].includes(item.status) || typeof item.create !== "boolean" || typeof item.receive !== "boolean") throw new Error("结构目标没有批准的固定名称或位置。");
+  for (const item of value.slots) {
+    if ("name" in item || ![item.resource, item.title, item.parent].every(part => typeof part === "string" && !!part) || !["ready", "unavailable"].includes(item.status) || typeof item.create !== "boolean" || typeof item.receive !== "boolean") throw new Error("结构目标没有批准的命名策略或位置。");
+    const policy = item.namePolicy;
+    if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new Error("结构目标没有封闭且有界的命名授权。");
+    const valid = policy.kind === "fixed"
+      ? Object.keys(policy).sort().join() === "kind,name" && typeof policy.name === "string" && !!policy.name
+      : policy.kind === "uniqueChildren" && Object.keys(policy).sort().join() === "kind,maxMembers,prefix" && typeof policy.prefix === "string" && !!policy.prefix && Number.isSafeInteger(policy.maxMembers) && policy.maxMembers >= 1 && policy.maxMembers <= 5000 && !item.receive;
+    if (!valid) throw new Error("结构目标没有封闭且有界的命名授权。");
+  }
   for (const item of value.templates) if (!item.id || typeof item.title !== "string" || !["ready", "unavailable"].includes(item.status)) throw new Error("模板描述不可用。");
   return structuredClone(value);
 }
@@ -30,7 +39,9 @@ export function freezeStructureRequest(draft: StructureDraft, catalog: Structure
   const source = catalog.sources.find(item => item.resource === draft.source), slot = catalog.slots.find(item => item.resource === draft.destination), template = catalog.templates.find(item => item.id === draft.template);
   const builtin = draft.kind === "template" && draft.template === "native-note";
   if (draft.kind !== "create" && !builtin && (!source || draft.kind !== "restore" && source.status !== "ready" || !source.actions.includes(draft.kind))) throw new Error("原源对象没有此结构动作的独立资格。");
-  if (draft.kind !== "trash" && (!slot || slot.status !== "ready" || !(draft.kind === "create" || builtin ? slot.create : slot.receive))) throw new Error("请选择对此动作明确获权的固定目标槽位。");
+  const unique = slot?.namePolicy.kind === "uniqueChildren";
+  if (unique && !["create", "template"].includes(draft.kind)) throw new Error("唯一子项授权仅允许新建或获权模板创建。");
+  if (draft.kind !== "trash" && (!slot || slot.status !== "ready" || !(draft.kind === "create" || builtin || unique && draft.kind === "template" ? slot.create : slot.receive))) throw new Error("请选择对此动作明确获权的固定目标槽位。");
   const request: StructureRequest = { resource: ["create", "copy", "template"].includes(draft.kind) ? draft.destination : draft.source, operationId, kind: draft.kind };
   if (draft.inputs.length) request.inputs = [...draft.inputs];
   if (draft.kind !== "create" && !builtin) request.source = draft.source;
@@ -41,6 +52,10 @@ export function freezeStructureRequest(draft: StructureDraft, catalog: Structure
     if (!slot?.capture || slot.captureStatus === "unavailable" || draft.types.some(type => !(slot.types ?? []).includes(type)) || Object.keys(draft.fields).some(id => !slot.capture!.fields.some(field => field.id === id))) throw new Error("原类型或属性没有当前固定槽位的准确表单权限；原输入保留。");
   }
   if (draft.kind === "create" && (draft.title || draft.body || draft.bodyMode !== "text" || draft.types.length || Object.keys(draft.fields).length)) request.capture = { ...(draft.title ? { title: draft.title } : {}), body: draft.body, bodyMode: draft.bodyMode, ...(draft.types.length ? { types: [...draft.types] } : {}), ...(Object.keys(draft.fields).length ? { fields: structuredClone(draft.fields) } : {}) };
+  if (request.capture && (draft.types.length || Object.keys(draft.fields).length)) {
+    if (!slot?.capture?.roleRef || !/^[a-f0-9]{64}$/.test(slot.capture.semanticDigest)) throw new Error("获权表单没有准确 Schema 依据，原字段输入保留。");
+    request.capture.formBasis = { schemaRef: slot.capture.roleRef, semanticDigest: slot.capture.semanticDigest };
+  }
   if (draft.kind === "template") {
     if (!template || template.status !== "ready") throw new Error("请选择当前可用的明确模板。");
     let parameters: unknown; try { parameters = JSON.parse(draft.parametersText); } catch { throw new Error("模板参数尚不是完整原生值 JSON，原输入保留。"); }

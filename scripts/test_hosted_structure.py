@@ -38,7 +38,7 @@ class HostedStructure(HostedHistory):
             slots = {'Created': ('root', 'Created'), 'Copied': ('root', 'Copied'),
                      'Renamed': ('root', 'Renamed'), 'Moved': ('destination', 'Shared'),
                      'Restored': ('root', 'Restored'), 'Template': ('root', 'Template')}
-            self.config['structureSlots'] = {key: {'parent': parent, 'name': name} for key, (parent, name) in slots.items()}
+            self.config['structureSlots'] = {key: {'parent': parent, 'namePolicy': {'kind': 'fixed', 'name': name}} for key, (parent, name) in slots.items()}
             for key, (parent, name) in slots.items():
                 prefix = '' if parent == 'root' else 'Destination/'
                 self.config['files'][key] = {'path': f'{prefix}{name}/{name}.typ', 'title': key, 'editable': True}
@@ -318,7 +318,7 @@ class HostedStructure(HostedHistory):
         self.config['directories']['secret-parent'] = {
             'path': 'Secret', 'reference': reference, 'title': 'Authorized destination only'}
         for key in ['ParentCopy', 'WithInput']:
-            self.config['structureSlots'][key] = {'parent': 'secret-parent', 'name': key}
+            self.config['structureSlots'][key] = {'parent': 'secret-parent', 'namePolicy': {'kind': 'fixed', 'name': key}}
             self.config['files'][key] = {'path': f'Secret/{key}/{key}.typ', 'title': key, 'editable': True}
         self.start()
         def policy(users):

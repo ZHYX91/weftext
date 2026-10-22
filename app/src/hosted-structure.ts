@@ -114,7 +114,7 @@ export class HostedStructure {
             return;
         this.catalog = value;
         this.options(this.source, value.sources.map(item => [item.resource, () => `${uiTextValue(item.title)}${uiTextValue(item.status === "unavailable" ? uiMessage("hostedStructure.restoreReceiptRequiredSuffix") : "")}`]), this.draft.source);
-        this.options(this.destination, value.slots.map(item => [item.resource, () => `${uiTextValue(item.title)} · ${uiTextValue(item.parentTitle ?? item.parent)} / ${uiTextValue(item.name)}${uiTextValue(item.status === "unavailable" ? uiMessage("hostedStructure.unavailableSuffix") : "")}`]), this.draft.destination);
+        this.options(this.destination, value.slots.map(item => [item.resource, () => `${uiTextValue(item.title)} · ${uiTextValue(item.parentTitle ?? item.parent)} / ${uiTextValue(item.namePolicy.kind === "fixed" ? item.namePolicy.name : item.namePolicy.prefix + "…")}${uiTextValue(item.status === "unavailable" ? uiMessage("hostedStructure.unavailableSuffix") : "")}`]), this.draft.destination);
         this.options(this.template, value.templates.map(item => [item.id, () => `${uiTextValue(item.title)}${uiTextValue(item.status === "unavailable" ? uiMessage("hostedStructure.unavailableSuffix") : "")}`]), this.draft.template);
         setUiText(this.coverage, value.coverage === "partial" ? uiMessage("hostedStructure.partialCatalog") : uiMessage("hostedStructure.completeCatalog"));
         this.render();

@@ -625,7 +625,7 @@ pub(crate) struct FrozenOperation {
     pub(crate) mutation: Mutation,
     pub(crate) receipt: OperationReceipt,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) hosted_destination: Option<String>,
+    pub(crate) hosted_destination: Option<HostedDestination>,
     #[serde(default)]
     pub(crate) expected_membership: Option<BTreeSet<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3729,7 +3729,7 @@ impl Core {
         witnesses: &[&SnapshotWitness],
         tree: Option<&FeatureTreeWitness>,
         transfer_witnesses: &[&SnapshotWitness],
-        destination_slot: Option<&str>,
+        destination_slot: Option<&HostedDestination>,
     ) -> Result<OperationPreview> {
         self.prepare_internal(
             request,
@@ -3799,7 +3799,7 @@ impl Core {
         witnesses: &[&SnapshotWitness],
         tree: Option<&FeatureTreeWitness>,
         transfer_witnesses: &[&SnapshotWitness],
-        destination_slot: Option<&str>,
+        destination_slot: Option<&HostedDestination>,
     ) -> Result<OperationPreview> {
         valid_operation_id(&request.operation_id)?;
         let fingerprint = author_fingerprint.unwrap_or(hash(&serde_json::to_vec(&request)?));
@@ -3820,6 +3820,9 @@ impl Core {
         }
         let root = absolute_path(Path::new(&request.root))?;
         let workspace = self.require_workspace(&root)?;
+        if let Some(destination) = destination_slot {
+            self.validate_hosted_destination(&root, &request.intent, destination, None)?;
+        }
         let plan_id = fresh();
         let mut preview = OperationPreview {
             operation_id: request.operation_id.clone(),
@@ -4967,6 +4970,9 @@ impl Core {
                 ParentGuard::acquire(Path::new(target))?.directory_identity()?,
             ));
         }
+        if let Some(destination) = destination_slot {
+            self.validate_hosted_destination(&root, &request.intent, destination, Some(&mutation))?;
+        }
         plan.transaction = Some(FrozenOperation {
             request,
             preview: preview.clone(),
@@ -4974,7 +4980,7 @@ impl Core {
             directories,
             mutation,
             receipt,
-            hosted_destination: destination_slot.map(str::to_owned),
+            hosted_destination: destination_slot.cloned(),
             expected_membership: cut.map(|c| c.members),
             expected_trash_membership: None,
             backup_private_digest,
@@ -5077,6 +5083,14 @@ impl Core {
         }
         if !matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
             self.require_workspace(root)?;
+        }
+        if let Some(destination) = &t.hosted_destination {
+            self.validate_hosted_destination(
+                root,
+                &t.request.intent,
+                destination,
+                Some(&t.mutation),
+            )?;
         }
         self.validate_resource_collection_initialization(t)?;
         self.validate_tag_plan_changes(&plan)?;

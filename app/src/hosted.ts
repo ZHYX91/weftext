@@ -20,15 +20,19 @@ import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
-import { PersonalInputRecovery, type PersonalInputRecord } from "./personal-input-recovery";
+import { PersonalInputRecovery, type BrowserProposalAck, type PersonalInputRecord } from "./personal-input-recovery";
 import { renderPersonalInputs } from "./personal-input-panel";
 import { replayPersonalInput } from "./source-input-origin";
 import { PersonalControlInput } from "./personal-control-input";
-import type { AuthorInputFactory } from "./author-input";
+import type { AuthorInputFactory, AuthorProducerState } from "./author-input";
 import { freezeOriginalAttempt } from "./original-operation";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
 import { HostedStructure } from "./hosted-structure";
+import { mountHostedCapture, type MountedHostedCapture } from "./capture-hosted-mount";
+import { decodeStructureCatalog, type StructureCatalog } from "./hosted-structure-state";
+import { action as captureAction, ui as captureUi } from "./native-value-form";
+import "./capture.css";
 import { HostedKnowledgeLinks } from "./hosted-knowledge-links";
 import { HostedCitations } from "./hosted-citations";
 import { HostedNavigationRegistry } from "./hosted-navigation-registry";
@@ -171,12 +175,12 @@ function renderEverydayBar() {
     add(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), status), busy);
     add(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), source.commands(), status), busy);
 }
-const personalInputs = new PersonalInputRecovery(sessionStorage);
-const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text }) => {
+const personalInputs = new PersonalInputRecovery();
+const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text, producerId, producerRevision }) => {
     if (context.owner.kind === "capture")
         throw new Error("捕获输入不能写入正文恢复域。");
     try {
-        personalInputs.update(context.audience, [{ id, owner: context.owner, slot: context.slot, path: context.path, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, revision, text }] : [], revision } }]);
+        observePersonalWrite(personalInputs.update(context.audience, [{ id, owner: context.owner, slot: context.slot, path: context.path, producer:{producerId,revision:producerRevision}, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, revision, text }] : [], revision } }]),context.audience);
         controls();
     }
     catch (error) {
@@ -184,6 +188,39 @@ const personalControls = new PersonalControlInput(document, context => context.a
     }
 });
 const authorInputs: AuthorInputFactory = (owner, current, sink, leaseRevision) => { const audience = personalAudience(); return audience ? personalControls.session(audience, authorizationEpoch, owner, current, sink, leaseRevision) : undefined; };
+let hostedCapture:MountedHostedCapture|undefined;
+let captureVersion=0;
+const capturePanel=document.createElement("section");capturePanel.id="capture-panel";capturePanel.hidden=true;el("structure").before(capturePanel);
+const captureButton=document.createElement("button");captureButton.type="button";setUiText(captureButton,uiMessage("capture.title"));el("refresh").after(captureButton);
+captureButton.onclick=()=>void showCapturePicker().catch(error=>status(errorUiText(error)));
+function captureAudienceCurrent(captured:{actor:string;deployment:string;generation:number;epoch:number;credential:string}):boolean{return authorizationEpoch===captured.epoch && token===captured.credential && identity?.actor===captured.actor && identity.deployment===captured.deployment && identity.generation===captured.generation;}
+async function showCapturePicker():Promise<void>{
+ if(!identity||!personalAudience())throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
+ capturePanel.hidden=false;
+ if(hostedCapture){capturePanel.scrollIntoView();return;}
+ const captured={actor:identity.actor,deployment:identity.deployment,generation:identity.generation,epoch:authorizationEpoch,credential:token},version=++captureVersion;
+ const current=()=>version===captureVersion&&captureAudienceCurrent(captured);
+ const [catalog,views]=await Promise.all([request<StructureCatalog>("structure").then(decodeStructureCatalog),request<{recovery:{draftId:string}}[]>("capture/draft/list",{})]);
+ if(!current())return;
+ const existing=captureUi("select","data-input"),slots=captureUi("select","data-input"),diagnostic=captureUi("p","data-warning");
+ for(const view of views){const id=view.recovery?.draftId;if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id))throw new UiError(uiMessage("capture.rawRetained"));const option=captureUi("option","",id);option.value=id;existing.append(option);}
+ for(const slot of catalog.slots.filter(slot=>slot.create&&slot.status==="ready")){const option=captureUi("option","",slot.title);option.value=slot.resource;slots.append(option);}
+ const activate=async(choice:{draftId?:string;slot?:string})=>{
+  if(!current())return;
+  const mounted=await mountHostedCapture(capturePanel,{request,inputs:personalControls,authorInputs,catalog,
+   options:{deployment:captured.deployment,actor:captured.actor,...choice,recovery:personalInputs,current},
+   deliverCommitted:async resource=>{if(!current())throw new UiError(uiMessage("capture.rawRetained"));await open(resource);if(!current()||doc?.resource!==resource||source.pausedSession)throw new UiError(uiMessage("capture.pending"));},
+   requestClose:async()=>{if(!current()||!hostedCapture)throw new UiError(uiMessage("desktop.unsavedClose"));const closing=hostedCapture;hostedCapture=undefined;closing.dispose();capturePanel.replaceChildren();capturePanel.hidden=true;},
+  });
+  if(!current()){mounted.retireAuthorization();mounted.dispose();return;}
+  hostedCapture=mounted;capturePanel.scrollIntoView();
+ };
+ const run=(work:()=>Promise<void>)=>async()=>{try{await work();}catch(error){if(current())setUiText(diagnostic,errorUiText(error));}};
+ const restore=captureAction(uiMessage("capture.restoreDraft"),run(()=>activate({draftId:existing.value})));restore.disabled=existing.options.length===0;
+ const create=captureAction(uiMessage("capture.newDraft"),run(()=>activate({slot:slots.value})));create.disabled=slots.options.length===0;
+ capturePanel.replaceChildren(captureUi("h2","",uiMessage("capture.title")),captureUi("p","",uiMessage("capture.restoreDraft")),existing,restore,captureUi("p","",uiMessage("capture.target")),slots,create,diagnostic);
+}
+
 const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
 const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
     canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
@@ -340,7 +377,7 @@ const knowledgeLinks = new HostedKnowledgeLinks(el("knowledge-links"), (path, bo
     navigate: reference => reference.startsWith("weftext-resource://") ? navigateResource(reference) : navigateReference(reference),
     select: (from, to) => source.selectSourceRange(from, to),
     revealRendered: heading => source.revealRendered(heading.key, heading),
-    authorizationChanged: (message, current) => { clearDisplay(message); confirmIdentity({ ...identity!, ...current }); },
+    authorizationChanged: (message, current) => { clearDisplay(message); void confirmIdentity({ ...identity!, ...current }).catch(error=>status(errorUiText(error))); },
 });
 function hostedIdentity() { return identity ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, authorization: authorizationEpoch } : null; }
 async function readSharedProcessingDefaults() {
@@ -367,7 +404,7 @@ function authorizationsChanged(message: UiText, current: {
 }) {
     clearDisplay(message);
     if (identity)
-        confirmIdentity({ ...identity, ...current });
+        void confirmIdentity({ ...identity, ...current }).catch(error=>status(errorUiText(error)));
 }
 const citations = new HostedCitations(el("citations"), request, {
     identity: hostedIdentity,
@@ -816,6 +853,10 @@ class HostedError extends ApiError {
     constructor(error: ApiError, public http: number) { super(error.code, error.explanation, error.diagnostics, error.details, error.causes, http); }
 }
 function clearDisplay(message: UiText, clearToken = false) {
+    let captureFailure:unknown;
+    try{hostedCapture?.retireAuthorization();}catch(error){captureFailure=error;}
+    try{hostedCapture?.dispose();}catch(error){captureFailure??=error;}
+    hostedCapture=undefined;captureVersion++;capturePanel.replaceChildren();capturePanel.hidden=true;
     interfaceLocale?.dispose();
     interfaceLocale = undefined;
     let personalFailure = false;
@@ -853,7 +894,7 @@ function clearDisplay(message: UiText, clearToken = false) {
     cachePrefix = "";
     stableReference = undefined;
     draftCache.clearMemory();
-    const clearErrors: unknown[] = [];
+    const clearErrors: unknown[] = captureFailure ? [captureFailure] : [];
     // A blocked storage provider must never stop the remaining protected views
     // from disposing their in-memory capabilities and visible content.
     for (const clear of [() => latexAuthoring.clear(), () => diagramAuthoring.clear(), () => source.clear(), () => knowledgeLinks.clear(), () => citations.clear(), () => navigationRegistry.clear(), () => contentImport.clear(), () => recognitionPanel.revoke(), () => ownerBackup.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
@@ -932,7 +973,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
                 const current = await request<Me>("me");
                 if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) {
                     clearDisplay(uiMessage("hostedShell.authorizationChangedViewsCacheCleared"));
-                    confirmIdentity(current);
+                    await confirmIdentity(current);
                 }
             }
             catch { /* A retired structural coordinate never clears a newer buffer or actor. */ }
@@ -943,7 +984,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
                 if (sameHostedQueryIdentity(captured, audience())) {
                     if (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation) {
                         clearDisplay(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
-                        confirmIdentity(current);
+                        await confirmIdentity(current);
                     }
                     else if (sameHostedQueryAudience(captured, audience()))
                         queries.refuseResult(uiMessage("hostedShell.queryObjectOrScopeUnavailable"));
@@ -961,7 +1002,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
                 const current = await request<Me>("me");
                 if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) {
                     clearDisplay(uiMessage("hostedShell.authorizationChangedRefreshMedia"));
-                    confirmIdentity(current);
+                    await confirmIdentity(current);
                 }
             }
             catch { /* Caller stops this resource delivery; personal source remains protected. */ }
@@ -971,7 +1012,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
                 const current = await request<Me>("me");
                 if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) {
                     clearDisplay(uiMessage("hostedShell.authorizationChangedRefreshLinks"));
-                    confirmIdentity(current);
+                    await confirmIdentity(current);
                 }
             }
             catch { /* Stop this link delivery without treating a hidden same-epoch target as source revocation. */ }
@@ -1003,49 +1044,56 @@ function controls() {
     el<HTMLButtonElement>("rebase").disabled = busy || !doc?.rights.write || source.pausedSession || !!draft?.pending;
     el<HTMLButtonElement>("copy-reference").disabled = busy || !stableReference || stableReference.sessionId !== doc?.sessionId;
 }
-function retain() {
-    if (!doc || !draft)
-        return;
-    draft.source = source.value;
-    // Storage failure is visible and prevents a save request that could lose an
-    // unknown operation receipt on reload.
-    persistPersonalInputs();
-    draftCache.write(doc.resource, draft);
+function retain(): Promise<BrowserProposalAck | undefined> {
+  if (!doc || !draft) return Promise.resolve(undefined);
+  draft.source = source.value;
+  // Storage failure is visible and prevents a save request that could lose an
+  // unknown operation receipt on reload.
+  const write = persistPersonalInputs(); draftCache.write(doc.resource, draft); return write;
 }
-function confirmIdentity(next: Me): void {
-    identity = next;
-    verifiedPersonalAudience = JSON.stringify([next.deployment, next.actor]);
-    sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
-    controls();
+async function confirmIdentity(next: Me): Promise<void> {
+  identity = next; verifiedPersonalAudience = "";
+  const epoch = authorizationEpoch, credential = token, audience = JSON.stringify([next.deployment, next.actor]);
+  try { await personalInputs.open(audience); }
+  catch (error) { if (identity === next && epoch === authorizationEpoch && credential === token) status(errorUiText(error)); }
+  if (identity !== next || epoch !== authorizationEpoch || credential !== token) return;
+  verifiedPersonalAudience = audience;
+  sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
+  controls();
 }
 function personalAudience(): string | null { const current = identity ? JSON.stringify([identity.deployment, identity.actor]) : ""; return current && current === verifiedPersonalAudience ? current : null; }
-function persistPersonalInputs(): void {
-    const audience = personalAudience();
-    if (!audience)
-        return;
-    const updates = source.personalInputRecords();
-    personalInputs.update(audience, updates);
+function observePersonalWrite(write: Promise<BrowserProposalAck>, audience: string): Promise<BrowserProposalAck> {
+  void write.catch(error => { if (personalAudience() === audience) { status(errorUiText(error)); controls(); } }); return write;
 }
-function finishPersonalOperation(operationId: string, terminal: "committed" | "cancelled" | "resolved"): void {
-    source.settlePersonalSave(operationId, terminal === "committed");
-    const audience = personalAudience();
-    if (!audience)
-        return;
-    for (const record of personalInputs.list(audience).filter(record => record.pending?.operationId === operationId))
-        personalInputs.settle(audience, record, terminal);
+function persistPersonalInputs(): Promise<BrowserProposalAck | undefined> {
+  const audience = personalAudience(); if (!audience) return Promise.resolve(undefined);
+  const updates = source.personalInputRecords();
+  return observePersonalWrite(personalInputs.update(audience, updates), audience);
+}
+async function finishPersonalOperation(operationId: string, terminal: "committed" | "cancelled" | "resolved"): Promise<void> {
+  source.settlePersonalSave(operationId, terminal === "committed");
+  const audience = personalAudience(); if (!audience) return;
+  await Promise.all(personalInputs.list(audience).filter(record => record.pending?.operationId === operationId).map(record => observePersonalWrite(personalInputs.settle(audience, record, terminal), audience)));
 }
 function showPersonalInputs(): void {
-    const audience = personalAudience();
-    if (!audience)
-        throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
-    const panel = el("personal-inputs");
-    panel.hidden = false;
-    renderPersonalInputs(panel, personalInputs, audience, { restore: record => restorePersonalInput(record, audience), operation: record => recoverPersonalOperation(record, audience), changed: () => {
-            if (personalAudience() === audience) {
-                controls();
-                showPersonalInputs();
-            }
-        } });
+  const audience = personalAudience(); if (!audience) throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
+  const panel = el("personal-inputs"); panel.hidden = false;
+  renderPersonalInputs(panel, personalInputs, audience, {
+    restore: record => restorePersonalInput(record, audience), operation: record => recoverPersonalOperation(record, audience),
+    producers: () => personalControls.inspect().producers.filter(producer => producer.audience === audience),
+    discardProducer: producer => discardRetiredPersonalProducer(producer, audience),
+    changed: () => { if (personalAudience() === audience) { controls(); showPersonalInputs(); } },
+  });
+}
+async function discardRetiredPersonalProducer(producer: AuthorProducerState, audience: string): Promise<void> {
+  const epoch = authorizationEpoch; await verifyPersonalIdentity(audience, epoch);
+  const current = () => personalControls.inspect().producers.find(item => item.producerId === producer.producerId);
+  if (producer.audience !== audience || !producer.retired || JSON.stringify(current()) !== JSON.stringify(producer)) throw new Error("作者表单已变化，未放弃另一代输入。");
+  const records = personalInputs.list(audience).filter(record => record.producer?.producerId === producer.producerId);
+  if (records.some(record => record.pending?.status === "unresolved")) throw new Error("原保存结果尚未核定，先查询同一编号；未放弃其输入。");
+  await Promise.all(records.map(record => observePersonalWrite(personalInputs.remove(audience, record), audience)));
+  if (authorizationEpoch !== epoch || personalAudience() !== audience || JSON.stringify(current()) !== JSON.stringify(producer)) throw new Error("处置期间作者身份已变化，未放弃新的输入。");
+  if (!personalControls.acknowledge(producer, "discarded")) throw new Error("原退休表单已变化，未采用较早的处置。");
 }
 async function verifyPersonalIdentity(audience: string, epoch: number): Promise<void> {
     const next = await request<Me>("me");
@@ -1074,7 +1122,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
     if (!["committed", "cancelled", "resolved"].includes(outcome.status))
         throw new UiError(uiMessage("hostedShell.originalSaveUnknownIdRetained"));
-    finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved");
+    await finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved");
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
     if (record.owner.kind !== "body")
@@ -1103,7 +1151,7 @@ async function restorePersonalInput(record: PersonalInputRecord, audience: strin
         throw new UiError(uiMessage("hostedShell.recoveryTargetOrBaselineMismatch"));
     const restored = replayPersonalInput(record.origin, basis.source);
     source.restorePersonalInput(restored, record.origin, record.baseHash, basis);
-    retain();
+    await retain();
     status(uiMessage("hostedShell.personalInputRestoredAsUnsavedDraft"));
 }
 function cached(resource: string): HostedDraft | undefined {
@@ -1117,7 +1165,8 @@ async function connect() {
         return;
     if (previous && (next.actor !== previous.actor || next.deployment !== previous.deployment || next.generation !== previous.generation))
         clearDisplay(uiMessage("hostedShell.authorizationUpdatedReopen"));
-    confirmIdentity(next);
+    await confirmIdentity(next);
+    if(identity!==next || credential!==token || !personalAudience())return;
     mountInterfaceLocale(next);
     cachePrefix = hostedCachePrefix("draft", next.deployment, next.actor, next.generation);
     sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
@@ -1250,18 +1299,19 @@ async function open(resource: string) {
                 return;
             checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
             if (outcome.status === "committed") {
-                finishPersonalOperation(targetDraft.pending.operationId, "committed");
+                await finishPersonalOperation(targetDraft.pending.operationId, "committed");
                 targetDraft = applySaveResult(targetDraft, targetDraft.pending.source);
                 recoveredSave = true;
             }
             else if (["cancelled", "resolved"].includes(outcome.status)) {
-                finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved");
+                await finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved");
                 delete targetDraft.pending;
             }
         }
         if (!await authority() || !current())
             return;
-        retain();
+        await retain();
+        if(!current())return;
         targetDraft = hostedOpenedDraft(opened.source, targetDraft);
         // A quota failure must happen while the original editor and session still
         // exist. This exact prepared cache is not written again during install.
@@ -1354,7 +1404,8 @@ async function save() {
     }
     draft.source = source.value;
     draft.pending = { operationId: op, source: sent, request: exactRequest };
-    retain();
+    await retain();
+    if(epoch!==requestEpoch || doc!==selected || !draft)return;
     controls();
     queries.authorChanged();
     knowledgeAuthorChanged();
@@ -1369,7 +1420,8 @@ async function save() {
         }
         doc.baseId = result.baseId!;
         doc.source = sent;
-        finishPersonalOperation(op, "committed");
+        await finishPersonalOperation(op, "committed");
+        if(epoch!==requestEpoch || doc!==selected || !draft)return;
         draft = applySaveResult(draft, sent);
         retain();
         source.refreshQueries();
@@ -1394,7 +1446,8 @@ async function save() {
                 throw error;
             checkedSaveStatus(result, op, selected.resource);
             if (result.status === "cancelled") {
-                finishPersonalOperation(op, "cancelled");
+                await finishPersonalOperation(op, "cancelled");
+                if(epoch!==requestEpoch || doc!==selected || !draft)return;
                 delete draft.pending;
                 compareRequired = true;
             }
@@ -1459,7 +1512,8 @@ el("refresh").onclick = () => void run(async () => {
         return;
     if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment)
         clearDisplay(uiMessage("hostedShell.authorizationUpdatedViewsCacheCleared"));
-    confirmIdentity(current);
+    await confirmIdentity(current);
+    if(identity!==current || !personalAudience())return;
     cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation);
     sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
     await connectPanels(current, requestEpoch, token);
@@ -1567,7 +1621,7 @@ el("copy-reference").onclick = () => void run(async () => {
 });
 window.addEventListener("offline", () => status(uiMessage("hostedShell.connectionLostNoAutomaticCommit")));
 window.addEventListener("beforeunload", e => {
-    if (structures.hasPending || media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source !== draft.baseSource)) {
+    if (personalInputs.pending() || personalControls.inspect().producers.some(producer=>producer.unapplied||producer.nativePending||producer.pendingDeliveries) || structures.hasPending || media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source !== draft.baseSource)) {
         e.preventDefault();
     }
 });
@@ -1584,12 +1638,12 @@ setInterval(() => {
     if (!identity || busy)
         return;
     const old = identity, epoch = requestEpoch, credential = token;
-    void request<Me>("me").then(next => {
+    void request<Me>("me").then(async next => {
         if (epoch !== requestEpoch || credential !== token || identity !== old)
             return;
         if (next.generation !== old.generation || next.actor !== old.actor || next.deployment !== old.deployment) {
             clearDisplay(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
-            confirmIdentity(next);
+            await confirmIdentity(next);
         }
         else
             void refreshOpenSession();

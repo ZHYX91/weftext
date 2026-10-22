@@ -9,24 +9,42 @@ export type AuthorInputOwner =
   | { kind: "capture"; draftId: string; library?: { workspaceId: string; genesis: string }; approvedSlot?: string };
 export interface AuthorInputContext { audience: string; epoch: number; owner: AuthorInputOwner; slot: string; path: readonly ValuePath[] }
 export interface AuthorInputSnapshot {
+  kind: "text" | "choice";
   context: AuthorInputContext; id: string; revision: number;
   /** Proved new text only: the personal recovery store may retain this. */
   text: string;
   /** Explicit owner sinks (e.g. Core CaptureDraft) may consume their raw slot.
    * This must never be copied into the generic personal-input store. */
   rawValue: string;
+  producerId: string;
+  producerRevision: number;
 }
 export type AuthorInputSink = (input: AuthorInputSnapshot) => void;
-export interface AuthorInputLease { apply(text: string, assign?: (text: string) => void): boolean }
+export interface AuthorProducerCheckpoint { producerId: string; revision: number }
+export interface AuthorProducerState extends AuthorProducerCheckpoint {
+  audience: string; epoch: number; owner: AuthorInputOwner; ackRevision: number;
+  retired: boolean; nativePending: boolean; hasObservedChanges: boolean;
+  unapplied: boolean; pendingDeliveries: number; frozen: boolean;
+}
+export interface AuthorProducerSnapshot { collectorRevision: number; producers: AuthorProducerState[] }
+export interface AuthorInputLease { apply(text: string, assign?: (text: string) => void): boolean; release(): void }
 export interface AuthorInputSession {
   bind(control: HTMLInputElement | HTMLTextAreaElement, slot: string, path?: readonly ValuePath[]): () => void;
+  /** Positive choice registration tracks unapplied intent without treating an
+   * untouched protected option as personally typed text. */
+  bindChoice(control: HTMLInputElement | HTMLSelectElement, slot: string, path?: readonly ValuePath[]): () => void;
   /** Structure/branch/reorder changes retire previous slot identities. */
   invalidate(slot: string, path?: readonly ValuePath[]): void;
   capture(control: HTMLInputElement | HTMLTextAreaElement): AuthorInputLease | undefined;
+  inspect(): AuthorProducerState;
+  /** Actual application/explicit owner discard only; never a browser storage ACK. */
+  acknowledge(checkpoint: AuthorProducerCheckpoint, disposition: "applied" | "discarded"): boolean;
+  /** Producer stop only; this is never a Core durability or close proof. */
+  freeze(checkpoint: AuthorProducerCheckpoint): boolean;
+  thaw(): void;
   retire(): void;
 }
 export type AuthorInputFactory = (owner: AuthorInputOwner, current: () => boolean, sink?: AuthorInputSink, leaseRevision?: () => unknown) => AuthorInputSession | undefined;
-export interface ValueInputBinding { session: AuthorInputSession; slot: string; path: readonly ValuePath[] }
 
 /** Re-rendering the same proposal keeps its slot IDs; a new proposal gets a new lease. */
 export class AuthorInputScopes {

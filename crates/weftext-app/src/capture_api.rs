@@ -2,20 +2,28 @@
 //! Hosted consumers must use authenticated actor/library wrappers, not this API.
 use super::*;
 use weftext_core::{
-    CaptureInput, CaptureMutationCommand, CaptureMutationTarget, FrozenCaptureRequest,
-    MAX_CAPTURE_RECORD_BYTES,
+    CaptureAuthorInput, CaptureInput, CaptureMutationCommand, CaptureMutationTarget,
+    FrozenCaptureRequest, MAX_CAPTURE_RECORD_BYTES,
 };
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
+        .route("/api/capture/identity", post(identity))
         .route("/api/capture/draft/create", post(create))
         .route("/api/capture/draft/read", post(read))
         .route("/api/capture/draft/list", post(list))
         .route("/api/capture/draft/storage", post(storage))
         .route("/api/capture/draft/input", post(input))
+        .route("/api/capture/draft/input-mutation", post(input_mutation))
+        .route("/api/capture/draft/author-input", post(author_input))
+        .route("/api/capture/draft/author-mutation", post(author_mutation))
+        .route("/api/capture/draft/checkpoint", post(checkpoint))
         .route("/api/capture/draft/target", post(target))
         .route("/api/capture/draft/resolve", post(resolve))
         .route("/api/capture/draft/freeze", post(freeze))
+        .route("/api/capture/draft/advance", post(advance))
+        .route("/api/capture/draft/submit", post(submit))
+        .route("/api/capture/draft/open-result", post(open_result))
         .route("/api/capture/draft/mutation", post(mutation))
         .route("/api/capture/draft/flush", post(flush))
         .layer(DefaultBodyLimit::max(MAX_CAPTURE_RECORD_BYTES + 16 * 1024))
@@ -40,6 +48,12 @@ struct Read {
     draft_id: String,
 }
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenResult {
+    draft_id: String,
+    operation_id: String,
+}
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Empty {}
 #[derive(Deserialize)]
@@ -49,6 +63,29 @@ struct Input {
     expected_revision: u64,
     mutation_id: String,
     input: CaptureInput,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InputMutation {
+    draft_id: String,
+    expected_revision: u64,
+    mutation_id: String,
+    fingerprint: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AuthorInput {
+    draft_id: String,
+    expected_revision: u64,
+    mutation_id: String,
+    input: CaptureAuthorInput,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Checkpoint {
+    draft_id: String,
+    expected_revision: u64,
+    mutation_id: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -68,6 +105,15 @@ struct Freeze {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Advance {
+    draft_id: String,
+    expected_revision: u64,
+    mutation_id: String,
+    operation_id: String,
+    reset_input: bool,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Mutation {
     draft_id: String,
     mutation_id: String,
@@ -83,6 +129,9 @@ struct Mutation {
     deny_unknown_fields
 )]
 enum MutationCommand {
+    Checkpoint {
+        expected_revision: u64,
+    },
     Create {
         input: CaptureInput,
         target: Option<TargetSelection>,
@@ -99,6 +148,11 @@ enum MutationCommand {
         expected_revision: u64,
         request: FrozenCaptureRequest,
     },
+    Advance {
+        expected_revision: u64,
+        operation_id: String,
+        reset_input: bool,
+    },
 }
 impl From<TargetSelection> for CaptureMutationTarget {
     fn from(target: TargetSelection) -> Self {
@@ -112,6 +166,9 @@ impl From<TargetSelection> for CaptureMutationTarget {
 impl From<MutationCommand> for CaptureMutationCommand {
     fn from(command: MutationCommand) -> Self {
         match command {
+            MutationCommand::Checkpoint { expected_revision } => {
+                Self::Checkpoint { expected_revision }
+            }
             MutationCommand::Create { input, target } => Self::Create {
                 input,
                 target: target.map(Into::into),
@@ -136,6 +193,15 @@ impl From<MutationCommand> for CaptureMutationCommand {
             } => Self::Freeze {
                 expected_revision,
                 request,
+            },
+            MutationCommand::Advance {
+                expected_revision,
+                operation_id,
+                reset_input,
+            } => Self::Advance {
+                expected_revision,
+                operation_id,
+                reset_input,
             },
         }
     }
@@ -163,6 +229,75 @@ async fn create(State(state): State<AppState>, Json(req): Json<Create>) -> ApiRe
     })
     .await?;
     Ok(Json(value(draft)?))
+}
+async fn identity(State(state): State<AppState>, Json(_req): Json<Empty>) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            let identity = core.device_identity()?;
+            if !identity.is_current {
+                return Err(weftext_core::CoreError::new(
+                    "deviceIdentityUnavailable",
+                    "The retained device identity is not qualified for this Core profile",
+                ));
+            }
+            Ok(identity)
+        })
+        .await?,
+    )?))
+}
+async fn author_input(State(state): State<AppState>, Json(req): Json<AuthorInput>) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.update_capture_author_input(
+                &req.draft_id,
+                req.expected_revision,
+                &req.mutation_id,
+                req.input,
+            )?;
+            core.read_capture_draft(&req.draft_id)
+        })
+        .await?,
+    )?))
+}
+async fn input_mutation(
+    State(state): State<AppState>,
+    Json(req): Json<InputMutation>,
+) -> ApiResult {
+    Ok(Json(
+        core_call(&state, move |core| {
+            let (status, _) = core.capture_input_mutation_status(
+                &req.draft_id,
+                &req.mutation_id,
+                req.expected_revision,
+                &req.fingerprint,
+            )?;
+            Ok(json!({"status":status,"draft":core.read_capture_draft(&req.draft_id)?}))
+        })
+        .await?,
+    ))
+}
+async fn author_mutation(State(state): State<AppState>, Json(req): Json<AuthorInput>) -> ApiResult {
+    Ok(Json(
+        core_call(&state, move |core| {
+            let (status, _) = core.capture_author_mutation_status(
+                &req.draft_id,
+                &req.mutation_id,
+                req.expected_revision,
+                &req.input,
+            )?;
+            Ok(json!({"status":status,"draft":core.read_capture_draft(&req.draft_id)?}))
+        })
+        .await?,
+    ))
+}
+async fn checkpoint(State(state): State<AppState>, Json(req): Json<Checkpoint>) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.checkpoint_capture_input(&req.draft_id, req.expected_revision, &req.mutation_id)?;
+            core.read_capture_draft(&req.draft_id)
+        })
+        .await?,
+    )?))
 }
 async fn read(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResult {
     Ok(Json(value(
@@ -235,6 +370,67 @@ async fn mutation(State(state): State<AppState>, Json(req): Json<Mutation>) -> A
         })
         .await?,
     )?))
+}
+async fn advance(State(state): State<AppState>, Json(req): Json<Advance>) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.advance_capture_submission(
+                &req.draft_id,
+                req.expected_revision,
+                &req.mutation_id,
+                &req.operation_id,
+                req.reset_input,
+            )
+        })
+        .await?,
+    )?))
+}
+async fn submit(State(state): State<AppState>, Json(req): Json<Read>) -> ApiResult {
+    let (_preview, receipt) = core_call(&state, move |core| {
+        let draft = core.read_capture_draft(&req.draft_id)?;
+        if draft.input_cut!=weftext_core::CaptureInputCut::Full {return Err(CoreError::new("captureInputIncomplete","Only an author recovery checkpoint is durable; query the original operation without dispatching an effect"));}
+        let original = draft.pending.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "captureRequestMissing",
+                "No durable original capture request",
+            )
+        })?;
+        if original.request_kind != "capture" {
+            return Err(CoreError::new(
+                "captureRequestInvalid",
+                "This route only dispatches the original local capture request",
+            ));
+        }
+        // A committed/prepared original is recovered before current-path
+        // interpretation. A fresh attempt must still name the same admitted
+        // target container that was frozen, even if its old path was replaced.
+        if core.local_operation_status(&original.operation_id)?["status"] == "unknown" {
+            let actual = core.resolve_capture_target(&req.draft_id)?;
+            let target = draft.target.as_ref().ok_or_else(|| CoreError::new("captureTargetMissing", "Capture target is unavailable"))?;
+            let parent = match &target.parent {
+                weftext_core::CaptureParent::LibraryRoot => &target.root_hint,
+                weftext_core::CaptureParent::Managed { path_hint, .. } => path_hint,
+            };
+            if actual.root != target.root_hint || actual.parent != *parent {
+                return Err(CoreError::new("captureTargetChanged", "Original target moved after freezing; retain and settle this original attempt before selecting another"));
+            }
+        }
+        crate::data_api::capture_frozen_wire(core, &original.wire)
+    })
+    .await?;
+    // Capture effects and document delivery are separate actions. Save-next
+    // does not create an unused Session, and delivery cannot change this fact.
+    Ok(Json(value(receipt)?))
+}
+async fn open_result(State(state): State<AppState>, Json(req): Json<OpenResult>) -> ApiResult {
+    let document = value(
+        core_call(&state, move |core| {
+            core.open_capture_result(&req.draft_id, &req.operation_id)
+        })
+        .await?,
+    )?;
+    remember(&state, &document)?;
+    Ok(Json(document))
 }
 async fn flush(State(state): State<AppState>, Json(req): Json<Flush>) -> ApiResult {
     Ok(Json(value(
@@ -409,6 +605,17 @@ mod tests {
         forged["actor"] = json!("other-author");
         assert!(!host.request("create", &forged).await.status().is_success());
         let before_budget = std::fs::read(&record).unwrap();
+        for malformed in [
+            json!({"kind":"text","value":"own","schema":{}}),
+            json!({"kind":"record","value":[{"key":"a","value":{"kind":"none"},"extra":true}]}),
+        ] {
+            let mut bad = updated_raw.clone();
+            bad["fields"] =
+                json!([{"fieldId":"field","valueState":{"kind":"valid","value":malformed}}]);
+            let response=host.request("input",&json!({"draftId":id,"mutationId":uuid::Uuid::new_v4().to_string(),"expectedRevision":frozen["revision"],"input":bad})).await;
+            assert!(!response.status().is_success());
+            assert_eq!(std::fs::read(&record).unwrap(), before_budget);
+        }
         let mut oversized = serde_json::to_vec(&json!({"draftId":id,"mutationId":uuid::Uuid::new_v4().to_string(),"expectedRevision":frozen["revision"],"input":updated_raw})).unwrap();
         oversized.resize(MAX_CAPTURE_RECORD_BYTES + 16 * 1024 + 1, b' ');
         let denied = host

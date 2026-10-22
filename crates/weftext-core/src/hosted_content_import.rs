@@ -59,7 +59,7 @@ impl Core {
             witnesses,
             &[],
             None,
-            Some(destination_slot),
+            Some(&HostedDestination::fixed(destination_slot)),
         )
     }
 
@@ -187,7 +187,10 @@ impl Core {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(slot)
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
                 continue;
@@ -273,7 +276,10 @@ impl Core {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(slot)
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
                 continue;
