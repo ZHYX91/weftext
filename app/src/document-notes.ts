@@ -310,7 +310,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
         setUiText(node, value);
     return node;
 }
-function label(title: UiText, input: HTMLElement): HTMLElement { const field = element("label", "document-notes-field"); field.append(element("span", "", title), input); return field; }
+function label(title: UiText, input: HTMLElement): HTMLLabelElement { const field = document.createElement("label"); field.className = "document-notes-field"; field.append(element("span", "", title), input); return field; }
 function select(choices: [
     string,
     UiText

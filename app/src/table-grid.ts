@@ -132,7 +132,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     };
     const literal = (cell: WritingTableCell) => {
         const matches = controller.map?.literalRegions.filter(region => region.range.utf16From === cell.body.utf16From && region.range.utf16To === cell.body.utf16To && region.range.raw === cell.body.raw) ?? [];
-        return matches.length === 1 ? matches[0] : cell.body.raw === "" && cell.body.writable ? { range: cell.body, text: "", role: "tableCell" } : null;
+        return matches.length === 1 ? matches[0] : cell.body.raw === "" && cell.body.writable ? { range: cell.body, text: "", role: "tableCell", paragraphBreaks: [] } : null;
     };
     const refreshCurrent = () => {
         if (!controller.map)
