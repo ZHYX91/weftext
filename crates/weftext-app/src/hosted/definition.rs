@@ -423,7 +423,7 @@ pub(super) fn save(
     let original = inner
         .core
         .with_actor_for_root(&scope, &inner.config.root, |core| {
-            core.actor_save_status(&req.operation_id)
+            core.actor_save_status(&session.resource, &req.operation_id)
         })
         .map_err(core_error)?;
     if original.is_some_and(|s| s.status != "notCommitted") {

@@ -769,7 +769,7 @@ fn hosted_resource_original_ref_and_plan_survive_restart_retry_and_settle() {
     );
     assert!(
         f.core
-            .with_actor(ACTOR, |core| core.actor_save_status(&op))
+            .with_actor(ACTOR, |core| core.actor_save_status("Note", &op))
             .is_err()
     );
     assert!(

@@ -252,12 +252,12 @@ struct Session {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Draft {
     scope: QualifiedInputScope,
+    identity: FileIdentity,
     path: String,
     base_source: String,
     source: String,
     #[serde(default = "known_base")]
     base_known: bool,
-    identity: FileIdentity,
     #[serde(default)]
     alternatives: Vec<DraftAlternative>,
 }

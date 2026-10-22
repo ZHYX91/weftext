@@ -4,6 +4,23 @@
 use super::*;
 use std::collections::BTreeSet;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct DraftMetadata {
+    pub scope: QualifiedInputScope,
+    pub identity: FileIdentity,
+}
+pub(super) fn read_draft_metadata(file: &mut (impl Read + std::io::Seek)) -> Result<DraftMetadata> {
+    let fields =
+        hosted::read_metadata_prefix(file, &[("scope", false), ("identity", false)], 4096)?
+            .ok_or_else(|| {
+                CoreError::new(
+                    "unsupportedInputScope",
+                    "Draft lacks supported original metadata; original bytes remain unchanged",
+                )
+            })?;
+    hosted::decode_metadata(fields)
+}
 fn encode_draft_record(record: &impl Serialize) -> Result<Vec<u8>> {
     let bytes = serde_json::to_vec(record)?;
     if bytes.len() > MAX_DRAFT_RECORD_BYTES {
@@ -47,8 +64,9 @@ impl Core {
             ));
         }
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
-        if let Some(bytes) = self.read_draft_record(&path, &scope)? {
-            let original: Draft = serde_json::from_slice(&bytes)?;
+        if let Some((original, _)) =
+            self.read_draft_record(&path, &scope, &session.stamp.identity)?
+        {
             if original.identity != session.stamp.identity {
                 return Err(CoreError::new(
                     "privateEvidence",
@@ -227,42 +245,47 @@ impl Core {
         let bytes = encode_draft_record(draft)?;
         let path = self.object_draft_path(identity, &draft.scope)?;
         // Inspect metadata before replacing the one current record.
-        let _ = self.read_draft_record(&path, &draft.scope)?;
+        let _ = self.read_draft_record(&path, &draft.scope, &draft.identity)?;
         private_replace(&path, &bytes)
     }
-    fn read_draft_record(
+    pub(super) fn read_draft_record(
         &self,
         path: &Path,
         scope: &QualifiedInputScope,
-    ) -> Result<Option<Vec<u8>>> {
-        let mut file = match File::open(path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
+        identity: &FileIdentity,
+    ) -> Result<Option<(Draft, Vec<u8>)>> {
+        let guard = match ParentGuard::acquire(path) {
+            Ok(guard) => guard,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
         };
-        if file_save_scope::read_input_scope(&mut file)? != *scope {
+        let mut file = match guard.open_read_guard_file() {
+            Ok(file) => file,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let Some((metadata, bytes)) = hosted::read_qualified_private_record(&mut file, |file| {
+            let metadata = read_draft_metadata(file)?;
+            self.validate_original_input_scope(&metadata.scope)?;
+            if metadata.scope != *scope || metadata.identity != *identity {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    "Draft original input scope or physical identity differs",
+                ));
+            }
+            Ok(Some((metadata, MAX_DRAFT_RECORD_BYTES)))
+        })?
+        else {
+            return Ok(None);
+        };
+        let draft: Draft = serde_json::from_slice(&bytes)?;
+        if draft.scope != metadata.scope || draft.identity != metadata.identity {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Draft original input scope differs",
+                "Draft metadata changed during its qualified read",
             ));
         }
-        self.validate_original_input_scope(scope)?;
-        if file.metadata()?.len() > MAX_DRAFT_RECORD_BYTES as u64 {
-            return Err(CoreError::new(
-                "budget",
-                "Draft record exceeds its byte budget",
-            ));
-        }
-        let mut bytes = Vec::new();
-        file.take(MAX_DRAFT_RECORD_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_DRAFT_RECORD_BYTES {
-            return Err(CoreError::new(
-                "budget",
-                "Draft record exceeds its byte budget",
-            ));
-        }
-        Ok(Some(bytes))
+        Ok(Some((draft, bytes)))
     }
     #[cfg(test)]
     pub(super) fn draft_path(&self, path: &Path) -> PathBuf {
@@ -296,10 +319,9 @@ impl Core {
     ) -> Result<(Option<Draft>, bool)> {
         let scope = self.capture_file_save_scope(path)?;
         let primary = self.object_draft_path(identity, &scope)?;
-        let Some(bytes) = self.read_draft_record(&primary, &scope)? else {
+        let Some((mut draft, bytes)) = self.read_draft_record(&primary, &scope, identity)? else {
             return Ok((None, false));
         };
-        let mut draft: Draft = serde_json::from_slice(&bytes)?;
         if draft.scope != scope || &draft.identity != identity {
             return Err(CoreError::new(
                 "privateEvidence",

@@ -6,6 +6,10 @@ fn protected_history_draft_routing_validates_original_tuple_before_ignoring_fore
     let mut f = HistoryFixture::new();
     let foreign = f._temp.path().join("foreign");
     f.core.create_library(&foreign).unwrap();
+    let foreign_doc = f
+        .core
+        .create_note_fixture(&foreign, &foreign, "Foreign")
+        .unwrap();
     let mut scope = f
         .core
         .capture_file_save_scope(&foreign.join("prospective.typ"))
@@ -14,9 +18,15 @@ fn protected_history_draft_routing_validates_original_tuple_before_ignoring_fore
         .core
         .draft_directory("draft-history")
         .join(format!("{}.json", fresh()));
+    let foreign_identity = f.core.sessions[&foreign_doc.session_id]
+        .stamp
+        .identity
+        .clone();
     let encoded = |scope: &QualifiedInputScope| {
         let mut bytes = b"{\"scope\":".to_vec();
         bytes.extend(serde_json::to_vec(scope).unwrap());
+        bytes.extend_from_slice(b",\"identity\":");
+        bytes.extend(serde_json::to_vec(&foreign_identity).unwrap());
         bytes.extend_from_slice(b",\"source\":BROKEN_FOREIGN_BODY");
         bytes
     };
@@ -37,6 +47,127 @@ fn protected_history_draft_routing_validates_original_tuple_before_ignoring_fore
     fs::write(&path, &valid_foreign).unwrap();
     assert!(f.core.list_history(&f.doc.session_id).is_ok());
     assert_eq!(fs::read(path).unwrap(), valid_foreign);
+}
+
+#[test]
+fn protected_history_skips_other_physical_owner_before_its_private_body() {
+    let mut f = HistoryFixture::new();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let scope = f.core.draft_session_scope(&other.session_id).unwrap();
+    let identity = f.core.sessions[&other.session_id].stamp.identity.clone();
+    let mut bytes = b"{\"scope\":".to_vec();
+    bytes.extend(serde_json::to_vec(&scope).unwrap());
+    bytes.extend_from_slice(b",\"identity\":");
+    bytes.extend(serde_json::to_vec(&identity).unwrap());
+    bytes.extend_from_slice(b",\"source\":BROKEN_OTHER_PRIVATE_BODY");
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", fresh()));
+    let mut paths = vec![path];
+    for _ in 0..128 {
+        paths.push(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+        );
+    }
+    for path in &paths {
+        fs::write(path, &bytes).unwrap();
+    }
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    for path in paths {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    let mut reader = std::io::Cursor::new(&bytes);
+    assert_eq!(
+        draft_recovery::read_draft_metadata(&mut reader)
+            .unwrap()
+            .identity,
+        identity
+    );
+}
+
+#[test]
+fn retained_restore_rejects_foreign_scope_or_file_before_private_body_and_recovers_original_result()
+{
+    let mut f = HistoryFixture::new();
+    let version = f.initial_version();
+    f.save("saved S");
+    let request = f.restore_request(&version, "retain", Some("private pending Y"));
+    let original_result = f.core.restore_history(request.clone()).unwrap();
+    let original_plan = f.core.operations[&request.operation_id].clone();
+    let archives = &original_plan
+        .history_restore
+        .as_ref()
+        .unwrap()
+        .draft_records;
+    assert!(!archives.is_empty());
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", archives[0]));
+    let original = fs::read(&path).unwrap();
+    let plan_bytes = fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap();
+    let commit_bytes = fs::read(f.core.journal_path(&request.operation_id, "commit")).unwrap();
+    let source_bytes = fs::read(&f.doc.path).unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let foreign = f._temp.path().join("foreign");
+    f.core.create_library(&foreign).unwrap();
+    let foreign_doc = f
+        .core
+        .create_note_fixture(&foreign, &foreign, "Foreign")
+        .unwrap();
+    let count = f.core.operations.len();
+    for doc in [&other, &foreign_doc] {
+        let scope = f.core.draft_session_scope(&doc.session_id).unwrap();
+        let identity = f.core.sessions[&doc.session_id].stamp.identity.clone();
+        let mut damaged = b"{\"scope\":".to_vec();
+        damaged.extend(serde_json::to_vec(&scope).unwrap());
+        damaged.extend_from_slice(b",\"identity\":");
+        damaged.extend(serde_json::to_vec(&identity).unwrap());
+        damaged.extend_from_slice(b",\"source\":BROKEN_FOREIGN_PRIVATE_BODY");
+        fs::write(&path, &damaged).unwrap();
+        let status = f
+            .core
+            .history_restore_status(&request.operation_id)
+            .unwrap();
+        assert_eq!(status.status, "committed");
+        assert_eq!(
+            status.receipt.unwrap().base_id,
+            original_result.receipt.base_id
+        );
+        assert!(status.result.is_none());
+        assert_eq!(status.result_error.unwrap().code, "privateEvidence");
+        assert_eq!(fs::read(&path).unwrap(), damaged);
+        assert_eq!(
+            fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap(),
+            plan_bytes
+        );
+        assert_eq!(
+            fs::read(f.core.journal_path(&request.operation_id, "commit")).unwrap(),
+            commit_bytes
+        );
+        assert_eq!(fs::read(&f.doc.path).unwrap(), source_bytes);
+        assert_eq!(f.core.operations.len(), count);
+    }
+    fs::write(&path, &original).unwrap();
+    let restored = f
+        .core
+        .history_restore_status(&request.operation_id)
+        .unwrap();
+    assert_eq!(restored.status, "committed");
+    assert_eq!(
+        restored.result.unwrap().protected_drafts[0].source,
+        original_result.protected_drafts[0].source
+    );
+    assert_eq!(fs::read(path).unwrap(), original);
 }
 
 #[test]

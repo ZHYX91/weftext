@@ -107,7 +107,7 @@ class HostedDefinition(HostedQuery):
                          {first['definition']['key'], second['definition']['key']})
         self.server.close()
         self.start()
-        self.assertEqual(self.call('operation', {'operationId': request['operationId']})['status'], 'committed')
+        self.assertEqual(self.call('operation', {'resource': 'Shared', 'operationId': request['operationId']})['status'], 'committed')
         self.assertEqual(self.receipt('Shared', two['operationId'])['status'], 'admitted')
         self.assertEqual(self.open()['source'], final_source)
         call = {'advanced': {'call': {'owner': 'Shared', 'selection': {'mode': 'current', 'key': second['definition']['key']}}}}
@@ -178,7 +178,7 @@ class HostedDefinition(HostedQuery):
         retained = self.open()
         self.assertEqual(retained['source'], doc['source'])
         self.assertEqual(retained['recoveredDraft'], unfinished)
-        self.assertEqual(self.call('operation', {'operationId': request['operationId']})['status'], 'notCommitted')
+        self.assertEqual(self.call('operation', {'resource': 'Shared', 'operationId': request['operationId']})['status'], 'notCommitted')
         self.assertIn(self.call('operation/settle', {'resource': 'Shared', 'operationId': request['operationId']})['status'], ['cancelled', 'resolved'])
         self.assertEqual(self.receipt('Shared', proposal['operationId'])['status'], 'reserved')
         self.server.close()

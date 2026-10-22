@@ -111,6 +111,24 @@ struct DefinitionSaveRecord {
     source_hash: String,
     reservations: Vec<SaveDefinitionReservation>,
 }
+#[derive(PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DefinitionSaveMetadata {
+    core_operation_id: String,
+    save_operation_id: String,
+    actor: String,
+    resource: String,
+}
+impl From<&DefinitionSaveRecord> for DefinitionSaveMetadata {
+    fn from(record: &DefinitionSaveRecord) -> Self {
+        Self {
+            core_operation_id: record.core_operation_id.clone(),
+            save_operation_id: record.save_operation_id.clone(),
+            actor: record.actor.clone(),
+            resource: record.resource.clone(),
+        }
+    }
+}
 
 fn conflict() -> CoreError {
     CoreError::new(
@@ -162,22 +180,63 @@ fn exact_insertion(patch: &FieldPatch) -> bool {
             .is_some_and(|(from, to)| patch.source.get(from..to) == Some(patch.text.as_str()))
 }
 
-fn bounded_record(path: &Path) -> Result<Option<Vec<u8>>> {
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
+fn bounded_record(
+    path: &Path,
+    accept: impl FnOnce(&DefinitionSaveMetadata) -> Result<bool>,
+) -> Result<Option<(DefinitionSaveRecord, Vec<u8>)>> {
+    let guard = match ParentGuard::acquire(path) {
+        Ok(guard) => guard,
+        Err(error) if error.code == "missing" => return Ok(None),
+        Err(error) => return Err(error),
     };
-    let mut bytes = vec![];
-    file.take((MAX_RECORD_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > MAX_RECORD_BYTES {
+    let mut file = match guard.open_read_guard_file() {
+        Ok(file) => file,
+        Err(error) if error.code == "missing" => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let Some((metadata, bytes)) = read_qualified_private_record(&mut file, |file| {
+        let fields = read_metadata_prefix(
+            file,
+            &[
+                ("coreOperationId", false),
+                ("saveOperationId", false),
+                ("actor", false),
+                ("resource", false),
+            ],
+            4096,
+        )?
+        .ok_or_else(|| {
+            CoreError::new(
+                "privateEvidence",
+                "Definition admission metadata is missing",
+            )
+        })?;
+        let metadata: DefinitionSaveMetadata = decode_metadata(fields)?;
+        valid_operation_id(&metadata.core_operation_id)?;
+        valid_operation_id(&metadata.save_operation_id)?;
+        valid_resource(&metadata.resource)?;
+        if metadata.actor.is_empty() || metadata.actor.len() > 256 {
+            return Err(CoreError::new(
+                "privateEvidence",
+                "Invalid definition admission actor",
+            ));
+        }
+        if !accept(&metadata)? {
+            return Ok(None);
+        }
+        Ok(Some((metadata, MAX_RECORD_BYTES)))
+    })?
+    else {
+        return Ok(None);
+    };
+    let record: DefinitionSaveRecord = serde_json::from_slice(&bytes)?;
+    if DefinitionSaveMetadata::from(&record) != metadata {
         return Err(CoreError::new(
-            "budget",
-            "Definition record exceeds its byte budget",
+            "privateEvidence",
+            "Definition admission metadata changed during its qualified read",
         ));
     }
-    Ok(Some(bytes))
+    Ok(Some((record, bytes)))
 }
 
 pub(super) fn canonical_proposal_ids(ids: &[String]) -> Result<Vec<String>> {
@@ -208,12 +267,9 @@ impl Core {
     fn definition_record(&self, resource: &str, operation: &str) -> Result<Option<ActorOperation>> {
         valid_resource(resource)?;
         canonical_proposal_ids(&[operation.to_owned()])?;
-        let Some(bytes) = bounded_record(&self.actor_record(operation)?)? else {
+        let Some(record) = self.read_actor_operation(operation, resource, MAX_RECORD_BYTES)? else {
             return Ok(None);
         };
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.validate_actor_input_record(&record)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.definition.is_none()
@@ -427,7 +483,15 @@ impl Core {
         let mut saved = None;
         if let Some(proposal) = proposal {
             for plan in self.operations.values() {
-                let Some(admissions) = self.definition_save_record(plan)? else {
+                let ActorInputScope::Qualified { scope } = &record.scope else {
+                    return Err(conflict());
+                };
+                let Some(admissions) = self.definition_save_record(
+                    plan,
+                    Some(scope),
+                    Some((&record.actor, resource)),
+                )?
+                else {
                     continue;
                 };
                 if admissions.actor != record.actor
@@ -545,24 +609,21 @@ impl Core {
             {
                 continue;
             }
-            let Some(bytes) = bounded_record(&path)? else {
-                return Err(conflict());
+            let Some((record, count)) = self.read_actor_operation_counted(
+                operation,
+                resource,
+                (16 * 1024 * 1024).min(MAX_LIST_BYTES - bytes_used),
+                true,
+            )?
+            else {
+                continue;
             };
-            bytes_used = bytes_used.checked_add(bytes.len()).ok_or_else(conflict)?;
+            bytes_used = bytes_used.checked_add(count).ok_or_else(conflict)?;
             if bytes_used > MAX_LIST_BYTES {
                 return Err(CoreError::new(
                     "budget",
                     "Definition enumeration exceeds 64 MiB",
                 ));
-            }
-            let record: ActorOperation = serde_json::from_slice(&bytes)?;
-            self.validate_actor_input_record(&record)?;
-            self.check_actor_library(&record.library)?;
-            if self.actor.as_ref() != Some(&record.actor) {
-                return Err(conflict());
-            }
-            if record.resource != resource {
-                continue;
             }
             let Some(proposal) = record.definition.as_ref().and_then(|d| d.proposal.as_ref())
             else {
@@ -743,7 +804,13 @@ impl Core {
         };
         let path = self.journal_path(&record.core_operation_id, "definition-reservations");
         let bytes = serde_json::to_vec(&admissions)?;
-        if let Some(original) = bounded_record(&path)? {
+        let expected = DefinitionSaveMetadata::from(&admissions);
+        if let Some((_, original)) = bounded_record(&path, |metadata| {
+            if *metadata != expected {
+                return Err(conflict());
+            }
+            Ok(true)
+        })? {
             if original != bytes {
                 return Err(conflict());
             }
@@ -755,14 +822,37 @@ impl Core {
         Ok(())
     }
 
-    fn definition_save_record(&self, plan: &journal::Plan) -> Result<Option<DefinitionSaveRecord>> {
-        let Some(bytes) =
-            bounded_record(&self.journal_path(&plan.operation_id, "definition-reservations"))?
+    fn definition_save_record(
+        &self,
+        plan: &journal::Plan,
+        scope: Option<&QualifiedInputScope>,
+        audience: Option<(&str, &str)>,
+    ) -> Result<Option<DefinitionSaveRecord>> {
+        let path = self.journal_path(&plan.operation_id, "definition-reservations");
+        if plan.kind != "save" || plan.transaction.is_some() {
+            if path.try_exists()? {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    "Definition admission references another Plan kind",
+                ));
+            }
+            return Ok(None);
+        }
+        self.validate_file_save_plan(plan)?;
+        if scope.is_some_and(|scope| scope != &plan.file_save.as_ref().unwrap().scope) {
+            return Ok(None);
+        }
+        let Some((record, _)) = bounded_record(&path, |metadata| {
+            if metadata.core_operation_id != plan.operation_id {
+                return Err(conflict());
+            }
+            Ok(audience.is_none_or(|(actor, resource)| {
+                metadata.actor == actor && metadata.resource == resource
+            }))
+        })?
         else {
             return Ok(None);
         };
-        self.validate_file_save_plan(plan)?;
-        let record: DefinitionSaveRecord = serde_json::from_slice(&bytes)?;
         if record.core_operation_id != plan.operation_id
             || record.path != plan.path
             || record.save_fingerprint != plan.fingerprint
@@ -803,12 +893,22 @@ impl Core {
         if !self.committed(&plan.operation_id) {
             return Ok(false);
         }
-        Ok(self.definition_save_record(plan)?.is_some_and(|record| {
-            record
-                .reservations
-                .iter()
-                .any(|r| &r.owner == owner && r.key == key)
-        }))
+        if plan.kind != "save" {
+            return Ok(false);
+        }
+        self.validate_file_save_plan(plan)?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == owner.workspace_id)
+        {
+            return Ok(false);
+        }
+        Ok(self
+            .definition_save_record(plan, None, None)?
+            .is_some_and(|record| {
+                record
+                    .reservations
+                    .iter()
+                    .any(|r| &r.owner == owner && r.key == key)
+            }))
     }
 }
 

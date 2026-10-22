@@ -287,7 +287,7 @@ fn hosted_feature_original_preview_plan_commit_and_private_draft_survive_restart
     );
     assert!(
         f.core
-            .with_actor(ACTOR, |core| core.actor_save_status(&op))
+            .with_actor(ACTOR, |core| core.actor_save_status("Note", &op))
             .is_err()
     );
     assert!(

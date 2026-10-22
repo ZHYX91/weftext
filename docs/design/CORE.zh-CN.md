@@ -520,3 +520,7 @@ Session、当前文件 Draft 共用同一 scope，Draft 必需原 FI，唯一主
 共同原 scope reader 同时联核原 WorkspaceId、根 FI 和原准入 Plan 的稳定 locator；即使记录将被归为外库，也不能忽略矛盾 locator。首部保留有界原 JSON 字节作严格 typed decode，重复成员不能经中间通用值覆盖。Actor producer 在持久化前执行相同完整验证：普通 source／field 可以是设备输入，但非空库功能／导航提案必须已有合格库；拒绝时不留下自身 reader 无法读取的提案。纯 `noInput` fence 还须核准确 actor/operations/canonical UUID 文件名，不能隐藏实际 Plan。
 
 Draft reader 从当前真实位置逆向遍历同 workspace 的原 committed relocation，联核当前移动目录 FI，规范叶另核文件 FI；这可恢复整目录内未单独列入事务文件清单的普通输入。旧 Session 的 writer 路径关系不能充当当前物理位置证明，外部回滚到历史旧槽不会覆盖隐藏主稿。同步 publication／local-state 读取同样要求 file-save 原参与者；新发布以原 workspace 选择原 replica，旧路径复用不会把新库保存发布到外库绑定。
+
+所有私有 ActorOperation 读取先在同一 ParentGuard 保护句柄上逐字节读取既有顺序首部 `scope, library?, actor, resource, fingerprint, coreOperationId`（总计 8 KiB、单值 2 KiB），严格核原 scope tuple、原 Plan 和实际 actor/resource/库资格，再有界读取正文并重核元数据一致。Server 的原保存 status 必需原 resource，读取授权在进入 Core 前完成。定义枚举对已证明的其他 resource 只读首部，不读取或计入其正文预算；畸形原 tuple 不能借外域跳过。无 namespace library 绑定的原输入仍必须与当前受信库的 WorkspaceId 和根 FI 一致。纯 noInput fence 则在 4 KiB 内完整核其无输入事实，不能用未核的首部声明掩盖作者内容。
+
+Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在原 scope 和 FI 均匹配后计入 128 条／16 MiB 预算。准确 restore 引用若 scope 或 FI 不符直接拒绝，保原 commit 与回执，只报告结果暂不可交付。资格通过后从同一个受保护句柄有界读取、严格反序列化并联核首部；旧布局原件保留，明确 unsupported，不增加旧／新双 reader 或平行 metadata 账本。定义保存 admission sidecar 也先核其原 file-save Plan 和既有 coreOperationId/saveOperationId/actor/resource 首部，再读取预约正文。

@@ -1,7 +1,7 @@
 // Disconnected drafts carry their actual base. Reopening never silently adopts
 // a new base for an older proposal, including after a lost save response.
 export interface HostedSaveRequest { sessionId: string; baseId: string; operationId: string; source: string; definitionReservations?: string[] }
-export interface HostedDraft { source: string; baseSource: string; reference?: string; definitionReservations?: string[]; pending?: { operationId: string; source: string; request?: HostedSaveRequest } }
+export interface HostedDraft { source: string; baseSource: string; reference?: string; definitionReservations?: string[]; pending?: { resource: string; operationId: string; source: string; request?: HostedSaveRequest } }
 export function bindHostedDraftReference(draft: HostedDraft, reference: string): HostedDraft {
   if (draft.reference && draft.reference !== reference) throw new Error("当前获权笔记身份与原草稿不同；原引用与输入保留，请明确核对，未重绑原草稿。");
   return { ...draft, reference };

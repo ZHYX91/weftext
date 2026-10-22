@@ -173,13 +173,13 @@ class Hosted(unittest.TestCase):
     def test_retries_status_actor_namespace_and_restart(self):
         a=self.open();b=self.open(actor='bob');op=uid()
         saved,req=self.save(a,a['source']+'saved',op=op)
-        other_op=self.call('operation',{'operationId':op},'bob')
+        other_op=self.call('operation',{'resource':'Shared','operationId':op},'bob')
         self.assertEqual(other_op['status'],'notRegistered')
         self.save(b,b['source']+'conflict','bob',409,op)
         self.call('save',{**req,'source':req['source']+'changed'},status=409)
         self.server.close();self.start()
-        self.assertEqual(self.call('operation',{'operationId':op}),saved)
-        self.assertEqual(self.call('operation',{'operationId':op},'bob')['status'],'notCommitted')
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op}),saved)
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op},'bob')['status'],'notCommitted')
         reopened=self.open(actor='bob');self.assertIn('conflict',reopened['recoveredDraft'])
 
     def test_history_authorized_without_other_users_drafts(self):
@@ -239,7 +239,7 @@ class Hosted(unittest.TestCase):
 
     def test_unknown_request_is_fenced_before_a_new_proposal(self):
         a=self.open();op=uid()
-        self.assertEqual(self.call('operation',{'operationId':op})['status'],'notRegistered')
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op})['status'],'notRegistered')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':op})['status'],'cancelled')
         self.save(a,a['source']+'late original',status=409,op=op)
         self.assertNotIn('late original',(self.root/'Shared/Shared.typ').read_text('utf-8'))

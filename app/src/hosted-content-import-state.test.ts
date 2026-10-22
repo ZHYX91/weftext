@@ -37,5 +37,5 @@ test("reload retains both original request and later file; malformed record or b
 test("staged target cache normalizes only clean buffers, preserving unresolved requests and divergent Draft bases", () => {
   const clean = { source: "old", baseSource: "old", definitionReservations: ["reservation"] }; assert.deepEqual(hostedOpenedDraft("new", clean), { ...clean, source: "new", baseSource: "new" }); assert.equal(clean.source, "old");
   const dirty = { source: "personal", baseSource: "old" }; assert.deepEqual(hostedOpenedDraft("new", dirty), dirty);
-  const unknown = { ...clean, pending: { operationId: "original", source: "proposal", request: { sessionId: "old-session", baseId: "old-base", operationId: "original", source: "proposal" } } }; assert.deepEqual(hostedOpenedDraft("new", unknown), unknown);
+  const unknown = { ...clean, pending: { resource: "Shared", operationId: "original", source: "proposal", request: { sessionId: "old-session", baseId: "old-base", operationId: "original", source: "proposal" } } }; assert.deepEqual(hostedOpenedDraft("new", unknown), unknown);
 });

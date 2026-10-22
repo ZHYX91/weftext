@@ -744,32 +744,38 @@ impl Core {
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
-            let mut file = File::open(&path)?;
-            let original_scope = file_save_scope::read_input_scope(&mut file)?;
-            self.validate_original_input_scope(&original_scope)?;
-            if original_scope != *scope {
+            let guard = ParentGuard::acquire(&path)?;
+            let mut file = guard.open_read_guard_file()?;
+            let Some((metadata, bytes)) =
+                hosted::read_qualified_private_record(&mut file, |file| {
+                    let metadata = draft_recovery::read_draft_metadata(file)?;
+                    self.validate_original_input_scope(&metadata.scope)?;
+                    if metadata.scope != *scope {
+                        return Ok(None);
+                    }
+                    if metadata.identity != *identity {
+                        return Ok(None);
+                    }
+                    let remaining = 16 * 1024 * 1024usize - total;
+                    if records >= 128 {
+                        return Err(CoreError::new(
+                            "budget",
+                            "Protected draft browsing exceeds 128 records or 16 MiB",
+                        ));
+                    }
+                    records += 1;
+                    Ok(Some((metadata, remaining)))
+                })?
+            else {
                 continue;
-            }
-            let remaining = 16 * 1024 * 1024usize - total;
-            if records >= 128 || file.metadata()?.len() > remaining as u64 {
-                return Err(CoreError::new(
-                    "budget",
-                    "Protected draft browsing exceeds 128 records or 16 MiB",
-                ));
-            }
-            records += 1;
-            let mut bytes = Vec::new();
-            file.take(remaining as u64 + 1).read_to_end(&mut bytes)?;
-            if bytes.len() > remaining {
-                return Err(CoreError::new(
-                    "budget",
-                    "Protected draft bytes grew beyond their read budget",
-                ));
-            }
+            };
             total += bytes.len();
             let draft: Draft = serde_json::from_slice(&bytes)?;
-            if &draft.identity != identity || &draft.scope != scope {
-                continue;
+            if draft.identity != metadata.identity || draft.scope != metadata.scope {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    "Protected draft metadata changed during its qualified read",
+                ));
             }
             append_draft_alternatives(&mut drafts, &draft);
         }
@@ -833,18 +839,39 @@ impl Core {
             ));
         }
         let mut protected_drafts = Vec::new();
+        if binding.draft_records.len() > 128 {
+            return Err(CoreError::new(
+                "budget",
+                "Original restore exceeds 128 protected Draft records",
+            ));
+        }
+        let mut protected_bytes = 0usize;
         for name in &binding.draft_records {
             valid_operation_id(name)?;
-            let draft: Draft = serde_json::from_slice(&fs::read(
-                self.draft_directory("draft-history")
-                    .join(format!("{name}.json")),
-            )?)?;
-            if draft.scope != plan.file_save.as_ref().unwrap().scope
-                || Some(&draft.identity) != plan.identity.as_ref()
-            {
+            let path = self
+                .draft_directory("draft-history")
+                .join(format!("{name}.json"));
+            let (draft, bytes) = self
+                .read_draft_record(
+                    &path,
+                    &plan.file_save.as_ref().unwrap().scope,
+                    plan.identity.as_ref().ok_or_else(|| {
+                        CoreError::new(
+                            "historyUnavailable",
+                            "Original restore physical owner is missing",
+                        )
+                    })?,
+                )?
+                .ok_or_else(|| {
+                    CoreError::new("historyUnavailable", "Original protected Draft is missing")
+                })?;
+            protected_bytes = protected_bytes
+                .checked_add(bytes.len())
+                .ok_or_else(|| CoreError::new("budget", "Protected Draft byte count overflow"))?;
+            if protected_bytes > 16 * 1024 * 1024 {
                 return Err(CoreError::new(
-                    "historyUnavailable",
-                    "Protected Draft belongs to another original physical owner or input scope",
+                    "budget",
+                    "Original protected Drafts exceed 16 MiB",
                 ));
             }
             append_draft_alternatives(&mut protected_drafts, &draft);

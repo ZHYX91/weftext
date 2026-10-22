@@ -5,6 +5,135 @@ const ACTOR: &str = "hosted:alice:definitions";
 const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER_FP: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
+#[test]
+fn definition_enumeration_and_admission_status_skip_other_resources_before_private_body() {
+    let mut f = Fixture::new();
+    let doc = f.open();
+    let own = fresh();
+    f.reserve(&doc, &doc.source, "weftext-query-ownprivate", &own)
+        .unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let other = f
+        .core
+        .with_actor(ACTOR, |core| core.open(&other.path, Some(f.root.clone())))
+        .unwrap();
+    let other_id = fresh();
+    let request = f.request(&other, &other_id);
+    let proposal = f
+        .core
+        .with_actor(ACTOR, |core| {
+            core.actor_definition_reserve("Other", &f.root, request, |key, binding| {
+                weftext_data::upsert_saved_query(
+                    &other.source,
+                    None,
+                    key,
+                    "weftext-query-otherprivate",
+                    binding,
+                    &QueryPlan::default(),
+                    &f.schema,
+                )
+                .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))
+            })
+        })
+        .unwrap();
+    let path = f
+        .core
+        .with_actor(ACTOR, |core| core.actor_record(&other_id))
+        .unwrap();
+    let original = fs::read(&path).unwrap();
+    let marker = b",\"cancelled\":";
+    let at = original
+        .windows(marker.len())
+        .position(|part| part == marker)
+        .unwrap();
+    let mut damaged = original[..at].to_vec();
+    damaged.extend_from_slice(b",\"cancelled\":BROKEN_OTHER_PRIVATE_BODY");
+    fs::write(&path, &damaged).unwrap();
+    let count = f.core.operations.len();
+    let listed = f
+        .core
+        .with_actor(ACTOR, |core| {
+            core.actor_definition_list("Note", &f.root, &doc.session_id)
+        })
+        .unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].operation_id, own);
+    let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    file.set_len((MAX_LIST_BYTES + 1) as u64).unwrap();
+    drop(file);
+    assert_eq!(
+        f.core
+            .with_actor(ACTOR, |core| core.actor_definition_list(
+                "Note",
+                &f.root,
+                &doc.session_id
+            ))
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        fs::metadata(&path).unwrap().len(),
+        (MAX_LIST_BYTES + 1) as u64
+    );
+    fs::write(&path, &original).unwrap();
+    let source = proposal.patch.unwrap().source;
+    let saved_id = fresh();
+    f.core
+        .with_actor(ACTOR, |core| {
+            core.actor_save_with_definition_reservations(
+                "Other",
+                &f.root,
+                HostedSaveRequest {
+                    session_id: other.session_id.clone(),
+                    base_id: other.base_id.clone(),
+                    source: source.clone(),
+                    operation_id: saved_id.clone(),
+                },
+                std::slice::from_ref(&other_id),
+            )
+        })
+        .unwrap();
+    let saved = f
+        .core
+        .with_actor(ACTOR, |core| {
+            core.read_actor_operation(&saved_id, "Other", MAX_RECORD_BYTES)
+        })
+        .unwrap()
+        .unwrap();
+    let sidecar = f
+        .core
+        .journal_path(&saved.core_operation_id, "definition-reservations");
+    let original_sidecar = fs::read(&sidecar).unwrap();
+    let marker = b",\"reservations\":";
+    let at = original_sidecar
+        .windows(marker.len())
+        .position(|part| part == marker)
+        .unwrap();
+    let mut damaged_sidecar = original_sidecar[..at].to_vec();
+    damaged_sidecar.extend_from_slice(b",\"reservations\":BROKEN_OTHER_RESERVATIONS");
+    fs::write(&sidecar, &damaged_sidecar).unwrap();
+    assert_eq!(f.status(&own).status, "reserved");
+    assert_eq!(fs::read(&sidecar).unwrap(), damaged_sidecar);
+    assert!(f.core.operations.len() > count);
+    fs::write(&sidecar, &original_sidecar).unwrap();
+    assert_eq!(f.status(&own).status, "reserved");
+    assert_eq!(
+        f.core
+            .with_actor(ACTOR, |core| core
+                .actor_definition_status("Other", &other_id))
+            .unwrap()
+            .unwrap()
+            .status,
+        "admitted"
+    );
+    assert_eq!(fs::read(sidecar).unwrap(), original_sidecar);
+    assert_eq!(fs::read(path).unwrap(), original);
+}
+
 struct Fixture {
     core: Core,
     temp: tempfile::TempDir,
@@ -285,7 +414,7 @@ fn hosted_definition_request_fingerprint_owner_actor_category_and_base_are_fence
     );
     assert_eq!(
         f.core
-            .with_actor(ACTOR, |c| c.actor_save_status(&id))
+            .with_actor(ACTOR, |c| c.actor_save_status("Note", &id))
             .unwrap_err()
             .code,
         "operationConflict"
@@ -489,7 +618,7 @@ fn hosted_definition_preplan_failures_settle_original_and_explicitly_save_same_k
         assert_eq!(f.status(&id).status, "reserved");
         assert_eq!(
             f.core
-                .with_actor(ACTOR, |c| c.actor_save_status(&save_id))
+                .with_actor(ACTOR, |c| c.actor_save_status("Note", &save_id))
                 .unwrap()
                 .unwrap()
                 .status,
@@ -1067,7 +1196,7 @@ fn hosted_definition_first_admission_rejects_changed_owner_and_binding_before_so
     );
     assert!(
         f.core
-            .with_actor(ACTOR, |c| c.actor_save_status(&save_id))
+            .with_actor(ACTOR, |c| c.actor_save_status("Note", &save_id))
             .unwrap()
             .is_none()
     );

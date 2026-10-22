@@ -517,7 +517,7 @@ async function verifyPersonalIdentity(audience: string, epoch: number): Promise<
 async function recoverPersonalOperation(record: PersonalInputRecord, audience: string): Promise<void> {
   const epoch = authorizationEpoch; await verifyPersonalIdentity(audience, epoch); record = personalInputs.current(audience, record);
   if (!record.pending || record.owner.kind !== "body") throw new Error("此记录没有正文原保存编号。");
-  let outcome = await request<SaveStatus>("operation", { operationId: record.pending.operationId });
+  let outcome = await request<SaveStatus>("operation", { resource: record.owner.resource, operationId: record.pending.operationId });
   if (authorizationEpoch !== epoch || personalAudience() !== audience) return;
   checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
   if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource: record.owner.resource, operationId: record.pending.operationId });
@@ -619,13 +619,15 @@ async function open(resource: string) {
       if (ref.resource === opened.resource && ref.reference === draft.reference) { targetDraft = { ...draft, source: source.value }; alias = true; }
     }
     if (targetDraft.pending) {
-      let outcome = await request<SaveStatus>("operation", { operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
-      checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
-      if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
-      checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
+      const originalResource = targetDraft.pending.resource;
+      let outcome = await request<SaveStatus>("operation", { resource: originalResource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
+      if (["notRegistered", "notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle", { resource: originalResource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget"); if (!current()) return;
+      checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
       if (outcome.status === "committed") { finishPersonalOperation(targetDraft.pending.operationId, "committed"); targetDraft = applySaveResult(targetDraft, targetDraft.pending.source); recoveredSave = true; }
       else if (["cancelled", "resolved"].includes(outcome.status)) { finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved"); delete targetDraft.pending; }
     }
+    if (alias && targetDraft.pending) throw new Error("原别名保存尚未终结；原编号、resource、输入和 Undo 保留，没有将待核对提案重绑到新别名。");
     if (!await authority() || !current()) return; retain();
     targetDraft = hostedOpenedDraft(opened.source, targetDraft);
     // A quota failure must happen while the original editor and session still
@@ -672,7 +674,7 @@ async function save() {
   await source.beginPersonalSave(op, sent);
   if (epoch !== requestEpoch || doc !== selected || !draft) { source.settlePersonalSave(op, false); return; }
   draft.source = source.value;
-  draft.pending = {operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged(); knowledgeAuthorChanged();
+  draft.pending = {resource:selected.resource,operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged(); knowledgeAuthorChanged();
   try {
     const result = await request<SaveStatus>("save",exactRequest);
     if (epoch !== requestEpoch || doc !== selected || !draft) return;
@@ -685,7 +687,7 @@ async function save() {
     if (epoch !== requestEpoch || !draft) throw error;
     // Network/unknown failure keeps the exact original ID until status lookup.
     if (error instanceof HostedError && error.http === 409) {
-      let result = await request<SaveStatus>("operation",{operationId:op});
+      let result = await request<SaveStatus>("operation",{resource:selected.resource,operationId:op});
       if (epoch !== requestEpoch || doc !== selected || !draft) throw error;
       checkedSaveStatus(result, op, selected.resource);
       if (["notRegistered","notCommitted"].includes(result.status)) result = await request<SaveStatus>("operation/settle",{resource:selected.resource,operationId:op});

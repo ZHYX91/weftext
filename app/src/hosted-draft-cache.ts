@@ -13,7 +13,7 @@ function mapDraftTexts(value: unknown, convert: (text: unknown, field: string) =
     const draft = value as HostedDraft;
     const mapped = { ...draft, source: convert(draft.source, "source"), baseSource: convert(draft.baseSource, "baseSource") };
     if (draft.pending === undefined) return mapped;
-    if (!draft.pending || typeof draft.pending !== "object" || typeof draft.pending.operationId !== "string") throw invalid();
+    if (!draft.pending || typeof draft.pending !== "object" || typeof draft.pending.operationId !== "string" || typeof draft.pending.resource !== "string" || !draft.pending.resource) throw invalid();
     const pending = { ...draft.pending, source: convert(draft.pending.source, "pending") };
     if (draft.pending.request) pending.request = { ...draft.pending.request, source: convert(draft.pending.request.source, "request") } as typeof draft.pending.request;
     return { ...mapped, pending };
