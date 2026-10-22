@@ -47,5 +47,6 @@ jobs:
           path: |
             ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
             ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/roles/*
           if-no-files-found: error
           retention-days: 7
