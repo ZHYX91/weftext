@@ -549,7 +549,6 @@ def main():
             job_ids = [case["result"]["started"]["jobId"] for case in cases
                        if "started" in case.get("result", {})]
             assert len(job_ids) == len(set(job_ids)), "job identity reused"
-            print(f"PASS: {len(cases)} actual broker mechanism cases; no whole-version/product claim")
         finally:
             shutdown_error = None
             try:
@@ -566,6 +565,7 @@ def main():
                 }, indent=2), encoding="utf-8")
             if shutdown_error is not None:
                 raise RuntimeError("daemon did not exit cleanly; retain identities.json and owned deployment") from shutdown_error
+    print(f"PASS: {len(cases)} actual broker mechanism cases; no whole-version/product claim")
 
 
 if __name__ == "__main__":
