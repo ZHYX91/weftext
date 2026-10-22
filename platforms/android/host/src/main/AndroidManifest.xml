@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- This library grants no network, storage, exported component or Core capability.
+         The final application declares its concrete isolated worker only after
+         the real shared Engine ABI has been integrated. -->
+    <application />
+</manifest>
