@@ -1,5 +1,8 @@
 // Actual original-operation delivery consumers in owned headless Chrome.
 // node scripts/test_creation_delivery_browser.mjs EXE NEW_OUTPUT [all|CASE]
+// Optional WEFTEXT_BROWSER_FRONTEND_URL uses an already running local Vite UI;
+// WEFTEXT_API_PORT must match its proxy. This is source-UI/backend evidence,
+// distinct from acceptance of the executable's embedded frontend.
 // Browser abort/500 below are controlled delivery failures, not internal Core IO.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -13,6 +16,10 @@ const [exeArg, outArg, selected = "all"] = process.argv.slice(2);
 const repoArg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 if (![exeArg, repoArg, outArg].every(value => value && path.isAbsolute(value))) throw Error("Executable and new output must be explicit absolute paths");
 const exe = path.resolve(exeArg), repo = path.resolve(repoArg), out = path.resolve(outArg);
+const frontendUrl = process.env.WEFTEXT_BROWSER_FRONTEND_URL;
+const apiPort = Number(process.env.WEFTEXT_API_PORT);
+if (frontendUrl && (!/^http:\/\/127\.0\.0\.1:\d+$/.test(frontendUrl)
+  || !Number.isInteger(apiPort) || apiPort < 1 || apiPort > 65535)) throw Error("Source UI needs an explicit loopback origin and matching backend port");
 const cases = ["note", "library", "save-as-current", "save-as-unavailable", "save-as-tab-identity", "save-malformed", "history-fence", "history-current", "history-later", "history-resolve"];
 if (selected !== "all" && !cases.includes(selected)) throw Error("Unknown case " + selected);
 await mkdir(out, { recursive: false });
@@ -24,9 +31,10 @@ const sha = bytes => createHash("sha256").update(bytes).digest("hex");
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const sourceFiles = ["app/src/main.ts", "app/src/history-panel.ts", "app/src/history-state.ts", "app/src/library-creation.ts", "app/src/session.ts"];
 const result = { executable: exe, executableSha256: sha(await readFile(exe)),
+  frontend: frontendUrl ? { kind: "source-vite", origin: frontendUrl, backendPort: apiPort } : { kind: "embedded" },
   head: execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], { windowsHide: true }).toString().trim(),
   sourceHashes: Object.fromEntries(await Promise.all(sourceFiles.map(async name => [name, sha(await readFile(path.join(repo, name)))]))),
-  cases: [], http: [], uiRequests: [], controlledFailures: [], pageErrors: [], processes: [], completed: false,
+  cases: [], http: [], uiRequests: [], controlledFailures: [], pageErrors: [], routeErrors: [], processes: [], completed: false,
   limits: ["Controlled browser transport/read failures are not internal Core failures.", "History uses equal bytes S to exercise the real navigation Session rebind path.",
     "Owned TEST data/headless Chrome only; no system IME, accessibility, power-loss or graceful shutdown acceptance.",
     "This evidence belongs to the existing task acceptance record; not a second completion authority."] };
@@ -34,12 +42,21 @@ const state = path.join(out, "private-state");
 let child, base, token, context, page, caseName = "", logs = { stdout: "", stderr: "" }, observed = [];
 async function until(check, label) {
   const deadline = Date.now() + 30000; let last;
-  while (Date.now() < deadline) { try { if (await check()) return; } catch (error) { last = error; } await pause(100); }
+  while (Date.now() < deadline) { if (result.routeErrors.length) throw Error(result.routeErrors.at(-1).error);
+    try { if (await check()) return; } catch (error) { last = error; } await pause(100); }
   throw Error(label + (last ? ": " + String(last) : ""));
+}
+async function intercept(pattern, handler) {
+  await page.route(pattern, async route => {
+    try { await handler(route); }
+    catch (error) { result.routeErrors.push({ case: caseName, url: route.request().url(), error: String(error.stack || error) });
+      await route.abort("failed").catch(() => {}); }
+  });
 }
 async function start(opened) {
   assert.equal(child, undefined); logs = { stdout: "", stderr: "" }; base = undefined; token = undefined;
   const args = ["--no-browser", "--data-dir", state];
+  if (frontendUrl) args.push("--port", String(apiPort));
   if (opened) args.push("--open", opened.path, "--root", opened.root);
   child = spawn(exe, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   result.processes.push({ pid: child.pid, exe, args, startedAt: new Date().toISOString() });
@@ -112,13 +129,14 @@ async function browse(f) {
     if (route.startsWith("/api/")) result.uiRequests.push({ case: caseName, route, body: request.postDataJSON() }); });
   page.on("response", response => { const route = new URL(response.url()).pathname; if (!route.startsWith("/api/")) return;
     const capturedCase = caseName; observed.push((async () => { const body = await response.json().catch(() => null);
-      result.http.push({ case: capturedCase, browser: true, route, status: response.status(), response: body }); })()); });
-  await page.goto(base + "/#token=" + token); await click("源码"); await expectSource(f.sourceS);
+      result.http.push({ case: capturedCase, browser: true, route, request: response.request().postDataJSON(), status: response.status(), response: body }); })()); });
+  await page.goto((frontendUrl || base) + "/#token=" + token); await click("源码"); await expectSource(f.sourceS);
 }
 async function closeBrowser() { if (context) await context.close(); context = undefined; page = undefined;
   await Promise.allSettled(observed); observed = []; }
 async function inputY() { const before = await snapshot(); await editor().click(); await page.keyboard.press("Control+End");
-  await page.keyboard.insertText("\nWaiting Y 😀"); await expectSource(before.source + "\nWaiting Y 😀"); return { before, after: await snapshot() }; }
+  await page.keyboard.press("Enter"); await page.keyboard.insertText("Waiting Y 😀");
+  await expectSource(before.source + "\nWaiting Y 😀"); return { before, after: await snapshot() }; }
 async function undoRedo(proof) { await editor().click(); await page.keyboard.press("Control+z"); await expectSource(proof.before.source);
   await page.keyboard.press("Control+y"); await expectSource(proof.after.source); }
 async function navigation(f) {
@@ -141,7 +159,7 @@ const journal = (id, suffix = "plan") => path.join(state, "journal", id + "." + 
 const readJournal = async (id, suffix) => JSON.parse(await readFile(journal(id, suffix), "utf8"));
 const planExists = async id => (await readdir(path.join(state, "journal"))).includes(id + ".plan.json");
 async function failRefreshOnce(arm) {
-  await page.route("**/api/library/open", async route => {
+  await intercept("**/api/library/open", async route => {
     if (!arm.active) return route.continue(); arm.active = false;
     result.controlledFailures.push({ case: caseName, kind: "HTTP 500 at consumer refresh, after real create response" });
     await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { code: "probeDeliveryIO", message: "Owned one-shot consumer refresh failure" } }) });
@@ -149,7 +167,7 @@ async function failRefreshOnce(arm) {
 }
 async function noteCase() {
   const seen = [], arm = { active: false }; await failRefreshOnce(arm);
-  await page.route("**/api/note/create", async route => { seen.push(route.request().postDataJSON());
+  await intercept("**/api/note/create", async route => { seen.push(route.request().postDataJSON());
     const response = await route.fetch(); assert.equal(response.status(), 200); arm.active = true; await route.fulfill({ response }); });
   await page.locator(".sidebar-quick .new-note").click();
   const dialog = page.getByRole("dialog", { name: "新建笔记", exact: true });
@@ -170,7 +188,7 @@ async function libraryCase() {
   const key = "weftext-library-creation-v1", arm = { active: false }, requests = [];
   const retained = () => page.evaluate(key => JSON.parse(localStorage.getItem(key) || "null"), key);
   await failRefreshOnce(arm);
-  await page.route("**/api/library/create", async route => { requests.push(route.request().postDataJSON());
+  await intercept("**/api/library/create", async route => { requests.push(route.request().postDataJSON());
     const response = await route.fetch(); assert.equal(response.status(), 200); arm.active = true; await route.fulfill({ response }); });
   const open = async () => { await page.getByRole("button", { name: "创建资料库", exact: true }).first().click();
     const panel = page.getByRole("dialog", { name: "创建资料库与文档排版语言", exact: true }); await panel.waitFor(); return panel; };
@@ -194,7 +212,7 @@ async function saveAsCase(f, mode) {
   const target = path.join(out, caseName + ".typ"), retained = path.join(out, caseName + "-original.typ");
   let original, receipt, held = false, release; const requests = [], before = result.uiRequests.length;
   const refresh = { active: false }; if (mode === "current") await failRefreshOnce(refresh);
-  await page.route("**/api/save-as", async route => {
+  await intercept("**/api/save-as", async route => {
     original = route.request().postDataJSON(); requests.push(original);
     const response = await route.fetch(); assert.equal(response.status(), 200); receipt = await response.json();
     assert.ok(receipt.document && receipt.documentSourceMatchesCommit);
@@ -210,6 +228,7 @@ async function saveAsCase(f, mode) {
   await click("另存为", page.locator(".top-actions"));
   const dialog = page.getByRole("dialog", { name: "另存为", exact: true });
   await dialog.getByLabel("文件路径", { exact: true }).fill(target); await click("另存为", dialog);
+  await until(() => !!original, "Original SaveAs request observed");
   if (mode === "current") await until(() => held, "Qualified original SaveAs response held");
   else await page.locator(".save-as-delivery").filter({ hasText: original.operationId }).waitFor();
   const proof = await inputY();
@@ -222,6 +241,13 @@ async function saveAsCase(f, mode) {
     await page.locator(".save-as-delivery").waitFor({ state: "hidden" });
     await until(async () => await page.locator('.top-actions [data-command="save"]').isEnabled(), "Repeated delivery acknowledged");
   } else {
+    const notice = page.locator(".save-as-delivery").filter({ hasText: original.operationId });
+    // Wait for the real input's draft and projection callbacks before checking
+    // ownership: transient session-error refresh must not erase this receipt.
+    await until(() => result.http.some(item => item.case === caseName && item.browser && item.route === "/api/draft" && item.request?.source === proof.after.source && item.status === 200), "Input draft persisted");
+    await notice.getByRole("button", { name: "查询这次另存为原结果", exact: true }).waitFor();
+    await notice.getByRole("button", { name: "结束这次交付等待，继续当前稿", exact: true }).waitFor();
+    assert.equal(await page.locator(".document-error.session-error").count(), 0);
     const journalBefore = Object.fromEntries(await Promise.all(["plan", "commit"].map(async suffix => [suffix, sha(await readFile(journal(original.operationId, suffix)))])));
     await click("查询这次另存为原结果", page.locator(".save-as-delivery"));
     const fact = page.getByRole("dialog", { name: "另存为原提交事实", exact: true });
@@ -248,7 +274,7 @@ async function saveAsCase(f, mode) {
 async function tabIdentityCase(f) {
   const target = path.join(out, caseName + ".typ"), retained = path.join(out, caseName + "-original.typ");
   let original, receipt;
-  await page.route("**/api/save-as", async route => {
+  await intercept("**/api/save-as", async route => {
     original = route.request().postDataJSON(); const response = await route.fetch(); assert.equal(response.status(), 200);
     receipt = await response.json(); await route.fulfill({ response });
   });
@@ -282,7 +308,7 @@ async function tabIdentityCase(f) {
 }
 async function malformedSaveCase() {
   let original, actual, release, held = false, authors = 0, badIndex = 0;
-  await page.route("**/api/save", async route => {
+  await intercept("**/api/save", async route => {
     authors++; original = route.request().postDataJSON(); const response = await route.fetch(); assert.equal(response.status(), 200); actual = await response.json();
     await new Promise(resolve => { release = resolve; held = true; });
     result.controlledFailures.push({ case: caseName, kind: "replace a real committed save response with malformed DTO; not a natural backend failure" });
@@ -292,7 +318,7 @@ async function malformedSaveCase() {
   const proof = await inputY(); release();
   await until(async () => await page.locator('.top-actions [data-command="save"]').isEnabled(), "Malformed initial save retains pending request");
   const changes = [{ baseId: null }, { path: 12 }, { document: { ...actual.document, sessionId: null } }];
-  await page.route("**/api/operations/status", async route => {
+  await intercept("**/api/operations/status", async route => {
     const request = route.request().postDataJSON(); if (request.operationId !== original.operationId || badIndex >= changes.length) return route.continue();
     const response = await route.fetch(); assert.equal(response.status(), 200); const good = await response.json();
     result.controlledFailures.push({ case: caseName, kind: "malformed status DTO", change: changes[badIndex] });
@@ -321,21 +347,24 @@ async function historyCase(f, mode) {
     const older = await save(current, f.sourceS + "\nOlder independent draft basis C\n");
     staleDraftSession = await api("/api/open", { path: f.a.path, root: f.root });
     await save(older, f.sourceS);
-    await page.route("**/api/operations/status", async route => {
+    // The independent C -> S writes changed the real base. Reopen through the
+    // actual navigation consumer before reviewing a restore from this UI.
+    await navigation(f);
+    await intercept("**/api/operations/status", async route => {
       if (route.request().postDataJSON().operationId === original?.operationId && !draftInjected) {
         draftInjected = true;
         await api("/api/draft", { sessionId: staleDraftSession.sessionId, source: staleDraftSession.source + "\nProtected independent D\n" });
       }
       await route.continue();
     });
-    await page.route("**/api/draft/resolve", async route => {
+    await intercept("**/api/draft/resolve", async route => {
       const response = await route.fetch(); assert.equal(response.status(), 200);
       result.controlledFailures.push({ case: caseName, kind: "hold real successful draft resolution response while author inputs Y" });
       await new Promise(resolve => { releaseResolve = resolve; resolveHeld = true; });
       await route.fulfill({ response });
     });
   }
-  await page.route("**/api/history/restore", async route => {
+  await intercept("**/api/history/restore", async route => {
     original = route.request().postDataJSON();
     if (mode !== "fence") { const response = await route.fetch(); assert.equal(response.status(), 200);
       committed = await response.json(); assert.equal(committed.status, "committed"); }
@@ -372,7 +401,8 @@ async function historyCase(f, mode) {
     await timeline().locator(".history-operation").filter({ hasText: original.operationId }).waitFor();
     await closeTimeline(); await expectSource(proof.after.source); assert.equal(await readFile(f.a.path, "utf8"), sourceT);
     assert.equal(await page.locator('.top-actions [data-command="save"]').isDisabled(), true);
-    assert.match(await page.locator("body").innerText(), /比较|磁盘|交付/); await undoRedo(proof);
+    await page.locator(".document-error.session-error").filter({ hasText: "磁盘内容已改变" }).waitFor();
+    await undoRedo(proof);
   } else {
     // Review before use if final UI keeps an acknowledged fact visible: then
     // assert its typed pending flag/action state, not removal of all ID text.
@@ -401,7 +431,7 @@ try {
       await writeFile(path.join(out, "progress.json"), JSON.stringify(result, null, 2));
     } finally { await closeBrowser(); await stop(); }
   }
-  assert.deepEqual(result.pageErrors, []); result.completed = true;
+  assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.routeErrors, []); result.completed = true;
 } catch (error) {
   result.error = String(error.stack || error); process.exitCode = 1;
   if (page) { result.failureBody = await page.locator("body").innerText().catch(() => "unavailable");
