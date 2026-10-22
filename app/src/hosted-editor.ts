@@ -1,7 +1,8 @@
+import { UiError } from "./ui-locale";
+import { disposeUiTree } from "./ui-locale";
 import {decodeErrorDescription,descriptionUiText,type ErrorDescription} from "./ui-diagnostics";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, type UiText } from "./ui-locale";
-import { UiError } from "./ui-locale";
 import { SourceEditor, sourceBoundary, type SourcePatch } from "./editor";
 import { everydayWritingCommands } from "./everyday-writing";
 import type { EverydayCommand } from "./everyday-navigation";
@@ -144,11 +145,11 @@ export class HostedEditor {
     async beginPersonalSave(operationId: string, submitted: string): Promise<void> {
         const editor = this.editor, resource = this.resource, sessionId = this.sessionId;
         if (!editor || this.paused || this.composing)
-            throw new Error("当前正文输入尚未落定，未开始保存。");
+            throw new UiError(uiMessage("hostedEditor.saveInputUnsettled"));
         await editor.beginPersonalSave(operationId, submitted);
         if (this.editor !== editor || this.resource !== resource || this.sessionId !== sessionId || this.paused) {
             editor.settlePersonalSave(operationId, false);
-            throw new Error("原保存编辑器已变化，未将旧基线绑定到新文档。");
+            throw new UiError(uiMessage("hostedEditor.saveEditorChanged"));
         }
     }
     settlePersonalSave(operationId: string, committed: boolean): void {
@@ -444,7 +445,7 @@ export class HostedEditor {
         setUiText(this.message, "");
         // Shared structure dialogs may contain the just-revoked source. Dispose
         // both their visible data and their pending controller capability.
-        document.querySelectorAll<HTMLDialogElement>('.writing-dialog,dialog[aria-label="当前笔记编号控制"]').forEach(dialog => { dialog.close(); dialog.remove(); });
+        document.querySelectorAll<HTMLDialogElement>('.writing-dialog,.numbering-dialog').forEach(dialog => { disposeUiTree(dialog); dialog.close(); dialog.remove(); });
     }
     private async preparePersonalNumbering(): Promise<ReturnType<typeof personalNumberingKeys>> {
         const sessionId = this.sessionId, editor = this.editor, resource = this.resource;

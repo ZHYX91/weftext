@@ -12,6 +12,8 @@ import type { Origin, RenderNode, ViewMode } from "./types";
 import { textareaSourceDraft, utf8Offset } from "./writing";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 import { resourceCellReferences } from "./media-selection";
+import { decodeErrorDescription, decodeErrorDescriptions, descriptionUiText, exactKeys, type DataErrorKind, type ErrorDescription } from "./ui-diagnostics";
+import { joinUiText } from "./ui-locale";
 export interface EmbeddedQueryBasis {
     sessionId: string;
     source: string;
@@ -34,18 +36,21 @@ export interface EmbeddedQueryOccurrence {
     writable: boolean;
     builderSupported: boolean;
     runnable: boolean;
-    plan?: QueryPlan | null;
-    reason?: string | null;
-    controlReason?: string | null;
-    binding?: {
+    plan: QueryPlan | null;
+    reason: ErrorDescription | null;
+    controlKind: DataErrorKind | null;
+    controlReason: ErrorDescription | null;
+    controlDiagnostics: readonly ErrorDescription[];
+    call: NonNullable<NonNullable<QueryPlan["advanced"]>["call"]> | null;
+    binding: {
         schema: string;
         revision: string;
         language: string;
-    };
+    } | null;
 }
 export interface EmbeddedQueryDiscovery {
     serial: number;
-    source?: string;
+    source: string;
     sourceHash: string;
     syntaxValid: boolean;
     occurrences: EmbeddedQueryOccurrence[];
@@ -77,6 +82,38 @@ export interface EmbeddedQueryAssociation {
     origin: Origin | null;
     occurrence: EmbeddedQueryOccurrence | null;
     unique: boolean;
+}
+const controlKinds: readonly DataErrorKind[] = ["invalid", "unavailable", "coverage", "budget", "nativeBudget", "closedExpressionUnavailable"];
+function invalidEmbeddedDiscovery(): never { throw new UiError(message("error.invalidResponse")); }
+function queryObject(value: unknown): Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value)) return invalidEmbeddedDiscovery(); return value as Record<string, unknown>; }
+function queryText(value: unknown): string { if (typeof value !== "string") return invalidEmbeddedDiscovery(); return value; }
+function queryInteger(value: unknown): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) return invalidEmbeddedDiscovery(); return value; }
+function queryBoolean(value: unknown): boolean { if (typeof value !== "boolean") return invalidEmbeddedDiscovery(); return value; }
+function nullableDescription(value: unknown): ErrorDescription | null { return value === null ? null : decodeErrorDescription(value) ?? invalidEmbeddedDiscovery(); }
+/** Machine eligibility and the complete typed diagnostic collection are separate facts. */
+export function decodeEmbeddedQueryDiscovery(value: unknown): EmbeddedQueryDiscovery {
+    const item = queryObject(value);
+    if (!exactKeys(item, ["serial", "source", "sourceHash", "syntaxValid", "occurrences"]) || !Array.isArray(item.occurrences)) return invalidEmbeddedDiscovery();
+    return { serial: queryInteger(item.serial), source: queryText(item.source), sourceHash: queryText(item.sourceHash), syntaxValid: queryBoolean(item.syntaxValid), occurrences: item.occurrences.map(value => {
+        const occurrence = queryObject(value);
+        if (!exactKeys(occurrence, ["id", "label", "callFrom", "range", "reason", "key", "kind", "writable", "builderSupported", "runnable", "plan", "binding", "call", "controlKind", "controlReason", "controlDiagnostics"]) || !["definition", "call"].includes(String(occurrence.kind)) || occurrence.controlKind !== null && !controlKinds.includes(occurrence.controlKind as DataErrorKind)) return invalidEmbeddedDiscovery();
+        const range = queryObject(occurrence.range);
+        if (!exactKeys(range, ["from", "to", "utf16From", "utf16To", "raw", "writable"])) return invalidEmbeddedDiscovery();
+        const binding = occurrence.binding === null ? null : queryObject(occurrence.binding);
+        if (binding && !exactKeys(binding, ["schema", "revision", "language"])) return invalidEmbeddedDiscovery();
+        const controlReason = nullableDescription(occurrence.controlReason), controlDiagnostics = decodeErrorDescriptions(occurrence.controlDiagnostics) ?? invalidEmbeddedDiscovery();
+        if ((occurrence.controlKind === null) !== (controlReason === null) || occurrence.controlKind === null && controlDiagnostics.length) return invalidEmbeddedDiscovery();
+        const call = occurrence.call === null ? null : parseQueryPlan(JSON.stringify({ scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [], advanced: { call: occurrence.call } })).advanced!.call!;
+        return { id: queryText(occurrence.id), label: queryText(occurrence.label), callFrom: queryInteger(occurrence.callFrom), key: occurrence.key === null ? null : queryText(occurrence.key), kind: occurrence.kind as "definition" | "call",
+            range: { from: queryInteger(range.from), to: queryInteger(range.to), utf16From: queryInteger(range.utf16From), utf16To: queryInteger(range.utf16To), raw: queryText(range.raw), writable: queryBoolean(range.writable) },
+            writable: queryBoolean(occurrence.writable), builderSupported: queryBoolean(occurrence.builderSupported), runnable: queryBoolean(occurrence.runnable), plan: occurrence.plan === null ? null : parseQueryPlan(JSON.stringify(occurrence.plan)),
+            binding: binding ? { schema: queryText(binding.schema), revision: queryText(binding.revision), language: queryText(binding.language) } : null,
+            call, reason: nullableDescription(occurrence.reason), controlKind: occurrence.controlKind as DataErrorKind | null, controlReason, controlDiagnostics,
+        };
+    }) };
+}
+export function embeddedControlDiagnostics(item: EmbeddedQueryOccurrence): UiText[] {
+    return [...(item.controlReason ? [descriptionUiText(item.controlReason)] : []), ...item.controlDiagnostics.map(descriptionUiText)];
 }
 export function sameQueryBasis(left: EmbeddedQueryBasis | null, right: EmbeddedQueryBasis): boolean {
     return !!left && left.sessionId === right.sessionId && left.serial === right.serial && left.source === right.source;
@@ -283,9 +320,11 @@ export class EmbeddedQueryController {
     }
     async discover(basis: EmbeddedQueryBasis): Promise<boolean> {
         const generation = ++this.discoveryGeneration;
-        const discovery = await this.host.request<EmbeddedQueryDiscovery>("/api/query/embedded/discover", basis);
-        if (generation !== this.discoveryGeneration || !sameQueryBasis(this.host.basis(), basis) || discovery.serial !== basis.serial || discovery.source !== undefined && discovery.source !== basis.source)
+        const raw = await this.host.request<unknown>("/api/query/embedded/discover", basis);
+        if (generation !== this.discoveryGeneration || !sameQueryBasis(this.host.basis(), basis))
             return false;
+        const discovery = decodeEmbeddedQueryDiscovery(raw);
+        if (discovery.serial !== basis.serial || discovery.source !== basis.source) return false;
         if (discovery.occurrences.some(item => !exactQueryOccurrence(basis.source, item)))
             throw new UiError(message("embeddedQuery.discoveryRangeMismatch"));
         this.discovery = discovery;
@@ -450,11 +489,13 @@ export class EmbeddedQueryController {
             heading.append(source);
         }
         if (mode === "write" && !item.builderSupported)
-            mount.append(element("p", "embedded-query-warning", item.controlReason ?? item.reason ?? message("embeddedQuery.builderUnsupported")));
+            mount.append(element("p", "embedded-query-warning", item.controlReason ? descriptionUiText(item.controlReason) : item.reason ? descriptionUiText(item.reason) : message("embeddedQuery.builderUnsupported")));
         if (!item.runnable)
-            mount.append(element("p", "embedded-query-warning", displayMessage("embeddedQuery.previewUnavailable", { p0: uiDisplayParameter(item.reason ?? item.controlReason ?? message("embeddedQuery.executionEligibilityUnavailable")) })));
+            mount.append(element("p", "embedded-query-warning", displayMessage("embeddedQuery.previewUnavailable", { p0: uiDisplayParameter(item.reason ? descriptionUiText(item.reason) : item.controlReason ? descriptionUiText(item.controlReason) : message("embeddedQuery.executionEligibilityUnavailable")) })));
         if (!association.unique || !item.writable)
-            mount.append(element("p", "embedded-query-warning", item.reason ?? message("embeddedQuery.occurrenceReadOnly")));
+            mount.append(element("p", "embedded-query-warning", item.reason ? descriptionUiText(item.reason) : message("embeddedQuery.occurrenceReadOnly")));
+        for (const diagnostic of item.controlDiagnostics)
+            mount.append(element("p", "embedded-query-warning", descriptionUiText(diagnostic)));
         if (mode === "read")
             mount.append(element("p", "embedded-query-help", message("embeddedQuery.readModeHelp")));
         if (policy.edit) {

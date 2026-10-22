@@ -215,7 +215,7 @@ export class HostedFields {
         }
         catch (e) {
             if (epoch === this.epoch)
-                setUiText(this.message, e instanceof Error ? e.message : message("hostedFields.operationIncomplete"));
+                setUiText(this.message, e instanceof Error ? errorUiText(e) : message("hostedFields.operationIncomplete"));
         }
         finally {
             if (epoch === this.epoch) {

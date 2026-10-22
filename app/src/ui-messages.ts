@@ -9937,7 +9937,36 @@ export const zhCN = {
   "error.export.docx.math.matrixCellUnsupported": "公式矩阵单元格类型暂不支持。",
   "error.export.docx.math.structureUnsupported": "公式结构 {element} 暂不能转换为可编辑 Office Math。",
   "error.export.docx.math.variantUnsupported": "公式 mathvariant {variant} 暂不支持。",
-  "error.export.xlsx.relationshipPartNameInvalid": "关系部件名称缺少必需的 .rels 后缀。"
+  "error.export.xlsx.relationshipPartNameInvalid": "关系部件名称缺少必需的 .rels 后缀。",
+  "capture.uniqueTargetRequired": "此批准位置不支持连续新建；请选择管理员批准的唯一子项位置。",
+  "capture.schemaRequired": "先在资料库明确安装类型与字段规则；正文仍可记录为普通文字。",
+  "capture.deliveryUnavailable": "碎片已保存；当前没有可确认的笔记窗口交付通道，原操作保留。",
+  "capture.surfaceAddressInvalid": "捕获窗口地址无效；恢复稿未改动。",
+  "proofreading.ruleScopeSupported": "适用",
+  "proofreading.ruleScopeInapplicable": "不适用",
+  "proofreading.ruleScopeUnknown": "适用范围未知",
+  "proofreading.ruleDependencyMissing": "缺少准确依赖版本",
+  "editor.savedProposalChanged": "保存提案的正文已变化，未冻结另一份恢复基线。",
+  "editor.retiredSaveBasisRejected": "原编辑器已退休，未安装迟到的保存基线。",
+  "editor.closeRecoveryFrozen": "正在核对窗口关闭，未接受迟到的恢复修改。",
+  "editor.closeBodyFrozen": "正在核对窗口关闭，未接受迟到的正文修改。",
+  "editor.closeInsertionFrozen": "正在核对窗口关闭，未接受新的正文插入。",
+  "hostedEditor.saveInputUnsettled": "当前正文输入尚未落定，未开始保存。",
+  "hostedEditor.saveEditorChanged": "原保存编辑器已变化，未将旧基线绑定到新文档。",
+  "hostedShell.saveReceiptBasisMismatch": "原保存回执的编号、目标或基线不匹配；没有采用该结果。",
+  "hostedShell.captureBodyRecoveryRejected": "捕获输入不能写入正文恢复域。",
+  "hostedShell.bodySaveOperationMissing": "此记录没有正文原保存编号。",
+  "hostedShell.formCopyOnly": "此表单输入只供取回；没有借用当前正文目标自动重放。",
+  "shell.closePreparationFrozen": "窗口关闭核对仍冻结，未开始另一轮正文准备。",
+  "shell.closeAuthorInputPending": "正文组合、作者提案或原保存仍待核对，当前窗口继续保留输入。",
+  "shell.closeNewInputAfterDraft": "准备关闭期间又有新输入，未把旧草稿回执当作新输入的保留证明。",
+  "shell.closeRecoveryUnconfirmed": "尚未确认准确正文恢复稿，未放行窗口关闭。",
+  "shell.closeBasisChanged": "正文对象或输入在准备期间变化，原稿保留，请重新核对关闭。",
+  "shell.closeRecoveryWriteFrozen": "正文关闭核对已冻结，未启动另一轮恢复写入。",
+  "shell.closeDocumentSwitchFrozen": "窗口关闭核对已冻结，未切换正文对象。",
+  "shell.closeLateOpenFrozen": "窗口关闭核对已冻结，迟到的打开结果未替换正文。",
+  "shell.closeSaveFrozen": "正文关闭核对已冻结，未创建另一保存操作。",
+  "error.core.backend.sourceDescendantPlacementChanged": "保留的源后代目录已不在原父目录条目中"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19880,6 +19909,35 @@ export interface MessageParamsMap {
   "error.export.docx.math.structureUnsupported": { element: string };
   "error.export.docx.math.variantUnsupported": { variant: string };
   "error.export.xlsx.relationshipPartNameInvalid": {  };
+  "capture.uniqueTargetRequired": {  };
+  "capture.schemaRequired": {  };
+  "capture.deliveryUnavailable": {  };
+  "capture.surfaceAddressInvalid": {  };
+  "proofreading.ruleScopeSupported": {  };
+  "proofreading.ruleScopeInapplicable": {  };
+  "proofreading.ruleScopeUnknown": {  };
+  "proofreading.ruleDependencyMissing": {  };
+  "editor.savedProposalChanged": {  };
+  "editor.retiredSaveBasisRejected": {  };
+  "editor.closeRecoveryFrozen": {  };
+  "editor.closeBodyFrozen": {  };
+  "editor.closeInsertionFrozen": {  };
+  "hostedEditor.saveInputUnsettled": {  };
+  "hostedEditor.saveEditorChanged": {  };
+  "hostedShell.saveReceiptBasisMismatch": {  };
+  "hostedShell.captureBodyRecoveryRejected": {  };
+  "hostedShell.bodySaveOperationMissing": {  };
+  "hostedShell.formCopyOnly": {  };
+  "shell.closePreparationFrozen": {  };
+  "shell.closeAuthorInputPending": {  };
+  "shell.closeNewInputAfterDraft": {  };
+  "shell.closeRecoveryUnconfirmed": {  };
+  "shell.closeBasisChanged": {  };
+  "shell.closeRecoveryWriteFrozen": {  };
+  "shell.closeDocumentSwitchFrozen": {  };
+  "shell.closeLateOpenFrozen": {  };
+  "shell.closeSaveFrozen": {  };
+  "error.core.backend.sourceDescendantPlacementChanged": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -31650,7 +31708,36 @@ export const messageParamTypes = {
   "error.export.docx.math.variantUnsupported": {
     "variant": "text"
   },
-  "error.export.xlsx.relationshipPartNameInvalid": {}
+  "error.export.xlsx.relationshipPartNameInvalid": {},
+  "capture.uniqueTargetRequired": {},
+  "capture.schemaRequired": {},
+  "capture.deliveryUnavailable": {},
+  "capture.surfaceAddressInvalid": {},
+  "proofreading.ruleScopeSupported": {},
+  "proofreading.ruleScopeInapplicable": {},
+  "proofreading.ruleScopeUnknown": {},
+  "proofreading.ruleDependencyMissing": {},
+  "editor.savedProposalChanged": {},
+  "editor.retiredSaveBasisRejected": {},
+  "editor.closeRecoveryFrozen": {},
+  "editor.closeBodyFrozen": {},
+  "editor.closeInsertionFrozen": {},
+  "hostedEditor.saveInputUnsettled": {},
+  "hostedEditor.saveEditorChanged": {},
+  "hostedShell.saveReceiptBasisMismatch": {},
+  "hostedShell.captureBodyRecoveryRejected": {},
+  "hostedShell.bodySaveOperationMissing": {},
+  "hostedShell.formCopyOnly": {},
+  "shell.closePreparationFrozen": {},
+  "shell.closeAuthorInputPending": {},
+  "shell.closeNewInputAfterDraft": {},
+  "shell.closeRecoveryUnconfirmed": {},
+  "shell.closeBasisChanged": {},
+  "shell.closeRecoveryWriteFrozen": {},
+  "shell.closeDocumentSwitchFrozen": {},
+  "shell.closeLateOpenFrozen": {},
+  "shell.closeSaveFrozen": {},
+  "error.core.backend.sourceDescendantPlacementChanged": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -41591,5 +41678,34 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.export.docx.math.matrixCellUnsupported": "This equation matrix cell type is not yet supported.",
   "error.export.docx.math.structureUnsupported": "Math structure {element} cannot yet be converted to editable Office Math.",
   "error.export.docx.math.variantUnsupported": "Equation mathvariant {variant} is not yet supported.",
-  "error.export.xlsx.relationshipPartNameInvalid": "The relationship part name lacks the required .rels suffix."
+  "error.export.xlsx.relationshipPartNameInvalid": "The relationship part name lacks the required .rels suffix.",
+  "capture.uniqueTargetRequired": "This approved location does not allow repeated creation. Select an administrator-approved unique-child location.",
+  "capture.schemaRequired": "Install the library’s type and field rules explicitly first. Plain text capture remains available.",
+  "capture.deliveryUnavailable": "Capture saved. No acknowledged note-window delivery is available; the original operation is retained.",
+  "capture.surfaceAddressInvalid": "Invalid capture window address. Retained drafts are unchanged.",
+  "proofreading.ruleScopeSupported": "Applies",
+  "proofreading.ruleScopeInapplicable": "Does not apply",
+  "proofreading.ruleScopeUnknown": "Applicability is unknown",
+  "proofreading.ruleDependencyMissing": "An exact dependency version is missing",
+  "editor.savedProposalChanged": "The save proposal’s body changed; a different recovery basis was not frozen.",
+  "editor.retiredSaveBasisRejected": "The original editor was retired; the late save basis was not installed.",
+  "editor.closeRecoveryFrozen": "Window close is being checked; the late recovery change was not accepted.",
+  "editor.closeBodyFrozen": "Window close is being checked; the late body change was not accepted.",
+  "editor.closeInsertionFrozen": "Window close is being checked; a new body insertion was not accepted.",
+  "hostedEditor.saveInputUnsettled": "The current body input has not settled; saving has not started.",
+  "hostedEditor.saveEditorChanged": "The original save editor changed; the old basis was not bound to the new document.",
+  "hostedShell.saveReceiptBasisMismatch": "The original save receipt’s ID, target or basis does not match; the result was not adopted.",
+  "hostedShell.captureBodyRecoveryRejected": "Capture input cannot be written into the body-recovery domain.",
+  "hostedShell.bodySaveOperationMissing": "This record has no original body-save ID.",
+  "hostedShell.formCopyOnly": "This form input is available for recovery only; it was not automatically replayed into the current body target.",
+  "shell.closePreparationFrozen": "Window close checking remains frozen; another body-preparation round was not started.",
+  "shell.closeAuthorInputPending": "Body composition, an author proposal or the original save still needs checking; this window continues to retain the input.",
+  "shell.closeNewInputAfterDraft": "New input arrived during close preparation; the old draft receipt was not treated as proof that the new input is retained.",
+  "shell.closeRecoveryUnconfirmed": "The exact body recovery draft is not confirmed; the window was not allowed to close.",
+  "shell.closeBasisChanged": "The body object or input changed during preparation. The original draft is retained; check closing again.",
+  "shell.closeRecoveryWriteFrozen": "Body close checking is frozen; another recovery write was not started.",
+  "shell.closeDocumentSwitchFrozen": "Window close checking is frozen; the body object was not switched.",
+  "shell.closeLateOpenFrozen": "Window close checking is frozen; the late open result did not replace the body.",
+  "shell.closeSaveFrozen": "Body close checking is frozen; another save operation was not created.",
+  "error.core.backend.sourceDescendantPlacementChanged": "The retained source descendant no longer occupies its original parent entry"
 };

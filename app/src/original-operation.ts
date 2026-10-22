@@ -23,7 +23,7 @@ export interface OriginalFence { operationId: string; requestKind: string; wireD
 /** Capture actual JSON bytes before any network/hash await or later author input. */
 export function freezeOriginalAttempt(payload: object, requestKind: string): FrozenOriginalAttempt {
   const operationId = (payload as { operationId?: unknown }).operationId;
-  if (typeof operationId !== "string") throw new Error("原请求没有操作编号，输入保留。");
+  if (typeof operationId !== "string") throw new UiError(uiMessage("originalOperation.requestIdMissing"));
   return Object.freeze({ operationId, requestKind, wire: JSON.stringify(payload) });
 }
 /** The fence never reparses author payload: even rejected Unicode has an exact wire digest. */
@@ -31,11 +31,11 @@ export async function originalFence(attempt: FrozenOriginalAttempt): Promise<Ori
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(attempt.wire));
   return { operationId: attempt.operationId, requestKind: attempt.requestKind, wireDigest: [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("") };
 }
-export class TerminatedAttempt extends Error {
-  constructor(public originalError: unknown) { super(originalError instanceof Error ? originalError.message : "原操作已安全终结，输入保留，可修改后重试。"); }
+export class TerminatedAttempt extends UiError {
+  constructor(public originalError: unknown) { super(originalError instanceof Error ? errorUiText(originalError) : uiMessage("originalOperation.endedInputRetained")); }
 }
 function exact<T extends OriginalFact>(fact: T, id: unknown, statusRead = false): T {
-  if (!fact || typeof fact !== "object" || fact.operationId !== id || !["saved", "committed", "unknown", "prepared", "recoveryPending", "resolved"].includes(fact.status) || statusRead && fact.status === "saved") throw new Error("回执不能确认为原操作，保留原请求与输入。");
+  if (!fact || typeof fact !== "object" || fact.operationId !== id || !["saved", "committed", "unknown", "prepared", "recoveryPending", "resolved"].includes(fact.status) || statusRead && fact.status === "saved") throw new UiError(uiMessage("originalOperation.receiptUnconfirmed"));
   const errors: {deliveryError?: ApiErrorBody; documentError?: ApiErrorBody} = {};
   for (const slot of ["deliveryError", "documentError"] as const) {
     if (Object.hasOwn(fact, slot)) {
@@ -60,7 +60,7 @@ async function reconcileOriginal<T extends OriginalFact>(request: OriginalReques
 }
 export async function submitOriginal<T extends OriginalFact>(request: OriginalRequest, route: string, payload: Record<string, unknown>, kind: string, recoverFirst = false): Promise<T> {
   const attempt = freezeOriginalAttempt(payload, kind);
-  if (recoverFirst) return reconcileOriginal(request, attempt, new Error("原操作仍待确认，输入保留。"));
+  if (recoverFirst) return reconcileOriginal(request, attempt, new UiError(uiMessage("originalOperation.awaitingConfirmation")));
   try {
     const fact = exact(await request<T>(route, JSON.parse(attempt.wire)), attempt.operationId);
     if (!originalCommitted(fact) || fact.status === "saved" && !["save", "saveAs"].includes(kind)) throw new UiError(uiMessage("originalOperation.applicableCommittedReceiptRequired"));

@@ -36,7 +36,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     return data as T;
   }
   const response = await send(path, body), data = await json(response);
-  if (!response.ok || data && typeof data === "object" && Object.hasOwn(data, "error")) throw responseError(data, response.status);
+  if (!response.ok || data && typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 1 && Object.hasOwn(data, "error")) throw responseError(data, response.status);
   return data as T;
 }
 

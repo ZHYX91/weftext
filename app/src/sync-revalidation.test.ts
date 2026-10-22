@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SyncRevalidationSession, syncTextDigest } from "./sync-revalidation";
 import { SyncFlow, type ObjectState, type SyncPending, type SyncRevalidationCut, type SyncRevalidationInput, type SyncRevalidationReview, type SyncPlan } from "./sync-state";
+import { appendSyncRevalidationSummary } from "./sync-revalidation-panel";
+import { TestDocument } from "./dom.test-support";
+import { disposeUiTree, locale, message, uiTextValue } from "./ui-locale";
 
 const node = { kind: "node" as const, id: "note" }, schema = { kind: "schema" as const }, identity = { workspaceId: "workspace", genesis: "genesis" };
 const state = (): ObjectState => ({ parent: null, name: "Note", retired: false, files: { "Note.typ": "source-digest", "resource/unknown.bin": "opaque-digest", "weftext.annotations.json": "discussion-digest" }, fileRevisions: { "Note.typ": "source-revision", "resource/unknown.bin": "opaque-revision", "weftext.annotations.json": "discussion-revision" } });
@@ -70,7 +73,7 @@ test("exact file reads reject wrong owner/revision/path/digest and text altered 
 
 test("a revalidation request survives transport mutation/lost preparation and original-ID recovery through the one SyncFlow", async () => {
   const current = session(); await current.inspect(async input => review(input)); const request = current.request(), bodies: unknown[] = []; let calls = 0, saved: SyncPending | null = null;
-  const plan: SyncPlan = { operationId: "original", planId: "same-plan", status: "prepared", changes: [], losses: [] };
+  const plan: SyncPlan = { operationId: "original", planId: "same-plan", kind: "revalidateSync", status: "prepared", changes: [], nodeMap: {}, newNodeId: null, revisions: {}, resourceMap: {}, losses: [] };
   const flow = new SyncFlow({ store: p => { saved = structuredClone(p); }, request: async <T>(_route: string, body: unknown): Promise<T> => { bodies.push(structuredClone(body)); if (calls++ === 0) { (body as { root: string }).root = "mutated by transport"; throw new Error("response lost"); } return plan as T; } });
   await assert.rejects(flow.prepare(request)); assert.ok(saved); await flow.retryPrepare(); assert.deepEqual(bodies[0], bodies[1]);
   const reload = new SyncFlow({ store: () => {}, request: async <T>(route: string) => { assert.equal(route, "/api/sync/operation"); return { request, plan } as T; } }); await reload.recover("original"); assert.deepEqual(reload.pending?.request, request);
@@ -90,7 +93,7 @@ test("review retries retain one proposed ID and prepare uses its exact echo with
 test("missing or foreign review ID never authorizes prepare, even with identical choices and dependencies", async () => {
   const current = session();
   for (const operationId of [undefined, "other-operation"]) {
-    await assert.rejects(current.inspect(async input => ({ ...review(input), operationId })), /原操作编号/);
+    await assert.rejects(current.inspect(async input => JSON.parse(JSON.stringify({ ...review(input), operationId }))), /原操作编号/);
     assert.equal(current.review, null); assert.throws(() => current.request());
   }
   await current.inspect(async input => review(input)); assert.equal(current.request().operationId, "original");
@@ -116,7 +119,7 @@ test("durable Flow handoff alone consumes review; storage failure retains repair
   let ids = 0, quota = true, consumed = 0, saved: SyncPending | null = null;
   const current = session(() => `action-${++ids}`); await current.repairText(node, "Note.typ", "my private repair");
   await current.inspect(async input => review(input)); const request = current.request(), bodies: { path: string; body: unknown }[] = [];
-  const plan: SyncPlan = { operationId: request.operationId, planId: "original-plan", status: "prepared", changes: [], losses: [] };
+  const plan: SyncPlan = { operationId: request.operationId, planId: "original-plan", kind: "revalidateSync", status: "prepared", changes: [], nodeMap: {}, newNodeId: null, revisions: {}, resourceMap: {}, losses: [] };
   let prepareCalls = 0;
   const host = {
     store: (p: SyncPending | null): void => { if (p && quota) { quota = false; throw new Error("storage full"); } saved = structuredClone(p); },
@@ -124,7 +127,7 @@ test("durable Flow handoff alone consumes review; storage failure retains repair
       assert.equal(saved?.request.operationId, "action-1"); bodies.push({ path, body: structuredClone(body) });
       if (path.endsWith("prepare") && prepareCalls++ === 0) throw new Error("prepare response lost");
       if (path.endsWith("commit")) throw new Error("commit response lost");
-      return { ...plan, status: path.endsWith("cancel-prepared") ? "resolved" : "prepared" } as T;
+      return (path.endsWith("cancel-prepared") ? { operationId: plan.operationId, planId: plan.planId, status: "resolved", path: "root", nodeIds: [] } : plan) as T;
     },
   };
   const flow = new SyncFlow(host), consume = (): void => { consumed++; current.invalidate(); };
@@ -141,4 +144,24 @@ test("durable Flow handoff alone consumes review; storage failure retains repair
   assert.equal(consumed, 1); assert.throws(() => current.request()); assert.equal(ids, 1);
   assert.deepEqual(bodies.slice(2).map(call => call.body), [{ operationId: "action-1", planId: "original-plan" }, { operationId: "action-1" }, { operationId: "action-1", planId: "original-plan" }]);
   const next = session(() => `action-${++ids}`); await next.inspect(async input => review(input)); assert.equal(next.request().operationId, "action-2");
+});
+
+test("review-only annotation state and reason remain exact machine facts through clones and never enter a prepare request", async () => {
+  const current = session(); await current.inspect(async input => JSON.parse(JSON.stringify({ ...review(input), annotationTargets: [{ owner: { workspaceId: "workspace", nodeId: "note" }, annotationId: "作者😀", state: "unavailable", reason: "preserved-awaiting-exact-target-qualification" }] })));
+  const reviewed = current.review!; assert.equal(reviewed.annotationTargets[0].state, "unavailable"); assert.equal(reviewed.annotationTargets[0].reason, "preserved-awaiting-exact-target-qualification"); reviewed.annotationTargets[0].state = "exact";
+  assert.equal(current.review!.annotationTargets[0].state, "unavailable"); assert.equal("annotationTargets" in current.request().intent, false);
+  await assert.rejects(current.inspect(async input => ({ ...review(input), annotationTargets: [{ owner: { workspaceId: "workspace", nodeId: "note" }, annotationId: "作者😀", state: { key: "common.save", params: {} }, reason: "original machine reason" }] })));
+  assert.throws(() => current.request());
+});
+
+test("dependency summaries resolve live product labels while authored object names and reviewed facts stay exact", () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document"), document = new TestDocument(), container = document.createElement("section"), authored = '{"key":"common.save","params":{}} 作者😀';
+  document.body.append(container); Object.defineProperty(globalThis, "document", { configurable: true, value: document });
+  try {
+    const input: SyncRevalidationInput = { root: "root", identity, resolutions: [{ object: node, revisions: ["branch-a", "branch-b"], state: { ...state(), name: authored }, decision: { kind: "preserve", revision: "branch-a" }, reviewedDependencies: [] }], blobs: {} }, reviewed = review(input), before = JSON.stringify(reviewed);
+    appendSyncRevalidationSummary(container as unknown as HTMLElement, reviewed, cut().objects);
+    locale.set("en-US"); assert.ok(container.textContent.includes(authored)); assert.ok(container.textContent.includes(uiTextValue(message("syncRevalidation.kindPropertyDefinitions")))); assert.doesNotMatch(container.textContent, /=>/);
+    locale.set("zh-CN"); assert.ok(container.textContent.includes(uiTextValue(message("syncRevalidation.kindPropertyDefinitions")))); assert.equal(JSON.stringify(reviewed), before);
+  }
+  finally { disposeUiTree(container as unknown as Node); locale.set("zh-CN"); if (previous) Object.defineProperty(globalThis, "document", previous); else Reflect.deleteProperty(globalThis, "document"); }
 });

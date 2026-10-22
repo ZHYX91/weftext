@@ -1,11 +1,12 @@
-import { uiDisplayParameter } from "./ui-locale";
+import { replaceUiChildren, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
 import { action, ui } from "./data-panel";
 import { hostedCachePrefix } from "./hosted-state";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { sameHostedLinksContext, sameHostedLinksIdentity, type HostedLinksContext, type HostedLinksIdentity } from "./hosted-knowledge-links-state";
-import { citationPatches, type CitationDraft, type CitationProposal, type CitationWork } from "./hosted-citations-state";
+import { citationPatches, decodeCitationCatalog, decodeCitationDrafts, type CitationDraft, type CitationProposal, type CitationWork } from "./hosted-citations-state";
+import { exactKeys } from "./ui-diagnostics";
 import type { EmbeddedQueryBasis } from "./embedded-query";
 import type { SourcePatch } from "./editor";
 import { citationInsertionByte, citationInputScope, decodeNativeCitationSnapshot, newNativeCitationInputs, renderNativeCitations, type NativeCitationInputs, type NativeCitationSnapshot } from "./native-citations";
@@ -35,7 +36,7 @@ export class HostedCitations {
     private inputOwner = "";
     private inputVersion = 0;
     private prefix = "";
-    private drafts: Record<string, CitationDraft> = {};
+    private drafts: Record<string, CitationDraft> = Object.create(null);
     private works: CitationWork[] = [];
     private coverage = "complete";
     private unreadable?: UiText;
@@ -55,15 +56,19 @@ export class HostedCitations {
         this.epoch++;
         this.inputVersion++;
         this.prefix = "";
-        this.drafts = {};
+        this.drafts = Object.create(null);
         this.works = [];
+        this.coverage = "complete";
         this.busy = false;
         this.unreadable = undefined;
         this.nativeProfile = undefined;
         this.nativeBasis = undefined;
-        this.editor.replaceChildren();
+        this.nativeInputs.clear();
+        this.proposeButton = undefined;
+        for (const control of this.host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input,textarea,select")) control.value = "";
+        replaceUiChildren(this.editor);
         setUiText(this.message, "");
-        this.host.replaceChildren();
+        replaceUiChildren(this.host);
         this.host.hidden = true;
         if (removeCache)
             for (const key of Object.keys(sessionStorage))
@@ -81,10 +86,7 @@ export class HostedCitations {
         try {
             const raw = sessionStorage.getItem(this.prefix + "inputs");
             if (raw) {
-                const value = JSON.parse(raw) as Record<string, CitationDraft>;
-                if (!value || typeof value !== "object" || Object.values(value).some(v => !v || typeof v.key !== "string" || typeof v.work !== "string"))
-                    throw new Error();
-                this.drafts = value;
+                this.drafts = decodeCitationDrafts(JSON.parse(raw));
             }
         }
         catch {
@@ -92,41 +94,38 @@ export class HostedCitations {
         }
         this.documentChanged();
         try {
-            const result = await this.request<{
-                works: CitationWork[];
-                coverage: "complete" | "partial";
-            }>("citations");
-            if (!identity || !await this.authority(identity) || epoch !== this.epoch)
+            const raw = await this.request<unknown>("citations");
+            if (epoch !== this.epoch || !sameHostedLinksIdentity(identity, this.owner.identity()) || !await this.authority(identity) || epoch !== this.epoch || !sameHostedLinksIdentity(identity, this.owner.identity()))
                 return;
-            if (!Array.isArray(result.works) || !["complete", "partial"].includes(result.coverage) || result.works.some(w => !w || typeof w.resource !== "string" || typeof w.title !== "string" || !["ready", "unavailable"].includes(w.status)))
-                throw new UiError(uiMessage("hostedCitations.catalogFormatUnconfirmed"));
+            const result = decodeCitationCatalog(raw);
             this.works = result.works;
             this.coverage = result.coverage;
             this.paint();
         }
         catch (error) {
             if (epoch === this.epoch) {
-                setUiText(this.message, error instanceof Error ? error.message : uiMessage("hostedCitations.catalogReadIncomplete"));
+                setUiText(this.message, errorUiText(error));
             }
         }
     }
     documentChanged(): void { this.inputVersion++; this.busy = false; this.nativeProfile = undefined; this.nativeBasis = undefined; setUiText(this.message, uiMessage("hostedCitations.insertionDescription")); this.paint(); }
     private async readEditor(): Promise<void> {
-        const epoch = this.epoch;
+        const epoch = this.epoch, version = this.inputVersion;
         await this.owner.basis();
         const context = this.owner.context();
-        if (!context)
+        if (!context || epoch !== this.epoch || version !== this.inputVersion)
             return;
         const hash = await nodeSourceHash(context.source);
+        if (epoch !== this.epoch || version !== this.inputVersion || !sameHostedLinksContext(context, this.owner.context())) return;
         const result = await this.request<{
             resource: string;
             serial: number;
             sourceHash: string;
             profile: NativeCitationSnapshot;
         }>("citations/editor", { sessionId: context.sessionId, source: context.source, sourceHash: hash, serial: context.serial });
-        if (epoch !== this.epoch || !sameHostedLinksContext(context, this.owner.context()) || !await this.authority(context))
+        if (epoch !== this.epoch || version !== this.inputVersion || !sameHostedLinksContext(context, this.owner.context()) || !await this.authority(context) || epoch !== this.epoch || version !== this.inputVersion || !sameHostedLinksContext(context, this.owner.context()))
             return;
-        if (result.resource !== context.resource || result.serial !== context.serial || result.sourceHash !== hash || !result.profile || !Array.isArray(result.profile.choices) || !Array.isArray(result.profile.editor?.bindings) || !Array.isArray(result.profile.bindings) || !Array.isArray(result.profile.incoming))
+        if (!result || typeof result !== "object" || !exactKeys(result as unknown as Record<string, unknown>, ["resource", "serial", "sourceHash", "profile"]) || result.resource !== context.resource || result.serial !== context.serial || result.sourceHash !== hash)
             throw new UiError(uiMessage("hostedCitations.receiptCurrentBasisMissing"));
         this.nativeProfile = decodeNativeCitationSnapshot(result.profile,"hosted");
         this.nativeBasis = context;
@@ -151,16 +150,17 @@ export class HostedCitations {
             if (epoch !== this.epoch || version !== this.inputVersion || JSON.stringify(state) !== inputs || !sameHostedLinksContext(context, this.owner.context()) || !await this.authority(context))
                 return;
             await this.owner.apply(citationPatches(result, context, hash), basis);
+            if (epoch !== this.epoch || version !== this.inputVersion) return;
             this.nativeProfile = undefined;
             this.nativeBasis = undefined;
             setUiText(this.message, displayMessage("hostedCitations.proposalEnteredDraft", { p0: uiDisplayParameter(title) }));
         }
         catch (error) {
-            if (epoch === this.epoch)
-                setUiText(this.message, error instanceof Error ? error.message : uiMessage("hostedCitations.proposalIncomplete"));
+            if (epoch === this.epoch && version === this.inputVersion && sameHostedLinksContext(context, this.owner.context()))
+                setUiText(this.message, errorUiText(error));
         }
         finally {
-            if (epoch === this.epoch) {
+            if (epoch === this.epoch && version === this.inputVersion) {
                 this.busy = false;
                 this.paint();
             }
@@ -177,6 +177,7 @@ export class HostedCitations {
         if (!sameHostedLinksIdentity(identity, this.owner.identity()))
             return false;
         if (current.actor !== identity.actor || current.deployment !== identity.deployment || current.generation !== identity.generation) {
+            this.clear();
             this.owner.authorizationChanged(uiMessage("hostedCitations.authorizationChanged"), current);
             return false;
         }
@@ -218,15 +219,15 @@ export class HostedCitations {
             if (!await this.authority(context) || epoch !== this.epoch || version !== this.inputVersion || !sameHostedLinksContext(context, this.owner.context()))
                 return;
             await this.owner.apply(citationPatches(result, context, hash), basis);
-            if (epoch === this.epoch)
+            if (epoch === this.epoch && version === this.inputVersion)
                 setUiText(this.message, uiMessage("hostedCitations.citationBindingEnteredDraft"));
         }
         catch (error) {
-            if (epoch === this.epoch)
-                setUiText(this.message, error instanceof Error ? error.message : uiMessage("hostedCitations.proposalIncompleteOriginalRetained"));
+            if (epoch === this.epoch && version === this.inputVersion && sameHostedLinksContext(before, this.owner.context()))
+                setUiText(this.message, errorUiText(error));
         }
         finally {
-            if (epoch === this.epoch) {
+            if (epoch === this.epoch && version === this.inputVersion) {
                 this.busy = false;
                 const current = this.owner.context();
                 if (this.proposeButton)
@@ -235,14 +236,15 @@ export class HostedCitations {
         }
     }
     private paint(): void {
-        this.editor.replaceChildren();
+        replaceUiChildren(this.editor);
         this.host.hidden = !this.owner.context();
         if (this.host.hidden) {
-            this.host.replaceChildren();
+            replaceUiChildren(this.host);
             return;
         }
-        this.host.replaceChildren(ui("h2", "", uiMessage("hostedCitations.title")), this.message, this.editor);
-        this.editor.append(action(uiMessage("hostedCitations.readControlsAndRelations"), () => this.readEditor().catch(error => { setUiText(this.message, error instanceof Error ? error.message : uiMessage("hostedCitations.citationReadIncomplete")); })));
+        replaceUiChildren(this.host, ui("h2", "", uiMessage("hostedCitations.title")), this.message, this.editor);
+        const readEpoch = this.epoch, readVersion = this.inputVersion;
+        this.editor.append(action(uiMessage("hostedCitations.readControlsAndRelations"), () => this.readEditor().catch(error => { if (readEpoch === this.epoch && readVersion === this.inputVersion) setUiText(this.message, errorUiText(error)); })));
         if (this.nativeProfile && this.nativeBasis && sameHostedLinksContext(this.nativeBasis, this.owner.context())) {
             const context = this.nativeBasis, key = citationInputScope(context, this.nativeProfile.ownerReference);
             let inputs = this.nativeInputs.get(key);
@@ -256,7 +258,7 @@ export class HostedCitations {
                 this.inputOwner = ownerKey;
             }
             const epoch = this.epoch, selected = context, inputSession = this.inputScopes.get(inputs, { kind: "body", resource: context.resource, reference: this.nativeProfile?.ownerReference }, () => this.epoch === epoch && this.owner.context()?.sessionId === selected.sessionId && this.owner.context()?.resource === selected.resource, () => this.inputVersion);
-            renderNativeCitations(this.editor, this.nativeProfile, inputs, { inputs: inputSession, writable: context.writable && !context.pending && !context.compare && !this.busy, at: () => citationInsertionByte(context.source, this.owner.selection?.()?.from ?? context.source.length), perform: (title, intent) => this.editNative(title, intent), select: range => this.owner.select?.(range.utf16From, range.utf16To), navigate: reference => { void this.owner.navigate?.(reference).catch(error => { setUiText(this.message, error instanceof Error ? error.message : uiMessage("hostedCitations.navigationIncomplete")); }); }, repaint: () => this.paint() });
+            renderNativeCitations(this.editor, this.nativeProfile, inputs, { inputs: inputSession, writable: context.writable && !context.pending && !context.compare && !this.busy, at: () => citationInsertionByte(context.source, this.owner.selection?.()?.from ?? context.source.length), perform: (title, intent) => this.editNative(title, intent), select: range => this.owner.select?.(range.utf16From, range.utf16To), navigate: reference => { void this.owner.navigate?.(reference).catch(error => { if (epoch === this.epoch && sameHostedLinksContext(context, this.owner.context())) setUiText(this.message, errorUiText(error)); }); }, repaint: () => this.paint() });
             return;
         }
         if (this.unreadable) {
@@ -297,12 +299,12 @@ export class HostedCitations {
                 this.persist();
             }
             catch (error) {
-                setUiText(this.message, (error as Error).message);
+                setUiText(this.message, errorUiText(error));
             }
         };
         work.onchange = () => { inputSession?.invalidate("citation-key"); draft.work = work.value; keep(); this.paint(); };
         key.oninput = () => { draft.key = key.value; keep(); };
-        const propose = action(uiMessage("hostedCitations.addProposalToDraft"), () => { void this.propose().catch(e => { setUiText(this.message, (e as Error).message); }); });
+        const propose = action(uiMessage("hostedCitations.addProposalToDraft"), () => { void this.propose().catch(e => { if (epoch === this.epoch && sameHostedLinksContext(context, this.owner.context())) setUiText(this.message, errorUiText(e)); }); });
         this.proposeButton = propose;
         propose.disabled = this.busy || !context.writable || context.pending || context.compare;
         this.editor.append(work, key, propose);

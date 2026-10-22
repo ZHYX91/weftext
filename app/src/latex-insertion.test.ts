@@ -1,3 +1,4 @@
+import { TestDocument, TestElement } from "./dom.test-support";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LatexInsertionPanel } from "./latex-insertion";
@@ -5,27 +6,13 @@ import type { DocumentBasis, PanelHost, SourcePatch } from "./data-panel";
 import type { RenderNode } from "./types";
 
 /** Event/ownership fixture only; real native preview remains candidate coverage. */
-class ElementStub {
-  children: ElementStub[] = []; parent: ElementStub | null = null; open = false;
-  textContent = ""; className = ""; id = ""; value = ""; disabled = false; readOnly = false;
-  onclick: (() => void) | null = null; oninput: (() => void) | null = null; onchange: (() => void) | null = null;
-  constructor(readonly tag: string) {}
-  append(...items: ElementStub[]): void { for (const item of items) { item.parent = this; this.children.push(item); } }
-  replaceChildren(...items: ElementStub[]): void { this.children = []; this.append(...items); }
-  remove(): void { if (this.parent) this.parent.children = this.parent.children.filter(item => item !== this); this.parent = null; }
-  setAttribute(): void {}
-  addEventListener(): void {}
-  showModal(): void { this.open = true; }
-  close(): void { this.open = false; }
-  all(): ElementStub[] { return [this, ...this.children.flatMap(child => child.all())]; }
-  find(tag: string, text?: string): ElementStub { const result = this.all().find(item => item.tag === tag && (text === undefined || item.textContent === text)); assert.ok(result, `${tag}: ${text}`); return result; }
-}
+type ElementStub = TestElement;
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 const tree: RenderNode = { kind: "text", key: "preview", tag: null, text: "compiled document", children: [], origin: null, writable: false, attrs: {} };
 
 function fixture() {
-  const prior = Object.getOwnPropertyDescriptor(globalThis, "document"), body = new ElementStub("body");
-  Object.defineProperty(globalThis, "document", { configurable: true, value: { body, createElement: (tag: string) => new ElementStub(tag), createTextNode: (text: string) => { const node = new ElementStub("#text"); node.textContent = text; return node; } } });
+  const prior = Object.getOwnPropertyDescriptor(globalThis, "document"), testDocument = new TestDocument(), body = testDocument.body;
+  Object.defineProperty(globalThis, "document", { configurable: true, value: testDocument });
   let basis: DocumentBasis | null = { sessionId: "session", baseId: "base", serial: 1, source: "甲乙丙丁", path: "resource:note", root: "" }, selection = { from: 0, to: 1 }, editable = true;
   const requests: { source: string; proposalSource: string; serial: number }[] = [], applied: SourcePatch[] = [];
   let deferred: ((value: unknown) => void) | null = null, delay = false;

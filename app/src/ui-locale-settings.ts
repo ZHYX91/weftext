@@ -1,4 +1,5 @@
-import { locale, message, LocaleScope, disposeUiTree, type UiLocale } from "./ui-locale";
+import { parseStrictJson } from "./strict-json";
+import { locale, message, LocaleScope, disposeUiTree, UiError, type UiLocale } from "./ui-locale";
 
 export interface ClientPreferenceSnapshot { revision: number; preferences: { uiLocale: UiLocale } }
 export interface LocalePreferenceAdapter {
@@ -7,14 +8,14 @@ export interface LocalePreferenceAdapter {
 }
 
 export function decodeClientPreferences(value: unknown): ClientPreferenceSnapshot {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid interface preference response");
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new UiError(message("error.invalidResponse"));
   const record = value as Record<string, unknown>, preferences = record.preferences as Record<string, unknown> | undefined;
-  if (Object.keys(record).sort().join(",") !== "preferences,revision" || !Number.isSafeInteger(record.revision) || (record.revision as number) < 0 || !preferences || typeof preferences !== "object" || Array.isArray(preferences) || Object.keys(preferences).join(",") !== "uiLocale" || preferences.uiLocale !== "zh-CN" && preferences.uiLocale !== "en-US") throw new Error("Invalid interface preference response");
+  if (Object.keys(record).sort().join(",") !== "preferences,revision" || !Number.isSafeInteger(record.revision) || (record.revision as number) < 0 || !preferences || typeof preferences !== "object" || Array.isArray(preferences) || Object.keys(preferences).join(",") !== "uiLocale" || preferences.uiLocale !== "zh-CN" && preferences.uiLocale !== "en-US") throw new UiError(message("error.invalidResponse"));
   return { revision: record.revision as number, preferences: { uiLocale: preferences.uiLocale } };
 }
 
 function validateChoice(revision: number, uiLocale: UiLocale): void {
-  if (!Number.isSafeInteger(revision) || revision < 0 || uiLocale !== "zh-CN" && uiLocale !== "en-US") throw new Error("Invalid interface preference choice");
+  if (!Number.isSafeInteger(revision) || revision < 0 || uiLocale !== "zh-CN" && uiLocale !== "en-US") throw new UiError(message("error.invalidResponse"));
 }
 
 /** Core owns this preference, so a new loopback port still reads the same profile. */
@@ -27,26 +28,28 @@ export function localLocalePreferences(request: <T>(path: string, body?: unknown
 
 /** This is a personal display setting; the key contains no token or protected resource context. */
 export function hostedLocalePreferences(storage: Storage, deployment: string, actor: string): LocalePreferenceAdapter {
-  if (!deployment || !actor) throw new Error("An authenticated preference audience is required");
+  if (!deployment || !actor) throw new UiError(message("error.invalidResponse"));
   const key = `weftext-interface-locale:${encodeURIComponent(deployment)}:${encodeURIComponent(actor)}`;
   return browserLocalePreferences(storage, key);
 }
 
 export function publicLocalePreferences(storage: Storage, origin: string): LocalePreferenceAdapter {
-  if (new URL(origin).origin !== origin) throw new Error("An exact public origin is required");
+  if (new URL(origin).origin !== origin) throw new UiError(message("error.invalidResponse"));
   return browserLocalePreferences(storage, `weftext-interface-locale-public:${encodeURIComponent(origin)}`);
 }
 
 function browserLocalePreferences(storage: Storage, key: string): LocalePreferenceAdapter {
   const read = (): ClientPreferenceSnapshot => {
     const raw = storage.getItem(key); if (raw === null) return { revision: 0, preferences: { uiLocale: "zh-CN" } };
-    const record = JSON.parse(raw) as { version?: unknown; revision?: unknown; preferences?: unknown };
-    if (!record || Object.keys(record).sort().join(",") !== "preferences,revision,version" || record.version !== 1) throw new Error("Invalid retained interface preference");
-    const result = decodeClientPreferences({ revision: record.revision, preferences: record.preferences }); if (result.revision === 0) throw new Error("Invalid retained interface preference revision"); return result;
+    if (new TextEncoder().encode(raw).length > 16 * 1024) throw new UiError(message("error.clientPreferencesByteLimit"));
+    let record: { version?: unknown; revision?: unknown; preferences?: unknown };
+    try { record = parseStrictJson(raw) as typeof record; } catch { throw new UiError(message("error.clientPreferencesRecordUnsupported")); }
+    if (!record || Object.keys(record).sort().join(",") !== "preferences,revision,version" || record.version !== 1) throw new UiError(message("error.clientPreferencesRecordUnsupported"));
+    const result = decodeClientPreferences({ revision: record.revision, preferences: record.preferences }); if (result.revision === 0) throw new UiError(message("error.clientPreferencesRecordUnsupported")); return result;
   };
   return { read: async () => read(), write: async (expectedRevision, uiLocale) => {
     validateChoice(expectedRevision, uiLocale);
-    const persist = () => { const original = read(); if (original.revision !== expectedRevision) throw new Error("Interface preference changed in another page"); if (expectedRevision === Number.MAX_SAFE_INTEGER) throw new Error("Interface preference revision exhausted"); const result = { revision: expectedRevision + 1, preferences: { uiLocale } }; storage.setItem(key, JSON.stringify({ version: 1, ...result })); const actual = read(); if (actual.revision !== result.revision || actual.preferences.uiLocale !== uiLocale) throw new Error("Interface preference readback differs"); return actual; };
+    const persist = () => { const original = read(); if (original.revision !== expectedRevision) throw new UiError(message("error.clientPreferencesConflict")); if (expectedRevision === Number.MAX_SAFE_INTEGER) throw new UiError(message("error.clientPreferencesRevisionExhausted")); const result = { revision: expectedRevision + 1, preferences: { uiLocale } }; storage.setItem(key, JSON.stringify({ version: 1, ...result })); const actual = read(); if (actual.revision !== result.revision || actual.preferences.uiLocale !== uiLocale) throw new UiError(message("error.clientPreferencesReadbackMismatch")); return actual; };
     // The lock serializes cooperating pages of this authenticated deployment origin.
     return typeof window !== "undefined" && navigator.locks ? navigator.locks.request(key, persist) : persist();
   } };

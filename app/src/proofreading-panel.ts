@@ -1,3 +1,6 @@
+import { replaceUiChildren } from "./ui-locale";
+import { decodeProofreadResult, proofreadFindingUiText, processingMatchUiText, type ProofreadResult } from "./proofreading-wire";
+export type { ProofreadResult } from "./proofreading-wire";
 import { contentLanguageControl, DEFAULT_CONTENT_LOCALE } from "./content-language";
 import type { UiLocale } from "./ui-locale";
 import { joinUiText } from "./ui-locale";
@@ -34,47 +37,6 @@ export interface ProofreadOptions {
         number
     ] | null;
 }
-interface Finding {
-    id: string;
-    category: string;
-    ruleId: string;
-    excerpt: string;
-    message: string;
-    replacement: string | null;
-    executable: boolean;
-    sourceRange: {
-        from: number;
-        to: number;
-        utf16From: number;
-        utf16To: number;
-    } | null;
-}
-export interface ProofreadResult {
-    coverage: string;
-    findings: Finding[];
-    warnings: string[];
-    checkedCharacters: number;
-    existing: string[];
-    scanId?: string;
-    fragments?: {
-        language: {
-            language: string;
-            script: string | null;
-            region: string | null;
-        } | null;
-        nativeLanguage?: {
-            language: string;
-            script: string | null;
-            region: string | null;
-        } | null;
-        source: string;
-        checkedRules: string[];
-        skippedRules: [
-            string,
-            UiText
-        ][];
-    }[];
-}
 export interface ProcessingDefaultsSuggestion {
     processing: ProcessingDocument | null;
     source: UiText;
@@ -82,6 +44,7 @@ export interface ProcessingDefaultsSuggestion {
     revision?: string;
 }
 interface Host {
+    resultScope: "local" | "hosted";
     context(): KnowledgeContext | null;
     scan(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>;
     perform(label: UiText, intent: KnowledgeIntent): Promise<boolean>;
@@ -174,19 +137,22 @@ export class ProofreadingPanel {
             this.message = uiMessage("proofreading.preferencesSaveFailed");
         }
     }
-    dispose(): void { this.generation++; this.container = null; this.result = null; this.basis = null; }
+    dispose(): void { this.generation++; if (this.container) replaceUiChildren(this.container); this.container = null; this.result = null; this.basis = null; this.checkedOptions = null; this.selected.clear(); this.message = ""; this.busy = false; }
     render(container: HTMLElement): void { this.container = container; this.draw(); }
     private async run(): Promise<void> {
         if (this.busy)
             return;
+        const beforeActionGeneration = this.generation;
         try {
             await this.host.beforeAction?.();
         }
         catch (error) {
+            if (beforeActionGeneration !== this.generation) return;
             this.message = error instanceof Error ? errorUiText(error) : String(error);
             this.draw();
             return;
         }
+        if (beforeActionGeneration !== this.generation) return;
         const context = this.host.context();
         if (!context)
             return;
@@ -210,11 +176,13 @@ export class ProofreadingPanel {
         this.message = uiMessage("proofreading.scanning");
         this.draw();
         try {
-            const result = await this.host.scan(context, options);
-            if (generation !== this.generation || !sameKnowledgeBasis(context, this.host.context())) {
+            const raw = await this.host.scan(context, options);
+            if (generation !== this.generation) return;
+            if (!sameKnowledgeBasis(context, this.host.context())) {
                 this.message = uiMessage("proofreading.scanBasisChanged");
                 return;
             }
+            const result = decodeProofreadResult(raw, this.host.resultScope);
             this.result = result;
             this.basis = context;
             this.checkedOptions = options;
@@ -222,11 +190,10 @@ export class ProofreadingPanel {
             this.message = displayMessage("proofreading.scanSummary", { p0: result.checkedCharacters, p1: result.findings.length, p2: uiDisplayParameter(result.coverage === "complete" ? "" : uiMessage("proofreading.partialScopeSuffix")) });
         }
         catch (error) {
-            this.message = error instanceof Error ? errorUiText(error) : String(error);
+            if (generation === this.generation && sameKnowledgeBasis(context, this.host.context())) this.message = errorUiText(error);
         }
         finally {
-            this.busy = false;
-            this.draw();
+            if (generation === this.generation) { this.busy = false; this.draw(); }
         }
     }
     private async add(ignore: boolean): Promise<void> {
@@ -250,6 +217,7 @@ export class ProofreadingPanel {
             return;
         }
         const result = this.result;
+        const generation = this.generation;
         this.busy = true;
         try {
             const ok = await this.host.perform(ignore ? uiMessage("proofreading.ignoreOperation") : uiMessage("proofreading.annotateOperation"), { kind: "annotationProofread", annotationLocale: this.annotationLocale, options: this.checkedOptions, findings, ignore, ...(result.scanId ? { scanId: result.scanId } : {}) });
@@ -261,18 +229,18 @@ export class ProofreadingPanel {
             }
         }
         catch (error) {
-            this.message = error instanceof Error ? errorUiText(error) : String(error);
+            if (generation === this.generation && this.result === result) this.message = errorUiText(error);
         }
         finally {
-            this.busy = false;
+            if (generation === this.generation) this.busy = false;
         }
-        this.draw();
+        if (generation === this.generation) this.draw();
     }
     private draw(): void {
         const root = this.container;
         if (!root)
             return;
-        root.replaceChildren();
+        replaceUiChildren(root);
         root.append(el("h3", this.preferences.title), el("p", uiMessage("proofreading.help")));
         const processing = this.options.processing ?? defaultProcessingSettings();
         const languages = el("input");
@@ -427,7 +395,7 @@ export class ProofreadingPanel {
             const details = el("details");
             details.append(el("summary", uiMessage("proofreading.languageCoverageTitle")));
             for (const fragment of this.result.fragments)
-                details.append(el("p", displayMessage("proofreading.languageCoverageEntry", { p0: uiDisplayParameter(fragment.language ? processingLanguageTag(fragment.language) : uiMessage("proofreading.languageRegionUnknown")), p1: uiDisplayParameter(fragment.nativeLanguage ? processingLanguageTag(fragment.nativeLanguage) : uiMessage("common.unknown")), p2: uiDisplayParameter(({ original: uiMessage("proofreading.languageOriginSource"), explicit: uiMessage("proofreading.languageOriginExplicit"), explicitMixed: uiMessage("proofreading.languageOriginExplicitMixed"), unknown: uiMessage("common.unknown") } as Record<string, UiText>)[fragment.source] ?? fragment.source), p3: uiDisplayParameter(fragment.checkedRules.join("、") || uiMessage("proofreading.universalBuiltinRules")), p4: uiDisplayParameter(fragment.skippedRules.length ? joinUiText(fragment.skippedRules.map(([id, reason]) => () => `${id}（${uiTextValue(reason)}）`), "、") : uiMessage("proofreading.noDictionaryScopeExclusions")) })));
+                details.append(el("p", displayMessage("proofreading.languageCoverageEntry", { p0: uiDisplayParameter(fragment.language ? processingLanguageTag(fragment.language) : uiMessage("proofreading.languageRegionUnknown")), p1: uiDisplayParameter(fragment.nativeLanguage ? processingLanguageTag(fragment.nativeLanguage) : uiMessage("common.unknown")), p2: uiDisplayParameter(({ original: uiMessage("proofreading.languageOriginSource"), explicit: uiMessage("proofreading.languageOriginExplicit"), explicitMixed: uiMessage("proofreading.languageOriginExplicitMixed"), unknown: uiMessage("common.unknown") } as Record<string, UiText>)[fragment.source] ?? fragment.source), p3: uiDisplayParameter(fragment.checkedRules.join("、") || uiMessage("proofreading.universalBuiltinRules")), p4: uiDisplayParameter(fragment.skippedRules.length ? joinUiText(fragment.skippedRules.map(([id, reason]) => () => `${id}（${uiTextValue(processingMatchUiText(reason))}）`), "、") : uiMessage("proofreading.noDictionaryScopeExclusions")) })));
             root.append(details);
         }
         if (!sameKnowledgeBasis(this.basis, this.host.context()))
@@ -457,7 +425,7 @@ export class ProofreadingPanel {
                 else
                     this.selected.delete(f.id);
             };
-            row.append(field(() => `${uiTextValue(categories[f.category])}：${uiTextValue(f.excerpt)}`, check), el("p", f.message));
+            row.append(field(() => `${uiTextValue(categories[f.category])}：${uiTextValue(f.excerpt)}`, check), el("p", proofreadFindingUiText(f)));
             if (f.replacement !== null)
                 row.append(el("p", displayMessage("proofreading.replacementSuggestion", { p0: uiDisplayParameter(f.excerpt), p1: uiDisplayParameter(f.replacement), p2: uiDisplayParameter(f.executable ? "" : uiMessage("proofreading.manualFormattingReviewSuffix")) })));
             if (this.result.existing.includes(f.id))

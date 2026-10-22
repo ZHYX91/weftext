@@ -1,3 +1,5 @@
+import { uiTextValue } from "./ui-locale";
+import { sourceStyleDescription } from "./source-style";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EditorState, type Transaction } from "@codemirror/state";
@@ -37,7 +39,8 @@ test("unrelated body input retains heading geometry but immediately retires ever
   }
   const attributes = editor.facet(EditorView.contentAttributes).flatMap(value => typeof value === "function" ? [] : [value]);
   assert.equal(attributes[0]["data-source-style-status"], "pending");
-  assert.match(String(attributes[0]["aria-description"]), /不代表当前语法结果/);
+  assert.equal(attributes[0]["aria-description"], undefined);
+  assert.match(uiTextValue(sourceStyleDescription(editor)), /不代表当前语法结果/);
   assert.equal(editor.doc.toString(), before.slice(0, at) + "今天\n");
 });
 

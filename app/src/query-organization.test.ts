@@ -32,7 +32,7 @@ test("personal board and calendar keep every row and distinguish absent, null, i
 });
 test("Query arrangement accepts only the exact adjacent AST evidence and rejects an outside-source mutation", () => {
   const source = "前😀\r\n甲查询\r\n\r\n乙查询\n后";
-  const occurrence = (raw: string, key: string): EmbeddedQueryOccurrence => { const from = source.indexOf(raw), to = from + raw.length; return { id: key, key, label: key, kind: "definition", callFrom: utf8Offset(source, from), writable: true, builderSupported: true, runnable: true, range: { from: utf8Offset(source, from), to: utf8Offset(source, to), utf16From: from, utf16To: to, raw, writable: true } }; };
+  const occurrence = (raw: string, key: string): EmbeddedQueryOccurrence => { const from = source.indexOf(raw), to = from + raw.length; return { id: key, key, label: key, kind: "definition", callFrom: utf8Offset(source, from), writable: true, builderSupported: true, runnable: true, plan: null, binding: null, call: null, reason: null, controlKind: null, controlReason: null, controlDiagnostics: [], range: { from: utf8Offset(source, from), to: utf8Offset(source, to), utf16From: from, utf16To: to, raw, writable: true } }; };
   const one = occurrence("甲查询", "one"), two = occurrence("乙查询", "two"), basis = { sessionId: "s", source, serial: 2 }, text = "乙查询\r\n\r\n甲查询", changed = source.slice(0, one.range.utf16From) + text + source.slice(two.range.utf16To), result = { source: changed, serial: 2, patches: [{ from: one.range.utf16From, to: two.range.utf16To, text }] };
   assert.equal(validateQueryArrangement(basis, two, [one, two], "up", result).length, 1);
   assert.throws(() => validateQueryArrangement(basis, two, [one, two], "up", { ...result, source: changed + "x" }));

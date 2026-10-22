@@ -21,6 +21,14 @@ test("the actual local HTTP transport rejects duplicate fields before decoding a
         assert.ok(spec); assert.match(renderUiMessage("en-US", spec), /9007199254740991/);
         replies.push(new Response('{"error":{"code":"unavailable","explanation":{"key":"common.operation","params":{"operationId":"原号\\u0000😀"}},"diagnostics":[{"origin":"typst","text":"原诊断\\ud800"}],"causes":[]}}', {status:409}));
         await assert.rejects(api("/api/test"), (error: unknown) => error instanceof ApiError && error.code === "unavailable" && error.diagnostics[0].text === "原诊断\ud800" && renderUiMessage("en-US", error.explanation).endsWith("原号\0😀"));
+        const failure = { code: "sync-failure", explanation: { key: "common.unavailable", params: {} }, diagnostics: [], causes: [] };
+        for (const error of [null, failure]) {
+            const progress = { requestId: "original-sync", status: error ? "failed" : "running", sentObjects: 0, receivedObjects: 0, error };
+            replies.push(new Response(JSON.stringify(progress), { status: 200 }));
+            assert.deepEqual(await api("/api/test"), progress, "a successful result's own error slot is not an API failure envelope");
+        }
+        replies.push(new Response(JSON.stringify({ error: failure }), { status: 200 }));
+        await assert.rejects(api("/api/test"), (error: unknown) => error instanceof ApiError && error.code === "sync-failure");
         assert.equal(replies.length, 0);
     } finally {
         for (const [name, descriptor] of saved) if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globals[name];

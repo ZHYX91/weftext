@@ -200,17 +200,17 @@ export const bodyCloseParticipant = {
     async prepare(request: object) {
         preparedBody = undefined;
         if (bodyCloseFrozen)
-            throw new Error("窗口关闭核对仍冻结，未开始另一轮正文准备。");
+            throw new UiError(uiMessage("shell.closePreparationFrozen"));
         const owned = [...documents], snapshots: ReturnType<typeof bodySnapshot>[] = [], proofs = [];
         for (const doc of owned) {
             doc.writing.assertCloseReady();
             if (doc.editor.composing || doc.session.savePending || doc.lastSave || doc.queries.hasUnappliedAuthorInputs)
-                throw new Error("正文组合、作者提案或原保存仍待核对，当前窗口继续保留输入。");
+                throw new UiError(uiMessage("shell.closeAuthorInputPending"));
             await doc.writing.settleForSessionChange();
             await persistDraft(doc);
             const snapshot = bodySnapshot(doc);
             if (doc.session.lastDraftSource !== snapshot.source || doc.session.lastDraftSerial !== snapshot.serial)
-                throw new Error("准备关闭期间又有新输入，未把旧草稿回执当作新输入的保留证明。");
+                throw new UiError(uiMessage("shell.closeNewInputAfterDraft"));
             const sourceDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(snapshot.source)))].map(value => value.toString(16).padStart(2, "0")).join("");
             const result = await api<{
                 sessionId: string;
@@ -219,13 +219,13 @@ export const bodyCloseParticipant = {
                 recordDigest: string;
             }>("/api/desktop/document-flush", { sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest });
             if (!currentBody(snapshot) || !result || result.sessionId !== snapshot.sessionId || result.baseId !== snapshot.baseId || result.sourceDigest !== sourceDigest || typeof result.recordDigest !== "string" || !/^[a-f0-9]{64}$/.test(result.recordDigest))
-                throw new Error("尚未确认准确正文恢复稿，未放行窗口关闭。");
+                throw new UiError(uiMessage("shell.closeRecoveryUnconfirmed"));
             doc.writing.assertCloseReady();
             snapshots.push(snapshot);
             proofs.push({ kind: "document" as const, ownerId: JSON.stringify([doc.session.opened.workspaceId ?? "local", doc.session.opened.nodeId ?? doc.session.path]), ownerGeneration: snapshot.generation, sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest, recordDigest: result.recordDigest });
         }
         if (documents.length !== owned.length || owned.some((doc, at) => documents[at] !== doc) || snapshots.some(snapshot => !currentBody(snapshot)))
-            throw new Error("正文对象或输入在准备期间变化，原稿保留，请重新核对关闭。");
+            throw new UiError(uiMessage("shell.closeBasisChanged"));
         preparedBody = { request: JSON.stringify(request), snapshots };
         return proofs;
     },
@@ -2046,7 +2046,7 @@ function revealWritingSource(doc: LiveDocument, range: WritingRange): void {
 function scheduleDraft(doc: LiveDocument): void { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc).catch(showError); }, 450); }
 async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise<void> {
     if (bodyCloseFrozen)
-        throw new Error("正文关闭核对已冻结，未启动另一轮恢复写入。");
+        throw new UiError(uiMessage("shell.closeRecoveryWriteFrozen"));
     clearTimeout(doc.draftTimer);
     const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source;
     const serial = doc.session.serial;
@@ -2227,7 +2227,7 @@ async function createNote(): Promise<void> {
 }
 async function prepareSwitch(): Promise<void> {
     if (bodyCloseFrozen)
-        throw new Error("窗口关闭核对已冻结，未切换正文对象。");
+        throw new UiError(uiMessage("shell.closeDocumentSwitchFrozen"));
     captureNavigation();
     if (current)
         await current.writing.settleForSessionChange();
@@ -2258,7 +2258,7 @@ async function openDocument(path: string, root?: string): Promise<void> {
 function readOnlySource(doc: LiveDocument): boolean { return doc.session.opened.readOnly === true || doc.session.opened.kind === "trash" || doc.session.opened.kind === "managedTrash"; }
 function addDocument(opened: OpenedDocument): void {
     if (bodyCloseFrozen)
-        throw new Error("窗口关闭核对已冻结，迟到的打开结果未替换正文。");
+        throw new UiError(uiMessage("shell.closeLateOpenFrozen"));
     const session = new DocumentSession(opened);
     let doc!: LiveDocument;
     const editor = new SourceEditor(session.source, source => {
@@ -2460,7 +2460,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
 }
 async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     if (bodyCloseFrozen)
-        throw new Error("正文关闭核对已冻结，未创建另一保存操作。");
+        throw new UiError(uiMessage("shell.closeSaveFrozen"));
     if (historyPanel.hasPending(historyContext(doc))) { toast(uiMessage("shell.historyRestoreBeforeSave"), true); return; }
     if (doc.session.savePending)
         return;
@@ -3000,7 +3000,7 @@ document.addEventListener("keydown", event => {
         void stepNavigation(event.key === "ArrowLeft" ? -1 : 1).catch(showError);
         return;
     }
-    if (event.target instanceof Element && event.target.closest('.embedded-query-dialog, .embedded-query-builder, .embedded-query-parameters, .document-notes-dialog, dialog[aria-label="当前笔记编号控制"]'))
+    if (event.target instanceof Element && event.target.closest('.embedded-query-dialog, .embedded-query-builder, .embedded-query-parameters, .document-notes-dialog, .numbering-dialog'))
         return;
     if (event.defaultPrevented)
         return;

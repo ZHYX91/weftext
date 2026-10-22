@@ -83,7 +83,7 @@ type SaveStatus = {
 const recoveryContinuations = new WeakMap<Doc, Promise<void> | null>();
 function checkedSaveStatus(result: SaveStatus, operationId: string, resource: string): SaveStatus {
     if (!result || typeof result !== "object" || result.operationId !== operationId || !["committed", "cancelled", "resolved", "recoveryPending", "notCommitted", "notRegistered"].includes(result.status) || result.status !== "notRegistered" && result.resource !== resource || result.status === "committed" && (typeof result.baseId !== "string" || !result.baseId))
-        throw new Error("原保存回执的编号、目标或基线不匹配；没有采用该结果。");
+        throw new UiError(uiMessage("hostedShell.saveReceiptBasisMismatch"));
     return result;
 }
 const root = document.querySelector<HTMLElement>("#hosted")!;
@@ -172,7 +172,7 @@ function renderEverydayBar() {
     if (doc && !navigatingHistory)
         everydayNavigation.visit(doc.resource);
     everydayBar.replaceChildren();
-    const add = (label: UiText, action: () => void | Promise<void>, disabled = false) => { const button = document.createElement("button"); button.type = "button"; setUiText(button, label); button.disabled = disabled; button.onclick = () => { void Promise.resolve().then(action).catch(error => status(String(error))); }; everydayBar.append(button); };
+    const add = (label: UiText, action: () => void | Promise<void>, disabled = false) => { const button = document.createElement("button"); button.type = "button"; setUiText(button, label); button.disabled = disabled; button.onclick = () => { void Promise.resolve().then(action).catch(error => status(errorUiText(error))); }; everydayBar.append(button); };
     add(uiMessage("shell.back"), () => run(() => stepNavigation(-1)), !everydayNavigation.target(-1) || busy);
     add(uiMessage("shell.forward"), () => run(() => stepNavigation(1)), !everydayNavigation.target(1) || busy);
     add(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), status), busy);
@@ -183,7 +183,7 @@ function renderEverydayBar() {
 const personalInputs = new PersonalInputRecovery();
 const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text, producerId, producerRevision }) => {
     if (context.owner.kind === "capture")
-        throw new Error("捕获输入不能写入正文恢复域。");
+        throw new UiError(uiMessage("hostedShell.captureBodyRecoveryRejected"));
     try {
         observePersonalWrite(personalInputs.update(context.audience, [{ id, owner: context.owner, slot: context.slot, path: context.path, producer: { producerId, revision: producerRevision }, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, revision, text }] : [], revision } }]), context.audience);
         controls();
@@ -250,11 +250,22 @@ async function showCapturePicker(): Promise<void> {
             return;
         const mounted = await mountHostedCapture(capturePanel, { request, inputs: personalControls, authorInputs, catalog,
             options: { deployment: captured.deployment, actor: captured.actor, ...choice, recovery: personalInputs, current },
-            deliverCommitted: async (resource) => { if (!current())
-                throw new UiError(uiMessage("capture.rawRetained")); await open(resource); if (!current() || doc?.resource !== resource || source.pausedSession)
-                throw new UiError(uiMessage("capture.pending")); },
-            requestClose: async () => { if (!current() || !hostedCapture)
-                throw new UiError(uiMessage("desktop.unsavedClose")); const closing = hostedCapture; hostedCapture = undefined; closing.dispose(); capturePanel.replaceChildren(); capturePanel.hidden = true; },
+            deliverCommitted: async (resource) => {
+                if (!current())
+                    throw new UiError(uiMessage("capture.rawRetained"));
+                await open(resource);
+                if (!current() || doc?.resource !== resource || source.pausedSession)
+                    throw new UiError(uiMessage("capture.pending"));
+            },
+            requestClose: async () => {
+                if (!current() || !hostedCapture)
+                    throw new UiError(uiMessage("desktop.unsavedClose"));
+                const closing = hostedCapture;
+                hostedCapture = undefined;
+                closing.dispose();
+                capturePanel.replaceChildren();
+                capturePanel.hidden = true;
+            },
         });
         if (!current()) {
             mounted.retireAuthorization();
@@ -264,13 +275,15 @@ async function showCapturePicker(): Promise<void> {
         hostedCapture = mounted;
         capturePanel.scrollIntoView();
     };
-    const run = (work: () => Promise<void>) => async () => { try {
-        await work();
-    }
-    catch (error) {
-        if (current())
-            setUiText(diagnostic, errorUiText(error));
-    } };
+    const run = (work: () => Promise<void>) => async () => {
+        try {
+            await work();
+        }
+        catch (error) {
+            if (current())
+                setUiText(diagnostic, errorUiText(error));
+        }
+    };
     const restore = captureAction(uiMessage("capture.restoreDraft"), run(() => activate({ draftId: existing.value })));
     restore.disabled = existing.options.length === 0;
     const create = captureAction(uiMessage("capture.newDraft"), run(() => activate({ slot: slots.value })));
@@ -278,7 +291,7 @@ async function showCapturePicker(): Promise<void> {
     capturePanel.replaceChildren(captureUi("h2", "", uiMessage("capture.title")), captureUi("p", "", uiMessage("capture.restoreDraft")), existing, restore, captureUi("p", "", uiMessage("capture.target")), slots, create, diagnostic);
 }
 const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
-const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
+const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(errorUiText(error)), {
     canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
     openRow: row => {
         const target = row as HostedQueryRow;
@@ -1165,10 +1178,12 @@ async function confirmIdentity(next: Me): Promise<void> {
 }
 function personalAudience(): string | null { const current = identity ? JSON.stringify([identity.deployment, identity.actor]) : ""; return current && current === verifiedPersonalAudience ? current : null; }
 function observePersonalWrite(write: Promise<BrowserProposalAck>, audience: string): Promise<BrowserProposalAck> {
-    void write.catch(error => { if (personalAudience() === audience) {
-        status(errorUiText(error));
-        controls();
-    } });
+    void write.catch(error => {
+        if (personalAudience() === audience) {
+            status(errorUiText(error));
+            controls();
+        }
+    });
     return write;
 }
 function persistPersonalInputs(): Promise<BrowserProposalAck | undefined> {
@@ -1195,10 +1210,12 @@ function showPersonalInputs(): void {
         restore: record => restorePersonalInput(record, audience), operation: record => recoverPersonalOperation(record, audience),
         producers: () => personalControls.inspect().producers.filter(producer => producer.audience === audience),
         discardProducer: producer => discardRetiredPersonalProducer(producer, audience),
-        changed: () => { if (personalAudience() === audience) {
-            controls();
-            showPersonalInputs();
-        } },
+        changed: () => {
+            if (personalAudience() === audience) {
+                controls();
+                showPersonalInputs();
+            }
+        },
     });
 }
 async function discardRetiredPersonalProducer(producer: AuthorProducerState, audience: string): Promise<void> {
@@ -1230,7 +1247,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     await verifyPersonalIdentity(audience, epoch);
     record = personalInputs.current(audience, record);
     if (!record.pending || record.owner.kind !== "body")
-        throw new Error("此记录没有正文原保存编号。");
+        throw new UiError(uiMessage("hostedShell.bodySaveOperationMissing"));
     let outcome = await request<SaveStatus>("operation", { resource: record.owner.resource, operationId: record.pending.operationId });
     if (authorizationEpoch !== epoch || personalAudience() !== audience)
         return;
@@ -1247,7 +1264,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
     if (record.owner.kind !== "body")
-        throw new Error("此表单输入只供取回；没有借用当前正文目标自动重放。");
+        throw new UiError(uiMessage("hostedShell.formCopyOnly"));
     const owner = record.owner;
     const selected = doc, epoch = authorizationEpoch;
     if (!selected || !draft || !selected.rights.write || compareRequired || draft.pending)

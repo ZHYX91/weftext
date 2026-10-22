@@ -302,7 +302,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     const gate = new KnowledgeReadGate();
     const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
     let graphSession = "";
-    const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
+    const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
     let snapshot: KnowledgeSnapshot | null = null;
     let snapshotBasis: KnowledgeContext | null = null;
     let tab = "links";
