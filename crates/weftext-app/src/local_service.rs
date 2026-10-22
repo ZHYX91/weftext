@@ -219,18 +219,20 @@ impl LocalService {
     ) -> ServiceStopped {
         let admitting = self.admitting;
         let stopping_state = self.state.clone();
-        let result = axum::serve(self.listener, self.router)
+        let (http, tails) = crate::http_lifetime::track(self.router);
+        let result = axum::serve(self.listener, http)
             .with_graceful_shutdown(async move {
                 shutdown.await;
                 admitting.store(false, Ordering::Release);
                 close_jobs(&stopping_state);
             })
             .await;
+        let http_drained = tails.drain().await;
         close_jobs(&self.state);
         let drained = api::work::registry().drain().await;
         ServiceStopped {
             core: self.state.core,
-            outcome: result.and(drained),
+            outcome: result.and(http_drained).and(drained),
         }
     }
 }
@@ -317,18 +319,47 @@ fn router(state: api::AppState) -> Router {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn native_http_tail_hands_back_the_same_core_before_final_authority_release() {
         let directory = tempfile::tempdir().unwrap();
         let data = directory.path().join("core");
         let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
             .await
             .unwrap();
+        let mut address = url::Url::parse(service.browser_url()).unwrap();
+        let token = address
+            .fragment()
+            .unwrap()
+            .strip_prefix("token=")
+            .unwrap()
+            .to_owned();
+        address.set_fragment(None);
+        address.set_path("/api/bootstrap");
         let state = service.authority();
         let (stop, stopped) = tokio::sync::oneshot::channel();
         let host = tokio::spawn(service.serve_retaining_until(async {
             let _ = stopped.await;
         }));
+        let client = reqwest::Client::new();
+        let mut requests = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let client = client.clone();
+            let address = address.clone();
+            let token = token.clone();
+            requests.spawn(async move {
+                let response = client
+                    .get(address)
+                    .header("x-weftext-token", token)
+                    .send()
+                    .await
+                    .unwrap();
+                assert!(response.status().is_success());
+                response.json::<serde_json::Value>().await.unwrap();
+            });
+        }
+        while let Some(result) = requests.join_next().await {
+            result.unwrap();
+        }
         stop.send(()).unwrap();
         let returned = tokio::time::timeout(std::time::Duration::from_secs(10), host)
             .await

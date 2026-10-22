@@ -10,6 +10,8 @@ translation_status: synced
 
 Owner connections first retain the process identity obtained from the original OS pipe and a protected handle to its original executable. The identification handshake carries only version, physical-profile digest and random challenge; business bodies, credentials and shutdown commands require complete executable qualification on that same file handle. Large-image qualification has its own deadline and tracked background work, outside the peer identification deadline. Failure never reconnects or resends automatically.
 
+Normal shutdown waits for actual HTTP service and request-future destruction after the listener's completion signal, then joins accepted workers and releases the original Core. Local and hosted services use the same lifetime barrier; a completed response alone cannot prove final authority release.
+
 `weftext-cli` is the business console entry. It shares one Core and local owner with the `weftext` desktop entry. It does not directly modify authored library files or start another Core. Implementation and usage documentation do not establish platform acceptance; [MVP](MVP.md) records actual artifacts, platforms and unverified conditions.
 
 The default target is the current user's local profile; `--data-dir PATH` selects another profile explicitly. On Windows, the protected local channel qualifies the current user, physical directory and owner incarnation. An original request binds the physical profile identity; replacing a directory at the same path does not send an old request to a new empty journal. The lifecycle manages shared-owner exit; client exit never force-kills the shared process.

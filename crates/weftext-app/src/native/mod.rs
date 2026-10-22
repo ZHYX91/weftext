@@ -730,28 +730,65 @@ async fn run_owner(
         Some(result) => result,
         None => serving.await,
     };
-    let http_ok = match http_result {
+    let http_failure = match http_result {
         Ok(stopped) => {
-            let valid = Arc::ptr_eq(&stopped.core, &state.core) && stopped.outcome.is_ok();
+            let same_core = Arc::ptr_eq(&stopped.core, &state.core);
+            let drained = stopped.outcome.is_ok();
             drop(stopped.core);
-            valid
+            if !same_core {
+                Some(error(
+                    "shutdownUnknown",
+                    "The HTTP tail returned a different Core authority",
+                ))
+            } else if !drained {
+                Some(error(
+                    "shutdownUnknown",
+                    "The HTTP listener or its accepted work did not drain successfully",
+                ))
+            } else {
+                None
+            }
         }
-        Err(_) => false,
+        Err(_) => Some(error(
+            "shutdownUnknown",
+            "The HTTP supervisor task did not join successfully",
+        )),
     };
     // One final owner releases the same Core after HTTP, broker, author proofs,
     // notifications and worker tails. Normal and fatal HTTP share this path.
     let drained = crate::work::registry().drain().await.is_ok();
-    let released = Arc::try_unwrap(state.core)
-        .map_err(|_| ())
-        .and_then(|core| core.into_inner().map_err(|_| ()))
-        .map(drop)
-        .is_ok();
+    let release_failure = match Arc::try_unwrap(state.core) {
+        Err(_) => Some(error(
+            "shutdownUnknown",
+            "Core authority is still retained after HTTP and accepted work drained",
+        )),
+        Ok(core) => match core.into_inner() {
+            Err(_) => Some(error(
+                "shutdownUnknown",
+                "Core authority was poisoned during final release",
+            )),
+            Ok(core) => {
+                drop(core);
+                None
+            }
+        },
+    };
+    let released = release_failure.is_none();
     let core_quiet = drained && released;
-    if !matches!(broker_result, Ok(Ok(()))) || !http_ok || !core_quiet {
+    if !matches!(broker_result, Ok(Ok(()))) {
         failure.get_or_insert(error(
             "shutdownUnknown",
-            "Accepted work or the final Core lease release was not confirmed",
+            "The protected owner listener or its accepted requests did not drain successfully",
         ));
+    } else if let Some(http_failure) = http_failure {
+        failure.get_or_insert(http_failure);
+    } else if !drained {
+        failure.get_or_insert(error(
+            "shutdownUnknown",
+            "Accepted worker quiescence was not confirmed",
+        ));
+    } else if let Some(release_failure) = release_failure {
+        failure.get_or_insert(release_failure);
     }
     if let Some(desktop) = desktop {
         // Final Core release uses an independent retained terminal slot, never

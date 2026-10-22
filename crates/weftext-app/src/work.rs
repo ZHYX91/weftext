@@ -19,7 +19,7 @@ struct Inner {
     changed: Notify,
 }
 
-struct Permit(Registry);
+pub(crate) struct Permit(Registry);
 impl Drop for Permit {
     fn drop(&mut self) {
         if self.0.0.active.fetch_sub(1, Ordering::AcqRel) == 1 {
@@ -29,7 +29,7 @@ impl Drop for Permit {
 }
 
 impl Registry {
-    fn enter(&self) -> Permit {
+    pub(crate) fn enter(&self) -> Permit {
         self.0.active.fetch_add(1, Ordering::AcqRel);
         Permit(self.clone())
     }

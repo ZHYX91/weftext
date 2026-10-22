@@ -74,6 +74,7 @@ mod host_state;
 mod hosted;
 #[cfg(windows)]
 mod hosted_owner;
+mod http_lifetime;
 mod knowledge_api;
 pub mod launch;
 mod legacy_office;

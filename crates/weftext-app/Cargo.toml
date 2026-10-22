@@ -21,6 +21,7 @@ weftext-export = { path = "../weftext-export" }
 weftext-messages = { path = "../weftext-messages" }
 typst-syntax = "=0.15.1"
 axum = "0.8"
+tower = { version = "0.5.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true }

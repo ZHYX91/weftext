@@ -1459,7 +1459,8 @@ impl HostedService {
         let stopping_state = self.state.clone();
         let admitting = self.admitting;
         let reaper_signal = stop_reaper.clone();
-        let result = axum::serve(self.listener, self.router)
+        let (http, tails) = crate::http_lifetime::track(self.router);
+        let result = axum::serve(self.listener, http)
             .with_graceful_shutdown(async move {
                 shutdown.await;
                 admitting.store(false, std::sync::atomic::Ordering::Release);
@@ -1467,6 +1468,7 @@ impl HostedService {
                 close_hosted_jobs(&stopping_state).await;
             })
             .await;
+        let http_drained = tails.drain().await;
         let _ = stop_reaper.send(true);
         close_hosted_jobs(&self.state).await;
         if reaper.await.is_err() {
@@ -1479,7 +1481,7 @@ impl HostedService {
         drop(inner.into_inner().map_err(|_| {
             std::io::Error::other("Hosted Core authority was poisoned during shutdown")
         })?);
-        result
+        result.and(http_drained)
     }
 }
 
