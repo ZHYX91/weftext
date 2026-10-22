@@ -4080,6 +4080,7 @@ mod tests {
             renders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             editor_versions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

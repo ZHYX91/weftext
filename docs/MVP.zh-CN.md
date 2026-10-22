@@ -57,12 +57,16 @@ rc.4 在连接时逐个报告独立面板的失败，继续初始化其它获权
 
 ## 启动与文件
 
-运行打包目录的 `weftext.exe`。启动窗口给出本机会话地址并打开默认浏览器；关闭进程停止服务。默认本地模式只监听 `127.0.0.1`，不用云服务或账户。受控多用户入口须显式使用 `--server-config`，配置、启动与未实现范围见 [Server 指南](SERVER.zh-CN.md)。
+0.7 宿主批正在集成，以下是本批统一入口合同；整版原生窗口、保稿关闭和安装验收尚未完成。Windows 界面使用 `weftext.exe`，正式控制台使用 `weftext-cli.exe`。本机界面与命令行共享同一物理 profile 的唯一 Core，不需要云服务或账户。普通启动或再次点应用打开库窗口，`--capture` 只打开独立碎片窗口。本机浏览器服务须显式运行 CLI `serve`；受控多用户使用它的 `--server-config`，见 [Server 指南](SERVER.zh-CN.md) 与 [CLI 指南](CLI.zh-CN.md)。
+
+下例中的程序名须替换为本次 `scripts/mvp.py build/check` 打印的固定角色完整路径，或交付目录内的对应程序。两个 PE 与同批 `artifact-catalog.json` 必须放在一起；不能从 Cargo 的裸 `target/debug` 或 `target/release` 程序推断有效候选，也不能混用两次构建的程序。
 
 ```text
-weftext.exe --open "D:\Notes\example.typ"
-weftext.exe --open "D:\Project\chapter.typ" --root "D:\Project"
-weftext.exe --no-browser --data-dir "D:\Weftext-Local-State"
+weftext.exe
+weftext.exe --capture
+weftext.exe --data-dir "D:\Weftext-Local-State"
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --port 0
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --open "D:\Project\chapter.typ" --root "D:\Project" --port 0
 ```
 
 界面输入本机文件和目录的完整路径。新资料库使用尚不存在的目录；普通目录可以浏览，不自动纳管。新笔记是 `A/A.typ` 配对，使用原生 metadata 存放 ID、类型和字段。库内外普通文件可直接打开、编辑和保存，不主动添加 metadata。无标题笔记有效，导航可回退显示文件名。
@@ -167,18 +171,40 @@ Server 已按独立权限接通五档编辑、窄字段与高级／内嵌 Query�
 
 需要通过 rustup 安装 Rust、Node.js/npm、Python 3.11+ 及 Windows C++ 构建工具。仓库的 `rust-toolchain.toml` 为本地和 CI 选择相同的 Rust 1.99.1 与组件，不改变本机默认工具链。此前候选证据使用 Rust 1.98；Node.js 24 和官方 Typst 0.15.1 继续使用。
 
-0.7 的首个宿主基础重构复用 `weftext-app` 库及其 `LocalService::bind`／`browser_url`／`serve_until`，现有控制台仍提供本机浏览器或 `--no-browser` 服务和 `--server-config` 托管服务。版本暂保 `0.6.3-rc.4`，不代表托盘、提醒、Mobile 或整版 0.7 已完成。服务由一个 Core 持有私有目录租约；宿主选择停止信号，浏览器和未来原生窗口不自行创建另一写入者。
+0.7 的两个程序共享 `weftext-app`、业务路由、Core 与原操作恢复。GUI 不再承担控制台脚本入口；CLI `serve` 打印一行实际 Ready JSON，本机模式的 URL 含临时会话凭据，须只交给自己的界面。CLI 业务输出与内部 worker 管道分别持有，不能把启动日志混入管道数据。版本和已验范围仍以本次固定源码、产物及交付记录为准，源码接通不表示托盘、提醒、Mobile 或整版 0.7 已验。
+
+三个桌面偏好独立保存且默认关闭：
+
+| 偏好 | 行为 |
+| --- | --- |
+| 关闭最后窗口后继续运行 | 保稿关闭最后窗口后保留桌面托盘；显式退出仍走完整关闭与任务排空。 |
+| 登录时启动 | 向系统请求此设备的登录启动，实际状态以系统为准；用户或策略禁用不能被程序强开。 |
+| 自动／登录启动时打开库 | 仅选择登录启动后是否开库；不改变普通手动启动必定打开库窗口的动作。 |
+
+仅开启登录启动、另外两项关闭时，登录先进入零窗口托盘；随后手动打开并关闭最后窗口时，按关闭最后窗口偏好处理。CLI 服务先启动，或受保护的 CLI 业务请求完整被接纳后，后台服务会保留同一 Core 与会话供下一条命令使用；关闭 GUI 最后窗口不撤销该服务，托盘显示后台命令行服务状态。只有显式全局退出／owner shutdown 才结束它，并实际排空已接受作业；客户端断开不能证明 Core 或 worker 已退出。未获可靠 Core 保稿回执的输入会阻止关闭，浏览器恢复存储成功不能替代它。
+
+系统登录启动一次只选择一个已核验的 profile。在另一个 profile 启用时，会切换本应用的实际登录启动目标；旧 profile 的个人意图仍保留，但不代表它仍是系统当前生效的选择。一次通知激活失败或等待到期只结束那次启动等待，不能关闭随后打开的作者窗口或撤销后来接纳的 CLI 服务。
+
+Windows 原生 GUI 的本批目标是 Windows 11 x64、build 22000 起，并要求合同内最低 WebView2 Runtime。Core／HTTP／CLI 的能力检查独立；Windows Server 2022 的无界面检查不构成 Windows 11 GUI、通知或安装验收。
+
+| 交付能力 | MSIX | ZIP |
+| --- | --- | --- |
+| 原生窗口及手动启动 | 按同一实际候选验收 | 按同一实际候选验收 |
+| 登录启动 | 使用清单中的 StartupTask，并读取真实系统状态 | 本批明确不可用 |
+| 系统提醒与点击回跳 | 使用包身份、COM 激活及原通知地址，须实测投递／查询／撤回 | 本批明确不可用，不创建假注册或投递许可 |
+
+系统关闭通知时仍可在应用内查看提醒状态；注册成功不表示已经送达。未知投递结果保留原记录，不自动换号重发。上述 MSIX 路径的实际安装、通知激活和 StartupTask 尚待同一最终候选验收。
 
 显式 `--data-dir` 仍指定当前本机服务的 Core 持久状态。Windows 默认使用 `%LOCALAPPDATA%/Weftext-MVP/core`，私有宿主元数据使用独立的 `Weftext-MVP/host-state`；旧顶层 Core 不自动采用。macOS 目录选择为 `$HOME/Library/Application Support/Weftext`，Linux 为绝对 `$XDG_DATA_HOME/weftext` 或未设置该变量时的 `$HOME/.local/share/weftext`。默认根目录缺失、为空或不是绝对路径时明确失败，不回退临时目录；Core 仍会核实际后端能力，目录选择不表示非 Windows 写后端已支持。MSIX 保全声明覆盖整个准确 Weftext-MVP 范围，实际升级／卸载保证仍须同一候选验收。
 
-默认浏览器交接使用 Windows Shell、macOS `/usr/bin/open` 或 Linux `xdg-open`；交接失败会明确报告，本机服务及其已打印地址继续可用，`--no-browser` 可跳过交接。交接最多等待 10 秒，超时报告未确认且不重发；OS 仍可能继续处理原请求。HTTP 在交接期间响应，停止服务不等待未完成的交接；Windows OS 调用使用独立线程，避免卡住宿主运行时退出。系统接受交接不代表浏览器页面已加载，也不授予未验平台通过。内部 worker 参数不能与用户启动模式混用，`--root` 必须与 `--open` 同用。
+本机 WebView 使用按实际物理 profile 隔离的配置和保留的回环端口；端口被占用、原配置缺失或身份变化时明确拒绝，不自动换来源而藏起尚未进入 Core 的恢复输入。CLI `serve --port 0` 对已有 profile 表示复用该端口，首次才分配；Hosted Server 仍使用配置中的 public bind。GUI 外部链接才使用系统浏览器交接，交接失败或超时不等于页面已加载，也不自动重发。内部 worker 参数只接受各自一个固定角色，不能与用户启动模式混用；CLI `serve --root` 必须与 `--open` 同用。
 
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
 ```
 
-默认构建本地调试候选，`--release` 使用优化构建。入口使用 Cargo 实际报告的程序路径，包括 `CARGO_TARGET_DIR` 或 Cargo 配置覆盖，供后续检查与打包使用。打包要求使用仓库的 `target/` 树或源码树以外的构建目录，并从源码快照排除该构建树。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
+默认构建本地调试候选，`--release` 使用优化构建。入口读取 Cargo 实际报告的双角色产物路径，包括 `CARGO_TARGET_DIR` 或 Cargo 配置覆盖，然后在 `weftext-build-artifacts/<UUID>/` 新目录冻结两个 PE 与同批 catalog，打印后续检查与打包使用的完整路径。打包要求使用仓库的 `target/` 树或源码树以外的构建目录，并从源码快照排除该构建树。检查覆盖文档／有界模型、字体清单、前端行为、Rust 格式／静态分析／测试及真实程序 HTTP 场景，不替代 GUI、IME 和断电实测。
 
 Windows 双程序 ZIP／MSIX 使用同一入口的 `package` 动作，必须提供准确 SDK、离线材料目录与实际 MSVC linker，完整命令和当前缺项见 [打包合同](PACKAGING.zh-CN.md)。它从固定源码副本构建、检查并在 `dist/` 创建新目录，保留旧候选，不推送或发布。源码、两个 PE、原许可、字体清单与构建依赖声明绑定同一候选；声明含测试／构建依赖，不表示每项进入二进制。未取得资格的离线材料会在构建前明确拒绝，不能用旧单程序包替代。正式发布按 [WORKFLOW](WORKFLOW.zh-CN.md)。
 

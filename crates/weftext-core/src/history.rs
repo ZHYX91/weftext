@@ -1049,6 +1049,7 @@ impl Core {
                         base_known: true,
                         identity: Some(context.birth.identity.clone()),
                         alternatives: Vec::new(),
+                        producer_id: None,
                     });
                 }
             }
@@ -1096,6 +1097,7 @@ fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {
         base_source: draft.base_source.clone(),
         source: draft.source.clone(),
         base_known: draft.base_known,
+        producer_id: draft.producer_id.clone(),
     })
     .chain(draft.alternatives.iter().cloned())
     {

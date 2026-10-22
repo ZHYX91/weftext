@@ -60,7 +60,7 @@ async fn discover(State(state): State<AppState>, Json(req): Json<DiscoverRequest
     let loc = location(&state, &req.session_id)?;
     let read_only = data_api::deny_trash_writer(&loc.path).is_err();
     let source = req.source.clone();
-    let (syntax_valid, mut occurrences) = tokio::task::spawn_blocking(move || {
+    let (syntax_valid, mut occurrences) = crate::work::spawn_blocking(move || {
         (
             weftext_engine::inspect(&source).syntax_valid,
             weftext_data::embedded_queries(&source),
@@ -229,6 +229,7 @@ mod tests {
             renders: Arc::new(Mutex::new(HashMap::new())),
             editor_versions: Arc::new(Mutex::new(HashMap::new())),
             exports: Arc::new(Mutex::new(export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

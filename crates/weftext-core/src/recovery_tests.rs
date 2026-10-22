@@ -1022,6 +1022,7 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
             base_source: "original source".into(),
             source: format!("{index}{}", "x".repeat(MAX_SOURCE_BYTES - 1)),
             base_known: true,
+            producer_id: None,
         })
         .collect();
     assert_eq!(core.store_draft(&draft).unwrap_err().code, "budget");

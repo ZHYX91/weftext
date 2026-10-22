@@ -12,11 +12,15 @@ use std::{
     io,
     net::Ipv4Addr,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 /// An explicit document locator; Core still qualifies identity and restores Draft.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InitialDocument {
     pub path: PathBuf,
     pub root: Option<PathBuf>,
@@ -45,18 +49,78 @@ impl LocalServiceOptions {
 /// Each executable hosting this service must also dispatch `--render-worker` and
 /// `--notes-edit-worker` before GUI initialization or Core acquisition: isolated
 /// workers start through the current executable. The existing console dispatch
-/// is [`crate::launch::run`].
+/// is [`crate::launch::dispatch_worker`].
 pub struct LocalService {
     listener: tokio::net::TcpListener,
     router: Router,
     browser_url: String,
+    state: api::AppState,
+    admitting: Arc<AtomicBool>,
+}
+/// The HTTP tail has stopped, but the original Core lease is still owned.
+/// A native supervisor can continue preserving its exposed inputs after an
+/// HTTP failure, then release this exact lease after its other owners drain.
+pub(crate) struct ServiceStopped {
+    pub core: Arc<Mutex<weftext_core::Core>>,
+    pub outcome: io::Result<()>,
 }
 
 impl LocalService {
     /// Core failures retain `CoreError` in `io::Error::get_ref`; a host may
     /// inspect its code without treating paths or diagnostic text as authority.
     pub async fn bind(options: LocalServiceOptions) -> io::Result<Self> {
-        let (mut core, data) = api::host_environment::open_core(options.data_dir)?;
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port)).await?;
+        Self::bind_with_listener(options, listener).await
+    }
+
+    /// A native-attachable owner supplies its already reserved stable-origin
+    /// listener after acquiring the sole physical-profile owner lease.
+    pub(crate) async fn bind_with_listener(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+    ) -> io::Result<Self> {
+        Self::bind_core(options, listener, None).await
+    }
+
+    #[cfg(windows)]
+    pub(crate) async fn bind_existing_with_listener(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+        physical_identity: &str,
+        device_id: &str,
+    ) -> io::Result<Self> {
+        Self::bind_core(options, listener, Some((physical_identity, device_id))).await
+    }
+
+    async fn bind_core(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+        existing: Option<(&str, &str)>,
+    ) -> io::Result<Self> {
+        let bound = listener.local_addr()?;
+        if bound.ip() != std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)
+            || bound.port() == 0
+            || (options.port != 0 && options.port != bound.port())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "The owned listener does not match the exact local bind contract",
+            ));
+        }
+        let (mut core, data) = match existing {
+            #[cfg(windows)]
+            Some((physical, device)) => {
+                api::host_environment::open_existing_core(options.data_dir, physical, device)?
+            }
+            #[cfg(not(windows))]
+            Some(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "This local owner authority is unavailable",
+                ));
+            }
+            None => api::host_environment::open_core(options.data_dir)?,
+        };
         let initial = options
             .initial_document
             .map(|document| {
@@ -68,17 +132,6 @@ impl LocalService {
                     .map_err(io::Error::other)
             })
             .transpose()?;
-        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port))
-            .await
-            .map_err(|error| {
-                io::Error::new(
-                    error.kind(),
-                    format!(
-                        "Cannot bind Weftext local service on port {}: {error}",
-                        options.port
-                    ),
-                )
-            })?;
         let port = listener.local_addr()?.port();
         let token = format!(
             "{}{}",
@@ -95,6 +148,7 @@ impl LocalService {
             exports: Arc::new(Mutex::new(api::export_api::ExportStore::with_legacy_root(
                 data.join("legacy-office"),
             ))),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(api::remote_sync::Store::default())),
             initial,
@@ -102,11 +156,17 @@ impl LocalService {
         if let Some(document) = state.initial.as_ref() {
             api::remember(&state, document).map_err(|error| io::Error::other(error.message))?;
         }
-        let router = router(state);
+        let admitting = Arc::new(AtomicBool::new(true));
+        let router = router(state.clone()).layer(middleware::from_fn_with_state(
+            admitting.clone(),
+            admit_request,
+        ));
         Ok(Self {
             listener,
             router,
             browser_url: format!("http://127.0.0.1:{port}/#token={token}"),
+            state,
+            admitting,
         })
     }
 
@@ -115,15 +175,79 @@ impl LocalService {
         &self.browser_url
     }
 
-    /// The caller owns shutdown. Returning drains HTTP requests and drops Core.
+    /// Only trusted in-process native/broker coordinators receive this handle;
+    /// clients never obtain Core, session credentials or arbitrary HTTP access.
+    pub(crate) fn authority(&self) -> api::AppState {
+        self.state.clone()
+    }
+
+    /// Stop new requests, drain accepted HTTP and all registered async/blocking
+    /// work. In-process authority handles must also be dropped by the host
+    /// before it can claim that the final Core lease has been released.
     pub async fn serve_until(
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> io::Result<()> {
-        axum::serve(self.listener, self.router)
-            .with_graceful_shutdown(shutdown)
-            .await
+        let stopped = self.serve_retaining_until(shutdown).await;
+        let core = Arc::try_unwrap(stopped.core).map_err(|_| {
+            io::Error::other("Core authority is still retained after accepted work drained")
+        })?;
+        drop(
+            core.into_inner()
+                .map_err(|_| io::Error::other("Core authority was poisoned during shutdown"))?,
+        );
+        stopped.outcome
     }
+
+    pub(crate) async fn serve_retaining_until(
+        self,
+        shutdown: impl Future<Output = ()> + Send + 'static,
+    ) -> ServiceStopped {
+        let admitting = self.admitting;
+        let stopping_state = self.state.clone();
+        let result = axum::serve(self.listener, self.router)
+            .with_graceful_shutdown(async move {
+                shutdown.await;
+                admitting.store(false, Ordering::Release);
+                close_jobs(&stopping_state);
+            })
+            .await;
+        close_jobs(&self.state);
+        let drained = api::work::registry().drain().await;
+        ServiceStopped {
+            core: self.state.core,
+            outcome: result.and(drained),
+        }
+    }
+}
+
+fn close_jobs(state: &api::AppState) {
+    match state.exports.lock() {
+        Ok(mut exports) => exports.close(),
+        Err(_) => api::work::fault(),
+    }
+    match state.sync_remote.lock() {
+        Ok(mut sync) => sync.close(),
+        Err(_) => api::work::fault(),
+    }
+}
+
+pub(crate) async fn admit_request(
+    axum::extract::State(admitting): axum::extract::State<Arc<AtomicBool>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if !admitting.load(Ordering::Acquire) {
+        use axum::response::IntoResponse;
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({
+                "error": {"code":"hostClosing", "message":"The owner is draining accepted work"}
+            })),
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 fn router(state: api::AppState) -> Router {
@@ -131,6 +255,7 @@ fn router(state: api::AppState) -> Router {
         .merge(api::writing_api::router())
         .merge(api::builtin_module_api::router())
         .merge(api::data_api::router())
+        .merge(api::desktop_api::router())
         .merge(api::embedded_query_api::router())
         .merge(api::history_api::router())
         .merge(api::knowledge_api::router())
@@ -158,6 +283,7 @@ fn router(state: api::AppState) -> Router {
         .route("/api/save-as", post(api::save_as))
         .route("/api/draft", post(api::draft))
         .route("/api/draft/resolve", post(api::resolve_draft))
+        .route("/api/draft/resume", post(api::resume_draft))
         .route("/api/render", post(api::render))
         .route("/api/editor/preview", post(api::proposal_preview))
         .route("/api/paged", post(api::paged))
@@ -175,6 +301,32 @@ fn router(state: api::AppState) -> Router {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn native_http_tail_hands_back_the_same_core_before_final_authority_release() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("core");
+        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
+            .await
+            .unwrap();
+        let state = service.authority();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let host = tokio::spawn(service.serve_retaining_until(async {
+            let _ = stopped.await;
+        }));
+        stop.send(()).unwrap();
+        let returned = tokio::time::timeout(std::time::Duration::from_secs(10), host)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(returned.outcome.is_ok());
+        assert!(Arc::ptr_eq(&returned.core, &state.core));
+        assert!(weftext_core::Core::new(&data).is_err());
+        drop(returned.core);
+        assert!(weftext_core::Core::new(&data).is_err());
+        drop(state);
+        drop(weftext_core::Core::new(&data).unwrap());
+    }
 
     #[tokio::test]
     async fn host_shutdown_releases_the_only_core_lease_and_listener() {

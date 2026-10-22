@@ -141,7 +141,7 @@ async fn map(
     })
     .await?;
     let source = req.source.clone();
-    let result = tokio::task::spawn_blocking(move || weftext_engine::inspect_editor(&source))
+    let result = crate::work::spawn_blocking(move || weftext_engine::inspect_editor(&source))
         .await
         .map_err(|_| ApiError::internal("编辑映射未完成"))?;
     locked(&state, move |inner| {
@@ -208,7 +208,7 @@ async fn edit(
         })
         .await;
     }
-    let result = tokio::task::spawn_blocking(move || weftext_engine::edit(&source, &command))
+    let result = crate::work::spawn_blocking(move || weftext_engine::edit(&source, &command))
         .await
         .map_err(|_| ApiError::internal("编辑提案未完成"))?;
     locked(&state, move |inner| {
@@ -357,12 +357,10 @@ pub(super) fn freeze_with_inputs(
         root: inner.config.root.clone(),
         paged: false,
         style: None,
-        frozen_files: Some(
-            files
-                .into_iter()
-                .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
-                .collect(),
-        ),
+        frozen_files: files
+            .into_iter()
+            .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
+            .collect(),
     };
     let mut environment = library::environment(inner, actor)?;
     environment.attach_inputs(inner, actor, captured_inputs)?;
@@ -474,7 +472,7 @@ mod tests {
         );
         let (worker, dependencies, environment) =
             freeze(&mut inner, "alice", "Shared", &source).unwrap();
-        let files = worker.frozen_files.unwrap();
+        let files = worker.frozen_files;
         let actual_module_key = std::path::Path::new("Shared")
             .join("weftext-endnotes.typ")
             .to_string_lossy()

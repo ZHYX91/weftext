@@ -183,8 +183,18 @@ pub(crate) struct Store {
     pub(crate) root: Option<PathBuf>,
     runtime: Option<PathBuf>,
     active: BTreeMap<String, Arc<AtomicBool>>,
+    closing: Arc<AtomicBool>,
 }
 impl Store {
+    pub(crate) fn close(&mut self) {
+        self.closing.store(true, Ordering::Release);
+        for cancel in self.active.values() {
+            cancel.store(true, Ordering::Release);
+        }
+    }
+    pub(crate) fn closing_flag(&self) -> Arc<AtomicBool> {
+        self.closing.clone()
+    }
     pub(crate) fn new(root: PathBuf) -> Self {
         Self {
             root: Some(root),
@@ -281,6 +291,13 @@ impl Store {
         context: Context,
         req: Start,
     ) -> Result<(Claim, Option<Run>), ApiError> {
+        if self.closing.load(Ordering::Acquire) {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "hostClosing",
+                "The owner is closing; no new recognition job was started",
+            ));
+        }
         uuid(&req.job_id)?;
         let bytes = upload(&req.bytes_base64)?;
         validate_options(&req)?;
@@ -674,7 +691,7 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
         .create_new(true)
         .open(&diagnostics)
         .map_err(io_error)?;
-    let mut command = tokio::process::Command::new(python);
+    let mut command = crate::owned_process::Command::new(python);
     command
         .args(["-I"])
         .arg(
@@ -692,22 +709,21 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
         .env("TEMP", &run.dir)
         .env("TMP", &run.dir)
         .env("PYTHONUTF8", "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::from(out))
-        .stderr(std::process::Stdio::from(err))
-        .kill_on_drop(true);
+        .stdin(crate::owned_process::Stdio::piped())
+        .stdout(crate::owned_process::Stdio::from(out))
+        .stderr(crate::owned_process::Stdio::from(err));
     if operation.is_none() {
         command.arg("--progress").arg(run.dir.join("progress.json"));
     }
-    #[cfg(windows)]
-    command.creation_flags(0x08000000 | 0x00000004);
-    let mut child = command.spawn().map_err(io_error)?;
-    #[cfg(windows)]
-    let guard = process_job::attach_resume(&child).map_err(io_error)?;
+    let mut child = command.spawn().await.map_err(io_error)?;
     let request = serde_json::to_vec(&envelope(run, operation)).map_err(|_| changed())?;
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(&request).await.map_err(io_error)?;
-        stdin.shutdown().await.map_err(io_error)?;
+        let input = tokio::time::timeout(Duration::from_secs(15), stdin.write_all(&request)).await;
+        drop(stdin); // NamedPipeServer::shutdown only flushes; close sends EOF.
+        if !matches!(input, Ok(Ok(()))) {
+            child.kill().await.map_err(io_error)?;
+            return Err(changed());
+        }
     }
     let start = std::time::Instant::now();
     let status = loop {
@@ -717,10 +733,7 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
             || fs::metadata(&output).map_or(0, |m| m.len()) > MAX_RESULT as u64
             || fs::metadata(&diagnostics).map_or(0, |m| m.len()) > 1024 * 1024
         {
-            #[cfg(windows)]
-            drop(guard);
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+            child.kill().await.map_err(io_error)?;
             return Err(changed());
         }
         if let Some(s) = child.try_wait().map_err(io_error)? {
@@ -783,6 +796,7 @@ pub(crate) async fn preview_job(
     runtime: Option<PathBuf>,
     claim: Claim,
     page: u64,
+    cancel: Arc<AtomicBool>,
 ) -> Result<Value, ApiError> {
     check_live(&claim)?;
     if page == 0
@@ -813,7 +827,7 @@ pub(crate) async fn preview_job(
         implementation: materialize(&store_root)?,
         python: runtime.as_ref().map(|p| p.join("venv/Scripts/python.exe")),
         runtime,
-        cancel: Arc::new(AtomicBool::new(false)),
+        cancel,
     };
     let reply = execute(&run, Some(("preview", page))).await?;
     let p = &reply["result"]["pages"][0]["preview"];
@@ -1021,7 +1035,7 @@ async fn local_start(State(state): State<AppState>, Json(req): Json<Start>) -> A
     let reply = lock_store(&state)?.recognition.reply(&claim)?;
     if let Some(run) = run {
         let finished = claim.clone();
-        tokio::spawn(async move {
+        crate::work::spawn(async move {
             run_job(run).await;
             if let Ok(mut store) = state.exports.lock() {
                 store.recognition.finish(&finished);
@@ -1068,14 +1082,15 @@ async fn local_cancel(State(state): State<AppState>, Json(req): Json<JobRequest>
 }
 async fn local_preview(State(state): State<AppState>, Json(req): Json<Preview>) -> ApiResult {
     let (claim, _) = local_claim(&state, &req.job_id)?;
-    let (root, runtime) = {
+    let (root, runtime, cancel) = {
         let store = lock_store(&state)?;
         (
             store.recognition.root.clone().ok_or_else(unavailable)?,
             store.recognition.runtime(),
+            store.recognition.closing_flag(),
         )
     };
-    let value = preview_job(root, runtime, claim.clone(), req.page).await?;
+    let value = preview_job(root, runtime, claim.clone(), req.page, cancel).await?;
     let _ = local_claim(&state, &req.job_id)?;
     Ok(Json(value))
 }
@@ -1199,55 +1214,4 @@ pub(crate) fn decision_current(preview: &Value, ctx: &Context) -> bool {
         && d["implementationDigest"] == implementation_digest()
         && d["expires"].as_u64().is_some_and(|e| e > now())
         && runtime_current
-}
-
-#[cfg(windows)]
-mod process_job {
-    use std::io;
-    use windows_sys::Win32::{
-        Foundation::{CloseHandle, HANDLE},
-        System::JobObjects::*,
-    };
-    pub(super) struct Guard(HANDLE);
-    unsafe impl Send for Guard {}
-    impl Drop for Guard {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.0);
-            }
-        }
-    }
-    #[link(name = "ntdll")]
-    unsafe extern "system" {
-        fn NtResumeProcess(process: HANDLE) -> i32;
-    }
-    pub(super) fn attach_resume(child: &tokio::process::Child) -> io::Result<Guard> {
-        unsafe {
-            let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if handle.is_null() {
-                return Err(io::Error::last_os_error());
-            }
-            let guard = Guard(handle);
-            let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            limits.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
-            limits.ProcessMemoryLimit = 1024 * 1024 * 1024;
-            let process = child
-                .raw_handle()
-                .ok_or_else(|| io::Error::other("missing process"))?
-                as HANDLE;
-            if SetInformationJobObject(
-                handle,
-                JobObjectExtendedLimitInformation,
-                &limits as *const _ as *const _,
-                std::mem::size_of_val(&limits) as u32,
-            ) == 0
-                || AssignProcessToJobObject(handle, process) == 0
-                || NtResumeProcess(process) < 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-            Ok(guard)
-        }
-    }
 }

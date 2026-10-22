@@ -76,8 +76,16 @@ pub(crate) struct ExportStore {
     legacy_root: Option<PathBuf>,
     legacy_active: HashMap<String, Arc<AtomicBool>>,
     legacy_queued_cancels: std::collections::BTreeSet<String>,
+    closing: bool,
 }
 impl ExportStore {
+    pub(crate) fn close(&mut self) {
+        self.closing = true;
+        self.recognition.close();
+        for cancel in self.legacy_active.values() {
+            cancel.store(true, Ordering::Release);
+        }
+    }
     pub(crate) fn with_legacy_root(root: PathBuf) -> Self {
         Self {
             recognition: crate::recognition_api::Store::new(root.with_file_name("recognition")),
@@ -196,7 +204,7 @@ pub(crate) async fn legacy_convert(
                 "原外部转换仍在运行，请继续检查同一操作",
             ));
         }
-        let precancelled = store.legacy_queued_cancels.remove(id);
+        let precancelled = store.closing || store.legacy_queued_cancels.remove(id);
         let cancel = Arc::new(AtomicBool::new(precancelled));
         store.legacy_active.insert(id.into(), cancel.clone());
         (root, cancel)
@@ -606,7 +614,7 @@ async fn inspect_template(
     Json(req): Json<TemplateRequest>,
 ) -> ApiResult {
     let bytes = decode(&req.bytes_base64)?;
-    let output = tokio::task::spawn_blocking(move || template_slots(&req.format, &bytes))
+    let output = crate::work::spawn_blocking(move || template_slots(&req.format, &bytes))
         .await
         .map_err(|_| ApiError::internal("模板检查失败"))??;
     Ok(Json(output))
@@ -1081,7 +1089,7 @@ async fn inspect_import(
     let bytes = decode(&req.bytes_base64)?;
     if req.format == "docx" {
         let analysis =
-            tokio::task::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
+            crate::work::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
                 .await
                 .map_err(|_| ApiError::internal("Word 原件分析没有完成"))?
                 .map_err(|error| {
@@ -1093,7 +1101,7 @@ async fn inspect_import(
                 })?;
         return Ok(Json(value(analysis)?));
     }
-    let proposal = tokio::task::spawn_blocking(move || {
+    let proposal = crate::work::spawn_blocking(move || {
         bibliography_import_api::inspect_bibliography_import(&req.format, &bytes)
     })
     .await
@@ -1122,6 +1130,7 @@ mod tests {
             renders: Arc::new(Mutex::new(HashMap::new())),
             editor_versions: Arc::new(Mutex::new(HashMap::new())),
             exports: Arc::new(Mutex::new(ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

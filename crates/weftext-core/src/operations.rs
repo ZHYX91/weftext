@@ -3405,6 +3405,141 @@ impl Core {
         result
     }
 
+    /// Pure preview input from the actual opened document's qualified root.
+    /// It does not create a write basis or keep another author/Draft record.
+    pub fn preview_compile_snapshot(
+        &mut self,
+        session_id: &str,
+        source: &str,
+    ) -> Result<weftext_engine::FrozenRenderRequest> {
+        self.check_actor_session(session_id)?;
+        check_size(source.as_bytes())?;
+        let session = self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::new("sessionMissing", "Open the source again"))?
+            .clone();
+        self.check_pending(&session.path)?;
+        let main_guard = ParentGuard::acquire(&session.path)?;
+        let main = main_guard.open_file(false, false)?;
+        if stamp(&main)?.identity != session.stamp.identity {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "The opened source object was replaced",
+            ));
+        }
+        drop(main);
+        let (mut files, style) = if self.has_library(&session.root)? {
+            let captured = self.admitted_compile_snapshot(&session.root, "live")?;
+            // Read-only preview retains the bytes, not a write/dependency cut.
+            self.release_compile_dependency_cut(&captured.snapshot.cut_id);
+            (captured.files, captured.style)
+        } else {
+            let mut captured = Vec::new();
+            let mut directories = Vec::new();
+            snapshot_tree(&session.root, &mut captured, &mut directories, false)?;
+            let (_guards, _handles) = self.hold_compile_tree(&captured, &directories)?;
+            let mut files = BTreeMap::new();
+            for file in captured {
+                let relative = Path::new(&file.path)
+                    .strip_prefix(&session.root)
+                    .map_err(|_| {
+                        CoreError::new("outsideRoot", "Preview input is outside its actual root")
+                    })?
+                    .to_str()
+                    .ok_or_else(|| CoreError::new("invalidPath", "Preview path is not Unicode"))?
+                    .replace('\\', "/");
+                if files.insert(relative, file.bytes).is_some() {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "Preview input paths are not unique",
+                    ));
+                }
+            }
+            (files, None)
+        };
+        let relative = session
+            .path
+            .strip_prefix(&session.root)
+            .map_err(|_| {
+                CoreError::new(
+                    "outsideRoot",
+                    "The opened source is outside its actual root",
+                )
+            })?
+            .to_str()
+            .ok_or_else(|| CoreError::new("invalidPath", "Preview path is not Unicode"))?
+            .replace('\\', "/");
+        // The only replaced bytes are this caller's explicit current source.
+        // Every dependency stays from the one qualified immutable capture.
+        files.insert(relative, source.as_bytes().to_vec());
+        if files
+            .values()
+            .try_fold(0usize, |total, bytes| total.checked_add(bytes.len()))
+            .is_none_or(|total| total > MAX_OPERATION_BYTES)
+        {
+            return Err(CoreError::new(
+                "budget",
+                "Preview input exceeds the complete 64 MiB budget",
+            ));
+        }
+        let main = main_guard.open_file(false, false)?;
+        if stamp(&main)?.identity != session.stamp.identity {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "The opened source object changed during capture",
+            ));
+        }
+        Ok(weftext_engine::FrozenRenderRequest {
+            source: source.into(),
+            path: session.path,
+            root: session.root,
+            files,
+            style,
+        })
+    }
+
+    fn hold_compile_tree(
+        &self,
+        captured: &[CapturedFile],
+        directories: &[CapturedDirectory],
+    ) -> Result<(Vec<ParentGuard>, Vec<File>)> {
+        let mut guards = Vec::new();
+        let mut handles = Vec::new();
+        for file in captured {
+            self.check_pending(Path::new(&file.path))?;
+            let guard = ParentGuard::acquire(Path::new(&file.path))?;
+            let mut handle = guard.open_file(false, false)?;
+            if stamp(&handle)? != file.stamp
+                || read_blob(&mut handle)? != file.bytes
+                || stamp(&handle)? != file.stamp
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "A compile input changed while acquiring the shared cut",
+                ));
+            }
+            guards.push(guard);
+            handles.push(handle);
+        }
+        for directory in directories {
+            let guard =
+                ParentGuard::acquire(&Path::new(&directory.path).join(".compile-membership"))?;
+            let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
+            if !complete
+                || guard.directory_identity()? != directory.identity
+                || sorted_entries(entries, Path::new(&directory.path)) != directory.entries
+            {
+                return Err(CoreError::new(
+                    "scopeChanged",
+                    "Compile input membership changed",
+                ));
+            }
+            guards.push(guard);
+        }
+        Ok((guards, handles))
+    }
+
     fn capture_admitted_compile_snapshot(
         &mut self,
         root: &Path,
@@ -3414,21 +3549,7 @@ impl Core {
         let mut captured = Vec::new();
         let mut directories = Vec::new();
         snapshot_tree(root, &mut captured, &mut directories, false)?;
-        let mut guards = Vec::new();
-        let mut handles = Vec::new();
-        for f in &captured {
-            self.check_pending(Path::new(&f.path))?;
-            let guard = ParentGuard::acquire(Path::new(&f.path))?;
-            let mut handle = guard.open_file(false, false)?;
-            if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
-                return Err(CoreError::new(
-                    "scopeChanged",
-                    "A compile input changed while acquiring the shared cut",
-                ));
-            }
-            guards.push(guard);
-            handles.push(handle);
-        }
+        let (mut guards, handles) = self.hold_compile_tree(&captured, &directories)?;
         for original in snapshot
             .files
             .iter()
@@ -3461,20 +3582,6 @@ impl Core {
                 }
                 guards.push(guard);
             }
-        }
-        for d in &directories {
-            let guard = ParentGuard::acquire(&Path::new(&d.path).join(".compile-membership"))?;
-            let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
-            if !complete
-                || guard.directory_identity()? != d.identity
-                || sorted_entries(entries, Path::new(&d.path)) != d.entries
-            {
-                return Err(CoreError::new(
-                    "scopeChanged",
-                    "Compile input membership changed",
-                ));
-            }
-            guards.push(guard);
         }
         let settings_path = root.join(ConfigRole::WorkspaceSettings.filename());
         let settings = captured

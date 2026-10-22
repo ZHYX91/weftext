@@ -1060,6 +1060,10 @@ fn draft_fields<R: Read>(t: &mut Tokens<'_, R>, root: &Path, alternative: bool) 
                 t.string()?;
             }
             "baseKnown" => t.scalar()?,
+            "producerId" => {
+                let id = t.string()?;
+                valid_operation_id(&id).map_err(|_| private_evidence())?;
+            }
             "identity" if !alternative => t.identity()?,
             "alternatives" if !alternative => {
                 t.expect(b'[')?;

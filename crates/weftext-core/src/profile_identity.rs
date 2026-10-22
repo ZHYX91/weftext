@@ -18,11 +18,36 @@ impl QualifiedProfile {
     pub fn physical_identity(&self) -> &str {
         &self.identity
     }
+
+    /// Compare directory handles, including ancestors, rather than Windows
+    /// pathname spelling/case. Both qualifiers keep their parent chains held.
+    pub fn contains_profile(&self, other: &QualifiedProfile) -> Result<bool> {
+        let identity = self._guard.directory_identity()?;
+        for ancestor in other.path.ancestors() {
+            let guard = ParentGuard::acquire(&ancestor.join(".profile-prospective"))?;
+            if guard.directory_identity()? == identity {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
 }
 
 pub fn qualify_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
     let path = absolute_path(path.as_ref())?;
     let guard = qualify_directory(&path)?;
+    qualified(path, guard)
+}
+
+/// Existing-owner control must not create a new profile while locating the
+/// original. A missing/replaced directory is a rejection, never a fresh owner.
+pub fn qualify_existing_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
+    let path = absolute_path(path.as_ref())?;
+    let guard = ParentGuard::acquire(&path.join(".profile-prospective"))?;
+    qualified(path, guard)
+}
+
+fn qualified(path: PathBuf, guard: ParentGuard) -> Result<QualifiedProfile> {
     let identity = format!(
         "weftext.profile.ntfs.v1:{}",
         hash(&serde_json::to_vec(&guard.directory_identity()?)?)
@@ -57,5 +82,29 @@ fn qualify_directory(path: &Path) -> Result<ParentGuard> {
             }
         }
         Err(error) => Err(error),
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_ancestry_uses_actual_directory_identity_and_existing_control_never_creates() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = qualify_profile(temp.path().join("CoreState")).unwrap();
+        let child = qualify_profile(root.path().join("child")).unwrap();
+        let sibling = qualify_profile(temp.path().join("cache")).unwrap();
+        assert!(root.contains_profile(&root).unwrap());
+        assert!(root.contains_profile(&child).unwrap());
+        assert!(!child.contains_profile(&root).unwrap());
+        assert!(!sibling.contains_profile(&root).unwrap());
+        let spelling = PathBuf::from(root.path().to_str().unwrap().to_uppercase());
+        let alias = qualify_existing_profile(spelling).unwrap();
+        assert_eq!(alias.physical_identity(), root.physical_identity());
+        assert!(alias.contains_profile(&child).unwrap());
+        let missing = temp.path().join("not-created");
+        assert!(qualify_existing_profile(&missing).is_err());
+        assert!(!missing.exists());
     }
 }

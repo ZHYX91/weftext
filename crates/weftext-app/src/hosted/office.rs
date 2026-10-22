@@ -77,8 +77,16 @@ pub(super) struct Store {
     active: HashMap<(String, String), LegacyImportRun>,
     pub(super) import_active: HashMap<(String, String), LegacyImportRun>,
     legacy_capabilities: Option<Value>,
+    pub(super) closing: bool,
 }
 impl Store {
+    pub(super) fn close(&mut self) {
+        self.closing = true;
+        self.recognition.close();
+        for run in self.active.values().chain(self.import_active.values()) {
+            run.cancel.store(true, Ordering::Release);
+        }
+    }
     pub(super) fn with_legacy_root(root: PathBuf) -> Self {
         Self {
             recognition: crate::recognition_api::Store::new(root.with_file_name("recognition")),
@@ -719,7 +727,7 @@ fn capture_fields_only(
             root: inner.config.root.clone(),
             paged: false,
             style: None,
-            frozen_files: Some(BTreeMap::new()),
+            frozen_files: BTreeMap::new(),
         });
     }
     let size = cut
@@ -934,7 +942,7 @@ async fn inspect(
         .render_gate
         .try_acquire()
         .map_err(|_| ApiError::bad("Office 转换正在运行，请稍后重试"))?;
-    let result = tokio::task::spawn_blocking(move || {
+    let result = crate::work::spawn_blocking(move || {
         super::super::export_conversions::template_slots(
             if legacy_format(&req.format) {
                 "docx"
@@ -1944,7 +1952,7 @@ async fn recover_legacy(
         Err(_) => return Ok(Some(unknown_answer(request, "stageUnknown"))),
     }
     let read_dir = dir.clone();
-    let loaded = tokio::task::spawn_blocking(move || read_stage(&read_dir))
+    let loaded = crate::work::spawn_blocking(move || read_stage(&read_dir))
         .await
         .map_err(|_| failed())?;
     let (stage, bytes) = match loaded {
@@ -2185,7 +2193,7 @@ async fn prepare_legacy(
             return Err(ApiError::bad("Office 工件缓存已满，请稍后重试"));
         }
         let mut registered = registered.lock().map_err(|_| failed())?;
-        if initial_cancel.load(Ordering::Acquire) {
+        if inner.office.closing || initial_cancel.load(Ordering::Acquire) {
             return Err(failed());
         }
         if !inner
@@ -2241,7 +2249,7 @@ async fn prepare_legacy(
     let job = cut.job.clone();
     let mut docx_req = req.clone();
     docx_req.format = "docx".into();
-    let docx = tokio::task::spawn_blocking(move || convert(docx_req, cut, render))
+    let docx = crate::work::spawn_blocking(move || convert(docx_req, cut, render))
         .await
         .map_err(|_| failed())??;
     recheck_legacy(&state, &auth, &actor, &req, evidence.clone()).await?;
@@ -2269,7 +2277,7 @@ async fn prepare_legacy(
     let save_dir = dir.clone();
     let save_stage = stage.clone();
     let save_bytes = docx.bytes.clone();
-    tokio::task::spawn_blocking(move || write_stage(&save_dir, &save_stage, &save_bytes))
+    crate::work::spawn_blocking(move || write_stage(&save_dir, &save_stage, &save_bytes))
         .await
         .map_err(|_| failed())??;
     recheck_legacy(&state, &auth, &actor, &req, evidence.clone()).await?;
@@ -2368,7 +2376,7 @@ async fn prepare_legacy(
     })
     .map_err(|_| failed())?;
     let metadata_dir = dir.clone();
-    tokio::task::spawn_blocking(move || {
+    crate::work::spawn_blocking(move || {
         ensure_owned(stage_root(&metadata_dir)?, &metadata_dir, false)?;
         durable_write(&metadata_dir.join("ready.json"), &ready_bytes)
     })
@@ -2574,13 +2582,10 @@ async fn prepare(
             cut.additional_losses.extend(losses);
             if source != worker.source {
                 worker.source = source;
-                worker
-                    .frozen_files
-                    .get_or_insert_with(BTreeMap::new)
-                    .insert(
-                        worker.path.to_string_lossy().replace('\\', "/"),
-                        base64::engine::general_purpose::STANDARD.encode(worker.source.as_bytes()),
-                    );
+                worker.frozen_files.insert(
+                    worker.path.to_string_lossy().replace('\\', "/"),
+                    base64::engine::general_purpose::STANDARD.encode(worker.source.as_bytes()),
+                );
                 if let Some(environment) = &cut.environment {
                     environment.apply(&mut worker)?;
                 }
@@ -2596,7 +2601,7 @@ async fn prepare(
     let citations = cut.citations.clone();
     let native_witness = cut.native_witness.clone();
     let delivery_req = req.clone();
-    let converted = tokio::task::spawn_blocking(move || convert(req, cut, render))
+    let converted = crate::work::spawn_blocking(move || convert(req, cut, render))
         .await
         .map_err(|_| failed())?;
     locked(&state, move |inner| {

@@ -10,6 +10,8 @@ if (suppliedToken) {
 }
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
+  const native = nativeDraftRequest(path, body);
+  if (native) return checked<T>(await native, 200);
   const response = await fetch(path, {
     method: body === undefined ? "GET" : "POST",
     headers: {
@@ -19,10 +21,13 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data: unknown = await response.json();
-  if (!response.ok || (data && typeof data === "object" && "error" in data)) {
+  return checked<T>(data, response.status);
+}
+function checked<T>(data: unknown, status: number): T {
+  if (status < 200 || status >= 300 || (data && typeof data === "object" && "error" in data)) {
     const error = (data as { error?: { code?: string; message?: string; details?: unknown; currentSource?: string } }).error;
     const details = error?.details as { currentSource?: string } | undefined;
-    throw new ApiError(error?.code ?? "requestFailed", error?.message ?? `请求失败 (${response.status})`, error?.details, error?.currentSource ?? details?.currentSource);
+    throw new ApiError(error?.code ?? "requestFailed", error?.message ?? `请求失败 (${status})`, error?.details, error?.currentSource ?? details?.currentSource);
   }
   return data as T;
 }
@@ -37,3 +42,4 @@ export async function apiBlob(path: string, body: unknown): Promise<Blob> {
   }
   return response.blob();
 }
+import { nativeDraftRequest } from "./native-draft";

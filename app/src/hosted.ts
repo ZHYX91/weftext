@@ -36,7 +36,10 @@ import { RecognitionPanel } from "./recognition-panel";
 import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, hostedOpenedDraft, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
-type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
+type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftWitness?: string; recoveredDraftConflict: boolean; rights: Rights };
+// Only installDocument can establish that this editor actually adopted a
+// recovery primary. Observing another open result does not transfer a writer.
+const recoveryContinuations = new WeakMap<Doc, Promise<void> | null>();
 type Me = { actor: string; deployment: string; generation: number; version: string };
 type SaveStatus = { status: string; operationId: string; resource?: string; baseId?: string };
 function checkedSaveStatus(result: SaveStatus, operationId: string, resource: string): SaveStatus {
@@ -440,6 +443,19 @@ function clearDisplay(message: string, clearToken = false) {
 }
 async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget"): Promise<T> {
   const epoch = requestEpoch, credential = token;
+  const target = data as { sessionId?: string } | undefined, installed = doc;
+  if (path === "draft" && installed && installed.sessionId === target?.sessionId && recoveryContinuations.has(installed)) {
+    let pending = recoveryContinuations.get(installed);
+    if (!pending) {
+      pending = request("draft/resume", { sessionId: installed.sessionId, recordWitness: installed.recoveredDraftWitness, recoveredSource: installed.recoveredDraft }).then(() => undefined).catch(error => {
+        if (!(error instanceof HostedError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+      });
+      recoveryContinuations.set(installed, pending);
+    }
+    try { await pending; recoveryContinuations.delete(installed); }
+    catch (error) { recoveryContinuations.set(installed, null); throw error; }
+  }
+  if (epoch !== requestEpoch || credential !== token) throw new Error("恢复交接期间用户或对象已变化，未发送旧文档的后续写入。");
   const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
   const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store", signal});
   if (!response.ok) {
@@ -641,6 +657,7 @@ async function open(resource: string) {
 function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false, stagedCache = false) {
   clearNodeNavigation(); doc = opened; draft = stagedCache ? retainedDraft : hostedOpenedDraft(opened.source, retainedDraft); const epoch = requestEpoch;
   installingDocument = true;
+  if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft) recoveryContinuations.set(opened, null);
   try { source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write; } finally { installingDocument = false; }
   el("title").textContent = opened.title;
   compareRequired = opened.recoveredDraftConflict || draftDisposition(opened.source,draft) === "compare";

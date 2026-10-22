@@ -1,4 +1,5 @@
 import "./style.css";
+import { message, t } from "./ui-locale";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
@@ -215,7 +216,7 @@ async function openInventoryEntry(entry:InventoryEntry,root:string,workspaceId?:
   if(!entry.nodeId||!workspaceId){await openDocument(entry.path,root);return;}
   const generation=++navigationGeneration;await prepareSwitch();if(generation!==navigationGeneration)return;
   const opened=await api<OpenedDocument>("/api/data/open",{root,entityKey:`weftext-node://${workspaceId}/${entry.nodeId}`});
-  if(generation!==navigationGeneration)return;if(opened.nodeId!==entry.nodeId||opened.workspaceId!==workspaceId)throw new Error("返回目标不是原笔记，原稿保留。");await acceptResolvedDocument(opened);
+  if(generation!==navigationGeneration){await releaseOpenedSession(opened.sessionId);return;}if(opened.nodeId!==entry.nodeId||opened.workspaceId!==workspaceId){await releaseOpenedSession(opened.sessionId);throw new Error("返回目标不是原笔记，原稿保留。");}await acceptResolvedDocument(opened);
 }
 function everydayCommands(): EverydayCommand[] {
   const doc = current;
@@ -308,7 +309,7 @@ const workspaceTools = new WorkspaceTools({
     const range = current.editor.selection;
     return range.from === range.to ? undefined : range;
   },
-  beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument,
+  beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument, releaseOpenedSession,
   refreshLibrary: async root => { if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory(); },
   syncApplied: async root => {
     workspaceTools.invalidateQueryEnvironment(root);
@@ -507,6 +508,7 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
 }
 
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+  try {
   const generation=++navigationGeneration;
   await prepareSwitch();
   if(generation!==navigationGeneration)return;
@@ -516,6 +518,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
   if (!existing) addDocument(opened);
   else {
     await existing.writing.settleForSessionChange();
+    if(generation!==navigationGeneration || !documents.includes(existing))return;
     if (existing.session.baseSource === opened.source) {
       existing.session.opened = opened; existing.editor.clearTokens();
       existing.sourceTrashed = false;
@@ -530,6 +533,31 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
     current = existing; activeSourceOrigin = null; renderContent(); renderSidebar();
   }
   shell.classList.remove("sidebar-open");
+  } finally {
+    if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+  }
+}
+
+function ownsOpenedSession(sessionId: string): boolean {
+  return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
+}
+
+/** An Overview/navigation result that was never adopted has no UI input owner.
+ * Its exact Core coordinate can be retired without claiming a Draft flush. */
+async function releaseOpenedSession(sessionId: string): Promise<void> {
+  if (ownsOpenedSession(sessionId)) throw new Error(t(message("desktop.sessionAlreadyAdopted")));
+  try {
+    const result = await api<{ released: boolean; sessionId: string }>("/api/session/release", { sessionId });
+    if (result.released !== true || result.sessionId !== sessionId) throw new Error("sessionReleaseUnconfirmed");
+  } catch (error) {
+    // Keep the exact diagnostic visible even when the requesting panel was
+    // disposed while awaiting its open. There is no timeout guess or resend.
+    const item = el("div", "toast error", t(message("desktop.sessionReleaseFailed", { sessionId })));
+    item.setAttribute("role", "alert");
+    const dismiss = button("", () => item.remove(), "icon-button", "close");
+    dismiss.setAttribute("aria-label", t(message("common.close"))); item.append(dismiss); toastHost.append(item);
+    throw error;
+  }
 }
 
 function toast(message: string, error = false): void {
@@ -1081,8 +1109,20 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
   if (bodyCloseFrozen) throw new Error("正文关闭核对已冻结，未启动另一轮恢复写入。");
   clearTimeout(doc.draftTimer);
   const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source; const serial = doc.session.serial;
+  const sessionId = doc.session.opened.sessionId;
   const request = doc.draftChain.catch(() => undefined).then(async () => {
-    await api("/api/draft", { sessionId: doc.session.opened.sessionId, source });
+    const recovery = doc.session.recoveryContinuation;
+    if (!doc.session.recoveryContinuationSettled && recovery?.sessionId === sessionId) {
+      try { await api("/api/draft/resume", recovery); }
+      catch (error) {
+        // These definite non-transfers preserve the other producer. A missing
+        // transport acknowledgement is retried as the same CAS, never guessed.
+        if (!(error instanceof ApiError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+      }
+      doc.session.recoveryContinuationSettled = true;
+    }
+    await api("/api/draft", { sessionId, source });
+    if (doc.session.opened.sessionId !== sessionId) throw new Error("原恢复稿已留存；正文会话已变化，当前会话须重新核对恢复写入。");
     doc.session.acknowledgeDraft(source, serial); doc.draftFailure = null;
   });
   doc.draftChain = request;
@@ -1164,7 +1204,7 @@ async function openDocument(path: string, root?: string): Promise<void> {
   const existing = documents.find(doc => normalize(doc.session.path) === normalize(path)); if (existing && !existing.sourceTrashed) { await activateDocument(existing); return; }
   const generation=++navigationGeneration;
   await prepareSwitch(); if(generation!==navigationGeneration)return; const opened = await api<OpenedDocument>("/api/open", { path, root });
-  if(generation!==navigationGeneration)return;
+  if(generation!==navigationGeneration){await releaseOpenedSession(opened.sessionId);return;}
   if (opened.kind === "managed" && documents.some(doc => doc.sourceTrashed && doc.session.opened.nodeId === opened.nodeId && doc.session.opened.workspaceId === opened.workspaceId)) await acceptResolvedDocument(opened);
   else addDocument(opened);
   shell.classList.remove("sidebar-open");

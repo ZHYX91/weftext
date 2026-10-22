@@ -420,7 +420,7 @@ async fn project(State(state): State<AppState>, Json(req): Json<ProjectionReques
         core_call(&state, move |core| resolved_schema(core, &loc.root)).await?;
     let source = req.source.clone();
     let mut projection =
-        tokio::task::spawn_blocking(move || weftext_data::project(&source, &resolved))
+        crate::work::spawn_blocking(move || weftext_data::project(&source, &resolved))
             .await
             .map_err(|_| ApiError::internal("Data projection did not complete"))?;
     if read_only {
@@ -460,7 +460,7 @@ async fn edit(State(state): State<AppState>, Json(req): Json<FieldEdit>) -> ApiR
         .field(&req.key)
         .map(|field| field.id.clone())
         .ok_or_else(|| ApiError::bad("The selected field is not installed"))?;
-    let patch = tokio::task::spawn_blocking(move || {
+    let patch = crate::work::spawn_blocking(move || {
         weftext_data::patch_field(&source, &resolved, &req.key, &req.path, &req.value)
     })
     .await
@@ -501,7 +501,7 @@ async fn types(State(state): State<AppState>, Json(req): Json<TypeEdit>) -> ApiR
         core_call(&state, move |core| resolved_schema(core, &loc.root)).await?;
     let source = req.source.clone();
     let relation_schema = resolved.clone();
-    let patch = tokio::task::spawn_blocking(move || {
+    let patch = crate::work::spawn_blocking(move || {
         weftext_data::patch_types(&source, &resolved, &req.types)
     })
     .await
@@ -2284,7 +2284,7 @@ async fn evaluate_frozen_inner(
     let raw_pending = frozen.raw_pending;
     let membership_ids = frozen.membership_ids;
     let scope_cuts = frozen.scope_cuts;
-    let mut result = tokio::task::spawn_blocking(move || {
+    let mut result = crate::work::spawn_blocking(move || {
         weftext_data::execute_query(&frozen.input, &frozen.plan, &frozen.schema)
     })
     .await
@@ -3110,6 +3110,7 @@ mod tests {
             renders: Arc::new(Mutex::new(HashMap::new())),
             editor_versions: Arc::new(Mutex::new(HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

@@ -643,7 +643,6 @@ mod tests {
         let worker = capture.worker.take().unwrap();
         let files = worker
             .frozen_files
-            .unwrap()
             .into_iter()
             .map(|(p, b)| {
                 (

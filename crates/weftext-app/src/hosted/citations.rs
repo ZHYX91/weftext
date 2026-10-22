@@ -176,7 +176,7 @@ impl Capture {
     }
     pub(super) fn inject(&self, worker: &mut WorkerRequest) -> Result<(), ApiError> {
         if let Some(path) = &self.virtual_path {
-            let files = worker.frozen_files.get_or_insert_with(BTreeMap::new);
+            let files = &mut worker.frozen_files;
             if files
                 .keys()
                 .any(|p| p.replace('\\', "/").eq_ignore_ascii_case(path))
@@ -747,7 +747,7 @@ fn native_profile(
                 root: inner.config.root.clone(),
                 paged: false,
                 style: None,
-                frozen_files: Some(BTreeMap::new()),
+                frozen_files: BTreeMap::new(),
             };
             environment.apply(&mut worker)?;
             Ok(worker
@@ -1266,10 +1266,10 @@ mod tests {
             root: inner.config.root.clone(),
             paged: false,
             style: None,
-            frozen_files: Some(BTreeMap::new()),
+            frozen_files: BTreeMap::new(),
         };
         capture.inject(&mut worker).unwrap();
-        let files = worker.frozen_files.unwrap();
+        let files = worker.frozen_files;
         assert_eq!(files.len(), 1);
         assert!(files.contains_key("Shared/weftext.citations.bib"));
         assert!(

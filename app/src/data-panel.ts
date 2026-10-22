@@ -48,6 +48,8 @@ export interface PanelHost {
   applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
   openDocument(path: string, root?: string): Promise<void>;
   openResolved?(document: OpenedDocument): Promise<void>;
+  /** Only a fresh result that was never handed to the document owner. */
+  releaseOpenedSession?(sessionId: string): Promise<void>;
   openTemplates?(): void | Promise<void>;
   notify(message: string, error?: boolean): void;
   /** A confirmed Core mutation changed the original library's Query environment. */

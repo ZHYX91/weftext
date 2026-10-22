@@ -82,7 +82,7 @@ pub(crate) async fn resource_set(
     analyze_resources(managed).await
 }
 async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet, ApiError> {
-    tokio::task::spawn_blocking(move || {
+    crate::work::spawn_blocking(move || {
         let mut resources = Vec::new();
         let mut warnings = Vec::new();
         for resource in managed {
@@ -1418,6 +1418,7 @@ mod tests {
             renders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             editor_versions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,
@@ -1543,6 +1544,7 @@ mod tests {
             renders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             editor_versions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

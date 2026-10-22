@@ -447,7 +447,7 @@ pub(crate) async fn generate(
                 None
             };
             let req_owned = req.clone();
-            tokio::task::spawn_blocking(move || {
+            crate::work::spawn_blocking(move || {
                 let projection = weftext_data::project(&req_owned.source, &cut.schema);
                 let template = req_owned
                     .template

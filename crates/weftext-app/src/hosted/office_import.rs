@@ -455,7 +455,7 @@ async fn prepare(
             office::ensure_owned(base,&location.root,!recover_only).map_err(|_|unknown())?;
             decision=claim.decision;
             if decision.actor_epoch!=inner.actor_generation(&actor)||decision.config_hash!=config_hash(inner,&file)?||decision.expires_at_unix_ms<=now_ms(){return Err(changed());}
-            let flag=Arc::new(AtomicBool::new(false));inner.office.import_active.insert(key.clone(),office::LegacyImportRun{actor_epoch:decision.actor_epoch,cancel:flag.clone()});guard=Some(ImportGuard{state:guard_state,key,cancel:flag.clone()});cancel=Some(flag);root=Some(location.root);conversion_id=Some(location.request_id);
+            let flag=Arc::new(AtomicBool::new(inner.office.closing));inner.office.import_active.insert(key.clone(),office::LegacyImportRun{actor_epoch:decision.actor_epoch,cancel:flag.clone()});guard=Some(ImportGuard{state:guard_state,key,cancel:flag.clone()});cancel=Some(flag);root=Some(location.root);conversion_id=Some(location.request_id);
         }
         Ok(ImportStart::Frozen(Box::new(FrozenImport{actor,decision,root,conversion_id,cancel,recover_only,_guard:guard})))
     }).await?;
@@ -641,7 +641,7 @@ async fn inspect(
     })
     .await?;
     let analysis =
-        tokio::task::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
+        crate::work::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
             .await
             .map_err(|_| unknown())?
             .map_err(|_| {
