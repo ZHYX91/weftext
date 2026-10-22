@@ -58,24 +58,24 @@ function validReceipt(receipt: unknown, record: HostedHistoryRecord): receipt is
 export function hostedHistoryStatus(record: HostedHistoryRecord, incoming: HostedHistoryStatus): HostedHistoryStatus {
     if (!incoming || incoming.operationId !== record.request.operationId || incoming.resource !== record.request.resource || !["notRegistered", "notCommitted", "committed", "recoveryPending", "resolved", "cancelled"].includes(incoming.status)) {
         if (record.status?.status === "committed")
-            return committedFact(record, "后续回执不对应原恢复；原提交事实与编号保留，交付资格等待重新核对。");
+            return committedFact(record, uiMessage("hostedHistoryState.committedReceiptMismatch"));
         throw new UiError(uiMessage("hostedHistoryState.restoreReceiptMismatch"));
     }
     if (record.status?.status === "committed" && incoming.status !== "committed")
-        return committedFact(record, "原恢复已确认提交，后续状态不能解除原号或改成未提交。");
+        return committedFact(record, uiMessage("hostedHistoryState.committedStatusCannotRegress"));
     const status: HostedHistoryStatus = { operationId: incoming.operationId, resource: incoming.resource, status: incoming.status, resultStatus: "unavailable" };
     if (incoming.resultError !== undefined) {
         const error = decodeApiErrorBody(incoming.resultError);
         if (!error) {
             if (incoming.status === "committed")
-                return committedFact(record, "原恢复已提交，但准确结果或回执不完整；原事实和编号保留，请继续查询。");
+                return committedFact(record, uiMessage("hostedHistoryState.committedResultIncomplete"));
             throw new UiError(uiMessage("error.invalidResponse"));
         }
         status.resultError = error;
     }
     if (incoming.status !== "committed") {
         if (incoming.result)
-            throw new UiError("未提交状态不能携带恢复结果，原记录保留。");
+            throw new UiError(uiMessage("hostedHistoryState.uncommittedResultRejected"));
         return status;
     }
     // A saved fact can survive qualification loss; delivery is renewed only by this response.
@@ -92,7 +92,7 @@ export function hostedHistoryStatus(record: HostedHistoryRecord, incoming: Hoste
         || !["current", "superseded", "external"].includes(incoming.resultBasis ?? "")
         || incoming.currentRevision !== null && typeof incoming.currentRevision !== "string"
         || status.receipt && (receipt.baseId !== status.receipt.baseId || receipt.path !== status.receipt.path || receipt.revisionId !== status.receipt.revisionId)) {
-        status.guardReason = "原恢复已提交，但准确结果或回执不完整；原事实和编号保留，请继续查询。";
+        status.guardReason = uiMessage("hostedHistoryState.committedResultIncomplete");
         return status;
     }
     status.receipt = structuredClone(receipt);

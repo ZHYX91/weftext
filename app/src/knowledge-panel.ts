@@ -746,7 +746,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (!originalCommitted(receipt))
                 throw new UiError(joinUiText([displayMessage("knowledge.operationIncomplete", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
             if (!committedDeliveryComplete(receipt))
-                throw new UiError(joinUiText(["原操作已提交，交付仍待完成：", ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
+                throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
             await refresh(true);
             pendingPlan = null;
             const completion = joinUiText([uiMessage("knowledge.operationCompleted"), ...knowledgeDeliveryErrors(receipt)], "\n");
@@ -775,7 +775,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (pendingPlan !== pending) return;
             if (receipt.operationId !== pending.plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
             if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt))
-                throw new UiError("原操作已确认提交，后续状态不一致；原回执与编号保留。");
+                throw new UiError(uiMessage("knowledge.committedStatusMismatch"));
             pending.receipt = receipt;
             if (committedDeliveryComplete(receipt)) {
                 await refresh(true);
@@ -783,7 +783,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             }
             else if (receipt.status === "resolved") pendingPlan = null;
             else if (receipt.deliveryError || receipt.documentError)
-                throw new UiError(joinUiText(["原操作已提交，交付仍待完成：", ...knowledgeDeliveryErrors(receipt)], "\n"));
+                throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt)], "\n"));
             setUiText(status, joinUiText([displayMessage("knowledge.originalOperationStatus", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
         }
         catch (error) {

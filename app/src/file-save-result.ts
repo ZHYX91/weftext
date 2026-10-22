@@ -1,3 +1,4 @@
+import { message as uiMessage } from "./ui-locale";
 import { decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import { decodeCoreError, type CoreError } from "./ui-diagnostics";
 import { UiError } from "./ui-locale";
@@ -33,7 +34,7 @@ function document(value: unknown): value is OpenedDocument {
 /** One file-save delivery contract for the initial response and original-id
  * lookup. The generic operation envelope alone cannot acknowledge a writer. */
 export function fileSaveReceipt(value: unknown, frozen: FrozenFileSave): FileSaveReceipt {
-  const invalid = (): never => { throw new UiError("文件保存回执不完整或不属于原请求；原编号和输入保留，请查询原结果。"); };
+  const invalid = (): never => { throw new UiError(uiMessage("fileSave.invalidOriginalReceipt")); };
   const allowed = new Set(["operationId", "status", "path", "baseId", "revisionId", "recoveryIssue", "committedSource", "document", "documentError", "documentSourceMatchesCommit"]);
   if (!object(value) || Object.keys(value).some(key => !allowed.has(key)) || value.operationId !== frozen.operationId || typeof value.status !== "string" || !["saved", "committed"].includes(value.status)
       || !text(value.baseId) || !text(value.path)

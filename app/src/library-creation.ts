@@ -1,3 +1,4 @@
+import { message as uiMessage, joinUiText } from "./ui-locale";
 import { decodeApiErrorBody, apiErrorUiText, type ApiErrorBody } from "./api-error";
 import { decodeCoreDescription, coreDescriptionUiText, type CoreDescription } from "./ui-diagnostics";
 import { UiError, errorUiText, setUiText, uiTextValue, type UiText } from "./ui-locale";
@@ -10,10 +11,10 @@ export interface LibraryCreateOptions { initialStyle?: InitialLibraryStyle | nul
 export interface LibraryCreationRequest { path: string; options: LibraryCreateOptions; operationId: string }
 export interface LibraryCreationReceipt { operationId: string; root: string; workspaceId: string; status: string; rootNotePath?: string; library?: Inventory; rootDocument?: OpenedDocument; deliveryError?: ApiErrorBody }
 function typedCreationReceipt(value: LibraryCreationReceipt): LibraryCreationReceipt {
-  if (!value || typeof value !== "object" || Object.hasOwn(value,"message")) throw new UiError("资料库原创建回执不符合完整协议，原操作和输入保留。");
+  if (!value || typeof value !== "object" || Object.hasOwn(value,"message")) throw new UiError(uiMessage("libraryCreation.originalReceiptInvalid"));
   if (!Object.hasOwn(value,"deliveryError")) return value;
   const deliveryError = decodeApiErrorBody(value.deliveryError);
-  if (!deliveryError) throw new UiError("资料库原交付错误不符合完整协议，原回执、编号和输入保留。");
+  if (!deliveryError) throw new UiError(uiMessage("libraryCreation.deliveryErrorInvalid"));
   return {...value,deliveryError};
 }
 interface CreationSlot { key: string; value: string; editable: boolean; range: { utf16From: number; utf16To: number; raw: string } | null }
@@ -121,7 +122,7 @@ export class LibraryCreationController {
     const receipt = await this.create();
     this.busy = true;
     try {
-      if (receipt.deliveryError) throw new UiError(() => `资料库已提交，交付尚未完成：${uiTextValue(apiErrorUiText(receipt.deliveryError!))}`);
+      if (receipt.deliveryError) throw new UiError(joinUiText([uiMessage("libraryCreation.committedDeliveryPendingPrefix"), apiErrorUiText(receipt.deliveryError!)]));
       await this.host.deliver(receipt);
       this.storage.removeItem(key);
       return receipt;
@@ -129,9 +130,9 @@ export class LibraryCreationController {
   }
   private installRecovery(result: LibraryCreationRecovery): void {
     if (!this.request || result.operationId !== this.request.operationId) throw new Error("恢复结果与原创建操作不一致。");
-    if (this.receipt && result.status !== "committed") throw new Error("原资料库已确认提交，后续状态不一致；原回执与请求保留。");
+    if (this.receipt && result.status !== "committed") throw new UiError(uiMessage("libraryCreation.committedStatusMismatch"));
     const description = decodeCoreDescription(result.description);
-    if (!description || Object.hasOwn(result,"message")) throw new UiError("资料库原恢复结果不符合完整协议，原操作与输入保留。");
+    if (!description || Object.hasOwn(result,"message")) throw new UiError(uiMessage("libraryCreation.recoveryProtocolInvalid"));
     this.recovery = {...structuredClone(result),description};
     if (result.status === "resolved" || result.status === "cancelled") { this.request = null; this.proposal = null; this.receipt = null; }
     this.retain();

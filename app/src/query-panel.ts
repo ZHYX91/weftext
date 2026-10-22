@@ -372,7 +372,7 @@ class PeriodNavigator {
             }>(this.host.request, "/api/data/period/create", this.pending, "period", retry);
             receiptReceived = true;
             if (result.status !== "committed")
-                throw new UiError("原周期创建尚无适用的已提交回执，原请求保留。");
+                throw new UiError(message("queryDefinition.periodCommittedReceiptRequired"));
             const document = result.document;
             const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
             if (result.documentError !== undefined && !documentError) throw new UiError(message("error.invalidResponse"));
@@ -382,7 +382,7 @@ class PeriodNavigator {
             if (deliveryErrors.length || !document)
                 throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
             if (!this.host.created)
-                throw new UiError("原周期已提交，当前界面缺少准确文档交付入口；原号继续保留。");
+                throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
             await this.host.created(document);
             const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
             this.pending = null;

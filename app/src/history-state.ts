@@ -257,7 +257,7 @@ export class HistoryController {
     get locked(): boolean { return this.busy || this.pending !== null; }
     finishCommittedDelivery(): void {
         if (this.operation?.status !== "committed")
-            throw fail("operationPending", "只有原提交已确定后才可结束本页交付。");
+            throw fail("operationPending", uiMessage("historyState.finishCommittedDeliveryRequired"));
         this.pending = null;
         this.review = null;
         this.uncertain = false;

@@ -1,3 +1,4 @@
+import { message as uiMessage } from "./ui-locale";
 import { decodeApiErrorBody, apiErrorUiText, type ApiErrorBody } from "./api-error";
 import { UiError, errorUiText, type UiText } from "./ui-locale";
 /** Presentation keeps the frozen request; only the original Core journal decides effects. */
@@ -39,7 +40,7 @@ function exact<T extends OriginalFact>(fact: T, id: unknown, statusRead = false)
   for (const slot of ["deliveryError", "documentError"] as const) {
     if (Object.hasOwn(fact, slot)) {
       const decoded = decodeApiErrorBody(fact[slot]);
-      if (!decoded) throw new UiError("原结果交付错误不符合完整协议，原回执、编号和输入保留。");
+      if (!decoded) throw new UiError(uiMessage("originalOperation.deliveryErrorInvalid"));
       errors[slot] = decoded;
     }
   }
@@ -62,7 +63,7 @@ export async function submitOriginal<T extends OriginalFact>(request: OriginalRe
   if (recoverFirst) return reconcileOriginal(request, attempt, new Error("原操作仍待确认，输入保留。"));
   try {
     const fact = exact(await request<T>(route, JSON.parse(attempt.wire)), attempt.operationId);
-    if (!originalCommitted(fact) || fact.status === "saved" && !["save", "saveAs"].includes(kind)) throw new Error("原请求尚无适用的已提交回执，保留原编号查询。");
+    if (!originalCommitted(fact) || fact.status === "saved" && !["save", "saveAs"].includes(kind)) throw new UiError(uiMessage("originalOperation.applicableCommittedReceiptRequired"));
     return fact;
   }
   catch (error) { return reconcileOriginal(request, attempt, error); }

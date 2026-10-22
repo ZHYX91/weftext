@@ -4,7 +4,7 @@ import { coreDescriptionUiText } from "./ui-diagnostics";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileSaveReceipt } from "./file-save-result";
-import { submitOriginal, type OriginalRequest } from "./original-operation";
+import { submitOriginal, deliverCommitted, committedDeliveryComplete, originalDeliveryErrors, type OriginalRequest } from "./original-operation";
 import { DocumentSession, rebindCommittedSave } from "./session";
 
 const frozen = { operationId: "original", sessionId: "writer", source: "submitted S", sourcePath: "C:/TEST/a.typ", baseId: "before" };
@@ -63,4 +63,16 @@ test("the actual file-save DTO keeps full Core recovery and API delivery causes 
   assert.deepEqual(unavailable.documentError,api);assert.deepEqual(unavailable.recoveryIssue,core);assert.equal(unavailable.status,"committed");
   locale.set("en-US");assert.ok(uiTextValue(apiErrorUiText(unavailable.documentError!)).includes("raw OS recovery"));assert.ok(uiTextValue(coreDescriptionUiText({explanation:good.recoveryIssue!.explanation,diagnostics:good.recoveryIssue!.diagnostics,causes:good.recoveryIssue!.causes,details:good.recoveryIssue!.details})).includes("raw OS recovery"));locale.set("zh-CN");
   for(const change of [{recoveryIssue:{code:"old",message:"old"}},{recoveryIssue:{...core,details:{kind:"core",...core}}},{document:undefined,documentError:{code:"old",message:"old"}},{message:"old"},{revisionId:null},{recoveryIssue:null}]) assert.throws(()=>fileSaveReceipt({...receipt,...change},frozen));
+});
+
+test("the actual malformed-save delivery explanation changes language without changing the committed receipt or invoking delivery again", async () => {
+  const original={...receipt,document:{...document}};const before=JSON.stringify(original);let attempts=0;
+  const delivered=await deliverCommitted(original,async()=>{attempts++;fileSaveReceipt({...original,operationId:"another-operation"},frozen);});
+  assert.equal(committedDeliveryComplete(delivered),false);assert.equal(delivered.operationId,frozen.operationId);assert.equal(delivered.document.source,frozen.source);
+  const labels=originalDeliveryErrors(delivered);assert.equal(labels.length,1);
+  try {
+    locale.set("zh-CN");assert.match(uiTextValue(labels[0]),/原编号和输入保留/);
+    locale.set("en-US");assert.match(uiTextValue(labels[0]),/original ID and input are retained/);
+    assert.equal(attempts,1);assert.equal(JSON.stringify(original),before);assert.equal(JSON.stringify(delivered),before);assert.equal(delivered.document.sessionId,"fresh");
+  } finally {locale.set("zh-CN");}
 });

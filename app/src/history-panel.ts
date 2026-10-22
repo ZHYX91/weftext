@@ -295,7 +295,7 @@ class HistoryDialog {
         const basis = this.unacknowledged?.basis ?? pending;
         const operationId = this.unacknowledged?.result.receipt.operationId ?? this.controller.operationId;
         if (basis && operationId && this.controller.operationState === "committed" && this.host.finishDelivery) {
-            const finish = button("比较当前稿并结束本页原回执应用", async () => {
+            const finish = button(uiMessage("history.finishDelivery"), async () => {
                 if (this.acknowledging)
                     return;
                 this.acknowledging = true;
@@ -305,7 +305,7 @@ class HistoryDialog {
                         this.controller.finishCommittedDelivery();
                         this.unacknowledged = null;
                         this.host.restorePending?.(basis, false);
-                        this.host.notify("原恢复事实继续保留；已按明确比较接纳当前稿，结束本页回执应用。");
+                        this.host.notify(uiMessage("history.deliveryFinished"));
                     }
                 }
                 catch (error) { this.report(error); }
@@ -392,7 +392,7 @@ class HistoryDialog {
             await this.host.restored(pending.result, pending.basis);
             this.unacknowledged = null;
             this.host.restorePending?.(pending.basis, false);
-            const savedMessage = joinUiText([uiMessage("history.restoreSaved"), ...(pending.result.recoveryIssue ? [" 恢复草稿更新提示：", historyRecoveryIssueUiText(pending.result.recoveryIssue)] : [])]);
+            const savedMessage = joinUiText([uiMessage("history.restoreSaved"), ...(pending.result.recoveryIssue ? [uiMessage("history.recoveryIssuePrefix"), historyRecoveryIssueUiText(pending.result.recoveryIssue)] : [])]);
             setUiText(this.status, savedMessage);
             this.status.classList.remove("history-error");
             this.host.notify(savedMessage);

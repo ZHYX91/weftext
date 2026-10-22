@@ -130,7 +130,7 @@ export class LibraryTrashRestoreFlow {
             if (result.operationId !== pending.request.operationId)
                 throw new UiError(uiMessage("libraryTrash.statusOtherOperation"));
             if (pending.state === "committed" && result.status !== "committed")
-                throw new UiError("原恢复已确认提交，后续状态不能降低原事实或释放原编号。");
+                throw new UiError(uiMessage("libraryTrash.committedStatusCannotRegress"));
             if (result.status === "prepared" && typeof result.planId === "string") {
                 if (!result.planId || result.losses !== undefined && !Array.isArray(result.losses)) throw new UiError(uiMessage("error.invalidResponse"));
                 if (pending.plan && pending.plan.planId !== result.planId)
@@ -187,7 +187,7 @@ export class LibraryTrashRestoreFlow {
         if (pending.plan && typeof receipt.planId === "string" && receipt.planId !== pending.plan.planId)
             throw new UiError(uiMessage("libraryTrash.resultPreparedMismatch"));
         if (!["committed", "resolved", "recoveryPending", "unknown"].includes(receipt.status) || pending.state === "committed" && receipt.status !== "committed")
-            throw new UiError("恢复状态不符合原操作合同；原请求、已知事实与编号保留。");
+            throw new UiError(uiMessage("libraryTrash.statusContractMismatch"));
         pending.receipt = receipt;
         if (receipt.status === "committed") {
             const changed = pending.state !== "committed";
@@ -199,7 +199,7 @@ export class LibraryTrashRestoreFlow {
         }
         else if (receipt.status === "resolved") {
             pending.state = "failed";
-            pending.message = "原恢复已明确结束，原笔记与原件保留。";
+            pending.message = uiMessage("libraryTrash.originalEnded");
         }
         else {
             pending.state = "unknown";

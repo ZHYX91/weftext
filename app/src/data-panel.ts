@@ -567,7 +567,7 @@ export class QuickCapture {
                     if (deliveryErrors.length || !document)
                         throw new UiError(displayMessage("quickCapture.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : uiMessage("common.confirmOriginalOperation")) }));
                     if (!this.host.created)
-                        throw new UiError("原记录已提交，当前界面缺少准确文档交付入口；原号继续保留。");
+                        throw new UiError(uiMessage("capture.createdDocumentDeliveryRequired"));
                     await this.host.created(document);
                     const unchanged = name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
                     this.operationId = null;

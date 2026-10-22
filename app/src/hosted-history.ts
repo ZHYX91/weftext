@@ -401,7 +401,7 @@ export class HostedHistory {
         }
         finally {
             if (epoch === this.epoch && warning)
-                this.setNotice(joinUiText([this.notice, " 原恢复已保存；恢复草稿更新提示：", historyRecoveryIssueUiText(warning)]));
+                this.setNotice(joinUiText([this.notice, uiMessage("hostedHistory.recoveryIssuePrefix"), historyRecoveryIssueUiText(warning)]));
         }
     }
     private async acknowledge(record: HostedHistoryRecord) {

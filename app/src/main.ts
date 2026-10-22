@@ -1,3 +1,4 @@
+import { joinUiText } from "./ui-locale";
 import {apiErrorUiText,type ApiErrorBody} from "./api-error";
 import { InterfaceLocaleControl, localLocalePreferences } from "./ui-locale-settings";
 import { locale } from "./ui-locale";
@@ -724,11 +725,11 @@ const workspaceTools = new WorkspaceTools({
         }
     },
     applyReceipt: async (receipt, context) => {
-        if (!originalCommitted(receipt)) throw new UiError("原操作尚无已提交回执，原请求与输入保留。");
+        if (!originalCommitted(receipt)) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
         workspaceTools.invalidateQueryEnvironment(context.root);
         const opened = receipt.document as OpenedDocument | undefined;
         const doc = documents.find(item => item.session.opened.sessionId === context.sessionId || Boolean(context.nodeId && context.workspaceId && item.session.opened.nodeId === context.nodeId && item.session.opened.workspaceId === context.workspaceId));
-        let deliveryPending: UiText | null = receipt.documentError ? apiErrorUiText(receipt.documentError) : receipt.documentSourceMatchesCommit === false ? "原操作已提交，当前正文已变化。" : null;
+        let deliveryPending: UiText | null = receipt.documentError ? apiErrorUiText(receipt.documentError) : receipt.documentSourceMatchesCommit === false ? uiMessage("shell.committedBodyChanged") : null;
         if (doc)
             await doc.writing.settleForSessionChange();
         if (doc && (receipt.documentSourceMatchesCommit === false || receipt.documentError)) {
@@ -747,7 +748,7 @@ const workspaceTools = new WorkspaceTools({
         else if (opened && receipt.documentDisposition === "created") {
             const receiving = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
             if (current === doc || receiving === current) await acceptCreatedDocument(opened);
-            else deliveryPending = () => `已创建 ${basename(opened.path)}；请返回原笔记查询并交付原结果。`;
+            else deliveryPending = displayMessage("shell.createdReturnForOriginalDelivery", {name:uiDisplayParameter(basename(opened.path))});
         }
         else if (opened && doc && opened.source === doc.session.baseSource) {
             // Namespace changes keep the same saved bytes. Preserve newer local input,
@@ -781,7 +782,7 @@ const workspaceTools = new WorkspaceTools({
             doc.comparisonTarget = opened;
             deliveryPending = doc.session.error;
         }
-        if (receipt.documentDisposition === "created" && !opened) deliveryPending ||= "原节点已创建，但准确文档尚未交付。";
+        if (receipt.documentDisposition === "created" && !opened) deliveryPending ||= uiMessage("shell.createdDocumentNotDelivered");
         const affected = receipt.affectedDocuments as {
             priorSessionId: string;
             document?: OpenedDocument;
@@ -864,12 +865,12 @@ const historyPanel = new HistoryPanel({
     const opened = fact.document;
     if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
       if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
-      throw new UiError("原恢复已提交，当前准确文件或会话已变化；原回执、输入与撤销记录保留，请比较当前磁盘版本或继续查询原交付。");
+      throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
     }
     const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
     if (opened.recoveredDraftConflict) await api("/api/draft/resolve", { sessionId: opened.sessionId, action: "mergeRecovered", source: doc.session.source });
     await doc.writing.settleForSessionChange();
-    if (doc.session.opened !== prior) throw new UiError("交付期间笔记会话又变化，原回执和全部输入保留，请继续核对。");
+    if (doc.session.opened !== prior) throw new UiError(uiMessage("shell.deliverySessionChanged"));
     const disposition = restoreBufferDisposition(basis, historyContext(doc));
     if (disposition === "unrelated" || result.receipt.status !== "saved") throw new UiError(uiMessage("shell.restoreReceiptNoteMismatch"));
     opened.recoveredDraftVariants = variants.filter((value, index) => variants.findIndex(other => other.path === value.path && other.baseSource === value.baseSource && other.source === value.source && other.baseKnown === value.baseKnown) === index);
@@ -883,9 +884,9 @@ const historyPanel = new HistoryPanel({
   },
   finishDelivery: async (operationId, basis) => {
     const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
-    if (!doc) throw new UiError("请返回原缓冲区和原笔记后比较，原恢复事实继续保留。");
+    if (!doc) throw new UiError(uiMessage("shell.compareOriginalBuffer"));
     const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
-    if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError("原保存事实已保留，但准确当前对象尚不可读，不能结束这份交付。");
+    if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError(uiMessage("shell.originalCurrentObjectUnreadable"));
     doc.comparisonTarget = fact.document; doc.externalSource = fact.document.source;
     const prior = doc.session.opened;
     await showDraftComparison(doc);
@@ -901,13 +902,13 @@ async function refreshInventory(): Promise<void> {
     renderSidebar();
 }
 async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
-    if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError("原创建结果缺少已证明的实际节点身份，原操作继续保留。");
+    if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
     workspaceTools.invalidateQueryEnvironment(opened.root);
     await prepareSwitch();
     const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
     if (restored && (pendingSave(restored) || opened.source !== restored.session.baseSource)) {
         restored.comparisonTarget = opened; restored.externalSource = opened.source;
-        throw new UiError("原节点已经打开，但保存或当前磁盘版本仍待核对；输入和撤销记录保留，原创建继续等待交付。");
+        throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
     }
     if (restored) {
         await restored.writing.settleForSessionChange();
@@ -1254,7 +1255,7 @@ function renderTopbar(): void {
             setUiText(state, saveState(current));
             const save = topbar.querySelector<HTMLButtonElement>('[data-command="save"]')!;
             save.disabled = saveBusy(current);
-            setUiText(save.lastChild!, saveBusy(current) ? "保存待确认…" : uiMessage("common.save"));
+            setUiText(save.lastChild!, saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"));
         }
         return;
     }
@@ -1282,7 +1283,7 @@ function renderTopbar(): void {
         const timeline = button(uiMessage("shell.timeline"), () => historyPanel.open(), "button-secondary compact");
         timeline.disabled = !current.session.opened.nodeId || !current.session.opened.workspaceId;
         actions.append(timeline);
-        const saveButton = button(saveBusy(current) ? "保存待确认…" : uiMessage("common.save"), () => saveDocument(current!), "button-primary compact", "save");
+        const saveButton = button(saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"), () => saveDocument(current!), "button-primary compact", "save");
         saveButton.dataset.command = "save";
         saveButton.disabled = saveBusy(current);
         actions.append(saveButton);
@@ -1291,7 +1292,7 @@ function renderTopbar(): void {
         actions.append(el("span", "top-note", uiMessage("shell.localNativeTypst")));
     topbar.append(actions);
 }
-function saveState(doc: LiveDocument): UiText { return doc.writing.state.pending ? uiMessage("shell.textAwaitingConfirmation") : doc.session.opened.recoveredDraftConflict ? uiMessage("shell.recoveredDraftDiskConflict") : historyPanel.hasPending(historyContext(doc)) ? "原历史恢复待核对" : doc.session.savePending ? uiMessage("shell.saving") : pendingSave(doc) ? uiMessage("shell.saveResultAwaitingConfirmation") : doc.draftFailure ? uiMessage("shell.draftRecoveryWriteFailed") : doc.session.recovered ? uiMessage("shell.draftRecovered") : doc.session.dirty ? uiMessage("shell.unsaved") : uiMessage("shell.saved"); }
+function saveState(doc: LiveDocument): UiText { return doc.writing.state.pending ? uiMessage("shell.textAwaitingConfirmation") : doc.session.opened.recoveredDraftConflict ? uiMessage("shell.recoveredDraftDiskConflict") : historyPanel.hasPending(historyContext(doc)) ? uiMessage("shell.originalHistoryRestorePending") : doc.session.savePending ? uiMessage("shell.saving") : pendingSave(doc) ? uiMessage("shell.saveResultAwaitingConfirmation") : doc.draftFailure ? uiMessage("shell.draftRecoveryWriteFailed") : doc.session.recovered ? uiMessage("shell.draftRecovered") : doc.session.dirty ? uiMessage("shell.unsaved") : uiMessage("shell.saved"); }
 function renderTabs(): void {
     const ids = JSON.stringify(documents.map(doc => doc.session.opened.sessionId));
     if (tabs.dataset.ids === ids) {
@@ -1503,8 +1504,8 @@ function renderDocument(): void {
     if (doc.lastSave?.path && doc.lastSave.receipt) {
         const record = doc.lastSave;
         const delivery = el("div", "document-error save-as-delivery");
-        delivery.append(el("span", "", () => `另存为原提交 ${record.operationId}；${record.deliveryEnded ? "本次界面交付等待已结束，当前稿继续使用当前文件会话。" : "原效果已提交，准确结果尚待交付。"}`), button("查询这次另存为原结果", () => inspectSaveAsDelivery(record.operationId), "text-button"));
-        if (!record.deliveryEnded && !doc.session.savePending) delivery.append(button("结束这次交付等待，继续当前稿", () => endSaveAsDelivery(doc, record), "text-button"));
+        delivery.append(el("span", "", joinUiText([displayMessage("shell.originalSaveAsCommit", {operationId:uiDisplayParameter(record.operationId)}), record.deliveryEnded ? uiMessage("shell.saveAsDeliveryEndedState") : uiMessage("shell.saveAsDeliveryPendingState")])), button(uiMessage("shell.inspectOriginalSaveAs"), () => inspectSaveAsDelivery(record.operationId), "text-button"));
+        if (!record.deliveryEnded && !doc.session.savePending) delivery.append(button(uiMessage("shell.endSaveAsDelivery"), () => endSaveAsDelivery(doc, record), "text-button"));
         content.append(delivery);
     }
     const body = el("div", `document-body mode-${doc.mode} ${previewVisible ? "with-preview" : ""}`);
@@ -2133,9 +2134,9 @@ async function creation<T extends OriginalFact>(route: string, payload: Record<s
   catch (error) { if (error instanceof TerminatedAttempt && !request.receipt) pendingCreation = null; else toast(uiMessage("shell.creationUnconfirmedRetrySameOperation"), true); throw error; }
 }
 async function createLibrary(): Promise<void> {
-  if (pendingCreation) throw new UiError("上一次笔记创建结果仍待确认，请先重试原创建操作。");
+  if (pendingCreation) throw new UiError(uiMessage("shell.originalNoteCreationPending"));
   await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), delivery: operationId => api("/api/operations/status", { operationId }), deliver: async receipt => {
-    if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError("资料库已提交，原库或根笔记的准确交付尚未完成；原请求与回执保留。");
+    if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError(uiMessage("shell.libraryExactDeliveryPending"));
     workspaceTools.invalidateQueryEnvironment(receipt.root);
     inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
     if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument);
@@ -2181,7 +2182,7 @@ async function createNote(): Promise<void> {
         return;
     await prepareSwitch();
     await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name }, async receipt => {
-        if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(() => `笔记原结果尚未完成准确交付：${receipt.documentError ? uiTextValue(apiErrorUiText(receipt.documentError)) : "请查询原操作。"}`);
+        if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
         await acceptCreatedDocument(receipt.document);
     });
 }
@@ -2349,7 +2350,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
     try {
         fresh = prior.nodeId && prior.workspaceId && !readOnlySource(doc) ? await api<OpenedDocument>("/api/data/open", { root: prior.root, entityKey: `weftext-node://${prior.workspaceId}/${prior.nodeId}` }) : await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
     } catch (error) {
-        doc.session.error = () => `原文件会话当前不能重新资格化。原稿、文件会话和撤销记录保留，可另存当前稿。${uiTextValue(error instanceof Error ? errorUiText(error) : String(error))}`;
+        doc.session.error = joinUiText([uiMessage("shell.originalFileSessionUnavailable"), error instanceof Error ? errorUiText(error) : String(error)]);
     }
     if (generation !== navigationGeneration)
         return;
@@ -2419,7 +2420,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
 async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
     if (bodyCloseFrozen)
         throw new Error("正文关闭核对已冻结，未创建另一保存操作。");
-    if (historyPanel.hasPending(historyContext(doc))) { toast("请先查询或交付这份笔记的原历史恢复，原编号与输入继续保留。", true); return; }
+    if (historyPanel.hasPending(historyContext(doc))) { toast(uiMessage("shell.historyRestoreBeforeSave"), true); return; }
     if (doc.session.savePending)
         return;
     if ((doc.sourceTrashed || readOnlySource(doc)) && !path) {
@@ -2497,10 +2498,10 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             const opened = receipt.document;
             if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
                 if (opened) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
-                throw new UiError("另存为已提交，但原物理文件的准确交付尚未完成；原操作、原文件会话、后续输入和撤销记录保留。");
+                throw new UiError(uiMessage("shell.saveAsOriginalPhysicalDeliveryPending"));
             }
             await doc.writing.settleForSessionChange();
-            if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError("另存为交付期间原会话变化，原操作与输入保留，请继续核对。");
+            if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
             doc.session.opened = opened;
             request.deliverySessionId = opened.sessionId;
             doc.editor.clearTokens();
@@ -2526,7 +2527,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
         if (inventory) { inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar(); }
         if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
             doc.lastSave = request;
-            throw new UiError("后续交付期间会话变化，原操作与当前输入保留，请继续核对。");
+            throw new UiError(uiMessage("shell.laterDeliverySessionChanged"));
         }
         doc.saveAsChangedTarget = undefined;
         doc.lastSave = undefined;
@@ -2564,18 +2565,18 @@ async function saveAs(): Promise<void> {
 }
 async function inspectSaveAsDelivery(operationId: string): Promise<void> {
   const fact = await api<Receipt & OriginalFact>("/api/operations/status", { operationId });
-  if (fact.operationId !== operationId || fact.status !== "committed") throw new UiError("原提交的读取暂不可用；已确认事实和编号保留。");
-  await modal<void>("另存为原提交事实", "原文件提交事实及当前交付状态。", (form, close) => {
+  if (fact.operationId !== operationId || fact.status !== "committed") throw new UiError(uiMessage("shell.originalCommitReadUnavailable"));
+  await modal<void>(uiMessage("shell.originalSaveAsFactTitle"), uiMessage("shell.originalSaveAsFactHelp"), (form, close) => {
     form.append(el("pre", "", JSON.stringify({ operationId: fact.operationId, status: fact.status, path: fact.path, baseId: fact.baseId, documentError: fact.documentError }, null, 2)), button(uiMessage("common.close"), () => close(), "button-primary"));
   });
 }
 async function endSaveAsDelivery(doc: LiveDocument, request: NonNullable<LiveDocument["lastSave"]>): Promise<void> {
-  if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new UiError("只有已确认提交的原另存为操作可以结束界面交付等待。");
+  if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new UiError(uiMessage("shell.confirmedSaveAsRequiredToEnd"));
   await doc.writing.settleForSessionChange(); await persistDraft(doc);
-  if (doc.lastSave !== request || doc.session.savePending) throw new UiError("保存状态已变化，原请求和输入保留。");
+  if (doc.lastSave !== request || doc.session.savePending) throw new UiError(uiMessage("shell.saveStateChangedOriginalRetained"));
   request.deliveryEnded = true; doc.session.error = null; doc.comparisonTarget = undefined; doc.externalSource = undefined;
   if (doc === current) renderContent();
-  toast("这次另存为的界面交付等待已结束；原提交和编号继续保留，当前稿与撤销记录保持原样。");
+  toast(uiMessage("shell.saveAsDeliveryEndedNotice"));
 }
 
 async function showDraftComparison(doc = current): Promise<void> {
