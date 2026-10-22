@@ -189,6 +189,77 @@ impl Fixture {
             .unwrap();
         self.core().task_reminder_candidate(&root, &owner).unwrap()
     }
+    fn import_task_batches(&mut self, count: usize) {
+        use weftext_export::exchange::{
+            NativeEntry, NativeFileRole, read_native_package, write_native_package,
+        };
+        let root = self.root.clone();
+        let original = fs::read_to_string(&self.path).unwrap();
+        let source_id = self.owner.node_id.clone();
+        let workspace_id = self.owner.workspace_id.clone();
+        let mut template =
+            read_native_package(&self.core().export_native_package(&root).unwrap()).unwrap();
+        let sources = template
+            .manifest
+            .entries
+            .iter()
+            .filter(|(_, entry)| entry.role == NativeFileRole::Source)
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>();
+        for path in sources {
+            template.manifest.entries.remove(&path);
+            template.files.remove(&path);
+        }
+        for (batch, start) in (0..count).step_by(MAX_SUBSCRIPTION_CHANGES).enumerate() {
+            let mut package = template.clone();
+            package.manifest.package_id = fresh();
+            let mut ids = vec![];
+            for index in start..(start + MAX_SUBSCRIPTION_CHANGES).min(count) {
+                let id = fresh();
+                let bytes = original.replace(&source_id, &id).into_bytes();
+                let path = format!("Task{index:04}/Task{index:04}.typ");
+                let mut entry = NativeEntry::new(NativeFileRole::Source, &bytes);
+                entry.node_id = Some(id.clone());
+                entry.revision = Some(fresh());
+                package.manifest.entries.insert(path.clone(), entry);
+                package.files.insert(path, bytes);
+                ids.push(id);
+            }
+            let prepared = self
+                .core()
+                .prepare_native_import(
+                    &root,
+                    &root,
+                    &format!("Batch{batch:02}"),
+                    write_native_package(&package).unwrap(),
+                    &fresh(),
+                    false,
+                )
+                .unwrap();
+            self.core()
+                .execute_operation(&prepared.operation_id, &prepared.plan_id)
+                .unwrap();
+            let changes = ids
+                .iter()
+                .map(|id| ReminderSubscription {
+                    owner: NodeRef {
+                        workspace_id: workspace_id.clone(),
+                        node_id: prepared.node_map[id].clone(),
+                    },
+                    reminder_id: INTENT.into(),
+                    enabled: true,
+                })
+                .collect::<Vec<_>>();
+            let revision = self.core().reminder_settings().unwrap().settings_revision;
+            self.core()
+                .set_reminder_subscriptions(&root, &changes, revision, &fresh())
+                .unwrap();
+        }
+        assert_eq!(
+            self.core().reminder_settings().unwrap().subscriptions.len(),
+            count + 1
+        );
+    }
     fn operate(&mut self, intent: OperationIntent) -> OperationReceipt {
         let root = self.root.clone();
         let operation = fresh();
@@ -1232,13 +1303,117 @@ fn reminder_complete_65_set_is_atomic_overflow_and_restart_never_drains_another_
 }
 
 #[test]
+fn reminder_subscription_batch_has_no_prefix_and_retries_before_recapture() {
+    let mut f = Fixture::new("absolute");
+    let second = f.add_task("Second");
+    let root = f.root.clone();
+    let first = ReminderSubscription {
+        owner: f.owner.clone(),
+        reminder_id: INTENT.into(),
+        enabled: true,
+    };
+    let mut changes = vec![
+        first.clone(),
+        ReminderSubscription {
+            owner: second.owner,
+            reminder_id: INTENT.into(),
+            enabled: true,
+        },
+    ];
+    let revision = f.core().reminder_settings().unwrap().settings_revision;
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    assert!(
+        f.core()
+            .set_reminder_subscriptions(&root, &[first.clone(), first], revision, &fresh())
+            .is_err()
+    );
+    changes[0].enabled = false;
+    changes[1].reminder_id = fresh();
+    assert!(
+        f.core()
+            .set_reminder_subscriptions(&root, &changes, revision, &fresh())
+            .is_err()
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    changes[0].enabled = true;
+    changes[1].reminder_id = INTENT.into();
+    let mutation = fresh();
+    let applied = f
+        .core()
+        .set_reminder_subscriptions(&root, &changes, revision, &mutation)
+        .unwrap();
+    assert_eq!(applied.settings_revision, revision + 1);
+    let committed = fs::read(&ledger).unwrap();
+    fs::write(&f.path, "broken later author source").unwrap();
+    let retry = f
+        .core()
+        .set_reminder_subscriptions(&root, &changes, revision, &mutation)
+        .unwrap();
+    assert_eq!(retry.settings_revision, applied.settings_revision);
+    assert_eq!(fs::read(&ledger).unwrap(), committed);
+}
+
+#[test]
+fn reminder_summary_rechecks_late_duplicate_before_publishing_original_capture() {
+    let mut f = Fixture::new("absolute");
+    f.add_task("Second");
+    let copy = f.root.join("Copy");
+    let source = fs::read(&f.path).unwrap();
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    let mut reads = 0;
+    let error = f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), || {
+            reads += 1;
+            if reads == 2 {
+                fs::create_dir(&copy).unwrap();
+                fs::write(copy.join("Copy.typ"), &source).unwrap();
+            }
+            Ok(instant("2026-10-23T10:00:00Z"))
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "reminderUnavailable");
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert!(state.records.is_empty() && state.summaries.is_empty());
+}
+
+#[test]
+fn reminder_64_member_permit_checks_within_its_real_monotonic_lifetime() {
+    let mut f = Fixture::new("absolute");
+    for index in 1..MAX_SUMMARY_MEMBERS {
+        f.add_task(&format!("Task{index:03}"));
+    }
+    let permit = f.summary("2026-10-23T10:00:00Z");
+    let (state, _) = f.core().read_reminders().unwrap();
+    assert_eq!(state.summaries.len(), 1);
+    assert_eq!(state.summaries[permit.execution_key()].members.len(), 64);
+    // This seam controls only the wall clock. The production issued Instant,
+    // five-second monotonic deadline and complete pre-call check stay real.
+    f.core()
+        .check_reminder_permit_with_clock(&permit, || Ok(instant("2026-10-23T10:00:01Z")))
+        .unwrap();
+    eprintln!("64-member permit real age: {:?}", permit.issued.elapsed());
+    assert!(permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+    assert_eq!(
+        f.core()
+            .check_reminder_permit_with_clock(&permit, || Ok(instant("2026-10-23T10:00:01Z")))
+            .unwrap_err()
+            .code,
+        "reminderPermitUsed"
+    );
+}
+
+#[test]
 fn reminder_full_scan_guard_budget_never_publishes_its_first_64_prefix() {
     let mut f = Fixture::new("absolute");
     // Each real managed task contributes at least one distinct source input.
-    // The production limit is 1024, rather than an injected smaller budget.
-    for index in 1..=MAX_INPUT_PATHS {
-        f.add_task(&format!("Task{index:04}"));
-    }
+    // Keep the real 1024 limit and 1025 distinct admitted/subscribed tasks.
+    // This tests input-budget atomicity using multiple genuine import commits;
+    // the 65-member tests retain independent NewNode/single-enable history.
+    f.import_task_batches(MAX_INPUT_PATHS);
     let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
     let original = fs::read(&ledger).unwrap();
     assert_eq!(

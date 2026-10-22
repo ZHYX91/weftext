@@ -9861,6 +9861,7 @@ export const zhCN = {
   "error.core.backend.committedBirthIncomplete": "已提交 Node 的出生证据不完整；请保留原源文件",
   "error.core.backend.committedObservationsMissing": "原已提交物理版本观察记录缺失",
   "error.core.backend.ambiguousRevisionFacts": "同一耐久提交顺序的原已接纳版本事实不一致",
+  "error.core.backend.observationSetChanged": "修订观察记录集合在读取期间变化，未确认修订号",
   "error.core.backend.resourceBirthIncomplete": "原资源出生证据不完整",
   "desktop.cliServiceActive": "后台命令行服务正在运行",
   "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "原生来源不唯一，或未在实际输出中显示。",
@@ -20041,6 +20042,7 @@ export interface MessageParamsMap {
   "error.core.backend.committedBirthIncomplete": {  };
   "error.core.backend.committedObservationsMissing": {  };
   "error.core.backend.ambiguousRevisionFacts": {  };
+  "error.core.backend.observationSetChanged": {  };
   "error.core.backend.resourceBirthIncomplete": {  };
   "desktop.cliServiceActive": {  };
   "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {  };
@@ -32038,6 +32040,7 @@ export const messageParamTypes = {
   "error.core.backend.committedBirthIncomplete": {},
   "error.core.backend.committedObservationsMissing": {},
   "error.core.backend.ambiguousRevisionFacts": {},
+  "error.core.backend.observationSetChanged": {},
   "error.core.backend.resourceBirthIncomplete": {},
   "desktop.cliServiceActive": {},
   "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {},
@@ -42234,6 +42237,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.backend.committedBirthIncomplete": "The committed Node birth evidence is incomplete; preserve the original source",
   "error.core.backend.committedObservationsMissing": "Original committed physical revision observations are missing",
   "error.core.backend.ambiguousRevisionFacts": "Original accepted revision facts disagree at the same durable commit sequence",
+  "error.core.backend.observationSetChanged": "Revision observation records changed during reading; no revision was accepted",
   "error.core.backend.resourceBirthIncomplete": "Original resource birth evidence is incomplete",
   "desktop.cliServiceActive": "Command-line service is running in the background",
   "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "The native origin is nonunique or is not displayed in the actual output.",

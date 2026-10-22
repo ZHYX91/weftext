@@ -156,7 +156,7 @@ impl Core {
                     } else {
                         let observed = (|| -> Result<(String, FileIdentity)> {
                             let guard = ParentGuard::acquire(&self.backend, &path)?;
-                            let mut file = guard.open_file(false, false)?;
+                            let mut file = guard.open_read_guard_file()?;
                             let bytes = read_source(&mut file)?;
                             let id = stamp(&file)?.identity;
                             self.check_pending_identity(&id)?;

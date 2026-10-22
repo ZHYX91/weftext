@@ -10,6 +10,8 @@ use weftext_messages::UiMessage;
 #[path = "definition_admission_tests.rs"]
 mod definition_admission_tests;
 mod directory;
+#[cfg(all(test, windows))]
+mod observation_tests;
 mod owner_backup;
 mod pending;
 #[cfg(all(test, windows))]
@@ -18,6 +20,32 @@ mod trash;
 
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
+// A single observation-name cut retains the original enumeration's directory
+// guard. It carries no accepted revision or source qualification authority.
+struct ObservationRecordPaths {
+    _directory: backend::ScopedDirectoryEntries,
+    paths: Vec<PathBuf>,
+}
+fn observation_record_name_matches(name: &str, operation_id: &str) -> bool {
+    name.strip_prefix(operation_id).is_some_and(|suffix| {
+        suffix == ".observations.json"
+            || (suffix.starts_with(".recovery-observations-") && suffix.ends_with(".json"))
+    })
+}
+impl ObservationRecordPaths {
+    fn relevant_names(&self, plans: &[&journal::Plan]) -> BTreeSet<PathBuf> {
+        self.paths
+            .iter()
+            .filter(|path| {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                plans
+                    .iter()
+                    .any(|plan| observation_record_name_matches(&name, &plan.operation_id))
+            })
+            .cloned()
+            .collect()
+    }
+}
 #[path = "operations/compound.rs"]
 pub(crate) mod compound;
 
@@ -1058,15 +1086,43 @@ impl Core {
         }))
     }
     pub(crate) fn read_observation_facts(&self, operation_id: &str) -> Result<Vec<RevisionFact>> {
+        let records = self.observation_record_paths()?;
+        self.read_observation_facts_from_paths(operation_id, &records)
+    }
+    fn observation_record_paths(&self) -> Result<ObservationRecordPaths> {
+        let mut directory = self.backend.read_dir(self.data_dir.join("journal"))?;
+        let paths = directory
+            .by_ref()
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(ObservationRecordPaths {
+            _directory: directory,
+            paths,
+        })
+    }
+    fn check_observation_record_paths(
+        &self,
+        records: &ObservationRecordPaths,
+        plans: &[&journal::Plan],
+    ) -> Result<()> {
+        if records.relevant_names(plans) != self.observation_record_paths()?.relevant_names(plans) {
+            return Err(CoreError::new(
+                "identityPending",
+                UiMessage::error_core_backend_observation_set_changed(),
+            ));
+        }
+        Ok(())
+    }
+    fn read_observation_facts_from_paths(
+        &self,
+        operation_id: &str,
+        records: &ObservationRecordPaths,
+    ) -> Result<Vec<RevisionFact>> {
         let mut facts = Vec::new();
         let mut record_found = false;
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
-            let path = entry?.path();
+        for path in &records.paths {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if name == format!("{operation_id}.observations.json")
-                || (name.starts_with(&format!("{operation_id}.recovery-observations-"))
-                    && name.ends_with(".json"))
-            {
+            if observation_record_name_matches(&name, operation_id) {
                 record_found = true;
                 facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(
                     &self.backend.read_bytes(path)?,
@@ -2909,15 +2965,18 @@ impl Core {
     pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
         let digest = hash(&captured.bytes);
         let mut candidates = Vec::new();
-        for plan in self.committed_plans()? {
+        let plans = self.committed_plans()?;
+        let records = self.observation_record_paths()?;
+        for plan in &plans {
             if let Some(fact) = self
-                .read_observation_facts(&plan.operation_id)?
+                .read_observation_facts_from_paths(&plan.operation_id, &records)?
                 .into_iter()
                 .find(|fact| fact.stamp == captured.stamp && fact.hash == digest)
             {
                 candidates.push((self.commit_sequence(&plan.operation_id)?, fact.revision));
             }
         }
+        self.check_observation_record_paths(&records, &plans)?;
         candidates.sort_by_key(|value| value.0);
         let Some((sequence, revision)) = candidates.last() else {
             return Ok(None);

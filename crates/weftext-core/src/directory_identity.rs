@@ -7,6 +7,26 @@ use weftext_messages::UiMessage;
 const DIRECTORY_MARKER: &str = "weftext.directory.json";
 const TAG_REGISTRY: &str = ".weftext-tags.json";
 
+pub(crate) enum InventoryNode<'a> {
+    Managed(&'a InventoryEntry),
+    Missing,
+    Invalid,
+}
+pub(crate) fn inventory_node<'a>(inventory: &'a Inventory, id: &str) -> InventoryNode<'a> {
+    if !inventory.complete {
+        return InventoryNode::Invalid;
+    }
+    let mut matches = inventory
+        .entries
+        .iter()
+        .filter(|entry| entry.node_id.as_deref() == Some(id));
+    match (matches.next(), matches.next()) {
+        (None, _) => InventoryNode::Missing,
+        (Some(entry), None) if entry.identity_status == "admitted" => InventoryNode::Managed(entry),
+        _ => InventoryNode::Invalid,
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NavigationTarget {
@@ -988,30 +1008,27 @@ impl Core {
             ));
         }
         if kind == "node" {
-            let matches = inventory
-                .entries
-                .iter()
-                .filter(|entry| entry.node_id.as_deref() == Some(id))
-                .collect::<Vec<_>>();
-            if matches.is_empty() {
-                return Ok(target(
-                    kind,
-                    "missing",
-                    Some(reference.into()),
-                    None,
-                    String::new(),
-                ));
-            }
-            if matches.len() != 1 || matches[0].identity_status != "admitted" {
-                return Ok(target(
-                    kind,
-                    "identityInvalid",
-                    Some(reference.into()),
-                    None,
-                    String::new(),
-                ));
-            }
-            let entry = matches[0];
+            let entry = match inventory_node(&inventory, id) {
+                InventoryNode::Managed(entry) => entry,
+                InventoryNode::Missing => {
+                    return Ok(target(
+                        kind,
+                        "missing",
+                        Some(reference.into()),
+                        None,
+                        String::new(),
+                    ));
+                }
+                InventoryNode::Invalid => {
+                    return Ok(target(
+                        kind,
+                        "identityInvalid",
+                        Some(reference.into()),
+                        None,
+                        String::new(),
+                    ));
+                }
+            };
             let parent = Path::new(&entry.path).parent().unwrap();
             return Ok(target(
                 kind,

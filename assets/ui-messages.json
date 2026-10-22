@@ -51130,6 +51130,11 @@
       "en-US": "Original accepted revision facts disagree at the same durable commit sequence",
       "params": {}
     },
+    "error.core.backend.observationSetChanged": {
+      "zh-CN": "修订观察记录集合在读取期间变化，未确认修订号",
+      "en-US": "Revision observation records changed during reading; no revision was accepted",
+      "params": {}
+    },
     "error.core.backend.resourceBirthIncomplete": {
       "zh-CN": "原资源出生证据不完整",
       "en-US": "Original resource birth evidence is incomplete",

@@ -29,6 +29,8 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 每次完整库存扫描在根、Workspace 与规则资格成立后，只读取一次全部已提交 Plan 的原 Birth 证据，按原顺序保留本次调用内的物理绑定观察；逐文件仍核当前受保护句柄、身份、源码声明和相关 pending。坏的后续 Birth 不能被较早的有效绑定遮蔽。此观察不跨扫描复用，不授予提交权限；下一次扫描重新读取原证据。无关 Plan 不触发目标路径的 install／commit／resolution 查询，相关 Plan 的原资格顺序与别名边界保持。
 
+一次已接纳修订查询只枚举一次观察记录名称，并始终持有原 journal 目录 guard；每个已提交 Plan 仍通过同一受保护 reader 按观察顺序读取原记录。必需记录缺失或损坏仍拒绝，准确 stamp 与字节 hash、每 Plan 首个匹配事实、耐久提交序号及最大序号歧义规则不变。在确认修订号或确认没有修订号之前，再完整枚举一次并核对相关记录名称集合；名称变化直接拒绝，不接纳新记录替换原结论。名称与修订结果均不跨查询缓存。
+
 节点结构动作仍拒绝显式 ignored/unmanaged 边界内的目标，或已知子树含这类排除边界的动作；普通非节点文件动作经同一安全后端独立预览确切范围，不借普通改名/移动绕过受管节点的两侧配对、已登记资源及历史责任。已接纳节点突然缺主文件或改配对是诊断/恢复事件，不能静默降为普通文件、退休身份或猜新 ID。开放树未观察新增的严格排除仍需强范围能力；§5 的迟到边界 pending 规则针对这些显式排除边界，不把普通容器缺主文件误当同一阻断条件。
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
@@ -425,6 +427,8 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 `tasks/reminder` 是唯一作者意图。Core 从准入且当前可读的已保存 Task 重建候选，不从 Draft、通知参数或第二任务缓存取事实。共同 `device-state/reminders.json` 仅保存库选择、逐提醒 opt-in、个人处理和投递责任；复用 device-state 身份，不用 sync replica_id。复制任务不复制启用资格。固定叶 typed 完整格式拒未知／重复成员，限 16 MiB、128 库及 32768 记录，经原字节摘要和共同 device guard/CAS/flush/回读持久。库固定 WorkspaceId 与物理根身份，路径仅定位；外国设备／profile 不自动采纳。scope-first backup 仅在完整验证已知叶后排除该设备全局数据，未知文件仍拒绝。
 
 设备记录使用 schema version 2。`failedBeforeCall` 与 `unknown` 保存类型化 `CoreDescription`，在原记录预算内保留实际因果链、原诊断来源及完整并列事实。单条投递说明另有 16 KiB 序列化预算，超过时明确拒绝，不截断。调度问题连同 owner 与 reminder 身份保留完整原始类型化 Core 错误。状态／版本／重复校验使用显式事实，不解析诊断文案。v1 与旧字符串诊断记录明确拒绝，原始字节保留。原 OS 请求中的标题／正文、执行键域及系统通知 group 属于独立外部事实，保持原值。
+
+一次多成员检查按库收集，仅在本次调用内复用该库的完整库存定位观察，切换库即释放；准备、原批次重试、调用前许可检查和原通知重新核权共用同一捕获路径。逐源的原物理准入、当前位置、字节、Schema 与控制见证不省略；发生决定前，在原输入 guards 持有期间按库重新完整扫描，核对固定 NodeRef 到原 source path 的唯一映射，不刷新旧候选来接纳变更。单条订阅与有界内部批次共用一条设置写入路径：原 mutation 重取先于重新捕获，重复成员拒绝，完整资格后一次 CAS，失败不写前缀。对外仍为原单条命令，原单条 fingerprint 和禁用语义保持。
 
 执行键为 `weftext.reminder-effect.v1` 与 device、NodeRef、reminderId、实际语义摘要和精确 trigger 的 canonical SHA256。先持久原键的 submitting、完整 OS request 和 attempt，才返回不可反序列化／克隆的 permit。每次系统调用前必须 `check_reminder_permit`：重验当前源、库、设备、任务和授权，复核共同源／配置正负见证闭包及全部后置检查，并最终核对目标分钟、单调 5 秒时限和墙钟未回拨；全部通过后才准入一次并消费许可。普通投递不能因资格核查耗时越过目标分钟。Native 在 Core 锁外调用 OS，再以原 permit 写回结果；最后检查不声称与之后的作者编辑或 OS 调用全局原子。Server 没有 toast producer 或投递 HTTP 接口。
 

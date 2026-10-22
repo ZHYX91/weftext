@@ -19,6 +19,7 @@ const MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_RECORDS: usize = 32_768;
 const MAX_LIBRARIES: usize = 128;
 const MAX_SUMMARY_MEMBERS: usize = 64;
+const MAX_SUBSCRIPTION_CHANGES: usize = 64;
 const STATE_VERSION: u32 = 2;
 const GROUP: &str = "weftext.reminders.v1";
 
@@ -490,6 +491,31 @@ pub struct TaskReminderCandidate {
     pub resolution: TaskReminderResolution,
     #[serde(skip)]
     root_identity: FileIdentity,
+    #[serde(skip)]
+    source_path: String,
+}
+
+// Members are visited in library order. Retain only one complete inventory,
+// never a cross-call candidate/authority cache or all libraries' source bytes.
+#[derive(Default)]
+struct ReminderCaptureInventory(Option<(PathBuf, Result<Inventory>)>);
+impl ReminderCaptureInventory {
+    fn inventory<'a>(&'a mut self, core: &Core, root: &Path) -> Result<&'a Inventory> {
+        if self.0.as_ref().is_none_or(|(original, _)| original != root) {
+            self.0 = Some((root.to_path_buf(), core.inventory(root)));
+        }
+        self.0.as_ref().unwrap().1.as_ref().map_err(Clone::clone)
+    }
+    fn capture(
+        &mut self,
+        core: &mut Core,
+        root: &Path,
+        owner: &NodeRef,
+    ) -> Result<(TaskReminderCandidate, Vec<SnapshotWitness>)> {
+        let root = core.reminder_task_context(root, owner)?;
+        let inventory = self.inventory(core, &root)?;
+        core.capture_reminder_task_from_inventory(&root, owner, inventory)
+    }
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -747,7 +773,9 @@ impl Core {
                 UiMessage::error_reminder_original_library_root_changed(),
             ));
         }
-        let path = self.reminder_task_source(root, &record.owner)?;
+        let qualified_root = self.reminder_task_context(root, &record.owner)?;
+        let inventory = self.inventory(&qualified_root)?;
+        let path = self.reminder_task_source(&qualified_root, &record.owner, &inventory)?;
         let document = self.open(&path, Some(root.to_path_buf()))?;
         if document.kind != "managed"
             || document.node_id.as_deref() != Some(record.owner.node_id.as_str())
@@ -907,24 +935,43 @@ impl Core {
             },
         })
     }
-    fn reminder_task_source(&mut self, root: &Path, owner: &NodeRef) -> Result<PathBuf> {
-        let target = self.resolve_navigation_target(
-            root,
-            &format!("weftext-node://{}/{}", owner.workspace_id, owner.node_id),
-        )?;
-        if target.status != "managed" || target.kind != "node" {
+    fn reminder_inventory_source(
+        root: &Path,
+        owner: &NodeRef,
+        inventory: &Inventory,
+    ) -> Result<PathBuf> {
+        if inventory.root != display(root)
+            || inventory.workspace_id.as_deref() != Some(&owner.workspace_id)
+        {
+            return Err(err(UiMessage::error_reminder_task_library_mismatch()));
+        }
+        match crate::directory_identity::inventory_node(inventory, &owner.node_id) {
+            crate::directory_identity::InventoryNode::Managed(entry) => {
+                Ok(PathBuf::from(&entry.path))
+            }
+            _ => Err(CoreError::new(
+                "reminderUnavailable",
+                UiMessage::error_reminder_live_task_unavailable(),
+            )),
+        }
+    }
+    fn reminder_task_source(
+        &self,
+        root: &Path,
+        owner: &NodeRef,
+        inventory: &Inventory,
+    ) -> Result<PathBuf> {
+        let path = Self::reminder_inventory_source(root, owner, inventory)?;
+        let Some(directory) = path.parent() else {
             return Err(CoreError::new(
                 "reminderUnavailable",
                 UiMessage::error_reminder_live_task_unavailable(),
             ));
-        }
+        };
         // Navigation deliberately returns the Node directory. Resolve its
         // canonical source through the existing physical admission boundary;
         // the directory is never passed to a source-file API.
-        let directory = target
-            .path
-            .ok_or_else(|| err(UiMessage::error_reminder_task_location_unavailable()))?;
-        let source = self.managed_node(root, Path::new(&directory), false)?;
+        let source = self.managed_node(root, directory, false)?;
         let path = PathBuf::from(source.path);
         if self.qualified_node_at(root, &path)?.owner != *owner {
             return Err(CoreError::new(
@@ -939,6 +986,9 @@ impl Core {
         root: &Path,
         owner: &NodeRef,
     ) -> Result<(TaskReminderCandidate, Vec<SnapshotWitness>)> {
+        ReminderCaptureInventory::default().capture(self, root, owner)
+    }
+    fn reminder_task_context(&self, root: &Path, owner: &NodeRef) -> Result<PathBuf> {
         self.sync_local_owner()?;
         if !owner_valid(owner) {
             return Err(err(UiMessage::error_reminder_task_reference_invalid()));
@@ -948,11 +998,19 @@ impl Core {
         if workspace.workspace_id != owner.workspace_id {
             return Err(err(UiMessage::error_reminder_task_library_mismatch()));
         }
-        let path = self.reminder_task_source(&root, owner)?;
-        let qualified = self.qualified_query_node_at(&root, &path, owner, "live")?;
+        Ok(root)
+    }
+    fn capture_reminder_task_from_inventory(
+        &mut self,
+        root: &Path,
+        owner: &NodeRef,
+        inventory: &Inventory,
+    ) -> Result<(TaskReminderCandidate, Vec<SnapshotWitness>)> {
+        let path = self.reminder_task_source(root, owner, inventory)?;
+        let qualified = self.qualified_query_node_at(root, &path, owner, "live")?;
         let mut witnesses = vec![];
         Self::merge_query_node_feature_witness(&mut witnesses, &qualified.witness)?;
-        let config = self.read_config(&root, ConfigRole::Schema)?;
+        let config = self.read_config(root, ConfigRole::Schema)?;
         let config_witness = self.take_snapshot_witness(&config.base_id)?;
         let schema = match config.bytes {
             Some(bytes) => Schema::from_author_json(&decode(&bytes)?),
@@ -1021,13 +1079,38 @@ impl Core {
         let root_identity = ParentGuard::acquire(&self.backend, &root.join(".reminder-root"))?
             .directory_identity()?;
         let candidate = TaskReminderCandidate {
-            root: display(&root),
+            root: display(root),
             owner: owner.clone(),
             task_open,
             resolution,
             root_identity,
+            source_path: display(&path),
         };
         Ok((candidate, witnesses))
+    }
+    fn revalidate_reminder_locations<'a>(
+        &self,
+        candidates: impl Iterator<Item = &'a TaskReminderCandidate>,
+    ) -> Result<()> {
+        let mut candidates = candidates.collect::<Vec<_>>();
+        candidates.sort_by(|a, b| a.root.cmp(&b.root));
+        let mut inventories = ReminderCaptureInventory::default();
+        for candidate in candidates {
+            let root = self.reminder_task_context(Path::new(&candidate.root), &candidate.owner)?;
+            let inventory = inventories.inventory(self, &root)?;
+            if display(&Self::reminder_inventory_source(
+                &root,
+                &candidate.owner,
+                inventory,
+            )?) != candidate.source_path
+            {
+                return Err(CoreError::new(
+                    "staleBase",
+                    UiMessage::error_reminder_input_changed_before_decision(),
+                ));
+            }
+        }
+        Ok(())
     }
     pub fn task_reminder_candidate(
         &mut self,
@@ -1234,61 +1317,109 @@ impl Core {
         expected_revision: u64,
         mutation_id: &str,
     ) -> Result<ReminderSettings> {
+        self.set_reminder_subscriptions(
+            root,
+            &[ReminderSubscription {
+                owner: owner.clone(),
+                reminder_id: reminder_id.into(),
+                enabled,
+            }],
+            expected_revision,
+            mutation_id,
+        )
+    }
+    // One bounded internal settings writer; the public command remains singular.
+    fn set_reminder_subscriptions(
+        &mut self,
+        root: &Path,
+        changes: &[ReminderSubscription],
+        expected_revision: u64,
+        mutation_id: &str,
+    ) -> Result<ReminderSettings> {
         let (mut state, digest) = self.read_reminders()?;
-        if !owner_valid(owner) || !uuid(reminder_id) {
+        let mut keys = BTreeSet::new();
+        if changes.is_empty()
+            || changes.len() > MAX_SUBSCRIPTION_CHANGES
+            || changes.iter().any(|change| {
+                !owner_valid(&change.owner)
+                    || !uuid(&change.reminder_id)
+                    || !keys.insert(subscription_key(&change.owner, &change.reminder_id))
+            })
+        {
             return Err(err(
                 UiMessage::error_reminder_subscription_identity_invalid(),
             ));
         }
-        let fp = hash(&serde_json::to_vec(&(
-            "subscription",
-            owner,
-            reminder_id,
-            enabled,
-        ))?);
+        let fp = if let [change] = changes {
+            hash(&serde_json::to_vec(&(
+                "subscription",
+                &change.owner,
+                &change.reminder_id,
+                change.enabled,
+            ))?)
+        } else {
+            hash(&serde_json::to_vec(&("subscriptions", changes))?)
+        };
         if settings_retry(&state, expected_revision, mutation_id, &fp)? {
             return Ok(settings(&state));
         }
-        let key = subscription_key(owner, reminder_id);
-        if !enabled {
-            let old = state
-                .subscriptions
-                .get_mut(&key)
-                .ok_or_else(|| err(UiMessage::error_reminder_subscription_missing()))?;
-            old.enabled = false;
-            finish_settings(&mut state, mutation_id, fp)?;
-            let state = self.write_reminders(state, digest.as_deref())?;
-            return Ok(settings(&state));
+        let mut inventories = ReminderCaptureInventory::default();
+        let mut captured = vec![];
+        let mut budget = InputBudget::default();
+        for change in changes {
+            let key = subscription_key(&change.owner, &change.reminder_id);
+            if !change.enabled {
+                state
+                    .subscriptions
+                    .get_mut(&key)
+                    .ok_or_else(|| err(UiMessage::error_reminder_subscription_missing()))?
+                    .enabled = false;
+                continue;
+            }
+            let (candidate, witnesses) = inventories.capture(self, root, &change.owner)?;
+            if candidate.resolution.state != TaskReminderState::Ready
+                || candidate.resolution.reminder_id.as_deref() != Some(&change.reminder_id)
+            {
+                return Err(resolution_error(
+                    "reminderUnavailable",
+                    UiMessage::error_reminder_save_before_enable(),
+                    &candidate.resolution,
+                ));
+            }
+            let library = state
+                .libraries
+                .get(&change.owner.workspace_id)
+                .ok_or_else(|| err(UiMessage::error_reminder_select_library_first()))?;
+            if library.identity != candidate.root_identity || !library.enabled {
+                return Err(err(
+                    UiMessage::error_reminder_selected_library_disabled_or_changed(),
+                ));
+            }
+            for witness in &witnesses {
+                budget.include(
+                    &witness.binding.path,
+                    witness
+                        .binding
+                        .captured
+                        .as_ref()
+                        .map_or(0, |file| file.bytes.len()),
+                )?;
+            }
+            state.subscriptions.insert(key, change.clone());
+            captured.push((candidate, witnesses));
         }
-        let (candidate, witnesses) = self.capture_reminder_task(root, owner)?;
-        if candidate.resolution.state != TaskReminderState::Ready
-            || candidate.resolution.reminder_id.as_deref() != Some(reminder_id)
-        {
-            return Err(resolution_error(
-                "reminderUnavailable",
-                UiMessage::error_reminder_save_before_enable(),
-                &candidate.resolution,
-            ));
-        }
-        let library = state
-            .libraries
-            .get(&owner.workspace_id)
-            .ok_or_else(|| err(UiMessage::error_reminder_select_library_first()))?;
-        if library.identity != candidate.root_identity || !library.enabled {
-            return Err(err(
-                UiMessage::error_reminder_selected_library_disabled_or_changed(),
-            ));
-        }
-        state.subscriptions.insert(
-            key,
-            ReminderSubscription {
-                owner: owner.clone(),
-                reminder_id: reminder_id.into(),
-                enabled,
-            },
-        );
         finish_settings(&mut state, mutation_id, fp)?;
-        let state = self.with_reminder_inputs(Path::new(&candidate.root), &witnesses, |core| {
+        if captured.is_empty() {
+            return self
+                .write_reminders(state, digest.as_deref())
+                .map(|state| settings(&state));
+        }
+        let groups = captured
+            .iter()
+            .map(|(candidate, witnesses)| (Path::new(&candidate.root), witnesses.as_slice()))
+            .collect::<Vec<_>>();
+        let state = self.with_reminder_input_groups(&groups, |core| {
+            core.revalidate_reminder_locations(captured.iter().map(|(candidate, _)| candidate))?;
             core.write_reminders(state, digest.as_deref())
         })?;
         Ok(settings(&state))
@@ -1386,6 +1517,7 @@ impl Core {
             return Ok(ReminderSummaryPreparation::CoolingDown { until });
         }
         let mut captured = BTreeMap::new();
+        let mut inventories = ReminderCaptureInventory::default();
         let mut budget = InputBudget::default();
         let mut issues = vec![];
         let mut issue_count = 0usize;
@@ -1403,7 +1535,7 @@ impl Core {
             };
             let qualified = (|| {
                 let (candidate, witnesses) =
-                    self.capture_reminder_task(Path::new(&library.root), &subscription.owner)?;
+                    inventories.capture(self, Path::new(&library.root), &subscription.owner)?;
                 if candidate.root_identity != library.identity {
                     return Err(CoreError::new(
                         "foreignLibraryState",
@@ -1517,6 +1649,9 @@ impl Core {
             .map(|(candidate, witnesses, _)| (Path::new(&candidate.root), witnesses.as_slice()))
             .collect::<Vec<_>>();
         let permit = self.with_reminder_input_groups(&groups, |core| {
+            core.revalidate_reminder_locations(
+                captured.values().map(|(candidate, _, _)| candidate),
+            )?;
             // Full scan and all input guards precede the short-lived permit.
             // A large qualified set must not consume its permit while scanning.
             let admitted_at = clock()?;
@@ -1619,14 +1754,22 @@ impl Core {
             ));
         }
         let mut captured = vec![];
-        for member in &original.members {
+        let mut inventories = ReminderCaptureInventory::default();
+        let mut ordered_members = original.members.clone();
+        ordered_members.sort_by(|a, b| {
+            state.records[a]
+                .owner
+                .workspace_id
+                .cmp(&state.records[b].owner.workspace_id)
+        });
+        for member in &ordered_members {
             let record = &state.records[member];
             if record.handled || record.invalidated.is_some() {
                 return Err(err(UiMessage::error_reminder_summary_member_handled()));
             }
             let library = &state.libraries[&record.owner.workspace_id];
             let (candidate, witnesses) =
-                self.capture_reminder_task(Path::new(&library.root), &record.owner)?;
+                inventories.capture(self, Path::new(&library.root), &record.owner)?;
             check_enabled(&state, &candidate)?;
             let (id, definition, trigger) = ready(&candidate)?;
             if execution_key(&state.device_id, &candidate.owner, id, definition, trigger)?
@@ -1657,6 +1800,7 @@ impl Core {
             .map(|(candidate, witnesses)| (Path::new(&candidate.root), witnesses.as_slice()))
             .collect::<Vec<_>>();
         let permit = self.with_reminder_input_groups(&groups, |core| {
+            core.revalidate_reminder_locations(captured.iter().map(|(candidate, _)| candidate))?;
             let admitted_at = clock()?;
             if admitted_at.compare(&checked_at).is_lt() {
                 return Err(CoreError::new(
@@ -1710,12 +1854,19 @@ impl Core {
         }
         permit_age(permit, attempt, &clock()?)?;
         let summary = state.summaries.contains_key(&permit.key);
-        let members = if let Some(summary) = state.summaries.get(&permit.key) {
+        let mut members = if let Some(summary) = state.summaries.get(&permit.key) {
             summary.members.clone()
         } else {
             vec![permit.key.clone()]
         };
+        members.sort_by(|a, b| {
+            state.records[a]
+                .owner
+                .workspace_id
+                .cmp(&state.records[b].owner.workspace_id)
+        });
         let mut captured = vec![];
+        let mut inventories = ReminderCaptureInventory::default();
         for key in members {
             let record = &state.records[&key];
             if record.handled || record.invalidated.is_some() {
@@ -1726,7 +1877,7 @@ impl Core {
                 .get(&record.owner.workspace_id)
                 .ok_or_else(|| err(UiMessage::error_reminder_original_selection_missing()))?;
             let (candidate, witnesses) =
-                self.capture_reminder_task(Path::new(&library.root), &record.owner)?;
+                inventories.capture(self, Path::new(&library.root), &record.owner)?;
             check_enabled(&state, &candidate)?;
             if !summary && missed(&candidate, &clock()?)? {
                 return Err(CoreError::new(
@@ -1761,7 +1912,10 @@ impl Core {
             }
             Ok(())
         };
-        self.with_reminder_input_groups(&groups, |_| check_time())?;
+        self.with_reminder_input_groups(&groups, |core| {
+            core.revalidate_reminder_locations(captured.iter().map(|(candidate, _)| candidate))?;
+            check_time()
+        })?;
         check_time()?;
         permit
             .admitted
@@ -1871,14 +2025,21 @@ impl Core {
         let (mut state, digest) = self.read_reminders()?;
         original_notification(&state, key)?;
         let attempt = lookup_attempt(&state, key)?.clone();
-        let members = if let Some(summary) = state.summaries.get(key) {
+        let mut members = if let Some(summary) = state.summaries.get(key) {
             summary.members.clone()
         } else {
             vec![key.into()]
         };
         let mut eligible = true;
         let mut issues = vec![];
+        members.sort_by(|a, b| {
+            state.records[a]
+                .owner
+                .workspace_id
+                .cmp(&state.records[b].owner.workspace_id)
+        });
         let mut captured = vec![];
+        let mut inventories = ReminderCaptureInventory::default();
         let mut changed = false;
         for member in members {
             let record = state
@@ -1904,7 +2065,7 @@ impl Core {
             {
                 Some(ReminderCancellation::SubscriptionDisabled)
             } else {
-                match self.capture_reminder_task(Path::new(&library.root), &record.owner) {
+                match inventories.capture(self, Path::new(&library.root), &record.owner) {
                     Err(error) => {
                         eligible = false;
                         issues.push(ReminderScheduleIssue {
@@ -1974,6 +2135,9 @@ impl Core {
                 .map(|(candidate, witnesses)| (Path::new(&candidate.root), witnesses.as_slice()))
                 .collect::<Vec<_>>();
             self.with_reminder_input_groups(&groups, |core| {
+                core.revalidate_reminder_locations(
+                    captured.iter().map(|(candidate, _)| candidate),
+                )?;
                 core.write_reminders(state, digest.as_deref())
             })?;
         }
@@ -2668,6 +2832,7 @@ mod tests {
         let record = &state.records[&key];
         let candidate = TaskReminderCandidate {
             root: "D:/qualified-library".into(),
+            source_path: "D:/qualified-library/Task/Task.typ".into(),
             owner: record.owner.clone(),
             task_open: true,
             root_identity: state.libraries[LIBRARY].identity.clone(),

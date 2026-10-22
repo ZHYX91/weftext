@@ -953,6 +953,8 @@ fn native_birth_admission_duplicate_and_unmanaged_browse() {
 fn inventory_requalifies_complete_original_admissions_on_each_call() {
     let mut f = Fixture::new("outside");
     let root = f.temp.path().join("library");
+    let empty = f.temp.path().join("empty");
+    fs::create_dir(&empty).unwrap();
     f.core.create_library(&root).unwrap();
     let first = "00000000-0000-4000-8000-000000000001";
     let last = "ffffffff-ffff-4fff-bfff-ffffffffffff";
@@ -990,13 +992,30 @@ fn inventory_requalifies_complete_original_admissions_on_each_call() {
     };
     let original = fs::read(&birth).unwrap();
     fs::write(&birth, b"invalid original birth").unwrap();
-    // A previous successful inventory, or the earlier valid A binding, cannot
-    // hide corrupt later committed admission evidence in this complete scan.
+    // A previous successful inventory cannot hide corrupt committed evidence.
+    // Even an empty ordinary directory takes the complete admission cut.
     assert!(f.core.inventory(&root).is_err());
+    assert!(f.core.inventory(&empty).is_err());
     assert_eq!(fs::read(&birth).unwrap(), b"invalid original birth");
     fs::write(&birth, original).unwrap();
     assert!(f.core.inventory(&root).unwrap().complete);
+    let restored_empty = f.core.inventory(&empty).unwrap();
+    assert!(restored_empty.complete && restored_empty.entries.is_empty());
     let source = root.join("A/A.typ");
+    let source_guard = ParentGuard::acquire(&f.core.backend, &source).unwrap();
+    let protected_reader = source_guard.open_read_guard_file().unwrap();
+    let shared = f.core.inventory(&root).unwrap();
+    assert!(shared.complete);
+    assert_eq!(
+        shared
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+    drop(protected_reader);
+    drop(source_guard);
     let original = fs::read(&source).unwrap();
     fs::write(&source, b"broken declaration").unwrap();
     let changed = f.core.inventory(&root).unwrap();
