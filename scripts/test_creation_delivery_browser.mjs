@@ -354,6 +354,18 @@ async function historyCase(f, mode) {
     // The independent C -> S writes changed the real base. Reopen through the
     // actual navigation consumer before reviewing a restore from this UI.
     await navigation(f);
+    // The other live producer's committed S is still protected independently
+    // from the UI proposal. Complete its explicit UI review before preparing
+    // the restore and before holding the later, separately injected D result.
+    await click("比较并合并", page.locator(".document-conflict"));
+    const setupReview = page.getByRole("dialog", { name: "比较草稿与磁盘内容", exact: true });
+    const setupResolution = page.waitForResponse(response => response.url().endsWith("/api/draft/resolve"));
+    await click("应用合并后的草稿", setupReview);
+    const setupResponse = await setupResolution; assert.equal(setupResponse.status(), 200, await setupResponse.text());
+    await setupReview.waitFor({ state: "hidden" });
+    await page.locator(".document-conflict").waitFor({ state: "hidden" });
+    await page.getByText("已应用明确合并的草稿，保存后才会写入磁盘。", { exact: true }).waitFor();
+    await expectSource(f.sourceS);
     await intercept("**/api/operations/status", async route => {
       if (route.request().postDataJSON().operationId === original?.operationId && !draftInjected) {
         draftInjected = true;
@@ -381,10 +393,24 @@ async function historyCase(f, mode) {
   if (mode === "fence") assert.equal(await planExists(original.operationId), false);
   await closeTimeline();
   if (mode !== "resolve") await navigation(f);
-  let proof = mode === "fence" || mode === "resolve" ? undefined : await inputY();
   let sourceT;
   if (mode === "later") { const doc = await api("/api/open", { path: f.a.path, root: f.root });
-    sourceT = doc.source + "\nLater independently committed T\n"; await save(doc, sourceT); }
+    // Navigation has acknowledged the UI's independent S proposal. The other
+    // writer must review that complete record before committing T; equal bytes
+    // alone cannot authorize it to bypass recovery. Keep the original intact.
+    assert.notEqual(doc.sessionId, original.sessionId);
+    assert.equal(doc.recoveredDraftConflict, true); assert.equal(doc.recoveredDraft, doc.source);
+    assert.match(doc.recoveredDraftWitness, /^[0-9a-f]{64}$/);
+    const history = path.join(state, "draft-history"), before = new Set(await readdir(history));
+    await api("/api/draft/resolve", { sessionId: doc.sessionId, action: "mergeRecovered", source: doc.source });
+    const added = (await readdir(history)).filter(name => !before.has(name)); assert.equal(added.length, 1);
+    assert.equal(sha(await readFile(path.join(history, added[0]))), doc.recoveredDraftWitness);
+    const retained = await api("/api/history/list", { sessionId: doc.sessionId });
+    assert.ok(retained.protectedDrafts.some(item => item.source === doc.source));
+    sourceT = doc.source + "\nLater independently committed T\n"; await save(doc, sourceT);
+    await expectSource(f.sourceS);
+  }
+  let proof = mode === "fence" || mode === "resolve" ? undefined : await inputY();
   await openTimeline(); await timeline().locator(".history-operation").filter({ hasText: original.operationId }).waitFor();
   await click("查询原恢复结果", timeline());
   if (mode === "resolve") {

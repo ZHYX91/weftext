@@ -38,7 +38,7 @@ where
         if let Err(error) = weftext_data::parse_unique_json(&bytes) {
             // Preserve actual framework syntax diagnostics without invoking a
             // request type's deserializer on an ambiguous object.
-            let _ = axum::Json::<serde_json::Value>::from_bytes(&bytes).map_err(rejection)?;
+            let _ = axum::Json::<serde::de::IgnoredAny>::from_bytes(&bytes).map_err(rejection)?;
             return Err(ApiError::from_data(
                 StatusCode::BAD_REQUEST,
                 "invalid_json",
