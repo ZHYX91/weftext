@@ -6,7 +6,7 @@ import { locale, parseUiMessageJson, renderUiMessage, renderUiTemplate, uiTempla
 interface Oracle {
     wire: {name:string; json:string; valid:boolean; canonical?:unknown}[];
     templates: {name:string; template:string; params:[string,string][]; placeholders:string[]; expected:string}[];
-    locales: {value:unknown; valid:boolean}[];
+    locales: {name:string; value:unknown; json:string; valid:boolean}[];
 }
 const oracle = JSON.parse(fs.readFileSync(new URL("../../crates/weftext-messages/tests/wire_oracles.json", import.meta.url), "utf8")) as Oracle;
 
@@ -32,8 +32,10 @@ test("actual UI templates agree with the shared literal-code and single-pass ora
 
 test("explicit UI locale changes use the same closed locale domain as Rust", () => {
     for (const row of oracle.locales) {
-        if (row.valid) { locale.set(row.value as UiLocale); assert.equal(locale.current, row.value); }
-        else assert.throws(() => locale.set(row.value as UiLocale), /Unsupported/);
+        for (const value of [row.value, JSON.parse(row.json)]) {
+            if (row.valid) { locale.set(value as UiLocale); assert.equal(locale.current, row.value, row.name); }
+            else assert.throws(() => locale.set(value as UiLocale), /Unsupported/, row.name);
+        }
     }
     locale.set("zh-CN");
 });
