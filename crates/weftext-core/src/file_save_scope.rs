@@ -377,25 +377,29 @@ mod tests {
             &QualifiedInputScope::DeviceUnassigned
         );
         fs::write(root.join(".weftext-workspace.json"), "damaged controls").unwrap();
-        let readable = core.open(&path, None).unwrap();
-        assert_eq!(readable.source, "readable input");
-        let scope_error = core.sessions[&readable.session_id]
-            .file_scope
-            .as_ref()
-            .unwrap_err();
+        let scope_error = core.open(&path, None).unwrap_err();
         assert_eq!(scope_error.code, "unadmittedLibrary");
+        assert_eq!(scope_error.diagnostics.len(), 1);
         assert_eq!(
-            scope_error.explanation,
-            UiMessage::error_core_file_save_scope_ancestor_owner_unproven()
+            scope_error.diagnostics[0].origin,
+            weftext_messages::DiagnosticOrigin::Json
         );
-        assert!(scope_error.diagnostics.is_empty());
         assert_eq!(
-            core.persist_draft(&readable.session_id, "Y")
-                .unwrap_err()
-                .code,
+            core.save(SaveRequest {
+                session_id: device.session_id.clone(),
+                base_id: device.base_id,
+                source: "Y".into(),
+                operation_id: fresh(),
+            })
+            .unwrap_err()
+            .code,
             "unadmittedLibrary"
         );
         assert!(core.reopen_local_session(&device.session_id).is_err());
+        assert_eq!(
+            fs::read_to_string(root.join(".weftext-workspace.json")).unwrap(),
+            "damaged controls"
+        );
         assert_eq!(fs::read_to_string(path).unwrap(), "readable input");
     }
 }

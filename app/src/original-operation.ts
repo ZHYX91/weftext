@@ -51,7 +51,10 @@ export function committedDeliveryComplete(fact: OriginalFact): boolean { return 
 /** No error code proves absence. Query, then durably fence a missing attempt. */
 async function reconcileOriginal<T extends OriginalFact>(request: OriginalRequest, attempt: FrozenOriginalAttempt, error: unknown): Promise<T> {
   const operationId = attempt.operationId;
-  let fact = exact(await request<T>("/api/operations/status", { operationId }), operationId, true);
+  // A same-editor Save retry explicitly identifies its still-live writer.
+  // Generic lookup and SaveAs never acquire that producer from a receipt.
+  const sessionId = attempt.requestKind === "save" ? (JSON.parse(attempt.wire) as {sessionId?: unknown}).sessionId : undefined;
+  let fact = exact(await request<T>("/api/operations/status", { operationId, ...(typeof sessionId === "string" ? {sessionId} : {}) }), operationId, true);
   if (originalCommitted(fact)) return fact;
   if (fact.status === "unknown") fact = exact(await request<T>("/api/operations/settle", await originalFence(attempt)), operationId, true);
   if (originalCommitted(fact)) return fact;

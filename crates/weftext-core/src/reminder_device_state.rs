@@ -474,25 +474,9 @@ fn decode_reminder_record(bytes: &[u8]) -> Result<State> {
             UiMessage::error_reminder_state_version_unsupported(),
         ));
     }
-    let state: State = serde_json::from_value(raw.clone())?;
-    // FileIdentity is an existing common type. Reject unknown fields in this
-    // new format rather than inheriting that type's historical permissiveness.
-    for library in raw["libraries"]
-        .as_object()
-        .ok_or_else(|| err(UiMessage::error_reminder_libraries_missing()))?
-        .values()
-    {
-        let identity = library["identity"]
-            .as_object()
-            .ok_or_else(|| err(UiMessage::error_reminder_library_identity_missing()))?;
-        if identity.keys().map(String::as_str).collect::<BTreeSet<_>>()
-            != BTreeSet::from(["volume", "index", "created"])
-        {
-            return Err(err(
-                UiMessage::error_reminder_library_identity_fields_invalid(),
-            ));
-        }
-    }
+    // PhysicalIdentity owns the closed, platform-tagged identity wire. Do not
+    // impose a second historical Windows-only field list on that same value.
+    let state: State = serde_json::from_value(raw)?;
     state.validate()?;
     Ok(state)
 }
@@ -2545,6 +2529,9 @@ mod tests {
         let overflow = &keys[64];
         let bytes = serde_json::to_vec(&state).unwrap();
         validate_reminder_device_record(&bytes).unwrap();
+        let mut unknown: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        unknown["libraries"][LIBRARY]["identity"]["unexpected"] = serde_json::json!(true);
+        assert!(validate_reminder_device_record(&serde_json::to_vec(&unknown).unwrap()).is_err());
         let mut decoded = decode_reminder_record(&bytes).unwrap();
         assert!(matches!(
             status(&decoded, overflow).unwrap().delivery,

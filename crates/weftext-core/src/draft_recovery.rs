@@ -757,11 +757,12 @@ mod flush_tests {
         core.persist_draft(&a.session_id, "A").unwrap();
         core.close_session(&a.session_id).unwrap();
         let b = core.open(&path, None).unwrap();
-        let before = fs::read(core.draft_path(&path)).unwrap();
+        let original_record = core.draft_path(&path);
+        let before = fs::read(&original_record).unwrap();
         fs::rename(&path, temp.path().join("original.typ")).unwrap();
         fs::write(&path, "original").unwrap();
         assert_eq!(resume(&mut core, &b).unwrap_err().code, "draftChanged");
-        assert_eq!(fs::read(core.draft_path(&path)).unwrap(), before);
+        assert_eq!(fs::read(original_record).unwrap(), before);
     }
 
     #[test]

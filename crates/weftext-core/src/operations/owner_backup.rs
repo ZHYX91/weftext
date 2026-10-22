@@ -1091,22 +1091,31 @@ mod parse_boundary_tests {
     fn foreign_actor_classification_still_stops_at_header_before_malformed_author_body() {
         let temp = tempfile::tempdir().unwrap();
         let data = temp.path().join("private");
-        let core = Core::new(&data).unwrap();
+        let mut core = Core::new(&data).unwrap();
         let selected = temp.path().join("selected");
         let foreign = temp.path().join("foreign");
-        fs::create_dir_all(&selected).unwrap();
-        fs::create_dir_all(&foreign).unwrap();
+        core.create_library(&selected).unwrap();
+        core.create_library(&foreign).unwrap();
         let binding = |root: &Path| {
-            let guard =
-                ParentGuard::acquire(&core.backend, &root.join(".header-prospective")).unwrap();
-            ActorLibraryBinding {
-                root: display(&guard.directory_coordinates().unwrap()),
-                root_identity: guard.directory_identity().unwrap(),
-                workspace_id: Some(fresh()),
-            }
+            let QualifiedInputScope::Library { binding } = core
+                .capture_file_save_scope(&root.join("header.typ"))
+                .unwrap()
+            else {
+                panic!("Expected admitted library")
+            };
+            binding.actor_binding()
         };
         let expected = binding(&selected);
         let foreign_binding = binding(&foreign);
+        let scope = crate::hosted::ActorInputScope::Qualified {
+            scope: QualifiedInputScope::Library {
+                binding: file_save_scope::QualifiedLibrary {
+                    root: foreign_binding.root.clone(),
+                    root_identity: foreign_binding.root_identity.clone(),
+                    workspace_id: foreign_binding.workspace_id.clone().unwrap(),
+                },
+            },
+        };
         let path = core
             .data_dir
             .join("actors")
@@ -1115,7 +1124,8 @@ mod parse_boundary_tests {
             .join(format!("{}.json", fresh()));
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let original = format!(
-            "{{\"library\":{},\"body\":NOT_JSON_\"\\ud800",
+            "{{\"scope\":{},\"library\":{},\"body\":NOT_JSON_\"\\ud800",
+            serde_json::to_string(&scope).unwrap(),
             serde_json::to_string(&foreign_binding).unwrap()
         );
         fs::write(&path, &original).unwrap();
@@ -1131,7 +1141,7 @@ mod parse_boundary_tests {
         )
         .unwrap();
         assert!(!included);
-        assert_eq!(route, serde_json::to_string(&foreign_binding).unwrap());
+        assert_eq!(route, serde_json::to_string(&scope).unwrap());
         assert_eq!(file.stream_position().unwrap(), 0);
         assert_eq!(fs::read(&path).unwrap(), original.as_bytes());
         assert!(private_record_json(original.as_bytes()).is_err());

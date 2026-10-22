@@ -2214,4 +2214,13 @@ fn full_input_fingerprint_matches_browser_canonical_fixture() {
         full_input_fingerprint(case["expectedRevision"].as_u64().unwrap(), &input).unwrap(),
         case["fingerprint"].as_str().unwrap()
     );
+    let valid = r#"{"kind":"valid","value":{"kind":"text","value":"author input"}}"#;
+    serde_json::from_str::<CaptureFieldValueState>(valid).unwrap();
+    for invalid in [
+        r#"{"kind":"valid","value":{"kind":"text","value":"A","value":"B"}}"#,
+        r#"{"kind":"valid","value":{"kind":"text","value":"A","extra":true}}"#,
+        r#"{"kind":"valid","value":{"kind":"text","value":"\ud800"}}"#,
+    ] {
+        assert!(serde_json::from_str::<CaptureFieldValueState>(invalid).is_err());
+    }
 }

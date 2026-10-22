@@ -601,6 +601,11 @@ fn external_change_conflicts_and_draft_survives_restart() {
             .code,
         "draftConflict"
     );
+    let original_record = restarted
+        .current_session_draft_record(&restored.session_id)
+        .unwrap()
+        .unwrap()
+        .1;
     restarted
         .resolve_draft(
             &restored.session_id,
@@ -615,10 +620,11 @@ fn external_change_conflicts_and_draft_survives_restart() {
         fs::read_to_string(&f.path).unwrap(),
         "external + our draft\n"
     );
-    assert_eq!(
-        fs::read_dir(f.data.join("draft-history")).unwrap().count(),
-        2
-    );
+    let history = fs::read_dir(f.data.join("draft-history"))
+        .unwrap()
+        .map(|entry| fs::read(entry.unwrap().path()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(history, vec![original_record]);
 }
 
 #[test]

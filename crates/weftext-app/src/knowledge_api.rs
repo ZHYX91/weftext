@@ -417,6 +417,8 @@ struct CommitRequest {
 struct StatusRequest {
     operation_id: String,
     #[serde(default)]
+    session_id: Option<String>,
+    #[serde(default)]
     context: Option<Context>,
 }
 
@@ -3084,24 +3086,10 @@ async fn operation_delivery(
             Some((canonical_leaf(&result)?, "created"))
         }
         "renameNode" | "moveNode" | "relocateDirectory" => {
-            let source = preview
-                .changes
-                .iter()
-                .find(|change| change.action == "relocateFrom")
-                .map(|change| PathBuf::from(&change.path));
-            if let (Some(loc), Some(source)) = (&loc, source) {
-                if let Ok(relative) = loc.path.strip_prefix(&source) {
-                    let path = if preview.kind != "relocateDirectory"
-                        && loc.path == canonical_leaf(&source)?
-                    {
-                        canonical_leaf(&result)?
-                    } else {
-                        result.join(relative)
-                    };
-                    Some((path, "rebound"))
-                } else {
-                    None
-                }
+            if context.is_some() {
+                // Core selects this writer's original captured participant,
+                // including retries after its locator has already refreshed.
+                Some((result.clone(), "rebound"))
             } else if preview.kind != "relocateDirectory" {
                 Some((canonical_leaf(&result)?, "rebound"))
             } else {
@@ -3112,25 +3100,26 @@ async fn operation_delivery(
             output["documentDisposition"] = json!("trashed");
             None
         }
-        "updateFiles" => loc
-            .filter(|loc| {
-                preview
-                    .changes
-                    .iter()
-                    .any(|change| change.path == loc.path.to_string_lossy())
-            })
-            .map(|loc| (loc.path, "rebound")),
+        "updateFiles" => context.map(|_| (result.clone(), "rebound")),
         _ => None,
     };
     if let Some((path, disposition)) = destination {
-        output["documentDisposition"] = json!(disposition);
         let id = receipt.operation_id.clone();
+        let session = context.map(|context| context.session_id.clone());
         match core_call(state, move |core| {
-            core.reopen_local_operation_node(&id, &path.to_string_lossy())
+            if disposition == "rebound"
+                && let Some(session) = session
+            {
+                core.refresh_local_operation_session(&id, &session)
+            } else {
+                core.reopen_local_operation_node(&id, &path.to_string_lossy())
+                    .map(Some)
+            }
         })
         .await
         {
-            Ok(document) => {
+            Ok(Some(document)) => {
+                output["documentDisposition"] = json!(disposition);
                 let document = value(document)?;
                 remember(state, &document)?;
                 if let Some(expected) = &expected_source {
@@ -3147,7 +3136,9 @@ async fn operation_delivery(
                 }
                 output["document"] = document;
             }
+            Ok(None) => {}
             Err(error) => {
+                output["documentDisposition"] = json!(disposition);
                 output["documentError"] = value(error)?;
             }
         }
@@ -3167,7 +3158,7 @@ async fn operation_delivery(
             .map_err(|_| ApiError::internal(UiMessage::error_file_session_unavailable()))?
             .iter()
             .filter(|(id, loc)| {
-                loc.path.starts_with(&source)
+                (preview.kind != "trashNode" || loc.path.starts_with(&source))
                     && context.is_none_or(|context| context.session_id != **id)
             })
             .map(|(id, loc)| (id.clone(), loc.clone()))
@@ -3178,18 +3169,11 @@ async fn operation_delivery(
                 affected.push(json!({"priorSessionId":id,"documentDisposition":"trashed","priorPath":loc.path}));
                 continue;
             }
-            let relative = loc.path.strip_prefix(&source).map_err(|_| {
-                ApiError::internal(UiMessage::error_api_knowledge_moved_session_scope_mismatch())
-            })?;
-            let path =
-                if preview.kind != "relocateDirectory" && loc.path == canonical_leaf(&source)? {
-                    canonical_leaf(&result)?
-                } else {
-                    result.join(relative)
-                };
             let operation_id = receipt.operation_id.clone();
-            match core_call(state,move|core|core.reopen_local_operation_node(&operation_id,&path.to_string_lossy())).await {
-                Ok(document)=>{let document=value(document)?;remember(state,&document)?;affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","document":document}));},
+            let session = id.clone();
+            match core_call(state,move|core|core.refresh_local_operation_session(&operation_id,&session)).await {
+                Ok(Some(document))=>{let document=value(document)?;remember(state,&document)?;affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","document":document}));},
+                Ok(None)=>{},
                 Err(error)=>affected.push(json!({"priorSessionId":id,"documentDisposition":"rebound","documentError":value(error)?})),
             }
         }
@@ -3336,7 +3320,8 @@ async fn status(
         None => {
             if fact["status"] == "committed" && fact["baseId"].is_string() {
                 Ok(Json(
-                    file_save_delivery(&state, request.operation_id, fact).await,
+                    file_save_delivery(&state, request.operation_id, fact, request.session_id)
+                        .await,
                 ))
             } else {
                 Ok(Json(fact))
@@ -3344,9 +3329,18 @@ async fn status(
         }
     }
 }
-pub(crate) async fn file_save_delivery(state: &AppState, id: String, mut output: Value) -> Value {
+pub(crate) async fn file_save_delivery(
+    state: &AppState,
+    id: String,
+    mut output: Value,
+    session: Option<String>,
+) -> Value {
     let delivered = async {
-        let (source, document) = core_call(state, move |core| core.reopen_local_save(&id)).await?;
+        let (source, document) = core_call(state, move |core| match session {
+            Some(session) => core.refresh_local_saved_session(&id, &session),
+            None => core.reopen_local_save(&id),
+        })
+        .await?;
         output["committedSource"] = json!(source);
         let document = value(document)?;
         output["documentSourceMatchesCommit"] =
@@ -4868,6 +4862,7 @@ mod tests {
         let status = status(
             State(state),
             crate::RequestJson(StatusRequest {
+                session_id: None,
                 operation_id: accept_op,
                 context: Some(context.clone()),
             }),
@@ -4911,6 +4906,7 @@ mod tests {
         let outcome = status(
             State(state.clone()),
             crate::RequestJson(StatusRequest {
+                session_id: None,
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 context: Some(context.clone()),
             }),
@@ -4924,6 +4920,7 @@ mod tests {
         let unknown = status(
             State(state),
             crate::RequestJson(StatusRequest {
+                session_id: None,
                 operation_id: uuid::Uuid::new_v4().to_string(),
                 context: Some(context),
             }),

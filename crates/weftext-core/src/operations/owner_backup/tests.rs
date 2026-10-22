@@ -564,6 +564,9 @@ fn owner_backup_keeps_scoped_actor_drafts_history_unknown_fences_and_pending_sou
         f.core
             .with_actor_for_root("alice", &f.root, |c| {
                 let doc = c.open(&note, Some(f.root.clone()))?;
+                // Explicitly review the pending actor proposal before this
+                // separate source-write interruption; retain its exact record.
+                c.resolve_draft(&doc.session_id, "mergeRecovered", Some(&source))?;
                 c.save(SaveRequest {
                     session_id: doc.session_id,
                     base_id: doc.base_id,

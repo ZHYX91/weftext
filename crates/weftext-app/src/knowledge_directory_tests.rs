@@ -31,13 +31,13 @@ fn admit_directory(core: &mut Core, root: &Path, directory: &Path) {
 fn note(core: &mut Core, root: &Path, parent: &Path, name: &str) -> OpenedDocument {
     let opened = core.create_note_fixture(root, parent, name).unwrap();
     core.save(SaveRequest {
-        session_id: opened.session_id,
+        session_id: opened.session_id.clone(),
         base_id: opened.base_id,
         source: format!("{}\nSaved {name}", opened.source),
         operation_id: uuid::Uuid::new_v4().to_string(),
     })
     .unwrap();
-    core.open(opened.path, Some(root.to_path_buf())).unwrap()
+    core.reopen_local_session(&opened.session_id).unwrap()
 }
 
 fn fixture() -> Fixture {
@@ -159,6 +159,7 @@ async fn assert_rebound(fixture: &Fixture, document: &Value, index: usize, relat
     assert_eq!(document["recoveredDraft"], fixture.contexts[index].source);
     assert!(document["recoveredDraftConflict"].as_bool() == Some(false));
     let session_id = document["sessionId"].as_str().unwrap().to_owned();
+    assert_eq!(session_id, fixture.contexts[index].session_id);
     let history = core_call(&fixture.state, move |core| core.list_history(&session_id))
         .await
         .unwrap();
@@ -170,8 +171,8 @@ async fn assert_rebound(fixture: &Fixture, document: &Value, index: usize, relat
             .collect::<Vec<_>>(),
         fixture.histories[index]
     );
-    // Result consumption supplies a new Core session while leaving the
-    // original live source/serial (and the UI's shared editor/Undo) intact.
+    // Same-object delivery retains the original writer and producer while
+    // leaving the UI's live source/serial and shared editor/Undo intact.
     check_snapshot(
         &fixture.state,
         &fixture.contexts[index].session_id,
@@ -211,6 +212,7 @@ async fn directory_result_rebinds_current_and_nested_dirty_sessions_and_status()
     let result = status(
         State(f.state.clone()),
         crate::RequestJson(StatusRequest {
+            session_id: None,
             operation_id,
             context: Some(f.contexts[0].clone()),
         }),
@@ -261,6 +263,7 @@ async fn committed_directory_retry_keeps_typed_affected_failure_until_original_c
     let blocked = status(
         State(f.state.clone()),
         crate::RequestJson(StatusRequest {
+            session_id: None,
             operation_id: operation_id.clone(),
             context: None,
         }),
@@ -299,6 +302,7 @@ async fn committed_directory_retry_keeps_typed_affected_failure_until_original_c
     let delivered = status(
         State(f.state.clone()),
         crate::RequestJson(StatusRequest {
+            session_id: None,
             operation_id,
             context: None,
         }),

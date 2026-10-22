@@ -110,7 +110,7 @@ def run(executable, evidence):
         as_restored = call('/api/operations/status', {'operationId': save_as['operationId']})
         assert as_restored['baseId'] == saved_as['baseId'] and as_restored['documentSourceMatchesCommit'] is True
         qualified_refresh = call('/api/open', {'sessionId': saved_as['document']['sessionId']})
-        assert qualified_refresh['source'] == waiting and qualified_refresh['sessionId'] != saved_as['document']['sessionId']
+        assert qualified_refresh['source'] == waiting and qualified_refresh['sessionId'] == saved_as['document']['sessionId']
 
         # The rejected author JSON cannot be parsed a second time to settle it.
         invalid = {'sessionId': later['document']['sessionId'], 'baseId': later['document']['baseId'], 'source': waiting + '\ud800', 'operationId': test_hosted.uid()}

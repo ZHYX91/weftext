@@ -25,6 +25,228 @@ pub(crate) fn save_fingerprint(
 mod tests {
     use super::*;
     #[test]
+    fn same_writer_save_delivery_keeps_later_input_and_does_not_create_an_alternative() {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("private");
+        let path = temp.path().join("ordinary.typ");
+        fs::write(&path, "baseline").unwrap();
+        let mut core = Core::new(&data).unwrap();
+        let opened = core.open(&path, None).unwrap();
+        let producer = core.sessions[&opened.session_id].draft_producer_id.clone();
+        let id = fresh();
+        let saved = core
+            .save(SaveRequest {
+                session_id: opened.session_id.clone(),
+                base_id: opened.base_id,
+                source: "committed X".into(),
+                operation_id: id.clone(),
+            })
+            .unwrap();
+        core.persist_draft(&opened.session_id, "later Y").unwrap();
+        let (_, refreshed) = core
+            .refresh_local_saved_session(&id, &opened.session_id)
+            .unwrap();
+        assert_eq!(refreshed.session_id, opened.session_id);
+        assert_eq!(refreshed.base_id, saved.receipt.base_id);
+        assert_eq!(refreshed.recovered_draft.as_deref(), Some("later Y"));
+        assert!(!refreshed.recovered_draft_conflict);
+        assert_eq!(
+            core.sessions[&opened.session_id].draft_producer_id,
+            producer
+        );
+        core.persist_draft(&opened.session_id, "latest Z 😀")
+            .unwrap();
+        let (_, replay) = core
+            .refresh_local_saved_session(&id, &opened.session_id)
+            .unwrap();
+        assert_eq!(replay.base_id, refreshed.base_id);
+        assert!(replay.recovered_draft_variants.is_empty());
+        drop(core);
+        let mut core = Core::new(data).unwrap();
+        let recovered = core.open(path, None).unwrap();
+        assert_eq!(recovered.recovered_draft.as_deref(), Some("latest Z 😀"));
+        assert!(!recovered.recovered_draft_conflict);
+        assert!(recovered.recovered_draft_variants.is_empty());
+    }
+
+    #[test]
+    fn save_refresh_external_edit_is_comparison_without_rebasing_the_original_writer() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("ordinary.typ");
+        fs::write(&path, "baseline").unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let original = core.open(&path, None).unwrap();
+        let id = fresh();
+        let saved = core
+            .save(SaveRequest {
+                session_id: original.session_id.clone(),
+                base_id: original.base_id,
+                source: "committed X".into(),
+                operation_id: id.clone(),
+            })
+            .unwrap();
+        core.persist_draft(&original.session_id, "pending Y")
+            .unwrap();
+        let before = core
+            .current_session_draft_record(&original.session_id)
+            .unwrap()
+            .unwrap()
+            .1;
+        fs::write(&path, "external T").unwrap();
+        let (committed, comparison) = core
+            .refresh_local_saved_session(&id, &original.session_id)
+            .unwrap();
+        assert_eq!(committed, "committed X");
+        assert_eq!(comparison.source, "external T");
+        assert_ne!(comparison.session_id, original.session_id);
+        assert_eq!(
+            core.sessions[&original.session_id].base_id,
+            saved.receipt.base_id
+        );
+        assert_eq!(core.sessions[&original.session_id].bytes, b"committed X");
+        assert_eq!(
+            core.current_session_draft_record(&original.session_id)
+                .unwrap()
+                .unwrap()
+                .1,
+            before
+        );
+        let error = core
+            .save(SaveRequest {
+                session_id: original.session_id,
+                base_id: saved.receipt.base_id,
+                source: "pending Y".into(),
+                operation_id: fresh(),
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "conflict");
+        assert_eq!(error.current_source.as_deref(), Some("external T"));
+        assert_eq!(fs::read(path).unwrap(), b"external T");
+    }
+    #[test]
+    fn save_refresh_never_adopts_a_competing_writer_or_grants_replay_a_producer() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("ordinary.typ");
+        fs::write(&path, "baseline").unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let a = core.open(&path, None).unwrap();
+        let id = fresh();
+        core.save(SaveRequest {
+            session_id: a.session_id.clone(),
+            base_id: a.base_id,
+            source: "committed".into(),
+            operation_id: id.clone(),
+        })
+        .unwrap();
+        let b = core.open(&path, None).unwrap();
+        core.persist_draft(&b.session_id, "independent B").unwrap();
+        let before = core
+            .current_session_draft_record(&a.session_id)
+            .unwrap()
+            .unwrap()
+            .1;
+        assert_eq!(
+            core.refresh_local_saved_session(&id, &b.session_id)
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(
+            core.current_session_draft_record(&a.session_id)
+                .unwrap()
+                .unwrap()
+                .1,
+            before
+        );
+        let (_, refreshed) = core
+            .refresh_local_saved_session(&id, &a.session_id)
+            .unwrap();
+        assert!(refreshed.recovered_draft_conflict);
+        core.persist_draft(&a.session_id, "late A").unwrap();
+        let retained = core.current_session_draft(&a.session_id).unwrap().unwrap();
+        assert_eq!(retained.source, "late A");
+        assert!(
+            retained
+                .alternatives
+                .iter()
+                .any(|input| input.source == "independent B")
+        );
+        let (_, independent) = core.reopen_local_save(&id).unwrap();
+        assert_ne!(independent.session_id, a.session_id);
+        assert_ne!(
+            core.sessions[&independent.session_id].draft_producer_id,
+            core.sessions[&a.session_id].draft_producer_id
+        );
+        core.close_session(&a.session_id).unwrap();
+        assert_eq!(
+            core.refresh_local_saved_session(&id, &a.session_id)
+                .unwrap_err()
+                .code,
+            "sessionMissing"
+        );
+    }
+
+    #[test]
+    fn committed_move_refresh_keeps_the_original_writer_and_rejects_a_substitute() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        core.create_library(&root).unwrap();
+        let original = core.create_note_fixture(&root, &root, "Old").unwrap();
+        let producer = core.sessions[&original.session_id]
+            .draft_producer_id
+            .clone();
+        core.persist_draft(&original.session_id, "pending before move")
+            .unwrap();
+        let receipt = operate(
+            &mut core,
+            &root,
+            OperationIntent::RenameNode {
+                source: display(&root.join("Old")),
+                name: "New".into(),
+            },
+        );
+        let moved = core
+            .refresh_local_operation_session(&receipt.operation_id, &original.session_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(moved.session_id, original.session_id);
+        assert_eq!(core.sessions[&moved.session_id].draft_producer_id, producer);
+        core.persist_draft(&original.session_id, "late input after move")
+            .unwrap();
+        let replay = core
+            .refresh_local_operation_session(&receipt.operation_id, &original.session_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(replay.base_id, moved.base_id);
+        assert_eq!(
+            replay.recovered_draft.as_deref(),
+            Some("late input after move")
+        );
+        assert!(replay.recovered_draft_variants.is_empty());
+        let original_bytes = fs::read(&moved.path).unwrap();
+        let retained = temp.path().join("retained.typ");
+        fs::rename(&moved.path, &retained).unwrap();
+        fs::write(&moved.path, &original_bytes).unwrap();
+        let draft = core
+            .current_session_draft_record(&original.session_id)
+            .unwrap()
+            .unwrap()
+            .1;
+        assert!(
+            core.refresh_local_operation_session(&receipt.operation_id, &original.session_id)
+                .is_err()
+        );
+        assert_eq!(
+            core.current_session_draft_record(&original.session_id)
+                .unwrap()
+                .unwrap()
+                .1,
+            draft
+        );
+        assert_eq!(fs::read(retained).unwrap(), original_bytes);
+    }
+    #[test]
     fn old_local_writer_reopen_rejects_same_bytes_substitute_and_missing_or_hosted_session() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("ordinary.typ");
@@ -323,7 +545,161 @@ impl Core {
             self.sessions.remove(&document.session_id);
             return Err(unavailable());
         }
+        self.refresh_original_session(session_id, document, false)
+    }
+
+    // Keep the existing writer. No producer is transferred to a new Session,
+    // and no receipt grants authority to adopt another surface's input.
+    fn refresh_original_session(
+        &mut self,
+        session_id: &str,
+        mut document: OpenedDocument,
+        committed_basis_change: bool,
+    ) -> Result<OpenedDocument> {
+        let original = self.sessions[session_id].clone();
+        let mut refreshed = self.sessions[&document.session_id].clone();
+        if original.stamp.identity != refreshed.stamp.identity
+            || original.node_id != refreshed.node_id
+            || original.file_scope.as_ref().ok() != refreshed.file_scope.as_ref().ok()
+            || original.actor != refreshed.actor
+        {
+            self.sessions.remove(&document.session_id);
+            return Err(CoreError::new(
+                "sourceIdentityChanged",
+                UiMessage::error_core_original_delivery_original_open_file_unavailable(),
+            ));
+        }
+        let unchanged = original.stamp == refreshed.stamp && original.bytes == refreshed.bytes;
+        if !unchanged && !committed_basis_change {
+            // An external edit is an independent comparison result, not
+            // consent to rebase the original writer or its pending input.
+            return Ok(document);
+        }
+        if unchanged {
+            refreshed.base_id = original.base_id.clone();
+            document.base_id = original.base_id.clone();
+        }
+        self.sessions.remove(&document.session_id);
+        self.sessions.insert(
+            session_id.to_owned(),
+            Session {
+                draft_producer_id: original.draft_producer_id,
+                draft_input: original.draft_input,
+                draft_witness: original.draft_witness,
+                conflicting_draft: original.conflicting_draft,
+                ..refreshed
+            },
+        );
+        document.session_id = session_id.to_owned();
         Ok(document)
+    }
+
+    /// Refresh the active author of this exact ordinary save. Independent
+    /// result lookup and SaveAs continue to deliver independent Sessions.
+    pub fn refresh_local_saved_session(
+        &mut self,
+        id: &str,
+        session_id: &str,
+    ) -> Result<(String, OpenedDocument)> {
+        self.sync_local_owner()?;
+        self.check_actor_session(session_id)?;
+        valid_operation_id(id)?;
+        let plan = self.operations.get(id).ok_or_else(|| {
+            CoreError::new("operationMissing", UiMessage::error_reopen_file_session())
+        })?;
+        self.validate_file_save_plan(plan)?;
+        if plan.kind != "save" || plan.file_save.as_ref().unwrap().session_id != session_id {
+            return Err(CoreError::new(
+                "operationConflict",
+                UiMessage::error_core_original_scope_operation_transaction_identity_or_kind_differs(
+                ),
+            ));
+        }
+        let (source, document) = self.reopen_local_save(id)?;
+        Ok((
+            source,
+            self.refresh_original_session(session_id, document, false)?,
+        ))
+    }
+
+    /// Refresh only a live writer captured by this original transaction. Late
+    /// writes still use that same producer; generic replay never acquires it.
+    pub fn refresh_local_operation_session(
+        &mut self,
+        id: &str,
+        session_id: &str,
+    ) -> Result<Option<OpenedDocument>> {
+        self.sync_local_owner()?;
+        valid_operation_id(id)?;
+        let original = self.sessions.get(session_id).ok_or_else(|| {
+            CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
+        })?;
+        let original_path = self
+            .operations
+            .get(id)
+            .and_then(|plan| plan.transaction.as_ref())
+            .and_then(|transaction| {
+                transaction
+                    .files
+                    .iter()
+                    .find(|file| file.stamp.identity == original.stamp.identity)
+                    .map(|file| {
+                        (
+                            transaction.relocated_path(&file.path),
+                            file.stamp == original.stamp && file.bytes == original.bytes,
+                        )
+                    })
+                    .or_else(|| {
+                        transaction.relocations().into_iter().find_map(|step| {
+                            if original.node_id.is_some()
+                                && *step.leaf_identity == original.stamp.identity
+                            {
+                                Some((display(&Path::new(step.target).join(step.new_leaf)), false))
+                            } else {
+                                step.members
+                                    .iter()
+                                    .find(|member| {
+                                        member.identity == original.stamp.identity
+                                            && member.node_id.is_some()
+                                            && member.node_id == original.node_id
+                                    })
+                                    .map(|member| {
+                                        (
+                                            display(
+                                                &Path::new(step.target).join(&member.relative_path),
+                                            ),
+                                            false,
+                                        )
+                                    })
+                            }
+                        })
+                    })
+            });
+        let Some((original_path, captured_basis)) = original_path else {
+            return Ok(None);
+        };
+        self.check_actor_session(session_id)?;
+        let scope = original.file_scope.clone()?;
+        self.validate_original_input_scope(&scope)?;
+        let document = self.reopen_local_operation_node(id, &original_path)?;
+        let refreshed = &self.sessions[&document.session_id];
+        let changed = refreshed.stamp != self.sessions[session_id].stamp
+            || refreshed.bytes != self.sessions[session_id].bytes;
+        let committed_basis_change = if changed && captured_basis {
+            match self.read_observation_facts(id) {
+                Ok(facts) => facts.iter().any(|fact| {
+                    fact.stamp == refreshed.stamp && fact.hash == hash(&refreshed.bytes)
+                }),
+                Err(error) => {
+                    self.sessions.remove(&document.session_id);
+                    return Err(error);
+                }
+            }
+        } else {
+            false
+        };
+        self.refresh_original_session(session_id, document, committed_basis_change)
+            .map(Some)
     }
     /// Verify the complete original source-save intent without a live Session
     /// and without executing save again. The original Plan owns its path.
@@ -492,6 +868,7 @@ impl Core {
             || opened.workspace_id.as_ref() != Some(&birth.workspace_id)
             || opened.kind != "managed"
         {
+            self.sessions.remove(&opened.session_id);
             return Err(unavailable());
         }
         Ok(opened)

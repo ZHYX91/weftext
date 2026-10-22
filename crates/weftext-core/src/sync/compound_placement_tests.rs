@@ -95,6 +95,22 @@ fn save(core: &mut Core, root: &Path, directory: &Path, suffix: &str) {
     let doc = core
         .open(source_path(root, directory), Some(root.into()))
         .unwrap();
+    if doc.recovered_draft_conflict {
+        // This sender fixture starts a reviewed new head from disk. Only
+        // already committed clean proposals may be retired by that decision;
+        // real pending input would invalidate the fixture rather than vanish.
+        let retained = core
+            .current_session_draft(&doc.session_id)
+            .unwrap()
+            .unwrap();
+        assert!(
+            std::iter::once(retained.proposal())
+                .chain(retained.alternatives)
+                .all(|proposal| proposal.base_known && proposal.source == proposal.base_source)
+        );
+        core.resolve_draft(&doc.session_id, "discardRecovered", None)
+            .unwrap();
+    }
     core.save(SaveRequest {
         session_id: doc.session_id,
         base_id: doc.base_id,
@@ -1958,6 +1974,13 @@ fn compound_exchange_explicit_actor_draft_resolution_does_not_resurrect_consumed
             assert_eq!(opened.node_id.as_deref(), Some(left_id.as_str()));
             assert_eq!(opened.recovered_draft.as_deref(), Some(merged.as_str()));
             assert!(!opened.recovered_draft_conflict);
+            // This is the explicitly reviewed merged input after restart,
+            // continued through the complete-record CAS, not a fresh producer.
+            core.resume_recovered_draft(crate::ResumeDraftRequest {
+                session_id: opened.session_id.clone(),
+                record_witness: opened.recovered_draft_witness.clone().unwrap(),
+                recovered_source: merged.clone(),
+            })?;
             Ok(core
                 .save(SaveRequest {
                     session_id: opened.session_id,

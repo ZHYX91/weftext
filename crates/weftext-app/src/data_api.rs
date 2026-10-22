@@ -2905,6 +2905,7 @@ async fn save_definition(
                 )
             })?;
         let operation_id = req.operation_id.clone();
+        let session_id = req.session_id.clone();
         let outcome = core.save(SaveRequest {
             session_id: req.session_id,
             base_id: req.base_id,
@@ -2912,7 +2913,7 @@ async fn save_definition(
             operation_id: req.operation_id,
         })?;
         let document = core
-            .reopen_local_save(&operation_id)
+            .refresh_local_saved_session(&operation_id, &session_id)
             .map(|(_, document)| document);
         Ok((document, definition, outcome, patch))
     })
@@ -3014,9 +3015,11 @@ fn replay_saved_definition(
             UiMessage::error_api_data_original_committed_source_mismatch(),
         ));
     }
-    let document = core
-        .reopen_local_save(&req.operation_id)
-        .map(|(_, document)| document);
+    let document = match core.refresh_local_saved_session(&req.operation_id, &req.session_id) {
+        Err(error) if error.code == "sessionMissing" => core.reopen_local_save(&req.operation_id),
+        result => result,
+    }
+    .map(|(_, document)| document);
     Ok(Some((document, definition, outcome, patch)))
 }
 
@@ -4547,16 +4550,18 @@ mod tests {
         let key = first["definition"]["key"].as_str().unwrap().to_string();
         let old_revision = first["definitionRevision"].as_str().unwrap().to_string();
         let first_document = &first["document"];
-        let Json(second) = ok(save_definition(
-            State(state.clone()),
-            crate::RequestJson(definition_request(
-                first_document,
-                first_document["source"].as_str().unwrap().into(),
-                Some(key.clone()),
-                "done",
-            )),
-        )
-        .await);
+        assert_eq!(first_document["sessionId"], document["sessionId"]);
+        let mut second_request = definition_request(
+            first_document,
+            first_document["source"].as_str().unwrap().into(),
+            Some(key.clone()),
+            "done",
+        );
+        // Applying the first committed patch advances this same editor's
+        // source generation; a fresh Session must not hide a stale serial.
+        second_request.serial = 2;
+        let Json(second) =
+            ok(save_definition(State(state.clone()), crate::RequestJson(second_request)).await);
         assert_ne!(second["definitionRevision"], old_revision);
         let Json(current) = ok(run_definition(
             State(state.clone()),
@@ -5220,7 +5225,7 @@ mod tests {
         std::fs::rename(&path, &retained).unwrap();
         std::fs::write(&path, &source_bytes).unwrap();
         let unavailable =
-            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone()).await;
+            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone(), None).await;
         assert_eq!(unavailable["status"], "committed");
         assert_eq!(unavailable["operationId"], id);
         assert_eq!(unavailable["baseId"], fact["baseId"]);
@@ -5236,7 +5241,7 @@ mod tests {
         std::fs::rename(&path, &substitute).unwrap();
         std::fs::rename(&retained, &path).unwrap();
         let delivered =
-            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone()).await;
+            crate::knowledge_api::file_save_delivery(&state, id.clone(), fact.clone(), None).await;
         assert_eq!(delivered["status"], "committed");
         assert_eq!(delivered["operationId"], id);
         assert_eq!(delivered["baseId"], fact["baseId"]);
@@ -5274,12 +5279,13 @@ mod tests {
         )
         .await);
         let document = &saved["document"];
-        let bad = definition_request(
+        let mut bad = definition_request(
             document,
             document["source"].as_str().unwrap().into(),
             None,
             "open",
         );
+        bad.serial = 2;
         let id = bad.operation_id.clone();
         assert!(
             save_definition(State(state.clone()), crate::RequestJson(bad))
@@ -5300,6 +5306,7 @@ mod tests {
             "open",
         );
         next.label = "weftext-query-distinct".into();
+        next.serial = 2;
         let Json(saved) = ok(save_definition(State(state.clone()), crate::RequestJson(next)).await);
         assert_eq!(saved["status"], "committed");
         let destination = Path::new(&root)

@@ -265,7 +265,7 @@ mod tests {
             opened["source"]
                 .as_str()
                 .unwrap()
-                .contains("An authored fragment")
+                .contains(r"An\u{20}authored\u{20}fragment")
         );
         assert_eq!(
             inner.file(resource).unwrap().expected_node,

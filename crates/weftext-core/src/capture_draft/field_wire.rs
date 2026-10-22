@@ -32,7 +32,12 @@ pub(super) fn value_path<'de, D: serde::Deserializer<'de>>(
 pub(super) fn valid_native<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> std::result::Result<weftext_data::NativeValue, D::Error> {
-    let raw = Box::<RawValue>::deserialize(deserializer)?;
+    // Internally tagged Capture variants are buffered by Serde before this
+    // field is decoded. Keep strict duplicate checks without requiring the
+    // raw-text-only RawValue deserializer inside that buffered representation.
+    let value = weftext_data::deserialize_unique_json(deserializer)?;
+    let raw = RawValue::from_string(serde_json::to_string(&value).map_err(D::Error::custom)?)
+        .map_err(D::Error::custom)?;
     let mut nodes = 0;
     let mut bytes = 0;
     let mut context = Context {
@@ -43,7 +48,7 @@ pub(super) fn valid_native<'de, D: serde::Deserializer<'de>>(
         incomplete: false,
     };
     native(&raw, &mut Vec::new(), 0, &mut context).map_err(D::Error::custom)?;
-    serde_json::from_str(raw.get()).map_err(D::Error::custom)
+    serde_json::from_value(value).map_err(D::Error::custom)
 }
 impl<'de> Deserialize<'de> for Members {
     fn deserialize<D: serde::Deserializer<'de>>(

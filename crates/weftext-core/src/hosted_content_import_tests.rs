@@ -66,7 +66,13 @@ fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_origi
         .iter()
         .find(|loss| loss["code"] == "generatedBibliographyNotInstalled")
         .unwrap();
-    assert!(loss["message"].as_str().unwrap().contains("不安装"));
+    let explanation: UiMessage = serde_json::from_value(loss["explanation"].clone()).unwrap();
+    assert!(
+        explanation
+            .render(weftext_messages::UiLocale::ZhCn)
+            .contains("不安装")
+    );
+    assert!(loss.get("message").is_none());
     let public = serde_json::to_string(&prepared).unwrap();
     for secret in [
         "PRIVATE_SCHEMA_PATH",

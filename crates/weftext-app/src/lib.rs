@@ -776,9 +776,10 @@ async fn save(
     RequestJson(req): RequestJson<SaveRequest>,
 ) -> ApiResult {
     let id = req.operation_id.clone();
+    let session = req.session_id.clone();
     let output = value(core_call(&state, move |c| c.save(req)).await?)?;
     Ok(Json(
-        knowledge_api::file_save_delivery(&state, id, output).await,
+        knowledge_api::file_save_delivery(&state, id, output, Some(session)).await,
     ))
 }
 async fn save_as(
@@ -788,7 +789,7 @@ async fn save_as(
     let id = req.operation_id.clone();
     let output = value(core_call(&state, move |c| c.save_as(req)).await?)?;
     Ok(Json(
-        knowledge_api::file_save_delivery(&state, id, output).await,
+        knowledge_api::file_save_delivery(&state, id, output, None).await,
     ))
 }
 async fn draft(

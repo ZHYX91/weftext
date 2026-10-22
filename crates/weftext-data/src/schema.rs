@@ -1829,19 +1829,17 @@ pub fn compare_native(a: &NativeValue, b: &NativeValue) -> Result<std::cmp::Orde
 /// unchanged; callers retain original bytes for exact author provenance.
 pub fn parse_unique_json(bytes: &[u8]) -> Result<Value> {
     let parsed: UniqueJson = serde_json::from_slice(bytes)?;
-    if let Some(issue) = parsed.issue {
-        return Err(match issue {
-            UniqueJsonIssue::DuplicateKey { key } => {
-                DataError::new(UiMessage::error_data_schema_json_key_duplicate(
-                    weftext_messages::params::ErrorDataSchemaJsonKeyDuplicate { key },
-                ))
-            }
-            UniqueJsonIssue::NonfiniteNumber => {
-                DataError::new(UiMessage::error_data_schema_json_number_nonfinite())
-            }
-        });
-    }
-    Ok(parsed.value)
+    parsed.into_checked()
+}
+
+/// The same strict JSON policy for buffered enum fields and in-memory values.
+/// These Serde inputs cannot provide serde_json's raw-text-only newtype port.
+pub fn deserialize_unique_json<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Value, D::Error> {
+    UniqueJson::deserialize(deserializer)?
+        .into_checked()
+        .map_err(serde::de::Error::custom)
 }
 
 struct UniqueJson {
@@ -1853,6 +1851,21 @@ enum UniqueJsonIssue {
     NonfiniteNumber,
 }
 impl UniqueJson {
+    fn into_checked(self) -> Result<Value> {
+        if let Some(issue) = self.issue {
+            return Err(match issue {
+                UniqueJsonIssue::DuplicateKey { key } => {
+                    DataError::new(UiMessage::error_data_schema_json_key_duplicate(
+                        weftext_messages::params::ErrorDataSchemaJsonKeyDuplicate { key },
+                    ))
+                }
+                UniqueJsonIssue::NonfiniteNumber => {
+                    DataError::new(UiMessage::error_data_schema_json_number_nonfinite())
+                }
+            });
+        }
+        Ok(self.value)
+    }
     fn plain(value: Value) -> Self {
         Self { value, issue: None }
     }

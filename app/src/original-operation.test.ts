@@ -11,6 +11,18 @@ test("ordinary postcommit error recovers the original receipt without another au
   const result=await submitOriginal(transport((path,body)=>{calls.push(path);if(path==="/save")throw Object.assign(new Error("draft delivery failed"),{code:"invalidState"});assert.deepEqual(body,{operationId:"original"});return {operationId:"original",status:"committed",baseId:"new"};}),"/save",payload,"save");
   assert.equal(result.status,"committed");assert.deepEqual(calls,["/save","/api/operations/status"]);
 });
+
+test("ordinary Save reconciliation identifies only its frozen live writer", async () => {
+  for (const kind of ["save", "saveAs"]) {
+    const frozen = { ...payload, sessionId: "original-writer" };
+    const result = await submitOriginal(transport((path, body) => {
+      assert.equal(path, "/api/operations/status");
+      assert.deepEqual(body, { operationId: "original", ...(kind === "save" ? { sessionId: "original-writer" } : {}) });
+      return { operationId: "original", status: "committed" };
+    }), "/save", frozen, kind, true);
+    assert.equal(result.status, "committed");
+  }
+});
 test("missing original releases only after the durable fence; damaged/unknown results preserve it", async () => {
   const calls:string[]=[];
   await assert.rejects(submitOriginal(transport((path,body)=>{calls.push(path);if(path==="/save")throw new Error("rejected");if(path.endsWith("status"))return {operationId:"original",status:"unknown"};assert.deepEqual(body,{operationId:"original",requestKind:"save",wireDigest:digest(JSON.stringify(payload))});return {operationId:"original",status:"resolved"};}),"/save",payload,"save"),TerminatedAttempt);

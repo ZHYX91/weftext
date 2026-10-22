@@ -431,19 +431,27 @@ fn resource_collection_delayed_original_first_import_cannot_reset_newly_lost_man
 fn resource_collection_missing_observation_cannot_erase_original_empty_initialization() {
     let mut f = Fixture::new();
     let plan = f.write_manifest(serde_json::json!({"version":1,"resources":[]}));
+    let original_commit = fs::read(f.core.journal_path(&plan.operation_id, "commit")).unwrap();
     fs::remove_file(f.core.journal_path(&plan.operation_id, "observations")).unwrap();
     fs::remove_file(f.manifest()).unwrap();
     f.restart();
-    assert_eq!(
-        f.collection().err().unwrap().code,
-        "resourceManifestUnavailable"
-    );
+    assert_eq!(f.collection().err().unwrap().code, "identityPending");
     assert_eq!(
         f.core
             .prepare_import_resource(&f.root, &f.source, "new.bin", vec![1], &fresh())
             .unwrap_err()
             .code,
         "resourceManifestUnavailable"
+    );
+    assert!(!f.manifest().exists());
+    assert!(
+        !f.core
+            .journal_path(&plan.operation_id, "observations")
+            .exists()
+    );
+    assert_eq!(
+        fs::read(f.core.journal_path(&plan.operation_id, "commit")).unwrap(),
+        original_commit
     );
 }
 
