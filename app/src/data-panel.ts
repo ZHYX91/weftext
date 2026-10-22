@@ -4,6 +4,10 @@ import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original
 import type { OpenedDocument } from "./types";
 import { TagTree } from "./tag-tree";
 import { tagPicker } from "./tag-picker";
+import { reminderForm, type ReminderRawInput } from "./reminder-form";
+import { nativeControlAddress } from "./native-control-identity";
+import { newReminder } from "./reminder-values";
+import { ReminderDeviceControl } from "./reminder-device-control";
 export type NativeValue =
   | { kind: "none" }
   | { kind: "text" | "int" | "float" | "decimal" | "date" | "time" | "localDatetime" | "duration"; value: string }
@@ -64,7 +68,7 @@ export interface PanelHost {
 export const fieldNames: Record<string, string> = { status: "状态", due: "截止日期", start: "开始日期", priority: "优先级", project: "项目", completed_at: "完成时间", title: "标题", names: "姓名 / 名称", phones: "电话", emails: "邮箱", addresses: "地址", websites: "网站", accounts: "账号", tags: "标签", publication: "出版与引用", contributors: "作者与贡献者", resources: "资源", note: "备注", notes: "备注", label: "标签", number: "号码", value: "值", text: "文字", ref: "笔记引用", kind: "种类", role: "角色", agent: "作者", credited_as: "署名", date: "日期", amount: "金额", currency: "币种", unit: "单位", during: "有效期间", source: "来源", validity: "有效期间", period: "周期", range: "时间区间", event: "事件", dependency: "依赖任务" };
 export const typeNames: Record<string, string> = { person: "人员", organization: "组织", org: "组织", task: "任务", project: "项目", work: "作品", paper: "论文", event: "事件", period: "周期笔记", "period-note": "周期笔记", range: "区间笔记", "range-note": "区间笔记" };
 export const cellLabels: Record<Cell["state"], string> = { value: "已有值", absent: "未填写", null: "明确为空（none）", invalid: "值无效", unavailable: "不可用 / 计算值" };
-const commonFields = new Set(["title", "names", "status", "due", "project", "priority", "phones", "emails", "tags", "publication", "period", "range"]);
+const commonFields = new Set(["title", "names", "status", "due", "reminder", "project", "priority", "phones", "emails", "tags", "publication", "period", "range"]);
 
 export function resolveShape(shape: Shape, schema: DataSchema, seen = new Set<string>()): Shape {
   if (shape.kind !== "use") return shape;
@@ -250,7 +254,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
 
 interface FieldDraft { value: NativeValue; changed: boolean; original?: string; binding?: string; rawInputs?: Record<string, string> }
 export function nativeFormControls(wrapper: HTMLElement): [string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement][] {
-  const seen = new Map<string, number>(); return [...wrapper.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")].map(control => { const label = `${control.tagName}:${control.getAttribute("aria-label") ?? ""}`, ordinal = seen.get(label) ?? 0; seen.set(label, ordinal + 1); return [`${label}:${ordinal}`, control]; });
+  const seen = new Map<string, number>(); return [...wrapper.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea")].map(control => { const label = `${control.tagName}:${control.getAttribute("aria-label") ?? ""}`, ordinal = seen.get(label) ?? 0; seen.set(label, ordinal + 1); return [control.dataset.controlKey ?? `${label}:${ordinal}`, control]; });
 }
 export class DataPanel {
   readonly element = ui("aside", "data-panel");
@@ -270,12 +274,14 @@ export class DataPanel {
   private advancedOpen = false;
   private renderedIdentity: string | null = null;
   private draftIdentity: string | null = null;
-  constructor(private readonly host: PanelHost) { this.element.setAttribute("aria-label", "笔记属性"); this.element.append(ui("p", "data-empty", "打开笔记后查看属性。")); this.element.addEventListener("compositionstart", () => { this.composing = true; }); this.element.addEventListener("compositionend", () => { this.composing = false; requestAnimationFrame(() => { if (!this.composing && this.pendingRender) { this.pendingRender = false; this.render(); } }); }); }
+  private reminderDisposers: (() => void)[] = [];
+  private readonly reminderDevice: ReminderDeviceControl;
+  constructor(private readonly host: PanelHost) { this.reminderDevice = new ReminderDeviceControl(host); this.element.setAttribute("aria-label", "笔记属性"); this.element.append(ui("p", "data-empty", "打开笔记后查看属性。")); this.element.addEventListener("compositionstart", () => { this.composing = true; }); this.element.addEventListener("compositionend", () => { this.composing = false; requestAnimationFrame(() => { if (!this.composing && this.pendingRender) { this.pendingRender = false; this.render(); } }); }); }
   async refresh(): Promise<void> {
     this.rememberInputs();
     const basis = this.host.getDocument(); const generation = ++this.generation;
     const identity = (doc: DocumentBasis) => JSON.stringify([doc.workspaceId, doc.nodeId ?? doc.path]);
-    if (!basis) { if (this.basis) this.draftCache.set(identity(this.basis), this.drafts); this.basis = null; this.projection = null; this.draftIdentity = this.renderedIdentity = null; this.element.replaceChildren(ui("p", "data-empty", "打开笔记后查看属性。")); return; }
+    if (!basis) { if (this.basis) this.draftCache.set(identity(this.basis), this.drafts); this.basis = null; this.projection = null; this.draftIdentity = this.renderedIdentity = null; this.reminderDisposers.splice(0).forEach(dispose=>dispose()); this.reminderDevice.retire(); this.element.replaceChildren(ui("p", "data-empty", "打开笔记后查看属性。")); return; }
     if (!this.basis || identity(this.basis) !== identity(basis)) { if (this.basis) this.draftCache.set(identity(this.basis), this.drafts); this.drafts = this.draftCache.get(identity(basis)) ?? new Map(); }
     this.draftIdentity = identity(basis);
     this.basis = { ...basis }; this.element.setAttribute("aria-busy", "true");
@@ -304,6 +310,7 @@ export class DataPanel {
     this.renderSchemaSettings();
     const filter = ui("input", "data-input"); filter.type = "search"; filter.value = this.filter; filter.placeholder = "搜索属性…"; filter.id = "property-filter"; filter.setAttribute("aria-label", "搜索属性"); filter.oninput = () => { this.filter = filter.value; this.renderFields(); }; this.element.append(filter);
     this.element.append(ui("div", "data-fields")); this.renderFields();
+    this.reminderDevice.retire(); if (fieldsForTypes(schema,projection.types).some(item=>item.field.id==="tasks/reminder")) {this.element.append(this.reminderDevice.element);void this.reminderDevice.refresh(this.basis);}
     if (projection.unknownFields.length) { const unknown = ui("details", "data-unknown-fields"); unknown.append(ui("summary", "", `未知属性（${projection.unknownFields.length}）· 保留原文`)); for (const item of projection.unknownFields) { unknown.append(ui("strong", "", item.key), ui("pre", "", item.raw)); } this.element.append(unknown); }
     if (projection.diagnostics.length) { const diagnostics = ui("details", "data-diagnostics"); diagnostics.append(ui("summary", "", `${projection.diagnostics.length} 项字段提示`)); projection.diagnostics.forEach(item => diagnostics.append(ui("p", "data-warning", diagnosticText(item)))); this.element.append(diagnostics); }
     this.element.append(ui("p", "data-help", "应用属性修改只更新当前草稿；保存后写入文件。任务详情使用同一篇正文。"));
@@ -321,7 +328,7 @@ export class DataPanel {
   }
   private renderFields(): void {
     if (this.composing) { this.pendingRender = true; return; }
-    const target = this.element.querySelector<HTMLElement>(".data-fields"); if (!target || !this.schema || !this.projection) return; this.rememberInputs(); const oldAdvanced = target.querySelector<HTMLDetailsElement>(".advanced"); if (oldAdvanced) this.advancedOpen = oldAdvanced.open; target.replaceChildren();
+    const target = this.element.querySelector<HTMLElement>(".data-fields"); if (!target || !this.schema || !this.projection) return; this.rememberInputs(); this.reminderDisposers.splice(0).forEach(dispose=>dispose()); const oldAdvanced = target.querySelector<HTMLDetailsElement>(".advanced"); if (oldAdvanced) this.advancedOpen = oldAdvanced.open; target.replaceChildren();
     const schema = this.schema; const declared = fieldsForTypes(schema, this.projection.types); const ids = new Set(declared.map(item => item.field.id));
     const basis = this.basis;
     for (const item of this.projection.fields) if (!ids.has(item.fieldId)) { const field = schema.fields.find(field => field.id === item.fieldId); if (field) declared.push({ field, required: false }); }
@@ -334,13 +341,32 @@ export class DataPanel {
       const title = ui("div", "data-property-title"); title.append(ui("h3", "", `${fieldNames[field.key] ?? field.key}${required ? " *" : ""}`));
       const pin = action(this.pinned.has(field.id) ? "取消固定" : "固定", () => { if (this.pinned.has(field.id)) this.pinned.delete(field.id); else this.pinned.add(field.id); localStorage.setItem(`weftext-fields:${this.basis!.workspaceId ?? this.basis!.root}`, JSON.stringify([...this.pinned])); this.renderFields(); }, "data-button compact"); pin.setAttribute("aria-pressed", String(this.pinned.has(field.id))); title.append(pin); wrapper.append(title, ui("p", `data-cell-state ${cell.state}`, cellLabels[cell.state]));
       if (this.projection.readOnly || cell.state === "unavailable" || cell.state === "invalid" || projected?.writable === false) { wrapper.append(ui("p", "data-help", cell.reason || "当前字段没有安全写入资格。请恢复可写会话或查看原生源码。")); if (cell.value) wrapper.append(ui("p", "data-readonly-value", formatNativeValue(cell.value))); if (projected?.raw) wrapper.append(ui("pre", "data-readonly-source", projected.raw)); cell.diagnostics?.forEach(item => wrapper.append(ui("p", "data-warning", diagnosticText(item)))); }
-      else if (cell.state === "absent" && !this.drafts.has(field.key)) wrapper.append(action("填写此属性", () => { this.drafts.set(field.key, { value: emptyNativeValue(field.shape, schema), changed: true, original: JSON.stringify(cell) }); this.renderFields(); }));
+      else if (cell.state === "absent" && !this.drafts.has(field.key)) wrapper.append(action("填写此属性", () => { this.drafts.set(field.key, { value: field.id==="tasks/reminder"?newReminder("absolute"):emptyNativeValue(field.shape, schema), changed: true, original: JSON.stringify(cell) }); this.renderFields(); }));
       else {
         const draft: FieldDraft = this.drafts.get(field.key) ?? { value: cell.value ?? { kind: "none" } as NativeValue, changed: false, original: JSON.stringify(cell) }; const binding = JSON.stringify([field.id, field.shape, schema.definitions]); draft.binding ??= binding; const schemaChanged = draft.binding !== binding; if (!draft.changed) { draft.value = cell.value ?? { kind: "none" }; draft.original = JSON.stringify(cell); draft.binding = binding; } this.drafts.set(field.key, draft); const conflicted = draft.changed && (draft.original !== JSON.stringify(cell) || schemaChanged);
         if (conflicted) wrapper.append(ui("p", "data-warning", "原属性已变化；表单输入仍保留。请核对新属性并放弃旧表单修改后重新填写。"));
         const controls = ui("div", "data-property-actions"); const apply = action("应用到草稿", async () => { if (!wrapper.querySelector<HTMLInputElement>(":invalid")) await this.applyField(field.key, draft.value, basis); else wrapper.querySelector<HTMLInputElement>(":invalid")?.reportValidity(); }, "data-button primary"); apply.disabled = !draft.changed || conflicted;
         if (schemaChanged && draft.changed) wrapper.append(ui("p", "data-warning", "原字段身份或形状已变化；未把输入绑定到同名新字段。请复制保留输入或放弃表单修改后重填。"), ui("pre", "data-readonly-source", JSON.stringify({ value: draft.value, rawInputs: draft.rawInputs }, null, 2)));
-        else { wrapper.append(valueEditor(field.shape, draft.value, schema, next => { draft.value = next; draft.changed = true; apply.disabled = conflicted; }, fieldNames[field.key] ?? field.key, 0, this.references)); for (const [key, control] of this.formInputs(wrapper)) { if (draft.rawInputs && key in draft.rawInputs) { control.value = draft.rawInputs[key]; control.dispatchEvent(new Event("input", { bubbles: true })); } } }
+        else {
+          const changed = (next: NativeValue): void => { draft.value = next; draft.changed = true; apply.disabled = conflicted; };
+          if (field.id === "tasks/reminder") {
+            const form = reminderForm(draft.value, schema, changed, { fieldId: field.id, path: [] });
+            wrapper.append(form.element); this.reminderDisposers.push(form.dispose);
+            const raw: ReminderRawInput[] = [], retained: string[] = [];
+            for (const control of form.element.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select")) {
+              const address = nativeControlAddress(control);
+              if (!draft.rawInputs || !Object.hasOwn(draft.rawInputs, address.key)) continue;
+              const original = draft.rawInputs[address.key];
+              if (control instanceof HTMLInputElement) raw.push({ path: address.identity.path, role: address.role, text: original });
+              else if (control.value !== original) retained.push(original);
+            }
+            retained.push(...form.restoreRaw(raw).rejected.map(item => item.input.text));
+            if (retained.length) wrapper.append(ui("pre", "data-readonly-source", retained.join("\n")));
+          } else {
+            wrapper.append(valueEditor(field.shape, draft.value, schema, changed, fieldNames[field.key] ?? field.key, 0, this.references));
+            for (const [key, control] of this.formInputs(wrapper)) if (draft.rawInputs && key in draft.rawInputs) { control.value = draft.rawInputs[key]; control.dispatchEvent(new Event("input", { bubbles: true })); }
+          }
+        }
         controls.append(apply, action("放弃表单修改", () => { this.drafts.delete(field.key); this.renderFields(); }));
         if (field.nullable && draft.value.kind !== "none") controls.append(action("明确设为 none", () => { draft.value = { kind: "none" }; draft.changed = true; this.renderFields(); })); wrapper.append(controls);
       }
@@ -386,10 +412,13 @@ export class QuickCapture {
   private pending: Record<string, unknown> | null = null;
   private schema: DataSchema | null = null;
   private references = emptyReferences();
+  private reminderDisposers: (() => void)[] = [];
+  dispose(): void {this.reminderDisposers.splice(0).forEach(dispose=>dispose());}
   constructor(private readonly host: PanelHost, private context: CaptureContext) { this.element.setAttribute("aria-label", "快速记录"); }
   async initialize(): Promise<void> { try { const result = await this.host.request<DataSchema | { schema: DataSchema }>("/api/data/schema", { root: this.context.root }); this.schema = "schema" in result ? result.schema : result; this.render(); void loadFormReferences(this.host, this.context.root, this.references, this.element); } catch (error) { this.element.replaceChildren(ui("p", "data-warning", String(error)), action("重试", () => this.initialize())); } }
   updateContext(): void { const template = this.element.querySelector<HTMLButtonElement>(".capture-template-entry"); const help = this.element.querySelector<HTMLElement>(".capture-template-help"); if (!template || !help) return; const document = this.host.getDocument(); template.disabled = !this.host.openTemplates || !document?.nodeId || document.root !== this.context.root; help.textContent = template.disabled ? "打开本库笔记后可进入原生模板向导。当前可按类型创建第一篇笔记。" : "原生模板在同一资料库的模板向导中预览并创建；当前快速记录输入保留。"; }
   private render(): void {
+    this.dispose();
     if (!this.schema) return; const schema = this.schema; const form = ui("form", "capture-form"); form.append(ui("h2", "", "快速记录"));
     const template = action("选择原生模板并预览", async () => { try { await this.host.openTemplates?.(); } catch (error) { this.host.notify(error instanceof Error ? error.message : String(error), true); } }, "data-button capture-template-entry"); form.append(template, ui("p", "data-help capture-template-help"));
     const name = ui("input", "data-input"); name.required = true; name.placeholder = "笔记文件夹名称"; const parent = ui("input", "data-input"); parent.value = this.context.parent ?? this.context.root; parent.required = true;
@@ -398,9 +427,10 @@ export class QuickCapture {
     const type = ui("select", "data-input"); const ordinary = ui("option", "", "普通笔记"); ordinary.value = ""; type.append(ordinary); schema.types.forEach(item => { const alias = Object.entries(schema.aliases).find(([, id]) => id === item.id)?.[0] ?? item.id; const option = ui("option", "", typeNames[alias] ?? alias); option.value = alias; type.append(option); }); form.append(labelFor("笔记类型", type), type);
     const fields = ui("div", "capture-fields"); let values = new Map<string, NativeValue>(); form.append(fields);
     type.onchange = () => {
+      this.dispose();
       fields.replaceChildren(); values = new Map(); for (const { field, required } of fieldsForTypes(schema, type.value ? [type.value] : [])) {
         const container = required || commonFields.has(field.key) ? ui("section", "capture-property") : ui("details", "capture-property"); const heading = container instanceof HTMLDetailsElement ? ui("summary", "", fieldNames[field.key] ?? field.key) : ui("h3", "", `${fieldNames[field.key] ?? field.key}${required ? " *" : ""}`); container.append(heading);
-        const addEditor = (): void => { const value = emptyNativeValue(field.shape, schema); values.set(field.key, value); container.append(valueEditor(field.shape, value, schema, next => values.set(field.key, next), fieldNames[field.key] ?? field.key, 0, this.references)); };
+        const addEditor = (): void => { const value = field.id==="tasks/reminder"?newReminder("absolute"):emptyNativeValue(field.shape, schema); values.set(field.key, value);if(field.id==="tasks/reminder"){const form=reminderForm(value,schema,next=>values.set(field.key,next),{fieldId:field.id,path:[]});container.append(form.element);this.reminderDisposers.push(form.dispose);}else container.append(valueEditor(field.shape, value, schema, next => values.set(field.key, next), fieldNames[field.key] ?? field.key, 0, this.references)); };
         if (required) addEditor(); else { const add = action("填写", () => { add.remove(); addEditor(); }); container.append(add); } fields.append(container);
       }
     };
