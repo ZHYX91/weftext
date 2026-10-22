@@ -15,6 +15,8 @@ const sha = value => createHash('sha256').update(value).digest('hex'), pause = m
 const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(await readFile(new URL(import.meta.url))), personalInputHelperSha256: sha(await readFile(new URL('./_personal_input_browser.mjs', import.meta.url))), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), completed: false, cases: [], pageErrors: [], processes: [] };
 const tokens = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let base, localToken, local, server, browser;
+const pendingReleases = [];
+async function bounded(promise, label) { let timer; try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(Error(label + ' timeout')), 30000); })]); } finally { clearTimeout(timer); } }
 async function start(args, hosted = false) {
   const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }), record = { pid: child.pid, args: child.spawnargs.slice(1), stdout: '', stderr: '' }; result.processes.push(record);
   child.stdout.on('data', bytes => record.stdout += bytes.toString()); child.stderr.on('data', bytes => record.stderr += bytes.toString()); child.once('exit', (code, signal) => { record.exit = { code, signal }; });
@@ -87,10 +89,10 @@ try {
   {
     const { page, context } = await freshPage(), marker = 'OWN_RICH_WAITING_😀';
     await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 }); await page.getByRole('button', { name: 'V04 可视写作', exact: true }).click();
-    let observed; const pending = new Promise(resolve => observed = resolve); let release; const held = new Promise(resolve => release = resolve);
-    await page.route('**/api/hosted/editor/edit', async route => { const response = await route.fetch(); observed(); await held; await route.fulfill({ response }).catch(() => {}); });
-    const literal = page.getByRole('textbox', { name: '编辑段落文字', exact: true }).last(); await literal.click(); await literal.press('End'); await page.keyboard.insertText(marker); await pending;
-    await revoke(page); release(); await reauthorize(page); const row = await recoveryRow(page, marker); const pure = await row.locator('textarea').inputValue(); assert.ok(pure.includes(marker)); assert.ok(!pure.includes(secret));
+    let observed; const pending = new Promise(resolve => observed = resolve); let release; const held = new Promise(resolve => release = resolve); pendingReleases.push(release);
+    await page.route('**/api/hosted/editor/edit', async route => { try { const response = await route.fetch(); observed({ status: response.status() }); await held; await route.fulfill({ response }).catch(() => {}); } catch (error) { observed({ error: String(error) }); await route.abort('failed').catch(() => {}); } });
+    const literal = page.getByRole('textbox', { name: '编辑段落文字', exact: true }).last(); await literal.click(); await literal.press('End'); await page.keyboard.insertText(marker); assert.deepEqual(await bounded(pending, 'held native edit'), { status: 200 }); await assertOnlyOwn(page, marker, secret);
+    await revoke(page); await assertOnlyOwn(page, marker, secret); release(); await reauthorize(page); await assertOnlyOwn(page, marker, secret); const row = await recoveryRow(page, marker); const pure = await row.locator('textarea').inputValue(); assert.ok(pure.includes(marker)); assert.ok(!pure.includes(secret));
     await row.getByRole('button', { name: '核对原基线并恢复为草稿', exact: true }).click(); await row.getByRole('status').filter({ hasText: /未能准确映射|原目标或准确基线不同/ }).waitFor(); assert.equal(await source(page), initial);
     result.cases.push('held native rich result preserves only actual input and cannot reinstall old protected source or pretend automatic mapping'); await context.close();
   }
@@ -130,6 +132,7 @@ try {
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); throw error; }
 finally {
+  for (const release of pendingReleases) release();
   await browser?.close(); await stop(local); await stop(server); for (const process of result.processes) process.stdout = process.stdout.replace(/#token=\w+/g, '#token=[TEST credential redacted]');
   result.closeMethod = 'Owned browser.close, exact typed owner-stop receipts and actual original owner exits zero';
   await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, failure: result.failure }));
