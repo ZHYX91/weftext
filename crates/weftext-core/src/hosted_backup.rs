@@ -49,6 +49,7 @@ impl Core {
             ));
         }
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
@@ -201,6 +202,7 @@ impl Core {
         let destination = display(&absolute_path(destination)?);
         check_size(&serde_json::to_vec(&preview)?)?;
         let record = ActorOperation {
+            scope: self.actor_input_scope_for_root(&root)?,
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -220,7 +222,7 @@ impl Core {
         };
         journal::private_create(
             &self.actor_record(operation)?,
-            &Self::actor_operation_bytes(&record)?,
+            &self.actor_operation_bytes(&record)?,
         )?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("ownerBackupActorDurable")?;
@@ -266,6 +268,7 @@ impl Core {
         let mut record = match self.owner_backup_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -295,9 +298,9 @@ impl Core {
                 self.resolve_record(&record.core_operation_id, "cancelPrepared")?;
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_owner_backup_status(resource, operation)?
             .ok_or_else(feature::conflict)

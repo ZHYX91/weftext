@@ -1,11 +1,12 @@
-import { uiDisplayParameter } from "./ui-locale";
+import { disposeUiTree, joinUiText, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import "./history-panel.css";
 import { action, ui } from "./data-panel";
-import { HistoryController, historySourceDiff, historyTimeLabel, type HistoryContext, type HistoryList, type HistoryComparison, type HistoryRestoreBasis, type HistorySource, type SavedHistoryComparison, type DraftHistoryComparison } from "./history-state";
+import { HistoryController, historyRecoveryIssueUiText, historySourceDiff, historyTimeLabel, type HistoryContext, type HistoryList, type HistoryComparison, type HistoryRestoreBasis, type HistorySource, type SavedHistoryComparison, type DraftHistoryComparison } from "./history-state";
 import { hostedCachePrefix } from "./hosted-state";
-import { hostedHistoryPending, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryContext, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
+import { hostedHistoryPending, hostedHistoryStatus, resumeHostedHistoryRecord, unavailableCommittedHistory, type HostedHistoryContext, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import type { EmbeddedQueryBasis } from "./embedded-query";
+import { apiErrorUiText, decodeApiError } from "./api-error";
 type Request = <T>(path: string, body: unknown) => Promise<T>;
 export interface HostedHistoryHost {
     context(): HostedHistoryContext | null;
@@ -37,6 +38,7 @@ export class HostedHistory {
     private unreadable?: string;
     private dialog?: HTMLDialogElement;
     private message = ui("p", "history-status");
+    private notice: UiText = "";
     private content = ui("section");
     private operations = ui("section");
     constructor(private host: HTMLElement, private request: Request, private source: HostedHistoryHost) { this.message.setAttribute("role", "status"); this.clear(false); }
@@ -52,11 +54,15 @@ export class HostedHistory {
         this.busy = false;
         this.shown = false;
         this.unreadable = undefined;
+        if (this.dialog) disposeUiTree(this.dialog);
         this.dialog?.remove();
         this.dialog = undefined;
+        disposeUiTree(this.content);
+        disposeUiTree(this.operations);
+        disposeUiTree(this.host);
         this.content.replaceChildren();
         this.operations.replaceChildren();
-        setUiText(this.message, "");
+        this.setNotice("");
         this.host.replaceChildren();
         this.host.hidden = true;
         if (removeCache)
@@ -74,7 +80,7 @@ export class HostedHistory {
                 const records = JSON.parse(raw) as HostedHistoryRecord[];
                 if (!Array.isArray(records) || records.some(record => !record.request?.operationId || !record.request.resource || !record.basis || record.basis.resource !== record.request.resource || typeof record.request.source !== "string" || typeof record.basis.selectedSource !== "string"))
                     throw new Error();
-                this.records = records.map(record => ({ ...record, status: undefined }));
+                this.records = records.map(resumeHostedHistoryRecord);
                 this.selectedOperation = this.records[0]?.request.operationId ?? "";
             }
         }
@@ -107,6 +113,7 @@ export class HostedHistory {
             this.controller = undefined;
             this.note = undefined;
             this.shown = false;
+            if (this.dialog) disposeUiTree(this.dialog);
             this.dialog?.remove();
             this.dialog = undefined;
         }
@@ -129,7 +136,7 @@ export class HostedHistory {
             this.controller.list = structuredClone(list);
             this.shown = true;
             this.draftComparison = current.dirty;
-            setUiText(this.message, uiMessage("hostedHistory.readOnlyScopeHelp"));
+            this.setNotice(uiMessage("hostedHistory.readOnlyScopeHelp"));
         });
     }
     private persist(records = this.records, beforeEffect = false) {
@@ -142,7 +149,8 @@ export class HostedHistory {
             throw new UiError(beforeEffect ? uiMessage("hostedHistory.persistBeforeSendFailed") : uiMessage("hostedHistory.persistenceUnknown"));
         }
     }
-    private report(error: unknown) { setUiText(this.message, error instanceof Error ? errorUiText(error) : String(error)); }
+    private setNotice(notice: UiText) { this.notice = notice; setUiText(this.message, notice); }
+    private report(error: unknown) { this.setNotice(errorUiText(error)); }
     private async perform(run: () => Promise<void>) {
         if (this.busy)
             return;
@@ -166,6 +174,8 @@ export class HostedHistory {
     }
     private render() {
         this.host.hidden = !this.shown && !this.records.length && this.unreadable === undefined;
+        disposeUiTree(this.content);
+        disposeUiTree(this.operations);
         this.content.replaceChildren();
         this.operations.replaceChildren();
         if (this.unreadable !== undefined) {
@@ -291,6 +301,7 @@ export class HostedHistory {
             const cancel = action(uiMessage("hostedHistory.cancelRestoreDialog"), () => { controller.cancelRestore(); dialog.close(); });
             dialog.append(ui("h2", "", uiMessage("history.restoreDialogTitle")), ui("p", "history-help", uiMessage("hostedHistory.restoreScopeHelp")), pane(uiMessage("history.restoreSourceHeading"), review.basis.selectedSource), pane(uiMessage("hostedHistory.currentSavedBaseHeading"), review.basis.baseSource), label, cancel, confirm);
             dialog.onclose = () => {
+                disposeUiTree(dialog);
                 dialog.remove();
                 if (this.dialog === dialog)
                     this.dialog = undefined;
@@ -314,7 +325,7 @@ export class HostedHistory {
             this.records = retained;
             if (!retained.some(record => record.request.operationId === this.selectedOperation))
                 this.selectedOperation = retained[0]?.request.operationId ?? "";
-            setUiText(this.message, uiMessage("hostedHistory.terminalCacheCleared"));
+            this.setNotice(uiMessage("hostedHistory.terminalCacheCleared"));
         }));
         clear.disabled = this.busy || !this.records.some(record => record.acknowledged || ["cancelled", "resolved"].includes(record.status?.status ?? ""));
         this.operations.append(clear);
@@ -327,7 +338,7 @@ export class HostedHistory {
             const epoch = this.epoch, incoming = await this.request<HostedHistoryStatus>("history/settle", { resource: record.request.resource, operationId: record.request.operationId });
             if (epoch !== this.epoch)
                 return;
-            this.install(record, incoming);
+            this.installStatus(record, incoming);
         })), apply = action(uiMessage("hostedHistory.applyOriginalReceipt"), () => this.perform(() => this.acknowledge(record)));
         for (const button of [check, retry, settle, apply])
             button.disabled = this.busy;
@@ -346,7 +357,7 @@ export class HostedHistory {
                 record.acknowledged = true;
                 this.persist();
                 this.source.pendingChanged();
-                setUiText(this.message, uiMessage("hostedHistory.unavailableDeliveryFinished"));
+                this.setNotice(uiMessage("hostedHistory.unavailableDeliveryFinished"));
             }));
             finish.disabled = this.busy || this.source.context()?.resource !== record.request.resource;
             this.operations.append(finish);
@@ -361,21 +372,37 @@ export class HostedHistory {
             this.operations.append(details);
         }
     }
-    private install(record: HostedHistoryRecord, incoming: HostedHistoryStatus) { record.status = hostedHistoryStatus(record, incoming); this.persist(); this.source.pendingChanged(); this.render(); }
+    installStatus(record: HostedHistoryRecord, incoming: HostedHistoryStatus): HostedHistoryStatus {
+        record.status = hostedHistoryStatus(record, incoming);
+        this.persist();
+        this.source.pendingChanged();
+        this.render();
+        if (record.status.guardReason)
+            throw new UiError(joinUiText([record.status.guardReason, ...(record.status.resultError ? [" ", apiErrorUiText(record.status.resultError)] : [])]));
+        if (record.status.resultError)
+            throw decodeApiError(record.status.resultError) ?? new UiError(uiMessage("error.invalidResponse"));
+        return record.status;
+    }
     private async lookup(record: HostedHistoryRecord) {
         const epoch = this.epoch, incoming = await this.request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
         if (epoch !== this.epoch)
             return;
-        this.install(record, incoming);
+        this.installStatus(record, incoming);
     }
     private async send(record: HostedHistoryRecord) {
         this.persist(undefined, true);
         const epoch = this.epoch, incoming = await this.request<HostedHistoryStatus>("history/restore", record.request);
         if (epoch !== this.epoch)
             return;
-        this.install(record, incoming);
-        if (incoming.status === "committed" && incoming.result && this.source.context()?.resource === record.request.resource)
-            await this.acknowledge(record);
+        const status = this.installStatus(record, incoming), warning = status.result?.recoveryIssue;
+        try {
+            if (status.status === "committed" && status.result && this.source.context()?.resource === record.request.resource)
+                await this.acknowledge(record);
+        }
+        finally {
+            if (epoch === this.epoch && warning)
+                this.setNotice(joinUiText([this.notice, uiMessage("hostedHistory.recoveryIssuePrefix"), historyRecoveryIssueUiText(warning)]));
+        }
     }
     private async acknowledge(record: HostedHistoryRecord) {
         const epoch = this.epoch;
@@ -387,7 +414,7 @@ export class HostedHistory {
         record.acknowledged = true;
         this.persist();
         this.source.pendingChanged();
-        setUiText(this.message, outcome === "applied" ? uiMessage("hostedHistory.restoredApplied") : uiMessage("hostedHistory.restoredSuperseded"));
+        this.setNotice(outcome === "applied" ? uiMessage("hostedHistory.restoredApplied") : uiMessage("hostedHistory.restoredSuperseded"));
     }
 }
 import { coreDescriptionUiText } from "./ui-diagnostics";

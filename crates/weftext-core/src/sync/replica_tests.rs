@@ -35,6 +35,82 @@ fn source(graph: &ReplicaGraph, object: &ObjectKey) -> String {
 }
 
 #[test]
+fn current_sync_file_readers_reject_missing_original_participant_without_affecting_foreign_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let a = temp.path().join("A");
+    let b = temp.path().join("B");
+    core.create_library(&a).unwrap();
+    let note = core.create_note_fixture(&a, &a, "Note").unwrap();
+    core.enable_sync(&a, &fresh()).unwrap();
+    let doc = core.open(&note.path, Some(a.clone())).unwrap();
+    let id = fresh();
+    core.save(SaveRequest {
+        session_id: doc.session_id,
+        base_id: doc.base_id,
+        source: doc.source + "\noriginal S",
+        operation_id: id.clone(),
+    })
+    .unwrap();
+    let original = core.operations[&id].clone();
+    assert!(original.sync_publication.is_some());
+    let commit_path = core.journal_path(&id, "commit");
+    let commit_bytes = fs::read(&commit_path).unwrap();
+    let mut old: serde_json::Value = serde_json::from_slice(&commit_bytes).unwrap();
+    old.as_object_mut().unwrap().remove("fileSave");
+    let old_commit = serde_json::to_vec(&old).unwrap();
+    fs::write(&commit_path, &old_commit).unwrap();
+    core.operations.get_mut(&id).unwrap().file_save = None;
+    assert!(core.committed(&id));
+    assert_eq!(
+        core.sync_publications(&display(&a)).unwrap_err().code,
+        "unsupportedFileSaveEvidence"
+    );
+    assert!(
+        matches!(core.sync_local_state(core.sync_setup_for(&a).unwrap()), Err(error) if error.code == "unsupportedFileSaveEvidence")
+    );
+    core.create_library(&b).unwrap();
+    core.enable_sync(&b, &fresh()).unwrap();
+    assert!(core.sync_publications(&display(&b)).unwrap().is_empty());
+    assert_eq!(fs::read(&commit_path).unwrap(), old_commit);
+    core.operations.insert(id, original);
+    fs::write(commit_path, commit_bytes).unwrap();
+    assert_eq!(core.sync_publications(&display(&a)).unwrap().len(), 1);
+}
+
+#[test]
+fn reused_root_does_not_publish_new_library_or_ordinary_save_into_original_foreign_replica() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let root = temp.path().join("root");
+    core.create_library(&root).unwrap();
+    core.create_note_fixture(&root, &root, "Old").unwrap();
+    let a = core.enable_sync(&root, &fresh()).unwrap();
+    let a_workspace = a.identity.workspace_id;
+    fs::rename(&root, temp.path().join("retained-A")).unwrap();
+    let created = fresh();
+    core.create_library_with_id(&root, &created).unwrap();
+    assert!(core.operations[&created].sync_publication.is_none());
+    let path = root.join("ordinary.typ");
+    fs::write(&path, "B").unwrap();
+    let doc = core.open(&path, None).unwrap();
+    let id = fresh();
+    core.save(SaveRequest {
+        session_id: doc.session_id,
+        base_id: doc.base_id,
+        source: "B original source".into(),
+        operation_id: id.clone(),
+    })
+    .unwrap();
+    assert!(core.operations[&id].sync_publication.is_none());
+    assert_ne!(
+        core.require_workspace(&root).unwrap().workspace_id,
+        a_workspace
+    );
+    assert_eq!(fs::read_to_string(path).unwrap(), "B original source");
+}
+
+#[test]
 fn sync_setup_releases_private_captures_and_retries_owned_original_bytes_after_restart() {
     for installed_tags in [false, true] {
         for blocker in [None, Some("plan"), Some("commit")] {

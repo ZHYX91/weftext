@@ -85,6 +85,27 @@ class Hosted(unittest.TestCase):
         self.server = Server(['--data-dir',str(self.data),'--server-config',str(self.config_path)],hosted=True)
 
     def tearDown(self): self.server.close()
+
+    def test_device_reminder_capabilities_are_absent_from_hosted_routes(self):
+        device = self.data / 'device-state'
+        def records():
+            return {str(path.relative_to(device)): path.read_bytes() for path in device.rglob('*') if path.is_file()}
+        before = records()
+        owner = {'workspaceId':uid(),'nodeId':uid()}
+        routes = {
+            'settings':{}, 'inspect':{'sessionId':uid()},
+            'library':{'action':'enable','root':str(self.root),'expectedRevision':0,'mutationId':uid()},
+            'subscription':{'root':str(self.root),'owner':owner,'reminderId':uid(),'enabled':True,'expectedRevision':0,'mutationId':uid()},
+            'status':{'executionKey':'a'*64}, 'records':{'after':None},
+            'schedule':{'cursor':None}, 'open':{'executionKey':'a'*64}, 'handle':{'executionKey':'a'*64},
+        }
+        for actor in ['alice','reader']:
+            for route, body in routes.items():
+                with self.subTest(actor=actor,route=route):
+                    code, result, _ = self.server.call('/api/reminders/'+route,body,self.tokens[actor])
+                    self.assertEqual(code,404,result)
+                    self.assertEqual(records(),before)
+
     def call(self, route, data=None, actor='alice', status=200, headers=None):
         code, result, returned = self.server.call('/api/hosted/'+route,data,self.tokens.get(actor,'x'*40),headers)
         self.assertEqual(code,status,str(result)[:1500])
@@ -128,7 +149,7 @@ class Hosted(unittest.TestCase):
         self.assertEqual(no,hidden)
         self.assertEqual(self.call('search',{'text':'HIDDEN_PAYLOAD'},'bob')['rows'],[])
         self.assertNotIn(str(self.root),json.dumps(files))
-        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
+        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/api/recognition/open','/api/operations/status','/api/operations/settle','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
             code,body,_=self.server.call(route,{} if route.startswith('/api/') else None,self.tokens['alice'])
             self.assertEqual(code,404,(route,body))
 

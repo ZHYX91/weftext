@@ -1,16 +1,30 @@
+import { message as uiMessage, joinUiText } from "./ui-locale";
+import { decodeApiErrorBody, apiErrorUiText, type ApiErrorBody } from "./api-error";
+import { decodeCoreDescription, coreDescriptionUiText, type CoreDescription } from "./ui-diagnostics";
+import { UiError, errorUiText, setUiText, uiTextValue, type UiText } from "./ui-locale";
 import { nativeLanguageOptions } from "./style-panel";
+import type { Inventory, OpenedDocument } from "./types";
 
 export interface InitialLibraryStyle { source: string; enabled: boolean }
 export interface InitialRootNote { title: string; queries: string[] }
 export interface LibraryCreateOptions { initialStyle?: InitialLibraryStyle | null; initialRoot?: InitialRootNote }
 export interface LibraryCreationRequest { path: string; options: LibraryCreateOptions; operationId: string }
-export interface LibraryCreationReceipt { operationId: string; root: string; workspaceId: string; status: string; rootNotePath?: string }
+export interface LibraryCreationReceipt { operationId: string; root: string; workspaceId: string; status: string; rootNotePath?: string; library?: Inventory; rootDocument?: OpenedDocument; deliveryError?: ApiErrorBody }
+function typedCreationReceipt(value: LibraryCreationReceipt): LibraryCreationReceipt {
+  if (!value || typeof value !== "object" || Object.hasOwn(value,"message")) throw new UiError(uiMessage("libraryCreation.originalReceiptInvalid"));
+  if (!Object.hasOwn(value,"deliveryError")) return value;
+  const deliveryError = decodeApiErrorBody(value.deliveryError);
+  if (!deliveryError) throw new UiError(uiMessage("libraryCreation.deliveryErrorInvalid"));
+  return {...value,deliveryError};
+}
 interface CreationSlot { key: string; value: string; editable: boolean; range: { utf16From: number; utf16To: number; raw: string } | null }
 export interface LibraryCreationDefaults { source: string; sourceHash: string; controls: CreationSlot[]; rootPresets?: { id: string; title: string; plan: unknown }[] }
-export interface LibraryCreationRecovery { operationId: string; status: string; message: string; allowedActions?: string[]; [key: string]: unknown }
+export interface LibraryCreationRecovery { operationId: string; status: string; description: CoreDescription; allowedActions?: string[]; [key: string]: unknown }
 export interface LibraryCreationHost {
   defaults(): Promise<LibraryCreationDefaults>;
   create(request: LibraryCreationRequest): Promise<LibraryCreationReceipt>;
+  delivery(operationId: string): Promise<LibraryCreationReceipt>;
+  deliver(receipt: LibraryCreationReceipt): Promise<void>;
   inspect(operationId: string): Promise<LibraryCreationRecovery>;
   resolve(operationId: string, action: string): Promise<LibraryCreationRecovery>;
   cancel?(request: LibraryCreationRequest): Promise<LibraryCreationRecovery>;
@@ -51,7 +65,7 @@ export class LibraryCreationController {
     try {
       const value = JSON.parse(raw) as RetainedCreation;
       if (value.version !== 1 || !value.draft || typeof value.draft.path !== "string" || typeof value.draft.language !== "string" || typeof value.draft.region !== "string" || value.draft.defaults !== null && !defaultsValid(value.draft.defaults) || value.request !== null && !validRequest(value.request) || value.receipt && (!value.request || value.receipt.operationId !== value.request.operationId || typeof value.receipt.root !== "string" || typeof value.receipt.workspaceId !== "string")) throw new Error("invalid creation record");
-      this.draft = value.draft; this.request = value.request; this.receipt = value.receipt;
+      this.draft = value.draft; this.request = value.request; this.receipt = value.receipt ? typedCreationReceipt(value.receipt) : null;
     } catch { this.recoveryError = raw; }
   }
   get locked(): boolean { return this.busy || this.request !== null || this.recoveryError !== null; }
@@ -84,9 +98,9 @@ export class LibraryCreationController {
     }
     this.busy = true;
     try {
-      const receipt = await this.host.create(structuredClone(this.request));
-      if (receipt.operationId !== this.request.operationId || !receipt.workspaceId || !receipt.root) throw new Error("创建回执与原操作不一致，请继续核对原编号。");
-      this.receipt = structuredClone(receipt); this.retain(); return receipt;
+      const receipt = typedCreationReceipt(this.receipt ? await this.host.delivery(this.request.operationId) : await this.host.create(structuredClone(this.request)));
+      if (receipt.operationId !== this.request.operationId || receipt.status !== "committed" || !receipt.workspaceId || !receipt.root || this.receipt && (receipt.workspaceId !== this.receipt.workspaceId || receipt.root !== this.receipt.root)) throw new Error("创建回执与原操作不一致，请继续核对原编号。");
+      this.receipt = typedCreationReceipt(structuredClone(receipt)); this.retain(); return receipt;
     } finally { this.busy = false; }
   }
   async inspect(): Promise<void> {
@@ -104,10 +118,22 @@ export class LibraryCreationController {
     this.busy = true;
     try { this.installRecovery(await this.host.cancel(structuredClone(this.request))); } finally { this.busy = false; }
   }
-  acknowledge(): void { if (!this.receipt) throw new Error("创建结果尚未核对。"); this.storage.removeItem(key); }
+  async deliver(): Promise<LibraryCreationReceipt> {
+    const receipt = await this.create();
+    this.busy = true;
+    try {
+      if (receipt.deliveryError) throw new UiError(joinUiText([uiMessage("libraryCreation.committedDeliveryPendingPrefix"), apiErrorUiText(receipt.deliveryError!)]));
+      await this.host.deliver(receipt);
+      this.storage.removeItem(key);
+      return receipt;
+    } finally { this.busy = false; }
+  }
   private installRecovery(result: LibraryCreationRecovery): void {
     if (!this.request || result.operationId !== this.request.operationId) throw new Error("恢复结果与原创建操作不一致。");
-    this.recovery = structuredClone(result);
+    if (this.receipt && result.status !== "committed") throw new UiError(uiMessage("libraryCreation.committedStatusMismatch"));
+    const description = decodeCoreDescription(result.description);
+    if (!description || Object.hasOwn(result,"message")) throw new UiError(uiMessage("libraryCreation.recoveryProtocolInvalid"));
+    this.recovery = {...structuredClone(result),description};
     if (result.status === "resolved" || result.status === "cancelled") { this.request = null; this.proposal = null; this.receipt = null; }
     this.retain();
   }
@@ -118,7 +144,7 @@ export class LibraryCreationController {
   }
 }
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); e.textContent = text; return e; };
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text: UiText = ""): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); setUiText(e,text); return e; };
 let activeCreation: Promise<LibraryCreationReceipt | null> | null = null;
 export function openLibraryCreation(host: LibraryCreationHost): Promise<LibraryCreationReceipt | null> {
   if (!activeCreation) activeCreation = showLibraryCreation(host).finally(() => { activeCreation = null; });
@@ -137,9 +163,9 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
   const queryChoices = el("fieldset"); queryChoices.append(el("legend", "选择初始查询"));
   for (const preset of controller.draft.defaults?.rootPresets ?? []) { const label = el("label", preset.title), input = el("input"); input.type = "checkbox"; input.value = preset.id; input.setAttribute("aria-label", `初始查询：${preset.title}`); input.onchange = () => { controller.change({ queries: [...queryChoices.querySelectorAll<HTMLInputElement>("input:checked")].map(input => input.value) }); draw(); }; label.prepend(input); queryChoices.append(label); }
   let composing = false, finish: (value: LibraryCreationReceipt | null) => void = () => {};
-  const button = (label: string, run: () => Promise<void> | void) => { const b = el("button", label); b.type = "button"; b.className = "button-secondary"; b.onclick = () => { void (async () => { try { if (composing) return; const promise = run(); draw(); await promise; } catch (error) { message.textContent = `${error instanceof Error ? error.message : String(error)}${controller.request ? ` 原操作 ${controller.request.operationId} 与全部选择已保留。` : ""}`; } draw(); })(); }; actions.append(b); return b; };
+  const button = (label: string, run: () => Promise<void> | void) => { const b = el("button", label); b.type = "button"; b.className = "button-secondary"; b.onclick = () => { void (async () => { try { if (composing) return; const promise = run(); draw(); await promise; } catch (error) { setUiText(message,() => `${uiTextValue(errorUiText(error))}${controller.request ? ` 原操作 ${controller.request.operationId} 与全部选择已保留。` : ""}`); } draw(); })(); }; actions.append(b); return b; };
   const prepare = button("预览创建", () => { controller.preview(); message.textContent = "请核对路径和文档排版默认，再创建资料库。"; });
-  const create = button("创建资料库", async () => { const receipt = await controller.create(); controller.acknowledge(); finish(receipt); });
+  const create = button("创建资料库", async () => { const receipt = await controller.deliver(); finish(receipt); });
   const inspect = button("查看原操作恢复信息", () => controller.inspect());
   const cancel = button("结束尚未开始的原创建", () => controller.cancel());
   const close = button("关闭", () => finish(null));
@@ -162,7 +188,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
     if (request) { const details = el("details"); details.append(el("summary", "高级：本次初始化的原生样式"), el("pre", request.options.initialStyle!.source)); preview.append(el("p", `目标：${request.path}`), el("p", `原操作：${request.operationId}`), el("p", "库默认样式及其资源身份与资料库一起创建。地区未知保持未指定；不会自动简繁转换，也不修改个人界面语言。"), details); }
     if (controller.recoveryError) preview.append(el("p", "原创建恢复记录无法安全解析，原文保留供核对，未发送新创建。"), el("pre", controller.recoveryError));
     if (controller.recovery) {
-      preview.append(el("p", `原操作状态：${controller.recovery.status}。${controller.recovery.message}`));
+      preview.append(el("p", () => `原操作状态：${controller.recovery!.status}。${uiTextValue(coreDescriptionUiText(controller.recovery!.description))}`));
       for (const action of controller.recovery.allowedActions ?? []) {
         const b = el("button", ({ keepCurrent: "保留当前状态并结束原操作", adoptAfterImages: "核验并确认原计划已写入的内容", resumeOriginalPlan: "仅续写原计划缺失部分" } as Record<string, string>)[action] ?? action); b.type = "button"; b.disabled = controller.busy; b.onclick = () => { void controller.resolve(action).then(draw).catch(error => { message.textContent = String(error); draw(); }); }; preview.append(b);
       }

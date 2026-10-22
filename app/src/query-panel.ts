@@ -1,4 +1,5 @@
 import { joinUiText } from "./ui-locale";
+import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import type { UiMessage } from "./ui-locale";
 import type { CoreDescription } from "./ui-diagnostics";
 import { decodeLocalQueryResult, queryDiagnostics, type QueryEngineGroup, type QueryProductError } from "./query-result";
@@ -326,7 +327,7 @@ class PeriodNavigator {
                             throw new UiError(message("periodNavigation.existingTargetUnavailable"));
                     }
                     catch (error) {
-                        this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                        this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
                     }
                 }, "query-row-title"));
             result.diagnostics?.forEach(item => this.resultHost.append(ui("p", "data-warning", diagnosticText(item))));
@@ -337,7 +338,7 @@ class PeriodNavigator {
         catch (error) {
             if (generation === this.lookupGeneration) {
                 this.result = null;
-                this.resultHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : String(error)));
+                this.resultHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
                 this.createButton.disabled = !this.pending;
             }
         }
@@ -367,18 +368,22 @@ class PeriodNavigator {
         try {
             const result = await submitOriginal<OriginalFact & {
                 document?: OpenedDocument;
-                documentError?: {
-                    message?: string;
-                };
+                documentError?: ApiErrorBody;
             }>(this.host.request, "/api/data/period/create", this.pending, "period", retry);
             receiptReceived = true;
+            if (result.status !== "committed")
+                throw new UiError(message("queryDefinition.periodCommittedReceiptRequired"));
             const document = result.document;
-            if (!document)
-                throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(result.documentError?.message ?? message("common.confirmOriginalOperation")) }));
-            if (this.host.created)
-                await this.host.created(document);
-            else
-                await this.host.openDocument(document.path, document.root ?? this.root);
+            const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
+            if (result.documentError !== undefined && !documentError) throw new UiError(message("error.invalidResponse"));
+            const deliveryError = result.deliveryError === undefined ? undefined : decodeApiErrorBody(result.deliveryError);
+            if (result.deliveryError !== undefined && !deliveryError) throw new UiError(message("error.invalidResponse"));
+            const deliveryErrors = [documentError, deliveryError].filter((error): error is ApiErrorBody => !!error);
+            if (deliveryErrors.length || !document)
+                throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
+            if (!this.host.created)
+                throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
+            await this.host.created(document);
             const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
             this.pending = null;
             if (unchanged) {
@@ -396,7 +401,7 @@ class PeriodNavigator {
                 this.result = null;
             }
             const hint = this.pending ? displayMessage("periodNavigation.originalOperationRetained", { p0: String(this.pending.seriesKey), p1: String(this.pending.key) }) : message("periodNavigation.lookupBeforeCreating");
-            this.resultHost.append(ui("p", "data-warning", () => `${uiTextValue(errorUiText(error))}${uiTextValue(hint)}`));
+            this.resultHost.append(ui("p", "data-warning", () => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(hint)}`));
         }
         finally {
             this.loading = false;
@@ -436,7 +441,7 @@ class NavigationControls {
     private search = "";
     private offset = 0;
     private expanded = new Set<string>();
-    private recoveryError?: string;
+    private recoveryError?: UiText;
     private busy = false;
     private registryRead = 0;
     private registry: TagRegistry | null = null;
@@ -463,7 +468,7 @@ class NavigationControls {
             }
         }
         catch (error) {
-            this.recoveryError = String(error);
+            this.recoveryError = (error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             setUiText(this.status, this.recoveryError);
         }
         setUiAttr(this.createName, "placeholder", message("tagNavigation.newNameLabel"));
@@ -490,7 +495,7 @@ class NavigationControls {
             await this.mutate("/api/navigation/create-tag", { displayName: this.createName.value, parentRef: this.parentRef, baseId: this.registry.baseId, ...(assign && basis ? { assignment: { path: basis.path, baseId: basis.baseId, fieldId } } : {}) }, this.createName.value, "tag", basis ?? undefined);
         }
         catch (error) {
-            setUiText(this.status, String(error));
+            setUiText(this.status, (error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
         }
     }
     private pendingKey(): string { return `weftext-navigation-operation:${JSON.stringify([this.workspaceId, this.root])}`; }
@@ -532,7 +537,7 @@ class NavigationControls {
                 return;
             this.registry = null;
             this.tagsHost.replaceChildren();
-            setUiText(this.status, displayMessage("tagNavigation.registryUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) }));
+            setUiText(this.status, displayMessage("tagNavigation.registryUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }));
         }
     }
     private renderTags(): void {
@@ -617,7 +622,7 @@ class NavigationControls {
             await this.mutate("/api/navigation/admit-directory", { path: target.path }, target.label, "directory");
         }
         catch (error) {
-            setUiText(this.status, error instanceof Error ? errorUiText(error) : String(error));
+            setUiText(this.status, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
         }
     }
     private async mutate(route: string, payload: Record<string, unknown>, label: string, addKind?: "directory" | "tag", context?: DocumentBasis): Promise<void> {
@@ -635,7 +640,7 @@ class NavigationControls {
             await this.resume();
         }
         catch (error) {
-            setUiText(this.status, displayMessage("tagNavigation.persistenceBeforeSendFailed", { p0: uiDisplayParameter(String(error)) }));
+            setUiText(this.status, displayMessage("tagNavigation.persistenceBeforeSendFailed", { p0: uiDisplayParameter((error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))) }));
         }
     }
     private async resume(): Promise<void> {
@@ -731,9 +736,9 @@ class NavigationControls {
                 this.persistPending();
             }
             catch (storageError) {
-                persistence = displayMessage("tagNavigation.recoveryPersistenceFailed", { p0: uiDisplayParameter(String(storageError)) });
+                persistence = displayMessage("tagNavigation.recoveryPersistenceFailed", { p0: uiDisplayParameter((storageError instanceof Error ? errorUiText(storageError) : message("error.invalidResponse"))) });
             }
-            setUiText(this.status, displayMessage("tagNavigation.originalRetained", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)), p1: uiDisplayParameter(persistence) }));
+            setUiText(this.status, displayMessage("tagNavigation.originalRetained", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")), p1: uiDisplayParameter(persistence) }));
         }
         finally {
             this.busy = false;
@@ -1314,7 +1319,7 @@ export class QueryPanel {
                 localStorage.setItem(shortcutKey, JSON.stringify({ version: 2, items: this.shortcuts }));
         }
         catch (error) {
-            this.shortcutError = displayMessage("queryShortcut.recoveryFailed", { p0: uiDisplayParameter(String(error)) });
+            this.shortcutError = displayMessage("queryShortcut.recoveryFailed", { p0: uiDisplayParameter((error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))) });
         }
         try {
             const recent: unknown = JSON.parse(localStorage.getItem(`weftext-query-recents:${this.libraryIdentity()}`) ?? "[]");
@@ -1411,7 +1416,7 @@ export class QueryPanel {
         catch (error) {
             this.refreshQueue.invalidate();
             this.loading = false;
-            this.error = error instanceof Error ? errorUiText(error) : String(error);
+            this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
             this.renderResults();
         }
     }
@@ -1506,7 +1511,7 @@ export class QueryPanel {
         }
         catch (error) {
             if (current()) {
-                this.error = error instanceof Error ? errorUiText(error) : String(error);
+                this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
                 if (intent.selection)
                     this.result = null;
             }
@@ -1703,7 +1708,7 @@ export class QueryPanel {
                 this.contextChanged();
             }
             catch (error) {
-                this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
             }
         };
         const expression = ui("textarea", "data-input query-expression");
@@ -1890,7 +1895,7 @@ export class QueryPanel {
             }
             catch (error) {
                 feedback.className = "data-warning";
-                setUiText(feedback, error instanceof Error ? errorUiText(error) : String(error));
+                setUiText(feedback, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
         }, "data-button primary"), action(message("queryAdvanced.rerunParameters"), async () => {
             try {
@@ -1900,7 +1905,7 @@ export class QueryPanel {
             }
             catch (error) {
                 feedback.className = "data-warning";
-                setUiText(feedback, error instanceof Error ? errorUiText(error) : String(error));
+                setUiText(feedback, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
         }));
         const back = action(message("queryAdvanced.returnToVisual"), () => { this.exactPlan = null; this.group = undefined; this.expression = ""; this.conditions = []; this.loadPreferences(); this.renderControls(); void this.refresh(); });
@@ -1971,7 +1976,7 @@ export class QueryPanel {
                     this.contextChanged();
                 }
                 catch (error) {
-                    this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                    this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
                 }
             }, "query-facet");
             this.navigationHost.append(button);
@@ -2093,7 +2098,7 @@ export class QueryPanel {
             this.contextChanged();
         }
         catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+            this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
         }
     }
     private async openNavigationShortcut(shortcut: Shortcut): Promise<void> {
@@ -2116,7 +2121,7 @@ export class QueryPanel {
                 throw new UiError(message("queryShortcut.directoryUnavailable"));
         }
         catch (error) {
-            this.host.notify(displayMessage("queryShortcut.targetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) }), true);
+            this.host.notify(displayMessage("queryShortcut.targetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
         }
     }
     private mountSavedControls(): void {
@@ -2192,7 +2197,7 @@ export class QueryPanel {
             }
             catch (error) {
                 if (owner()?.identity === context.identity && generation === readGeneration)
-                    setUiText(version, error instanceof Error ? errorUiText(error) : String(error));
+                    setUiText(version, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
             finally {
                 if (owner()?.identity === context.identity && generation === readGeneration)
@@ -2254,7 +2259,7 @@ export class QueryPanel {
             await this.host.prepareAction?.();
         }
         catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+            this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
             return;
         }
         const basis = this.host.getDocument();
@@ -2290,7 +2295,7 @@ export class QueryPanel {
                 this.environmentChanged(pending.basis.root);
             if (!receiptReceived && error instanceof TerminatedAttempt)
                 this.savedPending = null;
-            this.host.notify(() => `${uiTextValue(error instanceof Error ? errorUiText(error) : String(error))}${uiTextValue(this.savedPending ? message("queryDefinition.originalSaveRetainedSuffix") : message("queryDefinition.originalDraftRetainedSuffix"))}`, true);
+            this.host.notify(() => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(this.savedPending ? message("queryDefinition.originalSaveRetainedSuffix") : message("queryDefinition.originalDraftRetainedSuffix"))}`, true);
             this.renderControls();
         }
     }
@@ -2413,7 +2418,7 @@ export class QueryPanel {
                 this.renderResults();
             }
             catch (error) {
-                this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
             }
         }, "query-row-title");
         button.disabled = !row.path;
@@ -2699,7 +2704,7 @@ export class QueryPanel {
             this.host.notify(displayMessage("queryEdit.fieldApplied", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
         }
         catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+            this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
         }
     }
     private async openTarget(path: string, entityKey?: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<void> {
@@ -2713,7 +2718,7 @@ export class QueryPanel {
             }
         }
         catch (error) {
-            this.host.notify(displayMessage("queryShortcut.openTargetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) }), true);
+            this.host.notify(displayMessage("queryShortcut.openTargetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
         }
     }
     private async openStrong(entityKey: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<OpenedDocument> {
@@ -2741,7 +2746,7 @@ export class QueryPanel {
                 await this.resolveScopeLocator(this.generation);
             }
             catch (error) {
-                this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
                 return;
             }
         }

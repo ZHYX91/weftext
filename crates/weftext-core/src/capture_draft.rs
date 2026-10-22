@@ -90,6 +90,25 @@ pub(crate) enum CaptureLibrary {
     DeviceUnassigned,
     Bound { binding: ActorLibraryBinding },
 }
+impl CaptureLibrary {
+    /// Shape validation is not original ownership proof. Capture retains its
+    /// physical volume-GUID coordinate; file-save scope uses the original
+    /// admission locator. A future consumer must qualify that conversion.
+    fn validate_shape(&self) -> Result<()> {
+        match self {
+            Self::DeviceUnassigned => Ok(()),
+            Self::Bound { binding } => file_save_scope::QualifiedLibrary {
+                root: binding.root.clone(),
+                root_identity: binding.root_identity.clone(),
+                workspace_id: binding
+                    .workspace_id
+                    .clone()
+                    .ok_or_else(|| invalid("Capture requires a qualified library owner"))?,
+            }
+            .validate(),
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct CaptureScopeHeader {
@@ -433,6 +452,7 @@ fn native_valid(
     Ok(())
 }
 fn header_valid(header: &CaptureScopeHeader) -> Result<()> {
+    header.library.validate_shape()?;
     if let CaptureOwner::Actor { actor } = &header.owner
         && (actor.is_empty() || actor.len() > 256)
     {

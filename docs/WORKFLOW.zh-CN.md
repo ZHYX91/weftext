@@ -23,6 +23,10 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
+`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时只调整相关本地 crate 真实入口的 mtime，字节不改，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
+
+入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。Python 在读取输出或等待期间被中断时，仍排空自有子进程的输出，确认该确切进程退出后才释放锁，并重抛最初异常；收尾期间再次中断也不提前释放锁。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序；另用自有 Python 子进程核受控的仅父进程 SIGINT、输出／等待及重复中断。这些用例不冒实际产品验收或真实终端键盘行为。
+
 宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
 
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业按锁文件安装前端依赖，运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
@@ -75,3 +79,5 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 仓库保存可独立执行的产品构建/检查/打包入口。个人工作区只负责路径与本地环境，不建立另一套发布平台。发布产物校验与关键交接使用哈希，不对每轮讨论重复计算全库哈希。只有正式交付需要标签和发布记录；当前不创建空发布。
 
 历史交付修订另核真实 Core 结果首次读取失败后恢复可读、持续不可读时仍保 committed/receipt，以及 missing→期间提交→通用终结→typed 历史结果读取。适配器单元测试用自有目录确定移动和复位控制两次读取边界，不制造定时竞态；真实 HTTP 用例复用 test_commit_delivery.py，既有本地历史消费者由 test_v05_completion.py 核验。
+
+同一交付入口再核原 X 正常移动后旧槽创建 Y、同 NodeID 物理替身、库根替身、另存为同字节替身、完整 Definition SaveRequest 重放及重启无旧 Session、enableSync 原 journal 状态。`scripts/test_creation_delivery_browser.mjs EXE NEW_EVIDENCE_DIRECTORY [CASE]` 覆盖真实接纳后刷新失败、原号补交的标签幂等与 Y／选区／Undo、另存为接纳及不可交付处置后沿正确 Session 继续保存、普通旧标签遇同字节物理替身、首次及查询文件保存坏回包后原号恢复、本地历史换 Session 后原号查询／终结、S 补交、后来 T 的比较门，以及真实冲突草稿处理响应等待期间输入 Y。浏览器 abort／500／延迟响应和坏包替换是明确的受控传输或交付故障，不称后端自然产生坏 DTO 或内部 Core 读盘失败。托管历史另跑实际授权矩阵，Core 内部故障点核首次 committed 与瞬时 Draft 警告，纯 TS 负例核坏 DTO／矛盾状态与重连。v0.6.1 初始化同族严格核原取消 resolution、无伪作者 Plan、准确原请求指纹与原字节、重启和迟到请求拒绝；各自证据边界分开记录。

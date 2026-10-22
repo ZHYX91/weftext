@@ -40,7 +40,7 @@ import type { PanelHost } from "./data-panel";
 import { decodeProcessingDocument } from "./processing-settings-panel";
 import type { StructureReceipt, StructureRequest } from "./hosted-structure-state";
 import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
-import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
+import { currentHostedHistoryResult, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
 import { RecognitionPanel } from "./recognition-panel";
@@ -713,13 +713,13 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
         if (epoch !== requestEpoch || doc !== selected || !draft)
             throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
-        record.status = hostedHistoryStatus(record, confirmed);
-        if (!confirmed.result)
+        const accepted = history.installStatus(record, confirmed);
+        if (!accepted.result)
             throw new UiError(uiMessage("hostedShell.restoreResultNoCurrentDeliveryRight"));
-        const installed = currentHostedHistoryResult(record, fresh.source, confirmed), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
+        const installed = currentHostedHistoryResult(record, fresh.source, accepted), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
         const current: HistoryContext = { ...buffer, path: `resource:${selected.resource}`, root: "", baseId: selected.baseId, baseSource: selected.source, dirty: buffer.source !== selected.source, nodeId: record.basis.nodeId, workspaceId: record.basis.workspaceId };
         if (installed && restoreBufferDisposition(record.basis, current) === "replaceClean")
-            source.applyHistorySource(confirmed.result.source, buffer);
+            source.applyHistorySource(accepted.result.source, buffer);
         const retainedSource = source.value, originalDraftBase = draft.baseSource;
         doc = fresh;
         source.open(fresh.sessionId, fresh.resource, retainedSource);
@@ -770,7 +770,7 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
         if (epoch !== requestEpoch || doc !== selected || !draft)
             throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
-        record.status = hostedHistoryStatus(record, confirmed);
+        history.installStatus(record, confirmed);
         if (!unavailableCommittedHistory(record))
             throw new UiError(uiMessage("hostedShell.originalDeliveryStatusChanged"));
         const retainedSource = source.value;

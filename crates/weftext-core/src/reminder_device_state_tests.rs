@@ -1,0 +1,1062 @@
+//! Real Windows/NTFS Core fixtures; external outcomes below are simulated
+//! adapter results, not evidence that Windows displayed a notification.
+use super::*;
+use weftext_data::NativeValue;
+
+const INTENT: &str = "a46e68ef-30a3-4f74-bba2-13327ce81f11";
+const TRIGGER: &str = "2026-10-23T09:00:00Z";
+const AT: &str = "2026-10-23T09:00:01Z";
+fn options() -> ReminderNotificationOptions {
+    ReminderNotificationOptions {
+        app_id: "Weftext.Core.ReminderTests".into(),
+        title: "Task reminder".into(),
+        body: "Open your saved task".into(),
+    }
+}
+fn instant(value: &str) -> ExactInstant {
+    ExactInstant::parse(value).unwrap()
+}
+fn task_source(kind: &str) -> String {
+    let reminder = if kind == "absolute" {
+        format!("(id: \"{INTENT}\", kind: \"absolute\", at: \"{TRIGGER}\")")
+    } else {
+        format!("(id: \"{INTENT}\", kind: \"due_before\", before: \"1800\")")
+    };
+    format!(
+        "#metadata((types: (\"task\",), status: \"open\", due: \"2026-10-23T09:30:00Z\", reminder: {reminder})) <weftext>\n= Task\n正文😀\n"
+    )
+}
+struct Fixture {
+    core: Option<Core>,
+    data: PathBuf,
+    root: PathBuf,
+    owner: NodeRef,
+    path: PathBuf,
+    _temp: tempfile::TempDir,
+}
+impl Fixture {
+    fn new(kind: &str) -> Self {
+        let temp = tempfile::tempdir().unwrap();
+        let data = temp.path().join("state");
+        let root = temp.path().join("library");
+        let mut core = Core::new(&data).unwrap();
+        let library = core.create_library(&root).unwrap();
+        let operation = fresh();
+        let preview = core
+            .prepare_operation(OperationRequest {
+                operation_id: operation.clone(),
+                root: display(&root),
+                intent: OperationIntent::NewNode {
+                    parent: display(&root),
+                    name: "Task".into(),
+                    source: Some(task_source(kind)),
+                },
+            })
+            .unwrap();
+        let owner = NodeRef {
+            workspace_id: library.workspace_id,
+            node_id: preview.new_node_id.clone().unwrap(),
+        };
+        let receipt = core
+            .execute_operation(&operation, &preview.plan_id)
+            .unwrap();
+        let path = Path::new(&receipt.path).join("Task.typ");
+        let settings = core.set_reminder_library(&root, true, 0, &fresh()).unwrap();
+        core.set_reminder_subscription(
+            &root,
+            &owner,
+            INTENT,
+            true,
+            settings.settings_revision,
+            &fresh(),
+        )
+        .unwrap();
+        Self {
+            core: Some(core),
+            data,
+            root,
+            owner,
+            path,
+            _temp: temp,
+        }
+    }
+    fn core(&mut self) -> &mut Core {
+        self.core.as_mut().unwrap()
+    }
+    fn candidate(&mut self) -> TaskReminderCandidate {
+        let root = self.root.clone();
+        let owner = self.owner.clone();
+        self.core().task_reminder_candidate(&root, &owner).unwrap()
+    }
+    fn begin(&mut self, at: &str) -> ReminderDeliveryPermit {
+        let candidate = self.candidate();
+        match self
+            .core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(at))
+            .unwrap()
+        {
+            ReminderDeliveryStart::Started(permit) => permit,
+            ReminderDeliveryStart::Retained(status) => {
+                panic!("Expected a new original permit, got {status:?}")
+            }
+        }
+    }
+    fn reopen(&mut self) {
+        drop(self.core.take());
+        self.core = Some(Core::new(&self.data).unwrap());
+    }
+    fn edit(&mut self, key: &str, value: NativeValue) {
+        let path = self.path.clone();
+        let root = self.root.clone();
+        let document = self.core().open(path, Some(root)).unwrap();
+        let patch = weftext_data::patch_field(
+            &document.source,
+            &Schema::bundled().unwrap(),
+            key,
+            &[],
+            &value,
+        )
+        .unwrap();
+        let result = self
+            .core()
+            .save(SaveRequest {
+                session_id: document.session_id.clone(),
+                base_id: document.base_id,
+                source: patch.source,
+                operation_id: fresh(),
+            })
+            .unwrap();
+        assert_eq!(result.receipt.status, "saved");
+        self.core().close_session(&document.session_id).unwrap();
+    }
+    fn append_body(&mut self) {
+        let path = self.path.clone();
+        let root = self.root.clone();
+        let document = self.core().open(path, Some(root)).unwrap();
+        self.core()
+            .save(SaveRequest {
+                session_id: document.session_id.clone(),
+                base_id: document.base_id,
+                source: document.source + "\n只改正文\n",
+                operation_id: fresh(),
+            })
+            .unwrap();
+        self.core().close_session(&document.session_id).unwrap();
+    }
+    fn add_task(&mut self, name: &str) -> TaskReminderCandidate {
+        let root = self.root.clone();
+        let operation = fresh();
+        let preview = self
+            .core()
+            .prepare_operation(OperationRequest {
+                operation_id: operation.clone(),
+                root: display(&root),
+                intent: OperationIntent::NewNode {
+                    parent: display(&root),
+                    name: name.into(),
+                    source: Some(task_source("absolute")),
+                },
+            })
+            .unwrap();
+        let owner = NodeRef {
+            workspace_id: self.owner.workspace_id.clone(),
+            node_id: preview.new_node_id.clone().unwrap(),
+        };
+        self.core()
+            .execute_operation(&operation, &preview.plan_id)
+            .unwrap();
+        let settings = self.core().reminder_settings().unwrap();
+        self.core()
+            .set_reminder_subscription(
+                &root,
+                &owner,
+                INTENT,
+                true,
+                settings.settings_revision,
+                &fresh(),
+            )
+            .unwrap();
+        self.core().task_reminder_candidate(&root, &owner).unwrap()
+    }
+    fn operate(&mut self, intent: OperationIntent) -> OperationReceipt {
+        let root = self.root.clone();
+        let operation = fresh();
+        let preview = self
+            .core()
+            .prepare_operation(OperationRequest {
+                operation_id: operation.clone(),
+                root: display(&root),
+                intent,
+            })
+            .unwrap();
+        self.core()
+            .execute_operation(&operation, &preview.plan_id)
+            .unwrap()
+    }
+}
+#[test]
+fn reminder_new_library_uses_bundled_schema_without_materialization_and_draft_is_not_authority() {
+    let mut f = Fixture::new("due_before");
+    assert!(!f.root.join(".weftext-schema.json").exists());
+    let candidate = f.candidate();
+    assert_eq!(
+        candidate.resolution.trigger_instant.as_deref(),
+        Some(TRIGGER)
+    );
+    let path = f.path.clone();
+    let root = f.root.clone();
+    let document = f.core().open(path, Some(root)).unwrap();
+    let draft = weftext_data::patch_field(
+        &document.source,
+        &Schema::bundled().unwrap(),
+        "tasks/due",
+        &[],
+        &NativeValue::Text("2026-10-24T09:30:00Z".into()),
+    )
+    .unwrap();
+    f.core()
+        .persist_draft(&document.session_id, &draft.source)
+        .unwrap();
+    let saved = f
+        .core()
+        .task_reminder_for_session(&document.session_id)
+        .unwrap();
+    assert_eq!(
+        saved.resolution.trigger_instant,
+        candidate.resolution.trigger_instant
+    );
+    assert!(!f.root.join(".weftext-schema.json").exists());
+    let _permit = f.begin(AT);
+}
+#[test]
+fn reminder_begin_is_durable_and_restart_never_allocates_another_effect() {
+    let mut f = Fixture::new("absolute");
+    let device = f.core().reminder_settings().unwrap().device_id;
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let request = permit.request().clone();
+    f.reopen();
+    assert_eq!(f.core().reminder_settings().unwrap().device_id, device);
+    assert!(matches!(
+        f.core().reminder_delivery_status(&key).unwrap().delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+    let candidate = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    assert_eq!(
+        f.core().reminder_original_notifications(None).unwrap()[0].request,
+        request
+    );
+    assert_eq!(
+        f.core().reminder_records_page(None).unwrap().records.len(),
+        1
+    );
+}
+#[test]
+fn reminder_body_and_absolute_due_edits_keep_the_original_submitted_effect() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let definition = f.candidate().resolution.definition_digest;
+    f.core()
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .unwrap();
+    f.append_body();
+    f.edit(
+        "tasks/due",
+        NativeValue::Text("2026-10-24T12:30:00Z".into()),
+    );
+    let candidate = f.candidate();
+    assert_eq!(candidate.resolution.definition_digest, definition);
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    assert_eq!(
+        f.core().reminder_records_page(None).unwrap().records[0]
+            .status
+            .execution_key,
+        key
+    );
+}
+
+#[test]
+fn reminder_rename_move_trash_and_restore_use_current_identity_without_replaying_delivery() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    f.core()
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .unwrap();
+    let root = f.root.clone();
+    let _parent = f.add_task("Parent");
+    f.operate(OperationIntent::RenameNode {
+        source: display(&root.join("Task")),
+        name: "Renamed".into(),
+    });
+    f.operate(OperationIntent::MoveNode {
+        source: display(&root.join("Renamed")),
+        parent: display(&root.join("Parent")),
+    });
+    f.path = root.join("Parent/Renamed/Renamed.typ");
+    let candidate = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    let document = f.core().open_reminder_record(&key).unwrap();
+    assert_eq!(Path::new(&document.path), f.path);
+    assert_eq!(document.node_id.as_deref(), Some(f.owner.node_id.as_str()));
+    f.core().close_session(&document.session_id).unwrap();
+    let trash = f.operate(OperationIntent::TrashNode {
+        source: display(f.path.parent().unwrap()),
+    });
+    assert!(
+        !f.core()
+            .refresh_reminder_notification(&key)
+            .unwrap()
+            .eligible
+    );
+    let activation = f
+        .core()
+        .resolve_reminder_activation(&permit.request().activation_key)
+        .unwrap();
+    assert!(activation.candidates.is_empty());
+    assert_eq!(activation.issues.len(), 1);
+    assert_eq!(
+        f.core().open_reminder_record(&key).unwrap_err().code,
+        "reminderUnavailable"
+    );
+    f.operate(OperationIntent::RestoreNode {
+        trash_operation_id: trash.operation_id,
+        node_id: None,
+        parent: display(&root),
+        name: "Restored".into(),
+    });
+    f.path = root.join("Restored/Restored.typ");
+    let candidate = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    assert_eq!(
+        f.core()
+            .reminder_delivery_status(&key)
+            .unwrap()
+            .execution_key,
+        key
+    );
+}
+#[test]
+fn reminder_due_edits_invalidate_old_relative_activation_and_a_b_a_does_not_replay() {
+    let mut f = Fixture::new("due_before");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let activation = permit.request().activation_key.clone();
+    f.core()
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .unwrap();
+    f.edit(
+        "tasks/due",
+        NativeValue::Text("2026-10-23T09:35:00Z".into()),
+    );
+    let changed = f.candidate();
+    assert_eq!(
+        changed.resolution.trigger_instant.as_deref(),
+        Some("2026-10-23T09:05:00Z")
+    );
+    assert!(
+        !f.core()
+            .refresh_reminder_notification(&key)
+            .unwrap()
+            .eligible
+    );
+    assert!(
+        f.core()
+            .resolve_reminder_activation(&activation)
+            .unwrap()
+            .candidates
+            .is_empty()
+    );
+    let other = f
+        .core()
+        .begin_reminder_delivery_at(&changed, options(), instant("2026-10-23T09:05:01Z"))
+        .unwrap();
+    assert!(matches!(other, ReminderDeliveryStart::Started(_)));
+    f.edit(
+        "tasks/due",
+        NativeValue::Text("2026-10-23T09:30:00Z".into()),
+    );
+    let original = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&original, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    assert_eq!(
+        f.core().reminder_delivery_status(&key).unwrap().invalidated,
+        Some(ReminderCancellation::DefinitionChanged)
+    );
+}
+#[test]
+fn reminder_completion_and_personal_handling_are_orthogonal_to_external_result() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    f.core()
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .unwrap();
+    f.edit("tasks/status", NativeValue::Text("done".into()));
+    let eligibility = f.core().refresh_reminder_notification(&key).unwrap();
+    assert!(!eligibility.eligible);
+    assert_eq!(
+        f.core().reminder_delivery_status(&key).unwrap().invalidated,
+        Some(ReminderCancellation::TaskClosed)
+    );
+    f.edit("tasks/status", NativeValue::Text("open".into()));
+    let candidate = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+    let handled = f.core().handle_reminder(&key).unwrap();
+    assert!(handled.handled);
+    assert!(matches!(
+        handled.delivery,
+        ReminderDeliveryState::SubmittedToSystem { .. }
+    ));
+    assert!(f.candidate().task_open);
+}
+#[test]
+fn reminder_permit_is_single_use_and_normal_admission_cannot_cross_target_minute() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin("2026-10-23T09:00:59Z");
+    let at = instant("2026-10-23T09:01:00Z");
+    assert_eq!(
+        f.core()
+            .check_reminder_permit_with_clock(&permit, || Ok(at.clone()))
+            .unwrap_err()
+            .code,
+        "reminderMissed"
+    );
+    f.core()
+        .finish_reminder_delivery(
+            &permit,
+            ReminderSubmissionOutcome::FailedBeforeCall("Target minute ended before Show".into()),
+        )
+        .unwrap();
+    let candidate = f.candidate();
+    let summary = match f
+        .core()
+        .begin_reminder_summary_at(&[candidate], options(), &at)
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        _ => panic!("No missed summary permit"),
+    };
+    f.core()
+        .check_reminder_permit_with_clock(&summary, || Ok(at.clone()))
+        .unwrap();
+    assert_eq!(
+        f.core()
+            .check_reminder_permit_with_clock(&summary, || Ok(at.clone()))
+            .unwrap_err()
+            .code,
+        "reminderPermitUsed"
+    );
+}
+#[test]
+fn reminder_final_input_proof_cannot_extend_a_normal_permit_past_its_civil_minute() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin("2026-10-23T09:00:58Z");
+    let mut reads = 0;
+    let error = f
+        .core()
+        .check_reminder_permit_with_clock(&permit, || {
+            reads += 1;
+            Ok(instant(if reads < 4 {
+                "2026-10-23T09:00:59.999999999Z"
+            } else {
+                "2026-10-23T09:01:00Z"
+            }))
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "reminderMissed");
+    assert!(!permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(permit.execution_key())
+            .unwrap()
+            .delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+}
+
+#[test]
+fn reminder_unknown_summary_members_cannot_regroup_but_new_members_can_form_their_own_summary() {
+    let mut f = Fixture::new("absolute");
+    let a = f.candidate();
+    let b = f.add_task("B");
+    let c = f.add_task("C");
+    let at = instant("2026-10-23T10:00:00Z");
+    let summary = match f
+        .core()
+        .begin_reminder_summary_at(&[a.clone(), b.clone()], options(), &at)
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        _ => panic!("No summary"),
+    };
+    assert_eq!(
+        f.core()
+            .begin_reminder_summary_at(&[a, b, c.clone()], options(), &at)
+            .unwrap_err()
+            .code,
+        "reminderRetained"
+    );
+    assert!(matches!(
+        f.core()
+            .begin_reminder_summary_at(&[c], options(), &at)
+            .unwrap(),
+        ReminderDeliveryStart::Started(_)
+    ));
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(summary.execution_key())
+            .unwrap()
+            .delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+}
+#[test]
+fn reminder_failed_summary_can_regroup_without_erasing_original_failure() {
+    let mut f = Fixture::new("absolute");
+    let a = f.candidate();
+    let b = f.add_task("B");
+    let at = instant("2026-10-23T10:00:00Z");
+    let original = match f
+        .core()
+        .begin_reminder_summary_at(std::slice::from_ref(&a), options(), &at)
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        _ => panic!("No summary"),
+    };
+    f.core()
+        .finish_reminder_delivery(
+            &original,
+            ReminderSubmissionOutcome::FailedBeforeCall(
+                "Notifications unavailable before Show".into(),
+            ),
+        )
+        .unwrap();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_summary_at(&[a, b], options(), &at)
+            .unwrap(),
+        ReminderDeliveryStart::Started(_)
+    ));
+    assert!(matches!(
+        f.core()
+            .reminder_delivery_status(original.execution_key())
+            .unwrap()
+            .delivery,
+        ReminderDeliveryState::FailedBeforeCall { .. }
+    ));
+    let (state, _) = f.core().read_reminders().unwrap();
+    state.validate().unwrap();
+}
+#[test]
+fn reminder_begin_publish_fault_never_returns_a_permit_and_retains_any_published_barrier() {
+    for point in ["beforePublish", "afterPublish"] {
+        let mut f = Fixture::new("absolute");
+        let candidate = f.candidate();
+        crate::device_state::set_test_failpoint(point);
+        assert_eq!(
+            f.core()
+                .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+                .unwrap_err()
+                .code,
+            "injectedFailure"
+        );
+        let pending = fs::read_dir(f.data.join("device-state"))
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| entry.file_name().to_string_lossy().ends_with(".pending"));
+        // Before publication the complete staged original remains evidence.
+        // After publication the exact canonical barrier is authoritative.
+        assert_eq!(pending, point == "beforePublish");
+        f.reopen();
+        let candidate = f.candidate();
+        let records = f.core().reminder_records_page(None).unwrap().records;
+        let retry = f
+            .core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap();
+        if point == "beforePublish" {
+            assert!(records.is_empty());
+            assert!(matches!(retry, ReminderDeliveryStart::Started(_)));
+        } else {
+            assert_eq!(records.len(), 1);
+            assert!(matches!(
+                records[0].status.delivery,
+                ReminderDeliveryState::Unknown { .. }
+            ));
+            assert!(matches!(retry, ReminderDeliveryStart::Retained(_)));
+        }
+    }
+}
+
+#[test]
+fn reminder_finish_publish_faults_preserve_real_original_outcomes_across_restart() {
+    for point in ["beforePublish", "afterPublish"] {
+        let mut f = Fixture::new("absolute");
+        let permit = f.begin(AT);
+        let key = permit.execution_key().to_owned();
+        let request = permit.request().clone();
+        crate::device_state::set_test_failpoint(point);
+        assert_eq!(
+            f.core()
+                .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+                .unwrap_err()
+                .code,
+            "injectedFailure"
+        );
+        f.reopen();
+        let status = f.core().reminder_delivery_status(&key).unwrap();
+        if point == "beforePublish" {
+            assert!(matches!(
+                status.delivery,
+                ReminderDeliveryState::Unknown { .. }
+            ));
+        } else {
+            assert!(matches!(
+                status.delivery,
+                ReminderDeliveryState::SubmittedToSystem { .. }
+            ));
+        }
+        let candidate = f.candidate();
+        assert!(matches!(
+            f.core()
+                .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+                .unwrap(),
+            ReminderDeliveryStart::Retained(_)
+        ));
+        assert_eq!(
+            f.core().reminder_original_notifications(None).unwrap()[0].request,
+            request
+        );
+    }
+}
+#[test]
+fn reminder_missing_schema_is_rechecked_after_the_real_durable_action() {
+    let mut f = Fixture::new("absolute");
+    let root = f.root.clone();
+    let config = f.core().read_config(&root, ConfigRole::Schema).unwrap();
+    assert!(config.bytes.is_none());
+    let witness = f.core().take_snapshot_witness(&config.base_id).unwrap();
+    let candidate = f.candidate();
+    let (state, digest) = f.core().read_reminders().unwrap();
+    let error = f
+        .core()
+        .with_reminder_inputs(&root, &[witness], |core| {
+            core.write_reminders(state, digest.as_deref())?;
+            let config = core.read_config(&root, ConfigRole::Schema)?;
+            let operation = fresh();
+            let preview = core.prepare_config_save(
+                &root,
+                ConfigRole::Schema,
+                config.bytes,
+                crate::library_creation::ROOT_PRESET_SCHEMA
+                    .as_bytes()
+                    .to_vec(),
+                &operation,
+            )?;
+            core.execute_operation(&operation, &preview.plan_id)?;
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "staleBase");
+    assert!(root.join(".weftext-schema.json").exists());
+    assert_eq!(
+        f.candidate().resolution.definition_digest,
+        candidate.resolution.definition_digest
+    );
+}
+#[test]
+fn reminder_copy_needs_new_consent_and_backup_transports_intent_without_device_records() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let root = f.root.clone();
+    let source = f.path.parent().unwrap().to_path_buf();
+    let operation = fresh();
+    let preview = f
+        .core()
+        .prepare_operation(OperationRequest {
+            operation_id: operation.clone(),
+            root: display(&root),
+            intent: OperationIntent::CopyNode {
+                source: display(&source),
+                parent: display(&root),
+                name: "Copied".into(),
+                allow_losses: false,
+            },
+        })
+        .unwrap();
+    let copied = NodeRef {
+        workspace_id: f.owner.workspace_id.clone(),
+        node_id: preview.node_map.get(&f.owner.node_id).cloned().unwrap(),
+    };
+    f.core()
+        .execute_operation(&operation, &preview.plan_id)
+        .unwrap();
+    let candidate = f.core().task_reminder_candidate(&root, &copied).unwrap();
+    assert_eq!(candidate.resolution.reminder_id.as_deref(), Some(INTENT));
+    assert_eq!(
+        f.core().reminder_eligibility(&candidate).unwrap_err().code,
+        "reminderDisabled"
+    );
+    let destination = f._temp.path().join("backup");
+    let operation = fresh();
+    let preview = f
+        .core()
+        .prepare_operation(OperationRequest {
+            operation_id: operation.clone(),
+            root: display(&root),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&destination),
+            },
+        })
+        .unwrap();
+    f.core().handle_reminder(permit.execution_key()).unwrap();
+    f.core()
+        .execute_operation(&operation, &preview.plan_id)
+        .unwrap();
+    assert_eq!(
+        fs::read(destination.join("library/Task/Task.typ")).unwrap(),
+        fs::read(&f.path).unwrap()
+    );
+    assert!(!destination.join("private/device-state").exists());
+}
+#[test]
+fn reminder_foreign_profile_and_second_owner_lease_never_adopt_or_replay() {
+    let mut f = Fixture::new("absolute");
+    let _permit = f.begin(AT);
+    assert_eq!(Core::new(&f.data).err().unwrap().code, "instanceBusy");
+    let other = f._temp.path().join("foreign-state");
+    let mut foreign = Core::new(&other).unwrap();
+    for kind in [DeviceRecordKind::Identity, DeviceRecordKind::Reminders] {
+        let bytes = f
+            .core()
+            .read_device_record(kind, MAX_BYTES)
+            .unwrap()
+            .unwrap()
+            .0;
+        fs::write(foreign.device_record_path(kind), bytes).unwrap();
+    }
+    let identity_bytes = fs::read(foreign.device_record_path(DeviceRecordKind::Identity)).unwrap();
+    assert_eq!(
+        foreign.reminder_settings().unwrap_err().code,
+        "foreignDeviceState"
+    );
+    assert_eq!(
+        fs::read(foreign.device_record_path(DeviceRecordKind::Identity)).unwrap(),
+        identity_bytes
+    );
+    drop(foreign);
+}
+
+#[test]
+fn reminder_offline_selection_can_be_revoked_without_claiming_empty_scope_or_erasing_unknown() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let root = f.root.clone();
+    let owner = f.owner.clone();
+    let moved = f._temp.path().join("offline-library");
+    fs::rename(&root, &moved).unwrap();
+    let page = f.core().reminder_schedule_page(None).unwrap();
+    assert!(page.candidates.is_empty());
+    assert_eq!(page.issues.len(), 1);
+    let settings = f.core().reminder_settings().unwrap();
+    let settings = f
+        .core()
+        .set_reminder_subscription(
+            Path::new(""),
+            &owner,
+            INTENT,
+            false,
+            settings.settings_revision,
+            &fresh(),
+        )
+        .unwrap();
+    let settings = f
+        .core()
+        .disable_reminder_library(&owner.workspace_id, settings.settings_revision, &fresh())
+        .unwrap();
+    assert!(!settings.libraries[0].enabled);
+    assert!(!settings.subscriptions[0].enabled);
+    let current = f
+        .core()
+        .refresh_reminder_notification(permit.execution_key())
+        .unwrap();
+    assert!(!current.eligible);
+    assert!(current.issues.is_empty());
+    assert!(matches!(
+        current.original.delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+    assert_eq!(
+        f.core()
+            .reminder_delivery_status(permit.execution_key())
+            .unwrap()
+            .invalidated,
+        Some(ReminderCancellation::LibraryDisabled)
+    );
+    let original = fs::read(moved.join("Task/Task.typ")).unwrap();
+    f.core().handle_reminder(permit.execution_key()).unwrap();
+    assert_eq!(fs::read(moved.join("Task/Task.typ")).unwrap(), original);
+    fs::rename(&moved, &root).unwrap();
+    let page = f.core().reminder_schedule_page(None).unwrap();
+    assert!(page.candidates.is_empty());
+    assert!(page.issues.is_empty());
+}
+
+#[test]
+fn reminder_history_confirmation_requires_the_complete_original_request_and_never_downgrades_success()
+ {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    for member in 0..6 {
+        let mut observed = permit.request().clone();
+        match member {
+            0 => observed.app_id.push_str(".other"),
+            1 => observed.tag = "f".repeat(64),
+            2 => observed.group.push_str(".other"),
+            3 => observed.activation_key = fresh(),
+            4 => observed.title.push_str(" other"),
+            _ => observed.body.push_str(" other"),
+        }
+        assert_eq!(
+            f.core()
+                .confirm_reminder_in_system_history(permit.execution_key(), &observed)
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+    f.core()
+        .finish_reminder_delivery(
+            &permit,
+            ReminderSubmissionOutcome::Unknown("Show returned no definite result".into()),
+        )
+        .unwrap();
+    let unknown = fs::read(&path).unwrap();
+    assert!(
+        f.core()
+            .finish_reminder_delivery(
+                &permit,
+                ReminderSubmissionOutcome::FailedBeforeCall(
+                    "Cannot prove no call after unknown".into()
+                )
+            )
+            .is_err()
+    );
+    assert_eq!(fs::read(&path).unwrap(), unknown);
+    let status = f
+        .core()
+        .confirm_reminder_in_system_history(permit.execution_key(), permit.request())
+        .unwrap();
+    assert!(matches!(
+        status.delivery,
+        ReminderDeliveryState::SubmittedToSystem { .. }
+    ));
+    for outcome in [
+        ReminderSubmissionOutcome::Unknown("Late adapter uncertainty".into()),
+        ReminderSubmissionOutcome::FailedBeforeCall("Late adapter error".into()),
+    ] {
+        let status = f.core().finish_reminder_delivery(&permit, outcome).unwrap();
+        assert!(matches!(
+            status.delivery,
+            ReminderDeliveryState::SubmittedToSystem { .. }
+        ));
+    }
+    f.reopen();
+    let candidate = f.candidate();
+    assert!(matches!(
+        f.core()
+            .begin_reminder_delivery_at(&candidate, options(), instant(AT))
+            .unwrap(),
+        ReminderDeliveryStart::Retained(_)
+    ));
+}
+
+#[test]
+fn reminder_original_effect_lookup_is_read_only_without_author_scope_and_has_no_member_alias() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    let root = f.root.clone();
+    let offline = f._temp.path().join("offline-library");
+    fs::rename(&root, &offline).unwrap();
+    let observed = f
+        .core()
+        .original_reminder_notification(permit.execution_key())
+        .unwrap();
+    assert_eq!(observed.execution_key, permit.execution_key());
+    assert_eq!(&observed.request, permit.request());
+    assert!(matches!(
+        observed.delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+    assert!(
+        f.core()
+            .original_reminder_notification(&"f".repeat(64))
+            .is_err()
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+    fs::rename(&offline, &root).unwrap();
+
+    let mut f = Fixture::new("absolute");
+    let a = f.candidate();
+    let b = f.add_task("B");
+    let member_key = f.core().reminder_eligibility(&a).unwrap().execution_key;
+    let summary = match f
+        .core()
+        .begin_reminder_summary_at(&[a, b], options(), &instant("2026-10-23T10:00:00Z"))
+        .unwrap()
+    {
+        ReminderDeliveryStart::Started(permit) => permit,
+        _ => panic!("No summary"),
+    };
+    let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&ledger).unwrap();
+    let observed = f
+        .core()
+        .original_reminder_notification(summary.execution_key())
+        .unwrap();
+    assert_eq!(observed.execution_key, summary.execution_key());
+    assert_eq!(&observed.request, summary.request());
+    assert!(matches!(
+        observed.delivery,
+        ReminderDeliveryState::Unknown { .. }
+    ));
+    assert!(
+        f.core()
+            .original_reminder_notification(&member_key)
+            .is_err()
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+}
+
+#[test]
+fn reminder_actor_cannot_read_decide_open_or_confirm_a_local_owner_effect() {
+    fn denied<T>(result: Result<T>) {
+        match result {
+            Ok(_) => panic!("A hosted actor reached a device-local reminder capability"),
+            Err(error) => assert_eq!(error.code, "syncOwnerRequired"),
+        }
+    }
+    let mut f = Fixture::new("absolute");
+    let candidate = f.candidate();
+    let permit = f.begin(AT);
+    let root = f.root.clone();
+    let owner = f.owner.clone();
+    let path = f.path.clone();
+    let document = f.core().open(&path, Some(root.clone())).unwrap();
+    let original_identity =
+        fs::read(f.core().device_record_path(DeviceRecordKind::Identity)).unwrap();
+    let original_reminders =
+        fs::read(f.core().device_record_path(DeviceRecordKind::Reminders)).unwrap();
+    let sessions = f.core().sessions.len();
+    f.core()
+        .with_actor_for_root("alice", &root, |core| {
+            denied(core.reminder_settings());
+            denied(core.reminder_records_page(None));
+            denied(core.reminder_schedule_page(None));
+            denied(core.task_reminder_candidate(&root, &owner));
+            denied(core.task_reminder_for_session(&document.session_id));
+            denied(core.reminder_eligibility(&candidate));
+            denied(core.reminder_delivery_for_saved_task(&candidate));
+            denied(core.set_reminder_library(&root, true, 2, &fresh()));
+            denied(core.disable_reminder_library(&owner.workspace_id, 2, &fresh()));
+            denied(core.set_reminder_subscription(&root, &owner, INTENT, false, 2, &fresh()));
+            denied(core.begin_reminder_delivery(&candidate, options()));
+            denied(core.begin_reminder_summary(std::slice::from_ref(&candidate), options()));
+            denied(core.check_reminder_permit(&permit));
+            denied(
+                core.finish_reminder_delivery(
+                    &permit,
+                    ReminderSubmissionOutcome::SubmittedToSystem,
+                ),
+            );
+            denied(core.reminder_delivery_status(permit.execution_key()));
+            denied(core.original_reminder_notification(permit.execution_key()));
+            denied(core.reminder_original_notifications(None));
+            denied(core.refresh_reminder_notification(permit.execution_key()));
+            denied(
+                core.confirm_reminder_in_system_history(permit.execution_key(), permit.request()),
+            );
+            denied(core.handle_reminder(permit.execution_key()));
+            denied(core.resolve_reminder_activation(&permit.request().activation_key));
+            denied(core.open_reminder_record(permit.execution_key()));
+            assert_eq!(core.sessions.len(), sessions);
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        fs::read(f.core().device_record_path(DeviceRecordKind::Identity)).unwrap(),
+        original_identity
+    );
+    assert_eq!(
+        fs::read(f.core().device_record_path(DeviceRecordKind::Reminders)).unwrap(),
+        original_reminders
+    );
+    assert!(!permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+    f.core().close_session(&document.session_id).unwrap();
+}
+
+#[test]
+fn reminder_actor_rejection_precedes_first_device_identity_allocation() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut core = Core::new(temp.path().join("state")).unwrap();
+    let root = temp.path().join("library");
+    core.create_library(&root).unwrap();
+    let identity = core.device_record_path(DeviceRecordKind::Identity);
+    let reminders = core.device_record_path(DeviceRecordKind::Reminders);
+    assert!(!identity.exists());
+    assert!(!reminders.exists());
+    core.with_actor_for_root("alice", &root, |core| {
+        assert_eq!(
+            core.reminder_settings().unwrap_err().code,
+            "syncOwnerRequired"
+        );
+        assert_eq!(
+            core.set_reminder_library(&root, true, 0, &fresh())
+                .unwrap_err()
+                .code,
+            "syncOwnerRequired"
+        );
+        Ok(())
+    })
+    .unwrap();
+    assert!(!identity.exists());
+    assert!(!reminders.exists());
+}

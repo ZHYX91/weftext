@@ -253,6 +253,22 @@ async fn boundary(State(state): State<AppState>, request: Request, next: Next) -
 #[serde(rename_all = "camelCase")]
 struct PathRequest {
     path: String,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OpenRequest {
+    Session(ReopenSessionRequest),
+    Path(OpenPathRequest),
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ReopenSessionRequest {
+    session_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenPathRequest {
+    path: String,
     root: Option<PathBuf>,
 }
 #[derive(Deserialize)]
@@ -351,13 +367,13 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
                     &format!("weftext-node://{workspace}/{node}"),
                 )
             } else {
-                let path = original["path"].as_str().ok_or_else(|| {
+                let session_id = original["sessionId"].as_str().ok_or_else(|| {
                     CoreError::new(
                         "initialUnavailable",
-                        "The original launch path is unavailable",
+                        "The original launch Session is unavailable",
                     )
                 })?;
-                core.open(path, Some(PathBuf::from(root)))
+                core.reopen_local_session(session_id)
             }
         });
         Ok((recovery, reopened))
@@ -384,8 +400,14 @@ async fn bootstrap(State(state): State<AppState>) -> ApiResult {
         "localNoteTimeline":true,"embeddedQueryViews":true}}),
     ))
 }
-async fn open(State(state): State<AppState>, Json(req): Json<PathRequest>) -> ApiResult {
-    let doc = value(core_call(&state, move |c| c.open(req.path, req.root)).await?)?;
+async fn open(State(state): State<AppState>, Json(req): Json<OpenRequest>) -> ApiResult {
+    let doc = value(
+        core_call(&state, move |c| match req {
+            OpenRequest::Session(req) => c.reopen_local_session(&req.session_id),
+            OpenRequest::Path(req) => c.open(req.path, req.root),
+        })
+        .await?,
+    )?;
     remember(&state, &doc)?;
     Ok(Json(doc))
 }
@@ -405,15 +427,36 @@ async fn create_library(
     State(state): State<AppState>,
     Json(req): Json<CreateLibraryRequest>,
 ) -> ApiResult {
-    Ok(Json(value(
-        core_call(&state, move |c| {
-            let operation_id = req
-                .operation_id
-                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-            c.create_library_with_options_and_id(req.path, req.options, &operation_id)
-        })
-        .await?,
-    )?))
+    let receipt = core_call(&state, move |c| {
+        let operation_id = req
+            .operation_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        c.create_library_with_options_and_id(req.path, req.options, &operation_id)
+    })
+    .await?;
+    library_creation_output(&state, receipt).await.map(Json)
+}
+pub(crate) async fn library_creation_output(
+    state: &AppState,
+    receipt: weftext_core::LibraryInfo,
+) -> Result<Value, ApiError> {
+    let id = receipt.operation_id.clone();
+    let mut output = value(&receipt)?;
+    let delivery = core_call(state, move |core| core.reopen_local_library_creation(&id)).await;
+    let delivered = (|| -> Result<(), ApiError> {
+        let (library, document) = delivery?;
+        output["library"] = value(library)?;
+        if let Some(document) = document {
+            let document = value(document)?;
+            remember(state, &document)?;
+            output["rootDocument"] = document;
+        }
+        Ok(())
+    })();
+    if let Err(error) = delivered {
+        output["deliveryError"] = json!({"code":error.code,"message":error.message});
+    }
+    Ok(output)
 }
 async fn cancel_library_creation(
     State(state): State<AppState>,
@@ -443,12 +486,18 @@ async fn create_note(State(state): State<AppState>, Json(req): Json<CreateNote>)
         .map(Json)
 }
 async fn save(State(state): State<AppState>, Json(req): Json<SaveRequest>) -> ApiResult {
-    Ok(Json(value(core_call(&state, move |c| c.save(req)).await?)?))
+    let id = req.operation_id.clone();
+    let output = value(core_call(&state, move |c| c.save(req)).await?)?;
+    Ok(Json(
+        knowledge_api::file_save_delivery(&state, id, output).await,
+    ))
 }
 async fn save_as(State(state): State<AppState>, Json(req): Json<SaveAsRequest>) -> ApiResult {
-    Ok(Json(value(
-        core_call(&state, move |c| c.save_as(req)).await?,
-    )?))
+    let id = req.operation_id.clone();
+    let output = value(core_call(&state, move |c| c.save_as(req)).await?)?;
+    Ok(Json(
+        knowledge_api::file_save_delivery(&state, id, output).await,
+    ))
 }
 async fn draft(State(state): State<AppState>, Json(req): Json<DraftRequest>) -> ApiResult {
     core_call(&state, move |c| {

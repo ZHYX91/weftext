@@ -1,4 +1,5 @@
 import type { OpenedDocument } from "./types";
+import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 export * from "./native-value-form";
 import { uiDisplayParameter, message as uiMessage, displayMessage, setUiText, setUiAttr, uiTextValue, joinUiText, errorUiText, UiError, type UiText } from "./ui-locale";
 import { decodeProjection, type Cell, type NoteProjection } from "./data-projection";
@@ -97,7 +98,7 @@ export class DataPanel {
         }
         catch (error) {
             if (generation === this.generation)
-                this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : String(error)), action(uiMessage("dataPanel.retryRead"), () => this.refresh()));
+                this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")), action(uiMessage("dataPanel.retryRead"), () => this.refresh()));
         }
         finally {
             if (generation === this.generation)
@@ -375,7 +376,7 @@ export class DataPanel {
             this.host.notify(uiMessage("dataPanel.applied"));
         }
         catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+            this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
         }
         finally {
             this.element.removeAttribute("aria-busy");
@@ -427,14 +428,14 @@ export class DataPanel {
                             await this.refresh();
                         }
                         catch (error) {
-                            this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                            this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
                         }
                     }, "data-button primary"));
                 else
                     previewHost.append(ui("p", "data-warning", uiMessage("schemaSettings.noExecutablePlan")));
             }
             catch (error) {
-                previewHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : String(error)));
+                previewHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")));
             }
             finally {
                 prepare.disabled = false;
@@ -465,7 +466,7 @@ export class QuickCapture {
             void loadFormReferences(this.host, this.context.root, this.references, this.element);
         }
         catch (error) {
-            this.element.replaceChildren(ui("p", "data-warning", String(error)), action(uiMessage("common.retry"), () => this.initialize()));
+            this.element.replaceChildren(ui("p", "data-warning", (error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"))), action(uiMessage("common.retry"), () => this.initialize()));
         }
     }
     updateContext(): void {
@@ -488,7 +489,7 @@ export class QuickCapture {
                 await this.host.openTemplates?.();
             }
             catch (error) {
-                this.host.notify(error instanceof Error ? errorUiText(error) : String(error), true);
+                this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
             }
         }, "data-button capture-template-entry");
         form.append(template, ui("p", "data-help capture-template-help"));
@@ -552,20 +553,22 @@ export class QuickCapture {
                 try {
                     const result = await submitOriginal<OriginalFact & {
                         document?: OpenedDocument;
-                        documentError?: {
-                            message?: string;
-                        };
+                        documentError?: ApiErrorBody;
                     }>(this.host.request, "/api/data/capture", this.pending, "capture", retry);
-                    if (result.status && !["saved", "created", "committed", "complete", "success"].includes(result.status))
+                    if (result.status !== "committed")
                         throw new UiError(displayMessage("quickCapture.creationUnconfirmed", { p0: uiDisplayParameter(result.status) }));
                     receiptReceived = true;
                     const document = result.document;
-                    if (!document)
-                        throw new UiError(displayMessage("quickCapture.submittedOpenPending", { p0: uiDisplayParameter(result.documentError?.message ?? uiMessage("common.confirmOriginalOperation")) }));
-                    if (this.host.created)
-                        await this.host.created(document);
-                    else
-                        await this.host.openDocument(document.path, document.root ?? this.context.root);
+                    const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
+                    if (result.documentError !== undefined && !documentError) throw new UiError(uiMessage("error.invalidResponse"));
+                    const deliveryError = result.deliveryError === undefined ? undefined : decodeApiErrorBody(result.deliveryError);
+                    if (result.deliveryError !== undefined && !deliveryError) throw new UiError(uiMessage("error.invalidResponse"));
+                    const deliveryErrors = [documentError, deliveryError].filter((error): error is ApiErrorBody => !!error);
+                    if (deliveryErrors.length || !document)
+                        throw new UiError(displayMessage("quickCapture.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : uiMessage("common.confirmOriginalOperation")) }));
+                    if (!this.host.created)
+                        throw new UiError(uiMessage("capture.createdDocumentDeliveryRequired"));
+                    await this.host.created(document);
                     const unchanged = name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
                     this.operationId = null;
                     this.pending = null;
@@ -588,7 +591,7 @@ export class QuickCapture {
                         this.pending = null;
                     }
                     feedback.className = "data-warning";
-                    setUiText(feedback, () => `${uiTextValue(error instanceof Error ? errorUiText(error) : String(error))}${uiTextValue(this.pending ? uiMessage("quickCapture.originalCreateRetainedSuffix") : uiMessage("quickCapture.originalInputRetainedSuffix"))}`);
+                    setUiText(feedback, () => `${uiTextValue(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"))}${uiTextValue(this.pending ? uiMessage("quickCapture.originalCreateRetainedSuffix") : uiMessage("quickCapture.originalInputRetainedSuffix"))}`);
                 }
                 finally {
                     submit.disabled = false;

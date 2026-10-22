@@ -52,6 +52,7 @@ pub enum EnrollmentRejection {
     AuthorityChanged,
     EnrollmentChanged,
     ServiceCredentials,
+    PrivilegeGainAllowed,
     UnsupportedFilesystem,
     OpaqueHandleSize,
 }

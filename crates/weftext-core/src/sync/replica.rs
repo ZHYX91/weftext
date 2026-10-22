@@ -72,7 +72,79 @@ pub struct SyncBindingInfo {
     pub installed_versions: Vec<(ObjectKey, String)>,
 }
 
+fn setup_fingerprint(root: &Path, workspace: &str) -> Result<String> {
+    Ok(hash(&serde_json::to_vec(
+        &serde_json::json!({"kind":"enableSync","root":display(root),"workspace":workspace}),
+    )?))
+}
+
 impl Core {
+    /// Immutable result of the original setup decision, independent of later
+    /// replica state, publications or the current path's binding.
+    pub(crate) fn original_sync_setup_fact(&self, plan: &Plan) -> Result<serde_json::Value> {
+        let invalid = || CoreError::new("invalidState", "Original sync setup evidence is invalid");
+        let setup = plan.sync_setup.as_ref().ok_or_else(invalid)?;
+        if plan.kind != "enableSync"
+            || plan.transaction.is_some()
+            || plan.before.is_some()
+            || !plan.after.is_empty()
+            || plan.identity.is_some()
+            || plan.receipt.is_some()
+            || !plan.files.is_empty()
+            || plan.node_id.is_some()
+            || plan.history_restore.is_some()
+            || plan.sync_publication.is_some()
+            || plan.sync_application.is_some()
+            || plan.content_revision.is_some()
+            || plan.path != setup.root
+            || plan.workspace_id.as_ref() != Some(&setup.identity.workspace_id)
+            || setup.selection.is_some()
+            || setup_fingerprint(Path::new(&setup.root), &setup.identity.workspace_id)?
+                != plan.fingerprint
+        {
+            return Err(invalid());
+        }
+        valid_operation_id(&setup.replica_id)?;
+        let mut graph = ReplicaGraph::new(&setup.identity.workspace_id, &setup.identity.genesis)?;
+        for (id, bytes) in &setup.bundle.blobs {
+            graph.offer_blob(id, bytes.clone())?;
+        }
+        for (id, manifest) in &setup.bundle.manifests {
+            graph.offer_manifest(id, manifest.clone())?;
+        }
+        if graph.status(&setup.identity.genesis)? != Admission::Accepted
+            || setup
+                .bundle
+                .manifests
+                .get(&setup.identity.genesis)
+                .is_none_or(|genesis| {
+                    genesis.operation_id != plan.operation_id
+                        || genesis.replica_id != setup.replica_id
+                })
+        {
+            return Err(invalid());
+        }
+        for original in &setup.initial {
+            let manifest = setup
+                .bundle
+                .manifests
+                .get(&original.commit)
+                .ok_or_else(invalid)?;
+            if graph.status(&original.commit)? != Admission::Accepted
+                || !manifest.changes.iter().any(|change| {
+                    change.object == original.object
+                        && change.revision == original.revision
+                        && change.after == original.state
+                })
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(
+            serde_json::json!({"operationId":plan.operation_id,"kind":"enableSync","path":setup.root,
+            "root":setup.root,"workspaceId":setup.identity.workspace_id,"identity":setup.identity,"replicaId":setup.replica_id}),
+        )
+    }
     pub fn enable_sync(
         &mut self,
         root: impl AsRef<Path>,
@@ -82,9 +154,7 @@ impl Core {
         valid_operation_id(operation_id)?;
         let root = absolute_path(root.as_ref())?;
         let workspace = self.require_workspace(&root)?;
-        let fingerprint = hash(&serde_json::to_vec(
-            &serde_json::json!({"kind":"enableSync","root":display(&root),"workspace":workspace.workspace_id}),
-        )?);
+        let fingerprint = setup_fingerprint(&root, &workspace.workspace_id)?;
         if let Some(plan) = self.operations.get(operation_id).cloned() {
             if plan.fingerprint != fingerprint
                 || plan.sync_setup.is_none()
@@ -579,6 +649,9 @@ impl Core {
                 && publication.root == root
                 && self.committed(&plan.operation_id)
             {
+                if matches!(plan.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(plan)?;
+                }
                 let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
                     self.journal_path(&plan.operation_id, "commit"),
                 )?)?;
@@ -616,6 +689,9 @@ impl Core {
                     .is_some_and(|v| v.root == setup.root))
                 && self.committed(&p.operation_id)
             {
+                if matches!(p.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(p)?;
+                }
                 let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
                     self.journal_path(&p.operation_id, "commit"),
                 )?)?;
@@ -678,14 +754,26 @@ impl Core {
         }) {
             return Ok(());
         }
+        let original_owner = if matches!(plan.kind.as_str(), "save" | "saveAs") {
+            self.validate_file_save_plan(plan)?;
+            match &plan.file_save.as_ref().unwrap().scope {
+                crate::file_save_scope::QualifiedInputScope::Library { binding } => {
+                    Some(&binding.workspace_id)
+                }
+                crate::file_save_scope::QualifiedInputScope::DeviceUnassigned => return Ok(()),
+            }
+        } else {
+            plan.workspace_id.as_ref()
+        };
         let matches: Vec<_> = self
             .sync_setups()
             .into_iter()
             .filter(|s| {
-                plan.transaction.as_ref().map_or_else(
-                    || Path::new(&plan.path).starts_with(&s.root),
-                    |t| t.request.root == s.root,
-                )
+                original_owner.is_none_or(|owner| owner == &s.identity.workspace_id)
+                    && plan.transaction.as_ref().map_or_else(
+                        || Path::new(&plan.path).starts_with(&s.root),
+                        |t| t.request.root == s.root,
+                    )
             })
             .collect();
         if matches.is_empty() {

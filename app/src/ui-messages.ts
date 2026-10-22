@@ -9863,7 +9863,81 @@ export const zhCN = {
   "error.core.backend.ambiguousRevisionFacts": "同一耐久提交顺序的原已接纳版本事实不一致",
   "error.core.backend.resourceBirthIncomplete": "原资源出生证据不完整",
   "desktop.cliServiceActive": "后台命令行服务正在运行",
-  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "原生来源不唯一，或未在实际输出中显示。"
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "原生来源不唯一，或未在实际输出中显示。",
+  "capture.createdDocumentDeliveryRequired": "原记录已提交，当前界面缺少准确文档交付入口；原号继续保留。",
+  "history.finishDelivery": "比较当前稿并结束本页原回执应用",
+  "history.deliveryFinished": "原恢复事实继续保留；已按明确比较接纳当前稿，结束本页回执应用。",
+  "history.recoveryIssuePrefix": " 恢复草稿更新提示：",
+  "historyState.finishCommittedDeliveryRequired": "只有原提交已确定后才可结束本页交付。",
+  "hostedHistoryState.committedReceiptMismatch": "后续回执不对应原恢复；原提交事实与编号保留，交付资格等待重新核对。",
+  "hostedHistoryState.committedStatusCannotRegress": "原恢复已确认提交，后续状态不能解除原号或改成未提交。",
+  "hostedHistoryState.committedResultIncomplete": "原恢复已提交，但准确结果或回执不完整；原事实和编号保留，请继续查询。",
+  "hostedHistoryState.uncommittedResultRejected": "未提交状态不能携带恢复结果，原记录保留。",
+  "hostedHistory.recoveryIssuePrefix": " 原恢复已保存；恢复草稿更新提示：",
+  "knowledge.committedDeliveryPending": "原操作已提交，交付仍待完成：",
+  "knowledge.committedStatusMismatch": "原操作已确认提交，后续状态不一致；原回执与编号保留。",
+  "libraryTrash.committedStatusCannotRegress": "原恢复已确认提交，后续状态不能降低原事实或释放原编号。",
+  "libraryTrash.statusContractMismatch": "恢复状态不符合原操作合同；原请求、已知事实与编号保留。",
+  "libraryTrash.originalEnded": "原恢复已明确结束，原笔记与原件保留。",
+  "shell.originalCommittedReceiptRequired": "原操作尚无已提交回执，原请求与输入保留。",
+  "shell.committedBodyChanged": "原操作已提交，当前正文已变化。",
+  "shell.createdDocumentNotDelivered": "原节点已创建，但准确文档尚未交付。",
+  "shell.restoreCommittedCurrentSessionChanged": "原恢复已提交，当前准确文件或会话已变化；原回执、输入与撤销记录保留，请比较当前磁盘版本或继续查询原交付。",
+  "shell.deliverySessionChanged": "交付期间笔记会话又变化，原回执和全部输入保留，请继续核对。",
+  "shell.compareOriginalBuffer": "请返回原缓冲区和原笔记后比较，原恢复事实继续保留。",
+  "shell.originalCurrentObjectUnreadable": "原保存事实已保留，但准确当前对象尚不可读，不能结束这份交付。",
+  "shell.createdNodeIdentityRequired": "原创建结果缺少已证明的实际节点身份，原操作继续保留。",
+  "shell.createdNodeAlreadyOpenPending": "原节点已经打开，但保存或当前磁盘版本仍待核对；输入和撤销记录保留，原创建继续等待交付。",
+  "shell.saveAwaitingConfirmationEllipsis": "保存待确认…",
+  "shell.originalHistoryRestorePending": "原历史恢复待核对",
+  "shell.saveAsDeliveryEndedState": "本次界面交付等待已结束，当前稿继续使用当前文件会话。",
+  "shell.saveAsDeliveryPendingState": "原效果已提交，准确结果尚待交付。",
+  "shell.inspectOriginalSaveAs": "查询这次另存为原结果",
+  "shell.endSaveAsDelivery": "结束这次交付等待，继续当前稿",
+  "shell.originalNoteCreationPending": "上一次笔记创建结果仍待确认，请先重试原创建操作。",
+  "shell.libraryExactDeliveryPending": "资料库已提交，原库或根笔记的准确交付尚未完成；原请求与回执保留。",
+  "shell.noteOriginalDeliveryPending": "笔记原结果尚未完成准确交付：",
+  "shell.checkOriginalOperationSentence": "请查询原操作。",
+  "shell.originalFileSessionUnavailable": "原文件会话当前不能重新资格化。原稿、文件会话和撤销记录保留，可另存当前稿。",
+  "shell.historyRestoreBeforeSave": "请先查询或交付这份笔记的原历史恢复，原编号与输入继续保留。",
+  "shell.saveAsOriginalPhysicalDeliveryPending": "另存为已提交，但原物理文件的准确交付尚未完成；原操作、原文件会话、后续输入和撤销记录保留。",
+  "shell.saveAsDeliverySessionChanged": "另存为交付期间原会话变化，原操作与输入保留，请继续核对。",
+  "shell.laterDeliverySessionChanged": "后续交付期间会话变化，原操作与当前输入保留，请继续核对。",
+  "shell.originalCommitReadUnavailable": "原提交的读取暂不可用；已确认事实和编号保留。",
+  "shell.originalSaveAsFactTitle": "另存为原提交事实",
+  "shell.originalSaveAsFactHelp": "原文件提交事实及当前交付状态。",
+  "shell.confirmedSaveAsRequiredToEnd": "只有已确认提交的原另存为操作可以结束界面交付等待。",
+  "shell.saveStateChangedOriginalRetained": "保存状态已变化，原请求和输入保留。",
+  "shell.saveAsDeliveryEndedNotice": "这次另存为的界面交付等待已结束；原提交和编号继续保留，当前稿与撤销记录保持原样。",
+  "queryDefinition.periodCommittedReceiptRequired": "原周期创建尚无适用的已提交回执，原请求保留。",
+  "queryDefinition.periodDocumentDeliveryRequired": "原周期已提交，当前界面缺少准确文档交付入口；原号继续保留。",
+  "originalOperation.deliveryErrorInvalid": "原结果交付错误不符合完整协议，原回执、编号和输入保留。",
+  "originalOperation.applicableCommittedReceiptRequired": "原请求尚无适用的已提交回执，保留原编号查询。",
+  "fileSave.invalidOriginalReceipt": "文件保存回执不完整或不属于原请求；原编号和输入保留，请查询原结果。",
+  "libraryCreation.originalReceiptInvalid": "资料库原创建回执不符合完整协议，原操作和输入保留。",
+  "libraryCreation.deliveryErrorInvalid": "资料库原交付错误不符合完整协议，原回执、编号和输入保留。",
+  "libraryCreation.committedDeliveryPendingPrefix": "资料库已提交，交付尚未完成：",
+  "libraryCreation.committedStatusMismatch": "原资料库已确认提交，后续状态不一致；原回执与请求保留。",
+  "libraryCreation.recoveryProtocolInvalid": "资料库原恢复结果不符合完整协议，原操作与输入保留。",
+  "workspaceTools.importCommittedStatusMismatch": "原导入已确认提交，后续状态不一致；原回执与编号保留。",
+  "workspaceTools.resourceImportDeliveryPending": "原资源导入已提交，交付尚未完成。",
+  "workspaceTools.originalImportEnded": "原导入已明确终结，原文件仍保留。请重新选择后准备。",
+  "workspaceTools.originalImportPending": "原导入尚未完成，请继续查询原操作或处理其恢复状态。",
+  "workspaceTools.originalImportResultPending": "原导入结果仍待核对。",
+  "shell.createdReturnForOriginalDelivery": "已创建 {name}；请返回原笔记查询并交付原结果。",
+  "shell.originalSaveAsCommit": "另存为原提交 {operationId}；",
+  "error.export.docx.math.spacingWidthApproximate": "数学间距 {width} 输出为普通数学空格；精确宽度未保留。",
+  "error.export.docx.math.spacingWidthUnspecified": "数学间距输出为普通数学空格；精确宽度未保留。",
+  "error.export.docx.math.argumentMissing": "公式元素 {element} 的参数不足。",
+  "error.export.docx.math.fractionLineWidthUnsupported": "自定义分数线宽尚不能准确转换为 Office Math；原源保留。",
+  "error.export.docx.math.accentLimitUnsupported": "数学重音需要专用 Office Math 映射，未降格成极限标记。",
+  "error.export.docx.math.accentLowerUpperUnsupported": "数学重音需要专用 Office Math 映射，未降格成极限上下标。",
+  "error.export.docx.math.multipleSeparatorsUnsupported": "多分隔符公式暂不支持。",
+  "error.export.docx.math.matrixRowUnsupported": "公式矩阵行类型暂不支持。",
+  "error.export.docx.math.matrixCellUnsupported": "公式矩阵单元格类型暂不支持。",
+  "error.export.docx.math.structureUnsupported": "公式结构 {element} 暂不能转换为可编辑 Office Math。",
+  "error.export.docx.math.variantUnsupported": "公式 mathvariant {variant} 暂不支持。",
+  "error.export.xlsx.relationshipPartNameInvalid": "关系部件名称缺少必需的 .rels 后缀。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19732,6 +19806,80 @@ export interface MessageParamsMap {
   "error.core.backend.resourceBirthIncomplete": {  };
   "desktop.cliServiceActive": {  };
   "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {  };
+  "capture.createdDocumentDeliveryRequired": {  };
+  "history.finishDelivery": {  };
+  "history.deliveryFinished": {  };
+  "history.recoveryIssuePrefix": {  };
+  "historyState.finishCommittedDeliveryRequired": {  };
+  "hostedHistoryState.committedReceiptMismatch": {  };
+  "hostedHistoryState.committedStatusCannotRegress": {  };
+  "hostedHistoryState.committedResultIncomplete": {  };
+  "hostedHistoryState.uncommittedResultRejected": {  };
+  "hostedHistory.recoveryIssuePrefix": {  };
+  "knowledge.committedDeliveryPending": {  };
+  "knowledge.committedStatusMismatch": {  };
+  "libraryTrash.committedStatusCannotRegress": {  };
+  "libraryTrash.statusContractMismatch": {  };
+  "libraryTrash.originalEnded": {  };
+  "shell.originalCommittedReceiptRequired": {  };
+  "shell.committedBodyChanged": {  };
+  "shell.createdDocumentNotDelivered": {  };
+  "shell.restoreCommittedCurrentSessionChanged": {  };
+  "shell.deliverySessionChanged": {  };
+  "shell.compareOriginalBuffer": {  };
+  "shell.originalCurrentObjectUnreadable": {  };
+  "shell.createdNodeIdentityRequired": {  };
+  "shell.createdNodeAlreadyOpenPending": {  };
+  "shell.saveAwaitingConfirmationEllipsis": {  };
+  "shell.originalHistoryRestorePending": {  };
+  "shell.saveAsDeliveryEndedState": {  };
+  "shell.saveAsDeliveryPendingState": {  };
+  "shell.inspectOriginalSaveAs": {  };
+  "shell.endSaveAsDelivery": {  };
+  "shell.originalNoteCreationPending": {  };
+  "shell.libraryExactDeliveryPending": {  };
+  "shell.noteOriginalDeliveryPending": {  };
+  "shell.checkOriginalOperationSentence": {  };
+  "shell.originalFileSessionUnavailable": {  };
+  "shell.historyRestoreBeforeSave": {  };
+  "shell.saveAsOriginalPhysicalDeliveryPending": {  };
+  "shell.saveAsDeliverySessionChanged": {  };
+  "shell.laterDeliverySessionChanged": {  };
+  "shell.originalCommitReadUnavailable": {  };
+  "shell.originalSaveAsFactTitle": {  };
+  "shell.originalSaveAsFactHelp": {  };
+  "shell.confirmedSaveAsRequiredToEnd": {  };
+  "shell.saveStateChangedOriginalRetained": {  };
+  "shell.saveAsDeliveryEndedNotice": {  };
+  "queryDefinition.periodCommittedReceiptRequired": {  };
+  "queryDefinition.periodDocumentDeliveryRequired": {  };
+  "originalOperation.deliveryErrorInvalid": {  };
+  "originalOperation.applicableCommittedReceiptRequired": {  };
+  "fileSave.invalidOriginalReceipt": {  };
+  "libraryCreation.originalReceiptInvalid": {  };
+  "libraryCreation.deliveryErrorInvalid": {  };
+  "libraryCreation.committedDeliveryPendingPrefix": {  };
+  "libraryCreation.committedStatusMismatch": {  };
+  "libraryCreation.recoveryProtocolInvalid": {  };
+  "workspaceTools.importCommittedStatusMismatch": {  };
+  "workspaceTools.resourceImportDeliveryPending": {  };
+  "workspaceTools.originalImportEnded": {  };
+  "workspaceTools.originalImportPending": {  };
+  "workspaceTools.originalImportResultPending": {  };
+  "shell.createdReturnForOriginalDelivery": { name: string };
+  "shell.originalSaveAsCommit": { operationId: string };
+  "error.export.docx.math.spacingWidthApproximate": { width: string };
+  "error.export.docx.math.spacingWidthUnspecified": {  };
+  "error.export.docx.math.argumentMissing": { element: string };
+  "error.export.docx.math.fractionLineWidthUnsupported": {  };
+  "error.export.docx.math.accentLimitUnsupported": {  };
+  "error.export.docx.math.accentLowerUpperUnsupported": {  };
+  "error.export.docx.math.multipleSeparatorsUnsupported": {  };
+  "error.export.docx.math.matrixRowUnsupported": {  };
+  "error.export.docx.math.matrixCellUnsupported": {  };
+  "error.export.docx.math.structureUnsupported": { element: string };
+  "error.export.docx.math.variantUnsupported": { variant: string };
+  "error.export.xlsx.relationshipPartNameInvalid": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -31416,7 +31564,93 @@ export const messageParamTypes = {
   "error.core.backend.ambiguousRevisionFacts": {},
   "error.core.backend.resourceBirthIncomplete": {},
   "desktop.cliServiceActive": {},
-  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {}
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {},
+  "capture.createdDocumentDeliveryRequired": {},
+  "history.finishDelivery": {},
+  "history.deliveryFinished": {},
+  "history.recoveryIssuePrefix": {},
+  "historyState.finishCommittedDeliveryRequired": {},
+  "hostedHistoryState.committedReceiptMismatch": {},
+  "hostedHistoryState.committedStatusCannotRegress": {},
+  "hostedHistoryState.committedResultIncomplete": {},
+  "hostedHistoryState.uncommittedResultRejected": {},
+  "hostedHistory.recoveryIssuePrefix": {},
+  "knowledge.committedDeliveryPending": {},
+  "knowledge.committedStatusMismatch": {},
+  "libraryTrash.committedStatusCannotRegress": {},
+  "libraryTrash.statusContractMismatch": {},
+  "libraryTrash.originalEnded": {},
+  "shell.originalCommittedReceiptRequired": {},
+  "shell.committedBodyChanged": {},
+  "shell.createdDocumentNotDelivered": {},
+  "shell.restoreCommittedCurrentSessionChanged": {},
+  "shell.deliverySessionChanged": {},
+  "shell.compareOriginalBuffer": {},
+  "shell.originalCurrentObjectUnreadable": {},
+  "shell.createdNodeIdentityRequired": {},
+  "shell.createdNodeAlreadyOpenPending": {},
+  "shell.saveAwaitingConfirmationEllipsis": {},
+  "shell.originalHistoryRestorePending": {},
+  "shell.saveAsDeliveryEndedState": {},
+  "shell.saveAsDeliveryPendingState": {},
+  "shell.inspectOriginalSaveAs": {},
+  "shell.endSaveAsDelivery": {},
+  "shell.originalNoteCreationPending": {},
+  "shell.libraryExactDeliveryPending": {},
+  "shell.noteOriginalDeliveryPending": {},
+  "shell.checkOriginalOperationSentence": {},
+  "shell.originalFileSessionUnavailable": {},
+  "shell.historyRestoreBeforeSave": {},
+  "shell.saveAsOriginalPhysicalDeliveryPending": {},
+  "shell.saveAsDeliverySessionChanged": {},
+  "shell.laterDeliverySessionChanged": {},
+  "shell.originalCommitReadUnavailable": {},
+  "shell.originalSaveAsFactTitle": {},
+  "shell.originalSaveAsFactHelp": {},
+  "shell.confirmedSaveAsRequiredToEnd": {},
+  "shell.saveStateChangedOriginalRetained": {},
+  "shell.saveAsDeliveryEndedNotice": {},
+  "queryDefinition.periodCommittedReceiptRequired": {},
+  "queryDefinition.periodDocumentDeliveryRequired": {},
+  "originalOperation.deliveryErrorInvalid": {},
+  "originalOperation.applicableCommittedReceiptRequired": {},
+  "fileSave.invalidOriginalReceipt": {},
+  "libraryCreation.originalReceiptInvalid": {},
+  "libraryCreation.deliveryErrorInvalid": {},
+  "libraryCreation.committedDeliveryPendingPrefix": {},
+  "libraryCreation.committedStatusMismatch": {},
+  "libraryCreation.recoveryProtocolInvalid": {},
+  "workspaceTools.importCommittedStatusMismatch": {},
+  "workspaceTools.resourceImportDeliveryPending": {},
+  "workspaceTools.originalImportEnded": {},
+  "workspaceTools.originalImportPending": {},
+  "workspaceTools.originalImportResultPending": {},
+  "shell.createdReturnForOriginalDelivery": {
+    "name": "text"
+  },
+  "shell.originalSaveAsCommit": {
+    "operationId": "text"
+  },
+  "error.export.docx.math.spacingWidthApproximate": {
+    "width": "text"
+  },
+  "error.export.docx.math.spacingWidthUnspecified": {},
+  "error.export.docx.math.argumentMissing": {
+    "element": "text"
+  },
+  "error.export.docx.math.fractionLineWidthUnsupported": {},
+  "error.export.docx.math.accentLimitUnsupported": {},
+  "error.export.docx.math.accentLowerUpperUnsupported": {},
+  "error.export.docx.math.multipleSeparatorsUnsupported": {},
+  "error.export.docx.math.matrixRowUnsupported": {},
+  "error.export.docx.math.matrixCellUnsupported": {},
+  "error.export.docx.math.structureUnsupported": {
+    "element": "text"
+  },
+  "error.export.docx.math.variantUnsupported": {
+    "variant": "text"
+  },
+  "error.export.xlsx.relationshipPartNameInvalid": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -41283,5 +41517,79 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.backend.ambiguousRevisionFacts": "Original accepted revision facts disagree at the same durable commit sequence",
   "error.core.backend.resourceBirthIncomplete": "Original resource birth evidence is incomplete",
   "desktop.cliServiceActive": "Command-line service is running in the background",
-  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "The native origin is nonunique or is not displayed in the actual output."
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "The native origin is nonunique or is not displayed in the actual output.",
+  "capture.createdDocumentDeliveryRequired": "The original record is committed, but this view has no exact document-delivery entry. The original operation ID is retained.",
+  "history.finishDelivery": "Compare the current draft and finish applying the original receipt on this page",
+  "history.deliveryFinished": "The original restore fact is retained. The current draft was accepted through explicit comparison; receipt application on this page has ended.",
+  "history.recoveryIssuePrefix": " Recovery draft update notice: ",
+  "historyState.finishCommittedDeliveryRequired": "Delivery on this page can end only after the original commit is confirmed.",
+  "hostedHistoryState.committedReceiptMismatch": "The later receipt does not match the original restore. The original commit fact and ID are retained; delivery eligibility must be checked again.",
+  "hostedHistoryState.committedStatusCannotRegress": "The original restore is confirmed committed. A later status cannot release its ID or change it to uncommitted.",
+  "hostedHistoryState.committedResultIncomplete": "The original restore is committed, but its exact result or receipt is incomplete. The original fact and ID are retained; continue checking the original operation.",
+  "hostedHistoryState.uncommittedResultRejected": "An uncommitted status cannot carry a restore result. The original record is retained.",
+  "hostedHistory.recoveryIssuePrefix": " The original restore is saved. Recovery draft update notice: ",
+  "knowledge.committedDeliveryPending": "The original operation is committed; delivery remains incomplete: ",
+  "knowledge.committedStatusMismatch": "The original operation is confirmed committed, but the later status disagrees. The original receipt and ID are retained.",
+  "libraryTrash.committedStatusCannotRegress": "The original restore is confirmed committed. A later status cannot downgrade that fact or release the original ID.",
+  "libraryTrash.statusContractMismatch": "The restore status does not match the original operation contract. The original request, known facts and ID are retained.",
+  "libraryTrash.originalEnded": "The original restore has explicitly ended. The original note and files are retained.",
+  "shell.originalCommittedReceiptRequired": "The original operation has no committed receipt. The original request and input are retained.",
+  "shell.committedBodyChanged": "The original operation is committed, and the current body has changed.",
+  "shell.createdDocumentNotDelivered": "The original node was created, but the exact document has not been delivered.",
+  "shell.restoreCommittedCurrentSessionChanged": "The original restore is committed, but the exact current file or session has changed. The original receipt, input and Undo history are retained; compare the current disk version or continue checking the original delivery.",
+  "shell.deliverySessionChanged": "The note session changed again during delivery. The original receipt and all input are retained; continue checking the original operation.",
+  "shell.compareOriginalBuffer": "Return to the original buffer and note to compare. The original restore fact remains retained.",
+  "shell.originalCurrentObjectUnreadable": "The original save fact is retained, but the exact current object is unreadable. This delivery cannot end yet.",
+  "shell.createdNodeIdentityRequired": "The original creation result lacks a proven actual node identity. The original operation is retained.",
+  "shell.createdNodeAlreadyOpenPending": "The original node is already open, but its save or current disk version still needs checking. Input and Undo history are retained; the original creation still awaits delivery.",
+  "shell.saveAwaitingConfirmationEllipsis": "Save awaiting confirmation…",
+  "shell.originalHistoryRestorePending": "Original history restore awaiting review",
+  "shell.saveAsDeliveryEndedState": "The delivery wait in this view has ended. The current draft continues using the current file session.",
+  "shell.saveAsDeliveryPendingState": "The original effect is committed; its exact result still awaits delivery.",
+  "shell.inspectOriginalSaveAs": "Check the original result of this Save As",
+  "shell.endSaveAsDelivery": "End this delivery wait and continue the current draft",
+  "shell.originalNoteCreationPending": "The previous note creation result is still unconfirmed. Retry the original creation operation first.",
+  "shell.libraryExactDeliveryPending": "The library is committed, but exact delivery of the original library or root note is incomplete. The original request and receipt are retained.",
+  "shell.noteOriginalDeliveryPending": "Exact delivery of the original note result is incomplete: ",
+  "shell.checkOriginalOperationSentence": "Check the original operation.",
+  "shell.originalFileSessionUnavailable": "The original file session cannot currently be requalified. The original draft, file session and Undo history are retained; the current draft can be saved as a new file.",
+  "shell.historyRestoreBeforeSave": "Check or deliver this note's original history restore before saving. The original ID and input are retained.",
+  "shell.saveAsOriginalPhysicalDeliveryPending": "Save As is committed, but exact delivery of the original physical file is incomplete. The original operation, original file session, later input and Undo history are retained.",
+  "shell.saveAsDeliverySessionChanged": "The original session changed during Save As delivery. The original operation and input are retained; continue checking the original operation.",
+  "shell.laterDeliverySessionChanged": "The session changed during later delivery. The original operation and current input are retained; continue checking the original operation.",
+  "shell.originalCommitReadUnavailable": "The original commit cannot currently be read. Confirmed facts and the original ID are retained.",
+  "shell.originalSaveAsFactTitle": "Original Save As commit fact",
+  "shell.originalSaveAsFactHelp": "The original file commit fact and current delivery state.",
+  "shell.confirmedSaveAsRequiredToEnd": "Only an original Save As operation confirmed committed can end its delivery wait in this view.",
+  "shell.saveStateChangedOriginalRetained": "The save state changed. The original request and input are retained.",
+  "shell.saveAsDeliveryEndedNotice": "This Save As delivery wait in the view has ended. The original commit and ID remain retained; the current draft and Undo history are unchanged.",
+  "queryDefinition.periodCommittedReceiptRequired": "The original period creation has no applicable committed receipt. The original request is retained.",
+  "queryDefinition.periodDocumentDeliveryRequired": "The original period is committed, but this view has no exact document-delivery entry. The original operation ID is retained.",
+  "originalOperation.deliveryErrorInvalid": "The original result delivery error does not match the complete protocol. The original receipt, ID and input are retained.",
+  "originalOperation.applicableCommittedReceiptRequired": "The original request has no applicable committed receipt. Retain the original ID and check the original operation.",
+  "fileSave.invalidOriginalReceipt": "The file-save receipt is incomplete or does not belong to the original request. The original ID and input are retained; check the original result.",
+  "libraryCreation.originalReceiptInvalid": "The original library-creation receipt does not match the complete protocol. The original operation and input are retained.",
+  "libraryCreation.deliveryErrorInvalid": "The original library delivery error does not match the complete protocol. The original receipt, ID and input are retained.",
+  "libraryCreation.committedDeliveryPendingPrefix": "The library is committed; delivery is incomplete: ",
+  "libraryCreation.committedStatusMismatch": "The original library is confirmed committed, but the later status disagrees. The original receipt and request are retained.",
+  "libraryCreation.recoveryProtocolInvalid": "The original library recovery result does not match the complete protocol. The original operation and input are retained.",
+  "workspaceTools.importCommittedStatusMismatch": "The original import is confirmed committed, but the later status disagrees. The original receipt and ID are retained.",
+  "workspaceTools.resourceImportDeliveryPending": "The original resource import is committed; delivery is incomplete.",
+  "workspaceTools.originalImportEnded": "The original import has explicitly ended. The original file is retained; select it again before preparing another import.",
+  "workspaceTools.originalImportPending": "The original import is incomplete. Continue checking the original operation or address its recovery state.",
+  "workspaceTools.originalImportResultPending": "The original import result still needs checking.",
+  "shell.createdReturnForOriginalDelivery": "Created {name}; return to the original note to check and deliver the original result.",
+  "shell.originalSaveAsCommit": "Original Save As commit {operationId}; ",
+  "error.export.docx.math.spacingWidthApproximate": "Math spacing {width} is exported as an ordinary math space; its exact width is not retained.",
+  "error.export.docx.math.spacingWidthUnspecified": "Math spacing is exported as an ordinary math space; its exact width is not retained.",
+  "error.export.docx.math.argumentMissing": "Math element {element} has too few arguments.",
+  "error.export.docx.math.fractionLineWidthUnsupported": "Custom fraction-line width cannot yet be converted exactly to Office Math; the original source is retained.",
+  "error.export.docx.math.accentLimitUnsupported": "Math accents require a dedicated Office Math mapping; they are not reduced to limit scripts.",
+  "error.export.docx.math.accentLowerUpperUnsupported": "Math accents require a dedicated Office Math mapping; they are not reduced to lower and upper limit scripts.",
+  "error.export.docx.math.multipleSeparatorsUnsupported": "Equations with multiple separators are not yet supported.",
+  "error.export.docx.math.matrixRowUnsupported": "This equation matrix row type is not yet supported.",
+  "error.export.docx.math.matrixCellUnsupported": "This equation matrix cell type is not yet supported.",
+  "error.export.docx.math.structureUnsupported": "Math structure {element} cannot yet be converted to editable Office Math.",
+  "error.export.docx.math.variantUnsupported": "Equation mathvariant {variant} is not yet supported.",
+  "error.export.xlsx.relationshipPartNameInvalid": "The relationship part name lacks the required .rels suffix."
 };

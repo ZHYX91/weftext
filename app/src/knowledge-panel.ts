@@ -1,9 +1,10 @@
 import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
+import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, parseUiMessage, UiError, type UiText } from "./ui-locale";
 import { disposeUiTree, joinUiText } from "./ui-locale";
 import { apiErrorUiText, type ApiErrorBody } from "./api-error";
 import { coreDescriptionUiText, descriptionUiText, engineDiagnosticUiText, type CoreDescription, type ErrorDescription } from "./ui-diagnostics";
 import "./knowledge-view.css";
+import { committedDeliveryComplete, originalCommitted } from "./original-operation";
 import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
 import { canApplySuggestion, decodeKnowledgeDelivery, decodeKnowledgeDiagnosticFields, decodeKnowledgeLoss, decodeKnowledgeTemplatePreview, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput, KnowledgeReadError, KnowledgeTemplatePreview } from "./knowledge-state";
@@ -197,6 +198,7 @@ export interface KnowledgeReceipt {
     status: string;
     operationId?: string;
     path?: string;
+    deliveryError?: ApiErrorBody;
     documentError?: ApiErrorBody;
     affectedDocuments?: readonly { documentError?: ApiErrorBody }[];
     [key: string]: unknown;
@@ -354,6 +356,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     let pendingPlan: {
         plan: KnowledgePlan;
         context: KnowledgeContext;
+        receipt?: KnowledgeReceipt;
     } | null = null;
     let disposed = false, busy = false, loading = false;
     let annotationBody = "", suggestionReplacement = "", annotationKind = "comment", annotationTarget = "whole_document";
@@ -427,7 +430,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             });
     };
     container.addEventListener("focusout", onBlur);
-    function report(error: unknown): void { const message = error instanceof Error ? errorUiText(error) : String(error); setUiText(status, message); host.notify(message, true); }
+    function report(error: unknown): void { const message = error instanceof Error ? errorUiText(error) : typeof error === "string" ? error : parseUiMessage(error) ?? uiMessage("error.invalidResponse"); setUiText(status, message); host.notify(message, true); }
     async function copy(text: string): Promise<void> {
         try {
             if (host.copy)
@@ -733,18 +736,22 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 throw new UiError(uiMessage("knowledge.draftChangedBeforeConfirmation"));
             pendingPlan = { plan, context };
             const receipt = decodeKnowledgeDelivery(await host.commit(plan, context));
+            if (receipt.operationId !== plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            pendingPlan.receipt = receipt;
             if (uncertainKnowledgeOperation(receipt.status)) {
                 setUiText(status, uiMessage("knowledge.operationUnconfirmedRetained"));
                 render();
                 return false;
             }
-            pendingPlan = null;
-            if (!["committed", "saved", "complete", "success"].includes(receipt.status))
+            if (!originalCommitted(receipt))
                 throw new UiError(joinUiText([displayMessage("knowledge.operationIncomplete", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
+            if (!committedDeliveryComplete(receipt))
+                throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
+            await refresh(true);
+            pendingPlan = null;
             const completion = joinUiText([uiMessage("knowledge.operationCompleted"), ...knowledgeDeliveryErrors(receipt)], "\n");
             setUiText(status, completion);
             host.notify(completion);
-            await refresh();
             return true;
         }
         catch (error) {
@@ -759,20 +766,30 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
     }
     async function inspectPending(): Promise<void> {
-        if (!pendingPlan || !host.inspectOperation)
+        if (busy || !pendingPlan || !host.inspectOperation)
             return;
+        const pending = pendingPlan;
+        busy = true;
         try {
-            const receipt = decodeKnowledgeDelivery(await host.inspectOperation(pendingPlan.plan.operationId, pendingPlan.context));
-            if (["committed", "saved", "complete", "success", "conflict", "failed", "rejected"].includes(receipt.status)) {
+            const receipt = decodeKnowledgeDelivery(await host.inspectOperation(pending.plan.operationId, pending.context));
+            if (pendingPlan !== pending) return;
+            if (receipt.operationId !== pending.plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt))
+                throw new UiError(uiMessage("knowledge.committedStatusMismatch"));
+            pending.receipt = receipt;
+            if (committedDeliveryComplete(receipt)) {
+                await refresh(true);
                 pendingPlan = null;
-                await refresh();
             }
+            else if (receipt.status === "resolved") pendingPlan = null;
+            else if (receipt.deliveryError || receipt.documentError)
+                throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt)], "\n"));
             setUiText(status, joinUiText([displayMessage("knowledge.originalOperationStatus", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
         }
         catch (error) {
             report(error);
         }
-        render();
+        finally { busy = false; render(); }
     }
     function chooser(fragmentId: string, hit: KnowledgeMention, text: string): HTMLElement {
         const value = element("div", "knowledge-chooser");
@@ -1802,7 +1819,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (focusKey)
             container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
     }
-    async function refresh(): Promise<void> {
+    async function refresh(strict = false): Promise<void> {
         const context = host.context();
         const generation = gate.begin();
         if ((context?.sessionId ?? "") !== graphSession) {
@@ -1848,12 +1865,13 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 snapshotBasis = null;
                 clearOverlay();
                 report(error);
-                setUiText(status, displayMessage("knowledge.scanFailedLastResultStale", { p0: uiDisplayParameter(status.textContent) }));
+                setUiText(status, displayMessage("knowledge.scanFailedLastResultStale", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")) }));
                 if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
                     deferredRender = true;
                 else
                     render();
             }
+            if (strict) throw error;
         }
     }
     render();

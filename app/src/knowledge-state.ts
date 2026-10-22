@@ -1,6 +1,7 @@
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
+import { copyOriginalDeliveryPresentation, originalDeliveryErrors, type OriginalFact } from "./original-operation";
 import { decodeCoreDescription, decodeDescriptionFields, decodeEngineDiagnostic, decodeErrorDescriptions, descriptionUiText, exactKeys, type CoreDescription, type EngineDiagnostic, type ErrorDescription } from "./ui-diagnostics";
 import type { RenderNode } from "./types";
 /** Presentation state only. Core owns discovery, identities and write qualification. */
@@ -93,6 +94,7 @@ export function decodeKnowledgeDelivery<T extends { status: string }>(value: T):
     const record = knowledgeRecord(value);
     if (typeof record.status !== "string") return invalidKnowledgeResponse();
     const result = { ...record };
+    if (Object.hasOwn(record, "deliveryError")) result.deliveryError = decodeApiErrorBody(record.deliveryError) ?? invalidKnowledgeResponse();
     if (Object.hasOwn(record, "documentError")) result.documentError = decodeApiErrorBody(record.documentError) ?? invalidKnowledgeResponse();
     if (Object.hasOwn(record, "affectedDocuments")) {
         if (!Array.isArray(record.affectedDocuments)) return invalidKnowledgeResponse();
@@ -101,10 +103,10 @@ export function decodeKnowledgeDelivery<T extends { status: string }>(value: T):
             return { ...document, ...(Object.hasOwn(document, "documentError") ? { documentError: decodeApiErrorBody(document.documentError) ?? invalidKnowledgeResponse() } : {}) };
         });
     }
-    return result as T;
+    return copyOriginalDeliveryPresentation(value, result) as T;
 }
-export function knowledgeDeliveryErrors(value: { documentError?: ApiErrorBody; affectedDocuments?: readonly { documentError?: ApiErrorBody }[] }): readonly UiText[] {
-    return [...(value.documentError ? [apiErrorUiText(value.documentError)] : []), ...(value.affectedDocuments ?? []).flatMap(document => document.documentError ? [apiErrorUiText(document.documentError)] : [])];
+export function knowledgeDeliveryErrors(value: Pick<OriginalFact, "deliveryError" | "documentError"> & { affectedDocuments?: readonly { documentError?: ApiErrorBody }[] }): readonly UiText[] {
+    return [...originalDeliveryErrors(value), ...(value.affectedDocuments ?? []).flatMap(document => document.documentError ? [apiErrorUiText(document.documentError)] : [])];
 }
 export function uncertainKnowledgeOperation(status: string): boolean {
     return ["unknown", "pending", "resultUnknown", "in-progress", "pending_reconciliation", "recoveryPending"].includes(status);

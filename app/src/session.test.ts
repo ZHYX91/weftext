@@ -4,6 +4,7 @@ import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canR
 import type { OpenedDocument, RenderOutput } from "./types";
 import { createSourceState } from "./editor";
 import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
+import { locale, message, uiTextValue } from "./ui-locale";
 
 const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
 const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
@@ -143,4 +144,31 @@ test("a later current source or changed owner/Session cannot borrow the original
     assert.equal(rebindCommittedSave(session, { sessionId: "s", source: "submitted S" }, { ...session.opened, source: "submitted S", baseId: "actual-T-base", ...change }), false);
     assert.deepEqual(session.opened, before); assert.equal(session.source, "new input Y"); assert.equal(session.baseId, "b");
   }
+});
+test("an ordinary file within an admitted workspace retains that exact workspace on qualified save delivery", () => {
+  const session = new DocumentSession({ ...opened, workspaceId: "workspace" });
+  session.edit("input Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "foreign", source: "saved S" }), false);
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "workspace", source: "saved S", baseId: "fresh" }), true);
+  assert.equal(session.baseId, "fresh"); assert.equal(session.source, "input Y");
+});
+
+test("qualified ordinary save delivery can restore its actual ancestor owner after a default-parent open", () => {
+  const session = new DocumentSession({ ...opened, path: "D:/A/nested/ordinary.typ", root: "D:/A/nested" });
+  session.edit("Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "S" }, { ...session.opened, workspaceId: "qualified-A", root: "D:/A", source: "S", baseId: "fresh" }), true);
+  assert.equal(session.source, "Y");
+  assert.equal(session.opened.workspaceId, "qualified-A");
+});
+
+test("a live Session error remains visible across locale and equal-source projection updates until actual edit or acknowledged save", () => {
+  const session = new DocumentSession({ ...opened, workspaceId: "qualified" }), note = message("common.save");
+  session.error = note; const serial = session.serial;
+  locale.set("en-US"); assert.equal(uiTextValue(session.error), "Save"); assert.equal(session.source, opened.source); assert.equal(session.baseId, opened.baseId); assert.equal(session.serial, serial);
+  session.edit(opened.source); assert.equal(session.error, note);
+  session.acceptProjection(render(session.source, session.serial)); assert.equal(session.error, note);
+  session.edit("作者新增😀\r\n"); assert.equal(session.error, null);
+  session.error = note;
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved" }, { ...opened, workspaceId: "qualified", sessionId: "fresh", source: "saved", baseId: "actual" }), true);
+  assert.equal(session.error, null); assert.equal(session.source, "作者新增😀\r\n"); assert.equal(session.baseId, "actual"); locale.set("zh-CN");
 });

@@ -1,6 +1,8 @@
 import { joinUiText } from "./ui-locale";
 import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
+import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, disposeUiTree, UiError, type UiText } from "./ui-locale";
+import { decodeKnowledgeDelivery, decodeKnowledgeLoss, knowledgeDeliveryErrors, knowledgeLossMessage } from "./knowledge-state";
+import { committedDeliveryComplete, deliverCommitted } from "./original-operation";
 import type { KnowledgePlan, KnowledgeReceipt } from "./knowledge-panel";
 import type { OpenedDocument } from "./types";
 export interface LibraryTrashEntry {
@@ -52,18 +54,9 @@ export interface PendingRestore {
     delivered: boolean;
     message: UiText;
 }
-const success = new Set(["committed", "saved", "complete", "success"]);
-const failed = new Set(["conflict", "failed", "rejected", "failed-no-effect"]);
 const terminalErrorCodes = new Set(["conflict", "operationConflict", "preimageChanged", "invalidName", "invalidPath", "trashMissing", "trashSelectionRequired", "trashSelectionMismatch", "targetExists", "destinationExists", "unsupported", "permissionDenied", "rejected"]);
-function errorMessage(error: unknown): UiText { return error instanceof Error ? errorUiText(error) : String(error); }
-function errorCode(error: unknown): string { return error && typeof error === "object" && "code" in error ? String(error.code) : ""; }
-function lossMessage(value: unknown): UiText {
-    if (typeof value === "string")
-        return value;
-    if (value && typeof value === "object" && "message" in value && typeof value.message === "string")
-        return value.message;
-    return uiMessage("libraryTrash.restoreUnsupportedContent");
-}
+function errorMessage(error: unknown): UiText { return error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"); }
+function errorCode(error: unknown): string { return error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : ""; }
 function openedDocument(value: unknown, nodeId?: string): value is OpenedDocument {
     if (!value || typeof value !== "object")
         return false;
@@ -88,7 +81,8 @@ export class LibraryTrashRestoreFlow {
             const plan = await this.host.request<KnowledgePlan>("/api/operations/prepare", request);
             if (plan.operationId !== request.operationId || typeof plan.planId !== "string" || !plan.planId)
                 throw new UiError(uiMessage("libraryTrash.prepareRequestMismatch"));
-            this.pending.plan = plan;
+            if (plan.losses !== undefined && !Array.isArray(plan.losses)) throw new UiError(uiMessage("error.invalidResponse"));
+            this.pending.plan = { ...plan, ...(plan.losses ? { losses: plan.losses.map(decodeKnowledgeLoss) } : {}) };
             this.pending.state = "prepared";
             this.pending.message = uiMessage("libraryTrash.checkLocationAndAllChanges");
         }
@@ -132,13 +126,16 @@ export class LibraryTrashRestoreFlow {
         this.busy = true;
         pending.message = uiMessage("libraryTrash.checkingOriginalResult");
         try {
-            const result = await this.host.request<KnowledgeReceipt & Partial<KnowledgePlan>>("/api/operations/status", { operationId: pending.request.operationId });
-            if (result.operationId && result.operationId !== pending.request.operationId)
+            const result = decodeKnowledgeDelivery(await this.host.request<KnowledgeReceipt & Partial<KnowledgePlan>>("/api/operations/status", { operationId: pending.request.operationId }));
+            if (result.operationId !== pending.request.operationId)
                 throw new UiError(uiMessage("libraryTrash.statusOtherOperation"));
+            if (pending.state === "committed" && result.status !== "committed")
+                throw new UiError(uiMessage("libraryTrash.committedStatusCannotRegress"));
             if (result.status === "prepared" && typeof result.planId === "string") {
+                if (!result.planId || result.losses !== undefined && !Array.isArray(result.losses)) throw new UiError(uiMessage("error.invalidResponse"));
                 if (pending.plan && pending.plan.planId !== result.planId)
                     throw new UiError(uiMessage("libraryTrash.originalPrepareIdChanged"));
-                pending.plan = result as KnowledgePlan;
+                pending.plan = { ...result, planId: result.planId, operationId: pending.request.operationId, ...(result.losses ? { losses: result.losses.map(decodeKnowledgeLoss) } : {}) };
                 pending.state = "prepared";
                 pending.message = pending.confirmed ? uiMessage("libraryTrash.originalStillPrepared") : uiMessage("libraryTrash.originalPreparationFound");
             }
@@ -160,12 +157,17 @@ export class LibraryTrashRestoreFlow {
         if (!pending || pending.state !== "committed" || pending.delivered)
             return;
         const document = pending.receipt?.document;
-        if (!openedDocument(document, pending.request.intent.nodeId)) {
-            pending.message = uiMessage("libraryTrash.restoredOpenInformationUnavailable");
+        if (!pending.receipt || !committedDeliveryComplete(pending.receipt) || !openedDocument(document, pending.request.intent.nodeId)) {
+            // Explicit delivery retry rechecks the original fact before reusing a
+            // previously failed callback; a commit/status read never recurses.
+            if (!this.busy) { await this.reconcile(); return; }
+            pending.message = joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...(pending.receipt ? knowledgeDeliveryErrors(pending.receipt) : [])], "\n");
             return;
         }
         try {
-            await this.host.created(document);
+            pending.receipt = await deliverCommitted(pending.receipt, async () => { await this.host.created(document); });
+            if (!committedDeliveryComplete(pending.receipt))
+                throw new UiError(joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...knowledgeDeliveryErrors(pending.receipt)], "\n"));
             pending.delivered = true;
             pending.message = uiMessage("libraryTrash.restoredOpened");
             this.host.notify(pending.message);
@@ -175,27 +177,29 @@ export class LibraryTrashRestoreFlow {
             throw error;
         }
     }
-    private async receive(receipt: KnowledgeReceipt): Promise<void> {
+    private async receive(value: KnowledgeReceipt): Promise<void> {
         const pending = this.pending;
         if (!pending)
             return;
-        if (receipt.operationId && receipt.operationId !== pending.request.operationId)
+        const receipt = decodeKnowledgeDelivery(value);
+        if (receipt.operationId !== pending.request.operationId)
             throw new UiError(uiMessage("libraryTrash.resultRequestMismatch"));
         if (pending.plan && typeof receipt.planId === "string" && receipt.planId !== pending.plan.planId)
             throw new UiError(uiMessage("libraryTrash.resultPreparedMismatch"));
+        if (!["committed", "resolved", "recoveryPending", "unknown"].includes(receipt.status) || pending.state === "committed" && receipt.status !== "committed")
+            throw new UiError(uiMessage("libraryTrash.statusContractMismatch"));
         pending.receipt = receipt;
-        if (success.has(receipt.status)) {
+        if (receipt.status === "committed") {
             const changed = pending.state !== "committed";
             pending.state = "committed";
-            const deliveryErrors = [receipt.documentError, ...(receipt.affectedDocuments ?? []).map(item=>item.documentError)].filter((item):item is NonNullable<typeof item>=>!!item);
-            pending.message = joinUiText([uiMessage("libraryTrash.restoreComplete"), ...deliveryErrors.map(apiErrorUiText)],"\n");
+            pending.message = joinUiText([uiMessage("libraryTrash.restoreComplete"), ...knowledgeDeliveryErrors(receipt)], "\n");
             if (changed)
                 this.host.environmentChanged?.(pending.request.root);
             await this.deliverCommitted();
         }
-        else if (failed.has(receipt.status)) {
+        else if (receipt.status === "resolved") {
             pending.state = "failed";
-            pending.message = uiMessage("libraryTrash.restoreNotApplied");
+            pending.message = uiMessage("libraryTrash.originalEnded");
         }
         else {
             pending.state = "unknown";
@@ -246,6 +250,7 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
                     return;
                 closed = true;
                 dialog.close();
+                disposeUiTree(dialog);
                 dialog.remove();
                 if (active?.dialog === dialog)
                     active = null;
@@ -299,7 +304,7 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
                     pendingHost.append(paths);
                 }
                 for (const loss of pending.plan?.losses ?? [])
-                    pendingHost.append(el("p", "knowledge-warning", lossMessage(loss)));
+                    pendingHost.append(el("p", "knowledge-warning", knowledgeLossMessage(loss)));
                 pendingHost.append(el("p", pending.state === "unknown" || pending.state === "failed" ? "knowledge-warning" : "knowledge-help", pending.message));
             };
             const render = (): void => {
@@ -323,9 +328,10 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
                         }, true));
                     }
                     else if (pending.state === "committed") {
-                        controls.append(button(openedDocument(pending.receipt?.document, pending.request.intent.nodeId) ? uiMessage("libraryTrash.openRestoredNote") : uiMessage("knowledge.checkOriginalOperation"), async () => {
+                        const canDeliver = pending.receipt !== undefined && committedDeliveryComplete(pending.receipt) && openedDocument(pending.receipt.document, pending.request.intent.nodeId);
+                        controls.append(button(canDeliver ? uiMessage("libraryTrash.openRestoredNote") : uiMessage("knowledge.checkOriginalOperation"), async () => {
                             lock();
-                            if (openedDocument(flow.pending?.receipt?.document, flow.pending?.request.intent.nodeId))
+                            if (flow.pending?.receipt && committedDeliveryComplete(flow.pending.receipt) && openedDocument(flow.pending.receipt.document, flow.pending.request.intent.nodeId))
                                 await flow.deliverCommitted();
                             else
                                 await flow.reconcile();
@@ -382,4 +388,3 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
         },
     };
 }
-import { apiErrorUiText } from "./api-error";

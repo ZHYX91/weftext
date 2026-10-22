@@ -1,8 +1,9 @@
-import { uiDisplayParameter } from "./ui-locale";
+import { disposeUiTree, joinUiText, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import "./history-panel.css";
 import { coreDescriptionUiText } from "./ui-diagnostics";
-import { HistoryController, historySourceDiff, historyTimeLabel, type HistoryComparison, type HistoryContext, type HistoryRestoreBasis, type HistoryRestoreResult, type HistorySource, } from "./history-state";
+import { HistoryController, historyOwnerKey, historyRecoveryIssueUiText, historySourceDiff, historyTimeLabel, type HistoryComparison, type HistoryContext, type HistoryRestoreBasis, type HistoryRestoreResult, type HistorySource, } from "./history-state";
+import { apiErrorUiText } from "./api-error";
 export interface HistoryPanelHost {
     getDocument(): HistoryContext | null;
     request<T>(path: string, body?: unknown): Promise<T>;
@@ -10,6 +11,8 @@ export interface HistoryPanelHost {
     prepareRestore?(): Promise<void>;
     /** The source owner applies the saved base and durably preserves newer input and Undo. */
     restored(result: HistoryRestoreResult, basis: Readonly<HistoryRestoreBasis>): Promise<void>;
+    /** Explicit comparison can retire this page's delivery, never the Core fact. */
+    finishDelivery?(operationId: string, basis: Readonly<HistoryRestoreBasis>): Promise<boolean>;
     /** Keep ordinary Save from racing a pending or uncertain restore. */
     restorePending?(basis: Readonly<HistoryRestoreBasis>, pending: boolean): void;
     notify(message: UiText, error?: boolean): void;
@@ -66,6 +69,7 @@ class HistoryDialog {
         result: HistoryRestoreResult;
         basis: Readonly<HistoryRestoreBasis>;
     } | null = null;
+    get pending(): boolean { return this.controller.operationId !== null || this.unacknowledged !== null; }
     constructor(private readonly host: HistoryPanelHost, context: HistoryContext) {
         this.controller = new HistoryController({
             id: () => crypto.randomUUID(), current: () => host.getDocument(),
@@ -119,13 +123,13 @@ class HistoryDialog {
     async open(): Promise<void> {
         if (!this.dialog.open)
             this.dialog.showModal();
-        if (!this.controller.list)
+        if (!this.controller.list || this.host.getDocument()?.sessionId !== this.controller.note.sessionId)
             await this.refresh();
         else
             this.draw();
     }
     private report(error: unknown, prefix: UiText = ""): void {
-        const message = () => `${uiTextValue(prefix)}${uiTextValue(error instanceof Error ? errorUiText(error) : String(error))}`;
+        const message = joinUiText([prefix, errorUiText(error)]);
         setUiText(this.status, message);
         this.status.classList.add("history-error");
         this.host.notify(message, true);
@@ -268,12 +272,15 @@ class HistoryDialog {
         this.draftChoice.disabled = this.savedChoice.disabled;
     }
     private drawOperation(): void {
+        disposeUiTree(this.operationHost);
         this.operationHost.replaceChildren();
         const pending = this.controller.pendingBasis;
         if (pending) {
             const state = this.controller.operationState;
             const message = state === "committed" ? uiMessage("history.committedResultUnavailable") : state === "missing" ? uiMessage("history.originalNotRegistered") : state === "recoveryPending" ? uiMessage("history.originalRecoveryPending") : uiMessage("history.originalResultUnknown");
             this.operationHost.append(element("p", "history-warning", displayMessage("history.originalOperationSummary", { p0: uiDisplayParameter(message), p1: uiDisplayParameter(this.controller.operationId) })));
+            if (this.controller.originalResultError)
+                this.operationHost.append(element("p", "history-warning", apiErrorUiText(this.controller.originalResultError)));
             const inspect = button(uiMessage("history.inspectOriginal"), () => this.inspect());
             const retry = button(uiMessage("history.retryOriginal"), () => this.retry());
             inspect.disabled = this.controller.busy;
@@ -284,6 +291,28 @@ class HistoryDialog {
             const retry = button(uiMessage("history.retryReceiptDelivery"), () => this.acknowledge());
             retry.disabled = this.acknowledging;
             this.operationHost.append(element("p", "history-warning", uiMessage("history.savedReceiptDeliveryPending")), retry);
+        }
+        const basis = this.unacknowledged?.basis ?? pending;
+        const operationId = this.unacknowledged?.result.receipt.operationId ?? this.controller.operationId;
+        if (basis && operationId && this.controller.operationState === "committed" && this.host.finishDelivery) {
+            const finish = button(uiMessage("history.finishDelivery"), async () => {
+                if (this.acknowledging)
+                    return;
+                this.acknowledging = true;
+                this.dialog.close();
+                try {
+                    if (await this.host.finishDelivery!(operationId, basis)) {
+                        this.controller.finishCommittedDelivery();
+                        this.unacknowledged = null;
+                        this.host.restorePending?.(basis, false);
+                        this.host.notify(uiMessage("history.deliveryFinished"));
+                    }
+                }
+                catch (error) { this.report(error); }
+                finally { this.acknowledging = false; this.drawControls(); this.drawOperation(); }
+            });
+            finish.disabled = this.controller.busy || this.acknowledging;
+            this.operationHost.append(finish);
         }
     }
     private async prepareRestore(): Promise<void> {
@@ -320,7 +349,7 @@ class HistoryDialog {
                 }
                 catch (error) {
                     this.report(error);
-                    setUiText(note, error instanceof Error ? errorUiText(error) : String(error));
+                    setUiText(note, errorUiText(error));
                     dialog.close();
                 }
                 finally {
@@ -343,6 +372,7 @@ class HistoryDialog {
             dialog.onclose = () => {
                 if (!this.controller.operationId && this.controller.review)
                     this.controller.cancelRestore();
+                disposeUiTree(dialog);
                 dialog.remove();
                 this.restoreDialog = null;
             };
@@ -362,9 +392,10 @@ class HistoryDialog {
             await this.host.restored(pending.result, pending.basis);
             this.unacknowledged = null;
             this.host.restorePending?.(pending.basis, false);
-            setUiText(this.status, uiMessage("history.restoreSaved"));
+            const savedMessage = joinUiText([uiMessage("history.restoreSaved"), ...(pending.result.recoveryIssue ? [uiMessage("history.recoveryIssuePrefix"), historyRecoveryIssueUiText(pending.result.recoveryIssue)] : [])]);
+            setUiText(this.status, savedMessage);
             this.status.classList.remove("history-error");
-            this.host.notify(this.status.textContent);
+            this.host.notify(savedMessage);
             try {
                 await this.controller.refresh();
             }
@@ -429,22 +460,24 @@ class HistoryDialog {
             this.drawOperation();
         }
     }
-    dispose(): void { this.readGeneration++; this.restoreDialog?.remove(); this.dialog.remove(); }
+    dispose(): void { this.readGeneration++; if (this.restoreDialog) disposeUiTree(this.restoreDialog); disposeUiTree(this.dialog); this.restoreDialog?.remove(); this.dialog.remove(); }
 }
 /** Closing/reopening preserves an uncertain operation and its immutable request. */
 export class HistoryPanel {
     private readonly dialogs = new Map<string, HistoryDialog>();
     constructor(private readonly host: HistoryPanelHost) { }
+    hasPending(context: HistoryContext | null): boolean { return !!context && this.dialogs.get(historyOwnerKey(context))?.pending === true; }
     async open(): Promise<void> {
         const context = this.host.getDocument();
         if (!context?.nodeId || !context.workspaceId) {
             this.host.notify(uiMessage("history.admittedLocalNoteRequired"), true);
             return;
         }
-        let dialog = this.dialogs.get(context.sessionId);
+        const key = historyOwnerKey(context);
+        let dialog = this.dialogs.get(key);
         if (!dialog) {
             dialog = new HistoryDialog(this.host, context);
-            this.dialogs.set(context.sessionId, dialog);
+            this.dialogs.set(key, dialog);
         }
         await dialog.open();
     }

@@ -4,13 +4,33 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 mod message_template;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub enum UiLocale {
     #[default]
     #[serde(rename = "zh-CN")]
     ZhCn,
     #[serde(rename = "en-US")]
     EnUs,
+}
+
+impl<'de> Deserialize<'de> for UiLocale {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct LocaleVisitor;
+        impl serde::de::Visitor<'_> for LocaleVisitor {
+            type Value = UiLocale;
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("the language string zh-CN or en-US")
+            }
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<UiLocale, E> {
+                match value {
+                    "zh-CN" => Ok(UiLocale::ZhCn),
+                    "en-US" => Ok(UiLocale::EnUs),
+                    _ => Err(E::unknown_variant(value, &["zh-CN", "en-US"])),
+                }
+            }
+        }
+        deserializer.deserialize_str(LocaleVisitor)
+    }
 }
 
 impl UiLocale {
@@ -591,9 +611,32 @@ mod tests {
         for case in oracles["locales"].as_array().unwrap() {
             assert_eq!(
                 serde_json::from_value::<UiLocale>(case["value"].clone()).is_ok(),
-                case["valid"].as_bool().unwrap()
+                case["valid"].as_bool().unwrap(),
+                "{} decoded value",
+                case["name"]
             );
+            let decoded = serde_json::from_str::<UiLocale>(case["json"].as_str().unwrap());
+            assert_eq!(
+                decoded.is_ok(),
+                case["valid"].as_bool().unwrap(),
+                "{} raw JSON",
+                case["name"]
+            );
+            if let Ok(locale) = decoded {
+                assert_eq!(serde_json::to_value(locale).unwrap(), case["value"]);
+            }
         }
+    }
+
+    #[test]
+    fn locale_default_and_escaped_input_serialize_only_canonical_strings() {
+        assert_eq!(
+            serde_json::to_string(&UiLocale::default()).unwrap(),
+            "\"zh-CN\""
+        );
+        let english = serde_json::from_str::<UiLocale>(r#""\u0065n-US""#).unwrap();
+        assert_eq!(english, UiLocale::EnUs);
+        assert_eq!(serde_json::to_string(&english).unwrap(), "\"en-US\"");
     }
 
     #[test]

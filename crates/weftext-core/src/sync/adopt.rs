@@ -689,6 +689,20 @@ impl Core {
             .values()
             .filter(|p| self.committed(&p.operation_id))
         {
+            if matches!(plan.kind.as_str(), "save" | "saveAs")
+                && self
+                    .validate_file_save_plan(plan)
+                    .inspect_err(|error| {
+                        crate::resource_diagnostics::error(
+                            "sync_installed.scope",
+                            &plan.operation_id,
+                            error,
+                        )
+                    })
+                    .is_err()
+            {
+                continue;
+            }
             let commit: serde_json::Value = serde_json::from_slice(&std::fs::read(
                 self.journal_path(&plan.operation_id, "commit"),
             )?)?;

@@ -1,3 +1,4 @@
+import { message } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
@@ -146,7 +147,7 @@ test("a saved definition keeps its frozen original through ordinary errors and d
     if (path === "/api/query/definition/save") throw Object.assign(new Error("owner unavailable"), { code: "permissionDenied" });
     const id = (body as { operationId: string }).operationId;
     assert.equal(path, "/api/operations/status");
-    return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable" } };
+    return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable", explanation: message("queryDefinition.saveReceiptUnavailable"), diagnostics: [], causes: [] } };
   });
   let delivered = 0;
   Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { delivered++; throw new Error("document delivery unavailable"); } });

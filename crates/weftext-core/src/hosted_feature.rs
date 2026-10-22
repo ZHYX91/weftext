@@ -128,6 +128,14 @@ pub(super) struct FeatureOperation {
     navigation: Option<NavigationFeature>,
 }
 impl FeatureOperation {
+    pub(super) fn is_empty_fence(&self) -> bool {
+        self.preview.is_null()
+            && !self.docx_import
+            && self.import_losses.is_none()
+            && self.intent_kind.is_none()
+            && self.destination_slot.is_none()
+            && self.navigation.is_none()
+    }
     fn kind(&self) -> FeatureIntentKind {
         self.intent_kind.unwrap_or(if self.docx_import {
             FeatureIntentKind::ImportDocx
@@ -267,6 +275,25 @@ pub(super) fn valid_fingerprint(fingerprint: &str) -> Result<()> {
 }
 
 impl Core {
+    /// Read only an exact original creation member. The host separately grants
+    /// this operation's result read; the ActorOperation proves its ownership.
+    pub fn actor_feature_open_original_node(
+        &mut self,
+        resource: &str,
+        operation: &str,
+        owner: &weftext_knowledge::NodeRef,
+    ) -> Result<OpenedDocument> {
+        let record = self
+            .actor_feature_record(resource, operation)?
+            .ok_or_else(conflict)?;
+        let status = self
+            .actor_feature_status(resource, operation)?
+            .ok_or_else(conflict)?;
+        if status.status != "committed" || !status.node_refs.iter().any(|node| node == owner) {
+            return Err(conflict());
+        }
+        self.reopen_original_operation_member(&record.core_operation_id, owner)
+    }
     /// Describe shared-role writes from the immutable original actor Plan.
     /// Hosts must authorize these effects separately from destination slots.
     pub fn actor_feature_shared_writes(
@@ -434,6 +461,7 @@ impl Core {
             ));
         }
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        self.validate_actor_input_record(&record)?;
         self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
@@ -542,7 +570,7 @@ impl Core {
             record.feature.as_mut().unwrap().import_losses = Some(feature_losses(detail, kind));
             private_replace(
                 &self.actor_record(operation)?,
-                &Self::actor_operation_bytes(&record)?,
+                &self.actor_operation_bytes(&record)?,
             )?;
         }
         let feature = record.feature.unwrap();
@@ -1018,6 +1046,7 @@ impl Core {
         }
         check_size(&serde_json::to_vec(&preview)?)?;
         let record = ActorOperation {
+            scope: self.actor_input_scope_for_root(Path::new(&request.root))?,
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -1040,7 +1069,7 @@ impl Core {
         };
         journal::private_create(
             &self.actor_record(external_operation_id)?,
-            &Self::actor_operation_bytes(&record)?,
+            &self.actor_operation_bytes(&record)?,
         )?;
         request.operation_id = record.core_operation_id.clone();
         let mut canonical = serde_json::json!({
@@ -1138,6 +1167,7 @@ impl Core {
         let mut record = match self.actor_feature_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -1172,9 +1202,9 @@ impl Core {
                 self.resolve_record(&record.core_operation_id, "cancelPrepared")?;
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_feature_status(resource, operation)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing settled feature operation"))

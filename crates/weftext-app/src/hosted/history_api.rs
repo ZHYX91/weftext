@@ -260,6 +260,16 @@ fn restore_fingerprint(req: &Restore) -> Result<String, ApiError> {
     Ok(digest(&serde_json::to_vec(&json!({"resource":req.resource,"sessionId":req.session_id,"baseId":req.base_id,
         "versionId":req.version_id,"operationId":req.operation_id,"draftAction":req.draft_action,"source":req.source,"serial":req.serial})).map_err(|_| ApiError::internal("无法固定原恢复输入"))?))
 }
+fn core_restore_request(req: &Restore) -> HistoryRestoreRequest {
+    HistoryRestoreRequest {
+        session_id: req.session_id.clone(),
+        base_id: req.base_id.clone(),
+        version_id: req.version_id.clone(),
+        operation_id: req.operation_id.clone(),
+        draft_action: req.draft_action.clone(),
+        draft_source: Some(req.source.clone()),
+    }
+}
 fn public_status(
     inner: &mut HostedInner,
     auth: &Auth,
@@ -271,6 +281,13 @@ fn public_status(
     let path = root.join(&inner.file(&status.resource)?.path);
     let mut output = json!({"operationId":status.operation_id,"resource":status.resource,"status":status.status,"resultStatus":"unavailable"});
     if status.status == "committed" {
+        // A first successful author call can carry a transient Draft warning.
+        // Revalidate delivery independently and attach it only to that same
+        // exact result; later status does not invent an old warning.
+        let recovery_issue = status
+            .result
+            .as_ref()
+            .and_then(|result| result.recovery_issue.clone());
         let result = inner
             .core
             .with_actor_for_root(&scope, &inner.config.root, |core| {
@@ -300,7 +317,8 @@ fn public_status(
                 Ok((result, qualified, current))
             });
         match result {
-            Ok((result, qualified, original_current)) => {
+            Ok((mut result, qualified, original_current)) => {
+                result.recovery_issue = recovery_issue;
                 let current = original_current
                     && qualified.source_hash == digest(result.source.as_bytes())
                     && qualified.revision.is_some()
@@ -332,11 +350,12 @@ async fn restore(
         locked(&state, move |inner| {
             let actor = access(inner, &auth, &req.resource, true)?;
             let intent = restore_fingerprint(&req)?;
+            let request = core_restore_request(&req);
             let scope = inner.actor_scope(&actor);
             let known = inner
                 .core
                 .with_actor_for_root(&scope, &inner.config.root, |core| {
-                    core.actor_history_restore_retry(&req.resource, &req.operation_id, &intent)
+                    core.actor_history_restore_for_request(&req.resource, &request, &intent)
                 })
                 .map_err(history_error)?;
             let status = match known {
@@ -354,25 +373,37 @@ async fn restore(
                     )?;
                     let root = inner.config.root.clone();
                     let path = root.join(&inner.file(&req.resource)?.path);
-                    inner
-                        .core
-                        .with_actor_for_root(&scope, &inner.config.root, |core| {
-                            core.actor_history_restore(
-                                &req.resource,
-                                &root,
-                                &path,
-                                HistoryRestoreRequest {
-                                    session_id: req.session_id,
-                                    base_id: req.base_id,
-                                    version_id: req.version_id,
-                                    operation_id: req.operation_id,
-                                    draft_action: req.draft_action,
-                                    draft_source: Some(req.source),
-                                },
-                                &intent,
-                            )
-                        })
-                        .map_err(history_error)?
+                    let outcome =
+                        inner
+                            .core
+                            .with_actor_for_root(&scope, &inner.config.root, |core| {
+                                core.actor_history_restore(
+                                    &req.resource,
+                                    &root,
+                                    &path,
+                                    request.clone(),
+                                    &intent,
+                                )
+                            });
+                    match outcome {
+                        Ok(status) => status,
+                        Err(error) => {
+                            let known = inner
+                                .core
+                                .with_actor_for_root(&scope, &inner.config.root, |core| {
+                                    core.actor_history_restore_for_request(
+                                        &req.resource,
+                                        &request,
+                                        &intent,
+                                    )
+                                })
+                                .map_err(history_error)?;
+                            match known {
+                                Some(status) if status.status == "committed" => status,
+                                _ => return Err(history_error(error)),
+                            }
+                        }
+                    }
                 }
             };
             public_status(inner, &auth, status)

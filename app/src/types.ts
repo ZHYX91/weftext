@@ -87,7 +87,7 @@ export interface RenderOutput {
   serial: number;
   source: string;
 }
-export interface Receipt { recoveryIssue?: ErrorDescription & {code: string}; operationId: string; status: string; path: string; baseId: string }
+export interface Receipt { recoveryIssue?: CoreError; operationId: string; status: string; path: string; baseId: string; revisionId?: string }
 export interface RecoveryImage { present: boolean; source?: string; base64?: string; byteLength: number; sha256?: string }
 export interface RecoveryInfo {
   operationId: string; path: string; status: string; beforeSource?: string; afterSource?: string; currentSource?: string; description: CoreDescription;

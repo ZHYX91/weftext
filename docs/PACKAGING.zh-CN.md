@@ -10,6 +10,8 @@ translation_status: source
 
 `build`／`check` 使用当前源码；`package` 先核完整离线材料与 SDK，再把公开产品源码冻结到实际 Cargo target 下本次独有的输入目录，后续构建和同一套检查都在该副本运行。源码归档来自这份固定字节，嵌入前端另记准确清单。不会在构建后重新扫描正在编辑的工作树来冒充同源产物。源码、前端、两个程序、依赖原许可或材料资格变化会拒绝打包；失败输出保留，不回退旧 target 或旧单程序包。
 
+共享 target 的 Rust 编译另由同入口核内容资格：实际 Rust／Cargo、本地 path（含 vendor）源码、构建脚本和嵌入资源、命令／源码根上下文、上次成功产物及本地生成目录内容必须相符。未知或变更只强制相关本地入口重编，未变 registry 依赖继续复用；不 clean 或另建每检出冷缓存。target 内的输入提示仅为可丢弃缓存，先置未决，命令成功且输入／产物核准后才记成功；失败不冒新源码已编译。产品锁内完成双程序固定副本，再释放给同入口下一次构建。具体锁顺序和直接 Cargo 边界见 [WORKFLOW](WORKFLOW.zh-CN.md)，此机制不替代候选验收。
+
 首次打包要求实际产品 Git 检出及 Git 工具，按 `git ls-files -c -o --exclude-standard -z` 选择已跟踪和未忽略的公开文件，读取当前工作树字节；未提交修改、新增和删除均反映到本次快照，忽略的本地材料不会被扫描读取。源码归档不包含 `.git`，解压后仍可独立运行 `build`／`check`；任意无 Git 目录重新打包不属于支持入口。
 
 Windows 构建完成后，入口在实际 target 下新建同批产物目录，把两个最终程序及 `artifact-catalog.json` 固定在一起，后续检查和打包使用该角色映射。使用入口打印的这两个准确路径；原 mutable Cargo debug／release 输出不是本次验收角色映射。release 固定副本和最终候选属于交付产物，不纳入自动 temp 清理。清单包含 `schemaVersion`、`architecture`、`sourceSha256`、`hostContractSha256`、`buildId` 及 `roles`；desktop／cli 各记录固定文件名、准确 SHA-256／字节长度和 PE 子系统。`buildId` 为源码归档摘要、合同摘要、desktop 摘要、cli 摘要四个小写十六进制 ASCII 字符串依次以 LF 连接后的 SHA-256，末尾无 LF。宿主从系统返回的真实进程映像核对本批角色，不能信任 peer 自报身份或目录名。跨构建升级另行协调，不因目录相同而自动接管。

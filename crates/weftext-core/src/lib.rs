@@ -31,9 +31,12 @@ mod device_state_tests;
 mod draft_recovery;
 mod exchange;
 mod export_read;
+mod file_save_scope;
+use file_save_scope::{FileSaveData, QualifiedInputScope};
 mod history;
 mod hosted;
 mod recognition;
+pub mod reminder_device_state;
 #[cfg(all(test, windows))]
 mod tag_write_guard_tests;
 pub use hosted::{
@@ -49,6 +52,7 @@ mod inventory;
 mod journal;
 mod library_creation;
 mod local_operation;
+mod original_delivery;
 pub use library_creation::{
     InitialLibraryStyle, InitialRootNote, LibraryCreateOptions, root_query_presets,
 };
@@ -242,22 +246,21 @@ struct Session {
     base_id: String,
     bytes: Vec<u8>,
     stamp: FileStamp,
+    file_scope: Result<QualifiedInputScope>,
     node_id: Option<String>,
     conflicting_draft: Option<Draft>,
     draft_placement_pending: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Draft {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    library: Option<hosted::ActorLibraryBinding>,
+    scope: QualifiedInputScope,
     path: String,
     base_source: String,
     source: String,
     #[serde(default = "known_base")]
     base_known: bool,
-    #[serde(default)]
-    identity: Option<FileIdentity>,
+    identity: FileIdentity,
     #[serde(default)]
     alternatives: Vec<DraftAlternative>,
 }
@@ -429,8 +432,12 @@ impl Core {
         };
         let session_id = fresh();
         let base_id = fresh();
-        let (draft, draft_placement_pending) =
-            self.read_relocated_draft_with_identity(&root, &path, &observed.identity, &source)?;
+        let file_scope = self.capture_file_save_scope(&path);
+        let (draft, draft_placement_pending) = if file_scope.is_ok() {
+            self.read_relocated_draft_with_identity(&root, &path, &observed.identity, &source)?
+        } else {
+            (None, true)
+        };
         let draft = draft
             .filter(|d| d.source != source || !d.alternatives.is_empty())
             .filter(|d| {
@@ -457,6 +464,7 @@ impl Core {
                 base_id: base_id.clone(),
                 bytes,
                 stamp: observed,
+                file_scope,
                 node_id: admitted.clone(),
                 conflicting_draft: if recovered_draft_conflict {
                     draft
@@ -491,8 +499,7 @@ impl Core {
             )
         })?;
         let draft = Draft {
-            library: self
-                .draft_library_for_session(session_id, session.conflicting_draft.as_ref())?,
+            scope: self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
             base_source: session
                 .conflicting_draft
@@ -503,7 +510,7 @@ impl Core {
                 .conflicting_draft
                 .as_ref()
                 .is_none_or(|d| d.base_known),
-            identity: Some(session.stamp.identity.clone()),
+            identity: session.stamp.identity.clone(),
             alternatives: Self::retained_draft_alternatives(
                 session.conflicting_draft.as_ref(),
                 source,
@@ -555,12 +562,12 @@ impl Core {
         }
         if action == "mergeRecovered" {
             let reviewed = Draft {
-                library: self.draft_session_library(session_id)?,
+                scope: self.draft_session_scope(session_id)?,
                 path: display(&session.path),
                 base_source: decode(&session.bytes)?,
                 source: source.unwrap().into(),
                 base_known: true,
-                identity: Some(session.stamp.identity.clone()),
+                identity: session.stamp.identity.clone(),
                 alternatives: Vec::new(),
             };
             private_replace(
@@ -603,17 +610,29 @@ impl Core {
                     "Open the file again to establish a session",
                 )
             })?;
-        let mut intent = serde_json::json!({"kind":"save", "session":request.session_id,"base":request.base_id,"path":display(&session.path),"source":request.source});
-        if let Some(binding) = &restore {
-            intent["historyRestore"] = serde_json::to_value(binding)?;
-        }
-        let fingerprint = hash(&serde_json::to_vec(&intent)?);
+        let (original_path, scope) = if let Some(plan) = self.operations.get(&request.operation_id)
+        {
+            self.validate_file_save_plan(plan)?;
+            (
+                PathBuf::from(&plan.path),
+                plan.file_save.as_ref().unwrap().scope.clone(),
+            )
+        } else {
+            (session.path.clone(), session.file_scope.clone()?)
+        };
+        let fingerprint = original_delivery::save_fingerprint(
+            &request,
+            &original_path,
+            restore.as_ref(),
+            scope.clone(),
+        )?;
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
             return Ok(SaveOutcome::committed(receipt));
         }
+        self.validate_current_file_save_scope(&scope, &session.path)?;
         if request.base_id != session.base_id {
             let draft = Draft {
-                library: self.draft_library_for_session(
+                scope: self.draft_scope_for_session(
                     &request.session_id,
                     session.conflicting_draft.as_ref(),
                 )?,
@@ -621,7 +640,7 @@ impl Core {
                 base_source: String::new(),
                 source: request.source.clone(),
                 base_known: false,
-                identity: Some(session.stamp.identity.clone()),
+                identity: session.stamp.identity.clone(),
                 alternatives: Self::retained_draft_alternatives(
                     session.conflicting_draft.as_ref(),
                     &request.source,
@@ -683,6 +702,11 @@ impl Core {
             Some(current_stamp.identity.clone()),
             "save",
         );
+        plan.file_save = Some(FileSaveData::new(
+            request.session_id.clone(),
+            Some(request.base_id.clone()),
+            scope,
+        ));
         plan.receipt = Some(Receipt {
             revision_id: None,
             operation_id: request.operation_id,
@@ -763,11 +787,18 @@ impl Core {
             .ok_or_else(|| CoreError::new("sessionMissing", "Open the source first"))?;
         let path = absolute_path(Path::new(&request.path))?;
         check_typ(&path)?;
-        let fingerprint = hash(&serde_json::to_vec(
-            &serde_json::json!({"kind":"saveAs","session":request.session_id,"path":display(&path),"source":request.source}),
-        )?);
-        if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
-            return Ok(SaveOutcome::committed(receipt));
+        if let Some(plan) = self.operations.get(&request.operation_id) {
+            self.validate_file_save_plan(plan)?;
+            let data = FileSaveData::new(
+                request.session_id.clone(),
+                None,
+                plan.file_save.as_ref().unwrap().scope.clone(),
+            );
+            let fingerprint =
+                file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
+            if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
+                return Ok(SaveOutcome::committed(receipt));
+            }
         }
         self.persist_draft(&request.session_id, &request.source)?;
         self.check_pending(&path)?;
@@ -778,6 +809,13 @@ impl Core {
             ));
         }
         let guard = ParentGuard::acquire(&path)?;
+        let data = FileSaveData::new(
+            request.session_id.clone(),
+            None,
+            self.capture_file_save_scope(&path)?,
+        );
+        let fingerprint =
+            file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
         let mut plan = journal::Plan::file(
             request.operation_id.clone(),
             fingerprint,
@@ -787,6 +825,7 @@ impl Core {
             None,
             "saveAs",
         );
+        plan.file_save = Some(data);
         plan.receipt = Some(Receipt {
             revision_id: None,
             operation_id: request.operation_id,
@@ -803,6 +842,7 @@ impl Core {
                 return Err(e);
             }
         };
+        self.record_materialized(&plan.operation_id, &path, &file)?;
         write_source(&mut file, &plan.after)?;
         self.commit(&plan)?;
         Ok(SaveOutcome::committed(plan.receipt.unwrap()))
@@ -927,6 +967,7 @@ impl Core {
                     .find(|b| &b.identity == identity)
             })
     }
+    #[cfg(test)]
     fn legacy_draft_path(&self, path: &Path) -> PathBuf {
         self.draft_directory("drafts").join(format!(
             "{}.json",

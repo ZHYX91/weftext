@@ -1,12 +1,14 @@
 import { locale as interfaceLocale, type UiLocale } from "./ui-locale";
-import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
+import { message as uiMessage, displayMessage, joinUiText, UiError, type UiText } from "./ui-locale";
 /** Transient history presentation only. Core owns versions, retention and Draft persistence. */
 import type { DocumentBasis } from "./data-panel";
 import type { Receipt } from "./types";
-import { coreDescriptionUiText, descriptionUiText, type CoreDescription, type ErrorDescription } from "./ui-diagnostics";
+import { coreDescriptionUiText, decodeCoreError, type CoreDescription, type CoreError } from "./ui-diagnostics";
 import { freezeOriginalAttempt, originalFence, type FrozenOriginalAttempt, type OriginalFence } from "./original-operation";
+import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 export interface HistoryContext extends DocumentBasis {
+    /** One live editor buffer survives Core Session rebinding. */
+    ownerKey?: string;
     baseSource: string;
     dirty: boolean;
     readOnly?: boolean;
@@ -95,13 +97,14 @@ export interface HistoryRestoreResult {
     source: string;
     versionId: string;
     protectedDrafts: ProtectedHistoryDraft[];
+    recoveryIssue?: CoreError;
 }
 export interface HistoryOperationStatus {
     operationId: string;
     status: "missing" | "committed" | "recoveryPending" | "resolved";
     receipt?: Receipt;
     result?: HistoryRestoreResult;
-    resultError?: ErrorDescription & {code: string};
+    resultError?: ApiErrorBody;
 }
 /** The generic settlement route returns a flat original fact, never a history result. */
 export interface HistorySettlement extends Partial<Receipt> {
@@ -138,7 +141,14 @@ export interface HistoryTransport {
 }
 const clone = <T>(value: T): T => structuredClone(value);
 const fail = (code: string, message: UiText): Error => Object.assign(new UiError(message), { code });
-const codeOf = (error: unknown): string => typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+export function historyRecoveryIssueUiText(value: CoreError): UiText {
+    const issue = decodeCoreError(value);
+    if (!issue)
+        throw new UiError(uiMessage("error.invalidResponse"));
+    const { code, currentSource, ...description } = issue;
+    return joinUiText([coreDescriptionUiText(description), ...(currentSource === undefined ? [] : ["\n[currentSource]\n", currentSource])]);
+}
+const codeOf = (error: unknown): string => typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "";
 function validRestoreReceipt(value: unknown, operationId: string): value is Receipt {
     if (!value || typeof value !== "object")
         return false;
@@ -150,10 +160,12 @@ export function uncertainHistoryOperation(error: unknown): boolean {
     return !code || ["unknown", "resultUnknown", "recoveryPending", "pending", "in-progress", "pending_reconciliation"].includes(code);
 }
 export function sameHistoryNote(a: HistoryContext, b: HistoryContext | null): boolean {
-    return !!b && a.sessionId === b.sessionId && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId;
+    return !!b && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId && (a.ownerKey !== undefined || b.ownerKey !== undefined ? !!a.ownerKey && a.ownerKey === b.ownerKey : a.sessionId === b.sessionId);
 }
+export function historyOwnerKey(context: HistoryContext): string { return JSON.stringify([context.ownerKey ?? context.sessionId, context.workspaceId, context.nodeId]); }
+function sameHistorySession(a: HistoryContext, b: HistoryContext | null): boolean { return sameHistoryNote(a, b) && a.sessionId === b!.sessionId; }
 export function sameHistoryDraft(a: HistoryContext, b: HistoryContext | null): boolean {
-    return sameHistoryNote(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.source === b!.source;
+    return sameHistorySession(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.source === b!.source;
 }
 /** The source owner uses this before applying a restore receipt; newer input always survives. */
 export function restoreBufferDisposition(basis: HistoryRestoreBasis, current: HistoryContext | null): "replaceClean" | "retainDraft" | "unrelated" {
@@ -241,7 +253,15 @@ export class HistoryController {
     get pendingBasis(): Readonly<HistoryRestoreBasis> | null { return this.pending?.basis ?? null; }
     get operationState(): HistoryOperationStatus["status"] | null { return this.operation?.status ?? null; }
     get originalReceipt(): Readonly<Receipt> | null { return this.operation?.receipt ?? null; }
+    get originalResultError(): ApiErrorBody | undefined { return this.operation?.resultError; }
     get locked(): boolean { return this.busy || this.pending !== null; }
+    finishCommittedDelivery(): void {
+        if (this.operation?.status !== "committed")
+            throw fail("operationPending", uiMessage("historyState.finishCommittedDeliveryRequired"));
+        this.pending = null;
+        this.review = null;
+        this.uncertain = false;
+    }
     private context(): HistoryContext {
         const current = this.host.current();
         if (!sameHistoryNote(this.note, current))
@@ -257,7 +277,7 @@ export class HistoryController {
     async refresh(): Promise<boolean> {
         const current = this.context(), generation = ++this.generation;
         const result = await this.host.list({ sessionId: current.sessionId });
-        if (generation !== this.generation || !sameHistoryNote(current, this.host.current()))
+        if (generation !== this.generation || !sameHistorySession(current, this.host.current()))
             return false;
         if (result.nodeId !== current.nodeId || result.workspaceId !== current.workspaceId)
             throw fail("identityPending", uiMessage("historyState.noteIdentityMismatch"));
@@ -272,7 +292,7 @@ export class HistoryController {
         if (row && row.status !== "available")
             throw fail("historyUnavailable", coreDescriptionUiText(row.description));
         const result = await this.host.read({ sessionId: current.sessionId, versionId });
-        if (generation !== this.generation || !sameHistoryNote(current, this.host.current()))
+        if (generation !== this.generation || !sameHistorySession(current, this.host.current()))
             return false;
         this.validateRead(result, versionId);
         this.selected = clone(result);
@@ -288,7 +308,7 @@ export class HistoryController {
             throw fail("selectVersion", uiMessage("historyState.selectSavedVersion"));
         const generation = ++this.generation;
         const result = await this.host.compare({ sessionId: current.sessionId, versionId: selected.versionId });
-        if (generation !== this.generation || !sameHistoryNote(current, this.host.current()))
+        if (generation !== this.generation || !sameHistorySession(current, this.host.current()))
             return false;
         this.validateRead(result.selected, selected.versionId);
         if (result.comparison !== "currentSaved" || typeof result.current.source !== "string" || !result.current.baseId)
@@ -360,13 +380,18 @@ export class HistoryController {
         const pending = this.pending!;
         if (!result || !validRestoreReceipt(result.receipt, pending.request.operationId) || result.source !== pending.basis.selectedSource || result.versionId !== pending.basis.selectedVersionId || !Array.isArray(result.protectedDrafts) || result.protectedDrafts.some(draft => !draft || typeof draft.source !== "string" || typeof draft.baseSource !== "string" || typeof draft.path !== "string" || typeof draft.baseKnown !== "boolean"))
             throw fail("resultUnknown", uiMessage("historyState.restoreReceiptIncomplete"));
+        if (result.recoveryIssue !== undefined && !decodeCoreError(result.recoveryIssue))
+            throw fail("resultUnknown", uiMessage("error.invalidResponse"));
     }
     private accept(result: HistoryRestoreResult): HistoryRestoreResult {
         this.validateRestore(result);
         this.pending = null;
         this.review = null;
         this.uncertain = false;
-        return clone(result);
+        const accepted = clone(result);
+        if (accepted.recoveryIssue)
+            accepted.recoveryIssue = decodeCoreError(accepted.recoveryIssue)!;
+        return accepted;
     }
     private remember(status: HistoryOperationStatus): void {
         if (status.operationId !== this.pending!.request.operationId || !["missing", "committed", "recoveryPending", "resolved"].includes(status.status))
@@ -380,6 +405,12 @@ export class HistoryController {
                 throw fail("resultUnknown", uiMessage("historyState.laterReceiptSaveMismatch"));
             this.operation = clone({ operationId: status.operationId, status: "committed", receipt: valid ? status.receipt : priorReceipt });
             this.uncertain = false;
+            if (status.resultError !== undefined) {
+                const error = decodeApiErrorBody(status.resultError);
+                if (!error)
+                    throw fail("resultUnknown", uiMessage("error.invalidResponse"));
+                this.operation.resultError = error;
+            }
             if (status.receipt !== undefined && !valid)
                 throw fail("resultUnknown", uiMessage("historyState.committedSaveReceiptInvalid"));
             return;
@@ -411,7 +442,7 @@ export class HistoryController {
             const status = await this.host.restore(clone(this.pending!.request)), result = this.consume(status);
             if (result)
                 return result;
-            throw fail("resultUnavailable", status.status === "committed" ? displayMessage("historyState.committedDeliveryUnavailable", { p0: status.resultError ? descriptionUiText(status.resultError) : uiMessage("historyState.queryOriginalRestoreResult") }) : uiMessage("historyState.completionNotDelivered"));
+            throw fail("resultUnavailable", status.status === "committed" ? displayMessage("historyState.committedDeliveryUnavailable", { p0: status.resultError ? apiErrorUiText(status.resultError) : uiMessage("historyState.queryOriginalRestoreResult") }) : uiMessage("historyState.completionNotDelivered"));
         }
         catch (error) {
             // Even an ordinary API error can arise while reading evidence after a

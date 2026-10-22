@@ -1,6 +1,4 @@
-import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError } from "./ui-locale";
-import type { UiText } from "./ui-locale";
+import { message as uiMessage, type UiText } from "./ui-locale";
 import type { OpenedDocument, RenderOutput } from "./types";
 /** A qualified same-Node move does not authorize silently rebinding a Draft's
  * writer. Consumers wait for the user's existing comparison/merge flow. */
@@ -60,19 +58,15 @@ export class DocumentSession {
 }
 /** Install only the same original owner's verified saved bytes. A fresh
  * Session has its own actual base; the original receipt base cannot be reused. */
-export function rebindCommittedSave(session: DocumentSession, frozen: {
-    sessionId: string;
-    source: string;
-}, document: OpenedDocument): boolean {
-    const prior = session.opened;
-    const sameOwner = prior.nodeId && prior.workspaceId
-        ? document.nodeId === prior.nodeId && document.workspaceId === prior.workspaceId
-        : !document.nodeId && !document.workspaceId && document.path.replaceAll("\\", "/").toLowerCase() === session.path.replaceAll("\\", "/").toLowerCase();
-    if (prior.sessionId !== frozen.sessionId || !sameOwner || document.source !== frozen.source || document.recoveredDraftConflict)
-        return false;
-    session.opened = document;
-    session.acknowledgeSave(frozen.source, document.baseId, document.path);
-    return true;
+export function rebindCommittedSave(session: DocumentSession, frozen: { sessionId: string; source: string }, document: OpenedDocument): boolean {
+  const prior = session.opened;
+  const sameOwner = prior.nodeId && prior.workspaceId
+    ? document.nodeId === prior.nodeId && document.workspaceId === prior.workspaceId
+    : !document.nodeId && (!prior.workspaceId || document.workspaceId === prior.workspaceId) && document.path.replaceAll("\\", "/").toLowerCase() === session.path.replaceAll("\\", "/").toLowerCase();
+  if (prior.sessionId !== frozen.sessionId || !sameOwner || document.source !== frozen.source || document.recoveredDraftConflict) return false;
+  session.opened = document;
+  session.acknowledgeSave(frozen.source, document.baseId, document.path);
+  return true;
 }
 /** Conservative native literal escaping; source-mode paste remains exact. */
 export function encodeLiteral(text: string): string {

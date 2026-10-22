@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 import test_hosted as hosted_harness
 import test_local_features as local_harness
 from test_hosted_library import HostedLibrary
+from _creation_result import library_fact
 
 
 ARTIFACT_PARENT = None
@@ -109,13 +110,13 @@ class LocalProcessing(local_harness.LocalFeatures):
         admitted = self.api('/api/open', {'path': str(root / 'Styles' / 'Styles.typ'), 'root': str(root)})
         self.assertEqual(admitted['kind'], 'managed')
         self.assertEqual(admitted['workspaceId'], receipt['workspaceId'])
-        self.assertEqual(self.api('/api/library/create', request), receipt)
+        self.assertEqual(library_fact(self.api('/api/library/create', request)), library_fact(receipt))
         changed = copy.deepcopy(request)
         changed['options']['initialStyle']['source'] += '\n// changed frozen input'
         self.assertEqual(self.api('/api/library/create', changed, 409)['error']['code'], 'operationConflict')
         self.assertEqual(style.read_bytes(), request['options']['initialStyle']['source'].encode())
         self.restart_same_state()
-        self.assertEqual(self.api('/api/library/create', request), receipt)
+        self.assertEqual(library_fact(self.api('/api/library/create', request)), library_fact(receipt))
         doc = self.note(root, '初始化语言', 'English colour. #text(lang: "zh", region: "CN")[中文局部]\n')
         current = self.api('/api/styles/read', {'sessionId': doc['sessionId']})
         self.assertEqual(current['source'], request['options']['initialStyle']['source'])
@@ -144,12 +145,18 @@ class LocalProcessing(local_harness.LocalFeatures):
                 ended = self.api('/api/library/create-cancel', request)
                 self.assertEqual(ended['operationId'], request['operationId'])
                 self.assertEqual(ended['status'], 'resolved')
-                terminal_path = self.data_dir / 'journal' / (request['operationId'] + '.plan.json')
-                terminal = json.loads(terminal_path.read_text('utf-8'))
-                self.assertEqual(terminal['kind'], 'cancelLibraryCreation')
-                self.assertFalse((self.data_dir / 'journal' / (request['operationId'] + '.resolution.json')).exists())
-                self.assertFalse(terminal['files'])
-                self.assertIsNone(terminal['transaction'])
+                journal = self.data_dir / 'journal'
+                terminal_path = journal / (request['operationId'] + '.resolution.json')
+                terminal_bytes = terminal_path.read_bytes()
+                terminal = json.loads(terminal_bytes)
+                self.assertEqual(set(terminal), {'operationId', 'action', 'message', 'attempt'})
+                self.assertEqual(terminal['operationId'], request['operationId'])
+                self.assertEqual(terminal['action'], 'cancelPrepared')
+                self.assertIsInstance(terminal['message'], str)
+                self.assertEqual(set(terminal['attempt']), {'requestKind', 'wireDigest'})
+                self.assertEqual(terminal['attempt']['requestKind'], 'createLibrary')
+                self.assertIsNotNone(re.fullmatch(r'[0-9a-f]{64}', terminal['attempt']['wireDigest']))
+                self.assertEqual(list(journal.glob(request['operationId'] + '.*.json')), [terminal_path])
                 self.restart_same_state()
                 self.assertEqual(self.api('/api/recovery/inspect', {'operationId': request['operationId']})['status'], 'resolved')
                 self.assertEqual(self.api('/api/library/create', request, 409)['error']['code'], 'operationCanceled')
@@ -157,6 +164,8 @@ class LocalProcessing(local_harness.LocalFeatures):
                 changed = copy.deepcopy(request)
                 changed['options']['initialStyle']['enabled'] = False
                 self.assertEqual(self.api('/api/library/create-cancel', changed, 409)['error']['code'], 'operationConflict')
+                self.assertEqual(terminal_path.read_bytes(), terminal_bytes)
+                self.assertEqual(list(journal.glob(request['operationId'] + '.*.json')), [terminal_path])
                 if original:
                     self.assertEqual(original.read_bytes(), b'preserve exact original user bytes\x00')
                     self.assertEqual(list(root.iterdir()), [original])
@@ -175,7 +184,11 @@ class LocalProcessing(local_harness.LocalFeatures):
         root.rename(retained)
         shutil.copytree(retained, root)
         self.assertNotEqual(root.stat().st_ino, retained.stat().st_ino)
-        self.assertEqual(self.api('/api/library/create', request, 409)['error']['code'], 'committedResultUnavailable')
+        unavailable = self.api('/api/library/create', request)
+        self.assertEqual(library_fact(unavailable), library_fact(receipt))
+        self.assertIn('deliveryError', unavailable)
+        self.assertNotIn('library', unavailable)
+        self.assertNotIn('rootDocument', unavailable)
         self.assertEqual({p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob('*') if p.is_file()}, original)
         self.assertEqual({p.relative_to(retained).as_posix(): p.read_bytes() for p in retained.rglob('*') if p.is_file()}, original)
 

@@ -803,18 +803,18 @@ fn hard_link_alias_is_refused() {
 fn interrupted_write_third_state_and_partial_commit_never_reexecute() {
     let mut f = Fixture::new("before");
     let doc = f.open();
-    let session = f.core.sessions[&doc.session_id].clone();
-    let id = fresh();
-    let plan = journal::Plan::file(
-        id.clone(),
-        hash(b"proposal"),
-        &f.path,
-        Some(b"before".to_vec()),
-        b"after".to_vec(),
-        Some(session.stamp.identity),
-        "save",
+    let request = request(&doc, "after");
+    let id = request.operation_id.clone();
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
+    assert!(f.core.operations.contains_key(&id));
+    assert!(
+        !f.data
+            .join("journal")
+            .join(format!("{id}.commit.json"))
+            .exists()
     );
-    f.core.stage(plan).unwrap();
     fs::write(&f.path, "third external version").unwrap();
     fs::write(
         f.data.join("journal").join(format!("{id}.commit.json")),
@@ -1201,24 +1201,46 @@ fn stale_base_proposal_remains_unqualified_after_restart() {
 #[test]
 fn private_journal_publication_never_replaces_or_reads_partial_temps() {
     let mut f = Fixture::new("before");
-    let id = fresh();
+    let doc = f.open();
+    let request = request(&doc, "after");
+    let id = request.operation_id.clone();
+    let replacement = SaveRequest {
+        session_id: request.session_id.clone(),
+        base_id: request.base_id.clone(),
+        operation_id: id.clone(),
+        source: "replacement".into(),
+    };
     fs::write(
         f.data.join("journal").join(format!("{}.pending", fresh())),
         "partial unpublished payload",
     )
     .unwrap();
-    let plan = journal::Plan::file(
-        id.clone(),
-        hash(b"original"),
-        &f.path,
-        Some(b"before".to_vec()),
-        b"after".to_vec(),
-        None,
-        "save",
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
+    assert!(
+        !f.data
+            .join("journal")
+            .join(format!("{id}.commit.json"))
+            .exists()
     );
-    f.core.stage(plan.clone()).unwrap();
+    let plan = f.core.operations[&id].clone();
+    f.core.validate_file_save_plan(&plan).unwrap();
     let mut changed = plan;
     changed.after = b"replacement".to_vec();
+    changed.fingerprint = original_delivery::save_fingerprint(
+        &replacement,
+        &f.path,
+        None,
+        f.core.sessions[&doc.session_id].file_scope.clone().unwrap(),
+    )
+    .unwrap();
+    let revision = fresh();
+    changed.content_revision = Some(revision.clone());
+    let receipt = changed.receipt.as_mut().unwrap();
+    receipt.base_id = revision.clone();
+    receipt.revision_id = Some(revision);
+    f.core.validate_file_save_plan(&changed).unwrap();
     assert_eq!(f.core.stage(changed).unwrap_err().code, "exists");
     assert!(fs::rename(f.data.join("journal"), f.data.join("moved-journal")).is_err());
     drop(f.core);
@@ -1229,7 +1251,8 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
 }
 
 #[test]
-fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumption() {
+fn selected_library_backup_excludes_foreign_plaintext_and_preserves_current_draft_and_archived_input()
+ {
     let mut f = Fixture::new("ordinary");
     let first = f.temp.path().join("L1");
     let second = f.temp.path().join("L2");
@@ -1276,10 +1299,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
             }),
         "Explicit resolution must preserve the original selected proposal before backup"
     );
-    let marker = f
-        .core
-        .draft_path(&first.join("C/C.typ"))
-        .with_extension("relocation.json");
+    let marker = f.core.draft_path(&first.join("C/C.typ"));
     assert!(marker.exists());
     operation(
         &mut f.core,
@@ -1292,10 +1312,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
     f.core
         .open(second.join("D/D.typ"), Some(second.clone()))
         .unwrap();
-    let foreign_marker = f
-        .core
-        .draft_path(&second.join("D/D.typ"))
-        .with_extension("relocation.json");
+    let foreign_marker = f.core.draft_path(&second.join("D/D.typ"));
     let target = f.temp.path().join("selected-backup");
     operation(
         &mut f.core,

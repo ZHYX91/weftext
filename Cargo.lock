@@ -4499,6 +4499,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "weftext-worker-broker"
+version = "0.7.0-dev"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "weftext-enrollment",
+]
+
+[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
