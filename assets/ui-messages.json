@@ -51139,6 +51139,11 @@
       "zh-CN": "后台命令行服务正在运行",
       "en-US": "Command-line service is running in the background",
       "params": {}
+    },
+    "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {
+      "zh-CN": "原生来源不唯一，或未在实际输出中显示。",
+      "en-US": "The native origin is nonunique or is not displayed in the actual output.",
+      "params": {}
     }
   }
 }
