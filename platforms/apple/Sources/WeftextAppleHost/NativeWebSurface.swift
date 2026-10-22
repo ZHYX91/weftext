@@ -11,6 +11,9 @@ public protocol AppleHostPort: AnyObject {
 /// Main-thread owned WKWebView surface, common to AppKit and UIKit containers.
 public final class NativeWebSurface: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate {
     public let webView: WKWebView
+    /// The composition root may offer its real input-close workflow after a denied reload/navigation.
+    /// The callback itself grants no replacement-document or author-input permission.
+    public var onNavigationRejected: ((URL?) -> Void)?
     private let host: AppleHostPort
     private let assets: AssetSchemeHandler
     private var gate = SurfaceGate()
@@ -115,7 +118,9 @@ public final class NativeWebSurface: NSObject, WKScriptMessageHandlerWithReply, 
               navigationAction.navigationType == .other,
               let url = navigationAction.request.url,
               gate.consumeDocumentNavigation(url) else {
-            decisionHandler(.cancel); return
+            decisionHandler(.cancel)
+            onNavigationRejected?(navigationAction.request.url)
+            return
         }
         decisionHandler(.allow)
     }

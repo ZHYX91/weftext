@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -30,7 +31,8 @@ def static_check() -> None:
     required = ["Package.swift", "Sources/WeftextAppleHost/SurfaceGate.swift",
                 "Sources/WeftextAppleHost/BundledAssets.swift",
                 "Sources/WeftextAppleHost/NativeWebSurface.swift",
-                "Tests/WeftextAppleHostTests/SurfaceGateTests.swift"]
+                "Tests/WeftextAppleHostTests/SurfaceGateTests.swift",
+                "Tests/WeftextAppleHostTests/NativeWebSurfaceTests.swift"]
     for relative in required:
         if not (PACKAGE / relative).is_file():
             raise ValueError(f"Missing Apple host source: {relative}")
@@ -109,6 +111,56 @@ def save(run: Path, record: dict) -> None:
                                      encoding="utf-8")
 
 
+def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
+                 require_complete: bool) -> None:
+    """Fix actual executable/relocatable bytes, not a count of compiler intermediates."""
+    role_directory = run / "roles"
+    role_directory.mkdir()
+    record["roles"] = {}
+    record["unavailableRoles"] = []
+    selections = [("macos-test-bundle", list((run / "swift").rglob(
+        "WeftextAppleHostPackageTests.xctest/Contents/MacOS/WeftextAppleHostPackageTests")),
+        {"BUNDLE", "EXECUTE"}, None)]
+    for source in sorted((package / "Sources" / "WeftextAppleHost").glob("*.swift")):
+        selections.append(("macos-host-" + source.stem + ".o", list((run / "swift").rglob(
+            "WeftextAppleHost.build/" + source.name + ".o")), {"OBJECT"}, None))
+    selections.append(("ios-simulator-host.o", [run / "ios" / "Build" / "Products" /
+                       "Debug-iphonesimulator" / "WeftextAppleHost.o"], {"OBJECT"}, {"arm64", "x86_64"}))
+    magic_values = {"feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca",
+                    "cafebabf", "bfbafeca"}
+    for name, candidates, file_types, required_architectures in selections:
+        available = [p for p in candidates if p.is_file()]
+        if len(available) != 1:
+            record["unavailableRoles"].append({"role": name, "availableCandidates": len(available)})
+            continue
+        source = available[0]
+        if not source.resolve().is_relative_to(run):
+            raise ValueError("Artifact role escaped the owned run")
+        data = source.read_bytes()
+        if not 16 <= len(data) <= 128 * 1024 * 1024 or data[:4].hex() not in magic_values:
+            raise ValueError(f"Expected a bounded actual Mach-O role: {name}")
+        description = run_command(["/usr/bin/file", "-b", str(source)], run,
+                                  "role-" + name + "-file", env, 15, record, package).strip()
+        architectures = set(run_command(["/usr/bin/xcrun", "lipo", "-archs", str(source)], run,
+                                       "role-" + name + "-architectures", env, 15, record, package).split())
+        headers = run_command(["/usr/bin/xcrun", "otool", "-hv", str(source)], run,
+                              "role-" + name + "-headers", env, 15, record, package)
+        if not architectures or (required_architectures is not None and architectures != required_architectures):
+            raise ValueError(f"Unexpected architecture qualification for {name}")
+        if not any(re.search(r"\b(?:MH_)?" + kind + r"\b", headers) for kind in file_types):
+            raise ValueError(f"Unexpected actual Mach-O file type for {name}")
+        destination = role_directory / name
+        with destination.open("xb") as output:
+            output.write(data)
+        record["roles"][name] = {"source": source.relative_to(run).as_posix(),
+            "artifact": destination.relative_to(run).as_posix(), "bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(), "machOMagic": data[:4].hex(),
+            "architectures": sorted(architectures), "fileDescription": description,
+            "headersLog": "role-" + name + "-headers.log"}
+    if require_complete and record["unavailableRoles"]:
+        raise ValueError("A required actual Apple artifact role is missing or ambiguous")
+
+
 def build(state_root: Path, developer_dir: Path) -> int:
     if sys.platform != "darwin":
         raise ValueError("Apple SDK compilation requires an actual macOS host; no cross-platform pass")
@@ -156,9 +208,17 @@ def build(state_root: Path, developer_dir: Path) -> int:
             ("runtimes", ["/usr/bin/xcrun", "simctl", "list", "runtimes", "--json"]),
         ]:
             run_command(argv, run, label, env, 60, record)
-        run_command(["/usr/bin/xcrun", "swift", "test", "--package-path", str(package_input),
+        macos_output = run_command(["/usr/bin/xcrun", "swift", "test", "--package-path", str(package_input),
                      "--scratch-path", str(run / "swift"), "--cache-path", str(state_root / "cache"),
                      "--jobs", "2"], run, "macos-tests", env, 600, record, package_input)
+        mechanism_source = package_input / "Tests" / "WeftextAppleHostTests" / "NativeWebSurfaceTests.swift"
+        mechanism_tests = re.findall(r"\bfunc\s+(test[A-Za-z0-9_]+)\(", mechanism_source.read_text(encoding="utf-8"))
+        if not mechanism_tests or not all(re.search(r"Test Case .*" + re.escape(name) +
+                                                   r"[^\n]* passed", macos_output)
+                                           for name in mechanism_tests):
+            raise ValueError("The planned actual WebKit tests did not all produce passed XCTest results")
+        record["mechanismValidation"] = {"macosWebKitTestsPassed": mechanism_tests,
+                                         "iOSSimulatorRuntime": "not run", "product": "not validated"}
         schemes_text = run_command(["/usr/bin/xcodebuild", "-list", "-json"], run, "schemes", env, 90, record, package_input)
         # Xcode may print a short preamble before its JSON inventory.
         schemes = json.loads(schemes_text[schemes_text.index("{"):])
@@ -170,12 +230,6 @@ def build(state_root: Path, developer_dir: Path) -> int:
                      "-destination", "generic/platform=iOS Simulator", "-derivedDataPath", str(run / "ios"),
                      "-clonedSourcePackagesDirPath", str(run / "packages"),
                      "CODE_SIGNING_ALLOWED=NO", "build"], run, "ios-sdk-build", env, 600, record, package_input)
-        artifacts = {}
-        for base in [run / "swift", run / "ios"]:
-            for p in base.rglob("*"):
-                if p.is_file() and p.suffix in {".o", ".a", ".swiftmodule", ".xctest"}:
-                    artifacts[p.relative_to(run).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
-        record["artifacts"] = artifacts
         record["sourcesUnchanged"] = sources() == before
         if not record["sourcesUnchanged"]:
             raise ValueError("Apple source changed during compilation")
@@ -185,7 +239,15 @@ def build(state_root: Path, developer_dir: Path) -> int:
         record.update(state="failed", failure=f"{type(error).__name__}: {error}", sourcesUnchanged=sources() == before)
         raise
     finally:
-        save(run, record)
+        failed_before_role_collection = record["state"] != "passed"
+        try:
+            freeze_roles(run, package_input, env, record, require_complete=not failed_before_role_collection)
+        except BaseException as error:
+            record.update(state="failed", roleCollectionError=f"{type(error).__name__}: {error}")
+            if not failed_before_role_collection:
+                raise
+        finally:
+            save(run, record)
 
 
 def main() -> int:
