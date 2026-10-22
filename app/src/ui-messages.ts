@@ -9491,8 +9491,6 @@ export const zhCN = {
   "error.core.posix.deviceKeyOutsideProfileRequired": "设备密钥不能位于受控库或私有 profile 内",
   "error.core.posix.nonLoginServiceRequired": "服务必须使用专属非登录账号",
   "error.core.posix.physicalRootMismatch": "enrollment 指向的物理根目录已不同",
-  "error.core.posix.rootRegistryUnavailable": "受控根目录登记表暂不可用",
-  "error.core.posix.overlappingWriter": "受控根目录与现有 writer 权限范围重叠",
   "error.core.posix.authorityChanged": "原受控根目录的权限资格已改变",
   "error.core.posix.outsideControlledRoot": "路径位于已接纳的受控服务根目录之外",
   "error.core.posix.privateOrdinaryEntryRequired": "受控项须由服务拥有、权限私有且为普通单链接文件或目录",
@@ -9503,7 +9501,6 @@ export const zhCN = {
   "error.core.posix.depthBudget": "受控根目录超过目录深度预算",
   "error.core.posix.admissionBudget": "受控根目录接纳需要在 5000 项预算内完整枚举",
   "error.core.posix.symbolicOrSpecialEntry": "不支持符号链接或特殊文件系统项",
-  "error.core.posix.controlledAuthorityRequired": "路径没有已接纳的受控服务写入资格",
   "error.core.posix.descriptorAuthorityRequired": "描述符没有受控根目录资格",
   "error.core.posix.originalEntryChangedBeforeOpen": "数据访问前原目录项已改变",
   "error.core.posix.negativeModifiedTime": "不支持负的文件系统修改时间",
@@ -9520,7 +9517,6 @@ export const zhCN = {
   "error.core.posix.originalEntryChanged": "原目录项在移动前已改变",
   "error.core.posix.parentRequired": "此操作需要父目录",
   "error.core.posix.participantBudget": "namespace 参与者超出有效预算",
-  "error.core.posix.crossRootParticipants": "namespace 参与者属于不同的根目录权限范围",
   "error.core.posix.independentRootsRequired": "namespace 根目录和目标父目录必须相互独立",
   "error.core.posix.participantMissing": "缺少 namespace 参与者",
   "error.core.posix.canonicalWitnessChanged": "最终源的 canonical 见证已改变",
@@ -9778,7 +9774,95 @@ export const zhCN = {
   "status.reminder.externalSubmissionUnknown": "外部投递可能仍在进行或已经完成。请查询原始系统通知，不要盲目重试。",
   "error.device.reminderRecordInvalid": "任务提醒设备记录无效。",
   "error.device.recordInterrupted": "设备记录在 {point} 被中断。",
-  "error.reminder.stateVersionUnsupported": "提醒设备记录版本不受支持；此构建只读取版本 2。请保留原件。"
+  "error.reminder.stateVersionUnsupported": "提醒设备记录版本不受支持；此构建只读取版本 2。请保留原件。",
+  "error.api.jsonDataInvalid": "请求 JSON 的字段或类型无效。",
+  "error.api.jsonSyntaxInvalid": "请求正文不是完整有效的 JSON。",
+  "error.api.jsonContentTypeRequired": "请求必须使用 application/json 内容类型。",
+  "error.api.requestBodyBudget": "请求正文超过允许的字节预算。",
+  "error.api.requestBodyUnavailable": "无法完整读取请求正文。",
+  "error.localService.bindFailed": "无法在端口 {port} 绑定 Weftext 本地服务。",
+  "error.localService.documentEncodingFailed": "无法编码本地服务的原始文档结果。",
+  "error.core.originalScope.draft.retainedScopeDiffers": "保留的 Draft 属于另一个原始范围。",
+  "error.core.originalScope.draft.inputScopeDiffers": "Draft 的原始输入范围不一致。",
+  "error.core.originalScope.draft.participantDiffers": "Draft 的原始参与对象不一致。",
+  "error.core.originalScope.actor.unsupportedOriginalScope": "执行者提案缺少受支持的原始输入范围；原始字节保持不变。",
+  "error.core.originalScope.actor.noInputReferencesPlan": "无输入的执行者隔离记录引用了实际的 Core Plan。",
+  "error.core.originalScope.actor.qualifiedLibraryRequired": "库中的作者提案必须绑定其原始且已资格确认的库所有者。",
+  "error.core.originalScope.actor.proposalOwnerDiffers": "执行者提案与原始输入的所有者不一致。",
+  "error.core.originalScope.actor.fileSaveScopeDiffers": "执行者输入与原始文件保存 Plan 的范围不一致。",
+  "error.core.originalScope.actor.transactionOwnerDiffers": "执行者输入与原始事务的所有者不一致。",
+  "error.core.originalScope.actor.noInputRequiresEmptyCancelledFence": "只有实际为空且已取消的执行者隔离记录才可以没有输入范围。",
+  "error.core.originalScope.actor.noInputMetadataBudget": "无输入的执行者隔离记录超过元数据预算。",
+  "error.core.originalScope.actor.fenceScopeChanged": "执行者隔离记录的范围已改变。",
+  "error.core.originalScope.actor.fenceOutsideNamespace": "执行者隔离记录不在其私有命名空间内。",
+  "error.core.originalScope.actor.fenceNamespaceInvalid": "执行者隔离记录的命名空间无效。",
+  "error.core.originalScope.actor.fenceNamespaceDiffers": "执行者隔离记录的命名空间不一致。",
+  "error.core.originalScope.actor.fenceLeafInvalid": "执行者隔离记录的文件名无效。",
+  "error.core.originalScope.actor.originalOwnerUnqualified": "原始作者输入没有已资格确认的所有者。",
+  "error.core.originalScope.actor.noInputBackupOwnerAbsent": "无输入的设备隔离记录没有库备份所有者。",
+  "error.core.originalScope.actor.unboundBackupOwnerDiffers": "未绑定的执行者输入属于另一个原始备份所有者。",
+  "error.core.originalScope.actor.planInputOwnerDiffers": "原始执行者 Plan 与输入的所有者不一致。",
+  "error.core.originalScope.creation.physicalResultUnavailable": "原始库的物理结果不可用。",
+  "error.core.originalScope.creation.originalNotRetained": "未保留原始的库创建操作。",
+  "error.core.originalScope.creation.originalNotCommittedCreation": "此原始操作不是已提交的库创建操作。",
+  "error.core.originalScope.save.originalNotFileSave": "原始操作不是文件保存。",
+  "error.core.originalScope.save.requestParticipantsDiffer": "原始文件保存请求的参与对象不一致。",
+  "error.core.originalScope.save.frozenFingerprintDiffers": "原始文件保存的范围或请求与冻结的指纹不一致。",
+  "error.core.originalScope.save.syncOwnerDiffers": "文件保存与同步发布的所有者不一致。",
+  "error.core.originalScope.save.planParticipantsOrReceiptInvalid": "原始文件保存 Plan 的参与对象或回执无效。",
+  "error.core.originalScope.operation.transactionIdentityOrKindDiffers": "原始事务的身份或种类不一致。",
+  "error.core.originalScope.operation.planResultContractUnsupported": "未知种类的原始 Plan 没有已资格确认的结果合同。",
+  "error.core.originalScope.save.saveAsBirthUnavailable": "原始另存为操作的物理创建记录不可用。",
+  "error.core.originalScope.save.physicalIdentityMissing": "原始保存操作缺少物理身份。",
+  "error.core.originalScope.save.originalLibraryUnavailable": "原始文件保存所属的库不可用。",
+  "error.core.originalScope.save.physicalOwnerLibraryDiffers": "已保存的物理所有者属于另一个原始库。",
+  "error.core.originalScope.save.admittedLocationNotUnique": "原始保存对象没有唯一的当前已接纳位置。",
+  "error.core.originalScope.save.physicalObjectDiffers": "保存对象是另一个物理对象。",
+  "error.core.originalScope.save.deliveryOwnerOrScopeChanged": "交付过程中，保存对象的物理身份或原始范围已改变。",
+  "error.core.originalScope.backup.libraryIdentityDiffers": "原始私有库的身份与此备份不一致。",
+  "error.core.originalScope.backup.unqualifiedScopeDiffers": "未资格确认的原始库范围与此备份不一致。",
+  "error.core.originalScope.backup.logicalPhysicalIdentityConflict": "原始私有库的逻辑身份和物理身份与此备份相矛盾。",
+  "error.api.launchSessionUnavailable": "原始启动会话不可用。",
+  "error.core.captureDraft.qualifiedLibraryOwnerRequired": "捕获需要已核实的库所有者。",
+  "error.core.fileSaveScope.qualifiedMetadataBudgetExceeded": "已核实的输入元数据超过有界头部预算。",
+  "error.core.fileSaveScope.originalLibraryRootNotAbsolute": "原始已核实库根路径不是绝对路径。",
+  "error.core.fileSaveScope.retainedInputScopeUnsupported": "保留输入缺少受支持的原始范围；原始字节保持不变。",
+  "error.core.fileSaveScope.retainedFileSaveScopeUnsupported": "这份保留的文件保存记录缺少受支持的原始范围；其回执仅作为历史证据，不能据此取得写入或备份资格。",
+  "error.core.fileSaveScope.originalLocatorContradictsAdmission": "原始输入库定位信息与其接纳证据矛盾。",
+  "error.core.fileSaveScope.fileParentMissing": "文件缺少父目录。",
+  "error.core.fileSaveScope.ancestorOwnerUnproven": "现有上级目录控制文件不能证明文件的原始所有者。",
+  "error.core.fileSaveScope.physicalOwnerChanged": "原文件的物理所有者已变化；输入和原会话均予保留。",
+  "error.core.fileSaveScope.targetContradictsScope": "原始文件保存的库范围与其原始目标矛盾。",
+  "error.core.history.retainedSaveDifferentScope": "原始保留保存记录属于另一个输入范围。",
+  "error.core.history.protectedDraftReadBudgetExceeded": "受保护草稿的字节数增长并超过读取预算。",
+  "error.core.history.restoreDifferentOwner": "原始恢复操作属于另一个已核实的输入所有者。",
+  "error.core.history.protectedDraftDifferentOwnerOrScope": "受保护草稿属于另一个原始物理所有者或输入范围。",
+  "error.core.journal.originalCommitEvidenceInvalid": "原始提交证据无效；请保留原件，不推测操作结果。",
+  "error.core.originalDelivery.originalOpenFileUnavailable": "原先打开的文件不可用；当前路径不能替换它的写入会话。",
+  "error.core.originalDelivery.saveRetryDiffers": "这次重试与完整的原始保存请求不同。",
+  "error.core.originalDelivery.physicalResultUnavailable": "当前无法交付准确的原始物理结果。",
+  "error.core.originalDelivery.producerMemberMismatch": "请求的节点不是原始生产操作中的准确成员。",
+  "error.core.sync.originalSetupEvidenceInvalid": "原始同步设置证据无效。",
+  "error.reminder.summaryCooldownInvalid": "提醒摘要的固定时间或900秒冷却记录无效。",
+  "error.reminder.summaryClockRollback": "系统时钟早于原提醒摘要，暂不准入新摘要。",
+  "error.reminder.summaryOverflowInvalid": "仅应用内提醒未关联原摘要或错误占用系统成员。",
+  "error.reminder.summaryPrepareCapacity": "完整错过项集合超过提醒账本容量，本批未提交系统。",
+  "reminder.inAppOnly": "仅在应用内显示（本批摘要超额，未提交系统）",
+  "error.core.backend.entryLeafRequired": "目录项路径必须含叶名称",
+  "error.core.backend.entryParentRequired": "目录项路径必须含原父目录",
+  "error.core.backend.privateRecordChanged": "原私有记录在受保护读取期间发生变化",
+  "error.core.backend.privateNamespaceBudget": "私有命名空间的完整枚举超出预算",
+  "error.core.backend.unsupportedPrivateEntry": "私有命名空间包含不支持的文件系统目录项",
+  "error.core.backend.committedStorageProfileUnsupported": "已提交记录的存储档位不受支持；请保留原决议",
+  "error.core.backend.committedPlanMissing": "原已提交决议缺少保留的 Plan",
+  "error.core.backend.committedPlanChanged": "原已提交决议不再匹配其准确 Plan",
+  "error.core.backend.acceptedDecisionMissing": "原已接纳决议缺失",
+  "error.core.backend.committedNodeIdentityMissing": "已提交 Node 的 Plan 缺少原 Node 身份",
+  "error.core.backend.committedBirthIncomplete": "已提交 Node 的出生证据不完整；请保留原源文件",
+  "error.core.backend.committedObservationsMissing": "原已提交物理版本观察记录缺失",
+  "error.core.backend.ambiguousRevisionFacts": "同一耐久提交顺序的原已接纳版本事实不一致",
+  "error.core.backend.resourceBirthIncomplete": "原资源出生证据不完整",
+  "desktop.cliServiceActive": "后台命令行服务正在运行"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19274,8 +19358,6 @@ export interface MessageParamsMap {
   "error.core.posix.deviceKeyOutsideProfileRequired": {  };
   "error.core.posix.nonLoginServiceRequired": {  };
   "error.core.posix.physicalRootMismatch": {  };
-  "error.core.posix.rootRegistryUnavailable": {  };
-  "error.core.posix.overlappingWriter": {  };
   "error.core.posix.authorityChanged": {  };
   "error.core.posix.outsideControlledRoot": {  };
   "error.core.posix.privateOrdinaryEntryRequired": {  };
@@ -19286,7 +19368,6 @@ export interface MessageParamsMap {
   "error.core.posix.depthBudget": {  };
   "error.core.posix.admissionBudget": {  };
   "error.core.posix.symbolicOrSpecialEntry": {  };
-  "error.core.posix.controlledAuthorityRequired": {  };
   "error.core.posix.descriptorAuthorityRequired": {  };
   "error.core.posix.originalEntryChangedBeforeOpen": {  };
   "error.core.posix.negativeModifiedTime": {  };
@@ -19303,7 +19384,6 @@ export interface MessageParamsMap {
   "error.core.posix.originalEntryChanged": {  };
   "error.core.posix.parentRequired": {  };
   "error.core.posix.participantBudget": {  };
-  "error.core.posix.crossRootParticipants": {  };
   "error.core.posix.independentRootsRequired": {  };
   "error.core.posix.participantMissing": {  };
   "error.core.posix.canonicalWitnessChanged": {  };
@@ -19562,6 +19642,94 @@ export interface MessageParamsMap {
   "error.device.reminderRecordInvalid": {  };
   "error.device.recordInterrupted": { point: string };
   "error.reminder.stateVersionUnsupported": {  };
+  "error.api.jsonDataInvalid": {  };
+  "error.api.jsonSyntaxInvalid": {  };
+  "error.api.jsonContentTypeRequired": {  };
+  "error.api.requestBodyBudget": {  };
+  "error.api.requestBodyUnavailable": {  };
+  "error.localService.bindFailed": { port: string };
+  "error.localService.documentEncodingFailed": {  };
+  "error.core.originalScope.draft.retainedScopeDiffers": {  };
+  "error.core.originalScope.draft.inputScopeDiffers": {  };
+  "error.core.originalScope.draft.participantDiffers": {  };
+  "error.core.originalScope.actor.unsupportedOriginalScope": {  };
+  "error.core.originalScope.actor.noInputReferencesPlan": {  };
+  "error.core.originalScope.actor.qualifiedLibraryRequired": {  };
+  "error.core.originalScope.actor.proposalOwnerDiffers": {  };
+  "error.core.originalScope.actor.fileSaveScopeDiffers": {  };
+  "error.core.originalScope.actor.transactionOwnerDiffers": {  };
+  "error.core.originalScope.actor.noInputRequiresEmptyCancelledFence": {  };
+  "error.core.originalScope.actor.noInputMetadataBudget": {  };
+  "error.core.originalScope.actor.fenceScopeChanged": {  };
+  "error.core.originalScope.actor.fenceOutsideNamespace": {  };
+  "error.core.originalScope.actor.fenceNamespaceInvalid": {  };
+  "error.core.originalScope.actor.fenceNamespaceDiffers": {  };
+  "error.core.originalScope.actor.fenceLeafInvalid": {  };
+  "error.core.originalScope.actor.originalOwnerUnqualified": {  };
+  "error.core.originalScope.actor.noInputBackupOwnerAbsent": {  };
+  "error.core.originalScope.actor.unboundBackupOwnerDiffers": {  };
+  "error.core.originalScope.actor.planInputOwnerDiffers": {  };
+  "error.core.originalScope.creation.physicalResultUnavailable": {  };
+  "error.core.originalScope.creation.originalNotRetained": {  };
+  "error.core.originalScope.creation.originalNotCommittedCreation": {  };
+  "error.core.originalScope.save.originalNotFileSave": {  };
+  "error.core.originalScope.save.requestParticipantsDiffer": {  };
+  "error.core.originalScope.save.frozenFingerprintDiffers": {  };
+  "error.core.originalScope.save.syncOwnerDiffers": {  };
+  "error.core.originalScope.save.planParticipantsOrReceiptInvalid": {  };
+  "error.core.originalScope.operation.transactionIdentityOrKindDiffers": {  };
+  "error.core.originalScope.operation.planResultContractUnsupported": {  };
+  "error.core.originalScope.save.saveAsBirthUnavailable": {  };
+  "error.core.originalScope.save.physicalIdentityMissing": {  };
+  "error.core.originalScope.save.originalLibraryUnavailable": {  };
+  "error.core.originalScope.save.physicalOwnerLibraryDiffers": {  };
+  "error.core.originalScope.save.admittedLocationNotUnique": {  };
+  "error.core.originalScope.save.physicalObjectDiffers": {  };
+  "error.core.originalScope.save.deliveryOwnerOrScopeChanged": {  };
+  "error.core.originalScope.backup.libraryIdentityDiffers": {  };
+  "error.core.originalScope.backup.unqualifiedScopeDiffers": {  };
+  "error.core.originalScope.backup.logicalPhysicalIdentityConflict": {  };
+  "error.api.launchSessionUnavailable": {  };
+  "error.core.captureDraft.qualifiedLibraryOwnerRequired": {  };
+  "error.core.fileSaveScope.qualifiedMetadataBudgetExceeded": {  };
+  "error.core.fileSaveScope.originalLibraryRootNotAbsolute": {  };
+  "error.core.fileSaveScope.retainedInputScopeUnsupported": {  };
+  "error.core.fileSaveScope.retainedFileSaveScopeUnsupported": {  };
+  "error.core.fileSaveScope.originalLocatorContradictsAdmission": {  };
+  "error.core.fileSaveScope.fileParentMissing": {  };
+  "error.core.fileSaveScope.ancestorOwnerUnproven": {  };
+  "error.core.fileSaveScope.physicalOwnerChanged": {  };
+  "error.core.fileSaveScope.targetContradictsScope": {  };
+  "error.core.history.retainedSaveDifferentScope": {  };
+  "error.core.history.protectedDraftReadBudgetExceeded": {  };
+  "error.core.history.restoreDifferentOwner": {  };
+  "error.core.history.protectedDraftDifferentOwnerOrScope": {  };
+  "error.core.journal.originalCommitEvidenceInvalid": {  };
+  "error.core.originalDelivery.originalOpenFileUnavailable": {  };
+  "error.core.originalDelivery.saveRetryDiffers": {  };
+  "error.core.originalDelivery.physicalResultUnavailable": {  };
+  "error.core.originalDelivery.producerMemberMismatch": {  };
+  "error.core.sync.originalSetupEvidenceInvalid": {  };
+  "error.reminder.summaryCooldownInvalid": {  };
+  "error.reminder.summaryClockRollback": {  };
+  "error.reminder.summaryOverflowInvalid": {  };
+  "error.reminder.summaryPrepareCapacity": {  };
+  "reminder.inAppOnly": {  };
+  "error.core.backend.entryLeafRequired": {  };
+  "error.core.backend.entryParentRequired": {  };
+  "error.core.backend.privateRecordChanged": {  };
+  "error.core.backend.privateNamespaceBudget": {  };
+  "error.core.backend.unsupportedPrivateEntry": {  };
+  "error.core.backend.committedStorageProfileUnsupported": {  };
+  "error.core.backend.committedPlanMissing": {  };
+  "error.core.backend.committedPlanChanged": {  };
+  "error.core.backend.acceptedDecisionMissing": {  };
+  "error.core.backend.committedNodeIdentityMissing": {  };
+  "error.core.backend.committedBirthIncomplete": {  };
+  "error.core.backend.committedObservationsMissing": {  };
+  "error.core.backend.ambiguousRevisionFacts": {  };
+  "error.core.backend.resourceBirthIncomplete": {  };
+  "desktop.cliServiceActive": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -30862,8 +31030,6 @@ export const messageParamTypes = {
   "error.core.posix.deviceKeyOutsideProfileRequired": {},
   "error.core.posix.nonLoginServiceRequired": {},
   "error.core.posix.physicalRootMismatch": {},
-  "error.core.posix.rootRegistryUnavailable": {},
-  "error.core.posix.overlappingWriter": {},
   "error.core.posix.authorityChanged": {},
   "error.core.posix.outsideControlledRoot": {},
   "error.core.posix.privateOrdinaryEntryRequired": {},
@@ -30874,7 +31040,6 @@ export const messageParamTypes = {
   "error.core.posix.depthBudget": {},
   "error.core.posix.admissionBudget": {},
   "error.core.posix.symbolicOrSpecialEntry": {},
-  "error.core.posix.controlledAuthorityRequired": {},
   "error.core.posix.descriptorAuthorityRequired": {},
   "error.core.posix.originalEntryChangedBeforeOpen": {},
   "error.core.posix.negativeModifiedTime": {},
@@ -30891,7 +31056,6 @@ export const messageParamTypes = {
   "error.core.posix.originalEntryChanged": {},
   "error.core.posix.parentRequired": {},
   "error.core.posix.participantBudget": {},
-  "error.core.posix.crossRootParticipants": {},
   "error.core.posix.independentRootsRequired": {},
   "error.core.posix.participantMissing": {},
   "error.core.posix.canonicalWitnessChanged": {},
@@ -31159,7 +31323,97 @@ export const messageParamTypes = {
   "error.device.recordInterrupted": {
     "point": "text"
   },
-  "error.reminder.stateVersionUnsupported": {}
+  "error.reminder.stateVersionUnsupported": {},
+  "error.api.jsonDataInvalid": {},
+  "error.api.jsonSyntaxInvalid": {},
+  "error.api.jsonContentTypeRequired": {},
+  "error.api.requestBodyBudget": {},
+  "error.api.requestBodyUnavailable": {},
+  "error.localService.bindFailed": {
+    "port": "text"
+  },
+  "error.localService.documentEncodingFailed": {},
+  "error.core.originalScope.draft.retainedScopeDiffers": {},
+  "error.core.originalScope.draft.inputScopeDiffers": {},
+  "error.core.originalScope.draft.participantDiffers": {},
+  "error.core.originalScope.actor.unsupportedOriginalScope": {},
+  "error.core.originalScope.actor.noInputReferencesPlan": {},
+  "error.core.originalScope.actor.qualifiedLibraryRequired": {},
+  "error.core.originalScope.actor.proposalOwnerDiffers": {},
+  "error.core.originalScope.actor.fileSaveScopeDiffers": {},
+  "error.core.originalScope.actor.transactionOwnerDiffers": {},
+  "error.core.originalScope.actor.noInputRequiresEmptyCancelledFence": {},
+  "error.core.originalScope.actor.noInputMetadataBudget": {},
+  "error.core.originalScope.actor.fenceScopeChanged": {},
+  "error.core.originalScope.actor.fenceOutsideNamespace": {},
+  "error.core.originalScope.actor.fenceNamespaceInvalid": {},
+  "error.core.originalScope.actor.fenceNamespaceDiffers": {},
+  "error.core.originalScope.actor.fenceLeafInvalid": {},
+  "error.core.originalScope.actor.originalOwnerUnqualified": {},
+  "error.core.originalScope.actor.noInputBackupOwnerAbsent": {},
+  "error.core.originalScope.actor.unboundBackupOwnerDiffers": {},
+  "error.core.originalScope.actor.planInputOwnerDiffers": {},
+  "error.core.originalScope.creation.physicalResultUnavailable": {},
+  "error.core.originalScope.creation.originalNotRetained": {},
+  "error.core.originalScope.creation.originalNotCommittedCreation": {},
+  "error.core.originalScope.save.originalNotFileSave": {},
+  "error.core.originalScope.save.requestParticipantsDiffer": {},
+  "error.core.originalScope.save.frozenFingerprintDiffers": {},
+  "error.core.originalScope.save.syncOwnerDiffers": {},
+  "error.core.originalScope.save.planParticipantsOrReceiptInvalid": {},
+  "error.core.originalScope.operation.transactionIdentityOrKindDiffers": {},
+  "error.core.originalScope.operation.planResultContractUnsupported": {},
+  "error.core.originalScope.save.saveAsBirthUnavailable": {},
+  "error.core.originalScope.save.physicalIdentityMissing": {},
+  "error.core.originalScope.save.originalLibraryUnavailable": {},
+  "error.core.originalScope.save.physicalOwnerLibraryDiffers": {},
+  "error.core.originalScope.save.admittedLocationNotUnique": {},
+  "error.core.originalScope.save.physicalObjectDiffers": {},
+  "error.core.originalScope.save.deliveryOwnerOrScopeChanged": {},
+  "error.core.originalScope.backup.libraryIdentityDiffers": {},
+  "error.core.originalScope.backup.unqualifiedScopeDiffers": {},
+  "error.core.originalScope.backup.logicalPhysicalIdentityConflict": {},
+  "error.api.launchSessionUnavailable": {},
+  "error.core.captureDraft.qualifiedLibraryOwnerRequired": {},
+  "error.core.fileSaveScope.qualifiedMetadataBudgetExceeded": {},
+  "error.core.fileSaveScope.originalLibraryRootNotAbsolute": {},
+  "error.core.fileSaveScope.retainedInputScopeUnsupported": {},
+  "error.core.fileSaveScope.retainedFileSaveScopeUnsupported": {},
+  "error.core.fileSaveScope.originalLocatorContradictsAdmission": {},
+  "error.core.fileSaveScope.fileParentMissing": {},
+  "error.core.fileSaveScope.ancestorOwnerUnproven": {},
+  "error.core.fileSaveScope.physicalOwnerChanged": {},
+  "error.core.fileSaveScope.targetContradictsScope": {},
+  "error.core.history.retainedSaveDifferentScope": {},
+  "error.core.history.protectedDraftReadBudgetExceeded": {},
+  "error.core.history.restoreDifferentOwner": {},
+  "error.core.history.protectedDraftDifferentOwnerOrScope": {},
+  "error.core.journal.originalCommitEvidenceInvalid": {},
+  "error.core.originalDelivery.originalOpenFileUnavailable": {},
+  "error.core.originalDelivery.saveRetryDiffers": {},
+  "error.core.originalDelivery.physicalResultUnavailable": {},
+  "error.core.originalDelivery.producerMemberMismatch": {},
+  "error.core.sync.originalSetupEvidenceInvalid": {},
+  "error.reminder.summaryCooldownInvalid": {},
+  "error.reminder.summaryClockRollback": {},
+  "error.reminder.summaryOverflowInvalid": {},
+  "error.reminder.summaryPrepareCapacity": {},
+  "reminder.inAppOnly": {},
+  "error.core.backend.entryLeafRequired": {},
+  "error.core.backend.entryParentRequired": {},
+  "error.core.backend.privateRecordChanged": {},
+  "error.core.backend.privateNamespaceBudget": {},
+  "error.core.backend.unsupportedPrivateEntry": {},
+  "error.core.backend.committedStorageProfileUnsupported": {},
+  "error.core.backend.committedPlanMissing": {},
+  "error.core.backend.committedPlanChanged": {},
+  "error.core.backend.acceptedDecisionMissing": {},
+  "error.core.backend.committedNodeIdentityMissing": {},
+  "error.core.backend.committedBirthIncomplete": {},
+  "error.core.backend.committedObservationsMissing": {},
+  "error.core.backend.ambiguousRevisionFacts": {},
+  "error.core.backend.resourceBirthIncomplete": {},
+  "desktop.cliServiceActive": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -40654,8 +40908,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.deviceKeyOutsideProfileRequired": "Device key cannot reside inside the controlled library or private profile tree",
   "error.core.posix.nonLoginServiceRequired": "The service account must be a dedicated non-login account",
   "error.core.posix.physicalRootMismatch": "The enrollment names a different physical root",
-  "error.core.posix.rootRegistryUnavailable": "Controlled root registry is unavailable",
-  "error.core.posix.overlappingWriter": "This controlled root overlaps an existing writer authority",
   "error.core.posix.authorityChanged": "The original controlled root authority changed",
   "error.core.posix.outsideControlledRoot": "The path is outside its admitted controlled-service root",
   "error.core.posix.privateOrdinaryEntryRequired": "Controlled entries require service ownership, private permissions and ordinary single-link files or directories",
@@ -40666,7 +40918,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.depthBudget": "Controlled root exceeds the directory-depth budget",
   "error.core.posix.admissionBudget": "Controlled root admission requires complete enumeration within 5000 entries",
   "error.core.posix.symbolicOrSpecialEntry": "The controlled root contains a symbolic link or special filesystem entry",
-  "error.core.posix.controlledAuthorityRequired": "The path has no admitted controlled-service authority",
   "error.core.posix.descriptorAuthorityRequired": "The descriptor has no controlled-root authority",
   "error.core.posix.originalEntryChangedBeforeOpen": "The inspected original entry changed before data access",
   "error.core.posix.negativeModifiedTime": "Negative filesystem modification times are unsupported",
@@ -40683,7 +40934,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.originalEntryChanged": "The original namespace entry changed before movement",
   "error.core.posix.parentRequired": "Source lacks a parent",
   "error.core.posix.participantBudget": "Invalid namespace participant budget",
-  "error.core.posix.crossRootParticipants": "Namespace participants have different root authorities",
   "error.core.posix.independentRootsRequired": "Namespace roots and parents must be independent",
   "error.core.posix.participantMissing": "Missing namespace participant",
   "error.core.posix.canonicalWitnessChanged": "Final source canonical witness changed",
@@ -40941,5 +41191,93 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "status.reminder.externalSubmissionUnknown": "External submission may be pending or have completed; query the original OS notification, never retry blindly.",
   "error.device.reminderRecordInvalid": "The task reminder device record is invalid.",
   "error.device.recordInterrupted": "The device record was interrupted at {point}.",
-  "error.reminder.stateVersionUnsupported": "The reminder device-record version is unsupported; this build reads version 2 only. Retain the original."
+  "error.reminder.stateVersionUnsupported": "The reminder device-record version is unsupported; this build reads version 2 only. Retain the original.",
+  "error.api.jsonDataInvalid": "The request JSON has invalid fields or types.",
+  "error.api.jsonSyntaxInvalid": "The request body is not complete valid JSON.",
+  "error.api.jsonContentTypeRequired": "The request must use an application/json content type.",
+  "error.api.requestBodyBudget": "The request body exceeds the allowed byte budget.",
+  "error.api.requestBodyUnavailable": "The request body could not be read completely.",
+  "error.localService.bindFailed": "Cannot bind the Weftext local service on port {port}.",
+  "error.localService.documentEncodingFailed": "The local service could not encode the original document result.",
+  "error.core.originalScope.draft.retainedScopeDiffers": "Retained Draft has another original scope",
+  "error.core.originalScope.draft.inputScopeDiffers": "Draft original input scope differs",
+  "error.core.originalScope.draft.participantDiffers": "Draft original participant differs",
+  "error.core.originalScope.actor.unsupportedOriginalScope": "Actor proposal has no supported original input scope; original bytes remain unchanged",
+  "error.core.originalScope.actor.noInputReferencesPlan": "A no-input actor fence references an actual Core Plan",
+  "error.core.originalScope.actor.qualifiedLibraryRequired": "A library author proposal requires its original qualified library owner",
+  "error.core.originalScope.actor.proposalOwnerDiffers": "Typed actor proposal and original input owners differ",
+  "error.core.originalScope.actor.fileSaveScopeDiffers": "Actor input and original file-save Plan scopes differ",
+  "error.core.originalScope.actor.transactionOwnerDiffers": "Actor input and original transaction owners differ",
+  "error.core.originalScope.actor.noInputRequiresEmptyCancelledFence": "Only an actual empty cancelled actor fence can have no input scope",
+  "error.core.originalScope.actor.noInputMetadataBudget": "No-input actor fence exceeds its metadata budget",
+  "error.core.originalScope.actor.fenceScopeChanged": "Actor fence scope changed",
+  "error.core.originalScope.actor.fenceOutsideNamespace": "Actor fence is outside its private namespace",
+  "error.core.originalScope.actor.fenceNamespaceInvalid": "Invalid actor fence namespace",
+  "error.core.originalScope.actor.fenceNamespaceDiffers": "Actor fence namespace differs",
+  "error.core.originalScope.actor.fenceLeafInvalid": "Invalid actor fence leaf",
+  "error.core.originalScope.actor.originalOwnerUnqualified": "Original author input has no qualified owner",
+  "error.core.originalScope.actor.noInputBackupOwnerAbsent": "A no-input device fence has no library backup owner",
+  "error.core.originalScope.actor.unboundBackupOwnerDiffers": "Unbound actor input has a different original backup owner",
+  "error.core.originalScope.actor.planInputOwnerDiffers": "Original actor Plan and input owners differ",
+  "error.core.originalScope.creation.physicalResultUnavailable": "The original physical library result is unavailable",
+  "error.core.originalScope.creation.originalNotRetained": "No original library creation is retained",
+  "error.core.originalScope.creation.originalNotCommittedCreation": "This original operation is not a committed library creation",
+  "error.core.originalScope.save.originalNotFileSave": "The original operation is not a file save",
+  "error.core.originalScope.save.requestParticipantsDiffer": "Original file-save request participants differ",
+  "error.core.originalScope.save.frozenFingerprintDiffers": "Original file-save scope or request differs from its frozen fingerprint",
+  "error.core.originalScope.save.syncOwnerDiffers": "File-save and sync publication owners differ",
+  "error.core.originalScope.save.planParticipantsOrReceiptInvalid": "Original file-save Plan has invalid participants or receipt",
+  "error.core.originalScope.operation.transactionIdentityOrKindDiffers": "Original transaction identity or kind is inconsistent",
+  "error.core.originalScope.operation.planResultContractUnsupported": "Unknown original Plan kind has no qualified result contract",
+  "error.core.originalScope.save.saveAsBirthUnavailable": "The original Save As physical birth is unavailable",
+  "error.core.originalScope.save.physicalIdentityMissing": "The original save has no physical identity",
+  "error.core.originalScope.save.originalLibraryUnavailable": "The original file-save library is unavailable",
+  "error.core.originalScope.save.physicalOwnerLibraryDiffers": "Saved physical owner belongs to another original library",
+  "error.core.originalScope.save.admittedLocationNotUnique": "Original saved owner has no unique current admitted location",
+  "error.core.originalScope.save.physicalObjectDiffers": "Saved owner is a different physical object",
+  "error.core.originalScope.save.deliveryOwnerOrScopeChanged": "Saved physical owner or original scope changed during delivery",
+  "error.core.originalScope.backup.libraryIdentityDiffers": "Original private library identity differs from this backup",
+  "error.core.originalScope.backup.unqualifiedScopeDiffers": "Unqualified original library scope differs from this backup",
+  "error.core.originalScope.backup.logicalPhysicalIdentityConflict": "Original private logical and physical library identities contradict this backup",
+  "error.api.launchSessionUnavailable": "The original launch Session is unavailable.",
+  "error.core.captureDraft.qualifiedLibraryOwnerRequired": "Capture requires a qualified library owner",
+  "error.core.fileSaveScope.qualifiedMetadataBudgetExceeded": "Qualified input metadata exceeds its bounded header budget",
+  "error.core.fileSaveScope.originalLibraryRootNotAbsolute": "Original qualified library root is not absolute",
+  "error.core.fileSaveScope.retainedInputScopeUnsupported": "Retained input has no supported original scope; its original bytes remain unchanged",
+  "error.core.fileSaveScope.retainedFileSaveScopeUnsupported": "This retained file save has no supported original scope; its receipt is historical evidence, not writer or backup qualification",
+  "error.core.fileSaveScope.originalLocatorContradictsAdmission": "Original input library locator contradicts its admission",
+  "error.core.fileSaveScope.fileParentMissing": "Missing file parent",
+  "error.core.fileSaveScope.ancestorOwnerUnproven": "Existing ancestor controls do not prove an original file owner",
+  "error.core.fileSaveScope.physicalOwnerChanged": "The original file's physical owner changed; its input and original Session are retained",
+  "error.core.fileSaveScope.targetContradictsScope": "Original file-save library scope contradicts its original target",
+  "error.core.history.retainedSaveDifferentScope": "Original retained save belongs to another input scope",
+  "error.core.history.protectedDraftReadBudgetExceeded": "Protected draft bytes grew beyond their read budget",
+  "error.core.history.restoreDifferentOwner": "Original restore has another qualified input owner",
+  "error.core.history.protectedDraftDifferentOwnerOrScope": "Protected Draft belongs to another original physical owner or input scope",
+  "error.core.journal.originalCommitEvidenceInvalid": "Original commit evidence is invalid; preserve it without guessing its outcome",
+  "error.core.originalDelivery.originalOpenFileUnavailable": "The original open file is unavailable; the current path cannot replace its writer",
+  "error.core.originalDelivery.saveRetryDiffers": "This retry differs from the complete original save request",
+  "error.core.originalDelivery.physicalResultUnavailable": "The exact original physical result is not currently deliverable",
+  "error.core.originalDelivery.producerMemberMismatch": "The requested node is not an exact original producer member",
+  "error.core.sync.originalSetupEvidenceInvalid": "Original sync setup evidence is invalid",
+  "error.reminder.summaryCooldownInvalid": "The reminder summary has an invalid fixed time or 900-second cooldown record.",
+  "error.reminder.summaryClockRollback": "The system clock is earlier than the original reminder summary; a new summary is not admitted.",
+  "error.reminder.summaryOverflowInvalid": "An in-app-only reminder is not linked to its original summary or incorrectly occupies an OS member.",
+  "error.reminder.summaryPrepareCapacity": "The complete missed set exceeds reminder-ledger capacity; this batch was not submitted to the system.",
+  "reminder.inAppOnly": "In app only (summary overflow; not submitted to the system)",
+  "error.core.backend.entryLeafRequired": "An entry path requires a leaf name",
+  "error.core.backend.entryParentRequired": "An entry path requires its original parent",
+  "error.core.backend.privateRecordChanged": "The original private record changed during its guarded read",
+  "error.core.backend.privateNamespaceBudget": "Private namespace enumeration exceeds its complete inventory budget",
+  "error.core.backend.unsupportedPrivateEntry": "The private namespace contains an unsupported filesystem entry",
+  "error.core.backend.committedStorageProfileUnsupported": "The committed storage profile is unsupported; preserve the original decision",
+  "error.core.backend.committedPlanMissing": "An original committed decision has no retained Plan",
+  "error.core.backend.committedPlanChanged": "The original committed decision no longer matches its exact Plan",
+  "error.core.backend.acceptedDecisionMissing": "The original accepted decision is missing",
+  "error.core.backend.committedNodeIdentityMissing": "The committed Node Plan has no original Node identity",
+  "error.core.backend.committedBirthIncomplete": "The committed Node birth evidence is incomplete; preserve the original source",
+  "error.core.backend.committedObservationsMissing": "Original committed physical revision observations are missing",
+  "error.core.backend.ambiguousRevisionFacts": "Original accepted revision facts disagree at the same durable commit sequence",
+  "error.core.backend.resourceBirthIncomplete": "Original resource birth evidence is incomplete",
+  "desktop.cliServiceActive": "Command-line service is running in the background"
 };
