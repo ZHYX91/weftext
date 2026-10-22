@@ -152,13 +152,29 @@ mod tests {
                 axum::Json::<Preference>::from_request(request(body.clone(), content_type), &())
                     .await
                     .unwrap_err();
+            // The duplicate-guard parses raw JSON before the request type. For
+            // a syntax failure this preserves the framework's neutral parser
+            // diagnostic, not a type-specific field path inferred after the
+            // original bytes already failed admission.
+            let syntax_guard = (expected == UiMessage::error_api_json_syntax_invalid())
+                .then(|| body.clone());
             let error = RequestJson::<Preference>::from_request(request(body, content_type), &())
                 .await
                 .unwrap_err();
             assert_eq!(error.status, original.status());
             assert_eq!(error.explanation, expected);
             assert_eq!(error.diagnostics.len(), 1);
-            assert_eq!(error.diagnostics[0].text, original.body_text());
+            let framework_diagnostic = if let Some(bytes) = syntax_guard {
+                axum::Json::<serde::de::IgnoredAny>::from_request(
+                    request(bytes, content_type), &()
+                )
+                .await
+                .unwrap_err()
+                .body_text()
+            } else {
+                original.body_text()
+            };
+            assert_eq!(error.diagnostics[0].text, framework_diagnostic);
             let response = error.into_response();
             assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
             let bytes = axum::body::to_bytes(response.into_body(), 16 * 1024)
