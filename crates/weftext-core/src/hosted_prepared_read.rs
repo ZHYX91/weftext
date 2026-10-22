@@ -14,6 +14,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         let fail = |message| CoreError::new("staleBase", message);
         let record = self
             .actor_feature_record(resource, operation)?
@@ -27,9 +28,11 @@ impl Core {
             .get(&record.core_operation_id)
             .ok_or_else(|| fail("Original actor feature is no longer prepared"))?;
         if record.cancelled
-            || self.committed(&plan.operation_id)
+            || self.committed(&plan.operation_id)?
             || self.resolved(&plan.operation_id)?
-            || self.journal_path(&plan.operation_id, "install").exists()
+            || self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
         {
             return Err(fail("Original actor feature is no longer prepared"));
         }
@@ -64,7 +67,7 @@ impl Core {
         }
         let original = original.ok_or_else(|| fail("Original Plan has no settings dependency"))?;
         self.check_pending_except(&path, Some(&plan.operation_id))?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_read_guard_file()?;
         if namespace_path_compare(&guard.directory_coordinates()?, Path::new(&library.root))?
             .is_ne()

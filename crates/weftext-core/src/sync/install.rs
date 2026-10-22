@@ -40,10 +40,21 @@ impl Core {
             || self
                 .operations
                 .values()
-                .filter(|p| {
-                    self.committed(&p.operation_id)
-                        && matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                .map(|p| -> Result<_> {
+                    Ok(
+                        if {
+                            self.committed(&p.operation_id)?
+                                && matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
                 })
+                .collect::<Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
                 .any(|p| root.starts_with(&p.path) || Path::new(&p.path).starts_with(&root))
         {
             return Err(CoreError::new(
@@ -52,7 +63,7 @@ impl Core {
             ));
         }
         if self
-            .sync_setups()
+            .sync_setups()?
             .iter()
             .any(|s| s.identity.workspace_id == identity.workspace_id)
         {
@@ -62,8 +73,8 @@ impl Core {
             ));
         }
         self.check_sync_setup_pending(&identity.workspace_id)?;
-        ensure_absent(&root)?;
-        let parent = ParentGuard::acquire(&root)?.directory_identity()?;
+        ensure_absent(&self.backend, &root)?;
+        let parent = ParentGuard::acquire(&self.backend, &root)?.directory_identity()?;
         let source_graph = self.read_sync_history(identity)?;
         let bundle = source_graph.export_objects(objects)?;
         let mut graph = ReplicaGraph::new(&identity.workspace_id, &identity.genesis)?;

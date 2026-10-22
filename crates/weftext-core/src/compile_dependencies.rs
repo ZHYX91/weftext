@@ -425,7 +425,10 @@ impl Core {
         action: impl FnOnce(&Core) -> Result<T>,
     ) -> Result<T> {
         self.require_workspace(&witness.root)?;
-        let root_guard = ParentGuard::acquire(&witness.root.join(".compile-dependency-root"))?;
+        let root_guard = ParentGuard::acquire(
+            &self.backend,
+            &witness.root.join(".compile-dependency-root"),
+        )?;
         if root_guard.directory_identity()? != witness.root_identity {
             return Err(stale("The original compile root was replaced"));
         }
@@ -434,7 +437,7 @@ impl Core {
         for basis in &witness.files {
             let path = Path::new(&basis.path);
             self.check_pending(path)?;
-            let guard = ParentGuard::acquire(path)?;
+            let guard = ParentGuard::acquire(&self.backend, path)?;
             let mut handle = if operation_read_control(&witness.root, path) {
                 guard.open_read_guard_file()?
             } else {
@@ -455,8 +458,11 @@ impl Core {
             handles.push((handle, expected));
         }
         for directory in &witness.directories {
-            let parent = ParentGuard::acquire(&directory.path)?;
-            let child = ParentGuard::acquire(&directory.path.join(".compile-directory-input"))?;
+            let parent = ParentGuard::acquire(&self.backend, &directory.path)?;
+            let child = ParentGuard::acquire(
+                &self.backend,
+                &directory.path.join(".compile-directory-input"),
+            )?;
             if parent.directory_identity()? != directory.parent
                 || child.directory_identity()? != directory.identity
             {
@@ -469,11 +475,11 @@ impl Core {
         }
         for slot in &witness.absent {
             self.check_pending(&slot.path)?;
-            let guard = ParentGuard::acquire(&slot.path)?;
+            let guard = ParentGuard::acquire(&self.backend, &slot.path)?;
             if guard.directory_identity()? != slot.parent {
                 return Err(stale("An unavailable input's original parent was replaced"));
             }
-            absent(&slot.path)?;
+            absent(&self.backend, &slot.path)?;
             guards.push(guard);
         }
         let result = action(self);
@@ -485,7 +491,7 @@ impl Core {
             }
         }
         for slot in &witness.absent {
-            absent(&slot.path)?;
+            absent(&self.backend, &slot.path)?;
         }
         drop(handles);
         drop(guards);
@@ -573,13 +579,13 @@ impl CompileDependencyWitness {
     }
 }
 
-fn absent(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(stale(
+fn absent(backend: &crate::BackendContext, path: &Path) -> Result<()> {
+    if backend.entry_exists(path)? {
+        Err(stale(
             "An originally unavailable native input slot is now occupied",
-        )),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
+        ))
+    } else {
+        Ok(())
     }
 }
 

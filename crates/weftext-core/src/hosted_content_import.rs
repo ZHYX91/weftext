@@ -133,6 +133,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorContentImportReceipt>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.actor_feature_record(resource, operation)? else {
             return Ok(None);
         };
@@ -149,7 +150,7 @@ impl Core {
         ) {
             return Err(feature::conflict());
         }
-        if !self.committed(&record.core_operation_id) {
+        if !self.committed(&record.core_operation_id)? {
             return Ok(None);
         }
         Ok(Some(ActorContentImportReceipt {
@@ -167,6 +168,7 @@ impl Core {
         target: &Path,
         slot: &str,
     ) -> Result<Vec<ContentImportMember>> {
+        self.backend.check_path(&self.data_dir)?;
         feature::valid_resource(slot)?;
         let root = absolute_path(root)?;
         let target = absolute_path(target)?;
@@ -180,10 +182,25 @@ impl Core {
         let mut members = Vec::new();
         let mut producers = 0usize;
         let mut metadata = 0usize;
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -227,16 +244,12 @@ impl Core {
             }
         }
         if producers == 0 {
-            let _guard = ParentGuard::acquire(&target)?;
-            match fs::symlink_metadata(&target) {
-                Ok(_) => {
-                    return Err(CoreError::new(
-                        "slotUnavailable",
-                        "An unrelated object occupies the future import slot",
-                    ));
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e.into()),
+            let _guard = ParentGuard::acquire(&self.backend, &target)?;
+            if self.backend.entry_exists(&target)? {
+                return Err(CoreError::new(
+                    "slotUnavailable",
+                    "An unrelated object occupies the future import slot",
+                ));
             }
         }
         members.sort_by(|a, b| {
@@ -257,19 +270,35 @@ impl Core {
         slot: &str,
         node_id: &str,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         feature::valid_resource(slot)?;
         valid_operation_id(node_id)?;
         let root = absolute_path(root)?;
         let path = absolute_path(source_path)?;
         let workspace = self.require_workspace(&root)?;
-        let placement_guard = ParentGuard::acquire(&path)?;
+        let placement_guard = ParentGuard::acquire(&self.backend, &path)?;
         let placement_file = placement_guard.open_placement_file()?;
         let identity = stamp(&placement_file)?.identity;
         let mut owner = None;
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };

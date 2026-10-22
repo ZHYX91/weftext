@@ -68,14 +68,7 @@ fn diagnostic_witness_token(
         .captured
         .as_ref()
         .map(|captured| resource_diagnostics::stamp_token(&captured.stamp))
-        .unwrap_or_else(|| {
-            format!(
-                "absent:{}:{}:{}",
-                manifest.binding.parent.volume,
-                manifest.binding.parent.index,
-                manifest.binding.parent.created
-            )
-        });
+        .unwrap_or_else(|| format!("absent:{:?}", manifest.binding.parent));
     format!("{owner}:{stamp}:{}", revision.unwrap_or("none"))
 }
 
@@ -88,18 +81,37 @@ impl Core {
         root: &Path,
         source_path: &Path,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         let root = absolute_path(root)?;
         let source_path = absolute_path(source_path)?;
         let workspace = self.require_workspace(&root)?;
         self.check_pending(&source_path)?;
-        let guard = ParentGuard::acquire(&source_path)?;
-        let identity = stamp(&guard.open_placement_file()?)?.identity;
+        let guard = ParentGuard::acquire(&self.backend, &source_path)?;
+        let identity = {
+            let file = guard.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         self.check_pending_identity(&identity)?;
         let mut expected = None;
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(operation) = &plan.transaction else {
                 continue;
             };
@@ -193,17 +205,29 @@ impl Core {
                     error,
                 )
             })?;
-        let owner_guard = ParentGuard::acquire(&owner_path).inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.guard", &expected_owner.node_id, error)
-        })?;
-        let identity = stamp(&owner_guard.open_placement_file().inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.open", &expected_owner.node_id, error)
-        })?)
-        .inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.stamp", &expected_owner.node_id, error)
-        })?
-        .identity;
-        let birth = self.admitted_binding(&identity).ok_or_else(|| {
+        let owner_guard =
+            ParentGuard::acquire(&self.backend, &owner_path).inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.owner.guard",
+                    &expected_owner.node_id,
+                    error,
+                )
+            })?;
+        let identity = {
+            let file = owner_guard.open_placement_file().inspect_err(|error| {
+                resource_diagnostics::error("collection.owner.open", &expected_owner.node_id, error)
+            })?;
+            stamp(&file)
+                .inspect_err(|error| {
+                    resource_diagnostics::error(
+                        "collection.owner.stamp",
+                        &expected_owner.node_id,
+                        error,
+                    )
+                })?
+                .identity
+        };
+        let birth = self.admitted_binding(&identity)?.ok_or_else(|| {
             resource_diagnostics::branch(
                 "collection.owner.birth",
                 &expected_owner.node_id,
@@ -236,7 +260,7 @@ impl Core {
                 error,
             )
         })?;
-        let guard = ParentGuard::acquire(&manifest_path).inspect_err(|error| {
+        let guard = ParentGuard::acquire(&self.backend, &manifest_path).inspect_err(|error| {
             resource_diagnostics::error("collection.manifest.guard", &expected_owner.node_id, error)
         })?;
         if guard.directory_coordinates()? != owner.coordinate.parent().unwrap() {
@@ -281,7 +305,7 @@ impl Core {
                     stamp: observed,
                     bytes,
                 };
-                let revision = self.accepted_revision(&captured).ok_or_else(|| {
+                let revision = self.accepted_revision(&captured)?.ok_or_else(|| {
                     resource_diagnostics::branch(
                         "collection.manifest.accepted",
                         &resource_diagnostics::stamp_token(&captured.stamp),
@@ -323,7 +347,7 @@ impl Core {
                         .ok()
                         .is_none_or(|uuid| uuid.to_string() != id)
                         || resource_path(directory, name).is_err()
-                        || !self.resource_owner_birth_known(id, expected_owner)
+                        || !self.resource_owner_birth_known(id, expected_owner)?
                         || records.iter().filter(|r| r["resourceId"] == id).count() != 1
                         || records
                             .iter()
@@ -434,11 +458,33 @@ impl Core {
     /// This projects original observation facts at their original identity-
     /// proved placement; it does not create another membership ledger.
     pub(crate) fn require_resource_collection_uninitialized(&self, owner: &Birth) -> Result<()> {
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&owner.workspace_id)
-        }) {
-            let facts = self.read_observation_facts(&plan.operation_id)?;
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&owner.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
+            let facts = self
+                .read_observation_facts(&plan.operation_id)
+                .map_err(|mut error| {
+                    if error.code == "identityPending" {
+                        error.code = "resourceManifestUnavailable".into();
+                    }
+                    error
+                })?;
             let mut paths = facts
                 .iter()
                 .map(|fact| fact.path.clone())
@@ -547,7 +593,7 @@ impl Core {
                     )
                 })?;
             let birth = self
-                .admitted_binding(&source.stamp.identity)
+                .admitted_binding(&source.stamp.identity)?
                 .ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
@@ -599,7 +645,7 @@ impl Core {
                 )
             })?;
         if let Some(captured) = &witness.manifest.binding.captured {
-            if self.accepted_revision(captured) != witness.revision {
+            if self.accepted_revision(captured)? != witness.revision {
                 resource_diagnostics::branch(
                     "collection.recheck.accepted",
                     diagnostic_token.as_deref().unwrap_or("disabled"),

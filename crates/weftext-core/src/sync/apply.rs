@@ -42,6 +42,7 @@ impl Core {
     /// Recover the exact retained proposal by its original ID, including after
     /// a browser origin/port change. Never creates or executes a proposal.
     pub fn sync_operation_request(&self, operation_id: &str) -> Result<OperationRequest> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         self.operation_details(operation_id)?;
         let transaction = self.operations[operation_id].transaction.as_ref().unwrap();
@@ -89,7 +90,10 @@ impl Core {
         if matches!(preview.status.as_str(), "committed" | "resolved") {
             return Ok(preview);
         }
-        if self.journal_path(operation_id, "install").exists() {
+        if self
+            .backend
+            .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
                 "Original installation may have effects; inspect recovery instead",
@@ -527,7 +531,7 @@ impl Core {
                 ));
             }
             if old.is_none() && matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
-                ensure_absent(directory)?;
+                ensure_absent(&self.backend, directory)?;
             }
             let resources = validate_state(&graph, &key, state)?;
             if let ObjectKey::Node(id) = &key {
@@ -543,13 +547,13 @@ impl Core {
                             },
                             "trash",
                         )?;
-                        capture_optional(&path)?
+                        capture_optional(&self.backend, &path)?
                             .ok_or_else(|| invalid("The original retired source is unavailable"))?
                     } else {
                         self.managed_node(&root, directory, false)?
                     };
                     if self
-                        .admitted_binding(&canonical.stamp.identity)
+                        .admitted_binding(&canonical.stamp.identity)?
                         .is_none_or(|b| b.node_id != *id)
                     {
                         return Err(invalid(
@@ -567,7 +571,8 @@ impl Core {
             if let ObjectKey::Directory(id) | ObjectKey::RootDirectory(id) = &key
                 && old.is_some()
             {
-                let guard = ParentGuard::acquire(&directory.join("weftext.directory.json"))?;
+                let guard =
+                    ParentGuard::acquire(&self.backend, &directory.join("weftext.directory.json"))?;
                 if !self.directory_admitted(
                     &identity.workspace_id,
                     id,
@@ -585,7 +590,7 @@ impl Core {
                 }
                 self.check_pending(&path)?;
                 let mut parent = path.parent().unwrap();
-                while !parent.exists() && parent != root {
+                while !self.backend.entry_exists(parent)? && parent != root {
                     created_directories.insert(display(
                         parent
                             .strip_prefix(&root)
@@ -595,8 +600,8 @@ impl Core {
                         .parent()
                         .ok_or_else(|| invalid("Incoming file escaped root"))?;
                 }
-                let captured = if path.parent().unwrap().exists() {
-                    capture_optional(&path)?
+                let captured = if self.backend.entry_exists(path.parent().unwrap())? {
+                    capture_optional(&self.backend, &path)?
                 } else {
                     None
                 };
@@ -611,7 +616,9 @@ impl Core {
                 if matches!(key, ObjectKey::Tags)
                     && captured
                         .as_ref()
-                        .is_some_and(|f| self.accepted_revision(f).is_none())
+                        .map(|f| self.accepted_revision(f).map(|revision| revision.is_none()))
+                        .transpose()?
+                        .unwrap_or(false)
                 {
                     return Err(invalid("Tag registry is not the original observed file"));
                 }
@@ -632,7 +639,7 @@ impl Core {
                             &identity.workspace_id,
                             node_id,
                             &file.stamp.identity,
-                        ) {
+                        )? {
                             return Err(invalid(
                                 "Incoming resource identity differs from local admission",
                             ));
@@ -664,10 +671,10 @@ impl Core {
                 };
                 preview.changes.push(change(&path, action, bytes.len()));
                 preview.revisions.insert(display(&path), revision);
-                if path.parent().unwrap().exists() {
+                if self.backend.entry_exists(path.parent().unwrap())? {
                     write_parents.push((
                         display(&path),
-                        ParentGuard::acquire(&path)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
                     ));
                 }
                 changes.push(FileChange {
@@ -737,17 +744,17 @@ impl Core {
         {
             for relative in &created_directories {
                 let directory = root.join(relative);
-                if directory.parent().unwrap().exists() {
+                if self.backend.entry_exists(directory.parent().unwrap())? {
                     write_parents.push((
                         display(&directory),
-                        ParentGuard::acquire(&directory)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &directory)?.directory_identity()?,
                     ));
                 }
             }
             let root_member = root.join(".sync-root");
             write_parents.push((
                 display(&root_member),
-                ParentGuard::acquire(&root_member)?.directory_identity()?,
+                ParentGuard::acquire(&self.backend, &root_member)?.directory_identity()?,
             ));
             let (output, updates): (Vec<_>, Vec<_>) =
                 changes.into_iter().partition(|c| c.before.is_none());

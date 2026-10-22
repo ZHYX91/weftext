@@ -59,7 +59,7 @@ impl Core {
         // an older unbound record cannot divert new input away from an existing
         // bound clean record. Corrupt primaries never permit legacy fallback.
         let primary = self.object_draft_path(&session.stamp.identity, &binding)?;
-        if primary.exists() {
+        if self.backend.entry_exists(&primary)? {
             let bytes = self
                 .read_draft_record(&primary, &binding, false)?
                 .ok_or_else(|| CoreError::new("privateEvidence", "Draft library scope differs"))?;
@@ -150,11 +150,7 @@ impl Core {
         let mut paths = BTreeSet::from([first.to_owned()]);
         loop {
             let previous = paths.len();
-            for plan in self
-                .operations
-                .values()
-                .filter(|plan| self.committed(&plan.operation_id))
-            {
+            for plan in self.committed_plans()?.into_iter() {
                 let Some(transaction) = &plan.transaction else {
                     continue;
                 };
@@ -241,7 +237,7 @@ impl Core {
         };
         // Inspect the original metadata before touching an existing payload.
         // A foreign scoped record must never become a writable local proposal.
-        if path.exists()
+        if self.backend.entry_exists(&path)?
             && self
                 .read_draft_record(&path, &draft.library, false)?
                 .is_none()
@@ -251,7 +247,7 @@ impl Core {
                 "Draft library scope differs",
             ));
         }
-        private_replace(&path, &bytes)
+        private_replace(&self.backend, &path, &bytes)
     }
 
     fn read_draft_record(
@@ -260,10 +256,10 @@ impl Core {
         library: &Option<hosted::ActorLibraryBinding>,
         allow_unbound: bool,
     ) -> Result<Option<Vec<u8>>> {
-        let mut file = match File::open(path) {
+        let mut file = match self.backend.open_read(path) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
         };
         let original = match hosted::read_actor_library_header(&mut file)? {
             hosted::ActorLibraryHeader::Bound(binding) => Some(binding),
@@ -291,11 +287,11 @@ impl Core {
         Ok(Some(bytes))
     }
 
-    fn draft_root_for_file(&self, path: &Path, identity: &FileIdentity) -> PathBuf {
+    fn draft_root_for_file(&self, path: &Path, identity: &FileIdentity) -> Result<PathBuf> {
         if let Some(root) = &self.actor_library_path {
             // binding.root is original volume-GUID evidence, not a caller path.
             // Keep the trusted, already qualified ordinary locator separately.
-            return root.clone();
+            return Ok(root.clone());
         }
         if let Some(session) = self
             .sessions
@@ -307,11 +303,11 @@ impl Core {
             })
             .max_by_key(|session| session.root.components().count())
         {
-            return session.root.clone();
+            return Ok(session.root.clone());
         }
-        self.operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
+        Ok(self
+            .committed_plans()?
+            .into_iter()
             .filter_map(|plan| {
                 if let Some(transaction) = &plan.transaction {
                     Some(PathBuf::from(&transaction.request.root))
@@ -323,19 +319,21 @@ impl Core {
             })
             .filter(|root| relative_draft_path(path, root).is_some())
             .max_by_key(|root| root.components().count())
-            .unwrap_or_else(|| path.parent().unwrap_or(path).to_path_buf())
+            .unwrap_or_else(|| path.parent().unwrap_or(path).to_path_buf()))
     }
 
     // Test fixtures may inspect the current primary record, or deliberately
     // write an exact legacy pathname record for a target not yet materialized.
-    #[cfg(test)]
+    #[cfg(all(test, windows))]
     pub(super) fn draft_path(&self, path: &Path) -> PathBuf {
-        let identity = ParentGuard::acquire(path)
+        let identity = ParentGuard::acquire(&self.backend, path)
             .and_then(|guard| guard.open_file(false, false))
             .and_then(|file| stamp(&file))
             .map(|stamp| stamp.identity);
         if let Ok(identity) = identity {
-            let root = self.draft_root_for_file(path, &identity);
+            let root = self
+                .draft_root_for_file(path, &identity)
+                .expect("qualified draft fixture root");
             if let Ok(binding) = self.draft_library_for_root(&root) {
                 for scope in [binding, None] {
                     if let Ok(primary) = self.object_draft_path(&identity, &scope)
@@ -350,11 +348,11 @@ impl Core {
     }
 
     pub(super) fn read_relocated_draft(&self, path: &Path) -> Result<Option<Draft>> {
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let mut current = guard.open_file(false, false)?;
         let identity = stamp(&current)?.identity;
         let current_source = decode(&read_source(&mut current)?)?;
-        let root = self.draft_root_for_file(path, &identity);
+        let root = self.draft_root_for_file(path, &identity)?;
         self.read_relocated_draft_with_identity(&root, path, &identity, &current_source)
             .map(|(draft, _)| draft)
     }
@@ -371,11 +369,7 @@ impl Core {
         // Equal names or equal source bytes never substitute for this evidence.
         loop {
             let prior_len = lineage.len();
-            for plan in self
-                .operations
-                .values()
-                .filter(|p| self.committed(&p.operation_id))
-            {
+            for plan in self.committed_plans()?.into_iter() {
                 if let Some(t) = &plan.transaction {
                     for relocation in t.relocations() {
                         let operations::RelocationRef {
@@ -399,8 +393,10 @@ impl Core {
                             else {
                                 continue;
                             };
-                            let actual_guard =
-                                ParentGuard::acquire(&actual_root.join(".draft-prospective"))?;
+                            let actual_guard = ParentGuard::acquire(
+                                &self.backend,
+                                &actual_root.join(".draft-prospective"),
+                            )?;
                             if actual_guard.directory_identity()? != *source_identity {
                                 continue;
                             }
@@ -427,7 +423,7 @@ impl Core {
         for scope in [binding.clone(), None] {
             let record_path = self.object_draft_path(identity, &scope)?;
             let bytes = self.read_draft_record(&record_path, &scope, false)?;
-            if bytes.is_none() && record_path.exists() {
+            if bytes.is_none() && self.backend.entry_exists(&record_path)? {
                 return Err(CoreError::new(
                     "privateEvidence",
                     "Draft library scope differs",
@@ -612,6 +608,7 @@ impl Core {
             let _ = encode_draft_record(&chosen)?;
             if let Some((_, bytes)) = &primary {
                 journal::private_create(
+                    &self.backend,
                     &self
                         .draft_directory("draft-history")
                         .join(format!("{}.json", fresh())),
@@ -619,7 +616,7 @@ impl Core {
                 )?;
             }
             self.store_draft(&chosen)?;
-            private_replace(&migration_path, &migration)?;
+            private_replace(&self.backend, &migration_path, &migration)?;
         }
         Ok((Some(chosen), false))
     }

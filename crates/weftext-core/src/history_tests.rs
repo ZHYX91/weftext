@@ -161,11 +161,14 @@ fn retained_trash_root_reads_exact_history_and_resources_without_content_write_r
         .managed_resource_snapshot(&f.root, &f.doc.path)
         .unwrap()
         .remove(0);
-    let before_identity = operations::capture_optional(Path::new(&before_resource.path))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let before_identity = operations::capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&before_resource.path),
+    )
+    .unwrap()
+    .unwrap()
+    .stamp
+    .identity;
     let draft = format!("{saved}\nprivate unsaved draft");
     f.core.persist_draft(&f.doc.session_id, &draft).unwrap();
     let history = f
@@ -208,11 +211,14 @@ fn retained_trash_root_reads_exact_history_and_resources_without_content_write_r
     assert_eq!(resource.bytes, before_resource.bytes);
     assert_eq!(resource.revision, before_resource.revision);
     assert_eq!(
-        operations::capture_optional(Path::new(&resource.path))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        operations::capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&resource.path)
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         before_identity
     );
     let operations_before = f.core.operations.len();
@@ -333,7 +339,7 @@ fn configured_owner_history_reads_exact_admitted_revision_without_other_sources(
 }
 
 #[test]
-fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
+fn history_optional_clock_and_clock_rollback_never_replace_commit_relationship() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
     let (second, _) = f.save("v2");
@@ -346,7 +352,6 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
             fact["savedAtUnixMs"] = serde_json::json!(time);
         } else {
             fact.as_object_mut().unwrap().remove("savedAtUnixMs");
-            fact.as_object_mut().unwrap().remove("commitSequence");
         }
         fs::write(path, serde_json::to_vec(&fact).unwrap()).unwrap();
     }
@@ -358,7 +363,7 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
         .unwrap();
     assert_eq!(old.saved_at_unix_ms, None);
     assert_eq!(old.time_basis, "unknown");
-    assert_eq!(old.commit_sequence, None);
+    assert!(old.commit_sequence.is_some());
     let v2 = timeline
         .versions
         .iter()
@@ -382,6 +387,24 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
     fs::write(path, serde_json::to_vec(&fact).unwrap()).unwrap();
     let tied = f.core.list_history(&f.doc.session_id).unwrap();
     assert_eq!(tied.versions[0].version_id, third);
+}
+
+#[test]
+fn history_missing_commit_sequence_refuses_admission_without_repairing_original() {
+    let f = HistoryFixture::new();
+    let initial = f.initial_version();
+    let path = f.core.journal_path(&initial, "commit");
+    let mut decision: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    decision.as_object_mut().unwrap().remove("commitSequence");
+    let invalid = serde_json::to_vec(&decision).unwrap();
+    fs::write(&path, &invalid).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_err());
+    assert_eq!(fs::read(&path).unwrap(), invalid);
+    let data = f.data.clone();
+    drop(f.core);
+    assert!(Core::new(data).is_err());
+    assert_eq!(fs::read(path).unwrap(), invalid);
 }
 
 #[test]

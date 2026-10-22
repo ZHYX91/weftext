@@ -98,13 +98,13 @@ impl Core {
             let setup = plan.sync_setup.as_ref().unwrap();
             // Setup has no author-tree writes; retry its exact retained bytes.
             self.receive_sync(&setup.identity, setup.bundle.clone())?;
-            if !self.committed(operation_id) {
+            if !self.committed(operation_id)? {
                 self.commit(&plan)?;
             }
             return self.sync_binding_info(&root);
         }
         if self
-            .sync_setups()
+            .sync_setups()?
             .iter()
             .any(|s| s.root == display(&root) || s.identity.workspace_id == workspace.workspace_id)
         {
@@ -319,7 +319,7 @@ impl Core {
                 let name = relative_to(&path, Path::new(&tracked.directory))?;
                 super::relative(&name)?;
                 let blob = hash(bytes);
-                let observed = crate::operations::capture_optional(&path)?
+                let observed = crate::operations::capture_optional(&self.backend, &path)?
                     .ok_or_else(|| invalid("Captured replica file disappeared"))?;
                 let frozen = self.admitted_cuts[&captured.snapshot.cut_id]
                     .bases
@@ -339,7 +339,7 @@ impl Core {
                     relative_path: name.clone(),
                     stamp: observed.stamp.clone(),
                 });
-                let revision = self.accepted_revision(&observed).unwrap_or_else(fresh);
+                let revision = self.accepted_revision(&observed)?.unwrap_or_else(fresh);
                 tracked.state.file_revisions.insert(name.clone(), revision);
                 tracked.state.files.insert(name, blob.clone());
                 bundle.blobs.insert(blob, bytes.clone());
@@ -449,6 +449,7 @@ impl Core {
     }
 
     pub fn sync_binding_info(&self, root: impl AsRef<Path>) -> Result<SyncBindingInfo> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         let root = absolute_path(root.as_ref())?;
         let setup = self.sync_setup_for(&root)?;
@@ -467,7 +468,7 @@ impl Core {
             for plan in self.operations.values() {
                 if let Some(application) = &plan.sync_application
                     && application.root == setup.root
-                    && self.committed(&plan.operation_id)
+                    && self.committed(&plan.operation_id)?
                 {
                     selected.extend(application.selection.iter().cloned());
                 }
@@ -513,6 +514,7 @@ impl Core {
     }
 
     pub(crate) fn check_sync_operation_access(&self, operation: &str) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         if self
             .operations
             .get(operation)
@@ -537,7 +539,7 @@ impl Core {
             if p.sync_setup
                 .as_ref()
                 .is_some_and(|s| s.identity.workspace_id == workspace)
-                && !self.committed(&p.operation_id)
+                && !self.committed(&p.operation_id)?
                 && !self.resolved(&p.operation_id)?
             {
                 return Err(CoreError::new(
@@ -548,19 +550,17 @@ impl Core {
         }
         Ok(())
     }
-    pub(crate) fn sync_setups(&self) -> Vec<&SyncSetup> {
-        self.operations
-            .values()
-            .filter_map(|p| {
-                p.sync_setup
-                    .as_ref()
-                    .filter(|_| self.committed(&p.operation_id))
-            })
-            .collect()
+
+    pub(crate) fn sync_setups(&self) -> Result<Vec<&SyncSetup>> {
+        Ok(self
+            .committed_plans()?
+            .into_iter()
+            .filter_map(|plan| plan.sync_setup.as_ref())
+            .collect())
     }
     pub(crate) fn sync_setup_for(&self, root: &Path) -> Result<&SyncSetup> {
         let matches: Vec<_> = self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| Path::new(&s.root) == root)
             .collect();
@@ -577,11 +577,13 @@ impl Core {
         for plan in self.operations.values() {
             if let Some(publication) = &plan.sync_publication
                 && publication.root == root
-                && self.committed(&plan.operation_id)
+                && self.committed(&plan.operation_id)?
             {
-                let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
-                    self.journal_path(&plan.operation_id, "commit"),
-                )?)?;
+                let fact: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&plan.operation_id, "commit"))?,
+                )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
                     .ok_or_else(|| invalid("Publication lacks its durable commit order"))?;
@@ -614,11 +616,13 @@ impl Core {
                 || p.sync_application
                     .as_ref()
                     .is_some_and(|v| v.root == setup.root))
-                && self.committed(&p.operation_id)
+                && self.committed(&p.operation_id)?
             {
-                let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
-                    self.journal_path(&p.operation_id, "commit"),
-                )?)?;
+                let fact: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&p.operation_id, "commit"))?,
+                )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
                     .ok_or_else(|| invalid("Replica event lacks commit order"))?;
@@ -679,7 +683,7 @@ impl Core {
             return Ok(());
         }
         let matches: Vec<_> = self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| {
                 plan.transaction.as_ref().map_or_else(
@@ -1009,7 +1013,7 @@ impl Core {
         observed: &crate::FileStamp,
     ) -> Result<()> {
         for setup in self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| path.starts_with(&s.root))
         {

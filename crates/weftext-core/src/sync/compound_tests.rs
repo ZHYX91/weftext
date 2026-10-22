@@ -210,7 +210,7 @@ fn assert_installed(pair: &mut Pair, operation: &str) {
         fs::read(pair.br.join("Container/Right/raw.txt")).unwrap(),
         b"receiver-only right"
     );
-    assert!(pair.b.committed(operation));
+    assert!(pair.b.committed(operation).unwrap());
     assert_eq!(
         pair.b
             .sync_binding_info(&pair.br)
@@ -255,7 +255,7 @@ fn compound_two_moves_one_decision_keeps_resources_child_history_actor_drafts_an
     let before = paths
         .iter()
         .map(|path| {
-            crate::operations::capture_optional(path)
+            crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
                 .unwrap()
                 .unwrap()
                 .stamp
@@ -303,7 +303,7 @@ fn compound_two_moves_one_decision_keeps_resources_child_history_actor_drafts_an
     ];
     for (index, path) in after.iter().enumerate() {
         assert_eq!(
-            crate::operations::capture_optional(path)
+            crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
                 .unwrap()
                 .unwrap()
                 .stamp
@@ -411,10 +411,13 @@ fn compound_first_move_restart_resumes_only_remaining_original_steps_and_content
     );
     assert!(Path::new(&moves[0].1).exists());
     assert!(Path::new(&moves[1].0).exists());
-    let first_identity = ParentGuard::acquire(&Path::new(&moves[0].1).join(".probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap();
+    let first_identity = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &Path::new(&moves[0].1).join(".probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap();
     drop(pair.b);
     pair.b = Core::new(&pair.bd).unwrap();
     let info = pair.b.inspect_recovery(&preview.operation_id).unwrap();
@@ -441,10 +444,13 @@ fn compound_first_move_restart_resumes_only_remaining_original_steps_and_content
         .unwrap();
     assert_installed(&mut pair, &preview.operation_id);
     assert_eq!(
-        ParentGuard::acquire(&Path::new(&moves[0].1).join(".probe"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &Path::new(&moves[0].1).join(".probe")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap(),
         first_identity
     );
     assert_eq!(
@@ -573,7 +579,7 @@ fn compound_recovery_third_state_never_moves_second_tree_or_overwrites_outside()
         assert!(Path::new(&moves[1].0).exists());
         assert!(!Path::new(&moves[1].1).exists());
         assert_eq!(fs::read(&still).unwrap(), bytes);
-        assert!(!pair.b.committed(&preview.operation_id));
+        assert!(!pair.b.committed(&preview.operation_id).unwrap());
     }
 }
 
@@ -582,7 +588,7 @@ fn compound_same_bytes_external_stamp_requires_adoption_before_prepare() {
     let mut pair = fixture();
     let path = pair.br.join("Right/Right.typ");
     let bytes = fs::read(&path).unwrap();
-    let old = crate::operations::capture_optional(&path)
+    let old = crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &path)
         .unwrap()
         .unwrap()
         .stamp;
@@ -593,7 +599,7 @@ fn compound_same_bytes_external_stamp_requires_adoption_before_prepare() {
     .unwrap();
     drop(file);
     assert_ne!(
-        crate::operations::capture_optional(&path)
+        crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &path)
             .unwrap()
             .unwrap()
             .stamp,
@@ -664,7 +670,7 @@ fn compound_interrupted_original_cut_rejects_late_receive_without_replaying_seco
     assert!(Path::new(&moves[1].0).exists());
     assert!(!Path::new(&moves[1].1).exists());
     assert_eq!(fs::read(pair.br.join("Still/Still.typ")).unwrap(), still);
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -794,8 +800,12 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
         .unwrap();
     // Retain original FI and after bytes, as an interrupted original Update's
     // content write. This is the existing Core recovery fixture mechanism.
-    crate::journal::private_create(&b.journal_path(&preview.operation_id, "install"), b"{}")
-        .unwrap();
+    crate::journal::private_create(
+        &crate::BackendContext::local().unwrap(),
+        &b.journal_path(&preview.operation_id, "install"),
+        b"{}",
+    )
+    .unwrap();
     fs::write(&note.path, &note.after).unwrap();
     drop(b);
     let mut b = Core::new(&bd).unwrap();
@@ -817,5 +827,5 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
         assert!(b.resolve_recovery(&preview.operation_id, action).is_err());
     }
     assert_eq!(fs::read(&note.path).unwrap(), note.after);
-    assert!(!b.committed(&preview.operation_id));
+    assert!(!b.committed(&preview.operation_id).unwrap());
 }

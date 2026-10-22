@@ -96,10 +96,10 @@ impl Core {
                 "A canonical history operation UUID is required",
             ));
         }
-        let file = match File::open(self.actor_record(operation)?) {
+        let file = match self.backend.open_read(self.actor_record(operation)?) {
             Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => return Ok(None),
+            Err(e) => return Err(e),
         };
         let mut bytes = vec![];
         file.take((MAX_RECORD_BYTES + 1) as u64)
@@ -178,7 +178,7 @@ impl Core {
         };
         let plan = self.actor_history_plan(&record)?;
         let state = if let Some(plan) = plan {
-            if self.committed(&plan.operation_id) {
+            if self.committed(&plan.operation_id)? {
                 "committed"
             } else if self.resolved(&plan.operation_id)? {
                 "resolved"
@@ -273,7 +273,7 @@ impl Core {
                 "The original restore has no source save plan",
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
                 "The original restore is not committed",
@@ -307,7 +307,7 @@ impl Core {
                 "The original restore has no source save plan",
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
                 "The original restore is not committed",
@@ -415,7 +415,11 @@ impl Core {
                 "The history request exceeds its durable budget",
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("historyActorDurable")?;
         self.restore_history_at(root, path, internal_request(&record)?)?;
@@ -462,9 +466,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         }
         self.actor_history_restore_status(resource, operation)?
             .ok_or_else(conflict)

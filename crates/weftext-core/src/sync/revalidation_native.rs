@@ -845,7 +845,7 @@ impl Core {
         }
         for file in &transaction.files {
             self.check_pending(Path::new(&file.path))?;
-            let current = capture_optional(Path::new(&file.path))?;
+            let current = capture_optional(&self.backend, Path::new(&file.path))?;
             if current.as_ref().map(|file| (&file.stamp, &file.bytes))
                 != Some((&file.stamp, &file.bytes))
             {
@@ -856,7 +856,9 @@ impl Core {
             }
         }
         for (path, parent) in &transaction.write_parents {
-            if ParentGuard::acquire(Path::new(path))?.directory_identity()? != *parent {
+            if ParentGuard::acquire(&self.backend, Path::new(path))?.directory_identity()?
+                != *parent
+            {
                 return Err(CoreError::new(
                     "scopeChanged",
                     "An original native input parent changed",
@@ -865,8 +867,9 @@ impl Core {
         }
         for absent in &transaction.absent_dependencies {
             self.check_pending(Path::new(&absent.path))?;
-            if capture_optional(Path::new(&absent.path))?.is_some()
-                || ParentGuard::acquire(Path::new(&absent.path))?.directory_identity()?
+            if capture_optional(&self.backend, Path::new(&absent.path))?.is_some()
+                || ParentGuard::acquire(&self.backend, Path::new(&absent.path))?
+                    .directory_identity()?
                     != absent.parent
             {
                 return Err(CoreError::new(
@@ -894,7 +897,7 @@ impl Core {
             {
                 continue;
             }
-            validate_directory(directory)?;
+            validate_directory(&self.backend, directory)?;
         }
         Ok(())
     }
@@ -916,7 +919,7 @@ impl Core {
         let selected = states.keys().cloned().collect::<BTreeSet<_>>();
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(root, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, root, &mut files, &mut directories, false)?;
         let paths = files
             .iter()
             .map(|file| file.path.clone())
@@ -956,7 +959,7 @@ impl Core {
             originals.insert(path, witness);
         }
         for directory in &directories {
-            validate_directory(directory)?;
+            validate_directory(&self.backend, directory)?;
         }
         let directory_after = directories
             .iter()
@@ -1150,7 +1153,7 @@ impl Core {
                 .get("Styles/library-style.typ")
                 .and_then(|witness| witness.binding.captured.as_ref())
             {
-                if !self.admitted_resource(resource, &workspace, owner, &original.stamp.identity) {
+                if !self.admitted_resource(resource, &workspace, owner, &original.stamp.identity)? {
                     return Err(CoreError::new(
                         "styleSelection",
                         "The selected style is not the original admitted resource object",
@@ -1370,9 +1373,12 @@ impl Core {
     }
 }
 
-fn validate_directory(directory: &CapturedDirectory) -> Result<()> {
+fn validate_directory(
+    backend: &crate::BackendContext,
+    directory: &CapturedDirectory,
+) -> Result<()> {
     let path = Path::new(&directory.path);
-    let guard = ParentGuard::acquire(&path.join(".native-capture-prospective"))?;
+    let guard = ParentGuard::acquire(backend, &path.join(".native-capture-prospective"))?;
     let (entries, complete) = guard.directory_entries(MAX_FILES)?;
     if !complete
         || guard.directory_identity()? != directory.identity

@@ -22,9 +22,10 @@ impl QualifiedProfile {
 
 pub fn qualify_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
     let path = absolute_path(path.as_ref())?;
-    let guard = qualify_directory(&path)?;
+    let backend = crate::BackendContext::local()?;
+    let guard = qualify_directory(&backend, &path)?;
     let identity = format!(
-        "weftext.profile.ntfs.v1:{}",
+        "weftext.profile.physical.v2:{}",
         hash(&serde_json::to_vec(&guard.directory_identity()?)?)
     );
     Ok(QualifiedProfile {
@@ -34,25 +35,25 @@ pub fn qualify_profile(path: impl AsRef<Path>) -> Result<QualifiedProfile> {
     })
 }
 
-fn qualify_directory(path: &Path) -> Result<ParentGuard> {
+fn qualify_directory(backend: &crate::BackendContext, path: &Path) -> Result<ParentGuard> {
     let prospective = path.join(".profile-prospective");
-    match ParentGuard::acquire(&prospective) {
+    match ParentGuard::acquire(backend, &prospective) {
         Ok(guard) => Ok(guard),
         Err(error) if error.code == "missing" => {
             let parent = path
                 .parent()
                 .ok_or_else(|| CoreError::new("invalidPath", "Profile has no qualified parent"))?;
-            let _parent_guard = qualify_directory(parent)?;
-            let leaf = ParentGuard::acquire(path)?;
+            let _parent_guard = qualify_directory(backend, parent)?;
+            let leaf = ParentGuard::acquire(backend, path)?;
             match leaf.create_directory() {
                 Ok(directory) => {
-                    let guard = ParentGuard::acquire(&prospective)?;
+                    let guard = ParentGuard::acquire(backend, &prospective)?;
                     drop(directory);
                     Ok(guard)
                 }
                 // Another first-start process may have created this exact
                 // directory. Qualify it; do not recreate, remove or overwrite.
-                Err(error) if error.code == "exists" => ParentGuard::acquire(&prospective),
+                Err(error) if error.code == "exists" => ParentGuard::acquire(backend, &prospective),
                 Err(error) => Err(error),
             }
         }

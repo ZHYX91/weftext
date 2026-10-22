@@ -62,22 +62,50 @@ impl DeviceRecordKind {
 struct IdentityRecord {
     schema_version: u32,
     id: String,
-    protection: String,
+    protection: DeviceProtection,
     sealed_binding: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+enum DeviceProtection {
+    #[serde(rename = "windows-dpapi-local-machine-v1")]
+    WindowsDpapi,
+    #[serde(rename = "linux-controlled-service-hmac-sha256-v1")]
+    LinuxControlledService,
+}
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "platform",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+enum Binding {
+    Windows {
+        schema_version: u32,
+        id: String,
+        user_sid: String,
+        profile: FileIdentity,
+    },
+    Linux {
+        schema_version: u32,
+        id: String,
+        authority: LinuxAuthority,
+        profile: FileIdentity,
+    },
+}
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Binding {
-    schema_version: u32,
-    id: String,
-    user_sid: String,
-    profile: FileIdentity,
+struct LinuxAuthority {
+    machine: String,
+    enrollment: String,
+    service_uid: u32,
+    root: FileIdentity,
 }
 
 impl Core {
-    /// This identity belongs to this physical Core profile on this Windows
-    /// installation. An unreadable/foreign seal returns is_current=false and
+    /// This identity belongs to this physical Core profile and its qualified
+    /// platform authority. An unreadable/foreign seal returns is_current=false and
     /// keeps the exact original. It never allocates a replacement device ID.
     pub fn device_identity(&mut self) -> Result<DeviceIdentity> {
         if let Some((bytes, _)) = self.read_device_record(DeviceRecordKind::Identity, 64 * 1024)? {
@@ -93,41 +121,132 @@ impl Core {
             ));
         }
         let id = fresh();
-        let binding = Binding {
-            schema_version: 1,
-            id: id.clone(),
-            user_sid: platform::current_user_sid()?,
-            profile: self._data_guard.directory_identity()?,
-        };
+        let binding = self.current_device_binding(&id)?;
+        let (protection, sealed_binding) =
+            self.protect_device_binding(&serde_json::to_vec(&binding)?)?;
         let record = IdentityRecord {
-            schema_version: 1,
+            schema_version: 2,
             id: id.clone(),
-            protection: "windows-dpapi-local-machine-v1".into(),
-            sealed_binding: platform::seal(&serde_json::to_vec(&binding)?)?,
+            protection,
+            sealed_binding,
         };
         let bytes = serde_json::to_vec(&record)?;
         self.compare_and_write_device_record(DeviceRecordKind::Identity, None, &bytes)?;
         self.qualify_device_identity(&bytes)
     }
 
+    /// Reads and qualifies the original identity without creating a namespace,
+    /// identity, ledger or replacement device ID.
+    pub fn existing_device_identity(&self) -> Result<DeviceIdentity> {
+        let (bytes, _) = self
+            .read_device_record(DeviceRecordKind::Identity, 64 * 1024)?
+            .ok_or_else(|| evidence("Existing device identity is unavailable"))?;
+        self.qualify_device_identity(&bytes)
+    }
+
     fn qualify_device_identity(&self, bytes: &[u8]) -> Result<DeviceIdentity> {
         let record = validate_identity_record(bytes)?;
-        let Some(plaintext) = platform::unseal(&record.sealed_binding)? else {
+        let Some(plaintext) =
+            self.unprotect_device_binding(record.protection, &record.sealed_binding)?
+        else {
             return Ok(DeviceIdentity {
                 id: record.id,
                 is_current: false,
             });
         };
-        let binding: Binding = serde_json::from_slice(&plaintext)
-            .map_err(|_| evidence("Device binding plaintext is not a strict record"))?;
-        if binding.schema_version != 1 || binding.id != record.id {
-            return Err(evidence("Device identity and sealed binding differ"));
-        }
+        let binding: Binding = serde_json::from_slice(&plaintext).map_err(|_| {
+            evidence("Device binding plaintext is not a strict current physical record")
+        })?;
+        let expected = self.current_device_binding(&record.id)?;
         Ok(DeviceIdentity {
             id: record.id,
-            is_current: binding.user_sid == platform::current_user_sid()?
-                && binding.profile == self._data_guard.directory_identity()?,
+            is_current: binding == expected,
         })
+    }
+
+    fn current_device_binding(&self, id: &str) -> Result<Binding> {
+        let profile = self._data_guard.directory_identity()?;
+        #[cfg(windows)]
+        {
+            Ok(Binding::Windows {
+                schema_version: 2,
+                id: id.to_owned(),
+                user_sid: platform::current_user_sid()?,
+                profile,
+            })
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let actual = self.backend.linux_device_authority()?;
+            Ok(Binding::Linux {
+                schema_version: 2,
+                id: id.to_owned(),
+                authority: LinuxAuthority {
+                    machine: actual.machine,
+                    enrollment: actual.enrollment,
+                    service_uid: actual.service_uid,
+                    root: actual.root,
+                },
+                profile,
+            })
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        {
+            let _ = (id, profile);
+            Err(evidence(
+                "Device binding requires a qualified platform authority",
+            ))
+        }
+    }
+    fn protect_device_binding(&self, bytes: &[u8]) -> Result<(DeviceProtection, Vec<u8>)> {
+        #[cfg(windows)]
+        {
+            Ok((DeviceProtection::WindowsDpapi, platform::seal(bytes)?))
+        }
+        #[cfg(target_os = "linux")]
+        {
+            Ok((
+                DeviceProtection::LinuxControlledService,
+                self.backend.seal_linux_device(bytes)?,
+            ))
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        {
+            let _ = bytes;
+            Err(evidence(
+                "Device protection is unavailable on this platform",
+            ))
+        }
+    }
+    fn unprotect_device_binding(
+        &self,
+        protection: DeviceProtection,
+        bytes: &[u8],
+    ) -> Result<Option<Vec<u8>>> {
+        match protection {
+            DeviceProtection::WindowsDpapi => {
+                #[cfg(windows)]
+                {
+                    platform::unseal(bytes)
+                }
+                #[cfg(not(windows))]
+                {
+                    let _ = bytes;
+                    Ok(None)
+                }
+            }
+            DeviceProtection::LinuxControlledService => {
+                #[cfg(target_os = "linux")]
+                {
+                    self.backend.unseal_linux_device(bytes)
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let _ = bytes;
+                    Ok(None)
+                }
+            }
+        }
     }
 
     pub(crate) fn read_device_record(
@@ -139,7 +258,7 @@ impl Core {
             return Ok(None);
         };
         let path = self.device_record_path(kind);
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = match guard.open_file(false, false) {
             Ok(file) => file,
             Err(error) if error.code == "missing" => return Ok(None),
@@ -206,15 +325,15 @@ impl Core {
         // Strictly named, bounded candidates remain as original evidence if
         // publication is uncertain. No delete/retry/rollback fallback occurs.
         let temporary = path.with_file_name(format!(".{}.{}.pending", kind.leaf(), fresh()));
-        let guard = ParentGuard::acquire(&temporary)?;
+        let guard = ParentGuard::acquire(&self.backend, &temporary)?;
         let mut file = guard.open_file(true, true)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         drop(file);
         if expected_digest.is_some() {
-            crate::backend::publish_private_replace(&temporary, &path)?;
+            crate::backend::publish_private_replace(&self.backend, &temporary, &path)?;
         } else {
-            crate::backend::publish_private_create(&temporary, &path)?;
+            crate::backend::publish_private_create(&self.backend, &temporary, &path)?;
         }
         let actual = self
             .read_device_record(kind, MAX_RECORD_BYTES)?
@@ -234,13 +353,13 @@ impl Core {
     pub(crate) fn device_namespace(&self, create: bool) -> Result<Option<ParentGuard>> {
         let root = self.data_dir.join(DEVICE_STATE_ROOT);
         let prospective = root.join(".namespace-prospective");
-        let guard = match ParentGuard::acquire(&prospective) {
+        let guard = match ParentGuard::acquire(&self.backend, &prospective) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" && !create => return Ok(None),
             Err(error) if error.code == "missing" => {
-                let parent = ParentGuard::acquire(&root)?;
+                let parent = ParentGuard::acquire(&self.backend, &root)?;
                 let directory = parent.create_directory()?;
-                let guard = ParentGuard::acquire(&prospective)?;
+                let guard = ParentGuard::acquire(&self.backend, &prospective)?;
                 drop(directory);
                 guard
             }
@@ -254,9 +373,7 @@ impl Core {
             let name = name
                 .to_str()
                 .ok_or_else(|| evidence("Non-Unicode device record name"))?;
-            if attributes & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0
-                || device_member_kind(name).is_none()
-            {
+            if !attributes.is_file() || device_member_kind(name).is_none() {
                 return Err(evidence("Unknown or unsupported device namespace member"));
             }
         }
@@ -286,10 +403,9 @@ fn validate_identity_record(bytes: &[u8]) -> Result<IdentityRecord> {
     let record: IdentityRecord = serde_json::from_slice(bytes)?;
     let id =
         uuid::Uuid::parse_str(&record.id).map_err(|_| evidence("Invalid device identity UUID"))?;
-    if record.schema_version != 1
+    if record.schema_version != 2
         || id.to_string() != record.id
         || id.get_version_num() != 4
-        || record.protection != "windows-dpapi-local-machine-v1"
         || record.sealed_binding.is_empty()
         || record.sealed_binding.len() > 16 * 1024
     {
@@ -318,29 +434,22 @@ pub(crate) fn evidence(message: &str) -> CoreError {
 #[path = "device_state_windows.rs"]
 mod platform;
 
-#[cfg(not(windows))]
-mod platform {
-    use super::*;
-    fn unsupported() -> CoreError {
-        CoreError::new(
-            "unsupportedPlatform",
-            "Device binding requires the qualified Windows backend",
-        )
-    }
-    pub(super) fn current_user_sid() -> Result<String> {
-        Err(unsupported())
-    }
-    pub(super) fn seal(_: &[u8]) -> Result<Vec<u8>> {
-        Err(unsupported())
-    }
-    pub(super) fn unseal(_: &[u8]) -> Result<Option<Vec<u8>>> {
-        Err(unsupported())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn device_v2_rejects_old_physical_shell_and_unknown_providers() {
+        let id = fresh();
+        for original in [
+            serde_json::json!({"schemaVersion":1,"id":id,"protection":"windows-dpapi-local-machine-v1","sealedBinding":[1]}),
+            serde_json::json!({"schemaVersion":2,"id":id,"protection":"unknown-provider","sealedBinding":[1]}),
+        ] {
+            let bytes = serde_json::to_vec(&original).unwrap();
+            assert!(validate_identity_record(&bytes).is_err());
+        }
+        let foreign = serde_json::json!({"schemaVersion":2,"id":id,"protection":"windows-dpapi-local-machine-v1","sealedBinding":[1]});
+        assert!(validate_identity_record(&serde_json::to_vec(&foreign).unwrap()).is_ok());
+    }
     #[test]
     fn closed_namespace_does_not_ignore_arbitrary_files_or_aliases() {
         assert_eq!(

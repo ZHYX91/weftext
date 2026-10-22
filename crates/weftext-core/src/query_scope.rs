@@ -87,22 +87,19 @@ impl Core {
             ));
         }
         self.check_pending(&path)?;
-        let guard = ParentGuard::acquire(&path.join(".query-scope-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &path.join(".query-scope-prospective"))?;
         let directory_identity = guard.directory_identity()?;
         let coordinate = guard.directory_coordinates()?;
         let root_coordinate =
-            ParentGuard::acquire(&root.join(".query-root-prospective"))?.directory_coordinates()?;
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
+                .directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new("outsideRoot", "Scope is outside the selected physical root")
         })?;
         self.query_lifecycle_boundary(&root, &coordinate, lifecycle)?;
         let mut dependencies = if kind == "node" {
             let mut source = None;
-            for p in self
-                .operations
-                .values()
-                .filter(|p| self.committed(&p.operation_id))
-            {
+            for p in self.committed_plans()?.into_iter() {
                 for birth in self
                     .read_births(&p.operation_id)?
                     .into_iter()
@@ -209,14 +206,14 @@ impl Core {
             ));
         }
         self.check_pending(&path)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut handle = guard.open_file(false, false)?;
         let actual = stamp(&handle)?;
         self.check_pending_identity(&actual.identity)?;
         let coordinate = backend::file_coordinates(&handle)?;
         self.query_lifecycle_boundary(&root, coordinate.parent().unwrap(), lifecycle)?;
         let bytes = read_source(&mut handle)?;
-        let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
+        let birth = self.admitted_binding(&actual.identity)?.ok_or_else(|| {
             CoreError::new(
                 "identityPending",
                 "The selected source has no original physical admission",
@@ -235,7 +232,8 @@ impl Core {
             ));
         }
         let root_coordinate =
-            ParentGuard::acquire(&root.join(".query-root-prospective"))?.directory_coordinates()?;
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
+                .directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new(
                 "outsideRoot",
@@ -260,7 +258,7 @@ impl Core {
             stamp: actual,
         };
         let identity = captured.stamp.identity.clone();
-        let revision = self.accepted_revision(&captured);
+        let revision = self.accepted_revision(&captured)?;
         let source_hash = hash(&captured.bytes);
         let main = SnapshotWitness {
             binding: SnapshotBinding {
@@ -394,7 +392,7 @@ impl Core {
     }
     fn query_file_witness(&self, path: &Path) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let captured = match guard.open_file(false, false) {
             Ok(mut handle) => {
                 let actual = stamp(&handle)?;
@@ -436,9 +434,25 @@ impl Core {
     }
     pub(crate) fn query_rules_ever_committed(&self, root: &Path) -> Result<bool> {
         let workspace = self.require_workspace(root)?.workspace_id;
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(&workspace)
-        }) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(&workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let mut parents = Vec::new();
             if p.files.iter().any(|(name, _)| name == ".weftext-rules") {
                 parents.push(Path::new(&p.path));
@@ -467,7 +481,9 @@ impl Core {
                 );
             }
             for parent in parents {
-                if query_same_relative(parent, root) && backend::same_directory(parent, root)? {
+                if query_same_relative(parent, root)
+                    && backend::same_directory(&self.backend, parent, root)?
+                {
                     return Ok(true);
                 }
             }
@@ -486,7 +502,8 @@ impl Core {
                 "Choose live or trash explicitly",
             ));
         }
-        let root_guard = ParentGuard::acquire(&root.join(".query-root-prospective"))?;
+        let root_guard =
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?;
         let root_coordinate = root_guard.directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new(
@@ -515,7 +532,8 @@ impl Core {
                 ));
             }
             let tree = root.join(&parts);
-            let tree_guard = ParentGuard::acquire(&tree.join(".query-trash-prospective"))?;
+            let tree_guard =
+                ParentGuard::acquire(&self.backend, &tree.join(".query-trash-prospective"))?;
             let tree_identity = tree_guard.directory_identity()?;
             let owned = self.original_trash_roots(root)?.iter().any(|entry| {
                 crate::history::history_relative_path(&entry.path, root)

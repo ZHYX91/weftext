@@ -6,7 +6,6 @@ use crate::hosted::{ActorLibraryBinding, ActorLibraryHeader, read_actor_library_
 use crate::journal::Plan;
 use std::io::{Seek, SeekFrom};
 
-const BAD_ATTRIBUTES: u32 = 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000;
 const MAX_ROUTING_MEMBERS: usize = 5000;
 const PRIVATE_ROOTS: [&str; 7] = [
     "journal",
@@ -48,9 +47,9 @@ fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
 
 pub(crate) struct PrivateCapture {
     pub digest: String,
-    selected_files: Vec<(PathBuf, File)>,
+    selected_files: Vec<(PathBuf, backend::BoundFile)>,
     pub guards: Vec<ParentGuard>,
-    pub handles: Vec<File>,
+    pub handles: Vec<backend::BoundFile>,
 }
 
 #[derive(Serialize)]
@@ -62,7 +61,7 @@ struct DirectoryRoute {
 #[derive(Serialize)]
 struct FileRoute {
     path: String,
-    attributes: u32,
+    attributes: backend::EntryMetadata,
     stamp: FileStamp,
     route: String,
 }
@@ -138,11 +137,11 @@ fn route_device_state(
             .to_str()
             .and_then(crate::device_state::device_member_kind)
             .ok_or_else(private_evidence)?;
-        if attrs & (BAD_ATTRIBUTES | 0x10) != 0 {
+        if !attrs.is_file() {
             return Err(private_evidence());
         }
         let path = folder.join(name);
-        let file_guard = ParentGuard::acquire(&path)?;
+        let file_guard = ParentGuard::acquire(&core.backend, &path)?;
         let mut file = file_guard.open_read_guard_file()?;
         let actual = stamp(&file)?;
         inspected_bytes = inspected_bytes
@@ -213,8 +212,8 @@ impl Core {
             }
         }
         let sync = self.data_dir.join("sync").join(workspace_id);
-        if sync.exists() {
-            snapshot_tree(&sync, files, directories, false)?;
+        if self.backend.entry_exists(&sync)? {
+            snapshot_tree(&self.backend, &sync, files, directories, false)?;
             // snapshot_tree records selected actual empty directories as well.
         }
         capture.guards.clear();
@@ -267,7 +266,8 @@ impl Core {
         selected_inputs: &[CapturedFile],
         protected_inputs: bool,
     ) -> Result<PrivateCapture> {
-        let root_guard = ParentGuard::acquire(&root.join(".backup-root-prospective"))?;
+        let root_guard =
+            ParentGuard::acquire(&self.backend, &root.join(".backup-root-prospective"))?;
         let binding = ActorLibraryBinding {
             root: display(&root_guard.directory_coordinates()?),
             root_identity: root_guard.directory_identity()?,
@@ -285,7 +285,7 @@ impl Core {
             self.resolution_record(&plan.operation_id)?;
         }
         let mut selected_attempts = Vec::new();
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
@@ -324,7 +324,10 @@ impl Core {
             guards: vec![root_guard],
             handles: Vec::new(),
         };
-        let base_guard = ParentGuard::acquire(&self.data_dir.join(".backup-private-prospective"))?;
+        let base_guard = ParentGuard::acquire(
+            &self.backend,
+            &self.data_dir.join(".backup-private-prospective"),
+        )?;
         let (base_entries, complete) = base_guard.directory_entries(MAX_ROUTING_MEMBERS)?;
         if !complete {
             return Err(backup_budget());
@@ -352,7 +355,7 @@ impl Core {
             if !PRIVATE_ROOTS.iter().any(|p| name == *p) {
                 return Err(private_evidence());
             }
-            if attrs & BAD_ATTRIBUTES != 0 || attrs & 0x10 == 0 {
+            if attrs.is_unsupported() || !attrs.is_directory() {
                 return Err(private_evidence());
             }
             let path = self.data_dir.join(&name);
@@ -362,7 +365,8 @@ impl Core {
                 // Its other workspace bodies are never opened. Fix the selected
                 // workspace's presence and parent identity; its subtree uses
                 // the existing complete CapturedDirectory/CapturedFile path.
-                let guard = ParentGuard::acquire(&path.join(".backup-sync-prospective"))?;
+                let guard =
+                    ParentGuard::acquire(&self.backend, &path.join(".backup-sync-prospective"))?;
                 let (entries, complete) = guard.directory_entries(MAX_ROUTING_MEMBERS)?;
                 if !complete {
                     return Err(backup_budget());
@@ -390,7 +394,8 @@ impl Core {
             if members > MAX_ROUTING_MEMBERS {
                 return Err(backup_budget());
             }
-            let guard = ParentGuard::acquire(&folder.join(".backup-private-prospective"))?;
+            let guard =
+                ParentGuard::acquire(&self.backend, &folder.join(".backup-private-prospective"))?;
             let own_limit = own.map_or(0, own_suffix_limit);
             let (mut entries, complete) =
                 guard.directory_entries(MAX_ROUTING_MEMBERS + own_limit)?;
@@ -401,7 +406,7 @@ impl Core {
             let mut routed_entries = Vec::new();
             for (name, attrs) in entries {
                 let path = folder.join(&name);
-                if attrs & BAD_ATTRIBUTES != 0 {
+                if attrs.is_unsupported() {
                     return Err(private_evidence());
                 }
                 if folder == self.data_dir.join("journal")
@@ -411,7 +416,8 @@ impl Core {
                     })
                 {
                     let own = own.unwrap();
-                    let (own_guard, own_file) = validate_own_suffix(own, &path, attrs)?;
+                    let (own_guard, own_file) =
+                        validate_own_suffix(&self.backend, own, &path, attrs)?;
                     capture.guards.push(own_guard);
                     capture.handles.push(own_file);
                     continue;
@@ -421,7 +427,7 @@ impl Core {
                     return Err(backup_budget());
                 }
                 routed_entries.push((name.clone(), attrs));
-                if attrs & 0x10 != 0 {
+                if attrs.is_directory() {
                     if !path.starts_with(self.data_dir.join("actors")) {
                         return Err(private_evidence());
                     }
@@ -446,7 +452,7 @@ impl Core {
                     )?;
                     (original.stamp.clone(), route, true, None)
                 } else {
-                    let file_guard = ParentGuard::acquire(&path)?;
+                    let file_guard = ParentGuard::acquire(&self.backend, &path)?;
                     let mut file = file_guard.open_read_guard_file()?;
                     let actual = stamp(&file)?;
                     let (selected, route) = if folder == self.data_dir.join("journal") {
@@ -464,7 +470,9 @@ impl Core {
                                 },
                             )?;
                             let selected = selected_attempt_scope(scope.as_ref(), &binding)?;
-                            let mut decision = File::open(self.journal_path(id, "resolution"))?;
+                            let mut decision = self
+                                .backend
+                                .open_read(self.journal_path(id, "resolution"))?;
                             let mut bytes = Vec::new();
                             Read::by_ref(&mut decision)
                                 .take(4097)
@@ -582,7 +590,7 @@ fn private_evidence() -> CoreError {
 fn classify_record(
     core: &Core,
     path: &Path,
-    file: &mut File,
+    file: &mut backend::BoundFile,
     root: &Path,
     expected: &ActorLibraryBinding,
     remaining: usize,
@@ -751,7 +759,8 @@ fn validate_selected_record(
                 }
             } else {
                 let scope = core.validate_preplan_reservation(id, suffix, bytes)?;
-                let guard = ParentGuard::acquire(&root.join(".reservation-backup-root"))?;
+                let guard =
+                    ParentGuard::acquire(&core.backend, &root.join(".reservation-backup-root"))?;
                 if scope.workspace_id.as_deref() != Some(workspace_id)
                     || scope.root_identity != guard.directory_identity()?
                 {
@@ -763,7 +772,7 @@ fn validate_selected_record(
     }
     if kind == RecordKind::Capture {
         let draft = capture_draft::validate_capture_record(path, &core.data_dir, bytes)?;
-        let guard = ParentGuard::acquire(&root.join(".backup-capture-prospective"))?;
+        let guard = ParentGuard::acquire(&core.backend, &root.join(".backup-capture-prospective"))?;
         let expected = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),
             root_identity: guard.directory_identity()?,
@@ -777,7 +786,7 @@ fn validate_selected_record(
     let value: UniqueValue = serde_json::from_slice(bytes)?;
     if let Some(library) = value.0.get("library") {
         let binding: ActorLibraryBinding = serde_json::from_value(library.clone())?;
-        let guard = ParentGuard::acquire(&root.join(".backup-record-prospective"))?;
+        let guard = ParentGuard::acquire(&core.backend, &root.join(".backup-record-prospective"))?;
         if binding.root != display(&guard.directory_coordinates()?)
             || binding.root_identity != guard.directory_identity()?
             || binding.workspace_id.as_deref() != Some(workspace_id)
@@ -788,7 +797,7 @@ fn validate_selected_record(
             core.validate_scoped_actor_record(path, bytes, &binding)?;
         }
     } else if kind == RecordKind::Actor {
-        let guard = ParentGuard::acquire(&root.join(".backup-record-prospective"))?;
+        let guard = ParentGuard::acquire(&core.backend, &root.join(".backup-record-prospective"))?;
         let binding = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),
             root_identity: guard.directory_identity()?,
@@ -950,20 +959,35 @@ impl<'a, R: Read> Tokens<'a, R> {
         if b != b'{' {
             return Err(private_evidence());
         }
-        let mut keys = BTreeSet::new();
-        loop {
-            let key = self.key()?;
-            if !keys.insert(key.clone()) || !["volume", "index", "created"].contains(&key.as_str())
-            {
+        let mut bytes = vec![b'{'];
+        let mut quoted = false;
+        let mut escaped = false;
+        let mut depth = 1;
+        while depth != 0 {
+            let byte = self.byte()?;
+            bytes.push(byte);
+            if bytes.len() > 2048 {
                 return Err(private_evidence());
             }
-            self.scalar()?;
-            match self.next()? {
-                b'}' => break,
-                b',' => {}
-                _ => return Err(private_evidence()),
+            if quoted {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    quoted = false;
+                }
+            } else {
+                match byte {
+                    b'"' => quoted = true,
+                    b'{' | b'[' => depth += 1,
+                    b'}' | b']' => depth -= 1,
+                    _ => {}
+                }
             }
         }
+        let unique: UniqueValue = serde_json::from_slice(&bytes).map_err(|_| private_evidence())?;
+        let _: FileIdentity = serde_json::from_value(unique.0).map_err(|_| private_evidence())?;
         Ok(())
     }
 }
@@ -1181,8 +1205,13 @@ fn own_suffix_limit(plan: &Plan) -> usize {
         6
     }
 }
-fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGuard, File)> {
-    if attrs & (BAD_ATTRIBUTES | 0x10) != 0 {
+fn validate_own_suffix(
+    backend: &crate::BackendContext,
+    plan: &Plan,
+    path: &Path,
+    attrs: backend::EntryMetadata,
+) -> Result<(ParentGuard, backend::BoundFile)> {
+    if !attrs.is_file() {
         return Err(private_evidence());
     }
     let name = path.file_name().unwrap().to_string_lossy();
@@ -1190,7 +1219,7 @@ fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGu
         .strip_prefix(&format!("{}.", plan.operation_id))
         .and_then(|p| p.strip_suffix(".json"))
         .ok_or_else(private_evidence)?;
-    let guard = ParentGuard::acquire(path)?;
+    let guard = ParentGuard::acquire(backend, path)?;
     let mut file = guard.open_read_guard_file()?;
     if suffix == "plan" {
         // A Plan may encode two copies of byte arrays. Compare a streamed exact
@@ -1299,10 +1328,15 @@ fn validate_own_suffix(plan: &Plan, path: &Path, attrs: u32) -> Result<(ParentGu
                     .iter()
                     .any(|d| display(&Path::new(target).join(d)) == recorded);
             let actual = if directory {
-                ParentGuard::acquire(&Path::new(recorded).join(".backup-object-prospective"))?
-                    .directory_identity()?
+                ParentGuard::acquire(
+                    backend,
+                    &Path::new(recorded).join(".backup-object-prospective"),
+                )?
+                .directory_identity()?
             } else {
-                stamp(&ParentGuard::acquire(Path::new(recorded))?.open_placement_file()?)?.identity
+                let placed =
+                    ParentGuard::acquire(backend, Path::new(recorded))?.open_placement_file()?;
+                stamp(&placed)?.identity
             };
             if actual != identity {
                 return Err(private_evidence());

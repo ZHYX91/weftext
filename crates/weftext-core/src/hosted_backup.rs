@@ -34,10 +34,10 @@ impl Core {
         operation: &str,
     ) -> Result<Option<ActorOperation>> {
         feature::valid_resource(resource)?;
-        let file = match File::open(self.actor_record(operation)?) {
+        let file = match self.backend.open_read(self.actor_record(operation)?) {
             Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => return Ok(None),
+            Err(e) => return Err(e),
         };
         let mut bytes = Vec::new();
         file.take((MAX_SOURCE_BYTES + 4097) as u64)
@@ -94,6 +94,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorOwnerBackupStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         self.require_owner_backup_scope()?;
         let Some(record) = self.owner_backup_record(resource, operation)? else {
             return Ok(None);
@@ -125,8 +126,8 @@ impl Core {
                 if error.code == "operationMissing"
                     && !self.operations.contains_key(&record.core_operation_id)
                     && !self
-                        .journal_path(&record.core_operation_id, "plan")
-                        .exists() =>
+                        .backend
+                        .entry_exists(self.journal_path(&record.core_operation_id, "plan"))? =>
             {
                 None
             }
@@ -136,9 +137,11 @@ impl Core {
             Some("committed") => "committed",
             Some("recoveryPending") => "recoveryPending",
             Some("resolved") => {
-                let resolution: serde_json::Value = serde_json::from_slice(&fs::read(
-                    self.journal_path(&record.core_operation_id, "resolution"),
-                )?)?;
+                let resolution: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&record.core_operation_id, "resolution"))?,
+                )?;
                 if resolution["action"] == "cancelPrepared" {
                     "cancelled"
                 } else {
@@ -219,6 +222,7 @@ impl Core {
             }),
         };
         journal::private_create(
+            &self.backend,
             &self.actor_record(operation)?,
             &Self::actor_operation_bytes(&record)?,
         )?;
@@ -295,9 +299,9 @@ impl Core {
                 self.resolve_record(&record.core_operation_id, "cancelPrepared")?;
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         }
         self.actor_owner_backup_status(resource, operation)?
             .ok_or_else(feature::conflict)

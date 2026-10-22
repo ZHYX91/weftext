@@ -224,7 +224,7 @@ impl Core {
         let root = absolute_path(root)?;
         self.require_workspace(&root)?;
         let path = root.join(".weftext-schema.json");
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_file(false, false)?;
         let bytes = read_source(&mut file)?;
         let captured = operations::CapturedFile {
@@ -235,7 +235,7 @@ impl Core {
         if expected.path != captured.path
             || expected.bytes.as_ref() != Some(&captured.bytes)
             || expected.revision.is_none()
-            || self.accepted_revision(&captured) != expected.revision
+            || self.accepted_revision(&captured)? != expected.revision
         {
             return Err(CoreError::new(
                 "schemaBasisChanged",
@@ -263,7 +263,8 @@ impl Core {
             "operations",
             capture_draft::CAPTURE_DIRECTORY,
         ] {
-            fs::create_dir_all(root.join(directory))?;
+            self.backend
+                .create_private_directory(&root.join(directory))?;
         }
         let _guards = [
             "drafts",
@@ -271,15 +272,16 @@ impl Core {
             "operations",
             capture_draft::CAPTURE_DIRECTORY,
         ]
-        .map(|directory| ParentGuard::acquire(&root.join(directory).join(".scope")))
+        .map(|directory| ParentGuard::acquire(&self.backend, &root.join(directory).join(".scope")))
         .into_iter()
         .collect::<Result<Vec<_>>>()?;
         let staging = self
             .data_dir
             .join(capture_draft::CAPTURE_STAGING_DIRECTORY)
             .join(hash(actor.as_bytes()));
-        fs::create_dir_all(&staging)?;
-        let _staging_guard = ParentGuard::acquire(&staging.join(".capture-staging-scope"))?;
+        self.backend.create_private_directory(&staging)?;
+        let _staging_guard =
+            ParentGuard::acquire(&self.backend, &staging.join(".capture-staging-scope"))?;
         self.actor = Some(actor.into());
         let result = action(self);
         self.actor = None;
@@ -321,17 +323,24 @@ impl Core {
     /// Service-owned policy survives restarts; bootstrap configuration cannot
     /// silently restore a revoked grant. No client chooses this filesystem path.
     pub fn hosted_policy(&self) -> Result<Option<Vec<u8>>> {
-        match fs::read(self.data_dir.join("hosted-policy.json")) {
+        match self
+            .backend
+            .read_bytes(self.data_dir.join("hosted-policy.json"))
+        {
             Ok(bytes) => Ok(Some(bytes)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) if e.code == "missing" => Ok(None),
+            Err(e) => Err(e),
         }
     }
     pub fn store_hosted_policy(&self, bytes: &[u8]) -> Result<()> {
         if bytes.len() > MAX_SOURCE_BYTES {
             return Err(CoreError::new("budget", "Policy exceeds 2 MiB"));
         }
-        private_replace(&self.data_dir.join("hosted-policy.json"), bytes)
+        private_replace(
+            &self.backend,
+            &self.data_dir.join("hosted-policy.json"),
+            bytes,
+        )
     }
 
     fn actor_record(&self, operation: &str) -> Result<PathBuf> {
@@ -347,11 +356,12 @@ impl Core {
             .join(format!("{operation}.json")))
     }
     pub fn actor_save_status(&self, operation: &str) -> Result<Option<ActorSaveStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         let path = self.actor_record(operation)?;
-        let bytes = match fs::read(path) {
+        let bytes = match self.backend.read_bytes(path) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => return Ok(None),
+            Err(e) => return Err(e),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
         self.check_actor_library(&record.library)?;
@@ -409,9 +419,9 @@ impl Core {
     /// committing after an earlier status lookup said notRegistered.
     pub fn actor_settle(&mut self, resource: &str, operation: &str) -> Result<ActorSaveStatus> {
         let path = self.actor_record(operation)?;
-        let mut record = match fs::read(&path) {
+        let mut record = match self.backend.read_bytes(&path) {
             Ok(bytes) => serde_json::from_slice::<ActorOperation>(&bytes)?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => ActorOperation {
+            Err(e) if e.code == "missing" => ActorOperation {
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -425,7 +435,7 @@ impl Core {
                 history: None,
                 owner_backup: None,
             },
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
         if record.resource != resource || self.actor.as_ref() != Some(&record.actor) {
             return Err(CoreError::new(
@@ -439,7 +449,7 @@ impl Core {
             return Ok(status);
         }
         record.cancelled = true;
-        private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+        private_replace(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         self.actor_save_status(operation)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing settled record"))
     }
@@ -467,7 +477,7 @@ impl Core {
             intent["definitionReservations"] = serde_json::to_value(&ids)?;
         }
         let fingerprint = hash(&serde_json::to_vec(&intent)?);
-        let record = match fs::read(&path) {
+        let record = match self.backend.read_bytes(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
                 self.check_actor_library(&record.library)?;
@@ -504,7 +514,7 @@ impl Core {
                 }
                 record
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(e) if e.code == "missing" => {
                 self.check_actor_session(&request.session_id)?;
                 let reservations = if ids.is_empty() {
                     vec![]
@@ -535,10 +545,14 @@ impl Core {
                     history: None,
                     owner_backup: None,
                 };
-                journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+                journal::private_create(
+                    &self.backend,
+                    &path,
+                    &Self::actor_operation_bytes(&record)?,
+                )?;
                 record
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
         #[cfg(all(test, windows))]
         definition_test_failpoint("actorSaveDurable")?;
@@ -566,10 +580,10 @@ impl Core {
         field_id: &str,
         operation: &str,
     ) -> Result<Option<ActorFieldStatus>> {
-        let bytes = match fs::read(self.actor_record(operation)?) {
+        let bytes = match self.backend.read_bytes(self.actor_record(operation)?) {
             Ok(bytes) => bytes,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => return Ok(None),
+            Err(e) => return Err(e),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
         self.check_actor_library(&record.library)?;
@@ -603,7 +617,7 @@ impl Core {
         let status = self.actor_field_status(resource, field_id, operation)?;
         if status.is_some() {
             let record: ActorOperation =
-                serde_json::from_slice(&fs::read(self.actor_record(operation)?)?)?;
+                serde_json::from_slice(&self.backend.read_bytes(self.actor_record(operation)?)?)?;
             if !record.cancelled && record.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
@@ -631,7 +645,7 @@ impl Core {
             return Err(CoreError::new("invalidField", "Invalid field intent"));
         }
         let path = self.actor_record(&request.operation_id)?;
-        match fs::read(&path) {
+        match self.backend.read_bytes(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
                 self.check_actor_library(&record.library)?;
@@ -648,8 +662,8 @@ impl Core {
                 }
                 return Ok(status);
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => {}
+            Err(e) => return Err(e),
         }
         self.check_actor_session(&request.session_id)?;
         let record = ActorOperation {
@@ -669,7 +683,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+        journal::private_create(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -711,6 +725,7 @@ impl Core {
                 owner_backup: None,
             };
             journal::private_create(
+                &self.backend,
                 &self.actor_record(operation)?,
                 &Self::actor_operation_bytes(&record)?,
             )?;
@@ -744,7 +759,7 @@ impl Core {
             }
             let path = root.join(relative_path);
             self.check_pending(&path)?;
-            let guard = ParentGuard::acquire(&path)?;
+            let guard = ParentGuard::acquire(&self.backend, &path)?;
             let file = guard.open_file(false, false)?;
             self.check_pending_identity(&stamp(&file)?.identity)?;
             guards.push(guard);

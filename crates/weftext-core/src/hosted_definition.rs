@@ -156,11 +156,11 @@ fn exact_insertion(patch: &FieldPatch) -> bool {
             .is_some_and(|(from, to)| patch.source.get(from..to) == Some(patch.text.as_str()))
 }
 
-fn bounded_record(path: &Path) -> Result<Option<Vec<u8>>> {
-    let file = match File::open(path) {
+fn bounded_record(backend: &crate::BackendContext, path: &Path) -> Result<Option<Vec<u8>>> {
+    let file = match backend.open_read(path) {
         Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
+        Err(e) if e.code == "missing" => return Ok(None),
+        Err(e) => return Err(e),
     };
     let mut bytes = vec![];
     file.take((MAX_RECORD_BYTES + 1) as u64)
@@ -202,7 +202,7 @@ impl Core {
     fn definition_record(&self, resource: &str, operation: &str) -> Result<Option<ActorOperation>> {
         valid_resource(resource)?;
         canonical_proposal_ids(&[operation.to_owned()])?;
-        let Some(bytes) = bounded_record(&self.actor_record(operation)?)? else {
+        let Some(bytes) = bounded_record(&self.backend, &self.actor_record(operation)?)? else {
             return Ok(None);
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
@@ -249,7 +249,7 @@ impl Core {
             ));
         }
         let birth = self
-            .admitted_binding(&session.stamp.identity)
+            .admitted_binding(&session.stamp.identity)?
             .ok_or_else(conflict)?;
         if birth.workspace_id != workspace.workspace_id
             || Some(&birth.node_id) != session.node_id.as_ref()
@@ -375,7 +375,11 @@ impl Core {
                 "Definition proposal exceeds its durable budget",
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         test_failpoint("reservationDurable")?;
         self.actor_definition_details(resource, &request.operation_id)?
@@ -405,6 +409,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.definition_record(resource, operation)? else {
             return Ok(None);
         };
@@ -431,7 +436,7 @@ impl Core {
                 {
                     continue;
                 }
-                if self.committed(&plan.operation_id) {
+                if self.committed(&plan.operation_id)? {
                     state = "admitted";
                     saved = Some(admissions.save_operation_id);
                     break;
@@ -502,9 +507,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &Self::actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -518,13 +523,14 @@ impl Core {
         root: &Path,
         session_id: &str,
     ) -> Result<Vec<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         valid_resource(resource)?;
         self.check_actor_session(session_id)?;
         self.check_session_base(session_id, &self.sessions[session_id].base_id)?;
         let (owner, identity) = self.definition_owner(root, session_id)?;
         let mut result = vec![];
         let mut bytes_used = 0usize;
-        for entry in fs::read_dir(self.draft_directory("operations"))? {
+        for entry in self.backend.read_dir(self.draft_directory("operations"))? {
             let path = entry?.path();
             let Some(operation) = path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
@@ -534,7 +540,7 @@ impl Core {
             {
                 continue;
             }
-            let Some(bytes) = bounded_record(&path)? else {
+            let Some(bytes) = bounded_record(&self.backend, &path)? else {
                 return Err(conflict());
             };
             bytes_used = bytes_used.checked_add(bytes.len()).ok_or_else(conflict)?;
@@ -725,12 +731,12 @@ impl Core {
         };
         let path = self.journal_path(&record.core_operation_id, "definition-reservations");
         let bytes = serde_json::to_vec(&admissions)?;
-        if let Some(original) = bounded_record(&path)? {
+        if let Some(original) = bounded_record(&self.backend, &path)? {
             if original != bytes {
                 return Err(conflict());
             }
         } else {
-            journal::private_create(&path, &bytes)?;
+            journal::private_create(&self.backend, &path, &bytes)?;
         }
         #[cfg(all(test, windows))]
         test_failpoint("admissionsDurable")?;
@@ -738,8 +744,10 @@ impl Core {
     }
 
     fn definition_save_record(&self, plan: &journal::Plan) -> Result<Option<DefinitionSaveRecord>> {
-        let Some(bytes) =
-            bounded_record(&self.journal_path(&plan.operation_id, "definition-reservations"))?
+        let Some(bytes) = bounded_record(
+            &self.backend,
+            &self.journal_path(&plan.operation_id, "definition-reservations"),
+        )?
         else {
             return Ok(None);
         };
@@ -781,7 +789,7 @@ impl Core {
         owner: &NodeRef,
         key: &str,
     ) -> Result<bool> {
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Ok(false);
         }
         Ok(self.definition_save_record(plan)?.is_some_and(|record| {

@@ -306,7 +306,7 @@ fn original_node_and_negative_schema_return_real_read_bindings() {
         .unwrap();
     // This producer has no separate accepted Rules observation. Its portable
     // revision is an actual immutable enable_sync genesis binding, not None.
-    assert!(f.core.accepted_revision(original_rules).is_none());
+    assert!(f.core.accepted_revision(original_rules).unwrap().is_none());
     assert!(
         f.local[&ObjectKey::Rules]
             .state
@@ -694,13 +694,16 @@ fn registered_directory_requires_its_original_marker_scope_and_physical_cut() {
         .unwrap();
     assert!(reads.read_objects.contains(&object));
     let mut forged = setup.physical_bindings.clone();
-    forged
+    let identity = &mut forged
         .iter_mut()
         .find(|entry| entry.object == object && entry.relative_path == "weftext.directory.json")
         .unwrap()
         .stamp
-        .identity
-        .index ^= 1;
+        .identity;
+    match identity {
+        crate::FileIdentity::Windows { index, .. } => *index ^= 1,
+        crate::FileIdentity::Linux { handle, .. } => handle[0] ^= 1,
+    }
     let bad_cut = SuppliedEvidenceCut {
         physical: &forged,
         ..cut

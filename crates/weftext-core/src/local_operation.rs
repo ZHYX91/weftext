@@ -18,11 +18,23 @@ impl Core {
         let plan = self
             .operations
             .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(workspace)
-                    && self.committed(&p.operation_id)
-            })
+            .try_fold(None, |found, p| -> Result<Option<_>> {
+                if found.is_some() {
+                    Ok(found)
+                } else {
+                    Ok(
+                        if {
+                            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && p.workspace_id.as_ref() == Some(workspace)
+                                && self.committed(&p.operation_id)?
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
+                }
+            })?
             .ok_or_else(invalid)?;
         if self
             .materialized_identity(&plan.operation_id, Path::new(&plan.path))?
@@ -54,7 +66,7 @@ impl Core {
     }
     pub(crate) fn check_attempt_not_cancelled(&self, id: &str) -> Result<()> {
         // A committed original wins over unrelated delivery metadata.
-        if !self.committed(id) && self.resolved(id)? {
+        if !self.committed(id)? && self.resolved(id)? {
             return Err(CoreError::new(
                 "operationCancelled",
                 "This original attempt is durably terminated; no effects were retried",
@@ -75,7 +87,7 @@ impl Core {
                 "The original operation is not a file save",
             ));
         }
-        if self.committed(id) {
+        if self.committed(id)? {
             return plan.receipt.clone().map(Some).ok_or_else(|| {
                 CoreError::new(
                     "invalidState",
@@ -88,6 +100,7 @@ impl Core {
     /// Public global lookup is local-owner only. Actor APIs use their scoped
     /// records before accessing the same internal Plan and commit fact.
     pub fn local_operation_status(&self, id: &str) -> Result<serde_json::Value> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         valid_operation_id(id)?;
         let Some(plan) = self.operations.get(id) else {
@@ -99,7 +112,7 @@ impl Core {
             return Ok(serde_json::json!({"operationId":id,"status":status}));
         };
         if let Some(t) = &plan.transaction {
-            if self.committed(id) {
+            if self.committed(id)? {
                 return Ok(serde_json::to_value(&t.receipt)?);
             }
             return Ok(serde_json::to_value(self.operation_details(id)?)?);
@@ -127,16 +140,30 @@ impl Core {
         let birth = plan
             .identity
             .as_ref()
-            .and_then(|identity| self.admitted_binding(identity));
+            .map(|identity| self.admitted_binding(identity))
+            .transpose()?
+            .flatten();
         let (path, root) = if let Some(birth) = &birth {
             let root = self
                 .operations
                 .values()
-                .find(|plan| {
-                    matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
-                        && plan.workspace_id.as_ref() == Some(&birth.workspace_id)
-                        && self.committed(&plan.operation_id)
-                })
+                .try_fold(None, |found, plan| -> Result<Option<_>> {
+                    if found.is_some() {
+                        Ok(found)
+                    } else {
+                        Ok(
+                            if {
+                                matches!(plan.kind.as_str(), "createLibrary" | "cloneSync")
+                                    && plan.workspace_id.as_ref() == Some(&birth.workspace_id)
+                                    && self.committed(&plan.operation_id)?
+                            } {
+                                Some(plan)
+                            } else {
+                                None
+                            },
+                        )
+                    }
+                })?
                 .map(|plan| PathBuf::from(&plan.path))
                 .ok_or_else(|| {
                     CoreError::new(
@@ -181,6 +208,7 @@ impl Core {
         Ok((source, document))
     }
     pub fn local_operation_root(&self, id: &str) -> Result<String> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         valid_operation_id(id)?;
         self.operations
@@ -222,7 +250,7 @@ impl Core {
         let bytes = serde_json::to_vec(&record)?;
         journal::decode_resolution(id, &bytes)?;
         self.validate_unregistered_fence_namespace(id)?;
-        journal::private_create(&self.journal_path(id, "resolution"), &bytes)?;
+        journal::private_create(&self.backend, &self.journal_path(id, "resolution"), &bytes)?;
         self.local_operation_status(id)
     }
 }

@@ -56,13 +56,13 @@ impl Core {
         let (_, workspace, id) = crate::directory_identity::parse_ref(&reference)?;
         let marker = source.join("weftext.directory.json");
         self.check_pending(&marker)?;
-        let captured = capture_optional(&marker)?.ok_or_else(|| {
+        let captured = capture_optional(&self.backend, &marker)?.ok_or_else(|| {
             CoreError::new(
                 "identityConflict",
                 "The admitted directory marker is missing",
             )
         })?;
-        let identity = ParentGuard::acquire(&marker)?.directory_identity()?;
+        let identity = ParentGuard::acquire(&self.backend, &marker)?.directory_identity()?;
         if workspace != self.require_workspace(root)?.workspace_id
             || !self.directory_admitted(workspace, id, &identity)?
             || serde_json::from_slice::<serde_json::Value>(&captured.bytes)?["directoryId"] != id
@@ -107,9 +107,10 @@ impl Core {
         let (captured, expected_directory) = self.qualified_directory_marker(root, source)?;
         let workspace = self.require_workspace(root)?;
         self.owned_parent(root, target.parent().unwrap())?;
-        let mut namespace = NamespaceGuard::acquire(source, target.parent().unwrap())?;
+        let mut namespace =
+            NamespaceGuard::acquire(&self.backend, source, target.parent().unwrap())?;
         if source != target {
-            qualify_relocation_target(target, occupant)?;
+            qualify_relocation_target(&self.backend, target, occupant)?;
         }
         let source_identity = namespace.source_identity()?;
         if source_identity != expected_directory {

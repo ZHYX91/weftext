@@ -310,7 +310,7 @@ impl Core {
         let parent = absolute_path(parent)?;
         self.owned_parent(root, &parent)?;
         let target = parent.join(name);
-        ensure_absent(&target)?;
+        ensure_absent(&self.backend, &target)?;
         validate_native_package(&package).map_err(native_error)?;
         validate_native_navigation_roles(&package)?;
         let workspace = self.require_workspace(root)?;
@@ -1263,7 +1263,7 @@ mod tests {
                 .unwrap();
         }
         let resource_path = root.join("Imported").join(path);
-        let physical = ParentGuard::acquire(&resource_path)
+        let physical = ParentGuard::acquire(&core.backend, &resource_path)
             .unwrap()
             .directory_identity()
             .unwrap();
@@ -1316,7 +1316,7 @@ mod tests {
                 .values()
                 .any(|reference| reference == &resources[0].resource_ref)
         );
-        assert!(core.committed(&preview.operation_id));
+        assert!(core.committed(&preview.operation_id).unwrap());
     }
 
     #[test]

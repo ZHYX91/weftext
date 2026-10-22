@@ -40,15 +40,15 @@ impl Core {
         // Qualify and retain the root ancestor closure while browsing; descendants
         // are separately opened with relative guarded handles before reading bytes.
         let anchor = root.join(".weftext-inventory-prospective");
-        let _root_guard = ParentGuard::acquire(&anchor)?;
+        let _root_guard = ParentGuard::acquire(&self.backend, &anchor)?;
         let workspace = self.workspace(&root)?;
-        let rules = read_rules(&root)?;
+        let rules = read_rules(&self.backend, &root)?;
         let mut result = Inventory {
             root: display(&root),
             workspace_id: workspace.as_ref().map(|w| w.workspace_id.clone()),
             status: if workspace.is_some() {
                 "localMvp"
-            } else if root.join(".weftext-format").exists() {
+            } else if self.backend.entry_exists(root.join(".weftext-format"))? {
                 "incomplete"
             } else {
                 "ordinary"
@@ -61,17 +61,19 @@ impl Core {
         let mut queue = vec![(root.clone(), false)];
         let mut total = 0;
         while let Some((directory, inherited_unmanaged)) = queue.pop() {
-            let directory_guard =
-                match ParentGuard::acquire(&directory.join(".weftext-inventory-prospective")) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        result.complete = false;
-                        result
-                            .warnings
-                            .push(format!("{}: {}", directory.display(), e.message));
-                        continue;
-                    }
-                };
+            let directory_guard = match ParentGuard::acquire(
+                &self.backend,
+                &directory.join(".weftext-inventory-prospective"),
+            ) {
+                Ok(g) => g,
+                Err(e) => {
+                    result.complete = false;
+                    result
+                        .warnings
+                        .push(format!("{}: {}", directory.display(), e.message));
+                    continue;
+                }
+            };
             let (mut children, enumeration_complete) =
                 directory_guard.directory_entries(MAX_ENTRIES)?;
             if !enumeration_complete {
@@ -96,7 +98,7 @@ impl Core {
                     continue;
                 }
                 let unmanaged = inherited_unmanaged || excluded(&relative, &rules.unmanaged);
-                let blocked = attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0;
+                let blocked = attrs.is_unsupported();
                 let mut item = InventoryEntry {
                     path: display(&path),
                     relative_path: relative.to_string_lossy().replace('\\', "/"),
@@ -121,7 +123,7 @@ impl Core {
                         "Reparse/offline object skipped: {}",
                         path.display()
                     ));
-                } else if attrs & 0x10 != 0 {
+                } else if attrs.is_directory() {
                     item.kind = "directory".into();
                     item.identity_status = "unmanaged".into();
                     queue.push((path.clone(), unmanaged));
@@ -139,7 +141,7 @@ impl Core {
                         item.identity_status = "recoveryPending".into();
                     } else {
                         let observed = (|| -> Result<(String, FileIdentity)> {
-                            let guard = ParentGuard::acquire(&path)?;
+                            let guard = ParentGuard::acquire(&self.backend, &path)?;
                             let mut file = guard.open_file(false, false)?;
                             let bytes = read_source(&mut file)?;
                             let id = stamp(&file)?.identity;
@@ -158,7 +160,7 @@ impl Core {
                                 }
                                 total += source.len();
                                 let info = weftext_engine::inspect(&source);
-                                let known = self.admitted_binding(&identity);
+                                let known = self.admitted_binding(&identity)?;
                                 if let Some(birth) = known {
                                     item.kind = "node".into();
                                     item.node_id = Some(birth.node_id.clone());
@@ -182,9 +184,19 @@ impl Core {
                                     item.node_id = info.id.clone();
                                     item.identity_status = match info.id.as_ref() {
                                         Some(id)
-                                            if workspace.as_ref().is_some_and(|w| {
-                                                self.admitted(id, &w.workspace_id, &identity)
-                                            }) =>
+                                            if workspace
+                                                .as_ref()
+                                                .map(|w| -> Result<bool> {
+                                                    Ok({
+                                                        self.admitted(
+                                                            id,
+                                                            &w.workspace_id,
+                                                            &identity,
+                                                        )?
+                                                    })
+                                                })
+                                                .transpose()?
+                                                .unwrap_or(false) =>
                                         {
                                             "admitted".into()
                                         }
@@ -231,7 +243,7 @@ impl Core {
         let relative = parent
             .strip_prefix(root)
             .map_err(|_| CoreError::new("outsideRoot", "Target is outside the selected library"))?;
-        let rules = read_rules(root)?;
+        let rules = read_rules(&self.backend, root)?;
         if !rules.warnings.is_empty() {
             return Err(CoreError::new(
                 "unsupportedRules",
@@ -251,7 +263,7 @@ impl Core {
         let relative = directory
             .strip_prefix(root)
             .map_err(|_| CoreError::new("outsideRoot", "Source is outside the library"))?;
-        let rules = read_rules(root)?;
+        let rules = read_rules(&self.backend, root)?;
         if rules
             .ignored
             .iter()
@@ -266,12 +278,12 @@ impl Core {
         Ok(())
     }
 }
-fn read_rules(root: &Path) -> Result<Rules> {
+fn read_rules(backend: &crate::BackendContext, root: &Path) -> Result<Rules> {
     let path = root.join(".weftext-rules");
-    if !path.exists() {
+    if !backend.entry_exists(&path)? {
         return Ok(Rules::default());
     }
-    let guard = ParentGuard::acquire(&path)?;
+    let guard = ParentGuard::acquire(backend, &path)?;
     let mut file = guard.open_read_guard_file()?;
     let bytes = read_source(&mut file)?;
     Ok(parse_rules(&bytes))

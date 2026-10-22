@@ -261,22 +261,43 @@ impl Core {
                 let exact_birth = plan
                     .identity
                     .as_ref()
-                    .and_then(|identity| self.admitted_binding(identity))
+                    .map(|identity| self.admitted_binding(identity))
+                    .transpose()?
+                    .flatten()
                     .is_some_and(|birth| {
                         Some(&birth.workspace_id) == binding.workspace_id.as_ref()
                     });
-                let exact_original_path = binding.workspace_id.as_ref().is_some_and(|workspace| {
-                    self.operations.values().any(|original| {
-                        self.committed(&original.operation_id)
-                            && matches!(original.kind.as_str(), "createLibrary" | "cloneSync")
-                            && original.workspace_id.as_ref() == Some(workspace)
-                            && crate::history::history_relative_path(
-                                Path::new(&plan.path),
-                                Path::new(&original.path),
-                            )
-                            .is_some()
+                let exact_original_path = binding
+                    .workspace_id
+                    .as_ref()
+                    .map(|workspace| -> Result<bool> {
+                        Ok({
+                            self.operations.values().try_fold(
+                                false,
+                                |found, original| -> Result<bool> {
+                                    if found {
+                                        Ok(true)
+                                    } else {
+                                        Ok({
+                                            self.committed(&original.operation_id)?
+                                                && matches!(
+                                                    original.kind.as_str(),
+                                                    "createLibrary" | "cloneSync"
+                                                )
+                                                && original.workspace_id.as_ref() == Some(workspace)
+                                                && crate::history::history_relative_path(
+                                                    Path::new(&plan.path),
+                                                    Path::new(&original.path),
+                                                )
+                                                .is_some()
+                                        })
+                                    }
+                                },
+                            )?
+                        })
                     })
-                });
+                    .transpose()?
+                    .unwrap_or(false);
                 if !exact_workspace && !exact_birth && !exact_original_path {
                     return Err(CoreError::new(
                         "privateEvidence",
@@ -313,7 +334,7 @@ impl Core {
         if self.actor.is_some() {
             return self.actor_library_for_root(root);
         }
-        let guard = ParentGuard::acquire(&root.join(".draft-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".draft-root-prospective"))?;
         let workspace = self.workspace(root)?;
         if workspace.is_none()
             && [
@@ -322,7 +343,13 @@ impl Core {
                 ".weftext-mvp-commit.json",
             ]
             .iter()
-            .any(|name| root.join(name).exists())
+            .try_fold(false, |found, name| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok(self.backend.entry_exists(root.join(name))?)
+                }
+            })?
         {
             // Preserve local ordinary-file behavior, without claiming that
             // damaged/unadmitted controls are an ordinary qualified library.
@@ -353,7 +380,7 @@ impl Core {
             ));
         }
         let root = absolute_path(root)?;
-        let guard = ParentGuard::acquire(&root.join(".actor-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".actor-root-prospective"))?;
         let workspace = self.workspace(&root)?;
         if workspace.is_none()
             && [
@@ -362,7 +389,13 @@ impl Core {
                 ".weftext-mvp-commit.json",
             ]
             .iter()
-            .any(|name| root.join(name).exists())
+            .try_fold(false, |found, name| -> Result<bool> {
+                if found {
+                    Ok(true)
+                } else {
+                    Ok(self.backend.entry_exists(root.join(name))?)
+                }
+            })?
         {
             return Err(CoreError::new(
                 "unadmittedLibrary",
@@ -399,7 +432,7 @@ impl Core {
             return Ok(None);
         };
         let root = absolute_path(root)?;
-        let guard = ParentGuard::acquire(&root.join(".actor-root-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".actor-root-prospective"))?;
         if guard.directory_identity()? != binding.root_identity
             || self.workspace(&root)?.map(|w| w.workspace_id) != binding.workspace_id
         {

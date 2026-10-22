@@ -800,7 +800,7 @@ impl Core {
     }
     fn capture_read(&self, id: &str) -> Result<(CaptureDraft, Vec<u8>)> {
         let path = capture_record_path(&self.data_dir, &self.capture_owner(), id)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_read_guard_file()?;
         let header = read_capture_header(&mut file)?;
         self.check_capture_scope(&header)?;
@@ -821,7 +821,7 @@ impl Core {
     }
     pub fn list_capture_drafts(&self) -> Result<Vec<CaptureDraft>> {
         let directory = self.draft_directory(CAPTURE_DIRECTORY);
-        let guard = ParentGuard::acquire(&directory.join(".capture-list"))?;
+        let guard = ParentGuard::acquire(&self.backend, &directory.join(".capture-list"))?;
         let (entries, complete) = guard.directory_entries(MAX_CAPTURE_RECORDS)?;
         if !complete {
             return Err(budget());
@@ -829,11 +829,11 @@ impl Core {
         let mut selected_ids = Vec::new();
         let mut selected_bytes = 0u64;
         for (name, attrs) in entries {
-            if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+            if !attrs.is_file() {
                 return Err(invalid("Invalid capture namespace member"));
             }
             let path = directory.join(name);
-            let file_guard = ParentGuard::acquire(&path)?;
+            let file_guard = ParentGuard::acquire(&self.backend, &path)?;
             let mut file = file_guard.open_read_guard_file()?;
             let header = read_capture_header(&mut file)?;
             validate_capture_header_path(&path, &self.data_dir, &header)?;
@@ -894,7 +894,7 @@ impl Core {
         let bytes = serde_json::to_vec(draft)?;
         validate_capture_record(&path, &self.data_dir, &bytes)?;
         let directory = self.draft_directory(CAPTURE_DIRECTORY);
-        let guard = ParentGuard::acquire(&directory.join(".capture-budget"))?;
+        let guard = ParentGuard::acquire(&self.backend, &directory.join(".capture-budget"))?;
         let (entries, complete) = guard.directory_entries(MAX_CAPTURE_RECORDS)?;
         if !complete {
             return Err(budget());
@@ -902,14 +902,14 @@ impl Core {
         let mut total = bytes.len() as u64;
         let mut count = 1usize;
         for (name, attrs) in entries {
-            if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+            if !attrs.is_file() {
                 return Err(invalid("Capture namespace contains an unsupported member"));
             }
             let existing = directory.join(name);
             if existing == path {
                 continue;
             }
-            let existing_guard = ParentGuard::acquire(&existing)?;
+            let existing_guard = ParentGuard::acquire(&self.backend, &existing)?;
             let mut file = existing_guard.open_read_guard_file()?;
             let header = read_capture_header(&mut file)?;
             let id = existing
@@ -940,11 +940,8 @@ impl Core {
         let stage =
             self.capture_staging_directory()
                 .join(format!("{}.{}.stage", draft.draft_id, fresh()));
-        let _stage_guard = ParentGuard::acquire(&stage)?;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&stage)?;
+        let stage_guard = ParentGuard::acquire(&self.backend, &stage)?;
+        let mut file = stage_guard.open_file(true, true)?;
         #[cfg(all(test, windows))]
         hosted::definition_test_failpoint("captureStageCreated")?;
         file.write_all(&bytes)?;
@@ -953,9 +950,9 @@ impl Core {
         #[cfg(all(test, windows))]
         hosted::definition_test_failpoint("captureStageFlushed")?;
         if create {
-            backend::publish_private_create(&stage, &path)?;
+            backend::publish_private_create(&self.backend, &stage, &path)?;
         } else {
-            backend::publish_private_replace(&stage, &path)?;
+            backend::publish_private_replace(&self.backend, &stage, &path)?;
         }
         let (readback, actual) = self.capture_read(&draft.draft_id)?;
         if actual != bytes {
@@ -965,7 +962,8 @@ impl Core {
     }
     pub fn capture_storage_status(&self) -> Result<CaptureStorageStatus> {
         let directory = self.capture_staging_directory();
-        let guard = ParentGuard::acquire(&directory.join(".capture-staging-budget"))?;
+        let guard =
+            ParentGuard::acquire(&self.backend, &directory.join(".capture-staging-budget"))?;
         let (entries, complete) = guard.directory_entries(MAX_CAPTURE_RECORDS)?;
         if !complete {
             return Err(budget());
@@ -975,7 +973,7 @@ impl Core {
             retained_stage_bytes: 0,
         };
         for (name, attrs) in entries {
-            if attrs & (0x10 | 0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+            if !attrs.is_file() {
                 return Err(invalid("Invalid capture staging member"));
             }
             let name = name
@@ -988,7 +986,7 @@ impl Core {
             canonical_id(parts[0])?;
             canonical_id(parts[1])?;
             let path = directory.join(name);
-            let file_guard = ParentGuard::acquire(&path)?;
+            let file_guard = ParentGuard::acquire(&self.backend, &path)?;
             let file = file_guard.open_read_guard_file()?;
             let length = file.metadata()?.len();
             if length > MAX_CAPTURE_RECORD_BYTES as u64 {
@@ -1021,7 +1019,7 @@ impl Core {
         }
         let fingerprint = hash(&serde_json::to_vec(&(0u64, "create", &input))?);
         let path = capture_record_path(&self.data_dir, &self.capture_owner(), id)?;
-        if path.exists() {
+        if self.backend.entry_exists(&path)? {
             let draft = self.read_capture_draft(id)?;
             return Self::capture_replay(draft, mutation_id, &fingerprint)?
                 .ok_or_else(|| invalid("Capture ID already exists"));
@@ -1067,7 +1065,7 @@ impl Core {
             &hosted_slot,
         ))?);
         let path = capture_record_path(&self.data_dir, &self.capture_owner(), id)?;
-        if path.exists() {
+        if self.backend.entry_exists(&path)? {
             let draft = self.read_capture_draft(id)?;
             return Self::capture_replay(draft, mutation_id, &fingerprint)?
                 .ok_or_else(|| invalid("Capture ID already exists"));
@@ -1204,8 +1202,8 @@ impl Core {
     ) -> Result<(CaptureLibrary, CaptureTarget)> {
         let root = absolute_path(root)?;
         let parent = absolute_path(parent)?;
-        let guard = ParentGuard::acquire(&root.join(".capture-root"))?;
-        let parent_guard = ParentGuard::acquire(&parent.join(".capture-parent"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".capture-root"))?;
+        let parent_guard = ParentGuard::acquire(&self.backend, &parent.join(".capture-parent"))?;
         let workspace = self.require_workspace(&root)?;
         let binding = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),
@@ -1280,7 +1278,7 @@ impl Core {
             return Err(invalid("Capture is not bound to a library"));
         };
         let root = absolute_path(Path::new(&target.root_hint))?;
-        let guard = ParentGuard::acquire(&root.join(".capture-resolve"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".capture-resolve"))?;
         let workspace = self.require_workspace(&root)?;
         if guard.directory_identity()? != binding.root_identity
             || workspace.workspace_id != binding.workspace_id.as_deref().unwrap()
@@ -1304,7 +1302,8 @@ impl Core {
                         .ok_or_else(|| invalid("Original capture parent is unavailable"))?,
                 );
                 // Both NodeRef and DirectoryRef resolve to their actual container.
-                let parent_guard = ParentGuard::acquire(&path.join(".capture-parent"))?;
+                let parent_guard =
+                    ParentGuard::acquire(&self.backend, &path.join(".capture-parent"))?;
                 if hash(&serde_json::to_vec(&parent_guard.directory_identity()?)?)
                     != *identity_digest
                 {

@@ -157,13 +157,13 @@ impl Core {
                     "This operationId already belongs to different input",
                 ));
             }
-            if !self.committed(operation_id) && self.resolved(operation_id)? {
+            if !self.committed(operation_id)? && self.resolved(operation_id)? {
                 return Err(CoreError::new(
                     "operationCanceled",
                     "The original creation was durably canceled or retained without activation",
                 ));
             }
-            if !self.committed(operation_id) {
+            if !self.committed(operation_id)? {
                 return Err(CoreError::new(
                     "recoveryPending",
                     "Inspect and resolve the original creation plan; no second plan was created",
@@ -182,7 +182,7 @@ impl Core {
             return Ok(library_info(plan));
         }
         let root = absolute_path(path)?;
-        let guard = ParentGuard::acquire(&root)?;
+        let guard = ParentGuard::acquire(&self.backend, &root)?;
         if root.try_exists()? {
             return Err(CoreError::new(
                 "exists",
@@ -485,7 +485,7 @@ impl Core {
             return Ok(true);
         }
         let expected = self.materialized_identity(&plan.operation_id, Path::new(&plan.path))?;
-        let guard = ParentGuard::acquire(&root.join(".library-identity"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".library-identity"))?;
         Ok(expected.as_ref() == Some(&guard.directory_identity()?))
     }
 
@@ -494,9 +494,11 @@ impl Core {
         plan: &journal::Plan,
     ) -> Result<RecoveryInfo> {
         let mut result = self.inspect_transaction_recovery(plan)?;
-        if !self.committed(&plan.operation_id)
+        if !self.committed(&plan.operation_id)?
             && !self.resolved(&plan.operation_id)?
-            && self.journal_path(&plan.operation_id, "install").exists()
+            && self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
             && result.members.iter().all(|m| {
                 if m.role == "write" {
                     m.matches_before || m.matches_after
@@ -515,7 +517,7 @@ impl Core {
         plan: &journal::Plan,
         action: &str,
     ) -> Result<RecoveryInfo> {
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id)? {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return self.inspect_library_creation_recovery(plan);
         }
         let t = plan
@@ -559,7 +561,9 @@ impl Core {
                     m.matches_after
                 }
             });
-            if !self.journal_path(&plan.operation_id, "install").exists()
+            if !self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
                 || !match action {
                     "adoptAfterImages" => after,
                     "resumeOriginalPlan" => resumable,
@@ -594,7 +598,7 @@ impl Core {
                     if member.matches_after {
                         continue;
                     }
-                    let guard = ParentGuard::acquire(&path)?;
+                    let guard = ParentGuard::acquire(&self.backend, &path)?;
                     let directory = guard.create_directory()?;
                     self.record_materialized(&plan.operation_id, &path, &directory)?;
                     capture.guards.push(guard);
@@ -617,7 +621,7 @@ impl Core {
                     if let Some((_, file)) = capture.files.iter_mut().find(|(i, _)| *i == index) {
                         write_blob(file, &change.after)?;
                     } else {
-                        let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                        let guard = ParentGuard::acquire(&self.backend, Path::new(&change.path))?;
                         let mut file = guard.open_file(true, true)?;
                         self.record_materialized(
                             &plan.operation_id,

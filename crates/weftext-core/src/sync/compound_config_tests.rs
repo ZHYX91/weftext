@@ -234,7 +234,7 @@ fn compound_materialized_rules_same_bytes_replacement_does_not_inherit_admission
                 .is_err()
         );
     }
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     assert_eq!(fs::read(&path).unwrap(), fs::read(&original).unwrap());
 }
 

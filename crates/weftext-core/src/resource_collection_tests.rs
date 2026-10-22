@@ -464,12 +464,17 @@ fn resource_collection_original_first_import_afterimages_remain_recoverable() {
         _ => unreachable!(),
     };
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&plan.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
     for change in &changes {
-        let guard = ParentGuard::acquire(Path::new(&change.path)).unwrap();
+        let guard = ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&change.path),
+        )
+        .unwrap();
         let mut handle = guard.open_file(true, true).unwrap();
         f.core
             .record_materialized(&plan.operation_id, Path::new(&change.path), &handle)

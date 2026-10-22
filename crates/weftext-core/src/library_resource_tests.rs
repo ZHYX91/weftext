@@ -52,7 +52,7 @@ impl Fixture {
         plan.workspace_id = Some(workspace.clone());
         plan.files=vec![(".weftext-workspace.json".into(),serde_json::to_vec(&config).unwrap()),(".weftext-format".into(),b"weftext.typst.v1\n".to_vec()),(".weftext-mvp-commit.json".into(),serde_json::to_vec(&serde_json::json!({"workspaceId":workspace,"operationId":operation,"storageProfile":STORAGE_PROFILE})).unwrap())];
         core.stage(plan.clone()).unwrap();
-        let guard = ParentGuard::acquire(&root).unwrap();
+        let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
         let directory = guard.create_directory().unwrap();
         for (name, bytes) in &plan.files {
             let mut file = ParentGuard::child_file(&directory, name).unwrap();

@@ -17,11 +17,7 @@ impl Core {
         let workspace = self.require_workspace(root)?.workspace_id;
         let trash = root.join(".weftext-trash");
         let mut roots = Vec::<OriginalTrashRoot>::new();
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -37,7 +33,7 @@ impl Core {
                     continue;
                 }
                 let node_id = self
-                    .admitted_binding(step.leaf_identity)
+                    .admitted_binding(step.leaf_identity)?
                     .filter(|birth| birth.workspace_id == workspace)
                     .map(|birth| birth.node_id);
                 // The existing Node relocation freezes its original admitted
@@ -155,7 +151,7 @@ impl Core {
                         .id
                         .as_ref()
                         != Some(id)
-                        || self.admitted_binding(&leaf_identity).is_none_or(|birth| {
+                        || self.admitted_binding(&leaf_identity)?.is_none_or(|birth| {
                             birth.workspace_id != workspace || birth.node_id != *id
                         })
                     {
@@ -232,7 +228,7 @@ impl Core {
         &self,
         entry: &OriginalTrashRoot,
     ) -> Result<CapturedFile> {
-        let guard = ParentGuard::acquire(&entry.path.join(".trash-root-proof"))?;
+        let guard = ParentGuard::acquire(&self.backend, &entry.path.join(".trash-root-proof"))?;
         if guard.directory_identity()? != entry.identity {
             return Err(CoreError::new(
                 "identityConflict",
@@ -241,12 +237,12 @@ impl Core {
         }
         let source = entry.path.join(&entry.leaf);
         self.check_pending(&source)?;
-        let file = capture_optional(&source)?.ok_or_else(|| {
+        let file = capture_optional(&self.backend, &source)?.ok_or_else(|| {
             CoreError::new("missingNode", "The retained canonical source is missing")
         })?;
         if file.stamp.identity != entry.leaf_identity
             || self
-                .admitted_binding(&file.stamp.identity)
+                .admitted_binding(&file.stamp.identity)?
                 .is_none_or(|birth| entry.node_id.as_ref() != Some(&birth.node_id))
         {
             return Err(CoreError::new(
