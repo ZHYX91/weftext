@@ -27,6 +27,8 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 `.weftext-rules` 不继承 `.gitignore`。Core 的单一库存分别记录文件存在/可见性、Folder Node 资格及显式节点识别边界：ignored 从普通列表隐藏并排除节点发现，字节仍备份；unmanaged 可见、可展开并可打开普通文件，不获得 Node/typed Query 资格。无同名主文件的目录与非配对 `.typ` 默认标“不管理”，不因此停止向下普通枚举或发现未被显式排除的后代配对。用户显式将目录子树设为不管理时，节点发现/批量整理不重入该子树，普通文件浏览仍可进入。完整节点的 canonical `.typ` 不可独立设为不管理；显式退出节点管理须预览身份/引用后果，不自动移动或删除文件。
 
+每次完整库存扫描在根、Workspace 与规则资格成立后，只读取一次全部已提交 Plan 的原 Birth 证据，按原顺序保留本次调用内的物理绑定观察；逐文件仍核当前受保护句柄、身份、源码声明和相关 pending。坏的后续 Birth 不能被较早的有效绑定遮蔽。此观察不跨扫描复用，不授予提交权限；下一次扫描重新读取原证据。无关 Plan 不触发目标路径的 install／commit／resolution 查询，相关 Plan 的原资格顺序与别名边界保持。
+
 节点结构动作仍拒绝显式 ignored/unmanaged 边界内的目标，或已知子树含这类排除边界的动作；普通非节点文件动作经同一安全后端独立预览确切范围，不借普通改名/移动绕过受管节点的两侧配对、已登记资源及历史责任。已接纳节点突然缺主文件或改配对是诊断/恢复事件，不能静默降为普通文件、退休身份或猜新 ID。开放树未观察新增的严格排除仍需强范围能力；§5 的迟到边界 pending 规则针对这些显式排除边界，不把普通容器缺主文件误当同一阻断条件。
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。

@@ -44,6 +44,13 @@ impl Core {
         let _root_guard = ParentGuard::acquire(&self.backend, &anchor)?;
         let workspace = self.workspace(&root)?;
         let rules = read_rules(&self.backend, &root)?;
+        // One call-local cut of original committed admissions. Re-reading the
+        // entire journal for each source makes one complete inventory quadratic
+        // in journal I/O. Every later inventory builds this evidence afresh.
+        let mut births = Vec::new();
+        for plan in self.committed_plans()? {
+            births.extend(self.read_births(&plan.operation_id)?);
+        }
         let mut result = Inventory {
             root: display(&root),
             workspace_id: workspace.as_ref().map(|w| w.workspace_id.clone()),
@@ -167,7 +174,7 @@ impl Core {
                                 }
                                 total += source.len();
                                 let info = weftext_engine::inspect(&source);
-                                let known = self.admitted_binding(&identity)?;
+                                let known = births.iter().find(|birth| birth.identity == identity);
                                 if let Some(birth) = known {
                                     item.kind = "node".into();
                                     item.node_id = Some(birth.node_id.clone());
@@ -190,23 +197,8 @@ impl Core {
                                     item.kind = "node".into();
                                     item.node_id = info.id.clone();
                                     item.identity_status = match info.id.as_ref() {
-                                        Some(id)
-                                            if workspace
-                                                .as_ref()
-                                                .map(|w| -> Result<bool> {
-                                                    Ok({
-                                                        self.admitted(
-                                                            id,
-                                                            &w.workspace_id,
-                                                            &identity,
-                                                        )?
-                                                    })
-                                                })
-                                                .transpose()?
-                                                .unwrap_or(false) =>
-                                        {
-                                            "admitted".into()
-                                        }
+                                        // An ID in source cannot replace an
+                                        // absent admitted physical binding.
                                         Some(_) => "unadmitted".into(),
                                         None if info.identity_status == "absent" => {
                                             "missing".into()

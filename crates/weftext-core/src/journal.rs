@@ -645,15 +645,14 @@ impl Core {
             let affects = a == b
                 || (p.kind == "createLibrary" && b.starts_with(&(a + "\\")))
                 || p.transaction.as_ref().is_some_and(|t| t.affects(path));
+            if !affects {
+                continue;
+            }
             let installing = p.transaction.is_none()
                 || self
                     .backend
                     .entry_exists(self.journal_path(&p.operation_id, "install"))?;
-            if affects
-                && installing
-                && !self.committed(&p.operation_id)?
-                && !self.resolved(&p.operation_id)?
-            {
+            if installing && !self.committed(&p.operation_id)? && !self.resolved(&p.operation_id)? {
                 return Err(CoreError::new(
                     "recoveryPending",
                     UiMessage::recovery_operation_pending(

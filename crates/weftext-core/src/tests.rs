@@ -950,6 +950,79 @@ fn native_birth_admission_duplicate_and_unmanaged_browse() {
 }
 
 #[test]
+fn inventory_requalifies_complete_original_admissions_on_each_call() {
+    let mut f = Fixture::new("outside");
+    let root = f.temp.path().join("library");
+    f.core.create_library(&root).unwrap();
+    let first = "00000000-0000-4000-8000-000000000001";
+    let last = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+    for (operation_id, name) in [(first, "A"), (last, "Z")] {
+        let preview = f
+            .core
+            .prepare_operation(OperationRequest {
+                operation_id: operation_id.into(),
+                root: display(&root),
+                intent: OperationIntent::NewNode {
+                    parent: display(&root),
+                    name: name.into(),
+                    source: None,
+                },
+            })
+            .unwrap();
+        f.core
+            .execute_operation(operation_id, &preview.plan_id)
+            .unwrap();
+    }
+    let inventory = f.core.inventory(&root).unwrap();
+    assert_eq!(
+        inventory
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+    let plural = f.core.journal_path(last, "births");
+    let birth = if plural.exists() {
+        plural
+    } else {
+        f.core.journal_path(last, "birth")
+    };
+    let original = fs::read(&birth).unwrap();
+    fs::write(&birth, b"invalid original birth").unwrap();
+    // A previous successful inventory, or the earlier valid A binding, cannot
+    // hide corrupt later committed admission evidence in this complete scan.
+    assert!(f.core.inventory(&root).is_err());
+    assert_eq!(fs::read(&birth).unwrap(), b"invalid original birth");
+    fs::write(&birth, original).unwrap();
+    assert!(f.core.inventory(&root).unwrap().complete);
+    let source = root.join("A/A.typ");
+    let original = fs::read(&source).unwrap();
+    fs::write(&source, b"broken declaration").unwrap();
+    let changed = f.core.inventory(&root).unwrap();
+    assert_eq!(
+        changed
+            .entries
+            .iter()
+            .find(|entry| entry.relative_path == "A/A.typ")
+            .unwrap()
+            .identity_status,
+        "bindingConflict"
+    );
+    fs::write(&source, original).unwrap();
+    assert_eq!(
+        f.core
+            .inventory(&root)
+            .unwrap()
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn exact_rules_hide_ignored_and_browse_explicit_unmanaged_descendants() {
     let mut f = Fixture::new("outside");
     let root = f.temp.path().join("library");
