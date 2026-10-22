@@ -3,6 +3,7 @@ from _cli_serve import launch_serve
 from _creation_result import created_document
 import argparse
 import json
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -27,8 +28,9 @@ def walk(node):
 class LocalApplication(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(prefix='weftext-mvp-test-')
-        cls.root = Path(cls.temp.name)
+        # Preserve originals when typed shutdown fails or is unconfirmed. A
+        # TemporaryDirectory finalizer must not erase a still-live owner's data.
+        cls.root = Path(tempfile.mkdtemp(prefix='weftext-mvp-test-'))
         cls.owner = launch_serve(EXE, ['--data-dir', str(cls.root / 'state')])
         cls.process = cls.owner.process
         cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
@@ -36,7 +38,7 @@ class LocalApplication(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.owner.stop()
-        cls.temp.cleanup()
+        shutil.rmtree(cls.root)
 
     def api(self, path, data=None, status=200, headers=None):
         request = Request(self.url + path,
@@ -61,9 +63,11 @@ class LocalApplication(unittest.TestCase):
     def assert_saved_replay(self, replay, receipt, path, committed, current):
         # Receipt is durable; current-document delivery independently opens a
         # qualified Session and may observe content written after the commit.
-        facts = ('operationId', 'status', 'path', 'baseId', 'message')
+        facts = ('operationId', 'status', 'path', 'baseId')
         self.assertEqual({key: replay[key] for key in facts},
                          {key: receipt[key] for key in facts})
+        self.assertEqual(('revisionId' in replay, replay.get('revisionId')),
+                         ('revisionId' in receipt, receipt.get('revisionId')))
         self.assertNotIn('documentError', replay)
         self.assertEqual(replay['committedSource'], committed)
         self.assertEqual(replay['documentSourceMatchesCommit'], current == committed)
