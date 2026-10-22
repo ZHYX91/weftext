@@ -32,7 +32,7 @@ export interface Inventory {
   workspaceId?: string;
   status: string;
   entries: InventoryEntry[];
-  warnings: string[];
+  warnings: CoreDescription[];
   complete: boolean;
 }
 export interface Origin {
@@ -74,7 +74,7 @@ export interface SourceInfo {
   syntaxTokens: SyntaxToken[];
   bodyInsertion?: { from: number; to: number; utf16From: number; utf16To: number; raw: string; writable: boolean } | null;
 }
-export interface Diagnostic { severity: "error" | "warning"; message: string; origin?: Origin | null }
+export type Diagnostic = EngineDiagnostic;
 export interface RenderOutput {
   ok: boolean;
   html: string;
@@ -87,10 +87,11 @@ export interface RenderOutput {
   serial: number;
   source: string;
 }
-export interface Receipt { recoveryIssue?: { code: string; message: string }; operationId: string; status: string; path: string; baseId: string; message: string }
+export interface Receipt { recoveryIssue?: ErrorDescription & {code: string}; operationId: string; status: string; path: string; baseId: string }
 export interface RecoveryImage { present: boolean; source?: string; base64?: string; byteLength: number; sha256?: string }
 export interface RecoveryInfo {
-  operationId: string; path: string; status: string; beforeSource?: string; afterSource?: string; currentSource?: string; message: string;
+  operationId: string; path: string; status: string; beforeSource?: string; afterSource?: string; currentSource?: string; description: CoreDescription;
   coherence?: string; allowedActions?: string[];
-  members?: { kind: string; path: string; targetPath?: string; before: RecoveryImage; after: RecoveryImage; current: RecoveryImage; identityBinding: string; state: string }[];
+  members?: { kind: string; path: string; targetPath?: string; before: RecoveryImage; after: RecoveryImage; current: RecoveryImage; identityBinding: string; state: string; description?: CoreDescription }[];
 }
+import type { CoreDescription, CoreError, EngineDiagnostic, ErrorDescription } from "./ui-diagnostics";

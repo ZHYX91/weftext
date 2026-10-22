@@ -5,6 +5,7 @@ import { createSourceState } from "./editor";
 import { associateEmbeddedQueries, EmbeddedQueryController, EmbeddedQueryRunGate, embeddedQueryPolicy, exactQueryOccurrence, sameQueryBasis, validateEmbeddedEdit, type EmbeddedQueryBasis, type EmbeddedQueryOccurrence, type EmbeddedQueryRun } from "./embedded-query";
 import { utf8Offset } from "./writing";
 import type { RenderNode, ViewMode } from "./types";
+import { message } from "./ui-locale";
 
 const source = "中文 😀\r\n#metadata((kind: \"weftext.query\", /* keep */ where: \"true\")) <weftext-query-first>\r\n外部字节\r\n#metadata((kind: \"weftext.query\", where: \"false\")) <weftext-query-second>\r\n";
 function occurrence(label = "first"): EmbeddedQueryOccurrence {
@@ -14,7 +15,7 @@ function occurrence(label = "first"): EmbeddedQueryOccurrence {
 const basis: EmbeddedQueryBasis = { sessionId: "session", source, serial: 7 };
 function node(key: string, item: EmbeddedQueryOccurrence, main = true): RenderNode { return { key, kind: "tag", tag: null, text: null, attrs: { "data-weftext-query-label": item.label, "data-weftext-query-occurrence": key }, children: [], origin: { path: main ? "note.typ" : "included.typ", from: item.callFrom, to: item.range.to, utf16From: item.range.utf16From + 1, utf16To: item.range.utf16To, raw: item.range.raw.slice(1), isMain: main, syntaxKind: "FuncCall" }, writable: false }; }
 function tree(children: RenderNode[]): RenderNode { return { key: "root", kind: "element", tag: "div", text: null, attrs: {}, children, origin: null, writable: false }; }
-const result: EmbeddedQueryRun = { serial: basis.serial, sourceHash: "hash", occurrenceId: "first", draftPreview: true, result: { rows: [], coverage: "partial", freshness: "stale", diagnostics: [{ message: "permission boundary" }], totalKnown: 0, limited: false } };
+const result: EmbeddedQueryRun = { serial: basis.serial, sourceHash: "hash", occurrenceId: "first", draftPreview: true, result: { rows: [], coverage: "partial", freshness: "stale", diagnostics: [{ explanation:message("common.unavailable"),diagnostics:[],causes:[] }], totalKnown: 0, limited: false } };
 
 test("query author range validates bytes, UTF16, CRLF and supplementary characters", () => {
   const item = occurrence(); assert.equal(exactQueryOccurrence(source, item), true);
@@ -95,7 +96,7 @@ test("late Q1 result cannot replace Q2, changed parameters or a newer same-defin
 
 test("discovery installs only its actual draft; invalid intermediate source remains unchanged", async () => {
   let current = { ...basis }, finish!: (value: unknown) => void;
-  const controller = new EmbeddedQueryController({ basis: () => current, mode: () => "write", editable: () => true, request: async <T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T, prepareEdit: async () => {}, apply: async () => { throw new Error("no edits expected"); }, reveal: () => false, closeReveal: () => {}, openRow: async () => {}, openOwner: async () => {}, notify: () => {} });
+  const controller = new EmbeddedQueryController({ queryResultScope:"local", basis: () => current, mode: () => "write", editable: () => true, request: async <T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T, prepareEdit: async () => {}, apply: async () => { throw new Error("no edits expected"); }, reveal: () => false, closeReveal: () => {}, openRow: async () => {}, openOwner: async () => {}, notify: () => {} });
   const pending = controller.discover(basis); current = { ...basis, source: source + "#(", serial: 8 }; controller.invalidate();
   finish({ serial: 7, sourceHash: "old", syntaxValid: true, occurrences: [occurrence()] });
   assert.equal(await pending, false); assert.equal(controller.hasQueries, false); assert.equal(current.source, source + "#(");
@@ -104,7 +105,7 @@ test("discovery installs only its actual draft; invalid intermediate source rema
 
 test("disposing an actor/query session clears discovered writers and rejects late rediscovery", async () => {
   let finish!: (value: unknown) => void;
-  const controller = new EmbeddedQueryController({ basis: () => basis, mode: () => "write", editable: () => true, request: async <T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T, prepareEdit: async () => {}, apply: async () => { throw new Error("no edits expected"); }, reveal: () => false, closeReveal: () => {}, openRow: async () => {}, openOwner: async () => {}, notify: () => {} });
+  const controller = new EmbeddedQueryController({ queryResultScope:"local", basis: () => basis, mode: () => "write", editable: () => true, request: async <T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T, prepareEdit: async () => {}, apply: async () => { throw new Error("no edits expected"); }, reveal: () => false, closeReveal: () => {}, openRow: async () => {}, openOwner: async () => {}, notify: () => {} });
   const initial = controller.discover(basis); finish({ serial: basis.serial, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }); assert.equal(await initial, true); assert.equal(controller.hasQueries, true);
   const late = controller.discover(basis); controller.dispose(); assert.equal(controller.hasQueries, false); assert.deepEqual(controller.outputSelections(), []);
   finish({ serial: basis.serial, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }); assert.equal(await late, false); assert.equal(controller.hasQueries, false);

@@ -1,3 +1,6 @@
+import { ApiError } from "./api-error";
+import { TestDocument } from "./dom.test-support";
+import { UiError, message as uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,16 +20,18 @@ const statements = sourceFile.statements.filter(node =>
 const compiled = ts.transpileModule(statements.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
 
 function fixture() {
+  const testDocument = new TestDocument();
   const nodes = new Map<string, any>(), listeners = new Map<string, (event: any) => void>();
   const calls: { url: string; options: RequestInit }[] = [];
   const storage = new Map<string, string>();
   const cleared: string[] = [];
   const el = (id: string) => {
-    if (!nodes.has(id)) nodes.set(id, { hidden: false, value: "", disabled: false, textContent: "", srcdoc: "", replaceChildren() {}, querySelectorAll() { return []; } });
+    if (!nodes.has(id)) nodes.set(id, testDocument.createElement("div"));
     return nodes.get(id);
   };
   const context: any = {
-    el, window: { addEventListener(name: string, listener: (event: any) => void) { listeners.set(name, listener); } },
+    ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, localeDisposals: 0, interfaceLocale: { dispose() { context.localeDisposals++; } }, mountInterfaceLocale() {},
+    el, window: { addEventListener(name: string, listener: (event: any) => void) { const prior = listeners.get(name); listeners.set(name, event => { prior?.(event); listener(event); }); } },
     document: { querySelectorAll() { return []; } },
     everydayNavigation: { clear() {} }, everydayBar: { replaceChildren() {} },
     personalControls: { clear() {} },
@@ -40,7 +45,7 @@ function fixture() {
     stableReference: undefined, retiredStructureSessions: new Set<string>(), retiredStructureSources: new Set<string>(),
     structureDocuments: [], compareRequired: false, busy: false, expiredSessionId: undefined, draftTimer: undefined,
     clearNodeNavigation() {}, clearTimeout, AbortSignal,
-    status(message: string) { context.lastStatus = message; },
+    status(message: unknown) { context.lastStatus = uiTextValue(message); },
     sessionStorage: { getItem(key: string) { return storage.get(key) ?? null; }, setItem(key: string, value: string) { storage.set(key, value); }, removeItem(key: string) { storage.delete(key); } },
     fetch: async (url: string, options: RequestInit) => { calls.push({ url, options }); return { arrayBuffer: async () => new ArrayBuffer(0) }; },
     request: async () => ({ active: true }),
@@ -89,8 +94,9 @@ test("pagehide preserves a back-forward cached page, but final departure release
   const f = fixture(), handler = f.listeners.get("pagehide");
   assert.ok(handler);
   f.context.retiredStructureSessions.add("alice-retired");
-  handler({ persisted: true }); assert.equal(f.calls.length, 0);
+  handler({ persisted: true }); assert.equal(f.calls.length, 0); assert.equal(f.context.localeDisposals, 0);
   handler({ persisted: false });
+  assert.equal(f.context.localeDisposals, 1);
   assert.deepEqual(f.calls.map(call => JSON.parse(call.options.body as string).sessionId).sort(), ["alice-original", "alice-retired"]);
   assert.equal(f.cleared.length, 0); assert.equal(f.context.source.value, "unsaved draft");
   assert.equal(f.storage.size, 1);
@@ -113,7 +119,7 @@ test("an expired lease preserves draft and Undo, blocks saving, and does not reo
   let requests = 0;
   f.context.request = async (path: string, data: { sessionId: string }) => {
     requests++; assert.equal(path, "session/keepalive"); assert.equal(data.sessionId, "alice-original");
-    throw vm.runInContext('new HostedError("sessionExpired", "expired", 410)', f.context);
+    throw vm.runInContext('new HostedError(new ApiError("sessionExpired", uiMessage("common.unavailable")), 410)', f.context);
   };
   await f.context.refreshOpenSession();
   assert.equal(f.context.doc, original); assert.equal(f.context.draft, draft);
@@ -130,7 +136,7 @@ test("a late lease-expiry response cannot pause a newer document or actor", asyn
   const pending = f.context.refreshOpenSession();
   f.context.doc = { sessionId: "newer-session", resource: "Other", rights: { read: true, write: true } };
   f.context.token = "bob-credential"; f.context.identity = { actor: "bob", deployment: "space", generation: 0 };
-  reject(vm.runInContext('new HostedError("sessionExpired", "expired", 410)', f.context));
+  reject(vm.runInContext('new HostedError(new ApiError("sessionExpired", uiMessage("common.unavailable")), 410)', f.context));
   await pending;
   assert.equal(f.context.compareRequired, false); assert.equal(f.context.expiredSessionId, undefined);
   assert.equal(f.context.lastStatus, undefined); assert.equal(f.storage.size, 0);

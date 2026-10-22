@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import {message,uiTextValue} from "./ui-locale";
 import type { KnowledgeBasis, KnowledgeMention, MediaRegionInput } from "./knowledge-state";
 
 const mention = (start: number, end: number, targets: string[]): KnowledgeMention => ({ startScalar: start, endScalar: end, startUtf16: start, endUtf16: end, targets: targets.map(nodeId => ({ workspaceId: "w", nodeId })), terms: [`${start}:${end}`], writable: true, component: -1 });
@@ -108,7 +109,8 @@ test("recovery pending is an uncertain original operation, while a definite conf
   assert.equal(uncertainKnowledgeOperation("committed"), false);
 });
 
-test("typed Core losses expose their actual human message in the confirmation flow", () => {
-  assert.equal(knowledgeLossMessage({ code: "unknownReference", message: "此引用未能迁移，已保存准确原件。" }), "此引用未能迁移，已保存准确原件。");
-  assert.equal(knowledgeLossMessage("原文保留"), "原文保留");
+test("typed Core losses expose product explanation and preserve authored location without string fallback", () => {
+ const loss={path:"原文",code:"unknownReference",explanation:message("common.unavailable"),diagnostics:[],causes:[],productDiagnostics:[]};
+ assert.match(uiTextValue(knowledgeLossMessage(loss)),/原文/);
+ assert.throws(()=>knowledgeLossMessage("原文保留" as unknown as typeof loss));
 });

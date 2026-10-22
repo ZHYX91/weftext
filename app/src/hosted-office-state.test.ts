@@ -2,17 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { freezeOfficeImportRequest, importReceipt, officeChunk, officeOutputPresentation, outputReceipt, type OfficeImportRequest, type OfficeOutputReceipt } from "./hosted-office-state";
 
-const prepared: OfficeOutputReceipt = { requestId: "original", status: "prepared", filename: "report.docx", contentType: "application/docx", length: 6, digest: "a".repeat(64), losses: [] };
+import { message } from "./ui-locale";
+const explanation=()=>({explanation:message("common.unavailable"),diagnostics:[],causes:[]});
+const loss=()=>({code:"legacyOffice_commentsUnverified",...explanation(),productDiagnostics:[]});
+const importPlan=(resource:string,operationId:string,planId="plan")=>({resource,operationId,status:"prepared",planId,preview:{summary:message("common.save"),losses:[]},commitAllowed:true});
+const prepared: OfficeOutputReceipt = { requestId: "original", status: "prepared", filename: "report.docx", contentType: "application/docx", length: 6, digest: "a".repeat(64), losses: [], summary:message("common.save"),preview:null };
 test("same original output cannot install replacement bytes from a late or inconsistent receipt", () => {
   assert.throws(() => outputReceipt("original", { ...prepared, requestId: "other" }));
   assert.throws(() => outputReceipt("original", { ...prepared, digest: "b".repeat(64) }, prepared));
   assert.throws(() => outputReceipt("original", { ...prepared, length: 7 }, prepared));
-  const confirmed = outputReceipt("original", { requestId: "original", status: "confirmed" }, prepared);
+  const confirmed = outputReceipt("original", { ...prepared, status: "confirmed" }, prepared);
   assert.equal(confirmed.digest, prepared.digest); assert.equal(confirmed.status, "confirmed");
   assert.throws(() => outputReceipt("original", prepared, confirmed));
-  for (const status of ["expired", "failed", "notRegistered"] as const) {
-    assert.deepEqual(outputReceipt("original", { ...prepared, status, preview: { source: "old source" } }, confirmed), { requestId: "original", status });
+  for (const status of ["expired", "notRegistered"] as const) {
+    assert.deepEqual(outputReceipt("original", {requestId:"original",status}, confirmed), { requestId: "original", status });
+    assert.throws(()=>outputReceipt("original", {...prepared,status},confirmed),{code:"resultUnknown"});
   }
+  assert.deepEqual(outputReceipt("original", {requestId:"original",status:"failed",preview:null},confirmed), {requestId:"original",status:"failed",preview:null});
 });
 test("a resumed download checks exact offset, bounded size, total, digest and completion", () => {
   const chunk = { bytesBase64: btoa("def"), offset: 3, length: 3, total: 6, sha256: prepared.digest!, done: true };
@@ -25,42 +31,40 @@ test("output cache never redelivers preview or confirm/download authority before
   assert.equal(officeOutputPresentation("original", cached, { requestId: "original", epoch: 8 }, 9), undefined);
   assert.equal(officeOutputPresentation("original", cached, { requestId: "other", epoch: 9 }, 9), undefined);
   const verification = { requestId: "original", epoch: 9 };
-  assert.equal(officeOutputPresentation("original", cached, verification, 9)?.preview, cached.preview);
-  for (const status of ["notRegistered", "expired", "failed"] as const) {
-    const restored = outputReceipt("original", { ...cached, status });
+  assert.deepEqual(officeOutputPresentation("original", cached, verification, 9)?.preview, cached.preview);
+  for (const status of ["notRegistered", "expired"] as const) {
+    const restored = outputReceipt("original", { requestId:"original", status });
     assert.deepEqual(officeOutputPresentation("original", restored, verification, 9), { requestId: "original", status });
     assert.equal(officeOutputPresentation("original", restored, verification, 10), undefined);
   }
 });
 test("import recovery never rebinds an original operation or revives a committed effect", () => {
   const request = { resource: "slot", operationId: "original", bytesBase64: "" };
-  const original = { resource: "slot", operationId: "original", status: "prepared", planId: "plan", preview: { losses: [] }, commitAllowed: true };
+  const original = importPlan("slot","original");
   assert.throws(() => importReceipt(request, { ...original, resource: "other" }));
   assert.throws(() => importReceipt(request, { ...original, operationId: "other" }));
   assert.throws(() => importReceipt(request, { ...original, planId: "replacement" }, original));
-  const committed = importReceipt(request, { ...original, status: "committed" }, original);
+  const committed = importReceipt(request, { ...original, status: "committed", planId:null,commitAllowed:false }, original);
   assert.throws(() => importReceipt(request, original, committed));
-  assert.equal(importReceipt(request, { resource: "slot", operationId: "original", status: "prepared", commitAllowed: false }).commitAllowed, false);
+  assert.equal(importReceipt(request, { resource: "slot", operationId: "original", status: "prepared", planId:null,preview:{},commitAllowed: false }).commitAllowed, false);
 });
 
 test("pending output supplies only the original locator and cannot replace a prepared artifact", () => {
-  const pending: OfficeOutputReceipt = { ...prepared, status: "pending", message: "still converting", preview: { source: "unverified replacement", legacyConversion: { backend: "other" } } };
-  assert.deepEqual(outputReceipt("original", pending), { requestId: "original", status: "pending", message: "still converting" });
-  for (const status of ["prepared", "confirmed"] as const) {
-    const original = { ...prepared, status, preview: { legacyConversion: { backend: "configured", generated: { sha256: prepared.digest } } } };
-    const before = structuredClone(original);
-    assert.throws(() => outputReceipt("original", pending, original), { code: "resultUnknown" });
-    assert.deepEqual(original, before);
+  const pending = {requestId:"original",status:"pending",preview:{source:"unverified replacement"}};
+  assert.deepEqual(outputReceipt("original",pending),{requestId:"original",status:"pending",preview:{}});
+  for(const status of ["prepared","confirmed"] as const) {
+    const original={...prepared,status}; const before=structuredClone(original);
+    assert.throws(()=>outputReceipt("original",pending,original),{code:"resultUnknown"});
+    assert.deepEqual(original,before);
   }
-  assert.throws(() => outputReceipt("original", { ...prepared, status: "unsupported" } as unknown as OfficeOutputReceipt), { code: "resultUnknown" });
+  assert.throws(()=>outputReceipt("original",{...prepared,status:"unsupported"}),{code:"resultUnknown"});
 });
-
-test("unknown and cancelled output receipts retain the original UUID without delivering cached artifacts", () => {
-  for (const status of ["unknown", "cancelled"] as const) {
-    const incoming = { ...prepared, status, message: "original result", preview: { source: "unverified source" } };
-    assert.deepEqual(outputReceipt("original", incoming, prepared), { requestId: "original", status, message: "original result" });
-    assert.throws(() => outputReceipt("other", incoming), { code: "resultUnknown" });
-  }
+test("unknown and cancelled output receipts retain the original UUID without delivering cached artifacts",()=>{
+  const unknown={requestId:"original",status:"unknown",code:"resultUnknown",...explanation(),executionLocation:"server"};
+  assert.deepEqual(outputReceipt("original",unknown,prepared),unknown);
+  const cancelled={requestId:"original",status:"cancelled",preview:{source:"unverified source"}};
+  assert.deepEqual(outputReceipt("original",cancelled,prepared),{requestId:"original",status:"cancelled",preview:{}});
+  assert.throws(()=>outputReceipt("other",unknown),{code:"resultUnknown"});
 });
 
 test("incomplete output receipts never grant presentation or delivery authority", () => {
@@ -111,7 +115,7 @@ test("Word import refuses incompatible format choices without silently rewriting
 
 test("legacy import receipt stays tied to the original operation and cannot substitute its plan", () => {
   const request: OfficeImportRequest = { resource: "empty-slot", operationId: "legacy-original", bytesBase64: btoa("exact-doc"), format: "doc", legacyBackend: "configured" };
-  const original = { resource: request.resource, operationId: request.operationId, status: "prepared", planId: "exact-plan", preview: { source: "converted document", losses: [{ code: "legacyOffice_commentsUnverified", message: "核对转换后的批注" }], legacyConversion: { status: "succeeded", backend: "configured", direction: "docToDocx", original: { filename: "original.doc", length: 9, sha256: "a".repeat(64) }, intermediateDocx: { filename: "converted.docx", length: 15, sha256: "b".repeat(64) } } }, commitAllowed: true };
+  const original = {...importPlan(request.resource,request.operationId,"exact-plan"),preview:{summary:message("common.save"),losses:[loss()]}};
   const before = structuredClone(request);
   assert.deepEqual(importReceipt(request, original), original);
   for (const replacement of [
@@ -124,16 +128,15 @@ test("legacy import receipt stays tied to the original operation and cannot subs
   }
 });
 
-test("pending import recovery hides unverified content while retaining the original plan identity", () => {
-  const request: OfficeImportRequest = { resource: "empty-slot", operationId: "legacy-original", bytesBase64: btoa("exact-wps"), format: "wps", legacyBackend: "configured" };
-  const original = { resource: request.resource, operationId: request.operationId, status: "prepared", planId: "exact-plan", preview: { source: "verified source", losses: [] }, commitAllowed: true };
-  for (const status of ["pending", "recoveryPending"] as const) {
-    const incoming = { resource: request.resource, operationId: request.operationId, status, planId: "unverified-plan", commitAllowed: true, preview: { source: "unverified replacement", losses: [{ code: "unverified", message: "unverified losses" }], legacyConversion: { backend: "other", original: { sha256: "b".repeat(64) } } } };
-    assert.deepEqual(importReceipt(request, incoming), { resource: request.resource, operationId: request.operationId, status, commitAllowed: false });
-    assert.throws(() => importReceipt(request, incoming, original), { code: "resultUnknown" });
-    const recovered = importReceipt(request, { ...incoming, planId: undefined }, original);
-    assert.deepEqual(recovered, { resource: request.resource, operationId: request.operationId, status, planId: "exact-plan", commitAllowed: false });
-    assert.throws(() => importReceipt(request, { ...original, planId: "replacement-plan" }, recovered), { code: "resultUnknown" });
-    assert.deepEqual(importReceipt(request, original, recovered), original);
+test("pending import recovery hides unverified content while retaining the original plan locator separately", () => {
+  const request:OfficeImportRequest={resource:"empty-slot",operationId:"legacy-original",bytesBase64:btoa("exact-wps"),format:"wps",legacyBackend:"configured"};
+  const original=importPlan(request.resource,request.operationId,"exact-plan");
+  for(const status of ["pending","recoveryPending"] as const) {
+    const incoming={resource:request.resource,operationId:request.operationId,status,planId:null,commitAllowed:false,preview:{}};
+    const recovered=importReceipt(request,incoming,original,"exact-plan");
+    assert.deepEqual(recovered,incoming);
+    assert.throws(()=>importReceipt(request,{...incoming,planId:"unverified-plan",commitAllowed:true}),{code:"resultUnknown"});
+    assert.throws(()=>importReceipt(request,{...original,planId:"replacement-plan"},recovered,"exact-plan"),{code:"resultUnknown"});
+    assert.deepEqual(importReceipt(request,original,recovered,"exact-plan"),original);
   }
 });

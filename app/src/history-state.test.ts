@@ -1,3 +1,4 @@
+import { message, uiTextValue } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HistoryController, historySourceDiff, historyTimeLabel, restoreBufferDisposition, type HistoryContext, type HistoryList, type HistoryOperationStatus, type HistoryRestoreRequest, type HistoryRestoreResult, type HistorySettlement, type HistorySource, type HistoryTransport, type SavedHistoryComparison } from "./history-state";
@@ -11,18 +12,18 @@ const original: HistoryContext = {
 };
 const old: HistorySource = {
   versionId: "save1", operationId: "save1", revisionId: "revision1", kind: "save", savedAtUnixMs: 1234,
-  timeBasis: "commitClock", commitSequence: 1, status: "available", byteLength: 4, sha256: "digest", message: "",
-  source: "v1\r\n", readOnly: true, previewStatus: "sourceOnly", previewMessage: "准确源码可读；历史排版未提供。",
+  timeBasis: "commitClock", commitSequence: 1, status: "available", byteLength: 4, sha256: "digest", description: { explanation: message("history.availableSource"), diagnostics: [], causes: [] },
+  source: "v1\r\n", readOnly: true, previewStatus: "sourceOnly", previewDescription: { explanation: message("history.sourceOnlyHelp"), diagnostics: [], causes: [] },
 };
 const comparison = (context = original): SavedHistoryComparison => ({ selected: structuredClone(old), current: { versionId: "save3", revisionId: "revision3", source: context.baseSource, baseId: context.baseId, path: context.path }, equal: false, comparison: "currentSaved" });
-const saved = (request: HistoryRestoreRequest): HistoryRestoreResult => ({ receipt: { operationId: request.operationId, status: "saved", path: original.path, baseId: "base4", message: "saved" }, source: old.source, versionId: request.versionId, protectedDrafts: request.draftSource === original.baseSource ? [] : [{ path: original.path, baseSource: original.baseSource, source: request.draftSource!, baseKnown: true }] });
+const saved = (request: HistoryRestoreRequest): HistoryRestoreResult => ({ receipt: { operationId: request.operationId, status: "saved", path: original.path, baseId: "base4" }, source: old.source, versionId: request.versionId, protectedDrafts: request.draftSource === original.baseSource ? [] : [{ path: original.path, baseSource: original.baseSource, source: request.draftSource!, baseKnown: true }] });
 const committed = (result: HistoryRestoreResult): HistoryOperationStatus => ({ operationId: result.receipt.operationId, status: "committed", receipt: structuredClone(result.receipt), result });
 function fixture(context: HistoryContext = structuredClone(original)) {
   let current: HistoryContext | null = context;
   const requests: HistoryRestoreRequest[] = [];
   const list: HistoryList = {
     nodeId: "node", workspaceId: "workspace", path: original.path, currentBaseId: "base3", currentSavedVersionId: "save3", currentness: "saved",
-    versions: [structuredClone(old)], retention: { policy: "retainedCoreJournal", complete: false, knownVersions: 1, availableVersions: 1, oldestSavedAtUnixMs: 1234, newestSavedAtUnixMs: 1234, message: "只显示实际保留记录" }, warnings: [], protectedDrafts: [],
+    versions: [structuredClone(old)], retention: { policy: "retainedCoreJournal", complete: false, knownVersions: 1, availableVersions: 1, oldestSavedAtUnixMs: 1234, newestSavedAtUnixMs: 1234, description: {explanation: message("history.retentionUnknownHelp"), diagnostics: [], causes: []} }, warnings: [], protectedDrafts: [],
   };
   const host: HistoryTransport = {
     settle: async request => ({ operationId: request.operationId, status: "resolved" }),
@@ -45,9 +46,9 @@ test("unknown times never borrow filesystem time, and the UI preserves Core-prov
   ];
   await f.controller.refresh();
   assert.deepEqual(f.controller.list!.versions.map(row => row.versionId), ["save3", "save2", "save1", "legacy"]);
-  assert.equal(historyTimeLabel(f.list.versions[3]), "时间未知");
-  assert.equal(historyTimeLabel({ savedAtUnixMs: 2000, timeBasis: "unknown" }), "时间未知");
-  assert.equal(historyTimeLabel({ savedAtUnixMs: Number.NaN, timeBasis: "commitClock" }), "时间未知");
+  assert.equal(uiTextValue(historyTimeLabel(f.list.versions[3])), "时间未知");
+  assert.equal(uiTextValue(historyTimeLabel({ savedAtUnixMs: 2000, timeBasis: "unknown" })), "时间未知");
+  assert.equal(uiTextValue(historyTimeLabel({ savedAtUnixMs: Number.NaN, timeBasis: "commitClock" })), "时间未知");
 });
 
 test("history identity is scoped to stable node identity; a same-name copy and replaced session cannot receive delayed reads", async () => {
@@ -176,7 +177,7 @@ test("a malformed nested result preserves the known committed receipt until corr
   f.host.status = async () => committed(saved(f.requests[0]));
   const result = await f.controller.inspectOriginal(); assert.equal(result!.source, old.source); assert.equal(f.requests.length, 1); assert.equal(f.controller.operationId, null);
   const nested = fixture(); await nested.controller.select("save1"); await nested.controller.prepareRestore();
-  nested.host.restore = async request => { nested.requests.push(structuredClone(request)); const good = saved(request); return { ...committed(good), result: { ...good, receipt: { ...good.receipt, message: 42 } as unknown as typeof good.receipt } }; };
+  nested.host.restore = async request => { nested.requests.push(structuredClone(request)); const good = saved(request); return { ...committed(good), result: { ...good, receipt: { ...good.receipt, baseId: 42 } as unknown as typeof good.receipt } }; };
   await assert.rejects(nested.controller.restore("retain"), { code: "resultUnknown" });
   assert.deepEqual(nested.controller.originalReceipt, saved(nested.requests[0]).receipt);
   nested.host.status = async () => committed(saved(nested.requests[0]));
@@ -195,7 +196,7 @@ test("committed without result keeps receipt and ID through read failures, and r
   const f = fixture(); await f.controller.select("save1"); await f.controller.prepareRestore();
   f.host.restore = async request => {
     f.requests.push(structuredClone(request));
-    return { operationId: request.operationId, status: "committed", receipt: saved(request).receipt, resultError: { code: "readUnavailable", message: "TEST retained result temporarily unavailable" } };
+    return { operationId: request.operationId, status: "committed", receipt: saved(request).receipt, resultError: { code: "readUnavailable", explanation: message("history.committedResultUnavailable"), diagnostics: [{origin:"os", text:"TEST retained result temporarily unavailable"}], causes: [] } };
   };
   await assert.rejects(f.controller.restore("retain"), /原恢复已提交/);
   const receipt = structuredClone(f.controller.originalReceipt);
@@ -221,7 +222,7 @@ test("committed without result keeps receipt and ID through read failures, and r
 });
 
 test("a commit between missing and settlement preserves its flat fact and fetches the typed history result", async () => {
-  for (const failSecondRead of [false, true]) for (const receiptDamage of [null, { baseId: 42 }, { baseId: undefined }, { baseId: "" }, { path: "" }, { message: 42 }]) {
+  for (const failSecondRead of [false, true]) for (const receiptDamage of [null, { baseId: 42 }, { baseId: undefined }, { baseId: "" }, { path: "" }]) {
     const f = fixture(); await f.controller.select("save1"); await f.controller.prepareRestore();
     f.host.restore = async request => { f.requests.push(structuredClone(request)); throw new Error("response lost"); };
     await assert.rejects(f.controller.restore("retain"), /response lost/);

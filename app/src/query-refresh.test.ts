@@ -4,7 +4,8 @@ import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { QueryPanel, defaultPreference, queryPlanRefreshInput, type QueryPlanInputs, type QueryResult } from "./query-panel";
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
-const result = (cutId: string): QueryResult => ({ cutId, rows: [], diagnostics: [], coverage: "complete", freshness: "current", totalKnown: 0, limited: false });
+import { localQueryResult } from "./query-result.test-support";
+const result=(cutId:string):QueryResult=>localQueryResult({cutId});
 
 /** Exercise the real panel's controller paths without mounting its rendering shell. */
 function panelHarness(request: (path: string, body: unknown) => Promise<unknown>) {
