@@ -225,7 +225,9 @@ try {
     check(recognition.scheme.options[1].textContent==='Save' && recognition.recovery.textContent.includes('Save') && recognition.recovery.textContent.includes('exact original diagnostic العربية'),'actual recognition capabilities and retained receipt decode product labels while raw diagnostics stay exact');
     check(recognition.name===recognitionName && recognitionName.value==='作者未完成名称 العربية' && document.activeElement===recognitionName && recognitionName.selectionStart===1 && recognitionName.selectionEnd===5 && recognitionEdits===0,'an open recognition dialog changes language without replacing its unfinished author input or selection');
     await recognition.run(async()=>{throw new api.UiError(message('common.unavailable'));});locale.set('zh-CN');
-    check(recognition.status.textContent==='不可用','an asynchronous recognition dialog error remains a live product message');
+    check(recognition.status.textContent===uiTextValue(message('common.unavailable')),'an asynchronous recognition dialog error remains a live product message');
+    locale.set('en-US');
+    check(recognition.status.textContent===uiTextValue(message('common.unavailable')),'the same asynchronous recognition error follows a later language switch');
     recognition.retireDisplay(false);locale.set('en-US');
     check(recognition.recovery.textContent==='' && recognition.controller.receipt===undefined && !recognition.element.open,'retiring a recognition audience clears retained diagnostic display and original receipt references');
     recognitionMount.remove();

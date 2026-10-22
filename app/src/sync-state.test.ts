@@ -8,7 +8,7 @@ import { knowledgeLossMessage } from "./knowledge-state";
 const request: SyncRequest = { operationId: "original", root: "R", intent: { kind: "applySync", identity: { workspaceId: "W", genesis: "G" }, objects: [{ kind: "node", id: "N" }] } };
 const plan: SyncPlan = { operationId: "original", planId: "frozen", kind: "applySync", status: "prepared", changes: [], nodeMap: {}, newNodeId: null, revisions: {}, resourceMap: {}, losses: [] };
 const description = () => ({ explanation: message("common.save"), diagnostics: [{ origin: "dependency" as const, text: "original raw 原文😀\r\n<&>" }], causes: [{ code: "originalCause", explanation: message("common.close"), diagnostics: [] }] });
-const apiFailure = () => ({ code: "transferFailed", ...description(), details: { kind: "productDiagnostics", code: "originalFacts", diagnostics: Array.from({ length: 40 }, description) } });
+const apiFailure = () => ({ code: "transferFailed", ...description(), details: { kind: "core", code: "originalFacts", ...description(), details: { kind: "aggregate", groups: [{ kind: "product", code: "originalFacts", diagnostics: Array.from({ length: 40 }, description) }] } } });
 test("pairing compares identity fields, independently of wire member order", () => {
   assert.ok(sameSyncIdentity({ workspaceId: "W", genesis: "G" }, JSON.parse('{"genesis":"G","workspaceId":"W"}')));
   assert.equal(sameSyncIdentity({ workspaceId: "W", genesis: "G" }, { workspaceId: "W", genesis: "other" }), false);

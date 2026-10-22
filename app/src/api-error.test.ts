@@ -16,7 +16,7 @@ test("typed errors preserve code, raw diagnostics, conflict content and details 
 
 test("error wire has no message-string fallback, unknown origin or extra field protocol", () => {
   const valid = { code: "failure", explanation: { key: "common.unavailable", params: {} }, diagnostics: [], causes: [] };
-  for (const value of [{ code: "failure", message: "old product string" }, { ...valid, extra: true }, { ...valid, currentSource: "wrong location" }, { ...valid, diagnostics: [{ origin: "browserGuess", text: "raw" }] }, { ...valid, diagnostics: [{ origin: "os", text: "raw", explanation: "guessed" }] }, { ...valid, explanation: { key: "common.save", params: { source: "private" } } }, { ...valid, details: { currentSource: null } }]) assert.equal(decodeApiError(value), undefined);
+  for (const value of [{ code: "failure", message: "old product string" }, { ...valid, extra: true }, { ...valid, currentSource: "wrong location" }, { ...valid, diagnostics: [{ origin: "browserGuess", text: "raw" }] }, { ...valid, diagnostics: [{ origin: "os", text: "raw", explanation: "guessed" }] }, { ...valid, explanation: { key: "common.save", params: { source: "private" } } }, { ...valid, details: { currentSource: null } }, { ...valid, details: { kind: "productDiagnostics", code: null, diagnostics: [] } }]) assert.equal(decodeApiError(value), undefined);
 });
 
 test("causes are required, bounded, flat and retain their exact typed explanation", () => {

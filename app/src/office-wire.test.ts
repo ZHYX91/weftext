@@ -69,7 +69,7 @@ test("local and hosted output envelopes are closed variants and details are not 
     const parsed = decodeLocalOutput(structuredClone(local)); assert.equal(parsed.status, "prepared");
     assert.throws(() => decodeHostedOutput(local)); assert.throws(() => decodeLocalOutput(artifact()));
     assert.deepEqual(decodeLocalOutput({ id: "original", requestId: "original", status: "pending" }), { id: "original", requestId: "original", status: "pending" });
-    const failure = decodeLocalOutput({ id: "original", requestId: "original", status: "failed", code: "failed", ...explanation(), details: { kind: "productDiagnostics", code: null, diagnostics: [explanation()] } });
+    const failure = decodeLocalOutput({ id: "original", requestId: "original", status: "failed", code: "failed", ...explanation(), details: { kind: "core", code: "originalFailure", ...explanation(), details: { kind: "aggregate", groups: [{ kind: "product", diagnostics: [explanation()] }] } } });
     assert.equal(failure.status, "failed"); if (failure.status !== "failed") assert.fail();
     assert.match(uiTextValue(outputFailureUiText(failure)), /原号/);
     assert.equal(decodeLocalOutput({ id: "original", requestId: "original", status: "failed", code: "failed", ...explanation(), details: null }).status, "failed");

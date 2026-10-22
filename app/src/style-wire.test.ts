@@ -89,9 +89,10 @@ test("hosted prepared summary is one message and filtered receipts cannot recrea
 
 test("processing warnings retain invalid author values and all original diagnostics across JSON recovery", () => {
     const invalid = { schemaVersion: 900, custom: ["原始作者😀", { key: "common.save", params: {} }] };
-    const warning = { code: "invalid_request", ...description(), details: { kind: "productDiagnostics", code: null, diagnostics: Array.from({ length: 40 }, description) } };
+    const warning = { code: "invalid_request", ...description(), details: { kind: "core", code: "invalid_request", ...description(), details: { kind: "aggregate", groups: [{ kind: "product", diagnostics: Array.from({ length: 40 }, description) }] } } };
     const wire = { ...settings(), processing: invalid, warning }, decoded = decodeProcessingRead(JSON.parse(JSON.stringify(wire)), decodeProcessingDocument);
     assert.deepEqual(decoded.processing, invalid); assert.equal(decoded.beforeSource, settings().beforeSource);
+    assert.deepEqual(decoded.warning!.details, warning.details);
     locale.set("en-US"); assert.match(uiTextValue(apiErrorUiText(decoded.warning!)), /Original operation/); assert.match(uiTextValue(apiErrorUiText(decoded.warning!)), /original tool 错误/); locale.set("zh-CN");
     assert.throws(() => decodeProcessingRead({ ...wire, warning: null }, decodeProcessingDocument));
     assert.throws(() => decodeProcessingRead({ ...settings(), warning: "old warning" }, decodeProcessingDocument));
