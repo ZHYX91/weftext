@@ -853,7 +853,7 @@ function renderDocument(): void {
   if (doc.session.opened.recoveredDraftConflict) {
     const conflict = el("div", "document-error document-conflict"); conflict.append(icon("alert"), el("span", "", "恢复草稿与当前磁盘内容不同。请比较并明确合并后再保存。"), button("比较并合并", showDraftComparison, "button-secondary compact")); content.append(conflict);
   }
-  if (doc.session.error) { const error = el("div", "document-error"); error.append(icon("alert"), el("span", "", doc.session.error), doc.saveAsChangedTarget ? button("打开另存为目标", () => openDocument(doc.saveAsChangedTarget!), "text-button") : button("比较磁盘内容", showDraftComparison, "text-button")); content.append(error); }
+  if (doc.session.error) { const error = el("div", "document-error session-error"); error.append(icon("alert"), el("span", "", doc.session.error), doc.saveAsChangedTarget ? button("打开另存为目标", () => openDocument(doc.saveAsChangedTarget!), "text-button") : button("比较磁盘内容", showDraftComparison, "text-button")); content.append(error); }
   if (doc.lastSave?.path && doc.lastSave.receipt) {
     const record = doc.lastSave;
     const delivery = el("div", "document-error save-as-delivery");
@@ -917,16 +917,16 @@ function refreshChrome(): void {
   const comparisonMessage = current && documentComparisonMessage(current);
   if (current && comparisonMessage) {
     current.session.error = comparisonMessage;
-    let notice = content.querySelector<HTMLElement>(".document-error:not(.document-conflict)");
+    let notice = content.querySelector<HTMLElement>(".document-error.session-error");
     if (!notice) {
-      notice = el("div", "document-error"); notice.append(icon("alert"), el("span", "", comparisonMessage), button("比较磁盘内容", showDraftComparison, "text-button"));
+      notice = el("div", "document-error session-error"); notice.append(icon("alert"), el("span", "", comparisonMessage), button("比较磁盘内容", showDraftComparison, "text-button"));
       content.querySelector(".document-body")?.before(notice);
     } else { const message = notice.querySelector("span"); if (message) message.textContent = comparisonMessage; }
   }
   renderTopbar(); renderTabs(); renderStatus();
   if (current) refreshProjectionNotice(current);
   if (current && !current.session.recovered) content.querySelector(".recovery-caption")?.remove();
-  if (current && !current.session.error) content.querySelector(".document-error:not(.document-conflict)")?.remove();
+  if (current && !current.session.error) content.querySelector(".document-error.session-error")?.remove();
   if (current && !current.session.opened.recoveredDraftConflict) content.querySelector(".document-conflict")?.remove();
 }
 
