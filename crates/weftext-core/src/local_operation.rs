@@ -77,10 +77,11 @@ impl Core {
             .file_save
             .as_ref()
             .ok_or_else(file_save_scope::unsupported_scope)?;
-        if data.version != 1 {
+        if data.version != 2 {
             return Err(file_save_scope::unsupported_scope());
         }
         valid_operation_id(&data.session_id)?;
+        valid_operation_id(&data.draft_producer_id)?;
         if let Some(base) = &data.base_id {
             valid_operation_id(base)?;
         }

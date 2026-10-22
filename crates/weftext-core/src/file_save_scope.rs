@@ -66,11 +66,12 @@ pub(crate) fn read_input_scope(
     scope.validate()?;
     Ok(scope)
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct FileSaveData {
     pub version: u8,
     pub session_id: String,
+    pub draft_producer_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_id: Option<String>,
     pub scope: QualifiedInputScope,
@@ -80,10 +81,12 @@ impl FileSaveData {
         session_id: String,
         base_id: Option<String>,
         scope: QualifiedInputScope,
+        draft_producer_id: String,
     ) -> Self {
         Self {
-            version: 1,
+            version: 2,
             session_id,
+            draft_producer_id,
             base_id,
             scope,
         }
@@ -329,7 +332,7 @@ mod tests {
             let mut changed = core.operations[&id].clone();
             match variant {
                 "scope" => changed.file_save.as_mut().unwrap().session_id = fresh(),
-                "version" => changed.file_save.as_mut().unwrap().version = 2,
+                "version" => changed.file_save.as_mut().unwrap().version = 3,
                 _ => changed.file_save = None,
             }
             fs::write(&plan_path, serde_json::to_vec(&changed).unwrap()).unwrap();

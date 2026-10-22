@@ -876,6 +876,11 @@ impl Core {
                     weftext_messages::UiMessage::error_core_history_protected_draft_metadata_changed_during_its_qualified_read(),
                 ));
             }
+            draft.validate_producers()?;
+            for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned())
+            {
+                self.qualify_committed_baseline(&draft.scope, &draft.identity, &input)?;
+            }
             append_draft_alternatives(&mut drafts, &draft);
         }
         Ok(drafts)
@@ -1239,6 +1244,7 @@ impl Core {
                         identity: context.birth.identity.clone(),
                         alternatives: Vec::new(),
                         producer_id: None,
+                        role: DraftRole::Proposal,
                     });
                 }
             }
@@ -1282,20 +1288,11 @@ impl Core {
     }
 }
 fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {
-    for proposal in std::iter::once(DraftAlternative {
-        path: draft.path.clone(),
-        base_source: draft.base_source.clone(),
-        source: draft.source.clone(),
-        base_known: draft.base_known,
-        producer_id: draft.producer_id.clone(),
-    })
-    .chain(draft.alternatives.iter().cloned())
-    {
-        if !out.iter().any(|d| {
-            d.source == proposal.source
-                && d.base_source == proposal.base_source
-                && d.base_known == proposal.base_known
-        }) {
+    for proposal in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+        if !out
+            .iter()
+            .any(|d| draft_recovery::same_proposal(d, &proposal))
+        {
             out.push(proposal);
         }
     }

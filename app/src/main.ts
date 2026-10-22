@@ -21,7 +21,7 @@ import { EmbeddedQueryController } from "./embedded-query";
 import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
-import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, sourceMoveComparisonMessage } from "./session";
+import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, sourceMoveComparisonMessage, uniqueRetainedDrafts } from "./session";
 import { WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
@@ -877,7 +877,7 @@ const historyPanel = new HistoryPanel({
     if (doc.session.opened !== prior) throw new UiError(uiMessage("shell.deliverySessionChanged"));
     const disposition = restoreBufferDisposition(basis, historyContext(doc));
     if (disposition === "unrelated" || result.receipt.status !== "saved") throw new UiError(uiMessage("shell.restoreReceiptNoteMismatch"));
-    opened.recoveredDraftVariants = variants.filter((value, index) => variants.findIndex(other => other.path === value.path && other.baseSource === value.baseSource && other.source === value.source && other.baseKnown === value.baseKnown) === index);
+    opened.recoveredDraftVariants = uniqueRetainedDrafts(variants);
     // Keep the shared editor and Undo. Only a still-clean, unchanged buffer adopts
     // the restored text; any original or late input remains a Draft over the new Base.
     if (disposition === "replaceClean" && doc.editor.source !== result.source) doc.editor.apply(0, doc.editor.source.length, result.source);
@@ -2653,12 +2653,7 @@ async function showDraftComparison(doc = current): Promise<void> {
             if (candidate.recoveredDraft != null && candidate.recoveredDraft !== initialMergeSource)
                 variants.push({ path: candidate.path, baseSource: candidate.recoveredDraftBaseSource ?? candidate.source, source: candidate.recoveredDraft, baseKnown: candidate.recoveredDraftBaseSource != null });
         }
-        const seen = new Set<string>();
-        for (const variant of variants) {
-            const key = JSON.stringify(variant);
-            if (seen.has(key))
-                continue;
-            seen.add(key);
+        for (const variant of uniqueRetainedDrafts(variants)) {
             const details = el("details", "recovery-member");
             details.open = true;
             details.append(el("summary", "", displayMessage("shell.anotherRetainedDraft", { p0: uiDisplayParameter(variant.path) })));

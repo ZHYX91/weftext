@@ -29,7 +29,11 @@ function document(value: unknown): value is OpenedDocument {
   for (const key of ["readOnly", "recoveredDraftConflict"]) if (value[key] !== undefined && typeof value[key] !== "boolean") return false;
   for (const key of ["recoveredDraft", "recoveredDraftBaseSource"]) if (value[key] !== undefined && value[key] !== null && typeof value[key] !== "string") return false;
   return value.recoveredDraftVariants === undefined || Array.isArray(value.recoveredDraftVariants) && value.recoveredDraftVariants.every(item =>
-    object(item) && text(item.path) && typeof item.baseSource === "string" && typeof item.source === "string" && typeof item.baseKnown === "boolean");
+    object(item) && text(item.path) && typeof item.baseSource === "string" && typeof item.source === "string" && typeof item.baseKnown === "boolean"
+      && (item.producerId === undefined || text(item.producerId))
+      && (item.role === undefined || object(item.role) && (
+        item.role.kind === "proposal" && Object.keys(item.role).length === 1
+        || item.role.kind === "committedBaseline" && Object.keys(item.role).length === 2 && text(item.role.operationId) && text(item.producerId))));
 }
 /** One file-save delivery contract for the initial response and original-id
  * lookup. The generic operation envelope alone cannot acknowledge a writer. */

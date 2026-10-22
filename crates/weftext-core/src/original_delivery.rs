@@ -7,6 +7,7 @@ pub(crate) fn save_fingerprint(
     path: &Path,
     restore: Option<&history::RestoreBinding>,
     scope: QualifiedInputScope,
+    producer: &str,
 ) -> Result<String> {
     file_save_scope::fingerprint(
         "save",
@@ -16,6 +17,7 @@ pub(crate) fn save_fingerprint(
             request.session_id.clone(),
             Some(request.base_id.clone()),
             scope,
+            producer.to_owned(),
         ),
         restore,
     )
@@ -570,7 +572,7 @@ impl Core {
             ));
         }
         let unchanged = original.stamp == refreshed.stamp && original.bytes == refreshed.bytes;
-        if !unchanged && !committed_basis_change {
+        if document.recovered_draft_conflict || (!unchanged && !committed_basis_change) {
             // An external edit is an independent comparison result, not
             // consent to rebase the original writer or its pending input.
             return Ok(document);
@@ -717,6 +719,7 @@ impl Core {
                 Path::new(&plan.path),
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
+                &plan.file_save.as_ref().unwrap().draft_producer_id,
             )? != plan.fingerprint
         {
             return Err(CoreError::new(

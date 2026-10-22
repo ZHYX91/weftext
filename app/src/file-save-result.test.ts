@@ -18,6 +18,16 @@ const malformed = [
   { committedSource: "other submission" }, { documentSourceMatchesCommit: undefined }, { documentSourceMatchesCommit: false },
   { documentError: {} }, { documentError: { code: "io", message: "unavailable" } },
 ];
+
+test("file delivery keeps complete Draft provenance and rejects malformed baseline metadata", () => {
+  const variant = { path: document.path, baseSource: "B", source: "S", baseKnown: true, producerId: "original-producer", role: {kind: "committedBaseline", operationId: "original-save"} };
+  const withVariant = (value: unknown) => ({...receipt, document: {...document, recoveredDraftVariants: [value]}});
+  assert.deepEqual(fileSaveReceipt(withVariant(variant), frozen).document?.recoveredDraftVariants, [variant]);
+  for (const role of [{kind: "unknown"}, {kind: "proposal", operationId: "extra"}, {kind: "committedBaseline"}, {kind: "committedBaseline", operationId: ""}])
+    assert.throws(() => fileSaveReceipt(withVariant({...variant, role}), frozen));
+  assert.throws(() => fileSaveReceipt(withVariant({...variant, producerId: undefined}), frozen));
+  assert.throws(() => fileSaveReceipt(withVariant({...variant, producerId: 12}), frozen));
+});
 test("initial and queried file saves share the exact original receipt and qualified-delivery contract", () => {
   for (const status of ["saved", "committed"]) {
     assert.equal(fileSaveReceipt({ ...receipt, status }, frozen).document?.baseId, "actual");

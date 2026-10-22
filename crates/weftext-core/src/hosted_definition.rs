@@ -802,6 +802,13 @@ impl Core {
             request.session_id.clone(),
             Some(request.base_id.clone()),
             scope.clone(),
+            self.operations
+                .get(&request.operation_id)
+                .and_then(|plan| plan.file_save.as_ref())
+                .map_or_else(
+                    || session.draft_producer_id.clone(),
+                    |data| data.draft_producer_id.clone(),
+                ),
         );
         let fingerprint =
             file_save_scope::fingerprint("save", &session.path, &request.source, &data, None)?;

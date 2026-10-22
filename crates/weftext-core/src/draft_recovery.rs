@@ -4,7 +4,24 @@
 use super::*;
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
+#[cfg(all(test, windows))]
+#[path = "draft_baseline_tests.rs"]
+mod baseline_tests;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum DraftRole {
+    #[default]
+    Proposal,
+    CommittedBaseline {
+        operation_id: String,
+    },
+}
 #[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct DraftMetadata {
@@ -41,6 +58,8 @@ pub struct DraftAlternative {
     pub base_known: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub producer_id: Option<String>,
+    #[serde(default)]
+    pub role: DraftRole,
 }
 
 impl Draft {
@@ -51,6 +70,7 @@ impl Draft {
             source: self.source.clone(),
             base_known: self.base_known,
             producer_id: self.producer_id.clone(),
+            role: self.role.clone(),
         }
     }
 
@@ -63,6 +83,14 @@ impl Draft {
     }
 
     pub(super) fn validate_producers(&self) -> Result<()> {
+        for input in std::iter::once(self.proposal()).chain(self.alternatives.iter().cloned()) {
+            if let DraftRole::CommittedBaseline { operation_id } = &input.role {
+                valid_operation_id(operation_id)?;
+                if input.producer_id.is_none() {
+                    return Err(invalid_baseline());
+                }
+            }
+        }
         for id in std::iter::once(self.producer_id.as_ref())
             .chain(self.alternatives.iter().map(|p| p.producer_id.as_ref()))
             .flatten()
@@ -109,6 +137,76 @@ pub struct ResumeDraftRequest {
     pub recovered_source: String,
 }
 impl Core {
+    /// Validate the original durable effect before treating a retained entry as
+    /// a committed projection. This never grants its producer to another UI.
+    pub(super) fn qualify_committed_baseline(
+        &self,
+        scope: &QualifiedInputScope,
+        identity: &FileIdentity,
+        input: &DraftAlternative,
+    ) -> Result<bool> {
+        let DraftRole::CommittedBaseline { operation_id } = &input.role else {
+            return Ok(false);
+        };
+        valid_operation_id(operation_id)?;
+        self.validate_original_input_scope(scope)?;
+        let plan = self
+            .operations
+            .get(operation_id)
+            .ok_or_else(invalid_baseline)?;
+        self.validate_file_save_plan(plan)?;
+        let binding = plan.file_save.as_ref().unwrap();
+        if plan.kind != "save"
+            || binding.scope != *scope
+            || plan.identity.as_ref() != Some(identity)
+            || input.producer_id.as_deref() != Some(binding.draft_producer_id.as_str())
+            || !input.base_known
+            || input.source.as_bytes() != plan.after
+            || input.base_source.as_bytes() != plan.after
+        {
+            return Err(invalid_baseline());
+        }
+        // The in-memory Plan is not preservation of the durable original.
+        // Reuse the journal's parser and exact original commit decoder.
+        let original = self
+            .read_original_file_save_plan(plan)
+            .map_err(|error| invalid_baseline().caused_by(error))?;
+        if serde_json::to_vec(&original)? != serde_json::to_vec(plan)?
+            || !self.committed(operation_id)?
+        {
+            return Err(invalid_baseline());
+        }
+        self.check_committed_draft_paths(scope, identity, &plan.path, &input.path)?;
+        Ok(!self
+            .sessions
+            .values()
+            .any(|session| input.producer_id.as_ref() == Some(&session.draft_producer_id)))
+    }
+
+    /// One classification for opening and merging. Retained entries keep their
+    /// complete role, producer, source and original basis, including promotion.
+    pub(super) fn normalize_inactive_baselines(&self, draft: &Draft) -> Result<Option<Draft>> {
+        let mut retained = Vec::new();
+        for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+            if !self.qualify_committed_baseline(&draft.scope, &draft.identity, &input)? {
+                retained.push(input);
+            }
+        }
+        let mut entries = retained.into_iter();
+        let Some(first) = entries.next() else {
+            return Ok(None);
+        };
+        let mut next = draft.clone();
+        next.path = first.path;
+        next.source = first.source;
+        next.base_source = first.base_source;
+        next.base_known = first.base_known;
+        next.producer_id = first.producer_id;
+        next.role = first.role;
+        next.alternatives = entries.collect();
+        Ok(Some(next))
+    }
+
     pub fn resume_recovered_draft(&mut self, request: ResumeDraftRequest) -> Result<()> {
         self.check_actor_session(&request.session_id)?;
         check_size(request.recovered_source.as_bytes())?;
@@ -246,6 +344,9 @@ impl Core {
         let draft: Draft = serde_json::from_slice(&bytes)?;
         draft.validate_producers()?;
         self.validate_original_input_scope(&draft.scope)?;
+        for entry in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+            self.qualify_committed_baseline(&draft.scope, &draft.identity, &entry)?;
+        }
         let input = session.draft_input.as_ref().ok_or_else(|| {
             CoreError::new(
                 "draftFlushMismatch",
@@ -333,9 +434,49 @@ impl Core {
         }
         let latest = self.current_session_draft(session_id)?;
         let previous_witness = latest.as_ref().map(Draft::witness).transpose()?;
+        // A redundant persist can retain an already issued role only while
+        // the same producer's exact acknowledged entry still exists. Undo
+        // returning to equal text cannot mint a new committed qualification.
+        if draft.role == DraftRole::Proposal
+            && let Some(input) = &session.draft_input
+            && matches!(input.role, DraftRole::CommittedBaseline { .. })
+        {
+            let mut at_current_path = input.clone();
+            at_current_path.path = draft.path.clone();
+            if same_input(&at_current_path, &draft.proposal())
+                && let Some(latest) = &latest
+            {
+                for entry in
+                    std::iter::once(latest.proposal()).chain(latest.alternatives.iter().cloned())
+                {
+                    let mut at_entry_path = input.clone();
+                    at_entry_path.path = entry.path.clone();
+                    if same_proposal(&at_entry_path, &entry) {
+                        self.check_committed_draft_paths(
+                            &draft.scope,
+                            &draft.identity,
+                            &input.path,
+                            &draft.path,
+                        )?;
+                        self.check_committed_draft_paths(
+                            &draft.scope,
+                            &draft.identity,
+                            &entry.path,
+                            &draft.path,
+                        )?;
+                        draft.role = input.role.clone();
+                        break;
+                    }
+                }
+            }
+        }
+        self.qualify_committed_baseline(&draft.scope, &draft.identity, &draft.proposal())?;
         let mut alternatives = Vec::<DraftAlternative>::new();
         if let Some(latest) = latest {
             for proposal in std::iter::once(latest.proposal()).chain(latest.alternatives) {
+                if self.qualify_committed_baseline(&draft.scope, &draft.identity, &proposal)? {
+                    continue;
+                }
                 if proposal.producer_id.as_deref() == Some(&session.draft_producer_id) {
                     continue;
                 }
@@ -526,6 +667,9 @@ impl Core {
     pub(super) fn store_draft(&self, draft: &Draft) -> Result<()> {
         self.validate_original_input_scope(&draft.scope)?;
         draft.validate_producers()?;
+        for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+            self.qualify_committed_baseline(&draft.scope, &draft.identity, &input)?;
+        }
         let identity = &draft.identity;
         let bytes = encode_draft_record(draft)?;
         let path = self.object_draft_path(identity, &draft.scope)?;
@@ -569,6 +713,10 @@ impl Core {
                 "privateEvidence",
                 weftext_messages::UiMessage::error_core_draft_recovery_draft_metadata_changed_during_its_qualified_read(),
             ));
+        }
+        draft.validate_producers()?;
+        for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+            self.qualify_committed_baseline(&draft.scope, &draft.identity, &input)?;
         }
         Ok(Some((draft, bytes)))
     }
@@ -645,7 +793,16 @@ fn unproved_draft_placement() -> CoreError {
         UiMessage::error_core_draft_recovery_source_position_has_no_committed_draft_relocation_original_proposal_unchanged_and_current_input_must_remain_in_editor(),
     )
 }
-fn same_proposal(a: &DraftAlternative, b: &DraftAlternative) -> bool {
+fn invalid_baseline() -> CoreError {
+    CoreError::new(
+        "privateEvidence",
+        UiMessage::error_core_draft_recovery_draft_object_provenance_differs(),
+    )
+}
+pub(super) fn same_proposal(a: &DraftAlternative, b: &DraftAlternative) -> bool {
+    a.role == b.role && same_input(a, b)
+}
+fn same_input(a: &DraftAlternative, b: &DraftAlternative) -> bool {
     a.producer_id == b.producer_id
         && a.source == b.source
         && a.base_source == b.base_source
@@ -653,8 +810,8 @@ fn same_proposal(a: &DraftAlternative, b: &DraftAlternative) -> bool {
         && same_draft_path(&a.path, &b.path)
 }
 fn same_draft_path(a: &str, b: &str) -> bool {
-    a.replace('/', "\\")
-        .eq_ignore_ascii_case(&b.replace('/', "\\"))
+    backend::namespace_path_compare(Path::new(a), Path::new(b))
+        .is_ok_and(|order| order == std::cmp::Ordering::Equal)
 }
 
 #[cfg(all(test, windows))]

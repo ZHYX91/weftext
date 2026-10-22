@@ -1263,6 +1263,7 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
         &f.path,
         None,
         f.core.sessions[&doc.session_id].file_scope.clone().unwrap(),
+        &changed.file_save.as_ref().unwrap().draft_producer_id,
     )
     .unwrap();
     let revision = fresh();

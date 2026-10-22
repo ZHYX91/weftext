@@ -844,6 +844,9 @@ fn validate_selected_record(
             return Err(private_evidence());
         }
         core.validate_original_file_save_scope(&draft.scope, Path::new(&draft.path))?;
+        for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+            core.qualify_committed_baseline(&draft.scope, &draft.identity, &input)?;
+        }
         return Ok(());
     }
     let guard = ParentGuard::acquire(&core.backend, &root.join(".backup-record-prospective"))?;

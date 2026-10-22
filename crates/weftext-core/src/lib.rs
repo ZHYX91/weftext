@@ -88,7 +88,7 @@ pub use directory_identity::{
     NavigationPreparation, NavigationTarget, TagAssignment, TagRecord, TagRegistrySnapshot,
 };
 pub use draft_recovery::{
-    DocumentDraftFlush, DocumentDraftReceipt, DraftAlternative, ResumeDraftRequest,
+    DocumentDraftFlush, DocumentDraftReceipt, DraftAlternative, DraftRole, ResumeDraftRequest,
 };
 pub use exchange::{NativeExport, NativeExportWitness};
 pub use history::{
@@ -553,6 +553,8 @@ struct Draft {
     alternatives: Vec<DraftAlternative>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     producer_id: Option<String>,
+    #[serde(default)]
+    role: draft_recovery::DraftRole,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -802,7 +804,25 @@ impl Core {
         } else {
             (None, true)
         };
-        let draft_witness = draft.as_ref().map(Draft::witness).transpose()?;
+        let original_witness = draft.as_ref().map(Draft::witness).transpose()?;
+        let draft = if let Some(original) = draft {
+            let normalized = self.normalize_inactive_baselines(&original)?;
+            if let Some(next) = &normalized
+                && Some(next.witness()?) != original_witness
+            {
+                self.store_draft(next)?;
+            }
+            normalized
+        } else {
+            None
+        };
+        // All-consumed baselines can stay as their durable projection until a
+        // real persist replaces it. Retain its exact witness for that first ACK.
+        let draft_witness = draft
+            .as_ref()
+            .map(Draft::witness)
+            .transpose()?
+            .or(original_witness);
         let draft = draft
             .filter(|d| d.source != source || !d.alternatives.is_empty())
             .filter(|d| {
@@ -860,6 +880,14 @@ impl Core {
         })
     }
     pub fn persist_draft(&mut self, session_id: &str, source: &str) -> Result<()> {
+        self.persist_draft_with_role(session_id, source, draft_recovery::DraftRole::Proposal)
+    }
+    fn persist_draft_with_role(
+        &mut self,
+        session_id: &str,
+        source: &str,
+        role: draft_recovery::DraftRole,
+    ) -> Result<()> {
         self.check_actor_session(session_id)?;
         check_size(source.as_bytes())?;
         let session = self.sessions.get(session_id).cloned().ok_or_else(|| {
@@ -880,6 +908,7 @@ impl Core {
             identity: session.stamp.identity.clone(),
             alternatives: Vec::new(),
             producer_id: Some(session.draft_producer_id.clone()),
+            role,
         };
         self.store_session_draft(session_id, draft).map(|_| ())
     }
@@ -930,6 +959,7 @@ impl Core {
             identity: session.stamp.identity.clone(),
             alternatives: Vec::new(),
             producer_id: Some(session.draft_producer_id.clone()),
+            role: draft_recovery::DraftRole::Proposal,
         };
         // Validate the complete replacement before changing history or the
         // primary. Archive the latest complete record, not the open-time cache
@@ -970,21 +1000,27 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
             })?;
-        let (original_path, scope) = if let Some(plan) = self.operations.get(&request.operation_id)
-        {
-            self.validate_file_save_plan(plan)?;
-            (
-                PathBuf::from(&plan.path),
-                plan.file_save.as_ref().unwrap().scope.clone(),
-            )
-        } else {
-            (session.path.clone(), session.file_scope.clone()?)
-        };
+        let (original_path, scope, producer) =
+            if let Some(plan) = self.operations.get(&request.operation_id) {
+                self.validate_file_save_plan(plan)?;
+                (
+                    PathBuf::from(&plan.path),
+                    plan.file_save.as_ref().unwrap().scope.clone(),
+                    plan.file_save.as_ref().unwrap().draft_producer_id.clone(),
+                )
+            } else {
+                (
+                    session.path.clone(),
+                    session.file_scope.clone()?,
+                    session.draft_producer_id.clone(),
+                )
+            };
         let fingerprint = original_delivery::save_fingerprint(
             &request,
             &original_path,
             restore.as_ref(),
             scope.clone(),
+            &producer,
         )?;
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
             return Ok(SaveOutcome::committed(receipt));
@@ -1003,6 +1039,7 @@ impl Core {
                 identity: session.stamp.identity.clone(),
                 alternatives: Vec::new(),
                 producer_id: Some(session.draft_producer_id.clone()),
+                role: draft_recovery::DraftRole::Proposal,
             };
             let draft = self.store_session_draft(&request.session_id, draft)?;
             self.sessions
@@ -1064,6 +1101,7 @@ impl Core {
             request.session_id.clone(),
             Some(request.base_id.clone()),
             scope,
+            producer,
         ));
         plan.receipt = Some(Receipt {
             revision_id: None,
@@ -1120,10 +1158,23 @@ impl Core {
             },
         );
         #[cfg(all(test, windows))]
-        let draft_update = hosted::definition_test_failpoint("saveDraftUpdate")
-            .and_then(|()| self.persist_draft(&request.session_id, &request.source));
+        let draft_update = hosted::definition_test_failpoint("saveDraftUpdate").and_then(|()| {
+            self.persist_draft_with_role(
+                &request.session_id,
+                &request.source,
+                draft_recovery::DraftRole::CommittedBaseline {
+                    operation_id: receipt.operation_id.clone(),
+                },
+            )
+        });
         #[cfg(not(all(test, windows)))]
-        let draft_update = self.persist_draft(&request.session_id, &request.source);
+        let draft_update = self.persist_draft_with_role(
+            &request.session_id,
+            &request.source,
+            draft_recovery::DraftRole::CommittedBaseline {
+                operation_id: receipt.operation_id.clone(),
+            },
+        );
         let recovery_issue = draft_update.err().map(|error| {
             let code = error.code.clone();
             CoreError::new(
@@ -1157,6 +1208,7 @@ impl Core {
                 request.session_id.clone(),
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
+                plan.file_save.as_ref().unwrap().draft_producer_id.clone(),
             );
             let fingerprint =
                 file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
@@ -1177,6 +1229,7 @@ impl Core {
             request.session_id.clone(),
             None,
             self.capture_file_save_scope(&path)?,
+            session.draft_producer_id.clone(),
         );
         let fingerprint =
             file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;

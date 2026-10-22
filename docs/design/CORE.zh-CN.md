@@ -575,6 +575,10 @@ Draft reader 从当前真实位置逆向遍历同 workspace 的原 committed rel
 
 普通保存、定义保存及原事务内同物理文件的搬移交付，刷新仍活动的原 Session，不另建输入 producer。刷新先核原保存 Session 或原事务捕获的文件 FI，再核当前文件 FI、Node、actor 与完整原 scope；保留原 producer、完整 Draft witness、已确认输入和冲突状态。文件实际基准未变时也保留 BaseId，重复 status 不使同一编辑器的请求失效。若实际基准已变且不匹配原事务捕获基准与原提交 observation，返回独立比较 Session，不更新原 writer 的基准或输入。保存失联后的查询显式携带冻结请求的原 Session；不带 Session 的通用回执查询及 SaveAs 仍返回独立 Session，不能从回执推导延续权。迟到输入继续属于原 writer，多窗口的独立提案不按文本合并；重启后仍走完整记录 CAS 的显式恢复。
 
+Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v2 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
+
+普通 persist 只可保留同一 producer 已 ACK、仍在完整记录中且输入依据未变的既有基线角色；输入变化即回到 proposal，Undo 回到同文也不能重新获得资格，旧保存重试不重装基线。打开与合并沿同一分类规则逐条消费已验证且 producer 已不活动的基线，不转移其 producer。混合记录保留其他完整输入，必要时提升完整条目，并在交付恢复 DTO/witness 前原子更新当前记录；全是可消费基线时可暂留磁盘投影，直到首次真实 persist。角色与原号参与完整 witness、回读、恢复及预算。原作者字节和可再生基线由原 Plan/commit 保留，正常消费不写 draft-history，也不放宽 128 条／16 MiB 保护预算；未知依据、独立同文输入和活动 producer 仍保留。
+
 所有私有 ActorOperation 读取先在同一 ParentGuard 保护句柄上逐字节读取既有顺序首部 `scope, library?, actor, resource, fingerprint, coreOperationId`（总计 8 KiB、单值 2 KiB），严格核原 scope tuple、原 Plan 和实际 actor/resource/库资格，再有界读取正文并重核元数据一致。Server 的原保存 status 必需原 resource，读取授权在进入 Core 前完成。定义枚举对已证明的其他 resource 只读首部，不读取或计入其正文预算；畸形原 tuple 不能借外域跳过。无 namespace library 绑定的原输入仍必须与当前受信库的 WorkspaceId 和根 FI 一致。纯 noInput fence 则在 4 KiB 内完整核其无输入事实，不能用未核的首部声明掩盖作者内容。
 
 Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在原 scope 和 FI 均匹配后计入 128 条／16 MiB 预算。准确 restore 引用若 scope 或 FI 不符直接拒绝，保原 commit 与回执，只报告结果暂不可交付。资格通过后从同一个受保护句柄有界读取、严格反序列化并联核首部；旧布局原件保留，明确 unsupported，不增加旧／新双 reader 或平行 metadata 账本。定义保存 admission sidecar 也先核其原 file-save Plan 和既有 coreOperationId/saveOperationId/actor/resource 首部，再读取预约正文。

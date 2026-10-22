@@ -1,13 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison } from "./session";
-import type { OpenedDocument, RenderOutput } from "./types";
+import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, uniqueRetainedDrafts } from "./session";
+import type { DraftInput, OpenedDocument, RenderOutput } from "./types";
 import { createSourceState } from "./editor";
 import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
 import { locale, message, uiTextValue } from "./ui-locale";
 
 const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
 const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
+
+test("retained comparison preserves independent producers, roles and unknown input without text coalescing", () => {
+  const input: DraftInput = { path: "a.typ", baseSource: "S", source: "same 😀", baseKnown: true, producerId: "A", role: {kind: "proposal"} };
+  const independent = { ...input, producerId: "B" };
+  const baseline: DraftInput = { ...input, role: {kind: "committedBaseline", operationId: "one"} };
+  const later: DraftInput = { ...baseline, role: {kind: "committedBaseline", operationId: "two"} };
+  const unknown: DraftInput = { path: "a.typ", baseSource: "S", source: "\ud800", baseKnown: true };
+  assert.deepEqual(uniqueRetainedDrafts([input, {...input}, independent, baseline, later, unknown, {...unknown}]),
+    [input, independent, baseline, later, unknown, {...unknown}]);
+  assert.equal(unknown.source.charCodeAt(0), 0xd800);
+});
 
 test("only recovery actually installed by this editor establishes an explicit continuation request", () => {
   const recovered = { ...opened, recoveredDraft: "已恢复输入", recoveredDraftWitness: "a".repeat(64) };

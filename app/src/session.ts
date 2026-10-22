@@ -1,5 +1,18 @@
 import { message as uiMessage, type UiText } from "./ui-locale";
-import type { OpenedDocument, RenderOutput } from "./types";
+import type { DraftInput, OpenedDocument, RenderOutput } from "./types";
+
+/** Presentation may collapse only the same known complete input. Unknown
+ * provenance and independently identical author text remain separate. */
+export function uniqueRetainedDrafts(inputs: readonly DraftInput[]): DraftInput[] {
+    const out: DraftInput[] = [];
+    for (const input of inputs) {
+        if (!out.some(other => other === input || input.producerId !== undefined && other.producerId === input.producerId
+            && other.path === input.path && other.baseSource === input.baseSource && other.source === input.source && other.baseKnown === input.baseKnown
+            && other.role?.kind === input.role?.kind
+            && (input.role?.kind !== "committedBaseline" || other.role?.kind === "committedBaseline" && other.role.operationId === input.role.operationId))) out.push(input);
+    }
+    return out;
+}
 /** A qualified same-Node move does not authorize silently rebinding a Draft's
  * writer. Consumers wait for the user's existing comparison/merge flow. */
 export function sourceConsumerNeedsComparison(opened: Pick<OpenedDocument, "path" | "nodeId" | "workspaceId">, target?: Pick<OpenedDocument, "path" | "nodeId" | "workspaceId">): boolean {

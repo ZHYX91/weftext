@@ -73,21 +73,21 @@ pub(crate) fn decode_resolution(id: &str, bytes: &[u8]) -> Result<ResolutionReco
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Plan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_save: Option<FileSaveData>,
+    pub identity: Option<FileIdentity>,
     pub operation_id: String,
     pub fingerprint: String,
     pub path: String,
     pub kind: String,
     pub before: Option<Vec<u8>>,
     pub after: Vec<u8>,
-    pub identity: Option<FileIdentity>,
     pub receipt: Option<Receipt>,
     pub files: Vec<(String, Vec<u8>)>,
     pub node_id: Option<String>,
     pub workspace_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub file_save: Option<FileSaveData>,
     #[serde(default)]
     pub transaction: Option<operations::FrozenOperation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -274,6 +274,24 @@ struct CommitRecord {
     commit_sequence: u64,
 }
 
+fn decode_journal_plan(path: &Path, bytes: &[u8]) -> Result<Plan> {
+    let plan: Plan = serde_json::from_slice(bytes)?;
+    valid_operation_id(&plan.operation_id)?;
+    if path.file_name().and_then(|n| n.to_str())
+        != Some(format!("{}.plan.json", plan.operation_id).as_str())
+    {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            UiMessage::error_core_journal_journal_plan_filename_and_original_identity_differ(),
+        ));
+    }
+    if plan.kind == "cancelLibraryCreation" && !library_creation::is_cancellation(&plan) {
+        return Err(CoreError::new("resolutionUnavailable",
+            UiMessage::error_core_journal_retained_library_cancellation_has_author_participants_or_invalid_request()));
+    }
+    Ok(plan)
+}
+
 impl Core {
     pub(crate) fn journal_path(&self, id: &str, suffix: &str) -> PathBuf {
         self.data_dir
@@ -287,24 +305,7 @@ impl Core {
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".plan.json"))
             {
-                let bytes = self.backend.read_bytes(&path)?;
-                let plan: Plan = serde_json::from_slice(&bytes)?;
-                valid_operation_id(&plan.operation_id)?;
-                if path.file_name().and_then(|n| n.to_str())
-                    != Some(format!("{}.plan.json", plan.operation_id).as_str())
-                {
-                    return Err(CoreError::new(
-                        "resolutionUnavailable",
-                        UiMessage::error_core_journal_journal_plan_filename_and_original_identity_differ(),
-                    ));
-                }
-                if plan.kind == "cancelLibraryCreation" && !library_creation::is_cancellation(&plan)
-                {
-                    return Err(CoreError::new(
-                        "resolutionUnavailable",
-                        UiMessage::error_core_journal_retained_library_cancellation_has_author_participants_or_invalid_request(),
-                    ));
-                }
+                let plan = self.read_journal_plan(&path)?;
                 self.operations.insert(plan.operation_id.clone(), plan);
             }
         }
@@ -320,6 +321,44 @@ impl Core {
             }
         }
         self.validate_resolution_namespace()
+    }
+    pub(crate) fn read_journal_plan(&self, path: &Path) -> Result<Plan> {
+        let bytes = self.backend.read_bytes(path)?;
+        decode_journal_plan(path, &bytes)
+    }
+    pub(crate) fn read_original_file_save_plan(&self, expected: &Plan) -> Result<Plan> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Metadata {
+            file_save: FileSaveData,
+            identity: FileIdentity,
+        }
+        let invalid = || {
+            CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid(),
+            )
+        };
+        let path = self.journal_path(&expected.operation_id, "plan");
+        let mut file = self.backend.open_read(&path)?;
+        let (_, bytes) = hosted::read_qualified_private_record(&mut file, |file| {
+            let fields = hosted::read_metadata_prefix(
+                file,
+                &[("fileSave", false), ("identity", false)],
+                4096,
+            )?
+            .ok_or_else(invalid)?;
+            let metadata: Metadata = hosted::decode_metadata(fields)?;
+            if Some(&metadata.file_save) != expected.file_save.as_ref()
+                || Some(&metadata.identity) != expected.identity.as_ref()
+            {
+                return Err(invalid());
+            }
+            self.validate_original_input_scope(&metadata.file_save.scope)?;
+            Ok(Some(((), 8 * MAX_SOURCE_BYTES + 65536)))
+        })?
+        .ok_or_else(invalid)?;
+        decode_journal_plan(&path, &bytes)
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
         if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id)? {
@@ -973,6 +1012,7 @@ mod description_tests {
             fresh(),
             Some(fresh()),
             QualifiedInputScope::DeviceUnassigned,
+            fresh(),
         ));
         plan
     }

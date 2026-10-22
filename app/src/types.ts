@@ -1,5 +1,15 @@
 export type ViewMode = "source" | "styled" | "focus" | "write" | "read";
 
+/** Read-only Core provenance. Missing metadata grants no identity to a local comparison copy. */
+export interface DraftInput {
+  path: string;
+  baseSource: string;
+  source: string;
+  baseKnown: boolean;
+  producerId?: string;
+  role?: { kind: "proposal" } | { kind: "committedBaseline"; operationId: string };
+}
+
 export interface OpenedDocument {
   sessionId: string;
   path: string;
@@ -14,7 +24,7 @@ export interface OpenedDocument {
   recoveredDraftBaseSource?: string | null;
   recoveredDraftWitness?: string | null;
   recoveredDraftConflict?: boolean;
-  recoveredDraftVariants?: { path: string; baseSource: string; source: string; baseKnown: boolean }[];
+  recoveredDraftVariants?: DraftInput[];
 }
 export interface InventoryEntry {
   path: string;
