@@ -9862,7 +9862,8 @@ export const zhCN = {
   "error.core.backend.committedObservationsMissing": "原已提交物理版本观察记录缺失",
   "error.core.backend.ambiguousRevisionFacts": "同一耐久提交顺序的原已接纳版本事实不一致",
   "error.core.backend.resourceBirthIncomplete": "原资源出生证据不完整",
-  "desktop.cliServiceActive": "后台命令行服务正在运行"
+  "desktop.cliServiceActive": "后台命令行服务正在运行",
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "原生来源不唯一，或未在实际输出中显示。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -19730,6 +19731,7 @@ export interface MessageParamsMap {
   "error.core.backend.ambiguousRevisionFacts": {  };
   "error.core.backend.resourceBirthIncomplete": {  };
   "desktop.cliServiceActive": {  };
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -31413,7 +31415,8 @@ export const messageParamTypes = {
   "error.core.backend.committedObservationsMissing": {},
   "error.core.backend.ambiguousRevisionFacts": {},
   "error.core.backend.resourceBirthIncomplete": {},
-  "desktop.cliServiceActive": {}
+  "desktop.cliServiceActive": {},
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -41279,5 +41282,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.backend.committedObservationsMissing": "Original committed physical revision observations are missing",
   "error.core.backend.ambiguousRevisionFacts": "Original accepted revision facts disagree at the same durable commit sequence",
   "error.core.backend.resourceBirthIncomplete": "Original resource birth evidence is incomplete",
-  "desktop.cliServiceActive": "Command-line service is running in the background"
+  "desktop.cliServiceActive": "Command-line service is running in the background",
+  "error.engine.reason.nativeOriginNonuniqueOrUndisplayed": "The native origin is nonunique or is not displayed in the actual output."
 };
