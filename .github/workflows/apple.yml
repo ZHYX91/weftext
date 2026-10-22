@@ -1,0 +1,52 @@
+name: Apple host checks
+
+on:
+  push:
+    branches: [main, 'feat/apple-native-*']
+    paths:
+      - 'platforms/apple/**'
+      - 'scripts/apple.py'
+      - 'docs/APPLE*'
+      - '.github/workflows/apple.yml'
+  pull_request:
+    paths:
+      - 'platforms/apple/**'
+      - 'scripts/apple.py'
+      - 'docs/APPLE*'
+      - '.github/workflows/apple.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-host-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apple-host:
+    name: macOS host tests and iOS SDK build
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Check native sources and compile with installed SDKs
+        run: python scripts/apple.py build --state-root "$RUNNER_TEMP/weftext-apple-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --developer-dir "$DEVELOPER_DIR"
+      - run: git diff --exit-code
+      - name: Preserve original Apple build records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-host-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
+            ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/weftext-apple-${{ github.run_id }}-${{ github.run_attempt }}/**/roles/*
+          if-no-files-found: error
+          retention-days: 7
