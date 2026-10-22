@@ -335,10 +335,14 @@ async function openInventoryEntry(entry: InventoryEntry, root: string, workspace
     if (generation !== navigationGeneration)
         return;
     const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${workspaceId}/${entry.nodeId}` });
-    if (generation !== navigationGeneration)
+    if (generation !== navigationGeneration) {
+        await releaseOpenedSession(opened.sessionId);
         return;
-    if (opened.nodeId !== entry.nodeId || opened.workspaceId !== workspaceId)
+    }
+    if (opened.nodeId !== entry.nodeId || opened.workspaceId !== workspaceId) {
+        await releaseOpenedSession(opened.sessionId);
         throw new UiError(uiMessage("shell.returnTargetMismatch"));
+    }
     await acceptResolvedDocument(opened);
 }
 function everydayCommands(): EverydayCommand[] {
@@ -576,7 +580,7 @@ const workspaceTools = new WorkspaceTools({
         const range = current.editor.selection;
         return range.from === range.to ? undefined : range;
     },
-    beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument,
+    beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument, releaseOpenedSession,
     refreshLibrary: async (root) => {
         if (inventory && normalize(inventory.root) === normalize(root))
             await refreshInventory();
@@ -929,6 +933,7 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
     await refreshInventory();
 }
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+    try {
     const generation = ++navigationGeneration;
     await prepareSwitch();
     if (generation !== navigationGeneration)
@@ -939,6 +944,8 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
         addDocument(opened);
     else {
         await existing.writing.settleForSessionChange();
+        if (generation !== navigationGeneration || !documents.includes(existing))
+            return;
         if (existing.session.baseSource === opened.source) {
             existing.session.opened = opened;
             existing.editor.clearTokens();
@@ -960,6 +967,28 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
         renderSidebar();
     }
     shell.classList.remove("sidebar-open");
+    } finally {
+        if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+    }
+}
+function ownsOpenedSession(sessionId: string): boolean {
+    return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
+}
+/** Only fresh, never adopted projections may be released. This does not prove
+ * an author Draft or native surface safe to close. */
+async function releaseOpenedSession(sessionId: string): Promise<void> {
+    if (ownsOpenedSession(sessionId)) throw new UiError(uiMessage("desktop.sessionAlreadyAdopted"));
+    try {
+        const result = await api<{ released: boolean; sessionId: string }>("/api/session/release", { sessionId });
+        if (result.released !== true || result.sessionId !== sessionId) throw new UiError(uiMessage("desktop.sessionReleaseFailed", { sessionId }));
+    } catch (error) {
+        const item = el("div", "toast error", uiMessage("desktop.sessionReleaseFailed", { sessionId }));
+        item.setAttribute("role", "alert");
+        const dismiss = button("", () => item.remove(), "icon-button", "close");
+        setUiAttr(dismiss, "aria-label", uiMessage("common.close"));
+        item.append(dismiss); toastHost.append(item);
+        throw error;
+    }
 }
 function toast(message: UiText, error = false): void {
     const item = el("div", `toast ${error ? "error" : ""}`, message);
@@ -2021,8 +2050,18 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
     clearTimeout(doc.draftTimer);
     const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source;
     const serial = doc.session.serial;
+    const sessionId = doc.session.opened.sessionId;
     const request = doc.draftChain.catch(() => undefined).then(async () => {
-        await api("/api/draft", { sessionId: doc.session.opened.sessionId, source });
+        const recovery = doc.session.recoveryContinuation;
+        if (!doc.session.recoveryContinuationSettled && recovery?.sessionId === sessionId) {
+            try { await api("/api/draft/resume", recovery); }
+            catch (error) {
+                if (!(error instanceof ApiError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+            }
+            doc.session.recoveryContinuationSettled = true;
+        }
+        await api("/api/draft", { sessionId, source });
+        if (doc.session.opened.sessionId !== sessionId) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
         doc.session.acknowledgeDraft(source, serial);
         doc.draftFailure = null;
     });
@@ -2206,8 +2245,10 @@ async function openDocument(path: string, root?: string): Promise<void> {
     if (generation !== navigationGeneration)
         return;
     const opened = await api<OpenedDocument>("/api/open", { path, root });
-    if (generation !== navigationGeneration)
+    if (generation !== navigationGeneration) {
+        await releaseOpenedSession(opened.sessionId);
         return;
+    }
     if (opened.kind === "managed" && documents.some(doc => doc.sourceTrashed && doc.session.opened.nodeId === opened.nodeId && doc.session.opened.workspaceId === opened.workspaceId))
         await acceptResolvedDocument(opened);
     else

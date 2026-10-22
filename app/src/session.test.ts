@@ -9,6 +9,17 @@ import { locale, message, uiTextValue } from "./ui-locale";
 const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
 const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
 
+test("only recovery actually installed by this editor establishes an explicit continuation request", () => {
+  const recovered = { ...opened, recoveredDraft: "已恢复输入", recoveredDraftWitness: "a".repeat(64) };
+  const session = new DocumentSession(recovered);
+  assert.deepEqual(session.recoveryContinuation, { sessionId: opened.sessionId, recordWitness: "a".repeat(64), recoveredSource: "已恢复输入" });
+  session.edit("继续编辑");
+  assert.equal(session.recoveryContinuation?.recoveredSource, "已恢复输入");
+  session.opened = { ...recovered, sessionId: "another", recoveredDraft: "另一位作者" };
+  assert.equal(session.recoveryContinuation?.sessionId, opened.sessionId);
+  assert.equal(new DocumentSession(opened).recoveryContinuation, null);
+});
+
 test("qualified same-Node relocation pauses consumers while equal-byte edits retain the original writer and Draft basis", () => {
   const original = { ...opened, path: "D:\\Library\\Left\\Left.typ", nodeId: "node", workspaceId: "workspace" };
   const moved = { ...original, path: "D:/Library/Renamed/Renamed.typ", sessionId: "fresh", baseId: "current", source: "当前保存稿" };

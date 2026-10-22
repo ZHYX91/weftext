@@ -177,7 +177,7 @@ async fn styles_prepare(
         Some(source) => source,
         None => {
             let changes = req.changes.unwrap_or_default();
-            tokio::task::spawn_blocking(move || {
+            crate::work::spawn_blocking(move || {
                 let hash = weftext_engine::source_hash(&source);
                 weftext_engine::apply_library_style_changes(&source, &hash, &changes)
                     .map(|edited| edited.source)
@@ -625,7 +625,7 @@ async fn editor_map(State(state): State<AppState>, Json(req): Json<SnapshotReque
         req.source_hash.as_deref(),
     )?;
     let source = req.source.clone();
-    let map = tokio::task::spawn_blocking(move || weftext_engine::inspect_editor(&source))
+    let map = crate::work::spawn_blocking(move || weftext_engine::inspect_editor(&source))
         .await
         .map_err(|_| ApiError::internal("编辑映射未完成"))?;
     check_snapshot(
@@ -764,7 +764,7 @@ async fn edit(State(state): State<AppState>, Json(req): Json<EditRequest>) -> Ap
         return Ok(Json(output));
     }
     let source = req.source.clone();
-    let edited = tokio::task::spawn_blocking(move || weftext_engine::edit(&source, &engine_req))
+    let edited = crate::work::spawn_blocking(move || weftext_engine::edit(&source, &engine_req))
         .await
         .map_err(|_| ApiError::internal("编辑操作未完成"))?;
     check_snapshot(
@@ -919,6 +919,7 @@ mod tests {
             renders: Arc::new(Mutex::new(HashMap::new())),
             editor_versions: Arc::new(Mutex::new(HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,

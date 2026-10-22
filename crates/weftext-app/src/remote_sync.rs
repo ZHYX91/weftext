@@ -15,6 +15,15 @@ use weftext_core::sync::{ObjectKey, SyncBundle, SyncIdentity};
 #[derive(Default)]
 pub(crate) struct Store {
     jobs: HashMap<String, Job>,
+    closing: bool,
+}
+impl Store {
+    pub(crate) fn close(&mut self) {
+        self.closing = true;
+        for job in self.jobs.values() {
+            job.stop.store(true, Ordering::Release);
+        }
+    }
 }
 struct Job {
     fingerprint: String,
@@ -219,6 +228,13 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
             }
             return Ok(Json(value(&original.info)?));
         }
+        if store.closing {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "hostClosing",
+                "The owner is closing; no new transfer was started",
+            ));
+        }
         if store.jobs.values().any(|v| v.info.status == "running") {
             return Err(ApiError::bad("已有远程传输进行中，可查看或停止原传输"));
         }
@@ -238,7 +254,7 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
             },
         );
     }
-    tokio::spawn(async move {
+    crate::work::spawn(async move {
         let id = req.request_id.clone();
         let result = tokio::time::timeout(
             Duration::from_secs(15 * 60),

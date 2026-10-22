@@ -59,6 +59,7 @@ type Doc = {
     source: string;
     recoveredDraft?: string;
     recoveredDraftBaseSource?: string;
+    recoveredDraftWitness?: string;
     recoveredDraftConflict: boolean;
     rights: Rights;
 };
@@ -74,6 +75,8 @@ type SaveStatus = {
     resource?: string;
     baseId?: string;
 };
+// Only an actual install establishes adoption of the reviewed recovery primary.
+const recoveryContinuations = new WeakMap<Doc, Promise<void> | null>();
 function checkedSaveStatus(result: SaveStatus, operationId: string, resource: string): SaveStatus {
     if (!result || typeof result !== "object" || result.operationId !== operationId || !["committed", "cancelled", "resolved", "recoveryPending", "notCommitted", "notRegistered"].includes(result.status) || result.status !== "notRegistered" && result.resource !== resource || result.status === "committed" && (typeof result.baseId !== "string" || !result.baseId))
         throw new Error("原保存回执的编号、目标或基线不匹配；没有采用该结果。");
@@ -905,6 +908,19 @@ function clearDisplay(message: UiText, clearToken = false) {
 }
 async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget"): Promise<T> {
     const epoch = requestEpoch, credential = token;
+    const target = data as { sessionId?: string } | undefined, installed = doc;
+    if (path === "draft" && installed && installed.sessionId === target?.sessionId && recoveryContinuations.has(installed)) {
+        let pending = recoveryContinuations.get(installed);
+        if (!pending) {
+            pending = request("draft/resume", { sessionId: installed.sessionId, recordWitness: installed.recoveredDraftWitness, recoveredSource: installed.recoveredDraft }).then(() => undefined).catch(error => {
+                if (!(error instanceof HostedError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+            });
+            recoveryContinuations.set(installed, pending);
+        }
+        try { await pending; recoveryContinuations.delete(installed); }
+        catch (error) { recoveryContinuations.set(installed, null); throw error; }
+    }
+    if (epoch !== requestEpoch || credential !== token) throw new UiError(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
     const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
     const response = await fetch(`/api/hosted/${path}`, { method: data === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: data === undefined ? undefined : JSON.stringify(data), cache: "no-store", signal });
     if (!response.ok) {
@@ -1294,6 +1310,7 @@ function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave 
     draft = stagedCache ? retainedDraft : hostedOpenedDraft(opened.source, retainedDraft);
     const epoch = requestEpoch;
     installingDocument = true;
+    if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft) recoveryContinuations.set(opened, null);
     try {
         source.open(opened.sessionId, opened.resource, draft.source);
         source.disabled = !opened.rights.write;

@@ -154,6 +154,9 @@ export interface PanelHost {
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
     openDocument(path: string, root?: string): Promise<void>;
     openResolved?(document: OpenedDocument): Promise<void>;
+    /** Only a fresh result never handed to the actual document owner. This
+     * releases its disposable Session, not an author/native close proof. */
+    releaseOpenedSession?(sessionId: string): Promise<void>;
     openTemplates?(): void | Promise<void>;
     notify(message: UiText, error?: boolean): void;
     /** A confirmed Core mutation changed the original library's Query environment. */

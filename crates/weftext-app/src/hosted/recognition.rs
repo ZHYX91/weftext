@@ -142,7 +142,7 @@ async fn start(
     })
     .await?;
     if let Some(run) = run {
-        tokio::spawn(async move {
+        crate::work::spawn(async move {
             api::run_job(run).await;
             if let Ok(mut inner) = state.inner.lock() {
                 inner.office.recognition.finish(&c);
@@ -201,7 +201,7 @@ async fn preview(
 ) -> ApiResult {
     let id = req.job_id.clone();
     let auth2 = auth.clone();
-    let (c, root, runtime) = locked(&state, move |inner| {
+    let (c, root, runtime, cancel) = locked(&state, move |inner| {
         let actor = inner.actor(&auth2)?;
         let (c, _) = claim(inner, &actor, &id, "read")?;
         Ok((
@@ -213,10 +213,11 @@ async fn preview(
                 .clone()
                 .ok_or_else(api::changed)?,
             inner.office.recognition.runtime(),
+            inner.office.recognition.closing_flag(),
         ))
     })
     .await?;
-    let result = api::preview_job(root, runtime, c, req.page).await?;
+    let result = api::preview_job(root, runtime, c, req.page, cancel).await?;
     locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
         let _ = claim(inner, &actor, &req.job_id, "read")?;

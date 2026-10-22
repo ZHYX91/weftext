@@ -58,12 +58,16 @@ Final-candidate real-system IME and the original 0.6.1 candidate-K cross-view Un
 
 ## Launch and files
 
-Run the packaged `weftext.exe`. Its window reports a local session address and opens the default browser; closing the process stops the service. Default local mode listens only on `127.0.0.1`, without a cloud account. The bounded multiuser entry requires explicit `--server-config`; see the [Server guide](SERVER.md) for configuration, startup and remaining scope.
+The 0.7 host batch is being integrated. The following is its unified entry contract; native windows, preservation on close and installation acceptance remain incomplete. Windows UI uses `weftext.exe`, and the formal console uses `weftext-cli.exe`. Local UI and CLI share the one Core for the same physical profile, without a cloud account. An ordinary launch or repeated application activation opens Library; `--capture` opens only the independent Capture window. Local browser service requires explicit CLI `serve`. Controlled multiuser service uses its `--server-config`; see [Server](SERVER.md) and [CLI](CLI.md).
+
+Replace the executable names below with the full fixed role paths printed by this attempt's `scripts/mvp.py build/check`, or their counterparts in the delivery directory. Keep both PEs and the same-build `artifact-catalog.json` together. Raw Cargo `target/debug` or `target/release` executables do not establish a qualified candidate, and executables from separate builds cannot be mixed.
 
 ```text
-weftext.exe --open "D:\Notes\example.typ"
-weftext.exe --open "D:\Project\chapter.typ" --root "D:\Project"
-weftext.exe --no-browser --data-dir "D:\Weftext-Local-State"
+weftext.exe
+weftext.exe --capture
+weftext.exe --data-dir "D:\Weftext-Local-State"
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --port 0
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --open "D:\Project\chapter.typ" --root "D:\Project" --port 0
 ```
 
 The UI accepts full local paths. New libraries use an absent directory; ordinary directories can be browsed without automatic admission. New notes use `A/A.typ` with native metadata for ID, types and fields. Ordinary files inside or outside a library can be opened, edited and saved without adding metadata. Titleless notes are valid; navigation may display a filename fallback.
@@ -168,18 +172,40 @@ Candidate acceptance runs frontend/Rust tests, baseline/feature/output HTTP scen
 
 Requires Rust through rustup, Node.js/npm, Python 3.11+ and Windows C++ build tools. The repository's `rust-toolchain.toml` selects the same Rust 1.99.1 and components for local work and CI without changing the machine default. Earlier candidate evidence used Rust 1.98; Node.js 24 and official Typst 0.15.1 remain in use.
 
-The first 0.7 host-foundation refactor reuses the `weftext-app` library and its `LocalService::bind` / `browser_url` / `serve_until` boundary. The existing console still provides the local browser or `--no-browser` service and the `--server-config` hosted service. The version remains `0.6.3-rc.4`; this does not complete tray support, reminders, Mobile or all of 0.7. One Core owns the private-directory lease. The host selects shutdown; browsers and future native windows do not create another writer.
+The two 0.7 executables share `weftext-app`, business routes, Core and original-operation recovery. The GUI no longer owns console scripts. CLI `serve` prints one actual Ready JSON line; the local URL contains a temporary session credential and belongs only in the selected UI. Business output and internal worker pipes have separate owners, keeping startup logs out of pipeline data. Version and accepted scope remain tied to the fixed source, artifacts and delivery record; connected source does not establish tray, reminder, Mobile or whole-version acceptance.
+
+Three independent desktop preferences default off:
+
+| Preference | Behavior |
+| --- | --- |
+| Continue running after the last window closes | Retains the desktop tray after preservation on close; explicit Exit still requires complete close and accepted-work drain. |
+| Start at login | Requests startup for this device and reports the actual system state; application requests cannot override user or policy disablement. |
+| Open Library on automatic/login startup | Selects whether login startup opens Library; ordinary manual launch still opens Library. |
+
+With only login startup enabled, login initially creates a tray with no window. After a window is opened manually, closing the last window follows the last-window preference. A CLI-first service, or a completely accepted protected CLI business call, retains the same Core and sessions for the next command. Closing the last GUI window does not revoke that service; the tray shows its background CLI state. Only explicit global Exit or owner shutdown ends it and drains accepted jobs. Client disconnection does not prove Core or worker exit. Input without a reliable Core preservation receipt blocks close. Successful browser recovery storage cannot replace that receipt.
+
+System login startup selects one qualified profile at a time. Enabling it in another profile changes the application's actual startup target. The previous profile's personal intent remains retained, but does not establish the currently effective system selection. A notification activation failure or timeout ends only that activation wait; it cannot close a subsequently opened author window or revoke a later accepted CLI service.
+
+This native GUI batch targets Windows 11 x64, build 22000 or later, with the contract's minimum WebView2 Runtime. Core/HTTP/CLI capability checks are independent. Headless checks on Windows Server 2022 do not qualify Windows 11 GUI, notifications or installation.
+
+| Delivery capability | MSIX | ZIP |
+| --- | --- | --- |
+| Native windows and manual launch | Requires the same actual candidate's acceptance | Requires the same actual candidate's acceptance |
+| Login startup | Manifest StartupTask with actual system state | Unavailable in this batch |
+| System reminders and activation | Package identity, COM activation and original notification addresses; submission/history/withdrawal require actual checks | Unavailable in this batch; no substitute registration or delivery permit |
+
+When the system disables notifications, reminder state remains available in the application. Registration does not prove submission. Unknown results retain the original record without automatic resubmission under another ID. Actual MSIX installation, notification activation and StartupTask acceptance remain pending on the same final candidate.
 
 Explicit `--data-dir` still selects Core persistent state for the current local service. Windows defaults to `%LOCALAPPDATA%/Weftext-MVP/core`, with private host metadata separately under `Weftext-MVP/host-state`; old top-level Core is not adopted automatically. macOS selects `$HOME/Library/Application Support/Weftext`, and Linux selects absolute `$XDG_DATA_HOME/weftext` or `$HOME/.local/share/weftext` when that variable is unset. A missing, empty or non-absolute default root fails explicitly rather than selecting temporary storage. Core still checks actual backend capability; choosing a directory does not implement a non-Windows write backend. The MSIX retention declaration covers the exact whole Weftext-MVP envelope; actual upgrade/uninstall guarantees still require acceptance on the same candidate.
 
-Default-browser handoff uses Windows Shell, macOS `/usr/bin/open` or Linux `xdg-open`. A failed handoff is reported explicitly while the local service and its printed address remain available; `--no-browser` skips it. Handoff waits at most ten seconds, then reports an unconfirmed outcome without retrying; the OS may still process the original request. HTTP responds during handoff, and stopping the service does not wait for an unfinished handoff. Windows uses an independent OS-call thread so it cannot hold the host runtime's shutdown. OS acceptance does not prove that a browser page loaded or qualify an untested platform. Internal worker flags cannot mix with user launch modes, and `--root` requires `--open`.
+Local WebViews use configuration isolated by actual physical profile and a retained loopback port. An occupied port, missing original configuration or changed identity refuses explicitly, without changing origins and hiding recovery input not yet accepted by Core. CLI `serve --port 0` reuses that profile's retained port; only a new profile allocates one. Hosted Server continues using its configured public bind. Only external GUI links hand off to the system browser. A handoff failure or timeout does not prove page loading and does not automatically retry. Internal workers accept only their own single fixed role flag, separate from user launch modes; CLI `serve --root` requires `--open`.
 
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
 ```
 
-The default builds a local debug candidate; `--release` selects optimization. The entry uses Cargo's reported executable path, including `CARGO_TARGET_DIR` or Cargo configuration overrides, for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
+The default builds a local debug candidate; `--release` selects optimization. The entry reads Cargo's actual reported paths for both roles, including `CARGO_TARGET_DIR` or Cargo configuration overrides, then freezes both PEs and their catalog in a new `weftext-build-artifacts/<UUID>/` directory and prints the complete paths for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
 
 Windows dual-executable ZIP/MSIX uses the same entry's `package` action with exact SDK, offline material directory and actual MSVC linker; see the [packaging contract](PACKAGING.md) for the full command and current gaps. It builds/checks a fixed source copy, creates a new `dist/` candidate, retains previous candidates and does not push or publish. Source, both PEs, original licenses, font manifests and dependency notices belong to that candidate. The inventory includes test/build dependencies, not a claim every item is in the binary. Unqualified offline materials refuse generation before building; the old single-executable package cannot substitute. Published releases follow [WORKFLOW](WORKFLOW.md).
 

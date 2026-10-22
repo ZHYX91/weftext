@@ -853,7 +853,7 @@ impl Environment {
         Ok(())
     }
     pub(super) fn apply(&self, worker: &mut WorkerRequest) -> Result<(), ApiError> {
-        let files = worker.frozen_files.get_or_insert_with(BTreeMap::new);
+        let files = &mut worker.frozen_files;
         for (path, bytes) in &self.files {
             if files.get(path).is_some_and(|old| old != bytes) {
                 return Err(changed());
@@ -1578,10 +1578,7 @@ mod tests {
             root: inner.config.root.clone(),
             paged: false,
             style: None,
-            frozen_files: Some(BTreeMap::from([(
-                "owned.bin".into(),
-                "x".repeat(MAX_CACHE),
-            )])),
+            frozen_files: BTreeMap::from([("owned.bin".into(), "x".repeat(MAX_CACHE))]),
         };
         assert!(env.apply(&mut worker).is_err());
         let authority = env.authority.clone();

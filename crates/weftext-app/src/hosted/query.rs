@@ -2006,7 +2006,7 @@ fn capture(
                             root: inner.config.root.clone(),
                             paged: false,
                             style: None,
-                            frozen_files: Some(frozen_files),
+                            frozen_files,
                         },
                     ));
                 }

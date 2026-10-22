@@ -1,11 +1,19 @@
 //! Host paths and browser handoff. These choices do not certify a file backend.
-use std::{ffi::OsString, io, path::PathBuf};
+#[cfg(any(test, not(windows)))]
+use std::ffi::OsString;
+use std::{io, path::PathBuf};
 use weftext_core::Core;
 
 pub(crate) fn default_data_dir() -> io::Result<PathBuf> {
+    #[cfg(windows)]
+    {
+        crate::host_paths::default_data_dir()
+    }
+    #[cfg(not(windows))]
     data_dir_from(std::env::consts::OS, |key| std::env::var_os(key))
 }
 
+#[cfg(any(test, not(windows)))]
 fn data_dir_from(
     platform: &str,
     environment: impl Fn(&str) -> Option<OsString>,
@@ -27,8 +35,6 @@ fn data_dir_from(
         Ok(path)
     };
     match platform {
-        // Retain the actual existing Windows state location, including Drafts.
-        "windows" => Ok(anchor("LOCALAPPDATA")?.join("Weftext-MVP")),
         "macos" => Ok(anchor("HOME")?.join("Library/Application Support/Weftext")),
         "linux" => Ok(if environment("XDG_DATA_HOME").is_some() {
             anchor("XDG_DATA_HOME")?.join("weftext")
@@ -50,6 +56,8 @@ pub(crate) fn open_core(data_dir: PathBuf) -> io::Result<(Core, PathBuf)> {
         ));
     }
     let data_dir = std::path::absolute(data_dir)?;
+    #[cfg(windows)]
+    let _profile = crate::host_paths::qualify_core(&data_dir)?;
     // Retain CoreError as the typed source so a host can distinguish an owned
     // instance from an unsupported backend without parsing diagnostic prose.
     let core = Core::new(&data_dir).map_err(io::Error::other)?;
@@ -60,6 +68,26 @@ pub(crate) fn open_core(data_dir: PathBuf) -> io::Result<(Core, PathBuf)> {
         ))
     })?;
     Ok((core, data_dir))
+}
+
+#[cfg(windows)]
+pub(crate) fn open_existing_core(
+    data_dir: PathBuf,
+    physical_identity: &str,
+    device_id: &str,
+) -> io::Result<(Core, PathBuf)> {
+    let data = std::path::absolute(data_dir)?;
+    let profile = weftext_core::qualify_existing_profile(&data).map_err(io::Error::other)?;
+    crate::host_state::Root::qualify(false)?.separate(&profile)?;
+    if profile.physical_identity() != physical_identity {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "The original physical profile was replaced",
+        ));
+    }
+    let core =
+        Core::open_existing(&data, physical_identity, device_id).map_err(io::Error::other)?;
+    Ok((core, std::fs::canonicalize(&data)?))
 }
 
 pub(crate) async fn open_browser(address: &str) -> io::Result<()> {
@@ -188,10 +216,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn persistent_defaults_use_the_host_location_and_preserve_windows_drafts() {
+    fn non_windows_persistent_defaults_use_the_host_location() {
         let base = std::env::current_dir().unwrap().join("TEST-user");
         for (platform, variable, suffix) in [
-            ("windows", "LOCALAPPDATA", "Weftext-MVP"),
             ("macos", "HOME", "Library/Application Support/Weftext"),
             ("linux", "HOME", ".local/share/weftext"),
             ("linux", "XDG_DATA_HOME", "weftext"),
@@ -212,7 +239,7 @@ mod tests {
             open_core(PathBuf::new()).err().unwrap().kind(),
             io::ErrorKind::InvalidInput
         );
-        for platform in ["windows", "macos", "linux"] {
+        for platform in ["macos", "linux"] {
             assert_eq!(
                 data_dir_from(platform, |_| None).unwrap_err().kind(),
                 io::ErrorKind::NotFound
@@ -235,6 +262,23 @@ mod tests {
         assert_eq!(
             data_dir_from("unknown", |_| None).unwrap_err().kind(),
             io::ErrorKind::Unsupported
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_default_uses_the_known_folder_and_shared_durable_contract() {
+        let expected = crate::host_paths::local_app_data().unwrap().join(
+            &crate::host_contract::get()
+                .unwrap()
+                .paths
+                .persistent_relative_root,
+        );
+        assert_eq!(default_data_dir().unwrap(), expected);
+        assert_eq!(expected.file_name().unwrap(), "core");
+        assert_eq!(
+            expected.parent().unwrap().file_name().unwrap(),
+            "Weftext-MVP"
         );
     }
 

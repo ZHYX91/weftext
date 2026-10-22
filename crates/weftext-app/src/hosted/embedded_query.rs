@@ -106,7 +106,7 @@ async fn discover(
 ) -> ApiResult {
     check(&state, &auth, &req, true, false).await?;
     let source = req.source.clone();
-    let (syntax_valid, mut occurrences) = tokio::task::spawn_blocking(move || {
+    let (syntax_valid, mut occurrences) = crate::work::spawn_blocking(move || {
         (
             weftext_engine::inspect(&source).syntax_valid,
             weftext_data::embedded_queries(&source),

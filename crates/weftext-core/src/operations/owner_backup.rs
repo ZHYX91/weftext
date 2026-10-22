@@ -811,6 +811,7 @@ fn validate_selected_record(
     let value: UniqueValue = serde_json::from_slice(bytes)?;
     if kind == RecordKind::Draft {
         let draft: Draft = serde_json::from_slice(bytes)?;
+        draft.validate_producers()?;
         let guard = ParentGuard::acquire(&root.join(".backup-draft-root"))?;
         let expected = ActorLibraryBinding {
             root: display(&guard.directory_coordinates()?),

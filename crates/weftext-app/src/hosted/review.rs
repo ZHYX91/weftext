@@ -816,7 +816,7 @@ async fn proofread(
     let source = b.node.as_ref().unwrap().source.clone();
     let options = req.options.clone();
     let result =
-        tokio::task::spawn_blocking(move || knowledge::proofread(&tree, &source, &options))
+        crate::work::spawn_blocking(move || knowledge::proofread(&tree, &source, &options))
             .await
             .map_err(|_| ApiError::internal("校对未完成"))?
             .map_err(knowledge_error)?;

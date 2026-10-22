@@ -107,7 +107,21 @@ impl Core {
             .device_namespace(true)?
             .ok_or_else(|| evidence("Device namespace is unavailable"))?;
         let (originals, complete) = namespace.directory_entries(MAX_NAMESPACE_MEMBERS)?;
-        if !complete || !originals.is_empty() {
+        // Personal client presentation can exist before any OS device feature.
+        // It carries no device ID, activation or delivery promise. Only its one
+        // canonical, fully validated record is eligible; pending/other records
+        // remain original evidence and never authorize allocating another ID.
+        let client_only = complete
+            && originals.len() == 1
+            && originals[0].0 == std::ffi::OsStr::new(DeviceRecordKind::ClientPreferences.leaf());
+        if client_only {
+            let (bytes, _) = self
+                .read_device_record(DeviceRecordKind::ClientPreferences, 16 * 1024)?
+                .ok_or_else(|| {
+                    evidence("Client preferences disappeared during device qualification")
+                })?;
+            validate_backup_record(DeviceRecordKind::ClientPreferences, &bytes)?;
+        } else if !complete || !originals.is_empty() {
             return Err(evidence(
                 "Device identity is missing while original device records remain; do not allocate a replacement",
             ));

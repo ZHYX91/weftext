@@ -30,6 +30,7 @@ export interface WorkspaceToolsHost {
   applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
   openDocument(path: string, root?: string): Promise<void>;
   openResolved(document: OpenedDocument): Promise<void>;
+  releaseOpenedSession(sessionId: string): Promise<void>;
   created(document: OpenedDocument): Promise<void>;
   applyReceipt(receipt: KnowledgeReceipt, context: KnowledgeContext): Promise<void>;
   savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
@@ -72,7 +73,7 @@ export class WorkspaceTools {
     const dataHost: PanelHost = {
       canEdit: host.canEditSource,
       request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
-      openDocument: host.openDocument, openResolved: host.openResolved, notify: host.notify,
+      openDocument: host.openDocument, openResolved: host.openResolved, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
       environmentChanged: root => this.invalidateQueryEnvironment(root),
       savedDefinition: host.savedDefinition,
       applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),

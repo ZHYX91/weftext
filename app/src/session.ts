@@ -20,12 +20,18 @@ export class DocumentSession {
     lastDraftSerial = -1;
     error: UiText | null = null;
     recovered: boolean;
+    /** Only the recovery primary actually installed in this editor may be
+     * explicitly continued. Later observations never adopt another producer. */
+    readonly recoveryContinuation: { sessionId: string; recordWitness: string; recoveredSource: string } | null;
+    recoveryContinuationSettled = false;
     constructor(public opened: OpenedDocument) {
         this.path = opened.path;
         this.baseId = opened.baseId;
         this.baseSource = opened.source;
         this.source = opened.recoveredDraft ?? opened.source;
         this.recovered = opened.recoveredDraft != null && opened.recoveredDraft !== opened.source;
+        this.recoveryContinuation = opened.recoveredDraft != null && opened.recoveredDraftWitness
+            ? { sessionId: opened.sessionId, recordWitness: opened.recoveredDraftWitness, recoveredSource: opened.recoveredDraft } : null;
     }
     get dirty(): boolean { return this.source !== this.baseSource; }
     get projectionCurrent(): boolean { return this.projection?.serial === this.serial && this.projection.source === this.source; }

@@ -594,6 +594,7 @@ impl HostedInner {
             details: error
                 .current_source
                 .map(|s| Box::new(json!({"currentSource":s}))),
+            private_worker_failure: None,
         }
     }
     fn actor_scope(&self, actor: &str) -> String {
@@ -627,7 +628,7 @@ impl HostedInner {
         Ok(
             json!({"resource":resource,"title":file.title,"sessionId":opened.session_id,"baseId":opened.base_id,
             "source":opened.source,"recoveredDraft":opened.recovered_draft,"recoveredDraftBaseSource":opened.recovered_draft_base_source,
-            "recoveredDraftConflict":opened.recovered_draft_conflict,"rights":rights}),
+            "recoveredDraftConflict":opened.recovered_draft_conflict,"recoveredDraftWitness":opened.recovered_draft_witness,"rights":rights}),
         )
     }
     fn files(
@@ -644,7 +645,7 @@ async fn locked<T: Send + 'static>(
     f: impl FnOnce(&mut HostedInner) -> Result<T, ApiError> + Send + 'static,
 ) -> Result<T, ApiError> {
     let inner = state.inner.clone();
-    tokio::task::spawn_blocking(move || {
+    crate::work::spawn_blocking(move || {
         let mut guard = inner.lock().map_err(|_| ApiError::internal("服务不可用"))?;
         f(&mut guard)
     })
@@ -798,6 +799,28 @@ async fn draft(
                 })
                 .map_err(HostedInner::core_error)?;
             Ok(json!({"status":"draftRetained"}))
+        })
+        .await?,
+    ))
+}
+async fn resume_draft(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<weftext_core::ResumeDraftRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
+            if !rights.write {
+                return Err(unavailable());
+            }
+            inner
+                .core
+                .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |core| {
+                    core.resume_recovered_draft(req)
+                })
+                .map_err(HostedInner::core_error)?;
+            Ok(json!({"status":"draftContinued"}))
         })
         .await?,
     ))
@@ -1126,242 +1149,308 @@ async fn hosted_assets(request: Request) -> Response {
     }
     StatusCode::NOT_FOUND.into_response()
 }
-pub(super) async fn serve(
-    core: Core,
-    config_path: PathBuf,
-    legacy_root: PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut config: Config = serde_json::from_slice(&std::fs::read(&config_path)?)?;
-    config.root = std::path::absolute(&config.root)?;
-    if !valid_id(&config.deployment)
-        || !valid_digest(&config.admin_token_sha256)
-        || config.files.len() > 256
-        || config.directories.len() > 64
-    {
-        return Err("Invalid deployment, administrator digest or resource budget".into());
+#[derive(Debug)]
+pub(super) struct PairingMismatch;
+impl std::fmt::Display for PairingMismatch {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Persisted sync pairing differs from configuration; existing grants cannot silently move to another family")
     }
-    let mut paths = BTreeSet::new();
-    if config.style_inputs.len() > 64
-        || config
-            .style_inputs
-            .iter()
-            .any(|id| !config.files.contains_key(id) && !media::valid_input(&config, id))
-        || config.style_inputs.iter().collect::<BTreeSet<_>>().len() != config.style_inputs.len()
-    {
-        return Err("Invalid explicit style inputs".into());
-    }
-    for (id, file) in &config.files {
-        let p = std::path::Path::new(&file.path);
-        if !valid_id(id)
-            || file.path.is_empty()
-            || p.components()
-                .any(|c| !matches!(c, std::path::Component::Normal(_)))
-            || file.path.contains(':')
-            || !paths.insert(file.path.replace('\\', "/").to_lowercase())
-            || (file.editable && p.extension().is_none_or(|e| e != "typ"))
-            || (file.importable
-                && (!file.editable
-                    || p.file_name().is_none_or(|n| n != "document.typ")
-                    || p.parent()
-                        .and_then(|p| p.file_name())
-                        .is_none_or(|n| n != "document")
-                    || p.parent()
-                        .and_then(|p| p.parent())
-                        .and_then(|p| p.file_name())
-                        .is_none()))
-            || file.title.len() > 500
-            || file.inputs.len() > 64
-            || !query_scopes::valid_file(file)
+}
+impl std::error::Error for PairingMismatch {}
+
+pub(super) struct HostedService {
+    listener: tokio::net::TcpListener,
+    router: Router,
+    state: HostedState,
+    origin: String,
+    admitting: Arc<std::sync::atomic::AtomicBool>,
+}
+impl HostedService {
+    pub(super) async fn bind(
+        core: Core,
+        config_path: PathBuf,
+        legacy_root: PathBuf,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut config: Config = serde_json::from_slice(&std::fs::read(&config_path)?)?;
+        config.root = std::path::absolute(&config.root)?;
+        if !valid_id(&config.deployment)
+            || !valid_digest(&config.admin_token_sha256)
+            || config.files.len() > 256
+            || config.directories.len() > 64
         {
-            return Err("Invalid configured resource".into());
+            return Err("Invalid deployment, administrator digest or resource budget".into());
         }
-        if file
-            .inputs
-            .iter()
-            .any(|i| (!config.files.contains_key(i) && !media::valid_input(&config, i)) || i == id)
+        let mut paths = BTreeSet::new();
+        if config.style_inputs.len() > 64
+            || config
+                .style_inputs
+                .iter()
+                .any(|id| !config.files.contains_key(id) && !media::valid_input(&config, id))
+            || config.style_inputs.iter().collect::<BTreeSet<_>>().len()
+                != config.style_inputs.len()
         {
-            return Err("Invalid configured dependency".into());
+            return Err("Invalid explicit style inputs".into());
         }
-    }
-    let mut references = BTreeSet::new();
-    if !media::valid_config(&config)
-        || !content_import::valid_config(&config)
-        || !owner_backup::valid_config(&config)
-        || !navigation_registry::valid_config(&config)
-        || !resource_collections::valid_config(&config)
-        || !structure::valid_config(&config)
-    {
-        return Err("Invalid explicitly configured owned resource".into());
-    }
-    for (id, directory) in &config.directories {
-        if !valid_id(id)
-            || !query_scopes::valid_directory(directory)
-            || !references.insert(directory.reference.clone())
-        {
-            return Err("Invalid configured directory scope".into());
-        }
-    }
-    validate_users(&config, &config.users).map_err(|e| e.message)?;
-    if let Some(identity) = &config.sync_identity {
-        match core.sync_binding_info(&config.root) {
-            Ok(binding) if binding.identity != *identity => {
-                return Err("Configured sync pairing differs from the served replica".into());
+        for (id, file) in &config.files {
+            let p = std::path::Path::new(&file.path);
+            if !valid_id(id)
+                || file.path.is_empty()
+                || p.components()
+                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
+                || file.path.contains(':')
+                || !paths.insert(file.path.replace('\\', "/").to_lowercase())
+                || (file.editable && p.extension().is_none_or(|e| e != "typ"))
+                || (file.importable
+                    && (!file.editable
+                        || p.file_name().is_none_or(|n| n != "document.typ")
+                        || p.parent()
+                            .and_then(|p| p.file_name())
+                            .is_none_or(|n| n != "document")
+                        || p.parent()
+                            .and_then(|p| p.parent())
+                            .and_then(|p| p.file_name())
+                            .is_none()))
+                || file.title.len() > 500
+                || file.inputs.len() > 64
+                || !query_scopes::valid_file(file)
+            {
+                return Err("Invalid configured resource".into());
             }
-            Err(error) if error.code != "syncNotEnabled" => return Err(error.into()),
-            _ => {}
-        }
-        core.receive_sync(identity, weftext_core::sync::SyncBundle::default())?;
-    }
-    for user in config.users.values_mut() {
-        user.epoch = 1;
-    }
-    let policy = match core.hosted_policy()? {
-        Some(bytes) => {
-            let mut policy: Policy = serde_json::from_slice(&bytes)?;
-            if policy.deployment != config.deployment {
-                return Err("Private server state belongs to another deployment".into());
+            if file.inputs.iter().any(|i| {
+                (!config.files.contains_key(i) && !media::valid_input(&config, i)) || i == id
+            }) {
+                return Err("Invalid configured dependency".into());
             }
-            if policy.sync_identity != config.sync_identity {
-                if policy.sync_identity.is_none()
-                    && config.sync_identity.is_some()
-                    && policy.users.values().all(|u| !u.sync_owner)
+        }
+        let mut references = BTreeSet::new();
+        if !media::valid_config(&config)
+            || !content_import::valid_config(&config)
+            || !owner_backup::valid_config(&config)
+            || !navigation_registry::valid_config(&config)
+            || !resource_collections::valid_config(&config)
+            || !structure::valid_config(&config)
+        {
+            return Err("Invalid explicitly configured owned resource".into());
+        }
+        for (id, directory) in &config.directories {
+            if !valid_id(id)
+                || !query_scopes::valid_directory(directory)
+                || !references.insert(directory.reference.clone())
+            {
+                return Err("Invalid configured directory scope".into());
+            }
+        }
+        validate_users(&config, &config.users).map_err(|e| e.message)?;
+        if let Some(identity) = &config.sync_identity {
+            match core.sync_binding_info(&config.root) {
+                Ok(binding) if binding.identity != *identity => {
+                    return Err("Configured sync pairing differs from the served replica".into());
+                }
+                Err(error) if error.code != "syncNotEnabled" => return Err(error.into()),
+                _ => {}
+            }
+            core.receive_sync(identity, weftext_core::sync::SyncBundle::default())?;
+        }
+        for user in config.users.values_mut() {
+            user.epoch = 1;
+        }
+        let policy = match core.hosted_policy()? {
+            Some(bytes) => {
+                let mut policy: Policy = serde_json::from_slice(&bytes)?;
+                if policy.deployment != config.deployment {
+                    return Err("Private server state belongs to another deployment".into());
+                }
+                if policy.sync_identity != config.sync_identity {
+                    if policy.sync_identity.is_none()
+                        && config.sync_identity.is_some()
+                        && policy.users.values().all(|u| !u.sync_owner)
+                    {
+                        // Adding a transport does not reapply bootstrap grants.
+                        policy.sync_identity = config.sync_identity.clone();
+                        policy.generation = policy
+                            .generation
+                            .checked_add(1)
+                            .ok_or("Policy generation exhausted")?;
+                        core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
+                    } else {
+                        return Err(Box::new(PairingMismatch));
+                    }
+                }
+                validate_users(&config, &policy.users).map_err(|e| e.message)?;
+                policy
+            }
+            None => {
+                let policy = Policy {
+                    deployment: config.deployment.clone(),
+                    generation: 1,
+                    users: config.users.clone(),
+                    sync_identity: config.sync_identity.clone(),
+                };
+                core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
+                policy
+            }
+        };
+        let listener = tokio::net::TcpListener::bind(config.bind).await?;
+        let address = listener.local_addr()?;
+        let origin = match config.origin.clone() {
+            Some(origin) => origin,
+            None if address.ip().is_loopback() => format!("http://{address}"),
+            None => return Err("Non-loopback binding requires an explicit origin".into()),
+        };
+        let parsed = url::Url::parse(&origin)?;
+        if parsed.origin().ascii_serialization() != origin
+            || !matches!(parsed.scheme(), "http" | "https")
+            || (!address.ip().is_loopback()
+                && parsed.scheme() == "http"
+                && !config.allow_insecure_http)
+        {
+            return Err("Use an exact HTTPS origin, or explicitly allow insecure HTTP for a controlled test network".into());
+        }
+        let host = origin
+            .split_once("://")
+            .ok_or("Invalid origin")?
+            .1
+            .to_owned();
+        let state = HostedState {
+            inner: Arc::new(Mutex::new(HostedInner {
+                core,
+                config,
+                policy,
+                sessions: HashMap::new(),
+                downloads: HashMap::new(),
+                sync: sync_transport::Store::default(),
+                editor_versions: HashMap::new(),
+                fields: fields::Store::default(),
+                review: review::Store::default(),
+                office: office::Store::with_legacy_root(legacy_root),
+                library: library::Store::default(),
+                media: media::Store::default(),
+                navigation_registry: Default::default(),
+                owner_backup: Default::default(),
+            })),
+            origin: origin.clone().into(),
+            host: host.into(),
+            render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+        };
+        let admitting = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let app = Router::new()
+            .merge(builtin_module::router())
+            .merge(sync_transport::router())
+            .merge(editor::router())
+            .merge(fields::router())
+            .merge(history_api::router())
+            .merge(navigation::router())
+            .merge(navigation_registry::router())
+            .merge(content_import::router())
+            .merge(recognition::router())
+            .merge(owner_backup::router())
+            .merge(library::router())
+            .merge(knowledge_links::router())
+            .merge(citations::router())
+            .merge(media::router())
+            .merge(resource_collections::router())
+            .merge(structure::router())
+            .merge(query::router())
+            .merge(definition::router())
+            .merge(embedded_query::router())
+            .merge(review::router())
+            .merge(office::router())
+            .merge(office_import::router())
+            .route("/api/hosted/me", get(me))
+            .route("/api/hosted/documents", get(list))
+            .route("/api/hosted/open", post(open))
+            .route("/api/hosted/close", post(close))
+            .route("/api/hosted/session/keepalive", post(keepalive))
+            .route("/api/hosted/save", post(save))
+            .route("/api/hosted/draft", post(draft))
+            .route("/api/hosted/draft/resolve", post(resolve_draft))
+            .route("/api/hosted/draft/resume", post(resume_draft))
+            .route("/api/hosted/operation", post(status))
+            .route("/api/hosted/operation/settle", post(settle))
+            .route("/api/hosted/search", post(search))
+            .route("/api/hosted/preview", post(preview))
+            .route("/api/hosted/download/prepare", post(prepare_download))
+            .route("/api/hosted/download/chunk", post(chunk))
+            .route(
+                "/api/hosted/admin/policy",
+                get(policy_read).post(update_policy),
+            )
+            .fallback(hosted_assets)
+            .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
+            .layer(middleware::from_fn_with_state(state.clone(), boundary))
+            .with_state(state.clone())
+            .layer(middleware::from_fn_with_state(
+                admitting.clone(),
+                crate::local_service::admit_request,
+            ));
+        Ok(Self {
+            listener,
+            router: app,
+            state,
+            origin,
+            admitting,
+        })
+    }
+
+    pub(super) fn origin(&self) -> &str {
+        &self.origin
+    }
+
+    pub(super) async fn serve_until(
+        self,
+        shutdown: impl std::future::Future<Output = ()> + Send + 'static,
+    ) -> std::io::Result<()> {
+        let reaper_state = self.state.clone();
+        let (stop_reaper, mut reaper_stopping) = tokio::sync::watch::channel(false);
+        let reaper = tokio::spawn(async move {
+            let mut ticks = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                tokio::select! {biased; _=reaper_stopping.changed()=>break, _=ticks.tick()=>{}}
+                if locked(&reaper_state, |inner| {
+                    inner.reap_idle_sessions(Instant::now())
+                })
+                .await
+                .is_err()
                 {
-                    // Adding a transport does not reapply bootstrap grants.
-                    policy.sync_identity = config.sync_identity.clone();
-                    policy.generation = policy
-                        .generation
-                        .checked_add(1)
-                        .ok_or("Policy generation exhausted")?;
-                    core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
-                } else {
-                    return Err("Persisted sync pairing differs from configuration; existing grants cannot silently move to another family".into());
+                    crate::work::fault();
                 }
             }
-            validate_users(&config, &policy.users).map_err(|e| e.message)?;
-            policy
-        }
-        None => {
-            let policy = Policy {
-                deployment: config.deployment.clone(),
-                generation: 1,
-                users: config.users.clone(),
-                sync_identity: config.sync_identity.clone(),
-            };
-            core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
-            policy
-        }
-    };
-    let listener = tokio::net::TcpListener::bind(config.bind).await?;
-    let address = listener.local_addr()?;
-    let origin = match config.origin.clone() {
-        Some(origin) => origin,
-        None if address.ip().is_loopback() => format!("http://{address}"),
-        None => return Err("Non-loopback binding requires an explicit origin".into()),
-    };
-    let parsed = url::Url::parse(&origin)?;
-    if parsed.origin().ascii_serialization() != origin
-        || !matches!(parsed.scheme(), "http" | "https")
-        || (!address.ip().is_loopback() && parsed.scheme() == "http" && !config.allow_insecure_http)
-    {
-        return Err("Use an exact HTTPS origin, or explicitly allow insecure HTTP for a controlled test network".into());
-    }
-    let host = origin
-        .split_once("://")
-        .ok_or("Invalid origin")?
-        .1
-        .to_owned();
-    let state = HostedState {
-        inner: Arc::new(Mutex::new(HostedInner {
-            core,
-            config,
-            policy,
-            sessions: HashMap::new(),
-            downloads: HashMap::new(),
-            sync: sync_transport::Store::default(),
-            editor_versions: HashMap::new(),
-            fields: fields::Store::default(),
-            review: review::Store::default(),
-            office: office::Store::with_legacy_root(legacy_root),
-            library: library::Store::default(),
-            media: media::Store::default(),
-            navigation_registry: Default::default(),
-            owner_backup: Default::default(),
-        })),
-        origin: origin.clone().into(),
-        host: host.into(),
-        render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
-    };
-    let reaper_state = state.clone();
-    let app = Router::new()
-        .merge(builtin_module::router())
-        .merge(sync_transport::router())
-        .merge(editor::router())
-        .merge(fields::router())
-        .merge(history_api::router())
-        .merge(navigation::router())
-        .merge(navigation_registry::router())
-        .merge(content_import::router())
-        .merge(recognition::router())
-        .merge(owner_backup::router())
-        .merge(library::router())
-        .merge(knowledge_links::router())
-        .merge(citations::router())
-        .merge(media::router())
-        .merge(resource_collections::router())
-        .merge(structure::router())
-        .merge(query::router())
-        .merge(definition::router())
-        .merge(embedded_query::router())
-        .merge(review::router())
-        .merge(office::router())
-        .merge(office_import::router())
-        .route("/api/hosted/me", get(me))
-        .route("/api/hosted/documents", get(list))
-        .route("/api/hosted/open", post(open))
-        .route("/api/hosted/close", post(close))
-        .route("/api/hosted/session/keepalive", post(keepalive))
-        .route("/api/hosted/save", post(save))
-        .route("/api/hosted/draft", post(draft))
-        .route("/api/hosted/draft/resolve", post(resolve_draft))
-        .route("/api/hosted/operation", post(status))
-        .route("/api/hosted/operation/settle", post(settle))
-        .route("/api/hosted/search", post(search))
-        .route("/api/hosted/preview", post(preview))
-        .route("/api/hosted/download/prepare", post(prepare_download))
-        .route("/api/hosted/download/chunk", post(chunk))
-        .route(
-            "/api/hosted/admin/policy",
-            get(policy_read).post(update_policy),
-        )
-        .fallback(hosted_assets)
-        .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
-        .layer(middleware::from_fn_with_state(state.clone(), boundary))
-        .with_state(state);
-    println!(
-        "Weftext {} hosted\n{origin}/\nBound to {address}; operator-managed resources only.",
-        env!("CARGO_PKG_VERSION")
-    );
-    let reaper = tokio::spawn(async move {
-        let mut ticks = tokio::time::interval(Duration::from_secs(60));
-        loop {
-            ticks.tick().await;
-            if locked(&reaper_state, |inner| {
-                inner.reap_idle_sessions(Instant::now())
+        });
+        let stopping_state = self.state.clone();
+        let admitting = self.admitting;
+        let reaper_signal = stop_reaper.clone();
+        let result = axum::serve(self.listener, self.router)
+            .with_graceful_shutdown(async move {
+                shutdown.await;
+                admitting.store(false, std::sync::atomic::Ordering::Release);
+                let _ = reaper_signal.send(true);
+                close_hosted_jobs(&stopping_state).await;
             })
-            .await
-            .is_err()
-            {
-                eprintln!("Hosted session cleanup did not complete; it will be retried.");
-            }
+            .await;
+        let _ = stop_reaper.send(true);
+        close_hosted_jobs(&self.state).await;
+        if reaper.await.is_err() {
+            crate::work::fault();
         }
-    });
-    let result = axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await;
-    reaper.abort();
-    let _ = reaper.await;
-    result?;
-    Ok(())
+        crate::work::registry().drain().await?;
+        let inner = Arc::try_unwrap(self.state.inner).map_err(|_| {
+            std::io::Error::other("Hosted authority is still retained after accepted work drained")
+        })?;
+        drop(inner.into_inner().map_err(|_| {
+            std::io::Error::other("Hosted Core authority was poisoned during shutdown")
+        })?);
+        result
+    }
+}
+
+async fn close_hosted_jobs(state: &HostedState) {
+    if locked(state, |inner| {
+        inner.office.close();
+        Ok(())
+    })
+    .await
+    .is_err()
+    {
+        crate::work::fault();
+    }
 }

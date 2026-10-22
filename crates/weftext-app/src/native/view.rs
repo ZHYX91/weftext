@@ -1,0 +1,310 @@
+use super::{
+    events::{Event, Queue},
+    window::WindowState,
+};
+use std::{cell::Cell, rc::Rc};
+use webview2_com::{
+    Microsoft::Web::WebView2::Win32::*, NavigationStartingEventHandler,
+    NewWindowRequestedEventHandler, ProcessFailedEventHandler, WebMessageReceivedEventHandler,
+};
+use windows::{
+    Win32::{
+        Foundation::{E_INVALIDARG, E_POINTER, RECT},
+        System::Com::CoTaskMemFree,
+        UI::WindowsAndMessaging::GetClientRect,
+    },
+    core::{Error, HSTRING, Interface, PWSTR, Result},
+};
+
+pub(super) struct Pending {
+    count: Rc<Cell<usize>>,
+    queue: Queue,
+}
+impl Pending {
+    pub fn new(count: &Rc<Cell<usize>>, queue: &Queue) -> Result<Self> {
+        count.set(
+            count
+                .get()
+                .checked_add(1)
+                .ok_or_else(|| Error::from(E_INVALIDARG))?,
+        );
+        Ok(Self {
+            count: count.clone(),
+            queue: queue.clone(),
+        })
+    }
+}
+impl Drop for Pending {
+    fn drop(&mut self) {
+        match self.count.get().checked_sub(1) {
+            Some(count) => self.count.set(count),
+            None => self.queue.fault(),
+        }
+        self.queue.wake();
+    }
+}
+
+fn text(pointer: PWSTR, maximum: usize) -> Result<String> {
+    struct Allocation(PWSTR);
+    impl Drop for Allocation {
+        fn drop(&mut self) {
+            unsafe {
+                CoTaskMemFree(Some(self.0.0.cast()));
+            }
+        }
+    }
+    let allocation = Allocation(pointer);
+    if allocation.0.is_null() {
+        return Err(Error::from(E_POINTER));
+    }
+    let mut length = 0;
+    while length <= maximum && unsafe { *allocation.0.0.add(length) } != 0 {
+        length += 1;
+    }
+    if length > maximum {
+        return Err(Error::from(E_INVALIDARG));
+    }
+    String::from_utf16(unsafe { std::slice::from_raw_parts(allocation.0.0, length) })
+        .map_err(|_| Error::from(E_INVALIDARG))
+}
+
+#[derive(Clone)]
+pub(super) struct NavigationPolicy {
+    origin: url::Origin,
+    path: String,
+    query: Option<String>,
+}
+impl NavigationPolicy {
+    pub fn new(address: &str) -> Result<Self> {
+        let address = url::Url::parse(address).map_err(|_| Error::from(E_INVALIDARG))?;
+        if address.scheme() != "http"
+            || address.host_str() != Some("127.0.0.1")
+            || address.port().is_none()
+            || !address.username().is_empty()
+            || address.password().is_some()
+        {
+            return Err(Error::from(E_INVALIDARG));
+        }
+        Ok(Self {
+            origin: address.origin(),
+            path: address.path().into(),
+            query: address.query().map(str::to_owned),
+        })
+    }
+    pub fn permits(&self, address: &str) -> bool {
+        url::Url::parse(address).is_ok_and(|address| {
+            address.origin() == self.origin
+                && address.path() == self.path
+                && address.query() == self.query.as_deref()
+                && address.username().is_empty()
+                && address.password().is_none()
+        })
+    }
+}
+
+pub(super) struct View {
+    controller: ICoreWebView2Controller,
+    webview: ICoreWebView2,
+    tokens: Vec<(u8, i64)>,
+    closed: bool,
+    queue: Queue,
+    pub policy: NavigationPolicy,
+}
+impl View {
+    /// Runs only in the outer STA reducer. The guard exists before any fallible
+    /// settings/registration/navigation call can leave a controller behind.
+    pub fn attach(
+        controller: ICoreWebView2Controller,
+        state: &Rc<WindowState>,
+        address: &str,
+        queue: Queue,
+    ) -> Result<Self> {
+        let webview = match unsafe { controller.CoreWebView2() } {
+            Ok(webview) => webview,
+            Err(error) => {
+                let _ = unsafe { controller.Close() };
+                return Err(error);
+            }
+        };
+        let policy = match NavigationPolicy::new(address) {
+            Ok(policy) => policy,
+            Err(error) => {
+                let _ = unsafe { controller.Close() };
+                return Err(error);
+            }
+        };
+        let mut view = Self {
+            controller,
+            webview,
+            tokens: Vec::new(),
+            closed: false,
+            queue: queue.clone(),
+            policy: policy.clone(),
+        };
+        let settings = unsafe { view.webview.Settings()? };
+        unsafe {
+            settings.SetAreHostObjectsAllowed(false)?;
+            settings.SetAreDevToolsEnabled(false)?;
+            settings.SetAreDefaultContextMenusEnabled(false)?;
+            settings
+                .cast::<ICoreWebView2Settings3>()?
+                .SetAreBrowserAcceleratorKeysEnabled(false)?;
+            view.controller.SetIsVisible(false)?;
+        }
+        let initial = Rc::new(Cell::new(true));
+        let callback = NavigationStartingEventHandler::create(Box::new(move |_, args| {
+            let args = args.ok_or_else(|| Error::from(E_POINTER))?;
+            let mut uri = PWSTR::null();
+            unsafe {
+                args.Uri(&mut uri)?;
+            }
+            let allowed =
+                text(uri, 32768).is_ok_and(|uri| policy.permits(&uri)) && initial.replace(false);
+            // Reload/back/context actions cannot destroy a live unsaved producer
+            // outside the same close barrier. A host-controlled reopen gets a
+            // new controller/surface epoch after its prior barrier completes.
+            unsafe { args.SetCancel(!allowed) }
+        }));
+        let mut token = 0;
+        unsafe {
+            view.webview.add_NavigationStarting(&callback, &mut token)?;
+        }
+        view.tokens.push((0, token));
+        let weak = Rc::downgrade(state);
+        let events = queue.clone();
+        let callback = WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
+            let args = args.ok_or_else(|| Error::from(E_POINTER))?;
+            let mut uri = PWSTR::null();
+            let mut json = PWSTR::null();
+            unsafe {
+                args.Source(&mut uri)?;
+            }
+            let source = text(uri, 32768)?;
+            unsafe {
+                args.WebMessageAsJson(&mut json)?;
+            }
+            let message = text(json, 16 * 1024 * 1024)?;
+            events.push(Event::Message(weak.clone(), source, message));
+            Ok(())
+        }));
+        let mut token = 0;
+        unsafe {
+            view.webview.add_WebMessageReceived(&callback, &mut token)?;
+        }
+        view.tokens.push((1, token));
+        let events = queue.clone();
+        let callback = NewWindowRequestedEventHandler::create(Box::new(move |_, args| {
+            let args = args.ok_or_else(|| Error::from(E_POINTER))?;
+            unsafe {
+                args.SetHandled(true)?;
+            }
+            let mut initiated = false.into();
+            unsafe {
+                args.IsUserInitiated(&mut initiated)?;
+            }
+            if !initiated.as_bool() {
+                return Ok(());
+            }
+            let mut uri = PWSTR::null();
+            unsafe {
+                args.Uri(&mut uri)?;
+            }
+            let uri = text(uri, 32768)?;
+            if url::Url::parse(&uri).is_ok_and(|uri| {
+                matches!(uri.scheme(), "https" | "http")
+                    && uri.username().is_empty()
+                    && uri.password().is_none()
+            }) {
+                events.push(Event::ExternalUrl(uri));
+            }
+            Ok(())
+        }));
+        let mut token = 0;
+        unsafe {
+            view.webview.add_NewWindowRequested(&callback, &mut token)?;
+        }
+        view.tokens.push((2, token));
+        let weak = Rc::downgrade(state);
+        let events = queue;
+        let callback = ProcessFailedEventHandler::create(Box::new(move |_, _| {
+            events.push(Event::ViewFailed(weak.clone()));
+            Ok(())
+        }));
+        let mut token = 0;
+        unsafe {
+            view.webview.add_ProcessFailed(&callback, &mut token)?;
+        }
+        view.tokens.push((3, token));
+        view.resize(state)?;
+        if state.live_hwnd().is_none() || state.destroying.get() {
+            return Err(Error::from(E_POINTER));
+        }
+        unsafe {
+            view.webview.Navigate(&HSTRING::from(address))?;
+        }
+        Ok(view)
+    }
+    pub fn post(&self, message: &serde_json::Value) -> Result<()> {
+        let text = serde_json::to_string(message).map_err(|_| Error::from(E_INVALIDARG))?;
+        if text.len() > 512 * 1024 {
+            return Err(Error::from(E_INVALIDARG));
+        }
+        unsafe { self.webview.PostWebMessageAsJson(&HSTRING::from(text)) }
+    }
+    pub fn show(&self) -> Result<()> {
+        unsafe { self.controller.SetIsVisible(true) }
+    }
+    pub fn resize(&self, state: &Rc<WindowState>) -> Result<()> {
+        if let Some(hwnd) = state.live_hwnd() {
+            let mut bounds = RECT::default();
+            unsafe {
+                GetClientRect(hwnd, &mut bounds)?;
+                self.controller.SetBounds(bounds)?;
+            }
+        }
+        Ok(())
+    }
+    pub fn focus(&self) -> Result<()> {
+        unsafe {
+            self.controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+        }
+    }
+    pub fn parent_moved(&self) -> Result<()> {
+        unsafe { self.controller.NotifyParentWindowPositionChanged() }
+    }
+    pub fn close(mut self) -> Result<()> {
+        self.close_inner()
+    }
+    fn close_inner(&mut self) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+        self.closed = true;
+        let mut failure = None;
+        for (kind, token) in self.tokens.drain(..) {
+            let result = unsafe {
+                match kind {
+                    0 => self.webview.remove_NavigationStarting(token),
+                    1 => self.webview.remove_WebMessageReceived(token),
+                    2 => self.webview.remove_NewWindowRequested(token),
+                    _ => self.webview.remove_ProcessFailed(token),
+                }
+            };
+            if let Err(error) = result {
+                failure.get_or_insert(error);
+            }
+        }
+        if let Err(error) = unsafe { self.controller.Close() } {
+            failure.get_or_insert(error);
+        }
+        failure.map_or(Ok(()), Err)
+    }
+}
+impl Drop for View {
+    fn drop(&mut self) {
+        if self.close_inner().is_err() {
+            self.queue.fault();
+        }
+    }
+}

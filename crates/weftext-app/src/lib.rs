@@ -1,3 +1,4 @@
+use crate::owned_process::{Command, Stdio};
 use axum::{
     Json, Router,
     body::Body,
@@ -16,10 +17,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
 
 #[cfg(test)]
@@ -47,31 +45,50 @@ impl CoreTestFixture for Core {
     }
 }
 
+#[cfg(windows)]
+mod artifact_catalog;
 mod bibliography_import_api;
+mod broker;
 mod builtin_module_api;
 mod capture_api;
 mod citation_api;
+pub mod cli;
+mod client_preferences_api;
 pub mod client_protocol;
 mod data_api;
+mod desktop_api;
 mod embedded_output;
 mod embedded_query_api;
 mod export_api;
 mod export_conversions;
 mod history_api;
+#[cfg(windows)]
+mod host_contract;
 mod host_environment;
+#[cfg(windows)]
+mod host_paths;
+#[cfg(windows)]
+mod host_state;
 mod hosted;
+#[cfg(windows)]
+mod hosted_owner;
 mod knowledge_api;
 pub mod launch;
 mod legacy_office;
+pub mod local_client;
 pub mod local_service;
 mod media_api;
+#[cfg(windows)]
+mod native;
 mod navigation_api;
+mod owned_process;
 mod processing_api;
 mod recognition_api;
 mod remote_sync;
 mod sync_api;
 mod sync_wire;
-mod client_preferences_api;
+mod work;
+mod worker_failure;
 mod writing_api;
 
 static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
@@ -86,6 +103,7 @@ struct AppState {
     editor_versions: Arc<Mutex<HashMap<String, writing_api::EditorVersion>>>,
     exports: Arc<Mutex<export_api::ExportStore>>,
     render_gate: Arc<tokio::sync::Semaphore>,
+    native_status: Arc<Mutex<desktop_api::HostStatus>>,
     sync_remote: Arc<Mutex<remote_sync::Store>>,
     // Route and middleware state clones share the immutable launch locator;
     // bootstrap still reopens its original identity and current Draft.
@@ -110,6 +128,7 @@ struct ApiError {
     code: String,
     message: String,
     details: Option<Box<Value>>,
+    private_worker_failure: Option<Arc<worker_failure::WorkerFailure>>,
 }
 impl ApiError {
     fn new(status: StatusCode, code: &str, message: impl Into<String>) -> Self {
@@ -118,6 +137,7 @@ impl ApiError {
             code: code.into(),
             message: message.into(),
             details: None,
+            private_worker_failure: None,
         }
     }
     fn bad(message: impl Into<String>) -> Self {
@@ -125,6 +145,82 @@ impl ApiError {
     }
     fn internal(message: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal", message)
+    }
+    fn worker_failure(failure: worker_failure::WorkerFailure) -> Self {
+        let mut error = Self::worker_failure_summary(&failure);
+        error.private_worker_failure = Some(Arc::new(failure));
+        error
+    }
+    fn worker_failure_summary(failure: &worker_failure::WorkerFailure) -> Self {
+        use worker_failure::Kind;
+        let (status, code, message) = if !failure.cleanup_confirmed {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "compiler_exit_unknown",
+                "The compiler's actual process exit is unconfirmed; the original input is retained",
+            )
+        } else {
+            match failure.kind {
+                Kind::InputBudget => (
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "compiler_input_budget",
+                    "The complete frozen compiler input exceeds its byte budget",
+                ),
+                Kind::Deadline => (
+                    StatusCode::REQUEST_TIMEOUT,
+                    "compile_timeout",
+                    "The compiler exceeded its deadline; the original input is retained",
+                ),
+                Kind::NonzeroExit => (
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "compiler_failed",
+                    "The compiler stopped with a nonzero result; the original input is retained",
+                ),
+                Kind::StdoutBudget | Kind::StderrBudget => (
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "compiler_output_budget",
+                    "The compiler stream exceeded its byte budget; the original input is retained",
+                ),
+                Kind::OutputRejected => (
+                    StatusCode::BAD_GATEWAY,
+                    "compiler_output_invalid",
+                    "The original compiler output does not satisfy its protocol",
+                ),
+                Kind::SupervisionLost => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "compiler_supervisor_unknown",
+                    "The compiler supervisor did not return its actual completion",
+                ),
+                Kind::Setup => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "compiler_unavailable",
+                    "The contained compiler process could not be started",
+                ),
+                Kind::InputEncoding => (
+                    StatusCode::BAD_REQUEST,
+                    "compiler_input_invalid",
+                    "The frozen compiler input could not be encoded",
+                ),
+                Kind::InputIo | Kind::StdoutIo | Kind::StderrIo | Kind::Wait => (
+                    StatusCode::BAD_GATEWAY,
+                    "compiler_transport_failed",
+                    "The original compiler transport did not complete",
+                ),
+            }
+        };
+        Self::new(status, code, message)
+    }
+}
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.code, self.message)
+    }
+}
+impl std::error::Error for ApiError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.private_worker_failure
+            .as_deref()
+            .map(|failure| failure as &dyn std::error::Error)
     }
 }
 impl From<CoreError> for ApiError {
@@ -140,6 +236,7 @@ impl From<CoreError> for ApiError {
             code,
             message,
             details: Some(Box::new(value)),
+            private_worker_failure: None,
         }
     }
 }
@@ -160,7 +257,7 @@ where
     F: FnOnce(&mut Core) -> Result<T, CoreError> + Send + 'static,
 {
     let core = state.core.clone();
-    tokio::task::spawn_blocking(move || {
+    crate::work::spawn_blocking(move || {
         let mut core = core
             .lock()
             .map_err(|_| ApiError::internal("文件服务暂不可用"))?;
@@ -203,6 +300,26 @@ fn location(state: &AppState, id: &str) -> Result<Location, ApiError> {
         .get(id)
         .cloned()
         .ok_or_else(|| ApiError::bad("文件会话已失效，请重新打开并恢复草稿"))
+}
+/// Disposable projections have exactly the same Session coordinate. This does
+/// not delete its persisted author Draft or original-operation recovery facts.
+fn forget_session_projection(state: &AppState, session_id: &str) -> Result<(), ApiError> {
+    state
+        .locations
+        .lock()
+        .map_err(|_| ApiError::internal("Session locations are unavailable"))?
+        .remove(session_id);
+    state
+        .renders
+        .lock()
+        .map_err(|_| ApiError::internal("Session render projections are unavailable"))?
+        .remove(session_id);
+    state
+        .editor_versions
+        .lock()
+        .map_err(|_| ApiError::internal("Session editor projections are unavailable"))?
+        .remove(session_id);
+    Ok(())
 }
 
 async fn boundary(State(state): State<AppState>, request: Request, next: Next) -> Response {
@@ -506,6 +623,13 @@ async fn draft(State(state): State<AppState>, Json(req): Json<DraftRequest>) -> 
     .await?;
     Ok(Json(json!({"ok":true})))
 }
+async fn resume_draft(
+    State(state): State<AppState>,
+    Json(req): Json<weftext_core::ResumeDraftRequest>,
+) -> ApiResult {
+    core_call(&state, move |core| core.resume_recovered_draft(req)).await?;
+    Ok(Json(json!({"ok":true})))
+}
 async fn recovery(State(state): State<AppState>) -> ApiResult {
     Ok(Json(value(core_call(&state, |c| c.recoveries()).await?)?))
 }
@@ -541,6 +665,7 @@ async fn resolve_draft(
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct WorkerRequest {
     source: String,
     path: PathBuf,
@@ -549,10 +674,10 @@ struct WorkerRequest {
     paged: bool,
     #[serde(default)]
     style: Option<weftext_engine::StyleModule>,
-    #[serde(default)]
-    frozen_files: Option<std::collections::BTreeMap<String, String>>,
+    frozen_files: std::collections::BTreeMap<String, String>,
 }
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct NotesWorkerRequest {
     input: WorkerRequest,
     request: weftext_engine::EditRequest,
@@ -612,6 +737,18 @@ async fn compile_output(
     } else {
         None
     };
+    let preview = if citation_inputs.is_none() {
+        let session = req.session_id.clone();
+        let source = compiled_source.clone();
+        Some(
+            core_call(&state, move |core| {
+                core.preview_compile_snapshot(&session, &source)
+            })
+            .await?,
+        )
+    } else {
+        None
+    };
     let _permit = state
         .render_gate
         .acquire()
@@ -625,10 +762,18 @@ async fn compile_output(
         style: citation_inputs
             .as_ref()
             .and_then(|c| c.0.style.clone())
-            .or_else(|| environment.style.clone()),
-        frozen_files: citation_inputs.as_ref().map(|c| {
+            .or_else(|| preview.as_ref().and_then(|preview| preview.style.clone())),
+        frozen_files: {
             use base64::Engine as _;
-            c.0.files
+            let files = if let Some(captured) = &citation_inputs {
+                &captured.0.files
+            } else {
+                &preview
+                    .as_ref()
+                    .expect("the non-citation preview was captured")
+                    .files
+            };
+            files
                 .iter()
                 .map(|(p, b)| {
                     (
@@ -637,7 +782,7 @@ async fn compile_output(
                     )
                 })
                 .collect()
-        }),
+        },
     };
     let mut output = render_worker(input).await?;
     writing_api::check_snapshot(&state, &req.session_id, &req.source, req.serial, None)?;
@@ -704,18 +849,16 @@ async fn render_frozen_target_worker(
         root: request.root,
         paged,
         style: request.style,
-        frozen_files: Some(
-            request
-                .files
-                .into_iter()
-                .map(|(path, bytes)| {
-                    (
-                        path,
-                        base64::engine::general_purpose::STANDARD.encode(bytes),
-                    )
-                })
-                .collect(),
-        ),
+        frozen_files: request
+            .files
+            .into_iter()
+            .map(|(path, bytes)| {
+                (
+                    path,
+                    base64::engine::general_purpose::STANDARD.encode(bytes),
+                )
+            })
+            .collect(),
     })
     .await
 }
@@ -747,18 +890,16 @@ async fn notes_edit_worker(
             root: input.root,
             paged: false,
             style: input.style,
-            frozen_files: Some(
-                input
-                    .files
-                    .into_iter()
-                    .map(|(path, bytes)| {
-                        (
-                            path,
-                            base64::engine::general_purpose::STANDARD.encode(bytes),
-                        )
-                    })
-                    .collect(),
-            ),
+            frozen_files: input
+                .files
+                .into_iter()
+                .map(|(path, bytes)| {
+                    (
+                        path,
+                        base64::engine::general_purpose::STANDARD.encode(bytes),
+                    )
+                })
+                .collect(),
         },
         request,
     )
@@ -775,7 +916,33 @@ async fn notes_edit_from_worker(
 }
 
 async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
-    let exe = std::env::current_exe().map_err(|e| ApiError::internal(e.to_string()))?;
+    // Own the whole process future independently of an HTTP caller. Dropping
+    // that caller cannot discard a live child or its final kill/wait receipt.
+    crate::work::spawn(owned_compiler_worker(input, notes_edit))
+        .await
+        .map_err(|_| {
+            let mut failure =
+                worker_failure::WorkerFailure::new(worker_failure::Kind::SupervisionLost);
+            failure.cleanup_confirmed = false;
+            ApiError::worker_failure(failure)
+        })?
+}
+
+async fn owned_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
+    use worker_failure::{Kind, WorkerFailure};
+    let bytes = serde_json::to_vec(&input)
+        .map_err(|_| ApiError::worker_failure(WorkerFailure::new(Kind::InputEncoding)))?;
+    if bytes.len() > 96 * 1024 * 1024 {
+        return Err(ApiError::worker_failure(WorkerFailure::new(
+            Kind::InputBudget,
+        )));
+    }
+    drop(input);
+    let exe = std::env::current_exe().map_err(|error| {
+        let mut failure = WorkerFailure::new(Kind::Setup);
+        failure.io_error = Some(error);
+        ApiError::worker_failure(failure)
+    })?;
     #[cfg(test)]
     let exe = std::env::var_os("WEFTEXT_TEST_EXECUTABLE")
         .map(PathBuf::from)
@@ -796,77 +963,220 @@ async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value
         } else {
             "--render-worker"
         })
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    command.creation_flags(0x08000000);
-    let mut child = command
-        .spawn()
-        .map_err(|e| ApiError::internal(e.to_string()))?;
-    #[cfg(windows)]
-    let _job = worker_job::guard(&child)?;
-    let bytes = serde_json::to_vec(&input).map_err(|e| ApiError::internal(e.to_string()))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| ApiError::internal("无法连接编译器"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| ApiError::internal("无法读取编译结果"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| ApiError::internal("无法读取编译诊断"))?;
-    // Bound the pipe while reading, rather than after buffering arbitrary output.
-    // Dropping this future also drops the child and its kill-on-close Windows job.
-    let output = tokio::time::timeout(Duration::from_secs(20), async {
-        let input = async {
-            stdin.write_all(&bytes).await?;
-            drop(stdin);
-            Ok::<(), std::io::Error>(())
-        };
-        let result = async {
-            let mut data = Vec::new();
-            stdout
-                .take(24 * 1024 * 1024 + 1)
-                .read_to_end(&mut data)
-                .await?;
-            if data.len() > 24 * 1024 * 1024 {
-                return Err(std::io::Error::other("预览结果超出 24 MiB"));
-            }
-            Ok(data)
-        };
-        let diagnostics = async {
-            let mut data = Vec::new();
-            stderr.take(256 * 1024 + 1).read_to_end(&mut data).await?;
-            if data.len() > 256 * 1024 {
-                return Err(std::io::Error::other("编译诊断超出 256 KiB"));
-            }
-            Ok(data)
-        };
-        let (_, data, _, status) = tokio::try_join!(input, result, diagnostics, child.wait())?;
-        Ok::<_, std::io::Error>((status, data))
-    })
-    .await
-    .map_err(|_| {
-        ApiError::new(
-            StatusCode::REQUEST_TIMEOUT,
-            "compile_timeout",
-            "预览超时，草稿已保留；请简化计算后重试",
-        )
-    })?
-    .map_err(|e| ApiError::internal(e.to_string()))?;
-    if !output.0.success() {
-        return Err(ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "compiler_failed",
-            "编译进程停止或超出资源限额；原文已保留",
-        ));
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().await.map_err(|error| {
+        let mut failure = WorkerFailure::new(Kind::Setup);
+        failure.io_error = Some(error);
+        ApiError::worker_failure(failure)
+    })?;
+    let mut facts = WorkerFailure::new(Kind::Setup);
+    facts.cleanup_confirmed = false;
+    // Stream buffers live outside cancellation/try_join futures. A budget,
+    // timeout or another stream's failure preserves the exact bytes observed,
+    // their EOF/truncation flags and the original non-lossy exit facts.
+    let completed: Result<Value, (Kind, Option<std::io::Error>, Option<ApiError>)> = async {
+        let mut stdin = child.stdin.take().ok_or((Kind::Setup, None, None))?;
+        let stdout = child.stdout.take().ok_or((Kind::Setup, None, None))?;
+        let stderr = child.stderr.take().ok_or((Kind::Setup, None, None))?;
+        let output = tokio::time::timeout(Duration::from_secs(20), async {
+            let input = async {
+                stdin
+                    .write_all(&bytes)
+                    .await
+                    .map_err(|error| (Kind::InputIo, Some(error)))?;
+                drop(stdin);
+                facts.stdin_complete = true;
+                Ok::<_, (Kind, Option<std::io::Error>)>(())
+            };
+            let result = capture_worker_stream(
+                stdout,
+                &mut facts.stdout,
+                24 * 1024 * 1024,
+                Kind::StdoutIo,
+                Kind::StdoutBudget,
+            );
+            let diagnostics = capture_worker_stream(
+                stderr,
+                &mut facts.stderr,
+                256 * 1024,
+                Kind::StderrIo,
+                Kind::StderrBudget,
+            );
+            let status = async {
+                let status = child
+                    .wait()
+                    .await
+                    .map_err(|error| (Kind::Wait, Some(error)))?;
+                facts.exit = Some(status.exit());
+                facts.cleanup_confirmed = true;
+                Ok::<_, (Kind, Option<std::io::Error>)>(status)
+            };
+            let (_, (), (), status) = tokio::try_join!(input, result, diagnostics, status)?;
+            Ok::<_, (Kind, Option<std::io::Error>)>(status)
+        })
+        .await
+        .map_err(|_| (Kind::Deadline, None, None))?
+        .map_err(|(kind, error)| (kind, error, None))?;
+        if !output.success() {
+            return Err((Kind::NonzeroExit, None, None));
+        }
+        decode_compiler_worker_output(&facts.stdout.bytes, notes_edit)
+            .map_err(|error| (Kind::OutputRejected, None, Some(error)))
     }
-    decode_compiler_worker_output(&output.1, notes_edit)
+    .await;
+    let (kind, error, protocol_error) = match completed {
+        Ok(output) => return Ok(output),
+        Err(error) => error,
+    };
+    facts.kind = kind;
+    facts.io_error = error;
+    if !facts.cleanup_confirmed {
+        match child.kill().await {
+            Ok(()) => match child.wait().await {
+                Ok(status) => {
+                    facts.exit = Some(status.exit());
+                    facts.cleanup_confirmed = true;
+                }
+                Err(error) => facts.cleanup_error = Some(error),
+            },
+            Err(error) => {
+                facts.cleanup_error = Some(error);
+                // A failed termination call is not a completion receipt. Only
+                // the same held process/job's independent actual exit can be.
+                if let Ok(Some(status)) = child.try_wait() {
+                    facts.exit = Some(status.exit());
+                    facts.cleanup_confirmed = true;
+                }
+            }
+        }
+    }
+    let facts = Arc::new(facts);
+    let mut error = match protocol_error {
+        Some(error) if facts.cleanup_confirmed => error,
+        _ => ApiError::worker_failure_summary(&facts),
+    };
+    error.private_worker_failure = Some(facts);
+    Err(error)
+}
+
+async fn capture_worker_stream(
+    stream: impl tokio::io::AsyncRead + Unpin,
+    capture: &mut worker_failure::StreamCapture,
+    limit: usize,
+    io_kind: worker_failure::Kind,
+    budget_kind: worker_failure::Kind,
+) -> Result<(), (worker_failure::Kind, Option<std::io::Error>)> {
+    stream
+        .take(limit as u64 + 1)
+        .read_to_end(&mut capture.bytes)
+        .await
+        .map_err(|error| (io_kind, Some(error)))?;
+    if capture.bytes.len() > limit {
+        capture.truncated = true;
+        return Err((budget_kind, None));
+    }
+    capture.complete = true;
+    Ok(())
+}
+
+#[cfg(test)]
+mod worker_capture_tests {
+    use super::*;
+    use worker_failure::{Kind, StreamCapture, WorkerFailure};
+
+    #[tokio::test]
+    async fn original_stream_bytes_survive_invalid_utf8_and_real_eof() {
+        let raw = vec![0xff, b'a', 0, b'\n'];
+        let mut captured = StreamCapture::default();
+        capture_worker_stream(
+            std::io::Cursor::new(raw.clone()),
+            &mut captured,
+            16,
+            Kind::StdoutIo,
+            Kind::StdoutBudget,
+        )
+        .await
+        .unwrap();
+        assert_eq!(captured.bytes, raw);
+        assert!(captured.complete);
+        assert!(!captured.truncated);
+        assert!(std::str::from_utf8(&captured.bytes).is_err());
+    }
+    #[tokio::test]
+    async fn cancelling_a_pending_read_preserves_its_observed_prefix_without_eof_claim() {
+        let (mut writer, reader) = tokio::io::duplex(32);
+        writer.write_all(b"partial-original").await.unwrap();
+        let mut captured = StreamCapture::default();
+        let result = tokio::time::timeout(
+            Duration::from_millis(20),
+            capture_worker_stream(
+                reader,
+                &mut captured,
+                32,
+                Kind::StderrIo,
+                Kind::StderrBudget,
+            ),
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(captured.bytes, b"partial-original");
+        assert!(!captured.complete);
+        assert!(!captured.truncated);
+        drop(writer);
+    }
+    #[tokio::test]
+    async fn budget_capture_keeps_the_exact_overflow_witness_and_closed_failure_kind() {
+        let mut captured = StreamCapture::default();
+        let (kind, error) = capture_worker_stream(
+            std::io::Cursor::new(b"12345678"),
+            &mut captured,
+            4,
+            Kind::StdoutIo,
+            Kind::StdoutBudget,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(kind, Kind::StdoutBudget);
+        assert!(error.is_none());
+        assert_eq!(captured.bytes, b"12345");
+        assert!(captured.truncated);
+        assert!(!captured.complete);
+    }
+    #[tokio::test]
+    async fn private_product_streams_are_retained_once_and_never_public_or_debug_diagnostics() {
+        fn traits<T: std::error::Error + Send + Sync>() {}
+        traits::<WorkerFailure>();
+        let raw = b"server-private-original\0\xff".to_vec();
+        let mut failure = WorkerFailure::new(Kind::NonzeroExit);
+        failure.stderr = StreamCapture {
+            bytes: raw.clone(),
+            complete: true,
+            truncated: false,
+        };
+        failure.io_error = Some(std::io::Error::other("private server path C:\\secret"));
+        let error = ApiError::worker_failure(failure);
+        let retained = error.private_worker_failure.as_ref().unwrap().clone();
+        assert_eq!(retained.stderr.bytes, raw);
+        let private = std::error::Error::source(&error)
+            .unwrap()
+            .downcast_ref::<WorkerFailure>()
+            .unwrap();
+        assert!(std::ptr::eq(private, retained.as_ref()));
+        let debug = format!("{error:?}");
+        assert!(!debug.contains("server-private-original"));
+        assert!(!debug.contains("C:\\secret"));
+        let response = error.into_response();
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        let public = std::str::from_utf8(&bytes).unwrap();
+        assert!(!public.contains("server-private-original"));
+        assert!(!public.contains("C:\\secret"));
+        assert!(public.contains("compiler_failed"));
+        assert_eq!(retained.stderr.bytes, raw);
+    }
 }
 
 const DISPLAY_TREE_BUDGET_ENGINE_ERROR: &str = "显示树超过安全预算；请使用源码入口";
@@ -1270,10 +1580,7 @@ fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
     let NotesWorkerRequest { input, request } = serde_json::from_slice(&bytes)?;
     let mut files = std::collections::BTreeMap::new();
     let mut total = 0usize;
-    for (path, bytes) in input
-        .frozen_files
-        .ok_or("A frozen note edit requires exact admitted files")?
-    {
+    for (path, bytes) in input.frozen_files {
         let decoded = base64::engine::general_purpose::STANDARD.decode(bytes)?;
         total = total
             .checked_add(decoded.len())
@@ -1317,15 +1624,14 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Compile input exceeds the local budget".into());
     }
     let input: WorkerRequest = serde_json::from_str(&input)?;
-    let engine = if input.frozen_files.is_some() {
-        weftext_engine::Engine::new_with_system_fonts(false)?
-    } else {
-        weftext_engine::Engine::new()?
-    };
-    let output = if let Some(files) = input.frozen_files {
+    if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
+        return Err("Compile source exceeds the local budget".into());
+    }
+    let engine = weftext_engine::Engine::new_with_system_fonts(false)?;
+    let output = {
         let mut decoded = std::collections::BTreeMap::new();
         let mut total = 0usize;
-        for (path, bytes) in files {
+        for (path, bytes) in input.frozen_files {
             let bytes = base64::engine::general_purpose::STANDARD.decode(bytes)?;
             total = total
                 .checked_add(bytes.len())
@@ -1347,66 +1653,8 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             serde_json::to_value(engine.render_frozen(&request)?)?
         }
-    } else if input.paged {
-        serde_json::to_value(if let Some(style) = &input.style {
-            engine.render_paged_with_style(&input.source, &input.path, &input.root, style)?
-        } else {
-            engine.render_paged(&input.source, &input.path, &input.root)?
-        })?
-    } else {
-        serde_json::to_value(if let Some(style) = &input.style {
-            engine.render_with_style(&input.source, &input.path, &input.root, style)?
-        } else {
-            engine.render(&input.source, &input.path, &input.root)?
-        })?
     };
     serde_json::to_writer(std::io::stdout().lock(), &output)?;
     std::io::stdout().flush()?;
     Ok(())
-}
-
-#[cfg(windows)]
-mod worker_job {
-    use super::ApiError;
-    use windows_sys::Win32::{
-        Foundation::{CloseHandle, HANDLE},
-        System::JobObjects::*,
-    };
-    pub struct Guard(HANDLE);
-    // Owned kernel handle may be closed on the executor thread that resumes this task.
-    unsafe impl Send for Guard {}
-    impl Drop for Guard {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.0);
-            }
-        }
-    }
-    pub fn guard(child: &tokio::process::Child) -> Result<Guard, ApiError> {
-        unsafe {
-            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if job.is_null() {
-                return Err(ApiError::internal("无法建立编译资源隔离"));
-            }
-            let guard = Guard(job);
-            let mut limit: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            limit.BasicLimitInformation.LimitFlags =
-                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
-            limit.ProcessMemoryLimit = 1024 * 1024 * 1024;
-            let Some(handle) = child.raw_handle() else {
-                return Err(ApiError::internal("无法连接编译进程"));
-            };
-            if SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                &limit as *const _ as *const _,
-                std::mem::size_of_val(&limit) as u32,
-            ) == 0
-                || AssignProcessToJobObject(job, handle as HANDLE) == 0
-            {
-                return Err(ApiError::internal("当前环境不支持所需编译资源隔离"));
-            }
-            Ok(guard)
-        }
-    }
 }

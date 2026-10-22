@@ -26,3 +26,31 @@ test("the actual local HTTP transport rejects duplicate fields before decoding a
         for (const [name, descriptor] of saved) if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globals[name];
     }
 });
+
+test("the native Draft branch uses the same strict typed error decoder without HTTP or legacy message adoption", async () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const names = ["window", "location", "sessionStorage", "fetch"], saved = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+    let listener!: (event: {data: unknown}) => void;
+    let reply: unknown;
+    const sent: {type: string; surfaceId: string; surfaceEpoch: string; requestId: string; request: {body: unknown}}[] = [];
+    Object.defineProperty(globalThis, "location", { configurable: true, value: { hash: "", pathname: "/", search: "" } });
+    Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: { getItem: () => null } });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: () => { throw new Error("A bound native Draft call must not use HTTP"); } });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { chrome: {webview: {
+        addEventListener(_kind: string, callback: typeof listener) { listener = callback; },
+        postMessage(envelope: typeof sent[number]) { sent.push(envelope); listener({data: {type: "core-draft-result", surfaceId: envelope.surfaceId, surfaceEpoch: envelope.surfaceEpoch, requestId: envelope.requestId, body: reply}}); },
+    }} } });
+    try {
+        const {api} = await import("./api"), {bindNativeDraftSurface} = await import("./native-draft");
+        bindNativeDraftSurface({surfaceId: "owned-surface", surfaceEpoch: "owned-epoch"});
+        const body = {sessionId: "7b67f37a-5c73-4a41-9951-798e67c639d5", source: "本人原文😀\r\n"};
+        reply = {error: {code: "draftChanged", explanation: {key: "common.operation", params: {operationId: "original-id"}}, diagnostics: [{origin: "typst", text: "原诊断\ud800"}], causes: []}};
+        await assert.rejects(api("/api/draft", body), (error: unknown) => error instanceof ApiError && error.code === "draftChanged" && error.diagnostics[0].text === "原诊断\ud800" && renderUiMessage("en-US", error.explanation).endsWith("original-id"));
+        reply = {error: {code: "draftChanged", message: "old untyped message", diagnostics: [], causes: []}};
+        await assert.rejects(api("/api/draft", body), (error: unknown) => error instanceof ApiError && error.code === "invalidResponse");
+        assert.equal(sent.length, 2); assert.deepEqual(sent[0].request.body, body); assert.deepEqual(sent[1].request.body, body);
+        assert.notEqual(sent[0].requestId, sent[1].requestId);
+    } finally {
+        for (const [name, descriptor] of saved) if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globals[name];
+    }
+});

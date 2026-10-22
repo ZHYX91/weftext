@@ -12,6 +12,7 @@ export interface OpenedDocument {
   workspaceId?: string;
   recoveredDraft?: string | null;
   recoveredDraftBaseSource?: string | null;
+  recoveredDraftWitness?: string | null;
   recoveredDraftConflict?: boolean;
   recoveredDraftVariants?: { path: string; baseSource: string; source: string; baseKnown: boolean }[];
 }
