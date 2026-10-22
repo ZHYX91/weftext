@@ -31,7 +31,7 @@ export interface PagedState {
     current: boolean;
     pageCount: number;
     diagnostics: Diagnostic[];
-    error: string | null;
+    error: UiText | null;
 }
 export interface PagedPreviewOptions {
     basis(): PagedBasis | null;
@@ -98,7 +98,7 @@ export class PagedPreview {
         url: string;
     } | null = null;
     private diagnostics: Diagnostic[] = [];
-    private error: string | null = null;
+    private error: UiText | null = null;
     constructor(host: HTMLElement, private readonly options: PagedPreviewOptions) {
         this.element = document.createElement("section");
         this.element.className = "paged-preview";
@@ -198,7 +198,7 @@ export class PagedPreview {
         }
         catch (error) {
             if (!this.disposed && generation === this.generation && samePagedBasis(basis, this.options.basis())) {
-                this.error = error instanceof Error ? error.message : String(error);
+                this.error = errorUiText(error);
                 setUiText(this.status, this.error);
                 this.options.onError?.(error instanceof Error ? error : new UiError(this.error));
             }

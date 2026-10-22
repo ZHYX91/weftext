@@ -1,4 +1,7 @@
 import test from "node:test";
+import { decodeWritingMap } from "./writing";
+import { locale, message, UiError, uiTextValue } from "./ui-locale";
+import { descriptionUiText } from "./ui-diagnostics";
 import assert from "node:assert/strict";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
@@ -11,7 +14,8 @@ import { DeferredPaint } from "./deferred-paint";
 import type { OpenedDocument } from "./types";
 
 function map(source: string, from = 0, to = source.length, text = source.slice(from, to)): WritingMap {
-  return { sourceHash: `hash:${source}`, syntaxValid: true, literalRegions: [{ range: writingRange(source, from, to), text, role: "body" }], structures: [], title: { status: "absent" }, subtitle: { status: "absent" }, bodyInsertion: writingRange(source, source.length, source.length) };
+  const sourceHash = `hash:${source}`, role = () => ({ status: "absent", text: null, range: null, construct: null, encoding: null });
+  return { sourceHash, syntaxValid: true, literalRegions: [{ range: writingRange(source, from, to), text, role: "body", paragraphBreaks: [] }], structures: [], title: role(), subtitle: role(), bodyInsertion: writingRange(source, source.length, source.length), unavailableReason: null, notes: { sourceHash, syntaxValid: true, entries: [] }, headingNumbering: { sourceHash, settings: null, editable: true, frozenEndnotesRequired: false, reason: null }, bodyBlocks: [] };
 }
 function result(source: string, from: number, to: number, text: string): WritingResult {
   const insert = encodeWritingLiteral(text), next = source.slice(0, from) + insert + source.slice(to);
@@ -325,15 +329,15 @@ test("render grouping uses exact native provenance and rejects duplicate occurre
 
 test("indexed native grouping distinguishes equal text, preserves render order and rejects corrupt byte addresses", () => {
   const source = "同😀\n同😀", nativeMap = map(source), first = writingRange(source, 0, 3), second = writingRange(source, 4, 7);
-  nativeMap.literalRegions = [first, second].map(range => ({ range, text: "同😀", role: "body" }));
+  nativeMap.literalRegions = [first, second].map(range => ({ range, text: "同😀", role: "body", paragraphBreaks: [] }));
   const leaf = (key: string, range: typeof first): RenderNode => ({ key, kind: "text", tag: null, text: "同😀", children: [], attrs: {}, writable: true, origin: { path: "a.typ", ...range, isMain: true, syntaxKind: "Text" } });
   const tree: RenderNode = { key: "root", kind: "element", tag: "p", text: null, children: [leaf("second", second), leaf("first", first)], attrs: {}, origin: null, writable: false };
   assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["first"], ["second"]]);
   nativeMap.literalRegions[0].range = { ...first, to: first.to - 1 };
   assert.deepEqual(groupWritingRenderNodes(tree, nativeMap, source).map(group => group.memberKeys), [["second"]]);
-  nativeMap.literalRegions = [{ range: writingRange(source, 0, 7), text: "同😀同😀", role: "body" }];
+  nativeMap.literalRegions = [{ range: writingRange(source, 0, 7), text: "同😀同😀", role: "body", paragraphBreaks: [] }];
   assert.equal(groupWritingRenderNodes(tree, nativeMap, source).length, 0, "sorting for lookup must never certify reordered output");
-  const original = { kind: "heading", range: first, runIn: false }, other = { kind: "table", range: first, runIn: false };
+  const common = { body: null, level: null, levelWritable: false, levelReason: null, label: null, language: null, table: null, runIn: false }, original = { ...common, kind: "heading", range: first }, other = { ...common, kind: "table", range: first };
   nativeMap.structures = [original, other];
   assert.equal(writingStructureIndex(nativeMap).get("0:3"), original, "the first native structure remains the owner at a shared range");
 });
@@ -411,7 +415,7 @@ test("paragraph grouping requires both an official Parbreak gap and actual nativ
   const root: RenderNode = { ...paragraph("root", []), tag: "div", children: [paragraph("p1", [leaf("a", 0, 1, "甲")]), paragraph("p2", [leaf("b", 3, 4, "乙")])] };
   assert.equal(groupWritingRenderNodes(root, nativeMap, source).length, 1);
   assert.equal(groupWritingRenderNodes(paragraph("same", [leaf("a", 0, 1, "甲"), leaf("b", 3, 4, "乙")]), nativeMap, source).length, 0);
-  delete nativeMap.literalRegions[0].paragraphBreaks; assert.equal(groupWritingRenderNodes(root, nativeMap, source).length, 0);
+  nativeMap.literalRegions[0].paragraphBreaks = []; assert.equal(groupWritingRenderNodes(root, nativeMap, source).length, 0);
 });
 
 test("merely focusing a minimally escaped native literal preserves exact recovery bytes", () => {
@@ -428,21 +432,22 @@ test("failed native qualification retains unapplied text and its explicit exact-
 
 test("two equal native slots target the chosen second range rather than the first matching string", async () => {
   const source = "相同|相同", { controller, editor, calls } = harness(source);
-  const nativeMap = map(source); nativeMap.literalRegions = [{ range: writingRange(source, 0, 2), text: "相同", role: "tableCell" }, { range: writingRange(source, 3, 5), text: "相同", role: "tableCell" }]; controller.installMap(nativeMap, source, 0);
+  const nativeMap = map(source); nativeMap.literalRegions = [{ range: writingRange(source, 0, 2), text: "相同", role: "tableCell", paragraphBreaks: [] }, { range: writingRange(source, 3, 5), text: "相同", role: "tableCell", paragraphBreaks: [] }]; controller.installMap(nativeMap, source, 0);
   controller.stageLiteral(nativeMap.literalRegions[1].range, "相同", "第二格"); await controller.flush();
   assert.equal(editor.source, "相同|第二格"); const intent = calls[0].intent; assert.equal(intent.kind, "replaceLiteral"); if (intent.kind === "replaceLiteral") assert.equal(intent.range.utf16From, 3); controller.dispose();
 });
 
 test("empty slot grouping requires a unique actual native owner and never chooses an empty table cell by order", () => {
   const source = "= #box[]", nativeMap = map(source, 7, 7, ""); nativeMap.literalRegions[0].role = "heading";
-  nativeMap.structures = [{ kind: "heading", range: writingRange(source, 0, 8), body: writingRange(source, 2, 8), level: 1, runIn: false }];
+  nativeMap.structures = [{ kind: "heading", range: writingRange(source, 0, 8), body: writingRange(source, 2, 8), level: 1, levelWritable: true, levelReason: null, label: null, language: null, table: null, runIn: false }];
   const heading: RenderNode = { key: "heading", kind: "element", tag: "h1", text: null, children: [], attrs: {}, writable: false, origin: { ...writingRange(source, 0, 8), path: "a.typ", isMain: true, syntaxKind: "Heading" } };
   assert.deepEqual(groupWritingEmptySlots(heading, nativeMap, source).map(slot => slot.nodeKey), ["heading"]);
   const duplicated: RenderNode = { key: "root", kind: "element", tag: "div", text: null, children: [heading, { ...heading, key: "heading2" }], attrs: {}, origin: null, writable: false };
   assert.equal(groupWritingEmptySlots(duplicated, nativeMap, source).length, 0);
   const tableSource = "#table(columns: 2, [], [])", first = tableSource.indexOf("[]") + 1, second = tableSource.lastIndexOf("[]") + 1;
-  const tableMap = map(tableSource, first, first, ""); tableMap.literalRegions.push({ range: writingRange(tableSource, second, second), text: "", role: "tableCell" });
-  tableMap.structures = [{ kind: "table", range: writingRange(tableSource, 0, tableSource.length), runIn: false, table: { columns: 2, rows: 1, cells: [tableMap.literalRegions[0].range, tableMap.literalRegions[1].range], gridWritable: true } }];
+  const tableMap = map(tableSource, first, first, ""); tableMap.literalRegions.push({ range: writingRange(tableSource, second, second), text: "", role: "tableCell", paragraphBreaks: [] });
+  const cells = [tableMap.literalRegions[0].range, tableMap.literalRegions[1].range];
+  tableMap.structures = [{ kind: "table", range: writingRange(tableSource, 0, tableSource.length), body: null, level: null, levelWritable: false, levelReason: null, label: null, language: null, runIn: false, table: { columns: 2, rows: 1, cells, gridWritable: true, logicalCells: cells.map((body, column) => ({ row: 0, column, rowspan: 1, colspan: 1, body, range: body, header: false })), topologyWritable: true, unavailableReason: null, headerRows: 0, headerColumns: 0 } }];
   const table: RenderNode = { ...heading, key: "table", tag: "table", origin: { ...writingRange(tableSource, 0, tableSource.length), path: "a.typ", isMain: true, syntaxKind: "FuncCall" }, children: [{ ...heading, key: "cell1", tag: "td" }, { ...heading, key: "cell2", tag: "td" }] };
   assert.equal(groupWritingEmptySlots(table, tableMap, tableSource).length, 0);
 });

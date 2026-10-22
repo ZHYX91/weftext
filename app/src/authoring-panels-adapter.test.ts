@@ -1,3 +1,4 @@
+import { message } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EditorState } from "@codemirror/state";
@@ -16,7 +17,7 @@ function tree(source: string, values: string[]): RenderNode {
     const title = line.replace(/^=+\s*/, ""); return [native("heading-" + index, "heading", "", source, from, from + line.length, [native("prefix-" + index, "heading-prefix", values.shift() ?? "", source, from, from + line.length), native("title-" + index, "", title, source, from, from + line.length)])];
   }));
 }
-function map(source: string): WritingMap { let at = 0; return { sourceHash: "hash:" + source, syntaxValid: true, literalRegions: [], structures: source.split("\n").flatMap(line => { const from = at; at += line.length + 1; return line.startsWith("=") ? [{ kind: "heading", range: writingRange(source, from, from + line.length), body: writingRange(source, from + 2, from + line.length), level: 1, runIn: false }] : []; }), title: { status: "absent" }, subtitle: { status: "absent" }, headingNumbering: { sourceHash: "hash:" + source, editable: true, reason: null, settings: null }, bodyInsertion: writingRange(source, source.length, source.length) }; }
+function map(source: string): WritingMap { let at = 0; return { sourceHash: "hash:" + source, syntaxValid: true, literalRegions: [], structures: source.split("\n").flatMap(line => { const from = at; at += line.length + 1; return line.startsWith("=") ? [{ kind: "heading", range: writingRange(source, from, from + line.length), body: writingRange(source, from + 2, from + line.length), level: 1, runIn: false }] : []; }), title: { status: "absent" }, subtitle: { status: "absent" }, headingNumbering: { sourceHash: "hash:" + source, editable: true, frozenEndnotesRequired: false, reason: null, settings: null }, bodyInsertion: writingRange(source, source.length, source.length) }; }
 function result(source: string, inserted = "// numbering\n"): WritingResult { const next = inserted + source, nextMap = map(next); return { source: next, sourceHash: nextMap.sourceHash, map: nextMap, selection: { from: inserted.length, to: inserted.length }, patches: [{ from: 0, to: 0, utf16From: 0, utf16To: 0, expected: "", insert: inserted }] }; }
 
 test("native numbering previews pair identical titles by mapped source ranges, preserving literal prefixes", () => {
@@ -62,14 +63,15 @@ test("numbering opens a pure native afterSource preview before one shared Draft/
 test("pending endnote qualification never bypasses the independent author write right", async () => {
   const h = harness();
   try {
-    h.controller.map!.headingNumbering = { sourceHash: h.controller.map!.sourceHash, settings: null, editable: false, reason: "requires-frozen-endnotes-module" };
+    h.controller.map!.headingNumbering = { sourceHash: h.controller.map!.sourceHash, settings: null, editable: false, frozenEndnotesRequired: true, reason: { explanation: message("common.unavailable"), diagnostics: [], causes: [] } };
     let writable = true;
     h.env.editable = () => writable;
     const host = numberingHost(h.env, personal);
-    assert.equal(host.inspection().reason, "requires-frozen-endnotes-module");
+    assert.equal(host.inspection().frozenEndnotesRequired, true);
     writable = false;
     assert.equal(host.inspection().editable, false);
-    assert.notEqual(host.inspection().reason, "requires-frozen-endnotes-module");
+    assert.equal(host.inspection().frozenEndnotesRequired, false);
+    assert.ok(host.inspection().availabilityMessage);
     await assert.rejects(host.preview(action), /写权限/);
     assert.deepEqual(h.calls, []);
     host.displayPersonal(true);

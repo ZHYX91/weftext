@@ -1,4 +1,7 @@
 import test from "node:test";
+import { decodeNotesSourceMap } from "./document-notes";
+import { locale, message, uiTextValue } from "./ui-locale";
+import { descriptionUiText } from "./ui-diagnostics";
 import assert from "node:assert/strict";
 import { EditorState } from "@codemirror/state";
 import { history, isolateHistory, undo, redo, undoDepth } from "@codemirror/commands";
@@ -15,16 +18,17 @@ function node(key: string, role: string, identity: string, content = "", origin:
 function projection(source: string, entries: NotesSourceEntry[], children: RenderNode[]): DocumentNotesProjection {
   return { source, sourceHash: `hash:${source}`, notes: { sourceHash: `hash:${source}`, syntaxValid: true, entries }, tree: node("root", "", "", "", null, children) };
 }
-function definition(source: string, construct: string, body: string): NotesSourceEntry { return { kind: "footnote-definition", construct: range(source, construct), body: range(source, body, source.indexOf(construct)), writable: true, label: /<([^>]+)>$/.exec(construct)?.[1] ?? null }; }
+function entry(value: Pick<NotesSourceEntry, "kind" | "construct" | "writable"> & Partial<NotesSourceEntry>): NotesSourceEntry { return { body: null, label: null, target: null, unavailableKind: null, unavailableReason: null, ...value }; }
+function definition(source: string, construct: string, body: string): NotesSourceEntry { return entry({ kind: "footnote-definition", construct: range(source, construct), body: range(source, body, source.indexOf(construct)), writable: true, label: /<([^>]+)>$/.exec(construct)?.[1] ?? null }); }
 
 test("native declaration identities distinguish equal note text and keep repeated markers in one body", () => {
   const source = "甲#footnote[同文] <one>，乙#footnote(<one>)。丙#footnote[同文] <two>";
   const first = definition(source, "#footnote[同文] <one>", "同文"), second = definition(source, "#footnote[同文] <two>", "同文");
-  const repeated: NotesSourceEntry = { kind: "footnote-reference", construct: range(source, "#footnote(<one>)"), target: "one", writable: true };
+  const repeated = entry({ kind: "footnote-reference", construct: range(source, "#footnote(<one>)"), target: "one", writable: true });
   const model = buildDocumentNotesSnapshot(projection(source, [first, repeated, second], [node("mark-one", "footnote-reference", "decl-one", "1", first.construct), node("mark-repeat", "footnote-reference", "decl-one", "1", repeated.construct), node("mark-two", "footnote-reference", "decl-two", "2", second.construct), node("body-two", "footnote-body", "decl-two", "同文", second.body!), node("body-one", "footnote-body", "decl-one", "同文", first.body!)]));
   assert.equal(model.available, true); assert.equal(model.notes.length, 2);
-  assert.equal(model.notes[0].references.length, 2); assert.equal(model.notes[0].definition, first);
-  assert.equal(model.notes[1].definition, second); assert.equal(model.notes[0].writable, true);
+  assert.equal(model.notes[0].references.length, 2); assert.deepEqual(model.notes[0].definition, first);
+  assert.deepEqual(model.notes[1].definition, second); assert.equal(model.notes[0].writable, true);
   assert.equal(model.notes[0].bodyRange?.raw, "同文"); assert.deepEqual(model.unlocated, []);
 });
 
@@ -40,18 +44,18 @@ test("source hash, exact Unicode ranges and duplicate native body evidence fail 
 
 test("caption ownership joins the actual figure target, independent of text and DOM order", () => {
   const source = "#figure(table(columns:1,[甲]), caption:[同文]) <a>\n#figure(table(columns:1,[乙]), caption:[同文]) <b>";
-  const first: NotesSourceEntry = { kind: "figure", construct: range(source, source.split("\n")[0]), body: range(source, "同文"), writable: true }, second: NotesSourceEntry = { kind: "figure", construct: range(source, source.split("\n")[1]), body: range(source, "同文", source.indexOf("\n")), writable: true };
+  const first = entry({ kind: "figure", construct: range(source, source.split("\n")[0]), body: range(source, "同文"), writable: true }), second = entry({ kind: "figure", construct: range(source, source.split("\n")[1]), body: range(source, "同文", source.indexOf("\n")), writable: true });
   const a = node("figure-a", "figure", "target-a", "", first.construct); a.attrs["data-weftext-caption-kind"] = "table"; a.attrs["data-weftext-numbered"] = "true";
   const b = node("figure-b", "figure", "target-b", "", second.construct); b.attrs["data-weftext-caption-kind"] = "table";
   const model = buildDocumentNotesSnapshot(projection(source, [first, second], [a, b, node("caption-b", "caption-body", "target-b", "同文", second.body!), node("prefix-a", "caption-prefix", "target-a", "表 1："), node("caption-a", "caption-body", "target-a", "同文", first.body!)]));
-  assert.equal(model.captions.length, 2); assert.equal(model.captions[0].entry, first); assert.equal(model.captions[0].prefix, "表 1："); assert.equal(model.captions[0].numbered, true);
-  assert.equal(model.captions[1].entry, second); assert.equal(model.captions[1].prefix, ""); assert.equal(model.captions[0].writable, true);
+  assert.equal(model.captions.length, 2); assert.deepEqual(model.captions[0].entry, first); assert.equal(model.captions[0].prefix, "表 1："); assert.equal(model.captions[0].numbered, true);
+  assert.deepEqual(model.captions[1].entry, second); assert.equal(model.captions[1].prefix, ""); assert.equal(model.captions[0].writable, true);
 });
 
 test("equation body numbering has its own actual source and never borrows a caption counter", () => {
   const source = "$ x^2 $", equationRange = range(source, source), math = node("eq", "equation", "equation-one", "", equationRange); math.attrs["data-weftext-numbered"] = "true";
   const p = projection(source, [], [math, node("number", "equation-prefix", "equation-one", "(3)"), node("other-caption", "caption-prefix", "figure-other", "图 8：")]);
-  p.structures = [{ kind: "displayMath", range: equationRange, body: range(source, "x^2"), runIn: false }];
+  p.structures = [{ kind: "displayMath", range: equationRange, body: range(source, "x^2"), level: null, levelWritable: false, levelReason: null, label: null, language: null, table: null, runIn: false }];
   const model = buildDocumentNotesSnapshot(p); assert.equal(model.equations.length, 1); assert.equal(model.equations[0].prefix, "(3)"); assert.equal(model.equations[0].writable, true); assert.deepEqual(model.equations[0].range, equationRange);
   p.tree!.children.push({ ...math, key: "duplicate-output" }); assert.ok(buildDocumentNotesSnapshot(p).equations.every(item => !item.writable));
 });
@@ -80,9 +84,9 @@ test("revocation recovery keeps newly entered Unicode without redisplaying old n
 });
 
 test("footnotes and authenticated endnotes keep separate kinds and ID scopes", () => {
-  const source = "#footnote[脚注] <f>\n#endnote(id:\"end-one\")[尾注]", foot = definition(source, "#footnote[脚注] <f>", "脚注"), end: NotesSourceEntry = { kind: "endnote-definition", construct: range(source, "#endnote(id:\"end-one\")[尾注]"), body: range(source, "尾注"), target: "end-one", writable: true };
+  const source = "#footnote[脚注] <f>\n#endnote(id:\"end-one\")[尾注]", foot = definition(source, "#footnote[脚注] <f>", "脚注"), end = entry({ kind: "endnote-definition", construct: range(source, "#endnote(id:\"end-one\")[尾注]"), body: range(source, "尾注"), target: "end-one", writable: true });
   const model = buildDocumentNotesSnapshot(projection(source, [foot, end], [node("fmark", "footnote-reference", "shared", "1", foot.construct), node("fbody", "footnote-body", "shared", "脚注", foot.body!), node("emark", "endnote-reference", "end-one", "1"), node("ebody", "endnote-body", "end-one", "尾注", end.body!)]));
-  assert.deepEqual(model.notes.map(item => item.kind), ["footnote", "endnote"]); assert.equal(model.notes[1].definition, end);
+  assert.deepEqual(model.notes.map(item => item.kind), ["footnote", "endnote"]); assert.deepEqual(model.notes[1].definition, end);
 });
 
 class Buffer implements WritingBuffer {
@@ -99,7 +103,7 @@ class Buffer implements WritingBuffer {
   undo() { undo({ state: this.state, dispatch: transaction => { this.state = transaction.state; this.generation++; this.emit(); } }); }
   redo() { redo({ state: this.state, dispatch: transaction => { this.state = transaction.state; this.generation++; this.emit(); } }); }
 }
-function currentMap(source: string): WritingMap { return { sourceHash: `hash:${source}`, syntaxValid: true, literalRegions: [], structures: [], title: { status: "absent" }, subtitle: { status: "absent" }, bodyInsertion: writingRange(source, source.length, source.length) }; }
+function currentMap(source: string): WritingMap { const sourceHash = `hash:${source}`, role = () => ({ status: "absent", text: null, range: null, construct: null, encoding: null }); return { sourceHash, syntaxValid: true, literalRegions: [], structures: [], title: role(), subtitle: role(), bodyInsertion: writingRange(source, source.length, source.length), unavailableReason: null, notes: { sourceHash, syntaxValid: true, entries: [] }, headingNumbering: { sourceHash, settings: null, editable: true, frozenEndnotesRequired: false, reason: null }, bodyBlocks: [] }; }
 function harness(source: string, respond?: (request: DocumentNotesIntent, old: string) => Promise<WritingResult>) {
   const editor = new Buffer(source); let serial = 0, writable = true, readable = true, calls = 0;
   editor.observe(() => { serial++; });

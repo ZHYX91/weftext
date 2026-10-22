@@ -45,4 +45,9 @@ test("hosted citation rows admit their actual resource projection without accept
   const decoded=decodeNativeCitationSnapshot(hosted,"hosted");assert.equal(decoded.choices[0].title,title);
   assert.throws(()=>decodeNativeCitationSnapshot(hosted));
   assert.throws(()=>decodeNativeCitationSnapshot({...hosted,choices:[{...hosted.choices[0],node:{workspaceId:"private",nodeId:"private"}}]},"hosted"));
+  const {suggestedKey: _key,...withoutKey}=hosted.choices[0];
+  assert.throws(()=>decodeNativeCitationSnapshot({...hosted,choices:[withoutKey]},"hosted"));
+  assert.throws(()=>decodeNativeCitationSnapshot({...hosted,choices:[{...hosted.choices[0],reason:{explanation:message("common.unavailable"),diagnostics:[],causes:[]}}]},"hosted"));
+  assert.throws(()=>decodeNativeCitationSnapshot({...hosted,choices:[{...hosted.choices[0],citationReady:false}]},"hosted"));
+  assert.equal(decodeNativeCitationSnapshot({...hosted,choices:[{...withoutKey,citationReady:false,reason:{explanation:message("common.unavailable"),diagnostics:[],causes:[]}}]},"hosted").choices[0].citationReady,false);
 });

@@ -76,7 +76,7 @@ type SaveStatus = {
 };
 function checkedSaveStatus(result: SaveStatus, operationId: string, resource: string): SaveStatus {
     if (!result || typeof result !== "object" || result.operationId !== operationId || !["committed", "cancelled", "resolved", "recoveryPending", "notCommitted", "notRegistered"].includes(result.status) || result.status !== "notRegistered" && result.resource !== resource || result.status === "committed" && (typeof result.baseId !== "string" || !result.baseId))
-        throw new Error("原保存回执的编号、目标或基线不匹配；没有采用该结果。");
+        throw new UiError(uiMessage("hostedShell.saveReceiptBasisMismatch"));
     return result;
 }
 const root = document.querySelector<HTMLElement>("#hosted")!;
@@ -163,7 +163,7 @@ function renderEverydayBar() {
     if (doc && !navigatingHistory)
         everydayNavigation.visit(doc.resource);
     everydayBar.replaceChildren();
-    const add = (label: UiText, action: () => void | Promise<void>, disabled = false) => { const button = document.createElement("button"); button.type = "button"; setUiText(button, label); button.disabled = disabled; button.onclick = () => { void Promise.resolve().then(action).catch(error => status(String(error))); }; everydayBar.append(button); };
+    const add = (label: UiText, action: () => void | Promise<void>, disabled = false) => { const button = document.createElement("button"); button.type = "button"; setUiText(button, label); button.disabled = disabled; button.onclick = () => { void Promise.resolve().then(action).catch(error => status(errorUiText(error))); }; everydayBar.append(button); };
     add(uiMessage("shell.back"), () => run(() => stepNavigation(-1)), !everydayNavigation.target(-1) || busy);
     add(uiMessage("shell.forward"), () => run(() => stepNavigation(1)), !everydayNavigation.target(1) || busy);
     add(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), status), busy);
@@ -174,7 +174,7 @@ function renderEverydayBar() {
 const personalInputs = new PersonalInputRecovery(sessionStorage);
 const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text }) => {
     if (context.owner.kind === "capture")
-        throw new Error("捕获输入不能写入正文恢复域。");
+        throw new UiError(uiMessage("hostedShell.captureBodyRecoveryRejected"));
     try {
         personalInputs.update(context.audience, [{ id, owner: context.owner, slot: context.slot, path: context.path, origin: { baseLength: 0, pieces: [], detached: text ? [{ id, revision, text }] : [], revision } }]);
         controls();
@@ -185,7 +185,7 @@ const personalControls = new PersonalControlInput(document, context => context.a
 });
 const authorInputs: AuthorInputFactory = (owner, current, sink, leaseRevision) => { const audience = personalAudience(); return audience ? personalControls.session(audience, authorizationEpoch, owner, current, sink, leaseRevision) : undefined; };
 const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
-const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
+const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(errorUiText(error)), {
     canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
     openRow: row => {
         const target = row as HostedQueryRow;
@@ -1061,7 +1061,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     await verifyPersonalIdentity(audience, epoch);
     record = personalInputs.current(audience, record);
     if (!record.pending || record.owner.kind !== "body")
-        throw new Error("此记录没有正文原保存编号。");
+        throw new UiError(uiMessage("hostedShell.bodySaveOperationMissing"));
     let outcome = await request<SaveStatus>("operation", { operationId: record.pending.operationId });
     if (authorizationEpoch !== epoch || personalAudience() !== audience)
         return;
@@ -1078,7 +1078,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
     if (record.owner.kind !== "body")
-        throw new Error("此表单输入只供取回；没有借用当前正文目标自动重放。");
+        throw new UiError(uiMessage("hostedShell.formCopyOnly"));
     const owner = record.owner;
     const selected = doc, epoch = authorizationEpoch;
     if (!selected || !draft || !selected.rights.write || compareRequired || draft.pending)

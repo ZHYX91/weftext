@@ -51526,6 +51526,151 @@
       "zh-CN": "关系部件名称缺少必需的 .rels 后缀。",
       "en-US": "The relationship part name lacks the required .rels suffix.",
       "params": {}
+    },
+    "capture.uniqueTargetRequired": {
+      "zh-CN": "此批准位置不支持连续新建；请选择管理员批准的唯一子项位置。",
+      "en-US": "This approved location does not allow repeated creation. Select an administrator-approved unique-child location.",
+      "params": {}
+    },
+    "capture.schemaRequired": {
+      "zh-CN": "先在资料库明确安装类型与字段规则；正文仍可记录为普通文字。",
+      "en-US": "Install the library’s type and field rules explicitly first. Plain text capture remains available.",
+      "params": {}
+    },
+    "capture.deliveryUnavailable": {
+      "zh-CN": "碎片已保存；当前没有可确认的笔记窗口交付通道，原操作保留。",
+      "en-US": "Capture saved. No acknowledged note-window delivery is available; the original operation is retained.",
+      "params": {}
+    },
+    "capture.surfaceAddressInvalid": {
+      "zh-CN": "捕获窗口地址无效；恢复稿未改动。",
+      "en-US": "Invalid capture window address. Retained drafts are unchanged.",
+      "params": {}
+    },
+    "proofreading.ruleScopeSupported": {
+      "zh-CN": "适用",
+      "en-US": "Applies",
+      "params": {}
+    },
+    "proofreading.ruleScopeInapplicable": {
+      "zh-CN": "不适用",
+      "en-US": "Does not apply",
+      "params": {}
+    },
+    "proofreading.ruleScopeUnknown": {
+      "zh-CN": "适用范围未知",
+      "en-US": "Applicability is unknown",
+      "params": {}
+    },
+    "proofreading.ruleDependencyMissing": {
+      "zh-CN": "缺少准确依赖版本",
+      "en-US": "An exact dependency version is missing",
+      "params": {}
+    },
+    "editor.savedProposalChanged": {
+      "zh-CN": "保存提案的正文已变化，未冻结另一份恢复基线。",
+      "en-US": "The save proposal’s body changed; a different recovery basis was not frozen.",
+      "params": {}
+    },
+    "editor.retiredSaveBasisRejected": {
+      "zh-CN": "原编辑器已退休，未安装迟到的保存基线。",
+      "en-US": "The original editor was retired; the late save basis was not installed.",
+      "params": {}
+    },
+    "editor.closeRecoveryFrozen": {
+      "zh-CN": "正在核对窗口关闭，未接受迟到的恢复修改。",
+      "en-US": "Window close is being checked; the late recovery change was not accepted.",
+      "params": {}
+    },
+    "editor.closeBodyFrozen": {
+      "zh-CN": "正在核对窗口关闭，未接受迟到的正文修改。",
+      "en-US": "Window close is being checked; the late body change was not accepted.",
+      "params": {}
+    },
+    "editor.closeInsertionFrozen": {
+      "zh-CN": "正在核对窗口关闭，未接受新的正文插入。",
+      "en-US": "Window close is being checked; a new body insertion was not accepted.",
+      "params": {}
+    },
+    "hostedEditor.saveInputUnsettled": {
+      "zh-CN": "当前正文输入尚未落定，未开始保存。",
+      "en-US": "The current body input has not settled; saving has not started.",
+      "params": {}
+    },
+    "hostedEditor.saveEditorChanged": {
+      "zh-CN": "原保存编辑器已变化，未将旧基线绑定到新文档。",
+      "en-US": "The original save editor changed; the old basis was not bound to the new document.",
+      "params": {}
+    },
+    "hostedShell.saveReceiptBasisMismatch": {
+      "zh-CN": "原保存回执的编号、目标或基线不匹配；没有采用该结果。",
+      "en-US": "The original save receipt’s ID, target or basis does not match; the result was not adopted.",
+      "params": {}
+    },
+    "hostedShell.captureBodyRecoveryRejected": {
+      "zh-CN": "捕获输入不能写入正文恢复域。",
+      "en-US": "Capture input cannot be written into the body-recovery domain.",
+      "params": {}
+    },
+    "hostedShell.bodySaveOperationMissing": {
+      "zh-CN": "此记录没有正文原保存编号。",
+      "en-US": "This record has no original body-save ID.",
+      "params": {}
+    },
+    "hostedShell.formCopyOnly": {
+      "zh-CN": "此表单输入只供取回；没有借用当前正文目标自动重放。",
+      "en-US": "This form input is available for recovery only; it was not automatically replayed into the current body target.",
+      "params": {}
+    },
+    "shell.closePreparationFrozen": {
+      "zh-CN": "窗口关闭核对仍冻结，未开始另一轮正文准备。",
+      "en-US": "Window close checking remains frozen; another body-preparation round was not started.",
+      "params": {}
+    },
+    "shell.closeAuthorInputPending": {
+      "zh-CN": "正文组合、作者提案或原保存仍待核对，当前窗口继续保留输入。",
+      "en-US": "Body composition, an author proposal or the original save still needs checking; this window continues to retain the input.",
+      "params": {}
+    },
+    "shell.closeNewInputAfterDraft": {
+      "zh-CN": "准备关闭期间又有新输入，未把旧草稿回执当作新输入的保留证明。",
+      "en-US": "New input arrived during close preparation; the old draft receipt was not treated as proof that the new input is retained.",
+      "params": {}
+    },
+    "shell.closeRecoveryUnconfirmed": {
+      "zh-CN": "尚未确认准确正文恢复稿，未放行窗口关闭。",
+      "en-US": "The exact body recovery draft is not confirmed; the window was not allowed to close.",
+      "params": {}
+    },
+    "shell.closeBasisChanged": {
+      "zh-CN": "正文对象或输入在准备期间变化，原稿保留，请重新核对关闭。",
+      "en-US": "The body object or input changed during preparation. The original draft is retained; check closing again.",
+      "params": {}
+    },
+    "shell.closeRecoveryWriteFrozen": {
+      "zh-CN": "正文关闭核对已冻结，未启动另一轮恢复写入。",
+      "en-US": "Body close checking is frozen; another recovery write was not started.",
+      "params": {}
+    },
+    "shell.closeDocumentSwitchFrozen": {
+      "zh-CN": "窗口关闭核对已冻结，未切换正文对象。",
+      "en-US": "Window close checking is frozen; the body object was not switched.",
+      "params": {}
+    },
+    "shell.closeLateOpenFrozen": {
+      "zh-CN": "窗口关闭核对已冻结，迟到的打开结果未替换正文。",
+      "en-US": "Window close checking is frozen; the late open result did not replace the body.",
+      "params": {}
+    },
+    "shell.closeSaveFrozen": {
+      "zh-CN": "正文关闭核对已冻结，未创建另一保存操作。",
+      "en-US": "Body close checking is frozen; another save operation was not created.",
+      "params": {}
+    },
+    "error.core.backend.sourceDescendantPlacementChanged": {
+      "zh-CN": "保留的源后代目录已不在原父目录条目中",
+      "en-US": "The retained source descendant no longer occupies its original parent entry",
+      "params": {}
     }
   }
 }

@@ -26,7 +26,6 @@ export interface AuthorInputSession {
   retire(): void;
 }
 export type AuthorInputFactory = (owner: AuthorInputOwner, current: () => boolean, sink?: AuthorInputSink, leaseRevision?: () => unknown) => AuthorInputSession | undefined;
-export interface ValueInputBinding { session: AuthorInputSession; slot: string; path: readonly ValuePath[] }
 
 /** Re-rendering the same proposal keeps its slot IDs; a new proposal gets a new lease. */
 export class AuthorInputScopes {

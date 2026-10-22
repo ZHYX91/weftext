@@ -1,3 +1,6 @@
+import { replaceUiChildren } from "./ui-locale";
+import { decodeErrorDescription, descriptionUiText, type ErrorDescription } from "./ui-diagnostics";
+import { decodeReviewPreview, decodeReviewReceipt, type ReviewPreview as Preview, type ReviewReceipt as Receipt } from "./hosted-review-wire";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
@@ -23,27 +26,11 @@ type Catalog = {
     rights: Rights;
 };
 type Profile = Catalog & {
+    warning?: ErrorDescription;
     basis: string | null;
     sourceHash?: string;
     annotations: KnowledgeAnnotation[];
     media?: HostedMediaDescriptor;
-};
-type Preview = {
-    summary?: string;
-    kind?: string;
-    body?: string;
-    replacement?: string;
-    count?: number;
-    source?: {
-        before: string;
-        after: string;
-    };
-};
-type Receipt = {
-    operationId: string;
-    status: string;
-    planId?: string;
-    preview?: Preview;
 };
 type Pending = {
     operationId: string;
@@ -51,6 +38,7 @@ type Pending = {
     planId?: string;
     preview?: Preview;
     status?: string;
+    commitAllowed?: boolean;
     intent: KnowledgeIntent;
 };
 type Draft = {
@@ -151,10 +139,10 @@ export class HostedReview {
         this.draft = undefined;
         this.unreadable = undefined;
         this.busy = false;
-        this.host.replaceChildren();
+        replaceUiChildren(this.host, );
         this.host.hidden = true;
-        this.editor.replaceChildren();
-        this.proofread.replaceChildren();
+        replaceUiChildren(this.editor, );
+        replaceUiChildren(this.proofread, );
         setUiText(this.message, "");
         this.prefix = "";
         if (remove)
@@ -174,8 +162,8 @@ export class HostedReview {
         this.catalog = result.resources;
         this.host.hidden = !this.catalog.length;
         setUiAttr(this.picker, "aria-label", uiMessage("hostedReview.pickerLabel"));
-        this.picker.replaceChildren(...this.catalog.map(item => { const option = ui("option", "", item.resource); option.value = item.resource; return option; }));
-        this.host.replaceChildren(ui("h2", "", uiMessage("hostedReview.title")), ui("p", "hint", uiMessage("hostedReview.saveScopeHelp")), this.picker, action(uiMessage("hostedReview.readAnnotations"), () => this.run(() => this.open(this.picker.value))), this.message, this.editor, this.proofread);
+        replaceUiChildren(this.picker, ...this.catalog.map(item => { const option = ui("option", "", item.resource); option.value = item.resource; return option; }));
+        replaceUiChildren(this.host, ui("h2", "", uiMessage("hostedReview.title")), ui("p", "hint", uiMessage("hostedReview.saveScopeHelp")), this.picker, action(uiMessage("hostedReview.readAnnotations"), () => this.run(() => this.open(this.picker.value))), this.message, this.editor, this.proofread);
     }
     private key(resource = this.resource!) { return this.prefix + encodeURIComponent(resource); }
     private retain() {
@@ -210,7 +198,7 @@ export class HostedReview {
         this.replyScopes.clear();
         this.panel?.dispose();
         this.panel = undefined;
-        this.proofread.replaceChildren();
+        replaceUiChildren(this.proofread, );
         this.resource = resource;
         this.profile = undefined;
         this.draft = undefined;
@@ -220,6 +208,7 @@ export class HostedReview {
             const draft = raw ? JSON.parse(raw) as Draft : newDraft();
             if (!draft || typeof draft.body !== "string" || !draft.replies)
                 throw new Error();
+            if (draft.pending?.preview) draft.pending.preview = decodeReviewPreview(draft.pending.preview);
             this.draft = draft;
         }
         catch {
@@ -233,6 +222,7 @@ export class HostedReview {
         const profile = await this.request<Profile>("review/read", { resource, ...(requestedAsset ? { asset: requestedAsset } : {}) });
         if (epoch !== this.epoch)
             return;
+        if (Object.hasOwn(profile, "warning")) profile.warning = decodeErrorDescription(profile.warning) ?? (() => { throw new UiError(uiMessage("error.invalidResponse")); })();
         this.profile = profile;
         setUiText(this.message, this.draft.pending ? uiMessage("hostedReview.originalPending") : uiMessage("hostedReview.annotationsRead"));
         this.installProofreading();
@@ -289,17 +279,19 @@ export class HostedReview {
             return;
         this.receipt(result);
     }
-    private receipt(result: Receipt) {
+    private receipt(raw: unknown) {
         const pending = this.draft?.pending;
-        if (!pending)
+        if (!pending || !this.resource)
             return;
+        const result = decodeReviewReceipt(raw, this.resource, pending.operationId);
+        if (pending.planId && result.planId && pending.planId !== result.planId) throw new UiError(uiMessage("error.invalidResponse"));
         if (["committed", "cancelled", "resolved"].includes(result.status)) {
             const sourceChanged = pending.intent.kind === "annotationAccept";
             delete this.draft!.pending;
             this.profile = undefined;
             this.panel?.dispose();
             this.panel = undefined;
-            this.proofread.replaceChildren();
+            replaceUiChildren(this.proofread, );
             this.retain();
             setUiText(this.message, result.status === "committed" ? uiMessage("hostedReview.originalCommitted") : uiMessage("hostedReview.originalEndedWithoutSave"));
             if (result.status === "committed")
@@ -307,7 +299,8 @@ export class HostedReview {
         }
         else {
             pending.status = result.status;
-            pending.planId = result.planId;
+            pending.planId = result.planId ?? undefined;
+            pending.commitAllowed = result.commitAllowed;
             pending.preview = result.preview;
             this.retain();
             setUiText(this.message, result.status === "prepared" ? uiMessage("hostedReview.prepared") : uiMessage("hostedReview.originalUnknown"));
@@ -319,11 +312,13 @@ export class HostedReview {
             return;
         const epoch = this.epoch;
         const request = { resource: this.resource, operationId: pending.operationId };
-        let result = await this.request<Receipt>("review/operation", request);
+        const raw = await this.request<unknown>("review/operation", request);
+        if (epoch !== this.epoch || this.draft?.pending !== pending) return;
+        let result = decodeReviewReceipt(raw, request.resource!, pending.operationId);
         if (epoch !== this.epoch)
             return;
         if (["notRegistered", "notCommitted"].includes(result.status))
-            result = await this.request<Receipt>("review/settle", request);
+            result = decodeReviewReceipt(await this.request<unknown>("review/settle", request), request.resource!, pending.operationId);
         if (epoch === this.epoch)
             this.receipt(result);
     }
@@ -331,7 +326,7 @@ export class HostedReview {
         if (!this.profile?.basis || !this.profile.rights.proofread)
             return;
         const epoch = this.epoch;
-        this.panel = new ProofreadingPanel({ context: () => epoch === this.epoch ? this.sourceContext() : null,
+        this.panel = new ProofreadingPanel({ resultScope: "hosted", context: () => epoch === this.epoch ? this.sourceContext() : null,
             processingDefaults: this.processingDefaults,
             beforeAction: () => this.requireSource().then(() => { }),
             scan: async (_, options) => {
@@ -345,7 +340,8 @@ export class HostedReview {
         this.panel.render(this.proofread);
     }
     private render() {
-        this.editor.replaceChildren();
+        replaceUiChildren(this.editor, );
+        if (this.profile?.warning) this.editor.append(ui("p", "data-warning", descriptionUiText(this.profile.warning)));
         const draft = this.draft, profile = this.profile;
         if (this.unreadable !== undefined) {
             this.editor.append(ui("pre", "", this.unreadable), action(uiMessage("hostedReview.discardDamagedRecovery"), () => { sessionStorage.removeItem(this.key()); this.unreadable = undefined; return this.run(() => this.open(this.resource!)); }));
@@ -437,7 +433,7 @@ export class HostedReview {
                 if (epoch === this.epoch)
                     this.receipt(result);
             }));
-            commit.disabled = this.busy || pending.status !== "prepared" || !pending.planId;
+            commit.disabled = this.busy || pending.status !== "prepared" || !pending.planId || pending.commitAllowed !== true;
             const recover = action(uiMessage("hostedReview.inspectOriginal"), () => this.run(() => this.recover()));
             recover.disabled = this.busy;
             const cancel = action(uiMessage("hostedReview.settleOriginal"), () => this.run(async () => {
