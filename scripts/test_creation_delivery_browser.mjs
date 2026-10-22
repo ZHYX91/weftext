@@ -30,6 +30,16 @@ const runtime = process.env.WEFTEXT_PLAYWRIGHT_MODULE || createRequire(path.join
 const { chromium } = require(runtime);
 const sha = bytes => createHash("sha256").update(bytes).digest("hex");
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function readAfterProtectedAccess(filename, encoding) {
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    try { return await readFile(filename, encoding); }
+    catch (error) {
+      if (!["EBUSY", "EPERM"].includes(error.code) || Date.now() >= deadline) throw error;
+      await pause(100);
+    }
+  }
+}
 const sourceFiles = ["app/src/main.ts", "app/src/history-panel.ts", "app/src/history-state.ts", "app/src/library-creation.ts", "app/src/session.ts"];
 const result = { executable: exe, executableSha256: sha(await readFile(exe)),
   frontend: frontendUrl ? { kind: "source-vite", origin: frontendUrl, backendPort: apiPort } : { kind: "embedded" },
@@ -429,7 +439,7 @@ async function historyCase(f, mode) {
   }
   if (mode === "later") {
     await timeline().locator(".history-operation").filter({ hasText: original.operationId }).waitFor();
-    await closeTimeline(); await expectSource(proof.after.source); assert.equal(await readFile(f.a.path, "utf8"), sourceT);
+    await closeTimeline(); await expectSource(proof.after.source); assert.equal(await readAfterProtectedAccess(f.a.path, "utf8"), sourceT);
     assert.equal(await page.locator('.top-actions [data-command="save"]').isDisabled(), true);
     await page.locator(".document-error.session-error").filter({ hasText: "磁盘内容已改变" }).waitFor();
     await undoRedo(proof);
