@@ -180,7 +180,7 @@ def pe_info(data):
     return {'machine': machine, 'optionalMagic': magic, 'subsystem': subsystem, 'isDll': bool(characteristics & 0x2000), 'executableImage': bool(characteristics & 2), 'imports': sorted(set(imports))}
 
 
-SYSTEM_DLLS = set('advapi32 bcrypt bcryptprimitives cfgmgr32 comctl32 comdlg32 crypt32 cryptbase d2d1 dbghelp dnsapi dwmapi dwrite dxgi gdi32 imm32 iphlpapi kernel32 kernelbase msimg32 ncrypt netapi32 normaliz ntdll ole32 oleaut32 powrprof profapi propsys psapi rpcrt4 secur32 setupapi shell32 shlwapi synchronization ucrtbase user32 userenv usp10 uxtheme version winhttp wininet winmm winspool wintrust ws2_32 wtsapi32'.split())
+SYSTEM_DLLS = set('advapi32 bcrypt bcryptprimitives cfgmgr32 combase comctl32 comdlg32 crypt32 cryptbase d2d1 dbghelp dnsapi dwmapi dwrite dxgi gdi32 imm32 iphlpapi kernel32 kernelbase msimg32 ncrypt netapi32 normaliz ntdll ole32 oleaut32 powrprof profapi propsys psapi rpcrt4 secur32 setupapi shell32 shlwapi synchronization ucrtbase user32 userenv usp10 uxtheme version winhttp wininet winmm winspool wintrust ws2_32 wtsapi32'.split())
 
 
 VC_DLLS = set('vcruntime140 vcruntime140_1 msvcp140 msvcp140_1 msvcp140_2 msvcp140_atomic_wait msvcp140_codecvt_ids concrt140 vccorlib140 vcamp140 vcomp140'.split())

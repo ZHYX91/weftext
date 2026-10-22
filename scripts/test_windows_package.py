@@ -185,6 +185,23 @@ class ActualRoleSelection(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 validate_roles({'desktop': bytes(data), 'cli': pe(3)}, CONTRACT)
 
+    def test_system_com_runtime_import_is_qualified_for_both_actual_roles(self):
+        for role, subsystem in (('desktop', 2), ('cli', 3)):
+            for delayed in (False, True):
+                data = bytearray(pe(subsystem))
+                directory = 13 if delayed else 1
+                struct.pack_into('<II', data, 152 + 112 + directory * 8, 0x1040, 64 if delayed else 40)
+                if delayed:
+                    struct.pack_into('<II', data, 512 + 64, 1, 0x10a0)
+                else:
+                    struct.pack_into('<IIIII', data, 512 + 64, 0, 0, 0, 0x10a0, 0)
+                name = b'COMBASE.dll\0'
+                data[512 + 160:512 + 160 + len(name)] = name
+                binaries = {'desktop': pe(2), 'cli': pe(3), role: bytes(data)}
+                with self.subTest(role=role, delayed=delayed):
+                    facts = validate_roles(binaries, CONTRACT)
+                    self.assertEqual(facts[role]['imports'], ['combase.dll'])
+
     def test_import_name_cannot_continue_into_unmapped_pe_overlay(self):
         data = bytearray(pe(2)) + bytearray(32)
         struct.pack_into('<II', data, 152 + 112 + 8, 0x1040, 40)
