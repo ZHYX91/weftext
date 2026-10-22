@@ -304,12 +304,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_default_uses_the_known_folder_and_shared_durable_contract() {
-        let expected = crate::host_paths::local_app_data().unwrap().join(
-            &crate::host_contract::get()
-                .unwrap()
-                .paths
-                .persistent_relative_root,
-        );
+        let paths = &crate::host_contract::get().unwrap().paths;
+        let expected = crate::host_paths::local_app_data()
+            .unwrap()
+            .join(&paths.persistent_relative_root)
+            .join(&paths.core_relative_path);
         assert_eq!(default_data_dir().unwrap(), expected);
         assert_eq!(expected.file_name().unwrap(), "core");
         assert_eq!(
