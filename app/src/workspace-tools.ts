@@ -1,4 +1,5 @@
-import { committedDeliveryComplete, deliverCommitted, originalCommitted } from "./original-operation";
+import { UiError, uiTextValue } from "./ui-locale";
+import { committedDeliveryComplete, deliverCommitted, originalCommitted, originalDeliveryErrors } from "./original-operation";
 import "./data-view.css";
 import "./style-panel.css";
 import "./export-panel.css";
@@ -229,7 +230,7 @@ export class WorkspaceTools {
       pending.receipt = status;
       if (originalCommitted(status)) {
         const delivered = await deliverCommitted(status, value => this.host.applyReceipt(value, pending.context));
-        if (!committedDeliveryComplete(delivered)) throw new Error(delivered.deliveryError?.message ?? delivered.documentError?.message ?? "原资源导入已提交，交付尚未完成。");
+        if (!committedDeliveryComplete(delivered)) throw new UiError(() => originalDeliveryErrors(delivered).map(uiTextValue).join("\n") || "原资源导入已提交，交付尚未完成。");
         this.pendingImport = null; this.host.notify("已确认上一次资源导入成功。"); return;
       }
       if (status.status === "resolved") { this.pendingImport = null; throw new Error("原导入已明确终结，原文件仍保留。请重新选择后准备。"); }
@@ -254,7 +255,7 @@ export class WorkspaceTools {
     });
     if (!accepted) return;
     this.pendingImport = { plan, context };
-    try { const result = await this.commit(plan, context); this.pendingImport.receipt = result; if (committedDeliveryComplete(result)) this.pendingImport = null; else throw new Error(result.deliveryError?.message ?? result.documentError?.message ?? "原导入结果仍待核对。"); }
+    try { const result = await this.commit(plan, context); this.pendingImport.receipt = result; if (committedDeliveryComplete(result)) this.pendingImport = null; else throw new UiError(() => originalDeliveryErrors(result).map(uiTextValue).join("\n") || "原导入结果仍待核对。"); }
     catch (error) { this.host.notify("资源导入结果待确认。再次导入会先检查原操作。", true); throw error; }
   }
   private async commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt> {
@@ -268,7 +269,7 @@ export class WorkspaceTools {
     }
     const receipt = await api<KnowledgeReceipt>("/api/operations/commit", { operationId: plan.operationId, planId: plan.planId, context });
     const delivered = await deliverCommitted(receipt, value => this.host.applyReceipt(value, context));
-    if (delivered.deliveryError) this.host.notify("原操作已提交；界面更新尚未完成，请检查原操作。", true);
+    if (!committedDeliveryComplete(delivered)) this.host.notify("原操作已提交；界面更新尚未完成，请检查原操作。", true);
     return delivered;
   }
   private async showStyles(): Promise<void> {

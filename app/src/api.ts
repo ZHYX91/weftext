@@ -1,6 +1,7 @@
-export class ApiError extends Error {
-  constructor(public code: string, message: string, public details?: unknown, public currentSource?: string) { super(message); }
-}
+import { ApiError, decodeApiError } from "./api-error";
+import { message } from "./ui-locale";
+import { readStrictJsonResponse, StrictJsonError } from "./strict-json";
+export { ApiError } from "./api-error";
 
 const fragment = new URLSearchParams(location.hash.slice(1));
 const suppliedToken = fragment.get("token");
@@ -9,31 +10,34 @@ if (suppliedToken) {
   history.replaceState(null, "", location.pathname + location.search);
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: body === undefined ? "GET" : "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Weftext-Token": sessionStorage.getItem("weftext-token") ?? "",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data: unknown = await response.json();
-  if (!response.ok || (data && typeof data === "object" && "error" in data)) {
-    const error = (data as { error?: { code?: string; message?: string; details?: unknown; currentSource?: string } }).error;
-    const details = error?.details as { currentSource?: string } | undefined;
-    throw new ApiError(error?.code ?? "requestFailed", error?.message ?? `请求失败 (${response.status})`, error?.details, error?.currentSource ?? details?.currentSource);
+async function send(path: string, body?: unknown): Promise<Response> {
+  try {
+    return await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "X-Weftext-Token": sessionStorage.getItem("weftext-token") ?? "" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch (error) {
+    throw new ApiError("networkRequest", message("error.networkRequest"), [{ origin: "network", text: error instanceof Error ? error.message : String(error) }]);
   }
+}
+
+async function json(response: Response): Promise<unknown> {
+  try { return await readStrictJsonResponse(response); }
+  catch (error) { throw new ApiError("invalidResponse", message("error.invalidResponse"), error instanceof StrictJsonError ? [] : [{ origin: "json", text: error instanceof Error ? error.message : String(error) }]); }
+}
+
+function responseError(data: unknown, status: number): ApiError {
+  const decoded = data && typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 1 && Object.hasOwn(data, "error") ? decodeApiError((data as { error: unknown }).error) : undefined;
+  return decoded ?? new ApiError("invalidResponse", message("error.invalidResponse"), [], undefined, [], status);
+}
+
+export async function api<T>(path: string, body?: unknown): Promise<T> {
+  const response = await send(path, body), data = await json(response);
+  if (!response.ok || data && typeof data === "object" && Object.hasOwn(data, "error")) throw responseError(data, response.status);
   return data as T;
 }
 
 export const operationId = (): string => crypto.randomUUID();
 
 export async function apiBlob(path: string, body: unknown): Promise<Blob> {
-  const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Weftext-Token": sessionStorage.getItem("weftext-token") ?? "" }, body: JSON.stringify(body) });
-  if (!response.ok) {
-    const data = await response.json() as { error?: { code?: string; message?: string; details?: unknown } };
-    throw new ApiError(data.error?.code ?? "resourceReadFailed", data.error?.message ?? "资源读取失败", data.error?.details);
-  }
+  const response = await send(path, body);
+  if (!response.ok) throw responseError(await json(response), response.status);
   return response.blob();
 }

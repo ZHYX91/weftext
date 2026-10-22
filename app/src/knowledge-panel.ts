@@ -1,765 +1,1892 @@
+import { uiDisplayParameter } from "./ui-locale";
+import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, parseUiMessage, UiError, type UiText } from "./ui-locale";
+import { disposeUiTree, joinUiText } from "./ui-locale";
+import { apiErrorUiText, type ApiErrorBody } from "./api-error";
+import { coreDescriptionUiText, descriptionUiText, engineDiagnosticUiText, type CoreDescription, type ErrorDescription } from "./ui-diagnostics";
 import "./knowledge-view.css";
 import { committedDeliveryComplete, originalCommitted } from "./original-operation";
 import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
-import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
-import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput } from "./knowledge-state";
+import { canApplySuggestion, decodeKnowledgeDelivery, decodeKnowledgeDiagnosticFields, decodeKnowledgeLoss, decodeKnowledgeTemplatePreview, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput, KnowledgeReadError, KnowledgeTemplatePreview } from "./knowledge-state";
 import type { Origin, RenderNode } from "./types";
 import { storedMediaSelection } from "./media-selection";
 import { trashRestoreDraft, type LibraryTrashEntry } from "./library-trash";
-import { citationInsertionByte, newNativeCitationInputs, renderNativeCitations, type NativeCitationSnapshot } from "./native-citations";
+import { citationInsertionByte, decodeNativeCitationSnapshot, newNativeCitationInputs, renderNativeCitations, type NativeCitationSnapshot } from "./native-citations";
 import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationDiagnostics, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
 import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-state";
 import { HeadingStructureView } from "./heading-structure-view";
 import type { HeadingSnapshot, StructureHeading } from "./heading-structure-state";
-
 export interface KnowledgeContext extends KnowledgeBasis {
-  root: string;
-  nodeId?: string;
-  workspaceId?: string;
-  dirty: boolean;
-  selection?: { from: number; to: number; visibleExcerpt?: string; elementRole?: string; nodeKey?: string };
+    root: string;
+    nodeId?: string;
+    workspaceId?: string;
+    dirty: boolean;
+    selection?: {
+        from: number;
+        to: number;
+        visibleExcerpt?: string;
+        elementRole?: string;
+        nodeKey?: string;
+    };
 }
 export interface KnowledgeLink {
-  sourceHash?: string;
-  source: KnowledgeNodeRef;
-  occurrence: { from: number; to: number; utf16From: number; utf16To: number; target: string; kind: string; raw?: string; destinationSlot?: unknown };
-  resolution: { status: string; target?: KnowledgeNodeRef; fragment?: string; form?: string };
+    sourceHash?: string;
+    source: KnowledgeNodeRef;
+    occurrence: {
+        from: number;
+        to: number;
+        utf16From: number;
+        utf16To: number;
+        target: string;
+        kind: string;
+        raw?: string;
+        destinationSlot?: unknown;
+    };
+    resolution: {
+        status: string;
+        target?: KnowledgeNodeRef;
+        fragment?: string;
+        form?: string;
+    };
 }
 export interface KnowledgeAnnotation {
-  id: string;
-  annotationId?: string;
-  body: string;
-  purpose?: string;
-  reviewState?: "open" | "resolved";
-  suggestionState?: "pending" | "accepted" | "rejected";
-  replacement?: string;
-  visibleExcerpt?: string | { text: string };
-  targetResolution?: AnnotationResolution;
-  targetSummary?: string;
-  sourceLocation?: { from: number; to: number };
-  navigateTarget?: string;
-  resourceLocation?: { resource: string; revision: string; target: unknown };
-  author?: string;
-  createdAt?: string;
-  verified?: boolean;
-  replies?: { id?: string; body: string; author?: string; createdAt?: string }[];
-  target?: unknown;
+    id: string;
+    annotationId?: string;
+    body: string;
+    purpose?: string;
+    reviewState?: "open" | "resolved";
+    suggestionState?: "pending" | "accepted" | "rejected";
+    replacement?: string;
+    visibleExcerpt?: string | {
+        text: string;
+    };
+    targetResolution?: AnnotationResolution;
+    targetSummary?: string;
+    sourceLocation?: {
+        from: number;
+        to: number;
+    };
+    navigateTarget?: string;
+    resourceLocation?: {
+        asset?: string;
+        resource: string;
+        revision: string;
+        target: unknown;
+    };
+    author?: string;
+    createdAt?: string;
+    verified?: boolean;
+    replies?: {
+        id?: string;
+        body: string;
+        author?: string;
+        createdAt?: string;
+    }[];
+    target?: unknown;
 }
 export interface KnowledgeTemplate {
-  id: string;
-  title: string;
-  description?: string;
-  source?: string;
-  sourceNode?: KnowledgeNodeRef;
-  sourceRevision?: string;
-  available?: boolean;
-  parameters?: { name: string; title?: string; type?: string; kind?: "markup" | "string" | "bool" | "int"; required?: boolean; nullable?: boolean; default?: string | boolean | null }[];
+    id: string;
+    title: string;
+    description?: string;
+    source?: string;
+    sourceNode?: KnowledgeNodeRef;
+    sourceRevision?: string;
+    available?: boolean;
+    parameters?: {
+        name: string;
+        title?: string;
+        type?: string;
+        kind?: "markup" | "string" | "bool" | "int";
+        required?: boolean;
+        nullable?: boolean;
+        default?: string | boolean | null;
+    }[];
 }
 export type KnowledgeTemplateValue = string | boolean | null;
 export interface KnowledgeSnapshot {
-  graph?: GraphSnapshot;
-  headingStructure?: HeadingSnapshot;
-  diagnostics?: { coverage: "complete" | "partial"; scannedNodes: number; issues: KnowledgeLink[]; propertyIssues?: { source: KnowledgeNodeRef; fieldId: string; itemPath: string[]; address: string; resolution: KnowledgeLink["resolution"] }[]; nodes: { node: KnowledgeNodeRef; incoming: number; outgoing: number; invalidOutgoing: number; state: string }[] };
-  links?: { generation: string | number; coverage: "complete" | "partial"; outgoing: KnowledgeLink[]; incomingId: KnowledgeLink[]; incomingPath: KnowledgeLink[]; warnings?: string[] };
-  renderedLinks?: { compileIdentity: string; target: string; projectionGeneration: string; occurrenceOrdinal: number; fragments: string[]; destination: string; origin: string }[];
-  propertyReferences?: { coverage: "complete" | "partial"; items: { source: KnowledgeNodeRef; fieldId: string; fieldTitle?: string; itemPath: string[]; resolution: KnowledgeLink["resolution"] }[]; diagnostics?: string[] };
-  citations?: NativeCitationSnapshot;
-  mentions?: { generation: string | number; coverage: "complete" | "partial"; fragments: { id: string; text?: string; nodeKey?: string; coverage?: string; hits: KnowledgeMention[] }[] };
-  annotations?: KnowledgeAnnotation[];
-  annotationStatus?: string;
-  annotationDiagnostics?: string[];
-  templates?: KnowledgeTemplate[];
-  trash?: LibraryTrashEntry[];
-  warnings?: string[];
+    graph?: GraphSnapshot;
+    headingStructure?: HeadingSnapshot;
+    diagnostics?: {
+        coverage: "complete" | "partial";
+        scannedNodes: number;
+        issues: KnowledgeLink[];
+        propertyIssues?: {
+            source: KnowledgeNodeRef;
+            fieldId: string;
+            itemPath: string[];
+            address: string;
+            resolution: KnowledgeLink["resolution"];
+        }[];
+        nodes: {
+            node: KnowledgeNodeRef;
+            incoming: number;
+            outgoing: number;
+            invalidOutgoing: number;
+            state: string;
+        }[];
+    };
+    links?: {
+        generation: string | number;
+        coverage: "complete" | "partial";
+        outgoing: KnowledgeLink[];
+        incomingId: KnowledgeLink[];
+        incomingPath: KnowledgeLink[];
+    };
+    renderedLinks?: {
+        compileIdentity: string;
+        target: string;
+        projectionGeneration: string;
+        occurrenceOrdinal: number;
+        fragments: string[];
+        destination: string;
+        origin: string;
+    }[];
+    propertyReferences?: {
+        coverage: "complete" | "partial";
+        items: {
+            source: KnowledgeNodeRef;
+            fieldId: string;
+            fieldTitle?: string;
+            itemPath: string[];
+            resolution: KnowledgeLink["resolution"];
+        }[];
+        diagnostics: readonly ErrorDescription[];
+    };
+    citations?: NativeCitationSnapshot;
+    mentions?: {
+        generation: string | number;
+        coverage: "complete" | "partial";
+        fragments: {
+            id: string;
+            text?: string;
+            nodeKey?: string;
+            coverage?: string;
+            hits: KnowledgeMention[];
+        }[];
+    };
+    annotations?: KnowledgeAnnotation[];
+    annotationStatus?: string;
+    annotationDiagnostics?: readonly ApiErrorBody[];
+    templates?: KnowledgeTemplate[];
+    trash?: LibraryTrashEntry[];
+    warnings?: readonly CoreDescription[];
+    errors?: readonly KnowledgeReadError[];
+}
+export function decodeKnowledgeSnapshot(value: unknown): KnowledgeSnapshot {
+    const record = decodeKnowledgeDiagnosticFields(value);
+    return { ...record, ...(record.citations !== null ? { citations: decodeNativeCitationSnapshot(record.citations) } : { citations: undefined }) } as unknown as KnowledgeSnapshot;
 }
 export interface KnowledgePlan {
-  operationId: string;
-  planId: string;
-  kind?: string;
-  status?: string;
-  changes?: { path?: string; action?: string; bytes?: number; before?: string; after?: string }[];
-  preview?: unknown;
-  losses?: (string | KnowledgeLoss)[];
-  [key: string]: unknown;
+    operationId: string;
+    planId: string;
+    kind?: string;
+    status?: string;
+    changes?: {
+        path?: string;
+        action?: string;
+        bytes?: number;
+        before?: string;
+        after?: string;
+    }[];
+    preview?: unknown;
+    losses?: readonly KnowledgeLoss[];
+    [key: string]: unknown;
 }
-export interface KnowledgeReceipt { status: string; message?: string; operationId?: string; path?: string; deliveryError?: { message: string }; documentError?: { message?: string }; [key: string]: unknown }
-export interface KnowledgeIntent { kind: string; [key: string]: unknown }
-export interface KnowledgeTextMapping { nodeKey: string; node: Text | HTMLElement; text: string; origin?: Origin | null }
+export interface KnowledgeReceipt {
+    status: string;
+    operationId?: string;
+    path?: string;
+    deliveryError?: ApiErrorBody;
+    documentError?: ApiErrorBody;
+    affectedDocuments?: readonly { documentError?: ApiErrorBody }[];
+    [key: string]: unknown;
+}
+export interface KnowledgeIntent {
+    kind: string;
+    [key: string]: unknown;
+}
+export interface KnowledgeTextMapping {
+    nodeKey: string;
+    node: Text | HTMLElement;
+    text: string;
+    origin?: Origin | null;
+}
 export interface KnowledgeHost {
-  processingDefaults?(): Promise<ProcessingDefaultsSuggestion>;
-  proofread?(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>;
-  context(): KnowledgeContext | null;
-  load(context: KnowledgeContext): Promise<KnowledgeSnapshot>;
-  /** A fresh preparation must qualify the current Draft and freeze every effect. */
-  prepare(intent: KnowledgeIntent, context: KnowledgeContext): Promise<KnowledgePlan>;
-  commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt>;
-  navigate(target: string | KnowledgeNodeRef): void | Promise<void>;
-  notify(message: string, error?: boolean): void;
-  inspectOperation?(operationId: string, context: KnowledgeContext): Promise<KnowledgeReceipt>;
-  previewTemplate?(id: string, parameters: Record<string, KnowledgeTemplateValue>, context: KnowledgeContext): Promise<{ tree?: RenderNode | null; source?: string; diagnostics?: { message: string }[] }>;
-  linkCopy?(link: KnowledgeLink, form: string, context: KnowledgeContext): Promise<{ address: string; fullLink: string }>;
-  mountMedia?(container: HTMLElement, selected: (target: MediaRegionInput | null) => void, initial?: MediaRegionInput): { dispose(): void };
-  selectSource?(from: number, to: number): void;
-  revealHeading?(heading: StructureHeading): boolean;
-  copy?(text: string): Promise<void>;
-  beforeAction?(): Promise<void>;
-  canEditSource?(): boolean;
+    processingDefaults?(): Promise<ProcessingDefaultsSuggestion>;
+    proofread?(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>;
+    context(): KnowledgeContext | null;
+    load(context: KnowledgeContext): Promise<KnowledgeSnapshot>;
+    /** A fresh preparation must qualify the current Draft and freeze every effect. */
+    prepare(intent: KnowledgeIntent, context: KnowledgeContext): Promise<KnowledgePlan>;
+    commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt>;
+    navigate(target: string | KnowledgeNodeRef): void | Promise<void>;
+    notify(message: UiText, error?: boolean): void;
+    inspectOperation?(operationId: string, context: KnowledgeContext): Promise<KnowledgeReceipt>;
+    previewTemplate?(id: string, parameters: Record<string, KnowledgeTemplateValue>, context: KnowledgeContext): Promise<KnowledgeTemplatePreview>;
+    linkCopy?(link: KnowledgeLink, form: string, context: KnowledgeContext): Promise<{
+        address: string;
+        fullLink: string;
+    }>;
+    mountMedia?(container: HTMLElement, selected: (target: MediaRegionInput | null) => void, initial?: MediaRegionInput): {
+        dispose(): void;
+    };
+    selectSource?(from: number, to: number): void;
+    revealHeading?(heading: StructureHeading): boolean;
+    copy?(text: string): Promise<void>;
+    beforeAction?(): Promise<void>;
+    canEditSource?(): boolean;
 }
 export type KnowledgePanelTab = "links" | "graph" | "headings" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
-  backgroundEnabled(): boolean;
-  refresh(): Promise<void>;
-  selectTab(tab: KnowledgePanelTab): void;
-  attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
-  dispose(): void;
+    backgroundEnabled(): boolean;
+    refresh(): Promise<void>;
+    selectTab(tab: KnowledgePanelTab): void;
+    attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
+    dispose(): void;
 }
-
-const resolutionLabels: Record<string, string> = { exact: "准确定位", mapped: "已映射", stale: "待重新定位", ambiguous: "定位有歧义", orphaned: "目标已失效", unavailable: "目标不可用", resolved: "目标有效", missing: "目标缺失", fragmentMissing: "段落标签缺失", invalid: "地址无效", external: "外部链接" };
-const formLabels: Record<string, string> = { id: "稳定 ID", relative: "源相对路径（最短有效）", workspace: "库内路径", file: "本机绝对路径" };
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: string): HTMLElementTagNameMap[K] {
-  const value = document.createElement(tag); value.className = className; if (text !== undefined) value.textContent = text; return value;
+const resolutionLabels: Record<string, UiText> = { exact: uiMessage("hostedReview.exactTarget"), mapped: uiMessage("knowledge.locationMapped"), stale: uiMessage("knowledge.locationNeedsRelocation"), ambiguous: uiMessage("knowledge.locationAmbiguous"), orphaned: uiMessage("knowledge.targetExpired"), unavailable: uiMessage("knowledge.targetUnavailable"), resolved: uiMessage("knowledge.targetValid"), missing: uiMessage("knowledge.targetMissing"), fragmentMissing: uiMessage("knowledge.paragraphLabelMissing"), invalid: uiMessage("knowledge.addressInvalid"), external: uiMessage("knowledge.externalLink") };
+const formLabels: Record<string, UiText> = { id: uiMessage("knowledge.formStableId"), relative: uiMessage("knowledge.formSourceRelative"), workspace: uiMessage("knowledge.formLibraryPath"), file: uiMessage("knowledge.formAbsolutePath") };
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: UiText): HTMLElementTagNameMap[K] {
+    const value = document.createElement(tag);
+    value.className = className;
+    if (text !== undefined)
+        setUiText(value, text);
+    return value;
 }
-function action(label: string, run: () => unknown | Promise<unknown>, className = "knowledge-button"): HTMLButtonElement {
-  const value = element("button", className, label); value.type = "button";
-  value.onclick = () => { void Promise.resolve(run()).catch(() => { /* Caller reports and retains its draft. */ }); }; return value;
+function action(label: UiText, run: () => unknown | Promise<unknown>, className = "knowledge-button"): HTMLButtonElement {
+    const value = element("button", className, label);
+    value.type = "button";
+    value.onclick = () => { void Promise.resolve(run()).catch(() => { }); };
+    return value;
 }
-function field(label: string, control: HTMLElement): HTMLLabelElement { const value = element("label", "knowledge-field"); value.append(element("span", "", label), control); return value; }
-function input(value = "", placeholder = ""): HTMLInputElement { const control = element("input", "knowledge-input"); control.value = value; control.placeholder = placeholder; return control; }
-function textarea(value = "", placeholder = ""): HTMLTextAreaElement { const control = element("textarea", "knowledge-input"); control.value = value; control.placeholder = placeholder; control.rows = 3; return control; }
-function select(options: [string, string][]): HTMLSelectElement { const control = element("select", "knowledge-input"); for (const [id, label] of options) { const option = element("option", "", label); option.value = id; control.append(option); } return control; }
-function nodeLabel(ref: KnowledgeNodeRef): string { return ref.title || ref.path?.replaceAll("\\", "/").split("/").at(-1) || "无标题笔记"; }
+function field(label: UiText, control: HTMLElement): HTMLLabelElement { const value = element("label", "knowledge-field"); value.append(element("span", "", label), control); return value; }
+function input(value = "", placeholder: UiText = ""): HTMLInputElement { const control = element("input", "knowledge-input"); control.value = value; setUiAttr(control, "placeholder", placeholder); return control; }
+function textarea(value = "", placeholder: UiText = ""): HTMLTextAreaElement { const control = element("textarea", "knowledge-input"); control.value = value; setUiAttr(control, "placeholder", placeholder); control.rows = 3; return control; }
+function select(options: [
+    string,
+    UiText
+][]): HTMLSelectElement {
+    const control = element("select", "knowledge-input");
+    for (const [id, label] of options) {
+        const option = element("option", "", label);
+        option.value = id;
+        control.append(option);
+    }
+    return control;
+}
+function nodeLabel(ref: KnowledgeNodeRef): UiText { return ref.title || ref.path?.replaceAll("\\", "/").split("/").at(-1) || uiMessage("knowledge.untitledNoteFallback"); }
 function excerpt(annotation: KnowledgeAnnotation): string { return typeof annotation.visibleExcerpt === "string" ? annotation.visibleExcerpt : annotation.visibleExcerpt?.text ?? ""; }
 function nativeTree(node: RenderNode): Node {
-  if (node.kind === "text") return document.createTextNode(node.text ?? "");
-  if (node.kind === "tag") return document.createDocumentFragment();
-  const allowed = new Set(["p", "div", "span", "strong", "em", "s", "blockquote", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6", "br"]);
-  const value = element(allowed.has(node.tag ?? "") ? node.tag as "div" : "div");
-  if (node.kind === "frame") value.textContent = "此布局需要分页预览";
-  else { for (const child of node.children ?? []) value.append(nativeTree(child)); if (node.text) value.append(document.createTextNode(node.text)); }
-  return value;
+    if (node.kind === "text")
+        return uiTextNode(node.text ?? "");
+    if (node.kind === "tag")
+        return document.createDocumentFragment();
+    const allowed = new Set(["p", "div", "span", "strong", "em", "s", "blockquote", "ul", "ol", "li", "table", "thead", "tbody", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6", "br"]);
+    const value = element(allowed.has(node.tag ?? "") ? node.tag as "div" : "div");
+    if (node.kind === "frame")
+        setUiText(value, uiMessage("knowledge.layoutNeedsPagedPreview"));
+    else {
+        for (const child of node.children ?? [])
+            value.append(nativeTree(child));
+        if (node.text)
+            value.append(uiTextNode(node.text));
+    }
+    return value;
 }
-
 /** Mount beside the shared editor. No independent source, history or persistence store. */
 export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost): KnowledgePanel {
-  container.classList.add("knowledge-panel"); container.setAttribute("aria-label", "知识与批注");
-  const gate = new KnowledgeReadGate();
-  const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
-  let graphSession = "";
-  const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new Error("校对接口不可用")), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
-  let snapshot: KnowledgeSnapshot | null = null;
-  let snapshotBasis: KnowledgeContext | null = null;
-  let tab = "links";
-  let enabled = localStorage.getItem("weftext-potential-links") === "true";
-  let problemHints = localStorage.getItem("weftext-link-problem-hints") === "true", composing = false;
-  const hintedLinks = new Map<HTMLAnchorElement, { title: string | null; description: string | null; hint: HTMLElement }>();
-  let ruleScope = "", rules = new PersonalRelationRules(), diagnosticView: RelationshipDiagnosticsView;
-  let mentionDomain = "all", exclusionScope = "note";
-  function relationNode(ref: KnowledgeNodeRef): RelationNode { return { key: nodeIdentity(ref), title: nodeLabel(ref), path: ref.path, reference: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }; }
-  function ensureRules(): void {
-    const scope = host.context()?.workspaceId ?? ""; if (scope === ruleScope && diagnosticView) return;
-    rules.closePreviews(); ruleScope = scope; const key = `weftext-relations-v1:${scope}`;
-    let stored: string | null = null; try { stored = localStorage.getItem(key); } catch { /* Saving reports its own error. */ }
-    rules = new PersonalRelationRules(next => localStorage.setItem(key, JSON.stringify(next)), stored);
-    diagnosticView = new RelationshipDiagnosticsView(rules, node => Promise.resolve(host.navigate(node.reference)), async issue => {
-      if (!sameKnowledgeBasis(snapshotBasis, host.context())) throw new Error("诊断依据已变化，请刷新后定位。");
-      const current = host.context(); if (!current || `${current.workspaceId}/${current.nodeId}` !== issue.source.key) await host.navigate(issue.source.reference);
-      if (issue.field) { host.notify("已打开属性来源笔记；没有精确源码位置，请在属性面板查看原字段。"); return; }
-      const target = host.context();
-      if (!target || `${target.workspaceId}/${target.nodeId}` !== issue.source.key || !issue.sourceHash || await nodeSourceHash(target.source) !== issue.sourceHash) { host.notify("已打开来源笔记；当前正文已变化，没有采用旧的精确位置。", true); return; }
-      if (issue.from !== undefined && issue.to !== undefined) host.selectSource?.(issue.from, issue.to);
-    }, report);
-  }
-  let surface: HTMLElement | null = null;
-  let mappings: KnowledgeTextMapping[] = [];
-  let overlay: HTMLElement | null = null;
-  let popover: HTMLElement | null = null;
-  let popoverAnchor: HTMLElement | null = null;
-  let pendingPlan: { plan: KnowledgePlan; context: KnowledgeContext; receipt?: KnowledgeReceipt } | null = null;
-  let disposed = false, busy = false, loading = false;
-  let annotationBody = "", suggestionReplacement = "", annotationKind = "comment", annotationTarget = "whole_document";
-  let annotationSelection: KnowledgeContext["selection"];
-  let annotationSelectionBasis: KnowledgeContext | null = null;
-  const replies = new Map<string, string>();
-  const citationInputs = new Map<string, ReturnType<typeof newNativeCitationInputs>>();
-  let relationFilter = "all";
-  const reconfirmations = new Map<string, { replacement: string; basis: KnowledgeContext | null; selection?: KnowledgeContext["selection"] }>();
-  const fileDrafts = new Map<string, { name: string; parent: string; backup: string; allowLosses: boolean; restores: Map<string, { name: string; parent: string }> }>();
-  const templateDrafts = new Map<string, { name: string; parent: string; parameters: Record<string, KnowledgeTemplateValue>; presence: Record<string, "omitted" | "value" | "none"> }>();
-  type RegistrationSlot = { name: string; kind: "markup" | "string" | "bool" | "int"; from: number; to: number; nullable?: boolean; default?: KnowledgeTemplateValue };
-  const registrationDrafts = new Map<string, { title: string; description: string; templateId?: string; basis: KnowledgeContext | null; parameters: RegistrationSlot[]; open: boolean; slotsOpen: boolean; slot: { name: string; kind: RegistrationSlot["kind"]; nullable: boolean; defaultMode: "omitted" | "value" | "none"; defaultValue: KnowledgeTemplateValue } }>();
-  let renderedBasis: KnowledgeContext | null = null;
-  let deferredRender = false;
-  let mediaDraft: MediaRegionInput | null = null;
-  const mediaContainer = element("div", "knowledge-media-viewer");
-  let mediaController: { dispose(): void } | null = null;
-  let mediaSession: string | null = null;
-  const status = element("div", "knowledge-status"); status.setAttribute("aria-live", "polite");
-  const onBlur = (): void => { if (deferredRender) queueMicrotask(() => { if (!disposed && !(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))) { deferredRender = false; render(); } }); };
-  container.addEventListener("focusout", onBlur);
-
-  function report(error: unknown): void { const message = error instanceof Error ? error.message : String(error); status.textContent = message; host.notify(message, true); }
-  async function copy(text: string): Promise<void> { try { if (host.copy) await host.copy(text); else await navigator.clipboard.writeText(text); host.notify("已复制。"); } catch (error) { report(error); } }
-  function navigate(target: string | KnowledgeNodeRef): void { void Promise.resolve(host.navigate(target)).catch(report); }
-  function section(title: string, description?: string): HTMLElement { const value = element("section", "knowledge-section"); value.append(element("h3", "", title)); if (description) value.append(element("p", "knowledge-help", description)); return value; }
-  function closePopover(restoreFocus = false): void { popover?.remove(); popover = null; const previous = popoverAnchor; popoverAnchor = null; if (restoreFocus && previous?.isConnected) previous.focus(); }
-  function clearHints(): void { for (const [anchor, old] of hintedLinks) { if (old.title === null) anchor.removeAttribute("title"); else anchor.title = old.title; if (old.description === null) anchor.removeAttribute("aria-describedby"); else anchor.setAttribute("aria-describedby", old.description); anchor.classList.remove("knowledge-link-problem"); old.hint.remove(); } hintedLinks.clear(); }
-  function clearOverlay(): void { closePopover(); overlay?.remove(); overlay = null; clearHints(); }
-  function knownMentions(): { fragment: NonNullable<KnowledgeSnapshot["mentions"]>["fragments"][number]; hit: KnowledgeMention }[] {
-    ensureRules(); const source = `${host.context()?.workspaceId}/${host.context()?.nodeId}`;
-    return snapshot?.mentions?.fragments.flatMap(fragment => layoutMentions(fragment.hits.map(hit => {
-      const candidates = (hit.candidates ?? hit.targets.map(target => ({ target, term: hit.terms[0], provenance: "title", fragment: undefined }))).filter(c => (mentionDomain === "all" || (mentionDomain === "fragments") === !!c.fragment) && visibleCandidate(rules.rules, source, c.term, nodeIdentity(c.target)));
-      return { ...hit, candidates, targets: candidates.map(c => c.target) };
-    }).filter(hit => hit.candidates.length)).map(hit => ({ fragment, hit }))) ?? [];
-  }
-  function mentionIntent(fragmentId: string, hit: KnowledgeMention, target: KnowledgeNodeRef, fragment?: string | null): KnowledgeIntent {
-    return { kind: "mentionConvert", generation: snapshot?.mentions?.generation, fragmentId, startScalar: hit.startScalar, endScalar: hit.endScalar, target, fragment };
-  }
-  async function confirmPlan(title: string, plan: KnowledgePlan): Promise<boolean> {
-    const dialog = element("dialog", "knowledge-dialog"); dialog.append(element("h2", "", title), element("p", "knowledge-help", "核对本次完整变动。确认只应用这份准备结果。"));
-    const preview = element("div", "knowledge-plan-preview");
-    const verbs: Record<string, string> = { create: "新建", write: "写入", update: "更新", replace: "替换", copy: "复制", move: "移动", rename: "改名", trash: "送到回收站", restore: "恢复", delete: "移除原位置", remove: "移除原位置", relocateFrom: "移出原位置", relocateTo: "移到新位置", backup: "备份到", import: "写入导入内容", style: "更新库样式" };
-    if (plan.kind === "trashNode") preview.append(element("p", "knowledge-warning", "笔记节点将进入资料库回收站，可通过恢复入口还原。"));
-    if (plan.kind === "copyNode" || plan.kind === "backupLibrary") preview.append(element("p", "knowledge-help", "创建独立副本；下列列出本次复制的准确目标。"));
-    if (plan.draftOnly === true) preview.append(element("p", "knowledge-help", "本次修改当前共享草稿，可用一次撤销还原；保存时才写入正文文件。"));
-    const fileChanges = plan.changes?.filter(change => Boolean(change.path)) ?? [];
-    if (fileChanges.length) {
-      preview.append(element("h3", "", `本次涉及 ${fileChanges.length} 个文件变化`));
-      const paths = element("ul", "knowledge-change-list");
-      for (const change of fileChanges) { const item = element("li"); item.append(element("strong", "", verbs[change.action ?? ""] ?? "变更"), element("span", "knowledge-address", change.path)); if (change.bytes !== undefined) item.append(element("small", "knowledge-help", `${change.bytes.toLocaleString()} 字节`)); paths.append(item); } preview.append(paths);
-    }
-    const currentSource = host.context()?.source;
-    const edit = plan.edit as { from?: number; to?: number; text?: string } | undefined;
-    if (currentSource !== undefined && edit && typeof edit.from === "number" && typeof edit.to === "number" && typeof edit.text === "string") {
-      preview.append(element("h3", "", "所选范围的变化"));
-      const pair = element("div", "knowledge-before-after");
-      const before = element("div"); before.append(element("strong", "", "原内容"), element("pre", "knowledge-replacement", currentSource.slice(edit.from, edit.to)));
-      const after = element("div"); after.append(element("strong", "", "应用后"), element("pre", "knowledge-replacement", edit.text)); pair.append(before, after); preview.append(pair);
-    }
-    const detail = plan.preview;
-    if (typeof detail === "string") preview.append(element("p", "knowledge-annotation-body", detail));
-    else if (detail && typeof detail === "object") {
-      const previewRecord = detail as Record<string, unknown>;
-      const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-      const stateName = (value: unknown): string => typeof value === "string" ? ({ open: "未解决", resolved: "已解决", pending: "待接受", accepted: "已接受", rejected: "已拒绝" } as Record<string, string>)[value] ?? value : "";
-      const targetSummary = (value: unknown): string => {
-        const target = asRecord(value), anchor = asRecord(target.anchor), range = asRecord(anchor.sourceRange);
-        const kind = String(target.kind ?? "");
-        if (["sourceRange", "source_range", "sourceElement", "source_element"].includes(kind)) return `${kind === "sourceElement" || kind === "source_element" ? "源元素" : "源范围"} UTF-16 [${range.utf16From ?? target.from ?? "?"}, ${range.utf16To ?? target.to ?? "?"})${typeof anchor.visibleExcerpt === "string" ? `：${anchor.visibleExcerpt}` : ""}`;
-        if (["wholeDocument", "whole_document"].includes(kind)) return "整篇笔记";
-        if (kind === "pdfRegion" || kind === "pdf_region") { const rect = asRecord(target.rect); return `PDF 第 ${Number(target.pageIndex ?? 0) + 1} 页，矩形 (${rect.x ?? target.x}, ${rect.y ?? target.y}, ${rect.width ?? target.rectWidth}, ${rect.height ?? target.rectHeight}) pt`; }
-        if (kind === "imageRegion" || kind === "image_region") { const rect = asRecord(target.rect); return `图片矩形 (${rect.x ?? target.x}, ${rect.y ?? target.y}, ${rect.width ?? target.rectWidth}, ${rect.height ?? target.rectHeight}) 像素`; }
-        if (kind === "mediaInterval" || kind === "media_interval") { const timebase = asRecord(target.timebase); return `媒体区间 [${target.startTick}, ${target.endTick}) ticks；每秒 ${timebase.numerator ?? target.timebase}/${timebase.denominator ?? target.timebaseDenominator ?? 1} ticks`; }
-        return "准确目标由本次准备结果固定";
-      };
-      const pair = (title: string, before: string, after: string): void => {
-        const group = section(title), columns = element("div", "knowledge-before-after");
-        for (const [label, text] of [["修改前", before], ["修改后", after]]) { const column = element("div"); column.append(element("strong", "", label), element("pre", "knowledge-replacement", text)); columns.append(column); }
-        group.append(columns); preview.append(group);
-      };
-      const annotationText = (record: Record<string, unknown>): string => {
-        const lines: string[] = [];
-        if (typeof record.body === "string") lines.push(`讨论：${record.body}`);
-        if (typeof record.reviewState === "string") lines.push(`讨论状态：${stateName(record.reviewState)}`);
-        if (record.target) lines.push(`目标：${targetSummary(record.target)}`);
-        const suggestion = asRecord(record.suggestion);
-        if (typeof suggestion.replacement === "string") lines.push(`建议文字：${suggestion.replacement}`);
-        if (typeof suggestion.state === "string") lines.push(`建议状态：${stateName(suggestion.state)}`);
-        return lines.join("\n");
-      };
-      const annotationRecords = (source: unknown): Record<string, unknown>[] | null => {
-        if (typeof source !== "string") return null;
-        try { const value = JSON.parse(source); return Array.isArray(value?.annotations) ? value.annotations.map(asRecord) : null; } catch { return null; }
-      };
-      const templateText = (value: unknown): string => {
-        const template = asRecord(value); if (!Object.keys(template).length) return "尚未登记";
-        const lines = [`模板名称：${typeof template.title === "string" ? template.title : ""}`];
-        if (typeof template.description === "string" && template.description) lines.push(`用途：${template.description}`);
-        const sourceNode = asRecord(template.sourceNode); const context = host.context();
-        if (typeof sourceNode.path === "string") lines.push(`来源：${sourceNode.path}`);
-        else if (context && sourceNode.nodeId === context.nodeId && sourceNode.workspaceId === context.workspaceId) lines.push(`来源：${context.path}`);
-        const slots = Array.isArray(template.parameters) ? template.parameters : Array.isArray(template.slots) ? template.slots : [];
-        if (!slots.length) lines.push("参数：整篇模板，无参数范围");
-        for (const entry of slots) { const slot = asRecord(entry), range = asRecord(slot.range); const kind = String(slot.kind ?? "markup"); const defaults = !("default" in slot) ? "必填" : slot.default === null ? "默认空值" : typeof slot.default === "boolean" ? `默认${slot.default ? "是" : "否"}` : typeof slot.default === "string" ? `默认：${slot.default === "" ? "空字符串" : slot.default}` : "默认内容见准确准备结果"; lines.push(`参数 ${slot.name}：${({ markup: "正文文字", string: "字符串", bool: "布尔值", int: "整数" } as Record<string, string>)[kind] ?? kind}，${defaults}${range.utf16From !== undefined ? `；UTF-16 [${range.utf16From}, ${range.utf16To})` : ""}`); }
-        return lines.join("\n");
-      };
-      if (previewRecord.templateAfter) pair("模板登记变化", templateText(previewRecord.templateBefore), templateText(previewRecord.templateAfter));
-      if (Array.isArray(previewRecord.files)) for (const entry of previewRecord.files) {
-        const file = asRecord(entry); if (file.action === "readDependency") continue;
-        const path = typeof file.path === "string" ? file.path : "文件内容";
-        if (previewRecord.templateAfter && path.replaceAll("\\", "/").endsWith("/.weftext-settings.json")) continue;
-        const before = typeof file.before === "string" ? file.before : "", after = typeof file.after === "string" ? file.after : "";
-        const annotationsAfter = annotationRecords(file.after), annotationsBefore = annotationRecords(file.before) ?? [];
-        if (annotationsAfter) {
-          const previous = new Map(annotationsBefore.map(record => [record.annotationId, record]));
-          for (const record of annotationsAfter) { const old = previous.get(record.annotationId); if (JSON.stringify(old) !== JSON.stringify(record)) pair("批注变化", old ? annotationText(old) : "新批注", annotationText(record)); }
-        } else if (before || after) pair(path, before, after);
-      }
-      const source = asRecord(previewRecord.source); if (typeof source.before === "string" && typeof source.after === "string" && !Array.isArray(previewRecord.files)) pair("正文变化", source.before, source.after);
-      const suggestion = asRecord(previewRecord.suggestion); if (typeof suggestion.before === "string" && typeof suggestion.after === "string") pair("建议状态", stateName(suggestion.before), stateName(suggestion.after));
-      if (previewRecord.reconfirmation === true) preview.append(element("p", "knowledge-warning", "本次重新确认建议的准确目标和替换文字，建议仍保持待接受。"));
-      if (previewRecord.targetAfter) preview.append(element("p", "knowledge-annotation-body", `新目标：${targetSummary(previewRecord.targetAfter)}`));
-      if (typeof previewRecord.replacementAfter === "string") preview.append(element("pre", "knowledge-replacement", previewRecord.replacementAfter));
-      const labels: Record<string, string> = { beforeSource: "源修改前", sourceBefore: "源修改前", afterSource: "源修改后", sourceAfter: "源修改后", annotationBefore: "批注修改前", annotationAfter: "批注修改后", annotationsBefore: "讨论修改前", annotationsAfter: "讨论修改后", before: "修改前", after: "修改后", summary: "变化说明", message: "说明", target: "目标", excerpt: "所选文字", replacement: "建议替换文字", address: "目标地址", fullLink: "完整原生链接", reviewState: "讨论状态", suggestionState: "建议状态" };
-      for (const [key, value] of Object.entries(detail)) {
-        if (!labels[key]) continue;
-        const group = section(labels[key]);
-        if (typeof value === "string") group.append(element("pre", "knowledge-replacement", value));
-        else if (value && typeof value === "object") {
-          const record = value as Record<string, unknown>;
-          for (const [fieldName, label] of [["body", "批注内容"], ["visibleExcerpt", "已存摘录"], ["replacement", "建议文字"], ["reviewState", "讨论状态"], ["suggestionState", "建议状态"]]) {
-            const fieldValue = record[fieldName]; if (typeof fieldValue === "string") group.append(element("p", "knowledge-annotation-body", `${label}：${({ open: "未解决", resolved: "已解决", pending: "待接受", accepted: "已接受", rejected: "已拒绝" } as Record<string, string>)[fieldValue] ?? fieldValue}`));
-          }
+    container.classList.add("knowledge-panel");
+    setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
+    const gate = new KnowledgeReadGate();
+    const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
+    let graphSession = "";
+    const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
+    let snapshot: KnowledgeSnapshot | null = null;
+    let snapshotBasis: KnowledgeContext | null = null;
+    let tab = "links";
+    let enabled = localStorage.getItem("weftext-potential-links") === "true";
+    let problemHints = localStorage.getItem("weftext-link-problem-hints") === "true", composing = false;
+    const hintedLinks = new Map<HTMLAnchorElement, {
+        title: string | null;
+        description: string | null;
+        hint: HTMLElement;
+    }>();
+    let ruleScope = "", rules = new PersonalRelationRules(), diagnosticView: RelationshipDiagnosticsView;
+    let mentionDomain = "all", exclusionScope = "note";
+    function relationNode(ref: KnowledgeNodeRef): RelationNode { return { key: nodeIdentity(ref), title: nodeLabel(ref), path: ref.path, reference: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }; }
+    function ensureRules(): void {
+        const scope = host.context()?.workspaceId ?? "";
+        if (scope === ruleScope && diagnosticView)
+            return;
+        rules.closePreviews();
+        ruleScope = scope;
+        const key = `weftext-relations-v1:${scope}`;
+        let stored: string | null = null;
+        try {
+            stored = localStorage.getItem(key);
         }
-        if (group.children.length > 1) preview.append(group);
-      }
+        catch { /* Saving reports its own error. */ }
+        rules = new PersonalRelationRules(next => localStorage.setItem(key, JSON.stringify(next)), stored);
+        diagnosticView = new RelationshipDiagnosticsView(rules, node => Promise.resolve(host.navigate(node.reference)), async (issue) => {
+            if (!sameKnowledgeBasis(snapshotBasis, host.context()))
+                throw new UiError(uiMessage("knowledge.diagnosticBasisChanged"));
+            const current = host.context();
+            if (!current || `${current.workspaceId}/${current.nodeId}` !== issue.source.key)
+                await host.navigate(issue.source.reference);
+            if (issue.field) {
+                host.notify(uiMessage("knowledge.propertyOwnerOpenedNoSource"));
+                return;
+            }
+            const target = host.context();
+            if (!target || `${target.workspaceId}/${target.nodeId}` !== issue.source.key || !issue.sourceHash || await nodeSourceHash(target.source) !== issue.sourceHash) {
+                host.notify(uiMessage("knowledge.sourceOpenedBodyChanged"), true);
+                return;
+            }
+            if (issue.from !== undefined && issue.to !== undefined)
+                host.selectSource?.(issue.from, issue.to);
+        }, report);
     }
-    if (plan.losses?.length) { const losses = section("本次损失与不能处理的内容"); for (const loss of plan.losses) losses.append(element("p", "knowledge-warning", knowledgeLossMessage(loss))); preview.append(losses); }
-    if (!preview.children.length) preview.append(element("p", "knowledge-help", "准备结果已固定。本次确认应用上方选定的操作。"));
-    dialog.append(preview);
-    const diagnostics = element("details", "knowledge-diagnostics"); diagnostics.append(element("summary", "", "查看准备结果详情")); const raw = element("pre", "knowledge-plan", JSON.stringify(plan, null, 2)); diagnostics.append(raw); dialog.append(diagnostics);
-    const actions = element("div", "knowledge-actions"); dialog.append(actions); document.body.append(dialog);
-    return new Promise(resolve => {
-      const finish = (value: boolean): void => { dialog.close(); dialog.remove(); resolve(value); };
-      actions.append(action("取消", () => finish(false)), action("确认应用", () => finish(true), "knowledge-button primary"));
-      dialog.addEventListener("cancel", event => { event.preventDefault(); finish(false); }); dialog.showModal();
-    });
-  }
-  async function perform(title: string, intent: KnowledgeIntent): Promise<boolean> {
-    if (busy) return false;
-    if (pendingPlan) { host.notify("上次操作结果仍待确认，请先检查原操作。", true); return false; }
-    busy = true; status.textContent = "正在准备准确变动…";
-    try {
-      const actionBasis = host.context();
-      await host.beforeAction?.();
-      const context = host.context(); if (!context) throw new Error("请先打开当前笔记。");
-      if ((["mentionConvert", "linkConvert"].includes(intent.kind) || intent.kind.startsWith("nativeCitation") || intent.kind.startsWith("nativeReference")) && host.canEditSource?.() === false) throw new Error("请先切换到编辑视图，再编辑引用。阅读模式只浏览和复制内容。");
-      if (!sameKnowledgeBasis(actionBasis, context)) throw new Error("当前输入已进入共享草稿，请核对更新后的目标并重新操作。输入已保留。");
-      const plan = await host.prepare(intent, context);
-      if (disposed) return false;
-      if (!sameKnowledgeBasis(context, host.context())) throw new Error("准备期间草稿或当前笔记已变化，请重新操作。输入已保留。");
-      if (!await confirmPlan(title, plan)) { status.textContent = "已取消，输入保留。"; return false; }
-      if (disposed) return false;
-      if (!sameKnowledgeBasis(context, host.context())) throw new Error("确认时草稿已变化，本次准备结果未应用。请重新准备。");
-      pendingPlan = { plan, context };
-      const receipt = await host.commit(plan, context);
-      pendingPlan.receipt = receipt;
-      if (uncertainKnowledgeOperation(receipt.status)) { status.textContent = "操作结果尚未确认，保留原操作以供检查。"; render(); return false; }
-      if (!originalCommitted(receipt)) throw new Error(receipt.message || `操作未完成：${receipt.status}`);
-      if (!committedDeliveryComplete(receipt)) throw new Error(`原操作已提交，交付仍待完成：${receipt.deliveryError?.message ?? receipt.documentError?.message ?? "请查询原操作。"}`);
-      await refresh(true); pendingPlan = null;
-      status.textContent = receipt.message || "操作已完成。"; host.notify(status.textContent); return true;
-    } catch (error) {
-      if (pendingPlan && !retainPendingKnowledgePlan(pendingPlan.plan.draftOnly === true, error)) pendingPlan = null;
-      report(error); render(); return false;
-    } finally { busy = false; }
-  }
-  async function inspectPending(): Promise<void> {
-    if (busy || !pendingPlan || !host.inspectOperation) return;
-    const pending = pendingPlan; busy = true;
-    try {
-      const receipt = await host.inspectOperation(pending.plan.operationId, pending.context);
-      if (pendingPlan !== pending) return;
-      if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt)) throw new Error("原操作已确认提交，后续状态不一致；原回执与编号保留。");
-      pending.receipt = receipt;
-      if (committedDeliveryComplete(receipt)) { await refresh(true); pendingPlan = null; }
-      else if (receipt.status === "resolved") pendingPlan = null;
-      else if (receipt.deliveryError || receipt.documentError) throw new Error(`原操作已提交，交付仍待完成：${receipt.deliveryError?.message ?? receipt.documentError?.message}`);
-      status.textContent = receipt.message || `原操作状态：${receipt.status}`;
-    } catch (error) { report(error); }
-    finally { busy = false; render(); }
-  }
-
-  function chooser(fragmentId: string, hit: KnowledgeMention, text: string): HTMLElement {
-    const value = element("div", "knowledge-chooser"); value.append(element("strong", "", text || hit.terms.join(" / ")));
-    let selected: NonNullable<KnowledgeMention["candidates"]>[number] | null = null;
-    const convert = action("转换为原生链接", async () => { if (selected) await perform("转换潜在链接", mentionIntent(fragmentId, hit, selected.target, selected.fragment)); }, "knowledge-button primary"); convert.disabled = true;
-    const open = action("打开所选候选", async () => { if (selected && sameKnowledgeBasis(snapshotBasis, host.context())) await host.navigate(`weftext-node://${selected.target.workspaceId}/${selected.target.nodeId}${selected.fragment ? `#${encodeURIComponent(selected.fragment)}` : ""}`); }); open.disabled = true;
-    const group = element("div", "knowledge-targets"); group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "选择准确链接目标");
-    const name = `mention-${crypto.randomUUID()}`;
-    for (const candidate of hit.candidates ?? []) {
-      const target = candidate.target;
-      const radio = input(); radio.type = "radio"; radio.name = name; radio.value = nodeIdentity(target);
-      const label = element("label", "knowledge-target"); label.append(radio, element("span", "", `${nodeLabel(target)}${candidate.fragment ? ` #${candidate.fragment}` : ""} · ${({ title: "笔记标题", nameField: "名称字段", heading: "标题文字", stableLabel: "稳定标签" })[candidate.provenance] ?? candidate.provenance}`));
-      if (target.path) label.append(element("small", "", target.path));
-      radio.onchange = () => { selected = candidate; open.disabled = false; convert.disabled = !hit.writable || host.canEditSource?.() === false || !sameKnowledgeBasis(snapshotBasis, host.context()); }; group.append(label);
-      label.append(action("排除此目标…", () => { const source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "target", value: nodeIdentity(target), source }, `排除准确目标 ${nodeLabel(target)} · ${nodeIdentity(target)}；范围：${source ? "此篇" : "个人此库"}，不影响真实链接。`, knownMentions().filter(m => m.hit.targets.some(t => nodeIdentity(t) === nodeIdentity(target))).length, () => { closePopover(); render(); drawOverlay(); }); }));
-    }
-    value.append(group);
-    if (!hit.writable) value.append(element("p", "knowledge-help", "只读发现：当前来源没有准确可写范围。"));
-    else if (host.canEditSource?.() === false) value.append(element("p", "knowledge-help", "阅读模式可查看候选；切换到编辑视图后可转换链接。"));
-    value.append(open, convert, action("忽略此词…", () => { const term = text || hit.terms[0], source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "term", value: term, source }, `精确词：${term}；范围：${source ? "此篇" : "个人此库"}。Unicode 字面匹配，不改作者标签。`, knownMentions().filter(m => m.hit.terms.includes(term)).length, () => { closePopover(); render(); drawOverlay(); }); })); return value;
-  }
-  function showMentionPopover(anchor: HTMLElement, fragmentId: string, hit: KnowledgeMention, text: string): void {
-    if (popover?.dataset.mention === `${fragmentId}:${hit.startScalar}:${hit.endScalar}`) return;
-    closePopover(); popoverAnchor = anchor; popover = element("div", "knowledge-popover"); popover.dataset.mention = `${fragmentId}:${hit.startScalar}:${hit.endScalar}`; popover.setAttribute("role", "dialog"); popover.setAttribute("aria-label", "潜在链接目标");
-    popover.append(chooser(fragmentId, hit, text), action("关闭", () => closePopover(true))); document.body.append(popover);
-    const rect = anchor.getBoundingClientRect(); popover.style.left = `${Math.min(Math.max(8, rect.left), Math.max(8, innerWidth - 330))}px`; popover.style.top = `${Math.min(rect.bottom + 5, Math.max(8, innerHeight - popover.offsetHeight - 8))}px`;
-  }
-  function textRange(mapping: KnowledgeTextMapping, start: number, end: number): Range | null {
-    if (!isGraphemeRange(mapping.text, start, end) || mapping.node instanceof HTMLTextAreaElement) return null;
-    const node = mapping.node instanceof Text ? mapping.node : mapping.node.firstChild;
-    if (!(node instanceof Text) || node.textContent !== mapping.text) return null;
-    const range = document.createRange(); range.setStart(node, start); range.setEnd(node, end); return range;
-  }
-  function drawOverlay(): void {
-    clearOverlay();
-    if (composing || !surface || !sameKnowledgeBasis(snapshotBasis, host.context()) || !surface.isConnected) return;
-    if (problemHints) for (const anchor of surface.querySelectorAll<HTMLAnchorElement>("a[href]")) {
-      const issue = snapshot?.diagnostics?.issues.find(i => i.source.nodeId === host.context()?.nodeId && i.occurrence.target === anchor.getAttribute("href")); if (!issue) continue;
-      const hint = element("span", "knowledge-problem-description", `链接问题：${resolutionLabels[issue.resolution.status] ?? issue.resolution.status}。可在关系诊断定位来源。`); hint.id = `link-problem-${crypto.randomUUID()}`; hint.hidden = true;
-      hintedLinks.set(anchor, { title: anchor.getAttribute("title"), description: anchor.getAttribute("aria-describedby"), hint }); anchor.title = hint.textContent!; anchor.setAttribute("aria-describedby", `${anchor.getAttribute("aria-describedby") ?? ""} ${hint.id}`.trim()); anchor.classList.add("knowledge-link-problem"); surface.append(hint);
-    }
-    if (!enabled) return;
-    const base = surface.getBoundingClientRect(); overlay = element("div", "knowledge-overlays"); overlay.setAttribute("aria-label", "潜在链接提示"); surface.append(overlay);
-    const overflow = new Map<string, { rect: DOMRect; count: number }>();
-    for (const { fragment, hit } of knownMentions()) {
-      const mapping = mappings.find(item => item.nodeKey === (fragment.nodeKey ?? fragment.id)); if (!mapping) continue;
-      const range = textRange(mapping, hit.startUtf16, hit.endUtf16); if (!range) continue;
-      const rects = [...range.getClientRects()];
-      if (hit.lane === undefined) {
-        const key = `${fragment.id}:${hit.component}`, previous = overflow.get(key); const rect = rects.at(-1); if (rect) overflow.set(key, { rect, count: (previous?.count ?? 0) + 1 }); continue;
-      }
-      for (const rect of rects) {
-        if (rect.width <= 0) continue;
-        const underline = action("", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16)), "knowledge-underline");
-        underline.setAttribute("aria-label", `${hit.terms.join(" / ")}：${hit.targets.length} 个候选目标，选择后转换`); underline.style.left = `${rect.left - base.left + surface.scrollLeft}px`; underline.style.top = `${rect.bottom - base.top + surface.scrollTop + hit.lane * 5 - 3}px`; underline.style.width = `${rect.width}px`;
-        underline.addEventListener("mouseenter", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16))); underline.addEventListener("focus", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16))); overlay.append(underline);
-        underline.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16)); popover?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus(); } });
-      }
-    }
-    for (const { rect, count } of overflow.values()) {
-      const more = action(`+${count}`, () => { tab = "mentions"; render(); container.querySelector<HTMLElement>(".knowledge-mentions")?.focus(); }, "knowledge-overflow"); more.setAttribute("aria-label", `更多 ${count} 个重叠范围，打开完整候选列表`); more.style.left = `${rect.right - base.left}px`; more.style.top = `${rect.bottom - base.top + 7}px`; overlay.append(more);
-    }
-  }
-  const resize = (): void => { if (!disposed) drawOverlay(); };
-  const compositionStart = (): void => { composing = true; clearOverlay(); };
-  const compositionEnd = (): void => { composing = false; };
-  const escape = (event: KeyboardEvent): void => { if (event.key === "Escape" && popover) { closePopover(true); event.stopPropagation(); } };
-  window.addEventListener("resize", resize); window.addEventListener("keydown", escape);
-  window.addEventListener("compositionstart", compositionStart); window.addEventListener("compositionend", compositionEnd);
-
-  function renderLinks(body: HTMLElement): void {
-    ensureRules(); const d = snapshot?.diagnostics;
-    const diagnostics: RelationDiagnostics | undefined = d && { ...d, issues: d.issues.map<RelationIssue>(i => ({ source: relationNode(i.source), target: i.resolution.target ? relationNode(i.resolution.target) : undefined, address: i.occurrence.target, status: i.resolution.status, from: i.occurrence.utf16From, to: i.occurrence.utf16To, sourceHash: i.sourceHash })).concat((d.propertyIssues ?? []).map(p => ({ source: relationNode(p.source), target: p.resolution.target ? relationNode(p.resolution.target) : undefined, address: p.address, status: p.resolution.status, from: undefined, to: undefined, sourceHash: undefined, field: [p.fieldId, ...p.itemPath].join(" / ") }))), nodes: d.nodes.map(n => ({ ...n, node: relationNode(n.node) })) };
-    diagnosticView.render(body, diagnostics);
-    const hintSetting = element("label", "knowledge-setting"), hintCheck = input(); hintCheck.type = "checkbox"; hintCheck.checked = problemHints; hintCheck.onchange = () => { try { localStorage.setItem("weftext-link-problem-hints", String(hintCheck.checked)); problemHints = hintCheck.checked; drawOverlay(); } catch { hintCheck.checked = problemHints; report("问题提示偏好保存失败；扫描与正文保留。"); } }; hintSetting.append(hintCheck, document.createTextNode("正文显示问题提示（默认关闭，原链接导航保留）")); body.append(hintSetting);
-    const data = snapshot?.links;
-    if (!data) { body.append(element("p", "knowledge-help", "当前对象尚无可用链接索引。")); return; }
-    body.append(element("p", "knowledge-help", data.coverage === "partial" ? "当前获权范围扫描不完整，下列为已知链接。" : "当前获权扫描范围已完成。"));
-    const filter=select([["all","全部关系"],["links","普通笔记链接"],["citations","文献引用"],["document","本篇交叉引用"],["properties","属性关系"]]);filter.value=relationFilter;filter.setAttribute("aria-label","关系分类");filter.onchange=()=>{relationFilter=filter.value;render();};body.append(filter);
-    if(relationFilter==="citations") { const context=host.context()!;let state=citationInputs.get(context.sessionId);if(!state){state=newNativeCitationInputs();citationInputs.set(context.sessionId,state);}renderNativeCitations(body,snapshot?.citations,state,{writable:host.canEditSource?.()!==false,at:()=>citationInsertionByte(context.source,context.selection?.from??context.source.length),perform:(title,intent)=>perform(title,intent as KnowledgeIntent),select:range=>host.selectSource?.(range.utf16From,range.utf16To),navigate,repaint:render});return; }
-    if(relationFilter==="all" || relationFilter==="document"){
-      const group=section("本篇交叉引用与待分类原生引用","只有本次实际编译确认的文献输出接入文献分类；@标签 源码候选保留待分类，不按同名连接 Work。");
-      for(const ref of snapshot?.citations?.editor.crossReferences??[]){if(ref.renderedKind==="citation")continue;group.append(action(ref.label,()=>host.selectSource?.(ref.range.utf16From,ref.range.utf16To)),element("span","knowledge-badge",ref.renderedKind==="document"?"本次原生文内引用":ref.kind==="link"?"文内链接源码槽":"原生引用源码：待执行分类"));}body.append(group);
-    }
-    for (const [title, entries] of (relationFilter==="all"||relationFilter==="links" ? [["出链", data.outgoing], ["ID 反链", data.incomingId], ["当前路径解析入链", data.incomingPath]] as const:[])) {
-      const group = section(title); body.append(group);
-      if (!entries.length) { group.append(element("p", "knowledge-empty", data.coverage === "complete" ? "该扫描范围没有链接。" : "暂未发现；扫描不完整。")); continue; }
-      for (const entry of entries) {
-        const row = element("article", "knowledge-card");
-        const target = entry.resolution.target;
-        if(target) row.title=`当前获权标题：${nodeLabel(target)}；正文显示文字保持作者原值。`;
-        row.append(action(title === "出链" ? target ? nodeLabel(target) : entry.occurrence.target : nodeLabel(entry.source), () => navigate(title === "出链" ? entry.occurrence.target : entry.source), "knowledge-link-title"));
-        row.append(element("span", "knowledge-badge", resolutionLabels[entry.resolution.status] ?? entry.resolution.status), element("p", "knowledge-address", entry.occurrence.target));
-        const controls = element("div", "knowledge-actions"); controls.append(action("复制地址", () => copy(entry.occurrence.target)));
-        const raw = entry.occurrence.raw ?? (snapshotBasis && entry.source.nodeId === snapshotBasis.nodeId ? snapshotBasis.source.slice(entry.occurrence.utf16From, entry.occurrence.utf16To) : undefined);
-        if (raw !== undefined) controls.append(action("复制完整链接", () => copy(raw)));
-        if (title === "出链") {
-          const format = select(Object.entries(formLabels)); format.setAttribute("aria-label", "链接转换形式"); if (entry.resolution.form) format.value = entry.resolution.form;
-          const convert = action("转换", () => perform("转换链接形式", { kind: "linkConvert", generation: data.generation, occurrence: entry.occurrence, form: format.value }));
-          convert.disabled = entry.resolution.status !== "resolved" || !entry.occurrence.destinationSlot || host.canEditSource?.() === false;
-          controls.append(format, convert);
-          if (host.linkCopy) {
-            const copyForm = async (full: boolean): Promise<void> => { const context = host.context(); if (!context || !sameKnowledgeBasis(snapshotBasis, context)) { report("链接信息已变化，请刷新后复制。原源仍保留。"); return; } try { const result = await host.linkCopy!(entry, format.value, context); await copy(full ? result.fullLink : result.address); } catch (error) { report(error); } };
-            controls.append(action("复制所选地址", () => copyForm(false)), action("复制所选完整链接", () => copyForm(true)));
-            const stableCopy=async(full:boolean):Promise<void>=>{const context=host.context();if(!context||!sameKnowledgeBasis(snapshotBasis,context))throw new Error("链接依据已变化，请刷新后复制。");try{const result=await host.linkCopy!(entry,"id",context);await copy(full?result.fullLink:result.address);}catch(error){report(error);}};
-            controls.append(action("复制应用稳定 URI",()=>stableCopy(false)),action("复制稳定原生 Typst 链接",()=>stableCopy(true)));
-            const web=action("复制 Web 深链（当前部署不可用）",()=>{});web.disabled=true;web.title="当前部署没有配置并验证登录返回、稳定身份及片段定位路由。";controls.append(web);
-          }
-          const updateText=action("更新此链接文字为当前标题",()=>perform("更新所选链接显示文字",{kind:"nativeCitationLinkText",generation:snapshot?.citations?.generation,occurrence:entry.occurrence}));updateText.disabled=host.canEditSource?.()===false||!target||!entry.occurrence.destinationSlot;controls.append(updateText);
-          if (convert.disabled) row.append(element("p", "knowledge-help", host.canEditSource?.() === false ? "阅读模式可浏览和复制链接；切换到编辑视图后可转换。" : "当前链接不能快捷转换；保留原生源与诊断。"));
+    let surface: HTMLElement | null = null;
+    let mappings: KnowledgeTextMapping[] = [];
+    let overlay: HTMLElement | null = null;
+    let popover: HTMLElement | null = null;
+    let popoverAnchor: HTMLElement | null = null;
+    let pendingPlan: {
+        plan: KnowledgePlan;
+        context: KnowledgeContext;
+        receipt?: KnowledgeReceipt;
+    } | null = null;
+    let disposed = false, busy = false, loading = false;
+    let annotationBody = "", suggestionReplacement = "", annotationKind = "comment", annotationTarget = "whole_document";
+    let annotationSelection: KnowledgeContext["selection"];
+    let annotationSelectionBasis: KnowledgeContext | null = null;
+    const replies = new Map<string, string>();
+    const citationInputs = new Map<string, ReturnType<typeof newNativeCitationInputs>>();
+    let relationFilter = "all";
+    const reconfirmations = new Map<string, {
+        replacement: string;
+        basis: KnowledgeContext | null;
+        selection?: KnowledgeContext["selection"];
+    }>();
+    const fileDrafts = new Map<string, {
+        name: string;
+        parent: string;
+        backup: string;
+        allowLosses: boolean;
+        restores: Map<string, {
+            name: string;
+            parent: string;
+        }>;
+    }>();
+    const templateDrafts = new Map<string, {
+        name: string;
+        parent: string;
+        parameters: Record<string, KnowledgeTemplateValue>;
+        presence: Record<string, "omitted" | "value" | "none">;
+    }>();
+    type RegistrationSlot = {
+        name: string;
+        kind: "markup" | "string" | "bool" | "int";
+        from: number;
+        to: number;
+        nullable?: boolean;
+        default?: KnowledgeTemplateValue;
+    };
+    const registrationDrafts = new Map<string, {
+        title: string;
+        description: string;
+        templateId?: string;
+        basis: KnowledgeContext | null;
+        parameters: RegistrationSlot[];
+        open: boolean;
+        slotsOpen: boolean;
+        slot: {
+            name: string;
+            kind: RegistrationSlot["kind"];
+            nullable: boolean;
+            defaultMode: "omitted" | "value" | "none";
+            defaultValue: KnowledgeTemplateValue;
+        };
+    }>();
+    let renderedBasis: KnowledgeContext | null = null;
+    let deferredRender = false;
+    let mediaDraft: MediaRegionInput | null = null;
+    const mediaContainer = element("div", "knowledge-media-viewer");
+    let mediaController: {
+        dispose(): void;
+    } | null = null;
+    let mediaSession: string | null = null;
+    const status = element("div", "knowledge-status");
+    status.setAttribute("aria-live", "polite");
+    const onBlur = (): void => {
+        if (deferredRender)
+            queueMicrotask(() => {
+                if (!disposed && !(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))) {
+                    deferredRender = false;
+                    render();
+                }
+            });
+    };
+    container.addEventListener("focusout", onBlur);
+    function report(error: unknown): void { const message = error instanceof Error ? errorUiText(error) : typeof error === "string" ? error : parseUiMessage(error) ?? uiMessage("error.invalidResponse"); setUiText(status, message); host.notify(message, true); }
+    async function copy(text: string): Promise<void> {
+        try {
+            if (host.copy)
+                await host.copy(text);
+            else
+                await navigator.clipboard.writeText(text);
+            host.notify(uiMessage("knowledge.copied"));
         }
-        row.append(controls); group.append(row);
-      }
-    }
-    const displayed = section("当前阅读预览中的链接", "来自当前连续阅读预览的实际显示项。生成或来源不明确的项可导航与复制，不提供源转换。"); if(relationFilter==="all"||relationFilter==="links")body.append(displayed);
-    const rendered = snapshot?.renderedLinks ?? [];
-    if (!rendered.length) displayed.append(element("p", "knowledge-empty", "当前预览没有可用显示链接。"));
-    for (const link of rendered) {
-      const card = element("article", "knowledge-card"); card.append(action(link.destination, () => navigate(link.destination), "knowledge-link-title"), element("span", "knowledge-badge", `显示项 ${link.occurrenceOrdinal + 1} · 只读`), action("复制显示地址", () => copy(link.destination))); displayed.append(card);
-    }
-    const properties = snapshot?.propertyReferences;
-    const context = host.context();
-    const identity = context?.workspaceId && context.nodeId ? `${context.workspaceId}/${context.nodeId}` : null;
-    if (properties && identity && (relationFilter==="all"||relationFilter==="properties")) {
-      const own = properties.items.filter(item => nodeIdentity(item.source) === identity);
-      const incoming = properties.items.filter(item => item.resolution.target && nodeIdentity(item.resolution.target) === identity);
-      for (const [title, items, outgoing] of [["属性出引用", own, true], ["属性入引用", incoming, false]] as const) {
-        const group = section(title, properties.coverage === "complete" ? "来自当前字段定义确认的结构化引用。" : "属性引用扫描不完整，下列为已知结果。"); body.append(group);
-        if (!items.length) group.append(element("p", "knowledge-empty", properties.coverage === "complete" ? "当前扫描范围没有属性引用。" : "暂未发现；扫描不完整。"));
-        for (const item of items) {
-          const target = outgoing ? item.resolution.target : item.source;
-          const card = element("article", "knowledge-card"); card.append(element("strong", "", item.fieldTitle || "结构化属性"), element("span", "knowledge-badge", resolutionLabels[item.resolution.status] ?? item.resolution.status));
-          if (target) card.append(action(nodeLabel(target), () => navigate(target), "knowledge-link-title"));
-          const details = element("details", "knowledge-diagnostics"); details.append(element("summary", "", "字段位置详情"), element("pre", "knowledge-address", [item.fieldId, ...item.itemPath].join(" / "))); card.append(details); group.append(card);
+        catch (error) {
+            report(error);
         }
-      }
-      for (const diagnostic of properties.diagnostics ?? []) body.append(element("p", "knowledge-warning", diagnostic));
     }
-  }
-  function renderMentions(body: HTMLElement): void {
-    ensureRules();
-    const setting = element("label", "knowledge-setting"); const check = input(); check.type = "checkbox"; check.checked = enabled; check.onchange = () => { try { localStorage.setItem("weftext-potential-links", String(check.checked)); enabled = check.checked; drawOverlay(); } catch { check.checked = enabled; report("提示偏好保存失败，请重试。扫描结果保留。"); } }; setting.append(check, document.createTextNode("正文显示双下划线提示（默认关闭，只改个人呈现）")); body.append(setting);
-    const domain = select([["all", "标题、名称及稳定片段"], ["notes", "仅笔记标题与名称"], ["fragments", "仅稳定片段"]]); domain.setAttribute("aria-label", "候选范围"); domain.value = mentionDomain; domain.onchange = () => { mentionDomain = domain.value; render(); drawOverlay(); };
-    const scope = select([["note", "此篇"], ["library", "个人此库"]]); scope.setAttribute("aria-label", "排除规则范围"); scope.value = exclusionScope; scope.onchange = () => { exclusionScope = scope.value; }; body.append(field("候选范围", domain), field("排除规则范围", scope), element("p", "knowledge-help", "扫描当前编译的普通可见文字；精确 Unicode 字面匹配，保留全部重复与重叠。未获唯一标签的标题不会猜测片段或新增标签。"));
-    rules.controls(body, () => { render(); drawOverlay(); });
-    body.append(element("p", "knowledge-help", "每个范围的全部目标都在此列出。正文最多两层提示；更多重叠范围仍可分别操作。"));
-    const list = element("div", "knowledge-mentions"); list.tabIndex = -1; body.append(list);
-    if (!snapshot?.mentions) { list.append(element("p", "knowledge-empty", "当前预览尚无可用潜在链接扫描。")); return; }
-    list.append(element("p", "knowledge-help", snapshot.mentions.coverage === "partial" ? "扫描不完整，下面保留全部已知候选。" : "当前获权扫描已完成。"));
-    const hits = knownMentions();
-    if (!hits.length) list.append(element("p", "knowledge-empty", snapshot.mentions.coverage === "complete" ? "该扫描范围没有潜在链接。" : "暂未发现；扫描不完整。"));
-    for (const { fragment, hit } of hits) {
-      const card = element("article", "knowledge-card"); card.append(element("span", "knowledge-badge", `[${hit.startScalar}, ${hit.endScalar})${hit.lane === undefined ? " · 更多重叠" : ""}`), chooser(fragment.id, hit, fragment.text?.slice(hit.startUtf16, hit.endUtf16) ?? hit.terms.join(" / "))); list.append(card);
+    function navigate(target: string | KnowledgeNodeRef): void { void Promise.resolve(host.navigate(target)).catch(report); }
+    function section(title: UiText, description?: UiText): HTMLElement {
+        const value = element("section", "knowledge-section");
+        value.append(element("h3", "", title));
+        if (description)
+            value.append(element("p", "knowledge-help", description));
+        return value;
     }
-  }
-
-  function mediaEntry(body: HTMLElement): void {
-    const group = section("资源区域", "选择实际资源后，在预览中确定区域。页面尺寸、原始像素、资源版本和音视频时间单位由获权资源读取提供。"); body.append(group);
-    const sessionId = host.context()?.sessionId ?? null;
-    if (sessionId !== mediaSession) { mediaController?.dispose(); mediaController = null; mediaContainer.replaceChildren(); mediaSession = sessionId; mediaDraft = null; }
-    if (host.mountMedia && !mediaController) mediaController = host.mountMedia(mediaContainer, target => { mediaDraft = target; }, mediaDraft ?? undefined);
-    if (!host.mountMedia) group.append(element("p", "knowledge-empty", "实际资源预览尚不可用。请选择源范围或整篇批注；已输入讨论会保留。"));
-    else group.append(mediaContainer);
-  }
-  function renderAnnotations(body: HTMLElement): void {
-    const diagnostics = snapshot?.annotationDiagnostics ?? [];
-    if (snapshot?.annotationStatus && !["ready", "valid", "available", "missing"].includes(snapshot.annotationStatus)) body.append(element("p", "knowledge-warning", `批注文件：${snapshot.annotationStatus}。原件保留，不能覆盖为空文件。`));
-    for (const message of diagnostics) body.append(element("p", "knowledge-warning", message));
-    const create = section("添加独立批注"); body.append(create);
-    const target = select([["whole_document", "整篇笔记"], ["source_range", "当前准确选区"], ["source_element", "当前选中元素"], ["media", "PDF / 图片 / 音视频区域"]]); target.value = annotationTarget;
-    target.onchange = () => { annotationTarget = target.value; if (annotationTarget === "source_range" || annotationTarget === "source_element") { annotationSelectionBasis = host.context(); annotationSelection = annotationSelectionBasis?.selection ? { ...annotationSelectionBasis.selection } : undefined; } render(); }; create.append(field("目标", target));
-    if (annotationTarget === "source_range" || annotationTarget === "source_element") {
-      const capture = action("取当前选区", () => { annotationSelectionBasis = host.context(); annotationSelection = annotationSelectionBasis?.selection ? { ...annotationSelectionBasis.selection } : undefined; render(); }); create.append(capture);
-      create.append(element("p", "knowledge-help", annotationSelection ? `源码 UTF-16 [${annotationSelection.from}, ${annotationSelection.to})。${host.context()?.dirty ? "请先保存源，再重新取准确选区；批注草稿会保留。" : "提交时重新验证准确源范围。"}` : "请在正文或源码中选择准确范围，再取当前选区。"));
-      if (annotationSelection?.visibleExcerpt) create.append(element("blockquote", "knowledge-excerpt", annotationSelection.visibleExcerpt));
+    function closePopover(restoreFocus = false): void {
+        popover?.remove();
+        popover = null;
+        const previous = popoverAnchor;
+        popoverAnchor = null;
+        if (restoreFocus && previous?.isConnected)
+            previous.focus();
     }
-    if (annotationTarget === "media") mediaEntry(create);
-    const kind = select([["comment", "讨论"], ["mark", "标记"], ["suggestion", "修改建议"]]); kind.value = annotationKind; kind.onchange = () => { annotationKind = kind.value; render(); }; create.append(field("用途", kind));
-    const entry = textarea(annotationBody, "写下讨论或说明…"); entry.oninput = () => { annotationBody = entry.value; }; create.append(field("批注内容", entry));
-    if (annotationKind === "suggestion") { const replacement = textarea(suggestionReplacement, "要替换成的文字"); replacement.oninput = () => { suggestionReplacement = replacement.value; }; create.append(field("建议替换文字", replacement), element("p", "knowledge-help", "接受建议会在同一次 Core 事务中修改源与接受状态。")); }
-    create.append(action("准备并保存批注", async () => {
-      if (!annotationBody.trim()) { report("请输入批注内容。"); return; }
-      let annotationAnchor: unknown = { kind: "whole_document" };
-      if (annotationTarget === "media") { if (!mediaDraft) { report("请在实际资源预览中选择一个准确区域。批注输入已保留。"); return; } const error = validateMediaRegion(mediaDraft); if (error) { report(error); return; } annotationAnchor = { ...mediaDraft }; }
-      else if (annotationTarget !== "whole_document") {
-        const context = host.context(); if (!context || !annotationSelection || !sameKnowledgeBasis(annotationSelectionBasis, context) || !isGraphemeRange(context.source, annotationSelection.from, annotationSelection.to)) { report("选区对应的源版本已变化，请重新取完整字符范围。批注输入已保留。"); return; }
-        if (annotationTarget === "source_element" && !annotationSelection.elementRole) { report("当前选区没有已验证元素角色，请选择源范围或整篇批注。"); return; }
-        annotationAnchor = { kind: annotationTarget, ...annotationSelection };
-      }
-      if (await perform("保存独立批注", { kind: "annotationCreate", target: annotationAnchor, body: annotationBody, purpose: annotationKind, replacement: annotationKind === "suggestion" ? suggestionReplacement : undefined })) { annotationBody = ""; suggestionReplacement = ""; render(); }
-    }, "knowledge-button primary"));
-    const threads = section("讨论与建议"); body.append(threads);
-    if (!snapshot?.annotations?.length) threads.append(element("p", "knowledge-empty", "当前可读范围暂无批注。"));
-    for (const annotation of snapshot?.annotations ?? []) {
-      const id = annotation.annotationId ?? annotation.id;
-      const card = element("article", "knowledge-card"); card.append(element("span", "knowledge-badge", annotation.reviewState === "resolved" ? "已解决" : "未解决"), element("span", `knowledge-badge ${annotation.targetResolution === "exact" || annotation.targetResolution === "mapped" ? "" : "warning"}`, resolutionLabels[annotation.targetResolution ?? "unavailable"] ?? "目标不可用"));
-      if (annotation.targetSummary) card.append(element("p", "knowledge-help", annotation.targetSummary));
-      if (excerpt(annotation)) card.append(element("blockquote", "knowledge-excerpt", excerpt(annotation)));
-      card.append(element("p", "knowledge-annotation-body", annotation.body));
-      if (annotation.author || annotation.createdAt) card.append(element("p", "knowledge-help", [annotation.author, annotation.createdAt].filter(Boolean).join(" · ")));
-      if (annotation.purpose === "suggestion") { card.append(element("span", "knowledge-badge", ({ pending: "待接受", accepted: "已接受", rejected: "已拒绝" })[annotation.suggestionState ?? "pending"])); if (annotation.replacement !== undefined) card.append(element("pre", "knowledge-replacement", annotation.replacement)); }
-      const controls = element("div", "knowledge-actions");
-      controls.append(action(annotation.reviewState === "resolved" ? "重新打开" : "解决", () => perform("更新讨论状态", { kind: "annotationResolve", annotationId: id, resolved: annotation.reviewState !== "resolved" })));
-      if (annotation.targetResolution === "exact" || annotation.targetResolution === "mapped") {
-        if (annotation.sourceLocation && host.selectSource) controls.append(action("回到目标", () => { if (!sameKnowledgeBasis(snapshotBasis, host.context())) { report("源版本已变化，请刷新后重新定位。讨论已保留。"); return; } host.selectSource!(annotation.sourceLocation!.from, annotation.sourceLocation!.to); }));
-        else if (annotation.navigateTarget) controls.append(action("回到目标", () => navigate(annotation.navigateTarget!)));
-        else if (annotation.resourceLocation) controls.append(action("回到媒体目标", () => {
-          if (!sameKnowledgeBasis(snapshotBasis, host.context())) { report("当前笔记已变化，请刷新后重新定位。讨论已保留。"); return; }
-          const location = annotation.resourceLocation!, target = storedMediaSelection(location.target);
-          if (!target || target.resource !== location.resource || target.revision !== location.revision) { report("准确媒体目标目前不可用；讨论已保留。"); return; }
-          mediaController?.dispose(); mediaController = null; mediaContainer.replaceChildren(); mediaDraft = target; annotationTarget = "media"; tab = "annotations"; render(); mediaContainer.scrollIntoView({ block: "nearest" });
+    function clearHints(): void {
+        for (const [anchor, old] of hintedLinks) {
+            if (old.title === null)
+                anchor.removeAttribute("title");
+            else
+                setUiAttr(anchor, "title", old.title);
+            if (old.description === null)
+                anchor.removeAttribute("aria-describedby");
+            else
+                anchor.setAttribute("aria-describedby", old.description);
+            anchor.classList.remove("knowledge-link-problem");
+            old.hint.remove();
+        }
+        hintedLinks.clear();
+    }
+    function clearOverlay(): void { closePopover(); overlay?.remove(); overlay = null; clearHints(); }
+    function knownMentions(): {
+        fragment: NonNullable<KnowledgeSnapshot["mentions"]>["fragments"][number];
+        hit: KnowledgeMention;
+    }[] {
+        ensureRules();
+        const source = `${host.context()?.workspaceId}/${host.context()?.nodeId}`;
+        return snapshot?.mentions?.fragments.flatMap(fragment => layoutMentions(fragment.hits.map(hit => {
+            const candidates = (hit.candidates ?? hit.targets.map(target => ({ target, term: hit.terms[0], provenance: "title", fragment: undefined }))).filter(c => (mentionDomain === "all" || (mentionDomain === "fragments") === !!c.fragment) && visibleCandidate(rules.rules, source, c.term, nodeIdentity(c.target)));
+            return { ...hit, candidates, targets: candidates.map(c => c.target) };
+        }).filter(hit => hit.candidates.length)).map(hit => ({ fragment, hit }))) ?? [];
+    }
+    function mentionIntent(fragmentId: string, hit: KnowledgeMention, target: KnowledgeNodeRef, fragment?: string | null): KnowledgeIntent {
+        return { kind: "mentionConvert", generation: snapshot?.mentions?.generation, fragmentId, startScalar: hit.startScalar, endScalar: hit.endScalar, target, fragment };
+    }
+    async function confirmPlan(title: UiText, plan: KnowledgePlan): Promise<boolean> {
+        const dialog = element("dialog", "knowledge-dialog");
+        dialog.append(element("h2", "", title), element("p", "knowledge-help", uiMessage("knowledge.checkCompleteChanges")));
+        const preview = element("div", "knowledge-plan-preview");
+        const verbs: Record<string, UiText> = { create: uiMessage("knowledge.operationCreate"), write: uiMessage("knowledge.operationWrite"), update: uiMessage("knowledge.operationUpdate"), replace: uiMessage("editor.replace"), copy: uiMessage("tableGrid.copy"), move: uiMessage("hostedStructure.moveKind"), rename: uiMessage("tagNavigation.rename"), trash: uiMessage("knowledge.operationRecycle"), restore: uiMessage("knowledge.operationRestore"), delete: uiMessage("knowledge.operationRemoveOriginal"), remove: uiMessage("knowledge.operationRemoveOriginal"), relocateFrom: uiMessage("knowledge.operationMoveOut"), relocateTo: uiMessage("knowledge.operationMoveToNew"), backup: uiMessage("knowledge.operationBackupTo"), import: uiMessage("knowledge.operationWriteImport"), style: uiMessage("knowledge.operationUpdateStyle") };
+        if (plan.kind === "trashNode")
+            preview.append(element("p", "knowledge-warning", uiMessage("knowledge.recyclePreviewDescription")));
+        if (plan.kind === "copyNode" || plan.kind === "backupLibrary")
+            preview.append(element("p", "knowledge-help", uiMessage("knowledge.copyPreviewDescription")));
+        if (plan.draftOnly === true)
+            preview.append(element("p", "knowledge-help", uiMessage("knowledge.sharedDraftPreviewDescription")));
+        const fileChanges = plan.changes?.filter(change => Boolean(change.path)) ?? [];
+        if (fileChanges.length) {
+            preview.append(element("h3", "", displayMessage("knowledge.fileChangeCount", { p0: fileChanges.length })));
+            const paths = element("ul", "knowledge-change-list");
+            for (const change of fileChanges) {
+                const item = element("li");
+                item.append(element("strong", "", verbs[change.action ?? ""] ?? uiMessage("knowledge.changeFallback")), element("span", "knowledge-address", change.path));
+                if (change.bytes !== undefined)
+                    item.append(element("small", "knowledge-help", displayMessage("knowledge.byteCount", { p0: uiDisplayParameter(change.bytes.toLocaleString()) })));
+                paths.append(item);
+            }
+            preview.append(paths);
+        }
+        const currentSource = host.context()?.source;
+        const edit = plan.edit as {
+            from?: number;
+            to?: number;
+            text?: string;
+        } | undefined;
+        if (currentSource !== undefined && edit && typeof edit.from === "number" && typeof edit.to === "number" && typeof edit.text === "string") {
+            preview.append(element("h3", "", uiMessage("knowledge.selectedRangeChanges")));
+            const pair = element("div", "knowledge-before-after");
+            const before = element("div");
+            before.append(element("strong", "", uiMessage("knowledge.originalContent")), element("pre", "knowledge-replacement", currentSource.slice(edit.from, edit.to)));
+            const after = element("div");
+            after.append(element("strong", "", uiMessage("knowledge.afterApply")), element("pre", "knowledge-replacement", edit.text));
+            pair.append(before, after);
+            preview.append(pair);
+        }
+        const detail = plan.preview;
+        if (typeof detail === "string")
+            preview.append(element("p", "knowledge-annotation-body", detail));
+        else if (detail && typeof detail === "object") {
+            const previewRecord = detail as Record<string, unknown>;
+            const asRecord = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+            const stateName = (value: unknown): UiText => typeof value === "string" ? ({ open: uiMessage("hostedReview.discussionUnresolved"), resolved: uiMessage("hostedReview.discussionResolved"), pending: uiMessage("hostedReview.suggestionPending"), accepted: uiMessage("hostedReview.suggestionAccepted"), rejected: uiMessage("hostedReview.suggestionRejected") } as Record<string, UiText>)[value] ?? value : "";
+            const targetSummary = (value: unknown): UiText => {
+                const target = asRecord(value), anchor = asRecord(target.anchor), range = asRecord(anchor.sourceRange);
+                const kind = String(target.kind ?? "");
+                if (["sourceRange", "source_range", "sourceElement", "source_element"].includes(kind))
+                    return () => `${uiTextValue(kind === "sourceElement" || kind === "source_element" ? uiMessage("knowledge.targetSourceElement") : uiMessage("knowledge.targetSourceRange"))} UTF-16 [${uiTextValue(range.utf16From ?? target.from ?? "?")}, ${uiTextValue(range.utf16To ?? target.to ?? "?")})${uiTextValue(typeof anchor.visibleExcerpt === "string" ? `：${anchor.visibleExcerpt}` : "")}`;
+                if (["wholeDocument", "whole_document"].includes(kind))
+                    return uiMessage("hostedReview.wholeNoteTarget");
+                if (kind === "pdfRegion" || kind === "pdf_region") {
+                    const rect = asRecord(target.rect);
+                    return displayMessage("knowledge.targetPdfRectangle", { p0: uiDisplayParameter(Number(target.pageIndex ?? 0) + 1), p1: uiDisplayParameter(rect.x ?? target.x), p2: uiDisplayParameter(rect.y ?? target.y), p3: uiDisplayParameter(rect.width ?? target.rectWidth), p4: uiDisplayParameter(rect.height ?? target.rectHeight) });
+                }
+                if (kind === "imageRegion" || kind === "image_region") {
+                    const rect = asRecord(target.rect);
+                    return displayMessage("knowledge.targetImageRectangle", { p0: uiDisplayParameter(rect.x ?? target.x), p1: uiDisplayParameter(rect.y ?? target.y), p2: uiDisplayParameter(rect.width ?? target.rectWidth), p3: uiDisplayParameter(rect.height ?? target.rectHeight) });
+                }
+                if (kind === "mediaInterval" || kind === "media_interval") {
+                    const timebase = asRecord(target.timebase);
+                    return displayMessage("knowledge.targetMediaTicks", { p0: uiDisplayParameter(target.startTick), p1: uiDisplayParameter(target.endTick), p2: uiDisplayParameter(timebase.numerator ?? target.timebase), p3: uiDisplayParameter(timebase.denominator ?? target.timebaseDenominator ?? 1) });
+                }
+                return uiMessage("knowledge.exactTargetFrozenByPreparation");
+            };
+            const pair = (title: UiText, before: UiText, after: UiText): void => {
+                const group = section(title), columns = element("div", "knowledge-before-after");
+                for (const [label, text] of [[uiMessage("knowledge.beforeChange"), before], [uiMessage("knowledge.afterChange"), after]] as const) {
+                    const column = element("div");
+                    column.append(element("strong", "", label), element("pre", "knowledge-replacement", text));
+                    columns.append(column);
+                }
+                group.append(columns);
+                preview.append(group);
+            };
+            const annotationText = (record: Record<string, unknown>): UiText => {
+                const lines: UiText[] = [];
+                if (typeof record.body === "string")
+                    lines.push(displayMessage("knowledge.discussionBody", { p0: uiDisplayParameter(record.body) }));
+                if (typeof record.reviewState === "string")
+                    lines.push(displayMessage("knowledge.discussionState", { p0: uiDisplayParameter(stateName(record.reviewState)) }));
+                if (record.target)
+                    lines.push(displayMessage("hostedReview.targetSummary", { p0: uiDisplayParameter(targetSummary(record.target)) }));
+                const suggestion = asRecord(record.suggestion);
+                if (typeof suggestion.replacement === "string")
+                    lines.push(displayMessage("knowledge.suggestedText", { p0: uiDisplayParameter(suggestion.replacement) }));
+                if (typeof suggestion.state === "string")
+                    lines.push(displayMessage("knowledge.suggestionState", { p0: uiDisplayParameter(stateName(suggestion.state)) }));
+                return () => lines.map(uiTextValue).join("\n");
+            };
+            const annotationRecords = (source: unknown): Record<string, unknown>[] | null => {
+                if (typeof source !== "string")
+                    return null;
+                try {
+                    const value = JSON.parse(source);
+                    return Array.isArray(value?.annotations) ? value.annotations.map(asRecord) : null;
+                }
+                catch {
+                    return null;
+                }
+            };
+            const templateText = (value: unknown): UiText => {
+                const template = asRecord(value);
+                if (!Object.keys(template).length)
+                    return uiMessage("knowledge.notRegistered");
+                const lines: UiText[] = [displayMessage("knowledge.templateName", { p0: uiDisplayParameter(typeof template.title === "string" ? template.title : "") })];
+                if (typeof template.description === "string" && template.description)
+                    lines.push(displayMessage("knowledge.templatePurpose", { p0: uiDisplayParameter(template.description) }));
+                const sourceNode = asRecord(template.sourceNode);
+                const context = host.context();
+                if (typeof sourceNode.path === "string")
+                    lines.push(displayMessage("knowledge.sourcePath", { p0: uiDisplayParameter(sourceNode.path) }));
+                else if (context && sourceNode.nodeId === context.nodeId && sourceNode.workspaceId === context.workspaceId)
+                    lines.push(displayMessage("knowledge.sourcePath", { p0: uiDisplayParameter(context.path) }));
+                const slots = Array.isArray(template.parameters) ? template.parameters : Array.isArray(template.slots) ? template.slots : [];
+                if (!slots.length)
+                    lines.push(uiMessage("knowledge.wholeTemplateNoParameters"));
+                for (const entry of slots) {
+                    const slot = asRecord(entry), range = asRecord(slot.range);
+                    const kind = String(slot.kind ?? "markup");
+                    const defaults = !("default" in slot) ? uiMessage("knowledge.parameterRequired") : slot.default === null ? uiMessage("knowledge.parameterDefaultNone") : typeof slot.default === "boolean" ? displayMessage("knowledge.parameterDefaultBoolean", { p0: uiDisplayParameter(slot.default ? uiMessage("nativeValue.booleanYes") : uiMessage("nativeValue.booleanNo")) }) : typeof slot.default === "string" ? displayMessage("knowledge.parameterDefaultValue", { p0: uiDisplayParameter(slot.default === "" ? uiMessage("knowledge.emptyString") : slot.default) }) : uiMessage("knowledge.parameterDefaultInPreparedResult");
+                    lines.push(displayMessage("knowledge.parameterSummary", { p0: uiDisplayParameter(slot.name), p1: uiDisplayParameter(({ markup: uiMessage("knowledge.parameterMarkup"), string: uiMessage("knowledge.parameterString"), bool: uiMessage("knowledge.parameterBoolean"), int: uiMessage("knowledge.parameterInteger") } as Record<string, UiText>)[kind] ?? kind), p2: uiDisplayParameter(defaults), p3: uiDisplayParameter(range.utf16From !== undefined ? `；UTF-16 [${range.utf16From}, ${range.utf16To})` : "") }));
+                }
+                return () => lines.map(uiTextValue).join("\n");
+            };
+            if (previewRecord.templateAfter)
+                pair(uiMessage("knowledge.templateRegistrationChanges"), templateText(previewRecord.templateBefore), templateText(previewRecord.templateAfter));
+            if (Array.isArray(previewRecord.files))
+                for (const entry of previewRecord.files) {
+                    const file = asRecord(entry);
+                    if (file.action === "readDependency")
+                        continue;
+                    const path = typeof file.path === "string" ? file.path : uiMessage("knowledge.fileContent");
+                    if (previewRecord.templateAfter && typeof path === "string" && path.replaceAll("\\", "/").endsWith("/.weftext-settings.json"))
+                        continue;
+                    const before = typeof file.before === "string" ? file.before : "", after = typeof file.after === "string" ? file.after : "";
+                    const annotationsAfter = annotationRecords(file.after), annotationsBefore = annotationRecords(file.before) ?? [];
+                    if (annotationsAfter) {
+                        const previous = new Map(annotationsBefore.map(record => [record.annotationId, record]));
+                        for (const record of annotationsAfter) {
+                            const old = previous.get(record.annotationId);
+                            if (JSON.stringify(old) !== JSON.stringify(record))
+                                pair(uiMessage("knowledge.annotationChanges"), old ? annotationText(old) : uiMessage("knowledge.newAnnotation"), annotationText(record));
+                        }
+                    }
+                    else if (before || after)
+                        pair(path, before, after);
+                }
+            const source = asRecord(previewRecord.source);
+            if (typeof source.before === "string" && typeof source.after === "string" && !Array.isArray(previewRecord.files))
+                pair(uiMessage("knowledge.bodyChanges"), source.before, source.after);
+            const suggestion = asRecord(previewRecord.suggestion);
+            if (typeof suggestion.before === "string" && typeof suggestion.after === "string")
+                pair(uiMessage("knowledge.suggestionStatus"), stateName(suggestion.before), stateName(suggestion.after));
+            if (previewRecord.reconfirmation === true)
+                preview.append(element("p", "knowledge-warning", uiMessage("knowledge.suggestionReconfirmDescription")));
+            if (previewRecord.targetAfter)
+                preview.append(element("p", "knowledge-annotation-body", displayMessage("knowledge.newTarget", { p0: uiDisplayParameter(targetSummary(previewRecord.targetAfter)) })));
+            if (typeof previewRecord.replacementAfter === "string")
+                preview.append(element("pre", "knowledge-replacement", previewRecord.replacementAfter));
+            const labels: Record<string, UiText> = { beforeSource: uiMessage("knowledge.sourceBefore"), sourceBefore: uiMessage("knowledge.sourceBefore"), afterSource: uiMessage("knowledge.sourceAfter"), sourceAfter: uiMessage("knowledge.sourceAfter"), annotationBefore: uiMessage("knowledge.annotationBefore"), annotationAfter: uiMessage("knowledge.annotationAfter"), annotationsBefore: uiMessage("knowledge.discussionBefore"), annotationsAfter: uiMessage("knowledge.discussionAfter"), before: uiMessage("knowledge.beforeChange"), after: uiMessage("knowledge.afterChange"), summary: uiMessage("knowledge.changeDescription"), message: uiMessage("office.previewDescription"), target: uiMessage("knowledge.target"), excerpt: uiMessage("knowledge.selectedText"), replacement: uiMessage("hostedReview.replacementLabel"), address: uiMessage("shell.linkTargetAddress"), fullLink: uiMessage("knowledge.completeNativeLink"), reviewState: uiMessage("knowledge.discussionStatus"), suggestionState: uiMessage("knowledge.suggestionStatus") };
+            for (const [key, value] of Object.entries(detail)) {
+                if (!labels[key])
+                    continue;
+                const group = section(labels[key]);
+                if (typeof value === "string")
+                    group.append(element("pre", "knowledge-replacement", value));
+                else if (value && typeof value === "object") {
+                    const record = value as Record<string, unknown>;
+                    for (const [fieldName, label] of [["body", uiMessage("hostedReview.bodyLabel")], ["visibleExcerpt", uiMessage("knowledge.storedExcerpt")], ["replacement", uiMessage("knowledge.suggestionText")], ["reviewState", uiMessage("knowledge.discussionStatus")], ["suggestionState", uiMessage("knowledge.suggestionStatus")]] as const) {
+                        const fieldValue = record[fieldName];
+                        if (typeof fieldValue === "string") {
+                            const stateValue = fieldName === "reviewState" || fieldName === "suggestionState"
+                                ? ({ open: uiMessage("hostedReview.discussionUnresolved"), resolved: uiMessage("hostedReview.discussionResolved"), pending: uiMessage("hostedReview.suggestionPending"), accepted: uiMessage("hostedReview.suggestionAccepted"), rejected: uiMessage("hostedReview.suggestionRejected") } as Record<string, UiText>)[fieldValue] ?? fieldValue
+                                : fieldValue;
+                            group.append(element("p", "knowledge-annotation-body", () => `${uiTextValue(label)}：${uiTextValue(stateValue)}`));
+                        }
+                    }
+                }
+                if (group.children.length > 1)
+                    preview.append(group);
+            }
+        }
+        if (plan.losses?.length) {
+            const losses = section(uiMessage("knowledge.lossesAndUnsupportedContent"));
+            for (const loss of plan.losses)
+                losses.append(element("p", "knowledge-warning", knowledgeLossMessage(loss)));
+            preview.append(losses);
+        }
+        if (!preview.children.length)
+            preview.append(element("p", "knowledge-help", uiMessage("knowledge.preparedResultFixed")));
+        dialog.append(preview);
+        const diagnostics = element("details", "knowledge-diagnostics");
+        diagnostics.append(element("summary", "", uiMessage("knowledge.viewPreparedDetails")));
+        const raw = element("pre", "knowledge-plan", JSON.stringify(plan, null, 2));
+        diagnostics.append(raw);
+        dialog.append(diagnostics);
+        const actions = element("div", "knowledge-actions");
+        dialog.append(actions);
+        document.body.append(dialog);
+        return new Promise(resolve => {
+            const finish = (value: boolean): void => { dialog.close(); disposeUiTree(dialog); dialog.remove(); resolve(value); };
+            actions.append(action(uiMessage("common.cancel"), () => finish(false)), action(uiMessage("knowledge.confirmApply"), () => finish(true), "knowledge-button primary"));
+            dialog.addEventListener("cancel", event => { event.preventDefault(); finish(false); });
+            dialog.showModal();
+        });
+    }
+    async function perform(title: UiText, intent: KnowledgeIntent): Promise<boolean> {
+        if (busy)
+            return false;
+        if (pendingPlan) {
+            host.notify(uiMessage("knowledge.previousOperationUnconfirmed"), true);
+            return false;
+        }
+        busy = true;
+        setUiText(status, uiMessage("knowledge.preparingExactChanges"));
+        try {
+            const actionBasis = host.context();
+            await host.beforeAction?.();
+            const context = host.context();
+            if (!context)
+                throw new UiError(uiMessage("knowledge.openCurrentNoteFirst"));
+            if ((["mentionConvert", "linkConvert"].includes(intent.kind) || intent.kind.startsWith("nativeCitation") || intent.kind.startsWith("nativeReference")) && host.canEditSource?.() === false)
+                throw new UiError(uiMessage("knowledge.switchToEditingForReferences"));
+            if (!sameKnowledgeBasis(actionBasis, context))
+                throw new UiError(uiMessage("knowledge.inputEnteredSharedDraft"));
+            const deliveredPlan = await host.prepare(intent, context);
+            if (deliveredPlan.losses !== undefined && !Array.isArray(deliveredPlan.losses))
+                throw new UiError(uiMessage("error.invalidResponse"));
+            const plan = { ...deliveredPlan, ...(deliveredPlan.losses ? { losses: deliveredPlan.losses.map(decodeKnowledgeLoss) } : {}) };
+            if (disposed)
+                return false;
+            if (!sameKnowledgeBasis(context, host.context()))
+                throw new UiError(uiMessage("knowledge.draftOrNoteChangedDuringPreparation"));
+            if (!await confirmPlan(title, plan)) {
+                setUiText(status, uiMessage("knowledge.cancelledInputRetained"));
+                return false;
+            }
+            if (disposed)
+                return false;
+            if (!sameKnowledgeBasis(context, host.context()))
+                throw new UiError(uiMessage("knowledge.draftChangedBeforeConfirmation"));
+            pendingPlan = { plan, context };
+            const receipt = decodeKnowledgeDelivery(await host.commit(plan, context));
+            if (receipt.operationId !== plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            pendingPlan.receipt = receipt;
+            if (uncertainKnowledgeOperation(receipt.status)) {
+                setUiText(status, uiMessage("knowledge.operationUnconfirmedRetained"));
+                render();
+                return false;
+            }
+            if (!originalCommitted(receipt))
+                throw new UiError(joinUiText([displayMessage("knowledge.operationIncomplete", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
+            if (!committedDeliveryComplete(receipt))
+                throw new UiError(joinUiText(["原操作已提交，交付仍待完成：", ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
+            await refresh(true);
+            pendingPlan = null;
+            const completion = joinUiText([uiMessage("knowledge.operationCompleted"), ...knowledgeDeliveryErrors(receipt)], "\n");
+            setUiText(status, completion);
+            host.notify(completion);
+            return true;
+        }
+        catch (error) {
+            if (pendingPlan && !retainPendingKnowledgePlan(pendingPlan.plan.draftOnly === true, error))
+                pendingPlan = null;
+            report(error);
+            render();
+            return false;
+        }
+        finally {
+            busy = false;
+        }
+    }
+    async function inspectPending(): Promise<void> {
+        if (busy || !pendingPlan || !host.inspectOperation)
+            return;
+        const pending = pendingPlan;
+        busy = true;
+        try {
+            const receipt = decodeKnowledgeDelivery(await host.inspectOperation(pending.plan.operationId, pending.context));
+            if (pendingPlan !== pending) return;
+            if (receipt.operationId !== pending.plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt))
+                throw new UiError("原操作已确认提交，后续状态不一致；原回执与编号保留。");
+            pending.receipt = receipt;
+            if (committedDeliveryComplete(receipt)) {
+                await refresh(true);
+                pendingPlan = null;
+            }
+            else if (receipt.status === "resolved") pendingPlan = null;
+            else if (receipt.deliveryError || receipt.documentError)
+                throw new UiError(joinUiText(["原操作已提交，交付仍待完成：", ...knowledgeDeliveryErrors(receipt)], "\n"));
+            setUiText(status, joinUiText([displayMessage("knowledge.originalOperationStatus", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
+        }
+        catch (error) {
+            report(error);
+        }
+        finally { busy = false; render(); }
+    }
+    function chooser(fragmentId: string, hit: KnowledgeMention, text: string): HTMLElement {
+        const value = element("div", "knowledge-chooser");
+        value.append(element("strong", "", text || hit.terms.join(" / ")));
+        let selected: NonNullable<KnowledgeMention["candidates"]>[number] | null = null;
+        const convert = action(uiMessage("knowledge.convertNativeLink"), async () => {
+            if (selected)
+                await perform(uiMessage("knowledge.convertPotentialLink"), mentionIntent(fragmentId, hit, selected.target, selected.fragment));
+        }, "knowledge-button primary");
+        convert.disabled = true;
+        const open = action(uiMessage("knowledge.openSelectedCandidate"), async () => {
+            if (selected && sameKnowledgeBasis(snapshotBasis, host.context()))
+                await host.navigate(`weftext-node://${selected.target.workspaceId}/${selected.target.nodeId}${selected.fragment ? `#${encodeURIComponent(selected.fragment)}` : ""}`);
+        });
+        open.disabled = true;
+        const group = element("div", "knowledge-targets");
+        group.setAttribute("role", "radiogroup");
+        setUiAttr(group, "aria-label", uiMessage("knowledge.selectExactLinkTarget"));
+        const name = `mention-${crypto.randomUUID()}`;
+        for (const candidate of hit.candidates ?? []) {
+            const target = candidate.target;
+            const radio = input();
+            radio.type = "radio";
+            radio.name = name;
+            radio.value = nodeIdentity(target);
+            const label = element("label", "knowledge-target");
+            label.append(radio, element("span", "", () => `${uiTextValue(nodeLabel(target))}${uiTextValue(candidate.fragment ? ` #${candidate.fragment}` : "")} · ${uiTextValue(({ title: uiMessage("knowledge.noteTitle"), nameField: uiMessage("knowledge.nameField"), heading: uiMessage("knowledge.headingText"), stableLabel: uiMessage("knowledge.stableLabel") })[candidate.provenance] ?? candidate.provenance)}`));
+            if (target.path)
+                label.append(element("small", "", target.path));
+            radio.onchange = () => { selected = candidate; open.disabled = false; convert.disabled = !hit.writable || host.canEditSource?.() === false || !sameKnowledgeBasis(snapshotBasis, host.context()); };
+            group.append(label);
+            label.append(action(uiMessage("knowledge.excludeTarget"), () => { const source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "target", value: nodeIdentity(target), source }, displayMessage("knowledge.excludeExactTargetDescription", { p0: uiDisplayParameter(nodeLabel(target)), p1: uiDisplayParameter(nodeIdentity(target)), p2: uiDisplayParameter(source ? uiMessage("knowledge.scopeThisNote") : uiMessage("knowledge.scopePersonalLibrary")) }), knownMentions().filter(m => m.hit.targets.some(t => nodeIdentity(t) === nodeIdentity(target))).length, () => { closePopover(); render(); drawOverlay(); }); }));
+        }
+        value.append(group);
+        if (!hit.writable)
+            value.append(element("p", "knowledge-help", uiMessage("knowledge.readOnlyDiscoveryNoWritableRange")));
+        else if (host.canEditSource?.() === false)
+            value.append(element("p", "knowledge-help", uiMessage("knowledge.readingCanViewCandidates")));
+        value.append(open, convert, action(uiMessage("knowledge.ignoreTerm"), () => { const term = text || hit.terms[0], source = exclusionScope === "note" ? `${host.context()?.workspaceId}/${host.context()?.nodeId}` : undefined; rules.preview({ kind: "term", value: term, source }, displayMessage("knowledge.ignoreExactTermDescription", { p0: uiDisplayParameter(term), p1: uiDisplayParameter(source ? uiMessage("knowledge.scopeThisNote") : uiMessage("knowledge.scopePersonalLibrary")) }), knownMentions().filter(m => m.hit.terms.includes(term)).length, () => { closePopover(); render(); drawOverlay(); }); }));
+        return value;
+    }
+    function showMentionPopover(anchor: HTMLElement, fragmentId: string, hit: KnowledgeMention, text: string): void {
+        if (popover?.dataset.mention === `${fragmentId}:${hit.startScalar}:${hit.endScalar}`)
+            return;
+        closePopover();
+        popoverAnchor = anchor;
+        popover = element("div", "knowledge-popover");
+        popover.dataset.mention = `${fragmentId}:${hit.startScalar}:${hit.endScalar}`;
+        popover.setAttribute("role", "dialog");
+        setUiAttr(popover, "aria-label", uiMessage("knowledge.potentialLinkTargets"));
+        popover.append(chooser(fragmentId, hit, text), action(uiMessage("common.close"), () => closePopover(true)));
+        document.body.append(popover);
+        const rect = anchor.getBoundingClientRect();
+        popover.style.left = `${Math.min(Math.max(8, rect.left), Math.max(8, innerWidth - 330))}px`;
+        popover.style.top = `${Math.min(rect.bottom + 5, Math.max(8, innerHeight - popover.offsetHeight - 8))}px`;
+    }
+    function textRange(mapping: KnowledgeTextMapping, start: number, end: number): Range | null {
+        if (!isGraphemeRange(mapping.text, start, end) || mapping.node instanceof HTMLTextAreaElement)
+            return null;
+        const node = mapping.node instanceof Text ? mapping.node : mapping.node.firstChild;
+        if (!(node instanceof Text) || node.textContent !== mapping.text)
+            return null;
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, end);
+        return range;
+    }
+    function drawOverlay(): void {
+        clearOverlay();
+        if (composing || !surface || !sameKnowledgeBasis(snapshotBasis, host.context()) || !surface.isConnected)
+            return;
+        if (problemHints)
+            for (const anchor of surface.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+                const issue = snapshot?.diagnostics?.issues.find(i => i.source.nodeId === host.context()?.nodeId && i.occurrence.target === anchor.getAttribute("href"));
+                if (!issue)
+                    continue;
+                const hint = element("span", "knowledge-problem-description", displayMessage("knowledge.linkProblemHint", { p0: uiDisplayParameter(resolutionLabels[issue.resolution.status] ?? issue.resolution.status) }));
+                hint.id = `link-problem-${crypto.randomUUID()}`;
+                hint.hidden = true;
+                hintedLinks.set(anchor, { title: anchor.getAttribute("title"), description: anchor.getAttribute("aria-describedby"), hint });
+                setUiAttr(anchor, "title", hint.textContent!);
+                anchor.setAttribute("aria-describedby", `${anchor.getAttribute("aria-describedby") ?? ""} ${hint.id}`.trim());
+                anchor.classList.add("knowledge-link-problem");
+                surface.append(hint);
+            }
+        if (!enabled)
+            return;
+        const base = surface.getBoundingClientRect();
+        overlay = element("div", "knowledge-overlays");
+        setUiAttr(overlay, "aria-label", uiMessage("knowledge.potentialLinkHints"));
+        surface.append(overlay);
+        const overflow = new Map<string, {
+            rect: DOMRect;
+            count: number;
+        }>();
+        for (const { fragment, hit } of knownMentions()) {
+            const mapping = mappings.find(item => item.nodeKey === (fragment.nodeKey ?? fragment.id));
+            if (!mapping)
+                continue;
+            const range = textRange(mapping, hit.startUtf16, hit.endUtf16);
+            if (!range)
+                continue;
+            const rects = [...range.getClientRects()];
+            if (hit.lane === undefined) {
+                const key = `${fragment.id}:${hit.component}`, previous = overflow.get(key);
+                const rect = rects.at(-1);
+                if (rect)
+                    overflow.set(key, { rect, count: (previous?.count ?? 0) + 1 });
+                continue;
+            }
+            for (const rect of rects) {
+                if (rect.width <= 0)
+                    continue;
+                const underline = action("", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16)), "knowledge-underline");
+                setUiAttr(underline, "aria-label", displayMessage("knowledge.mentionCandidateTargetCount", { p0: uiDisplayParameter(hit.terms.join(" / ")), p1: hit.targets.length }));
+                underline.style.left = `${rect.left - base.left + surface.scrollLeft}px`;
+                underline.style.top = `${rect.bottom - base.top + surface.scrollTop + hit.lane * 5 - 3}px`;
+                underline.style.width = `${rect.width}px`;
+                underline.addEventListener("mouseenter", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16)));
+                underline.addEventListener("focus", () => showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16)));
+                overlay.append(underline);
+                underline.addEventListener("keydown", event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        showMentionPopover(underline, fragment.id, hit, mapping.text.slice(hit.startUtf16, hit.endUtf16));
+                        popover?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus();
+                    }
+                });
+            }
+        }
+        for (const { rect, count } of overflow.values()) {
+            const more = action(`+${count}`, () => { tab = "mentions"; render(); container.querySelector<HTMLElement>(".knowledge-mentions")?.focus(); }, "knowledge-overflow");
+            setUiAttr(more, "aria-label", displayMessage("knowledge.overlappingRangeOverflow", { p0: count }));
+            more.style.left = `${rect.right - base.left}px`;
+            more.style.top = `${rect.bottom - base.top + 7}px`;
+            overlay.append(more);
+        }
+    }
+    const resize = (): void => {
+        if (!disposed)
+            drawOverlay();
+    };
+    const compositionStart = (): void => { composing = true; clearOverlay(); };
+    const compositionEnd = (): void => { composing = false; };
+    const escape = (event: KeyboardEvent): void => {
+        if (event.key === "Escape" && popover) {
+            closePopover(true);
+            event.stopPropagation();
+        }
+    };
+    window.addEventListener("resize", resize);
+    window.addEventListener("keydown", escape);
+    window.addEventListener("compositionstart", compositionStart);
+    window.addEventListener("compositionend", compositionEnd);
+    function renderLinks(body: HTMLElement): void {
+        ensureRules();
+        const d = snapshot?.diagnostics;
+        const diagnostics: RelationDiagnostics | undefined = d && { ...d, issues: d.issues.map<RelationIssue>(i => ({ source: relationNode(i.source), target: i.resolution.target ? relationNode(i.resolution.target) : undefined, address: i.occurrence.target, status: i.resolution.status, from: i.occurrence.utf16From, to: i.occurrence.utf16To, sourceHash: i.sourceHash })).concat((d.propertyIssues ?? []).map(p => ({ source: relationNode(p.source), target: p.resolution.target ? relationNode(p.resolution.target) : undefined, address: p.address, status: p.resolution.status, from: undefined, to: undefined, sourceHash: undefined, field: [p.fieldId, ...p.itemPath].join(" / ") }))), nodes: d.nodes.map(n => ({ ...n, node: relationNode(n.node) })) };
+        diagnosticView.render(body, diagnostics);
+        const hintSetting = element("label", "knowledge-setting"), hintCheck = input();
+        hintCheck.type = "checkbox";
+        hintCheck.checked = problemHints;
+        hintCheck.onchange = () => {
+            try {
+                localStorage.setItem("weftext-link-problem-hints", String(hintCheck.checked));
+                problemHints = hintCheck.checked;
+                drawOverlay();
+            }
+            catch {
+                hintCheck.checked = problemHints;
+                report(uiMessage("knowledge.issueHintPreferenceSaveFailed"));
+            }
+        };
+        hintSetting.append(hintCheck, uiTextNode(uiMessage("knowledge.showBodyIssueHints")));
+        body.append(hintSetting);
+        const data = snapshot?.links;
+        if (!data) {
+            body.append(element("p", "knowledge-help", uiMessage("knowledge.linkIndexUnavailable")));
+            return;
+        }
+        body.append(element("p", "knowledge-help", data.coverage === "partial" ? uiMessage("knowledge.authorizedScanPartialKnownLinks") : uiMessage("knowledge.authorizedScanComplete")));
+        const filter = select([["all", uiMessage("graph.allRelationships")], ["links", uiMessage("knowledge.ordinaryNoteLinks")], ["citations", uiMessage("knowledge.bibliographyCitations")], ["document", uiMessage("knowledge.currentNoteCrossReferences")], ["properties", uiMessage("knowledge.propertyRelationships")]] as const);
+        filter.value = relationFilter;
+        setUiAttr(filter, "aria-label", uiMessage("knowledge.relationshipCategory"));
+        filter.onchange = () => { relationFilter = filter.value; render(); };
+        body.append(filter);
+        if (relationFilter === "citations") {
+            const context = host.context()!;
+            let state = citationInputs.get(context.sessionId);
+            if (!state) {
+                state = newNativeCitationInputs();
+                citationInputs.set(context.sessionId, state);
+            }
+            renderNativeCitations(body, snapshot?.citations, state, { writable: host.canEditSource?.() !== false, at: () => citationInsertionByte(context.source, context.selection?.from ?? context.source.length), perform: (title, intent) => perform(title, intent as KnowledgeIntent), select: range => host.selectSource?.(range.utf16From, range.utf16To), navigate, repaint: render });
+            return;
+        }
+        if (relationFilter === "all" || relationFilter === "document") {
+            const group = section(uiMessage("knowledge.inDocumentAndUnclassifiedReferences"), uiMessage("knowledge.referenceClassificationDescription"));
+            for (const ref of snapshot?.citations?.editor.crossReferences ?? []) {
+                if (ref.renderedKind === "citation")
+                    continue;
+                group.append(action(ref.label, () => host.selectSource?.(ref.range.utf16From, ref.range.utf16To)), element("span", "knowledge-badge", ref.renderedKind === "document" ? uiMessage("knowledge.currentNativeInternalReference") : ref.kind === "link" ? uiMessage("knowledge.internalLinkSourceSlot") : uiMessage("knowledge.nativeReferenceSourceUnclassified")));
+            }
+            body.append(group);
+        }
+        for (const [title, entries] of (relationFilter === "all" || relationFilter === "links" ? [[uiMessage("knowledge.outgoingLinks"), data.outgoing], [uiMessage("knowledge.idBacklinks"), data.incomingId], [uiMessage("knowledge.currentPathResolvedIncoming"), data.incomingPath]] as const : [])) {
+            const group = section(title);
+            body.append(group);
+            if (!entries.length) {
+                group.append(element("p", "knowledge-empty", data.coverage === "complete" ? uiMessage("knowledge.scopeHasNoLinks") : uiMessage("knowledge.noneFoundScanIncomplete")));
+                continue;
+            }
+            for (const entry of entries) {
+                const row = element("article", "knowledge-card");
+                const target = entry.resolution.target;
+                if (target)
+                    setUiAttr(row, "title", displayMessage("knowledge.authorizedTitleOriginalBodyText", { p0: uiDisplayParameter(nodeLabel(target)) }));
+                row.append(action(title === uiMessage("knowledge.outgoingLinks") ? target ? nodeLabel(target) : entry.occurrence.target : nodeLabel(entry.source), () => navigate(title === uiMessage("knowledge.outgoingLinks") ? entry.occurrence.target : entry.source), "knowledge-link-title"));
+                row.append(element("span", "knowledge-badge", resolutionLabels[entry.resolution.status] ?? entry.resolution.status), element("p", "knowledge-address", entry.occurrence.target));
+                const controls = element("div", "knowledge-actions");
+                controls.append(action(uiMessage("knowledge.copyAddress"), () => copy(entry.occurrence.target)));
+                const raw = entry.occurrence.raw ?? (snapshotBasis && entry.source.nodeId === snapshotBasis.nodeId ? snapshotBasis.source.slice(entry.occurrence.utf16From, entry.occurrence.utf16To) : undefined);
+                if (raw !== undefined)
+                    controls.append(action(uiMessage("knowledge.copyCompleteLink"), () => copy(raw)));
+                if (title === uiMessage("knowledge.outgoingLinks")) {
+                    const format = select(Object.entries(formLabels));
+                    setUiAttr(format, "aria-label", uiMessage("knowledge.linkConversionForm"));
+                    if (entry.resolution.form)
+                        format.value = entry.resolution.form;
+                    const convert = action(uiMessage("knowledge.convert"), () => perform(uiMessage("knowledge.convertLinkForm"), { kind: "linkConvert", generation: data.generation, occurrence: entry.occurrence, form: format.value }));
+                    convert.disabled = entry.resolution.status !== "resolved" || !entry.occurrence.destinationSlot || host.canEditSource?.() === false;
+                    controls.append(format, convert);
+                    if (host.linkCopy) {
+                        const copyForm = async (full: boolean): Promise<void> => {
+                            const context = host.context();
+                            if (!context || !sameKnowledgeBasis(snapshotBasis, context)) {
+                                report(uiMessage("knowledge.linkChangedBeforeCopy"));
+                                return;
+                            }
+                            try {
+                                const result = await host.linkCopy!(entry, format.value, context);
+                                await copy(full ? result.fullLink : result.address);
+                            }
+                            catch (error) {
+                                report(error);
+                            }
+                        };
+                        controls.append(action(uiMessage("knowledge.copySelectedAddress"), () => copyForm(false)), action(uiMessage("knowledge.copySelectedCompleteLink"), () => copyForm(true)));
+                        const stableCopy = async (full: boolean): Promise<void> => {
+                            const context = host.context();
+                            if (!context || !sameKnowledgeBasis(snapshotBasis, context))
+                                throw new UiError(uiMessage("knowledge.linkBasisChangedBeforeCopy"));
+                            try {
+                                const result = await host.linkCopy!(entry, "id", context);
+                                await copy(full ? result.fullLink : result.address);
+                            }
+                            catch (error) {
+                                report(error);
+                            }
+                        };
+                        controls.append(action(uiMessage("knowledge.copyStableAppUri"), () => stableCopy(false)), action(uiMessage("knowledge.copyStableNativeTypstLink"), () => stableCopy(true)));
+                        const web = action(uiMessage("knowledge.copyWebDeepLinkUnavailable"), () => { });
+                        web.disabled = true;
+                        setUiAttr(web, "title", uiMessage("knowledge.webDeepLinkRoutesUnconfigured"));
+                        controls.append(web);
+                    }
+                    const updateText = action(uiMessage("knowledge.updateLinkTextToCurrentTitle"), () => perform(uiMessage("knowledge.updateSelectedLinkDisplayText"), { kind: "nativeCitationLinkText", generation: snapshot?.citations?.generation, occurrence: entry.occurrence }));
+                    updateText.disabled = host.canEditSource?.() === false || !target || !entry.occurrence.destinationSlot;
+                    controls.append(updateText);
+                    if (convert.disabled)
+                        row.append(element("p", "knowledge-help", host.canEditSource?.() === false ? uiMessage("knowledge.readingCanCopyLinks") : uiMessage("knowledge.linkQuickConversionUnavailable")));
+                }
+                row.append(controls);
+                group.append(row);
+            }
+        }
+        const displayed = section(uiMessage("knowledge.linksInReadingPreview"), uiMessage("knowledge.compiledDisplayLinksDescription"));
+        if (relationFilter === "all" || relationFilter === "links")
+            body.append(displayed);
+        const rendered = snapshot?.renderedLinks ?? [];
+        if (!rendered.length)
+            displayed.append(element("p", "knowledge-empty", uiMessage("knowledge.previewNoDisplayLinks")));
+        for (const link of rendered) {
+            const card = element("article", "knowledge-card");
+            card.append(action(link.destination, () => navigate(link.destination), "knowledge-link-title"), element("span", "knowledge-badge", displayMessage("knowledge.readOnlyDisplayOccurrence", { p0: link.occurrenceOrdinal + 1 })), action(uiMessage("knowledge.copyDisplayedAddress"), () => copy(link.destination)));
+            displayed.append(card);
+        }
+        const properties = snapshot?.propertyReferences;
+        const context = host.context();
+        const identity = context?.workspaceId && context.nodeId ? `${context.workspaceId}/${context.nodeId}` : null;
+        if (properties && identity && (relationFilter === "all" || relationFilter === "properties")) {
+            const own = properties.items.filter(item => nodeIdentity(item.source) === identity);
+            const incoming = properties.items.filter(item => item.resolution.target && nodeIdentity(item.resolution.target) === identity);
+            for (const [title, items, outgoing] of [[uiMessage("knowledge.outgoingPropertyReferences"), own, true], [uiMessage("knowledge.incomingPropertyReferences"), incoming, false]] as const) {
+                const group = section(title, properties.coverage === "complete" ? uiMessage("knowledge.structuredReferencesDescription") : uiMessage("knowledge.propertyReferenceScanPartial"));
+                body.append(group);
+                if (!items.length)
+                    group.append(element("p", "knowledge-empty", properties.coverage === "complete" ? uiMessage("knowledge.scopeHasNoPropertyReferences") : uiMessage("knowledge.noneFoundScanIncomplete")));
+                for (const item of items) {
+                    const target = outgoing ? item.resolution.target : item.source;
+                    const card = element("article", "knowledge-card");
+                    card.append(element("strong", "", item.fieldTitle || uiMessage("knowledge.structuredProperty")), element("span", "knowledge-badge", resolutionLabels[item.resolution.status] ?? item.resolution.status));
+                    if (target)
+                        card.append(action(nodeLabel(target), () => navigate(target), "knowledge-link-title"));
+                    const details = element("details", "knowledge-diagnostics");
+                    details.append(element("summary", "", uiMessage("knowledge.fieldLocationDetails")), element("pre", "knowledge-address", [item.fieldId, ...item.itemPath].join(" / ")));
+                    card.append(details);
+                    group.append(card);
+                }
+            }
+            for (const diagnostic of properties.diagnostics ?? [])
+                body.append(element("p", "knowledge-warning", descriptionUiText(diagnostic)));
+        }
+    }
+    function renderMentions(body: HTMLElement): void {
+        ensureRules();
+        const setting = element("label", "knowledge-setting");
+        const check = input();
+        check.type = "checkbox";
+        check.checked = enabled;
+        check.onchange = () => {
+            try {
+                localStorage.setItem("weftext-potential-links", String(check.checked));
+                enabled = check.checked;
+                drawOverlay();
+            }
+            catch {
+                check.checked = enabled;
+                report(uiMessage("knowledge.mentionHintPreferenceSaveFailed"));
+            }
+        };
+        setting.append(check, uiTextNode(uiMessage("knowledge.showBodyDoubleUnderlineHints")));
+        body.append(setting);
+        const domain = select([["all", uiMessage("knowledge.titlesNamesStableFragments")], ["notes", uiMessage("knowledge.noteTitlesNamesOnly")], ["fragments", uiMessage("knowledge.stableFragmentsOnly")]] as const);
+        setUiAttr(domain, "aria-label", uiMessage("knowledge.candidateScope"));
+        domain.value = mentionDomain;
+        domain.onchange = () => { mentionDomain = domain.value; render(); drawOverlay(); };
+        const scope = select([["note", uiMessage("knowledge.scopeThisNote")], ["library", uiMessage("knowledge.scopePersonalLibrary")]] as const);
+        setUiAttr(scope, "aria-label", uiMessage("knowledge.exclusionRuleScope"));
+        scope.value = exclusionScope;
+        scope.onchange = () => { exclusionScope = scope.value; };
+        body.append(field(uiMessage("knowledge.candidateScope"), domain), field(uiMessage("knowledge.exclusionRuleScope"), scope), element("p", "knowledge-help", uiMessage("knowledge.mentionScanDescription")));
+        rules.controls(body, () => { render(); drawOverlay(); });
+        body.append(element("p", "knowledge-help", uiMessage("knowledge.allMentionTargetsListed")));
+        const list = element("div", "knowledge-mentions");
+        list.tabIndex = -1;
+        body.append(list);
+        if (!snapshot?.mentions) {
+            list.append(element("p", "knowledge-empty", uiMessage("knowledge.mentionScanUnavailable")));
+            return;
+        }
+        list.append(element("p", "knowledge-help", snapshot.mentions.coverage === "partial" ? uiMessage("knowledge.mentionScanPartialAllKnown") : uiMessage("knowledge.authorizedScanCompleted")));
+        const hits = knownMentions();
+        if (!hits.length)
+            list.append(element("p", "knowledge-empty", snapshot.mentions.coverage === "complete" ? uiMessage("knowledge.scopeHasNoPotentialLinks") : uiMessage("knowledge.noneFoundScanIncomplete")));
+        for (const { fragment, hit } of hits) {
+            const card = element("article", "knowledge-card");
+            card.append(element("span", "knowledge-badge", () => `[${uiTextValue(hit.startScalar)}, ${uiTextValue(hit.endScalar)})${uiTextValue(hit.lane === undefined ? uiMessage("knowledge.moreOverlapsSuffix") : "")}`), chooser(fragment.id, hit, fragment.text?.slice(hit.startUtf16, hit.endUtf16) ?? hit.terms.join(" / ")));
+            list.append(card);
+        }
+    }
+    function mediaEntry(body: HTMLElement): void {
+        const group = section(uiMessage("knowledge.resourceRegion"), uiMessage("knowledge.selectActualResourceRegionDescription"));
+        body.append(group);
+        const sessionId = host.context()?.sessionId ?? null;
+        if (sessionId !== mediaSession) {
+            mediaController?.dispose();
+            mediaController = null;
+            mediaContainer.replaceChildren();
+            mediaSession = sessionId;
+            mediaDraft = null;
+        }
+        if (host.mountMedia && !mediaController)
+            mediaController = host.mountMedia(mediaContainer, target => { mediaDraft = target; }, mediaDraft ?? undefined);
+        if (!host.mountMedia)
+            group.append(element("p", "knowledge-empty", uiMessage("knowledge.resourcePreviewUnavailable")));
+        else
+            group.append(mediaContainer);
+    }
+    function renderAnnotations(body: HTMLElement): void {
+        const diagnostics = snapshot?.annotationDiagnostics ?? [];
+        if (snapshot?.annotationStatus && !["ready", "valid", "available", "missing"].includes(snapshot.annotationStatus))
+            body.append(element("p", "knowledge-warning", displayMessage("knowledge.annotationFileStatus", { p0: uiDisplayParameter(snapshot.annotationStatus) })));
+        for (const diagnostic of diagnostics)
+            body.append(element("p", "knowledge-warning", apiErrorUiText(diagnostic)));
+        const create = section(uiMessage("knowledge.addIndependentAnnotation"));
+        body.append(create);
+        const target = select([["whole_document", uiMessage("hostedReview.wholeNoteTarget")], ["source_range", uiMessage("knowledge.currentExactSelection")], ["source_element", uiMessage("knowledge.currentSelectedElement")], ["media", uiMessage("knowledge.mediaRegionTarget")]] as const);
+        target.value = annotationTarget;
+        target.onchange = () => {
+            annotationTarget = target.value;
+            if (annotationTarget === "source_range" || annotationTarget === "source_element") {
+                annotationSelectionBasis = host.context();
+                annotationSelection = annotationSelectionBasis?.selection ? { ...annotationSelectionBasis.selection } : undefined;
+            }
+            render();
+        };
+        create.append(field(uiMessage("knowledge.target"), target));
+        if (annotationTarget === "source_range" || annotationTarget === "source_element") {
+            const capture = action(uiMessage("knowledge.captureCurrentSelection"), () => { annotationSelectionBasis = host.context(); annotationSelection = annotationSelectionBasis?.selection ? { ...annotationSelectionBasis.selection } : undefined; render(); });
+            create.append(capture);
+            create.append(element("p", "knowledge-help", annotationSelection ? displayMessage("knowledge.sourceRangeValidationHint", { p0: annotationSelection.from, p1: annotationSelection.to, p2: uiDisplayParameter(host.context()?.dirty ? uiMessage("knowledge.saveSourceThenReselect") : uiMessage("knowledge.revalidateExactSourceOnCommit")) }) : uiMessage("knowledge.selectExactSourceRange")));
+            if (annotationSelection?.visibleExcerpt)
+                create.append(element("blockquote", "knowledge-excerpt", annotationSelection.visibleExcerpt));
+        }
+        if (annotationTarget === "media")
+            mediaEntry(create);
+        const kind = select([["comment", uiMessage("hostedReview.commentPurpose")], ["mark", uiMessage("hostedReview.markPurpose")], ["suggestion", uiMessage("hostedReview.suggestionPurpose")]] as const);
+        kind.value = annotationKind;
+        kind.onchange = () => { annotationKind = kind.value; render(); };
+        create.append(field(uiMessage("knowledge.purpose"), kind));
+        const entry = textarea(annotationBody, uiMessage("knowledge.discussionPlaceholder"));
+        entry.oninput = () => { annotationBody = entry.value; };
+        create.append(field(uiMessage("hostedReview.bodyLabel"), entry));
+        if (annotationKind === "suggestion") {
+            const replacement = textarea(suggestionReplacement, uiMessage("knowledge.replacementTextPlaceholder"));
+            replacement.oninput = () => { suggestionReplacement = replacement.value; };
+            create.append(field(uiMessage("hostedReview.replacementLabel"), replacement), element("p", "knowledge-help", uiMessage("knowledge.acceptSuggestionTransactionDescription")));
+        }
+        create.append(action(uiMessage("knowledge.prepareSaveAnnotation"), async () => {
+            if (!annotationBody.trim()) {
+                report(uiMessage("knowledge.annotationContentRequired"));
+                return;
+            }
+            let annotationAnchor: unknown = { kind: "whole_document" };
+            if (annotationTarget === "media") {
+                if (!mediaDraft) {
+                    report(uiMessage("knowledge.selectExactResourceRegion"));
+                    return;
+                }
+                const error = validateMediaRegion(mediaDraft);
+                if (error) {
+                    report(error);
+                    return;
+                }
+                annotationAnchor = { ...mediaDraft };
+            }
+            else if (annotationTarget !== "whole_document") {
+                const context = host.context();
+                if (!context || !annotationSelection || !sameKnowledgeBasis(annotationSelectionBasis, context) || !isGraphemeRange(context.source, annotationSelection.from, annotationSelection.to)) {
+                    report(uiMessage("knowledge.selectionSourceVersionChanged"));
+                    return;
+                }
+                if (annotationTarget === "source_element" && !annotationSelection.elementRole) {
+                    report(uiMessage("knowledge.selectionElementRoleUnverified"));
+                    return;
+                }
+                annotationAnchor = { kind: annotationTarget, ...annotationSelection };
+            }
+            if (await perform(uiMessage("knowledge.saveIndependentAnnotation"), { kind: "annotationCreate", target: annotationAnchor, body: annotationBody, purpose: annotationKind, replacement: annotationKind === "suggestion" ? suggestionReplacement : undefined })) {
+                annotationBody = "";
+                suggestionReplacement = "";
+                render();
+            }
+        }, "knowledge-button primary"));
+        const threads = section(uiMessage("knowledge.discussionsAndSuggestions"));
+        body.append(threads);
+        if (!snapshot?.annotations?.length)
+            threads.append(element("p", "knowledge-empty", uiMessage("knowledge.noReadableAnnotations")));
+        for (const annotation of snapshot?.annotations ?? []) {
+            const id = annotation.annotationId ?? annotation.id;
+            const card = element("article", "knowledge-card");
+            card.append(element("span", "knowledge-badge", annotation.reviewState === "resolved" ? uiMessage("hostedReview.discussionResolved") : uiMessage("hostedReview.discussionUnresolved")), element("span", `knowledge-badge ${annotation.targetResolution === "exact" || annotation.targetResolution === "mapped" ? "" : "warning"}`, resolutionLabels[annotation.targetResolution ?? "unavailable"] ?? uiMessage("knowledge.targetUnavailable")));
+            if (annotation.targetSummary)
+                card.append(element("p", "knowledge-help", annotation.targetSummary));
+            if (excerpt(annotation))
+                card.append(element("blockquote", "knowledge-excerpt", excerpt(annotation)));
+            card.append(element("p", "knowledge-annotation-body", annotation.body));
+            if (annotation.author || annotation.createdAt)
+                card.append(element("p", "knowledge-help", [annotation.author, annotation.createdAt].filter(Boolean).join(" · ")));
+            if (annotation.purpose === "suggestion") {
+                card.append(element("span", "knowledge-badge", ({ pending: uiMessage("hostedReview.suggestionPending"), accepted: uiMessage("hostedReview.suggestionAccepted"), rejected: uiMessage("hostedReview.suggestionRejected") })[annotation.suggestionState ?? "pending"]));
+                if (annotation.replacement !== undefined)
+                    card.append(element("pre", "knowledge-replacement", annotation.replacement));
+            }
+            const controls = element("div", "knowledge-actions");
+            controls.append(action(annotation.reviewState === "resolved" ? uiMessage("knowledge.reopenDiscussion") : uiMessage("knowledge.resolveDiscussion"), () => perform(uiMessage("knowledge.updateDiscussionStatus"), { kind: "annotationResolve", annotationId: id, resolved: annotation.reviewState !== "resolved" })));
+            if (annotation.targetResolution === "exact" || annotation.targetResolution === "mapped") {
+                if (annotation.sourceLocation && host.selectSource)
+                    controls.append(action(uiMessage("knowledge.returnToTarget"), () => {
+                        if (!sameKnowledgeBasis(snapshotBasis, host.context())) {
+                            report(uiMessage("knowledge.sourceVersionChangedDiscussionRetained"));
+                            return;
+                        }
+                        host.selectSource!(annotation.sourceLocation!.from, annotation.sourceLocation!.to);
+                    }));
+                else if (annotation.navigateTarget)
+                    controls.append(action(uiMessage("knowledge.returnToTarget"), () => navigate(annotation.navigateTarget!)));
+                else if (annotation.resourceLocation)
+                    controls.append(action(uiMessage("knowledge.returnToMediaTarget"), () => {
+                        if (!sameKnowledgeBasis(snapshotBasis, host.context())) {
+                            report(uiMessage("knowledge.currentNoteChangedDiscussionRetained"));
+                            return;
+                        }
+                        const location = annotation.resourceLocation!, target = storedMediaSelection(location.target);
+                        if (!target || target.resource !== location.resource || target.revision !== location.revision) {
+                            report(uiMessage("knowledge.exactMediaTargetUnavailable"));
+                            return;
+                        }
+                        mediaController?.dispose();
+                        mediaController = null;
+                        mediaContainer.replaceChildren();
+                        mediaDraft = target;
+                        annotationTarget = "media";
+                        tab = "annotations";
+                        render();
+                        mediaContainer.scrollIntoView({ block: "nearest" });
+                    }));
+            }
+            else if (!(annotation.purpose === "suggestion" && annotation.suggestionState === "pending"))
+                controls.append(action(uiMessage("knowledge.relocateToCurrentTarget"), async () => {
+                    if (annotationTarget === "media") {
+                        if (!mediaDraft || validateMediaRegion(mediaDraft)) {
+                            report(uiMessage("knowledge.selectCurrentExactResourceRegion"));
+                            return;
+                        }
+                        await perform(uiMessage("hostedReview.reattachOperation"), { kind: "annotationReattach", annotationId: id, target: { ...mediaDraft } });
+                        return;
+                    }
+                    const selection = host.context()?.selection;
+                    if (!selection) {
+                        report(uiMessage("knowledge.selectCurrentExactTarget"));
+                        return;
+                    }
+                    await perform(uiMessage("hostedReview.reattachOperation"), { kind: "annotationReattach", annotationId: id, target: { kind: "source_range", ...selection } });
+                }));
+            if (annotation.purpose === "suggestion" && annotation.suggestionState === "pending") {
+                const accept = action(uiMessage("knowledge.checkAndAccept"), () => perform(uiMessage("knowledge.applySuggestionAndAcceptance"), { kind: "annotationAccept", annotationId: id }));
+                accept.disabled = !canApplySuggestion(annotation);
+                controls.append(accept, action(uiMessage("hostedReview.rejectOperation"), () => perform(uiMessage("knowledge.rejectChangeSuggestion"), { kind: "annotationReject", annotationId: id })));
+                let draft = reconfirmations.get(id);
+                if (!draft) {
+                    draft = { replacement: annotation.replacement ?? "", basis: null };
+                    reconfirmations.set(id, draft);
+                }
+                const reconsider = element("details", "knowledge-reconfirm");
+                reconsider.append(element("summary", "", uiMessage("knowledge.reconfirmSuggestionTargetText")), element("p", "knowledge-help", uiMessage("knowledge.reconfirmSuggestionDescription")));
+                const replacement = textarea(draft.replacement);
+                replacement.oninput = () => { draft!.replacement = replacement.value; };
+                reconsider.append(field(uiMessage("knowledge.reconfirmedSuggestionText"), replacement));
+                reconsider.append(action(uiMessage("knowledge.captureCurrentExactSelection"), () => {
+                    const context = host.context();
+                    draft!.basis = context;
+                    draft!.selection = context?.selection ? { ...context.selection } : undefined;
+                    const caption = reconsider.querySelector<HTMLElement>(".knowledge-reconfirm-selection");
+                    if (caption)
+                        setUiText(caption, draft!.selection ? displayMessage("knowledge.selectedUtf16Range", { p0: draft!.selection.from, p1: draft!.selection.to }) : uiMessage("knowledge.noExactSelection"));
+                }));
+                reconsider.append(element("p", "knowledge-help knowledge-reconfirm-selection", draft.selection ? displayMessage("knowledge.selectedUtf16Range", { p0: draft.selection.from, p1: draft.selection.to }) : uiMessage("knowledge.selectTargetBeforeCapture")));
+                reconsider.append(action(uiMessage("knowledge.prepareReconfirmation"), async () => {
+                    const context = host.context();
+                    const selection = draft!.selection;
+                    if (!context || context.dirty || !selection || !sameKnowledgeBasis(draft!.basis, context) || !isGraphemeRange(context.source, selection.from, selection.to, true) || selection.from === selection.to && !draft!.replacement) {
+                        report(uiMessage("knowledge.saveSourceReselectSuggestion"));
+                        return;
+                    }
+                    await perform(uiMessage("knowledge.reconfirmSuggestionTargetAndText"), { kind: "annotationReconfirm", annotationId: id, target: { kind: selection.from === selection.to ? "source_point" : "source_range", ...selection }, replacement: draft!.replacement });
+                }));
+                card.append(reconsider);
+            }
+            card.append(controls);
+            for (const reply of annotation.replies ?? []) {
+                const value = element("div", "knowledge-reply");
+                value.append(element("p", "knowledge-annotation-body", reply.body));
+                if (reply.author || reply.createdAt)
+                    value.append(element("small", "", [reply.author, reply.createdAt].filter(Boolean).join(" · ")));
+                card.append(value);
+            }
+            const reply = textarea(replies.get(id) ?? "", uiMessage("knowledge.replyPlaceholder"));
+            setUiAttr(reply, "aria-label", displayMessage("knowledge.replyAnnotationLabel", { p0: uiDisplayParameter(id) }));
+            reply.oninput = () => replies.set(id, reply.value);
+            card.append(reply, action(uiMessage("knowledge.saveReply"), async () => {
+                const text = replies.get(id) ?? "";
+                if (!text.trim())
+                    return;
+                if (await perform(uiMessage("knowledge.saveAnnotationReply"), { kind: "annotationReply", annotationId: id, body: text })) {
+                    replies.delete(id);
+                    render();
+                }
+            }));
+            threads.append(card);
+        }
+    }
+    function renderFiles(body: HTMLElement): void {
+        const context = host.context();
+        if (!context)
+            return;
+        const managed = Boolean(context.nodeId && context.workspaceId);
+        const nodeDirectory = context.path.replace(/[/\\][^/\\]+$/, "");
+        let draft = fileDrafts.get(context.sessionId);
+        if (!draft) {
+            draft = { name: context.path.replaceAll("\\", "/").split("/").at(-1)?.replace(/\.typ$/i, "") ?? "", parent: context.root, backup: "", allowLosses: false, restores: new Map() };
+            fileDrafts.set(context.sessionId, draft);
+        }
+        const group = section(uiMessage("knowledge.noteNodeActions"), managed ? uiMessage("knowledge.nodeActionsDescription") : uiMessage("knowledge.nodeActionsRequireLibraryNote"));
+        body.append(group);
+        const name = input(draft.name);
+        name.oninput = () => { draft!.name = name.value; };
+        const parent = input(draft.parent);
+        parent.oninput = () => { draft!.parent = parent.value; };
+        group.append(field(uiMessage("knowledge.newOrCopyName"), name), field(uiMessage("knowledge.targetParentFullPath"), parent));
+        const lossChoice = element("label", "knowledge-setting");
+        const allowLosses = input();
+        allowLosses.type = "checkbox";
+        allowLosses.checked = draft.allowLosses;
+        allowLosses.onchange = () => { draft!.allowLosses = allowLosses.checked; };
+        lossChoice.append(allowLosses, uiTextNode(uiMessage("knowledge.copyRetainUnmigratedReferences")));
+        group.append(lossChoice, element("p", "knowledge-help", uiMessage("knowledge.copyLossDescription")));
+        if (managed && context.dirty)
+            group.append(element("p", "knowledge-warning", uiMessage("knowledge.saveDraftBeforeNodeAction")));
+        const actions = element("div", "knowledge-actions");
+        for (const [label, kind] of [[uiMessage("tagNavigation.rename"), "renameNode"], [uiMessage("hostedStructure.moveKind"), "moveNode"], [uiMessage("knowledge.copyIndependentNode"), "copyNode"], [uiMessage("knowledge.operationRecycle"), "trashNode"]] as const) {
+            const control = action(label, () => perform(label, { kind, source: nodeDirectory, ...(kind === "renameNode" || kind === "copyNode" ? { name: name.value } : {}), ...(kind === "moveNode" || kind === "copyNode" ? { parent: parent.value } : {}), ...(kind === "copyNode" && draft!.allowLosses ? { allowLosses: true } : {}) }));
+            control.disabled = !managed || context.dirty;
+            actions.append(control);
+        }
+        group.append(actions);
+        const backup = section(uiMessage("knowledge.libraryBackup"), uiMessage("knowledge.libraryBackupDescription"));
+        const destination = input(draft.backup, uiMessage("knowledge.backupPathPlaceholder"));
+        destination.oninput = () => { draft!.backup = destination.value; };
+        backup.append(field(uiMessage("knowledge.backupTargetFullPath"), destination), action(uiMessage("knowledge.prepareBackup"), () => perform(uiMessage("knowledge.createLibraryBackup"), { kind: "backupLibrary", destination: destination.value })));
+        body.append(backup);
+        const trash = section(uiMessage("knowledge.recycleBin"), uiMessage("knowledge.recycleBinDescription"));
+        body.append(trash);
+        if (!snapshot?.trash?.length)
+            trash.append(element("p", "knowledge-empty", uiMessage("knowledge.noReadableRecoveryRecords")));
+        for (const entry of snapshot?.trash ?? []) {
+            const card = element("article", "knowledge-card");
+            const restoreDraft = trashRestoreDraft(draft.restores, context.root, entry);
+            const restoreName = input(restoreDraft.name), restoreParent = input(restoreDraft.parent);
+            restoreName.oninput = () => { restoreDraft.name = restoreName.value; };
+            restoreParent.oninput = () => { restoreDraft.parent = restoreParent.value; };
+            card.append(element("strong", "", entry.name));
+            if (entry.path)
+                card.append(element("p", "knowledge-address", entry.path));
+            card.append(field(uiMessage("knowledge.restoreName"), restoreName), field(uiMessage("knowledge.restoreParentDirectory"), restoreParent), action(uiMessage("knowledge.prepareRestore"), () => perform(uiMessage("knowledge.restoreNoteNode"), { kind: "restoreNode", trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent: restoreParent.value, name: restoreName.value })));
+            trash.append(card);
+        }
+    }
+    function templateValueControl(kind: string, value: KnowledgeTemplateValue | undefined, changed: (value: KnowledgeTemplateValue) => void): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+        if (kind === "bool") {
+            const control = select([["false", uiMessage("nativeValue.booleanNo")], ["true", uiMessage("nativeValue.booleanYes")]] as const);
+            control.value = value === true ? "true" : "false";
+            control.onchange = () => changed(control.value === "true");
+            return control;
+        }
+        if (kind === "int") {
+            const control = input(typeof value === "string" ? value : "");
+            control.inputMode = "numeric";
+            control.pattern = "[+-]?[0-9]+";
+            setUiAttr(control, "placeholder", uiMessage("knowledge.exactIntegerPlaceholder"));
+            control.oninput = () => changed(control.value);
+            return control;
+        }
+        const control = textarea(typeof value === "string" ? value : "");
+        control.rows = kind === "markup" ? 4 : 2;
+        control.oninput = () => changed(control.value);
+        return control;
+    }
+    function renderTemplateRegistration(body: HTMLElement): void {
+        const context = host.context();
+        if (!context)
+            return;
+        let draft = registrationDrafts.get(context.sessionId);
+        if (!draft) {
+            draft = { title: "", description: "", basis: null, parameters: [], open: false, slotsOpen: false, slot: { name: "", kind: "markup", nullable: false, defaultMode: "omitted", defaultValue: "" } };
+            registrationDrafts.set(context.sessionId, draft);
+        }
+        const registration = element("details", "knowledge-template-registration");
+        registration.open = draft.open;
+        registration.ontoggle = () => {
+            if (registration.isConnected)
+                draft!.open = registration.open;
+        };
+        registration.append(element("summary", "", draft.templateId ? uiMessage("knowledge.updateNativeTemplateRegistration") : uiMessage("knowledge.registerCurrentNoteAsTemplate")));
+        body.append(registration);
+        const group = section(uiMessage("knowledge.nativeTemplateRegistration"), uiMessage("knowledge.templateRegistrationDescription"));
+        registration.append(group);
+        const title = input(draft.title), description = textarea(draft.description);
+        title.oninput = () => { draft!.title = title.value; };
+        description.oninput = () => { draft!.description = description.value; };
+        group.append(field(uiMessage("knowledge.templateNameLabel"), title), field(uiMessage("knowledge.templatePurposeLabel"), description));
+        if (context.dirty)
+            group.append(element("p", "knowledge-warning", uiMessage("knowledge.saveBeforeTemplateRegistration")));
+        const details = element("details");
+        details.open = draft.slotsOpen;
+        details.ontoggle = () => {
+            if (details.isConnected)
+                draft!.slotsOpen = details.open;
+        };
+        details.append(element("summary", "", displayMessage("knowledge.parameterRangeCount", { p0: draft.parameters.length })));
+        group.append(details);
+        for (const [index, parameter] of draft.parameters.entries()) {
+            const row = element("article", "knowledge-card");
+            row.append(element("strong", "", parameter.name), element("p", "knowledge-help", () => `${uiTextValue(({ markup: uiMessage("knowledge.parameterMarkup"), string: uiMessage("knowledge.parameterStringLiteral"), bool: uiMessage("knowledge.parameterBooleanLiteral"), int: uiMessage("knowledge.parameterIntegerLiteral") })[parameter.kind])} · UTF-16 [${uiTextValue(parameter.from)}, ${uiTextValue(parameter.to)})`), action(uiMessage("knowledge.removeParameter"), () => { draft!.parameters.splice(index, 1); render(); }));
+            details.append(row);
+        }
+        const slotName = input(draft.slot.name, uiMessage("knowledge.parameterNamePlaceholder"));
+        slotName.oninput = () => { draft!.slot.name = slotName.value; };
+        const kind = select([["markup", uiMessage("knowledge.parameterMarkup")], ["string", uiMessage("knowledge.completeStringLiteral")], ["bool", uiMessage("knowledge.parameterBooleanLiteral")], ["int", uiMessage("knowledge.parameterIntegerLiteral")]] as const);
+        kind.dataset.knowledgeFocus = "template-register-kind";
+        kind.value = draft.slot.kind;
+        kind.onchange = () => {
+            draft!.slot.kind = kind.value as RegistrationSlot["kind"];
+            draft!.slot.defaultValue = kind.value === "bool" ? false : "";
+            if (kind.value === "markup") {
+                draft!.slot.nullable = false;
+                if (draft!.slot.defaultMode === "none")
+                    draft!.slot.defaultMode = "omitted";
+            }
+            render();
+        };
+        details.append(field(uiMessage("knowledge.parameterName"), slotName), field(uiMessage("knowledge.parameterType"), kind));
+        const nullable = element("label", "knowledge-setting"), nullCheck = input();
+        nullCheck.dataset.knowledgeFocus = "template-register-nullable";
+        nullCheck.type = "checkbox";
+        nullCheck.checked = draft.slot.nullable;
+        nullCheck.disabled = draft.slot.kind === "markup";
+        nullCheck.onchange = () => {
+            draft!.slot.nullable = nullCheck.checked;
+            if (!nullCheck.checked && draft!.slot.defaultMode === "none")
+                draft!.slot.defaultMode = "omitted";
+            render();
+        };
+        nullable.append(nullCheck, uiTextNode(uiMessage("knowledge.allowNone")));
+        details.append(nullable);
+        const defaultChoices: [
+            string,
+            UiText
+        ][] = [["omitted", uiMessage("knowledge.requiredNoDefault")], ["value", uiMessage("knowledge.provideDefault")]] as const;
+        if (draft.slot.nullable)
+            defaultChoices.push(["none", uiMessage("knowledge.defaultNone")]);
+        const mode = select(defaultChoices);
+        mode.dataset.knowledgeFocus = "template-register-default-mode";
+        mode.value = draft.slot.defaultMode;
+        mode.onchange = () => { draft!.slot.defaultMode = mode.value as "omitted" | "value" | "none"; render(); };
+        details.append(field(uiMessage("knowledge.defaultValue"), mode));
+        if (draft.slot.defaultMode === "value")
+            details.append(field(uiMessage("knowledge.defaultContent"), templateValueControl(draft.slot.kind, draft.slot.defaultValue, value => { draft!.slot.defaultValue = value; })));
+        details.append(action(uiMessage("knowledge.addSelectionAsParameter"), () => {
+            const current = host.context(), selection = current?.selection;
+            if (!current || current.dirty || !selection || !isGraphemeRange(current.source, selection.from, selection.to)) {
+                report(uiMessage("knowledge.saveSelectCompleteParameterRange"));
+                return;
+            }
+            if (draft!.basis && !sameKnowledgeBasis(draft!.basis, current)) {
+                report(uiMessage("knowledge.existingParameterSourceChanged"));
+                return;
+            }
+            if (!draft!.slot.name.trim() || draft!.parameters.some(parameter => parameter.name === draft!.slot.name)) {
+                report(uiMessage("knowledge.unusedParameterNameRequired"));
+                return;
+            }
+            if (draft!.parameters.some(parameter => parameter.from < selection.to && selection.from < parameter.to)) {
+                report(uiMessage("knowledge.parameterRangeOverlap"));
+                return;
+            }
+            if (draft!.slot.kind === "int" && draft!.slot.defaultMode === "value" && (typeof draft!.slot.defaultValue !== "string" || !/^[+-]?\d+$/.test(draft!.slot.defaultValue))) {
+                report(uiMessage("knowledge.defaultIntegerExactDecimal"));
+                return;
+            }
+            draft!.parameters.push({ name: draft!.slot.name, kind: draft!.slot.kind, from: selection.from, to: selection.to, nullable: draft!.slot.nullable, ...(draft!.slot.defaultMode === "value" ? { default: draft!.slot.defaultValue } : draft!.slot.defaultMode === "none" ? { default: null } : {}) });
+            draft!.basis = current;
+            draft!.slot.name = "";
+            render();
         }));
-      }
-      else if (!(annotation.purpose === "suggestion" && annotation.suggestionState === "pending")) controls.append(action("重新定位到当前目标", async () => {
-        if (annotationTarget === "media") { if (!mediaDraft || validateMediaRegion(mediaDraft)) { report("请先在真实资源预览中选择当前准确区域。讨论已保留。"); return; } await perform("重新定位批注", { kind: "annotationReattach", annotationId: id, target: { ...mediaDraft } }); return; }
-        const selection = host.context()?.selection; if (!selection) { report("请先选择当前准确目标。讨论已保留。"); return; } await perform("重新定位批注", { kind: "annotationReattach", annotationId: id, target: { kind: "source_range", ...selection } });
-      }));
-      if (annotation.purpose === "suggestion" && annotation.suggestionState === "pending") {
-        const accept = action("检查并接受", () => perform("同时应用建议与接受状态", { kind: "annotationAccept", annotationId: id })); accept.disabled = !canApplySuggestion(annotation); controls.append(accept, action("拒绝建议", () => perform("拒绝修改建议", { kind: "annotationReject", annotationId: id })));
-        let draft = reconfirmations.get(id); if (!draft) { draft = { replacement: annotation.replacement ?? "", basis: null }; reconfirmations.set(id, draft); }
-        const reconsider = element("details", "knowledge-reconfirm"); reconsider.append(element("summary", "", "重新确认建议目标与文字"), element("p", "knowledge-help", "目标变化后，请选择已保存源中的准确范围并重新确认。现有建议与讨论会保留，接受仍是单独操作。"));
-        const replacement = textarea(draft.replacement); replacement.oninput = () => { draft!.replacement = replacement.value; }; reconsider.append(field("重新确认的建议文字", replacement));
-        reconsider.append(action("取当前准确选区", () => { const context = host.context(); draft!.basis = context; draft!.selection = context?.selection ? { ...context.selection } : undefined; const caption = reconsider.querySelector<HTMLElement>(".knowledge-reconfirm-selection"); if (caption) caption.textContent = draft!.selection ? `已选择 UTF-16 [${draft!.selection.from}, ${draft!.selection.to})。` : "当前没有准确选区。"; }));
-        reconsider.append(element("p", "knowledge-help knowledge-reconfirm-selection", draft.selection ? `已选择 UTF-16 [${draft.selection.from}, ${draft.selection.to})。` : "请先在正文或源码中选择目标，再取当前准确选区。"));
-        reconsider.append(action("准备重新确认", async () => {
-          const context = host.context(); const selection = draft!.selection;
-          if (!context || context.dirty || !selection || !sameKnowledgeBasis(draft!.basis, context) || !isGraphemeRange(context.source, selection.from, selection.to, true) || selection.from === selection.to && !draft!.replacement) { report("请先保存源并重新取当前完整字符范围，插入建议也可取正文光标位置。建议文字已保留。"); return; }
-          await perform("重新确认建议的目标与文字", { kind: "annotationReconfirm", annotationId: id, target: { kind: selection.from === selection.to ? "source_point" : "source_range", ...selection }, replacement: draft!.replacement });
-        })); card.append(reconsider);
-      }
-      card.append(controls);
-      for (const reply of annotation.replies ?? []) { const value = element("div", "knowledge-reply"); value.append(element("p", "knowledge-annotation-body", reply.body)); if (reply.author || reply.createdAt) value.append(element("small", "", [reply.author, reply.createdAt].filter(Boolean).join(" · "))); card.append(value); }
-      const reply = textarea(replies.get(id) ?? "", "回复这条讨论…"); reply.setAttribute("aria-label", `回复批注 ${id}`); reply.oninput = () => replies.set(id, reply.value); card.append(reply, action("保存回复", async () => { const text = replies.get(id) ?? ""; if (!text.trim()) return; if (await perform("保存批注回复", { kind: "annotationReply", annotationId: id, body: text })) { replies.delete(id); render(); } })); threads.append(card);
+        if (draft.parameters.length)
+            details.append(action(uiMessage("knowledge.clearParameterRangesReselect"), () => { draft!.parameters = []; draft!.basis = null; render(); }));
+        const save = action(draft.templateId ? uiMessage("knowledge.prepareTemplateRegistrationUpdate") : uiMessage("knowledge.prepareTemplateRegistration"), async () => {
+            const current = host.context();
+            if (!current || current.dirty || !current.nodeId || !current.workspaceId) {
+                report(uiMessage("knowledge.openSaveNativeNoteFirst"));
+                return;
+            }
+            if (!draft!.title.trim()) {
+                report(uiMessage("knowledge.templateNameRequired"));
+                return;
+            }
+            if (draft!.parameters.length && !sameKnowledgeBasis(draft!.basis, current)) {
+                report(uiMessage("knowledge.parameterSourceVersionChanged"));
+                return;
+            }
+            await perform(uiMessage("knowledge.registerCurrentNativeNote"), { kind: "templateRegister", ...(draft!.templateId ? { templateId: draft!.templateId } : {}), title: draft!.title, description: draft!.description, parameters: draft!.parameters });
+        }, "knowledge-button primary");
+        save.disabled = context.dirty || !context.nodeId || !context.workspaceId;
+        group.append(save);
+        if (draft.templateId)
+            group.append(action(uiMessage("knowledge.registerNewTemplateInstead"), () => { draft!.templateId = undefined; render(); }));
     }
-  }
-  function renderFiles(body: HTMLElement): void {
-    const context = host.context(); if (!context) return;
-    const managed = Boolean(context.nodeId && context.workspaceId);
-    const nodeDirectory = context.path.replace(/[/\\][^/\\]+$/, "");
-    let draft = fileDrafts.get(context.sessionId);
-    if (!draft) { draft = { name: context.path.replaceAll("\\", "/").split("/").at(-1)?.replace(/\.typ$/i, "") ?? "", parent: context.root, backup: "", allowLosses: false, restores: new Map() }; fileDrafts.set(context.sessionId, draft); }
-    const group = section("笔记节点操作", managed ? "同名目录与主文件作为一个节点操作。每次预览准确文件变动，稳定 ID 保持同一对象。" : "当前是普通文件。节点操作需要已纳管的资料库笔记。"); body.append(group);
-    const name = input(draft.name); name.oninput = () => { draft!.name = name.value; };
-    const parent = input(draft.parent); parent.oninput = () => { draft!.parent = parent.value; }; group.append(field("新名称 / 复制名称", name), field("目标父目录（完整路径）", parent));
-    const lossChoice = element("label", "knowledge-setting"); const allowLosses = input(); allowLosses.type = "checkbox"; allowLosses.checked = draft.allowLosses; allowLosses.onchange = () => { draft!.allowLosses = allowLosses.checked; }; lossChoice.append(allowLosses, document.createTextNode("复制时允许保留未能迁移的引用并保存原件")); group.append(lossChoice, element("p", "knowledge-help", "选择后，复制预览会列出未能迁移的引用与保留原件。每项损失仍需核对后确认。"));
-    if (managed && context.dirty) group.append(element("p", "knowledge-warning", "当前有未保存草稿，请先保存再操作节点。"));
-    const actions = element("div", "knowledge-actions");
-    for (const [label, kind] of [["改名", "renameNode"], ["移动", "moveNode"], ["复制为独立节点", "copyNode"], ["送到回收站", "trashNode"]]) {
-      const control = action(label, () => perform(label, { kind, source: nodeDirectory, ...(kind === "renameNode" || kind === "copyNode" ? { name: name.value } : {}), ...(kind === "moveNode" || kind === "copyNode" ? { parent: parent.value } : {}), ...(kind === "copyNode" && draft!.allowLosses ? { allowLosses: true } : {}) })); control.disabled = !managed || context.dirty; actions.append(control);
+    function renderTemplates(body: HTMLElement): void {
+        const templates = snapshot?.templates ?? [];
+        body.append(element("p", "knowledge-help", uiMessage("knowledge.templateCreationDescription")));
+        renderTemplateRegistration(body);
+        if (!templates.length) {
+            body.append(element("p", "knowledge-empty", uiMessage("knowledge.noCreationTemplates")));
+            return;
+        }
+        for (const template of templates) {
+            const key = `${host.context()?.sessionId}:${template.id}`;
+            let draft = templateDrafts.get(key);
+            if (!draft) {
+                draft = { name: "", parent: host.context()?.root ?? "", parameters: {}, presence: {} };
+                for (const parameter of template.parameters ?? [])
+                    draft.presence[parameter.name] = parameter.required && parameter.default === undefined ? "value" : "omitted";
+                templateDrafts.set(key, draft);
+            }
+            const card = section(template.title, template.description);
+            const name = input(draft.name, uiMessage("recognition.newNoteName")), parent = input(draft.parent);
+            name.oninput = () => { draft!.name = name.value; };
+            parent.oninput = () => { draft!.parent = parent.value; };
+            card.append(field(uiMessage("recognition.newNoteName"), name), field(uiMessage("knowledge.targetParentDirectory"), parent));
+            if (template.sourceNode)
+                card.append(action(displayMessage("knowledge.sourcePath", { p0: uiDisplayParameter(nodeLabel(template.sourceNode)) }), () => navigate(template.sourceNode!), "knowledge-link-title"));
+            if (template.available === false)
+                card.append(element("p", "knowledge-warning", uiMessage("knowledge.templateSourceVersionUnavailable")));
+            const context = host.context();
+            if (template.sourceNode && context?.nodeId === template.sourceNode.nodeId && context.workspaceId === template.sourceNode.workspaceId)
+                card.append(action(uiMessage("knowledge.updateCurrentTemplateRegistration"), () => {
+                    const registration = registrationDrafts.get(context.sessionId);
+                    if (!registration)
+                        return;
+                    registration.templateId = template.id;
+                    registration.title = template.title;
+                    registration.description = template.description ?? "";
+                    registration.parameters = [];
+                    registration.basis = null;
+                    registration.open = true;
+                    registration.slotsOpen = true;
+                    render();
+                    container.querySelector<HTMLElement>(".knowledge-body")?.scrollTo({ top: 0 });
+                }));
+            const parameters = draft.parameters;
+            const currentParameters = (): Record<string, KnowledgeTemplateValue> => {
+                const values: Record<string, KnowledgeTemplateValue> = {};
+                for (const parameter of template.parameters ?? []) {
+                    const mode = draft!.presence[parameter.name] ?? "omitted";
+                    if (mode === "value")
+                        values[parameter.name] = parameter.kind === "bool" ? parameters[parameter.name] === true : parameters[parameter.name] ?? "";
+                    else if (mode === "none")
+                        values[parameter.name] = null;
+                }
+                return values;
+            };
+            for (const parameter of template.parameters ?? []) {
+                const mode = draft.presence[parameter.name] ?? "omitted";
+                const control = templateValueControl(parameter.kind ?? "markup", parameter.name in parameters ? parameters[parameter.name] : mode === "omitted" ? parameter.default : undefined, value => { parameters[parameter.name] = value; });
+                control.required = Boolean(parameter.required);
+                control.disabled = mode !== "value";
+                const choices: [
+                    string,
+                    UiText
+                ][] = [];
+                if (!parameter.required || parameter.default !== undefined)
+                    choices.push(["omitted", parameter.default !== undefined ? uiMessage("knowledge.useTemplateDefault") : uiMessage("knowledge.omitParameter")]);
+                choices.push(["value", uiMessage("knowledge.provideText")]);
+                if (parameter.nullable)
+                    choices.push(["none", uiMessage("knowledge.useNone")]);
+                if (choices.length > 1) {
+                    const presence = select(choices);
+                    presence.value = mode;
+                    setUiAttr(presence, "aria-label", displayMessage("knowledge.parameterInputMode", { p0: uiDisplayParameter(parameter.title ?? parameter.name) }));
+                    presence.onchange = () => {
+                        draft!.presence[parameter.name] = presence.value as "omitted" | "value" | "none";
+                        control.disabled = presence.value !== "value";
+                        if (presence.value === "value" && !(parameter.name in parameters))
+                            parameters[parameter.name] = parameter.kind === "bool" ? control.value === "true" : control.value;
+                    };
+                    card.append(field(parameter.title ?? parameter.name, presence));
+                }
+                card.append(field(choices.length > 1 ? uiMessage("knowledge.parameterValue") : parameter.title ?? parameter.name, control));
+            }
+            const preview = element("div", "knowledge-template-preview");
+            if (template.source) {
+                const source = element("pre", "knowledge-template-source", template.source);
+                const details = element("details");
+                details.append(element("summary", "", uiMessage("knowledge.nativeTemplateSource")), source);
+                card.append(details);
+            }
+            const actions = element("div", "knowledge-actions");
+            const inspect = action(uiMessage("knowledge.previewTemplate"), async () => {
+                const context = host.context();
+                if (!context || !host.previewTemplate)
+                    return;
+                const values = currentParameters();
+                try {
+                    const result = decodeKnowledgeTemplatePreview(await host.previewTemplate(template.id, values, context));
+                    if (!sameKnowledgeBasis(context, host.context()) || JSON.stringify(values) !== JSON.stringify(currentParameters())) {
+                        report(uiMessage("knowledge.templateParametersOrDraftChanged"));
+                        return;
+                    }
+                    preview.replaceChildren();
+                    if (result.tree)
+                        preview.append(nativeTree(result.tree));
+                    else if (result.source)
+                        preview.append(element("pre", "knowledge-template-source", result.source));
+                    for (const diagnostic of result.diagnostics ?? [])
+                        preview.append(element("p", "knowledge-warning", engineDiagnosticUiText(diagnostic)));
+                }
+                catch (error) {
+                    report(error);
+                }
+            });
+            inspect.disabled = !host.previewTemplate || template.available === false;
+            const create = action(uiMessage("knowledge.prepareCreateAndOpen"), () => perform(uiMessage("knowledge.createNoteFromNativeTemplate"), { kind: "templateCreate", templateId: template.id, parent: parent.value, name: name.value, parameters: currentParameters() }), "knowledge-button primary");
+            create.disabled = template.available === false;
+            actions.append(inspect, create);
+            card.append(actions, preview);
+            body.append(card);
+        }
     }
-    group.append(actions);
-    const backup = section("资料库备份", "备份已保存的资料库文件到明确的新目录；预览全部复制项和准确目标。"); const destination = input(draft.backup, "D:\\Backups\\我的资料库副本"); destination.oninput = () => { draft!.backup = destination.value; }; backup.append(field("备份目标（完整路径）", destination), action("准备备份", () => perform("创建资料库备份", { kind: "backupLibrary", destination: destination.value }))); body.append(backup);
-    const trash = section("回收站", "这里仅提供明确恢复入口。恢复前检查目标名称、位置与身份。没有永久删除操作。"); body.append(trash);
-    if (!snapshot?.trash?.length) trash.append(element("p", "knowledge-empty", "暂无可读恢复记录。"));
-    for (const entry of snapshot?.trash ?? []) { const card = element("article", "knowledge-card"); const restoreDraft = trashRestoreDraft(draft.restores, context.root, entry); const restoreName = input(restoreDraft.name), restoreParent = input(restoreDraft.parent); restoreName.oninput = () => { restoreDraft.name = restoreName.value; }; restoreParent.oninput = () => { restoreDraft.parent = restoreParent.value; }; card.append(element("strong", "", entry.name)); if (entry.path) card.append(element("p", "knowledge-address", entry.path)); card.append(field("恢复名称", restoreName), field("恢复父目录", restoreParent), action("准备恢复", () => perform("恢复笔记节点", { kind: "restoreNode", trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent: restoreParent.value, name: restoreName.value }))); trash.append(card); }
-  }
-  function templateValueControl(kind: string, value: KnowledgeTemplateValue | undefined, changed: (value: KnowledgeTemplateValue) => void): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
-    if (kind === "bool") { const control = select([["false", "否"], ["true", "是"]]); control.value = value === true ? "true" : "false"; control.onchange = () => changed(control.value === "true"); return control; }
-    if (kind === "int") { const control = input(typeof value === "string" ? value : ""); control.inputMode = "numeric"; control.pattern = "[+-]?[0-9]+"; control.placeholder = "准确整数"; control.oninput = () => changed(control.value); return control; }
-    const control = textarea(typeof value === "string" ? value : ""); control.rows = kind === "markup" ? 4 : 2; control.oninput = () => changed(control.value); return control;
-  }
-  function renderTemplateRegistration(body: HTMLElement): void {
-    const context = host.context(); if (!context) return;
-    let draft = registrationDrafts.get(context.sessionId);
-    if (!draft) { draft = { title: "", description: "", basis: null, parameters: [], open: false, slotsOpen: false, slot: { name: "", kind: "markup", nullable: false, defaultMode: "omitted", defaultValue: "" } }; registrationDrafts.set(context.sessionId, draft); }
-    const registration = element("details", "knowledge-template-registration"); registration.open = draft.open; registration.ontoggle = () => { if (registration.isConnected) draft!.open = registration.open; }; registration.append(element("summary", "", draft.templateId ? "更新原生模板登记" : "把当前笔记登记为模板")); body.append(registration);
-    const group = section("原生模板登记", "模板继续使用这篇原生笔记作为来源。可以直接登记整篇，也可为准确选中的字面量设置参数。"); registration.append(group);
-    const title = input(draft.title), description = textarea(draft.description); title.oninput = () => { draft!.title = title.value; }; description.oninput = () => { draft!.description = description.value; }; group.append(field("模板名称", title), field("用途说明", description));
-    if (context.dirty) group.append(element("p", "knowledge-warning", "请先保存当前笔记，再登记模板和准确参数范围。输入会保留。"));
-    const details = element("details"); details.open = draft.slotsOpen; details.ontoggle = () => { if (details.isConnected) draft!.slotsOpen = details.open; }; details.append(element("summary", "", `参数范围（${draft.parameters.length} 项，可不设置）`)); group.append(details);
-    for (const [index, parameter] of draft.parameters.entries()) { const row = element("article", "knowledge-card"); row.append(element("strong", "", parameter.name), element("p", "knowledge-help", `${({ markup: "正文文字", string: "字符串字面量", bool: "布尔字面量", int: "整数字面量" })[parameter.kind]} · UTF-16 [${parameter.from}, ${parameter.to})`), action("移除此参数", () => { draft!.parameters.splice(index, 1); render(); })); details.append(row); }
-    const slotName = input(draft.slot.name, "例如 title、body"); slotName.oninput = () => { draft!.slot.name = slotName.value; };
-    const kind = select([["markup", "正文文字"], ["string", "完整字符串字面量（含引号）"], ["bool", "布尔字面量"], ["int", "整数字面量"]]); kind.dataset.knowledgeFocus = "template-register-kind"; kind.value = draft.slot.kind; kind.onchange = () => { draft!.slot.kind = kind.value as RegistrationSlot["kind"]; draft!.slot.defaultValue = kind.value === "bool" ? false : ""; if (kind.value === "markup") { draft!.slot.nullable = false; if (draft!.slot.defaultMode === "none") draft!.slot.defaultMode = "omitted"; } render(); };
-    details.append(field("参数名称", slotName), field("参数类型", kind));
-    const nullable = element("label", "knowledge-setting"), nullCheck = input(); nullCheck.dataset.knowledgeFocus = "template-register-nullable"; nullCheck.type = "checkbox"; nullCheck.checked = draft.slot.nullable; nullCheck.disabled = draft.slot.kind === "markup"; nullCheck.onchange = () => { draft!.slot.nullable = nullCheck.checked; if (!nullCheck.checked && draft!.slot.defaultMode === "none") draft!.slot.defaultMode = "omitted"; render(); }; nullable.append(nullCheck, document.createTextNode("允许空值")); details.append(nullable);
-    const defaultChoices: [string, string][] = [["omitted", "必填，不设默认值"], ["value", "提供默认值"]]; if (draft.slot.nullable) defaultChoices.push(["none", "默认使用空值"]);
-    const mode = select(defaultChoices); mode.dataset.knowledgeFocus = "template-register-default-mode"; mode.value = draft.slot.defaultMode; mode.onchange = () => { draft!.slot.defaultMode = mode.value as "omitted" | "value" | "none"; render(); }; details.append(field("默认值", mode));
-    if (draft.slot.defaultMode === "value") details.append(field("默认内容", templateValueControl(draft.slot.kind, draft.slot.defaultValue, value => { draft!.slot.defaultValue = value; })));
-    details.append(action("把当前选区加入参数", () => {
-      const current = host.context(), selection = current?.selection;
-      if (!current || current.dirty || !selection || !isGraphemeRange(current.source, selection.from, selection.to)) { report("请保存源并选择准确的完整字符范围。参数输入已保留。"); return; }
-      if (draft!.basis && !sameKnowledgeBasis(draft!.basis, current)) { report("已有参数范围对应的源版本已变化。请移除失效范围后重新选择。"); return; }
-      if (!draft!.slot.name.trim() || draft!.parameters.some(parameter => parameter.name === draft!.slot.name)) { report("请输入尚未使用的参数名称。"); return; }
-      if (draft!.parameters.some(parameter => parameter.from < selection.to && selection.from < parameter.to)) { report("参数范围不能包含或交叉已有参数，请分别选择。"); return; }
-      if (draft!.slot.kind === "int" && draft!.slot.defaultMode === "value" && (typeof draft!.slot.defaultValue !== "string" || !/^[+-]?\d+$/.test(draft!.slot.defaultValue))) { report("默认整数请使用准确十进制整数文字，不会转换为近似数值。"); return; }
-      draft!.parameters.push({ name: draft!.slot.name, kind: draft!.slot.kind, from: selection.from, to: selection.to, nullable: draft!.slot.nullable, ...(draft!.slot.defaultMode === "value" ? { default: draft!.slot.defaultValue } : draft!.slot.defaultMode === "none" ? { default: null } : {}) }); draft!.basis = current; draft!.slot.name = ""; render();
-    }));
-    if (draft.parameters.length) details.append(action("清空参数范围并重新选择", () => { draft!.parameters = []; draft!.basis = null; render(); }));
-    const save = action(draft.templateId ? "准备更新模板登记" : "准备登记模板", async () => {
-      const current = host.context(); if (!current || current.dirty || !current.nodeId || !current.workspaceId) { report("请先打开并保存资料库中的原生笔记。模板输入已保留。"); return; }
-      if (!draft!.title.trim()) { report("请输入模板名称。"); return; }
-      if (draft!.parameters.length && !sameKnowledgeBasis(draft!.basis, current)) { report("参数范围的源版本已变化，请重新选择准确范围。"); return; }
-      await perform("登记当前原生笔记为模板", { kind: "templateRegister", ...(draft!.templateId ? { templateId: draft!.templateId } : {}), title: draft!.title, description: draft!.description, parameters: draft!.parameters });
-    }, "knowledge-button primary"); save.disabled = context.dirty || !context.nodeId || !context.workspaceId; group.append(save);
-    if (draft.templateId) group.append(action("改为登记新的模板", () => { draft!.templateId = undefined; render(); }));
-  }
-  function renderTemplates(body: HTMLElement): void {
-    const templates = snapshot?.templates ?? [];
-    body.append(element("p", "knowledge-help", "参数按声明类型传入原生模板。创建前预览源、资源、身份映射与损失，确认同一份准备结果。"));
-    renderTemplateRegistration(body);
-    if (!templates.length) { body.append(element("p", "knowledge-empty", "当前资料库没有可用创建模板。")); return; }
-    for (const template of templates) {
-      const key = `${host.context()?.sessionId}:${template.id}`; let draft = templateDrafts.get(key);
-      if (!draft) { draft = { name: "", parent: host.context()?.root ?? "", parameters: {}, presence: {} }; for (const parameter of template.parameters ?? []) draft.presence[parameter.name] = parameter.required && parameter.default === undefined ? "value" : "omitted"; templateDrafts.set(key, draft); }
-      const card = section(template.title, template.description); const name = input(draft.name, "新笔记名称"), parent = input(draft.parent); name.oninput = () => { draft!.name = name.value; }; parent.oninput = () => { draft!.parent = parent.value; }; card.append(field("新笔记名称", name), field("目标父目录", parent));
-      if (template.sourceNode) card.append(action(`来源：${nodeLabel(template.sourceNode)}`, () => navigate(template.sourceNode!), "knowledge-link-title"));
-      if (template.available === false) card.append(element("p", "knowledge-warning", "登记的来源版本或参数范围目前不可用。请检查来源，必要时明确更新登记。"));
-      const context = host.context(); if (template.sourceNode && context?.nodeId === template.sourceNode.nodeId && context.workspaceId === template.sourceNode.workspaceId) card.append(action("更新当前模板登记", () => { const registration = registrationDrafts.get(context.sessionId); if (!registration) return; registration.templateId = template.id; registration.title = template.title; registration.description = template.description ?? ""; registration.parameters = []; registration.basis = null; registration.open = true; registration.slotsOpen = true; render(); container.querySelector<HTMLElement>(".knowledge-body")?.scrollTo({ top: 0 }); }));
-      const parameters = draft.parameters;
-      const currentParameters = (): Record<string, KnowledgeTemplateValue> => {
-        const values: Record<string, KnowledgeTemplateValue> = {};
-        for (const parameter of template.parameters ?? []) { const mode = draft!.presence[parameter.name] ?? "omitted"; if (mode === "value") values[parameter.name] = parameter.kind === "bool" ? parameters[parameter.name] === true : parameters[parameter.name] ?? ""; else if (mode === "none") values[parameter.name] = null; }
-        return values;
-      };
-      for (const parameter of template.parameters ?? []) {
-        const mode = draft.presence[parameter.name] ?? "omitted";
-        const control = templateValueControl(parameter.kind ?? "markup", parameter.name in parameters ? parameters[parameter.name] : mode === "omitted" ? parameter.default : undefined, value => { parameters[parameter.name] = value; }); control.required = Boolean(parameter.required); control.disabled = mode !== "value";
-        const choices: [string, string][] = [];
-        if (!parameter.required || parameter.default !== undefined) choices.push(["omitted", parameter.default !== undefined ? "使用模板默认值" : "不提供此参数"]);
-        choices.push(["value", "填写文字"]); if (parameter.nullable) choices.push(["none", "使用空值"]);
-        if (choices.length > 1) { const presence = select(choices); presence.value = mode; presence.setAttribute("aria-label", `${parameter.title ?? parameter.name}的输入方式`); presence.onchange = () => { draft!.presence[parameter.name] = presence.value as "omitted" | "value" | "none"; control.disabled = presence.value !== "value"; if (presence.value === "value" && !(parameter.name in parameters)) parameters[parameter.name] = parameter.kind === "bool" ? control.value === "true" : control.value; }; card.append(field(parameter.title ?? parameter.name, presence)); }
-        card.append(field(choices.length > 1 ? "参数值" : parameter.title ?? parameter.name, control));
-      }
-      const preview = element("div", "knowledge-template-preview");
-      if (template.source) { const source = element("pre", "knowledge-template-source", template.source); const details = element("details"); details.append(element("summary", "", "原生模板源码"), source); card.append(details); }
-      const actions = element("div", "knowledge-actions");
-      const inspect = action("预览模板", async () => { const context = host.context(); if (!context || !host.previewTemplate) return; const values = currentParameters(); try { const result = await host.previewTemplate(template.id, values, context); if (!sameKnowledgeBasis(context, host.context()) || JSON.stringify(values) !== JSON.stringify(currentParameters())) { report("模板参数或当前草稿已变化，请重新预览。输入已保留。"); return; } preview.replaceChildren(); if (result.tree) preview.append(nativeTree(result.tree)); else if (result.source) preview.append(element("pre", "knowledge-template-source", result.source)); for (const diagnostic of result.diagnostics ?? []) preview.append(element("p", "knowledge-warning", diagnostic.message)); } catch (error) { report(error); } }); inspect.disabled = !host.previewTemplate || template.available === false;
-      const create = action("准备创建并打开", () => perform("从原生模板创建笔记", { kind: "templateCreate", templateId: template.id, parent: parent.value, name: name.value, parameters: currentParameters() }), "knowledge-button primary"); create.disabled = template.available === false;
-      actions.append(inspect, create); card.append(actions, preview); body.append(card);
+    async function openGraphSource(edge: GraphEdge, node: GraphNode): Promise<void> {
+        if (!sameKnowledgeBasis(snapshotBasis, host.context()))
+            throw new UiError(uiMessage("knowledge.graphBasisChanged"));
+        await host.navigate(node.reference);
+        const current = host.context();
+        if (!current || `${current.workspaceId}/${current.nodeId}` !== edge.authorSource || await nodeSourceHash(current.source) !== edge.sourceHash) {
+            host.notify(uiMessage("knowledge.authorSourceOpenedBodyChanged"), true);
+            return;
+        }
+        if (edge.range)
+            host.selectSource?.(edge.range.utf16From, edge.range.utf16To);
+        else
+            host.notify(displayMessage("knowledge.authorSourceOpenedEditField", { p0: uiDisplayParameter(edge.fieldId ?? "") }));
     }
-  }
-  async function openGraphSource(edge: GraphEdge, node: GraphNode): Promise<void> {
-    if (!sameKnowledgeBasis(snapshotBasis, host.context())) throw new Error("图谱依据已变化，请刷新后定位原来源。");
-    await host.navigate(node.reference);
-    const current = host.context();
-    if (!current || `${current.workspaceId}/${current.nodeId}` !== edge.authorSource || await nodeSourceHash(current.source) !== edge.sourceHash) { host.notify("已打开作者来源；正文已变化，没有采用旧精确位置。", true); return; }
-    if (edge.range) host.selectSource?.(edge.range.utf16From, edge.range.utf16To);
-    else host.notify(`已打开作者来源，请在属性面板编辑原字段 ${edge.fieldId ?? ""}。`);
-  }
-  function openHeading(heading: StructureHeading): void {
-    if (!sameKnowledgeBasis(snapshotBasis, host.context())) { host.notify("标题依据已变化，请刷新后定位。", true); return; }
-    if (heading.range) { host.selectSource?.(heading.range.utf16From, heading.range.utf16To); return; }
-    if (!host.revealHeading?.(heading)) host.notify("此生成标题没有唯一源码地址；当前原生显示位置未匹配，请更新阅读预览后刷新。", true);
-  }
-  function render(): void {
-    if (disposed) return;
-    deferredRender = false;
-    const focused = document.activeElement instanceof HTMLElement && container.contains(document.activeElement) ? document.activeElement : null;
-    const focusKey = sameKnowledgeBasis(renderedBasis, host.context()) ? focused?.dataset.knowledgeFocus : undefined;
-    renderedBasis = host.context();
-    const scroll = container.querySelector(".knowledge-body")?.scrollTop ?? 0;
-    container.replaceChildren();
-    const heading = element("div", "knowledge-heading"); heading.append(element("strong", "", "知识与批注"), action("刷新", refresh, "knowledge-refresh"));
-    if (loading) heading.append(action("停止等待", () => { gate.invalidate(); loading = false; clearOverlay(); status.textContent = "已停止等待本次只读扫描；未取消服务端计算，正文保留。"; render(); })); container.append(heading);
-    const tabs = element("div", "knowledge-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "知识面板");
-    for (const [id, label] of [["links", "关系"], ["graph", "二维图谱"], ["headings", "标题结构"], ["citations", "插入引用"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
-    container.append(tabs, status);
-    if (pendingPlan) { const pending = element("div", "knowledge-warning", `原操作 ${pendingPlan.plan.operationId} 结果待确认。`); if (host.inspectOperation) pending.append(action("检查原操作", inspectPending)); container.append(pending); }
-    const body = element("div", "knowledge-body"); body.setAttribute("role", "tabpanel"); container.append(body);
-    if (!host.context()) { body.append(element("p", "knowledge-empty", "打开笔记后查看链接、批注和文件操作。")); return; }
-    body.append(element("p", "knowledge-help knowledge-current", host.context()!.path));
-    for (const message of snapshot?.warnings ?? []) body.append(element("p", "knowledge-warning", message));
-    if (tab === "links") { body.append(action("打开当前笔记局部图", () => { tab = "graph"; render(); })); renderLinks(body); } else if (tab === "graph") graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => host.navigate(node.reference), source: openGraphSource, error: report }); else if (tab === "headings") headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading); else if (tab === "citations") {
-      const context = host.context()!;
-      let state = citationInputs.get(context.sessionId); if (!state) { state = newNativeCitationInputs(); citationInputs.set(context.sessionId, state); }
-      renderNativeCitations(body, sameKnowledgeBasis(snapshotBasis, context) ? snapshot?.citations : undefined, state, { writable: host.canEditSource?.() !== false, at: () => { const current = host.context(); if (!current || !sameKnowledgeBasis(snapshotBasis, current)) throw new Error("引用依据已变化，请刷新后重试。"); return citationInsertionByte(current.source, current.selection?.from ?? current.source.length); }, perform: (title, intent) => perform(title, intent as KnowledgeIntent), select: range => host.selectSource?.(range.utf16From, range.utf16To), navigate, repaint: render });
-    } else if (tab === "mentions") renderMentions(body); else if (tab === "annotations") renderAnnotations(body); else if (tab === "proofreading") proofreading.render(body); else if (tab === "files") renderFiles(body); else renderTemplates(body);
-    body.scrollTop = scroll;
-    if (focusKey) container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
-  }
-  async function refresh(strict = false): Promise<void> {
-    const context = host.context(); const generation = gate.begin();
-    if ((context?.sessionId ?? "") !== graphSession) { graphSession = context?.sessionId ?? ""; graph.clear(); headings.clear(); }
-    if (!context) { snapshot = null; snapshotBasis = null; clearOverlay(); render(); return; }
-    if (!sameKnowledgeBasis(snapshotBasis, context)) { rules.closePreviews(); snapshot = null; snapshotBasis = null; clearOverlay(); render(); }
-    status.textContent = "正在读取当前获权知识信息…";
-    loading = true; if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))) render();
-    try {
-      const next = await host.load(context); if (disposed || !gate.accepts(generation, context, host.context())) return;
-      snapshot = next; snapshotBasis = context; loading = false; status.textContent = "";
-      if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render();
-      drawOverlay();
-    } catch (error) { if (gate.accepts(generation, context, host.context())) { loading = false; snapshotBasis = null; clearOverlay(); report(error); status.textContent = `扫描失败，最近结果已过期。${status.textContent} 搜索与个人规则保留，请刷新重试。`; if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")) deferredRender = true; else render(); } if (strict) throw error; }
-  }
-  render();
-  return {
-    backgroundEnabled: () => enabled || problemHints,
-    refresh,
-    selectTab(next) { tab = next; render(); },
-    attachSurface(next, nextMappings = []) { clearOverlay(); surface = next; mappings = nextMappings; if (surface) surface.classList.add("knowledge-surface"); drawOverlay(); },
-    dispose() { disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.replaceChildren(); },
-  };
+    function openHeading(heading: StructureHeading): void {
+        if (!sameKnowledgeBasis(snapshotBasis, host.context())) {
+            host.notify(uiMessage("knowledge.headingBasisChanged"), true);
+            return;
+        }
+        if (heading.range) {
+            host.selectSource?.(heading.range.utf16From, heading.range.utf16To);
+            return;
+        }
+        if (!host.revealHeading?.(heading))
+            host.notify(uiMessage("knowledge.generatedHeadingSourceUnavailable"), true);
+    }
+    function render(): void {
+        if (disposed)
+            return;
+        deferredRender = false;
+        const focused = document.activeElement instanceof HTMLElement && container.contains(document.activeElement) ? document.activeElement : null;
+        const focusKey = sameKnowledgeBasis(renderedBasis, host.context()) ? focused?.dataset.knowledgeFocus : undefined;
+        renderedBasis = host.context();
+        const scroll = container.querySelector(".knowledge-body")?.scrollTop ?? 0;
+        container.replaceChildren();
+        const heading = element("div", "knowledge-heading");
+        heading.append(element("strong", "", uiMessage("knowledge.title")), action(uiMessage("reminder.refresh"), refresh, "knowledge-refresh"));
+        if (loading)
+            heading.append(action(uiMessage("knowledge.stopWaiting"), () => { gate.invalidate(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
+        container.append(heading);
+        const tabs = element("div", "knowledge-tabs");
+        tabs.setAttribute("role", "tablist");
+        setUiAttr(tabs, "aria-label", uiMessage("knowledge.knowledgePanel"));
+        for (const [id, label] of [["links", uiMessage("knowledge.relationships")], ["graph", uiMessage("knowledge.graph2d")], ["headings", uiMessage("knowledge.headingStructure")], ["citations", uiMessage("knowledge.insertCitation")], ["mentions", uiMessage("knowledge.potentialLinks")], ["annotations", uiMessage("hostedShell.panelAnnotations")], ["proofreading", uiMessage("knowledge.proofreading")], ["files", uiMessage("knowledge.files")], ["templates", uiMessage("knowledge.templates")]] as const) {
+            const control = action(label, () => { tab = id; render(); }, "knowledge-tab");
+            control.setAttribute("role", "tab");
+            control.setAttribute("aria-selected", String(tab === id));
+            control.tabIndex = tab === id ? 0 : -1;
+            control.onkeydown = event => {
+                if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key))
+                    return;
+                event.preventDefault();
+                const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"];
+                const index = ids.indexOf(tab);
+                tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length];
+                render();
+                container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+            };
+            tabs.append(control);
+        }
+        container.append(tabs, status);
+        if (pendingPlan) {
+            const pending = element("div", "knowledge-warning", displayMessage("knowledge.originalOperationUnconfirmed", { p0: uiDisplayParameter(pendingPlan.plan.operationId) }));
+            if (host.inspectOperation)
+                pending.append(action(uiMessage("knowledge.checkOriginalOperation"), inspectPending));
+            container.append(pending);
+        }
+        const body = element("div", "knowledge-body");
+        body.setAttribute("role", "tabpanel");
+        container.append(body);
+        if (!host.context()) {
+            body.append(element("p", "knowledge-empty", uiMessage("knowledge.openNoteToViewKnowledge")));
+            return;
+        }
+        body.append(element("p", "knowledge-help knowledge-current", host.context()!.path));
+        for (const warning of snapshot?.warnings ?? [])
+            body.append(element("p", "knowledge-warning", coreDescriptionUiText(warning)));
+        for (const failure of snapshot?.errors ?? []) {
+            const card = element("section", "knowledge-warning");
+            if (failure.path !== null) card.append(element("pre", "knowledge-address", failure.path));
+            card.append(element("p", "", apiErrorUiText(failure.error)));
+            body.append(card);
+        }
+        if (tab === "links") {
+            body.append(action(uiMessage("knowledge.openCurrentNoteLocalGraph"), () => { tab = "graph"; render(); }));
+            renderLinks(body);
+        }
+        else if (tab === "graph")
+            graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => host.navigate(node.reference), source: openGraphSource, error: report });
+        else if (tab === "headings")
+            headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading);
+        else if (tab === "citations") {
+            const context = host.context()!;
+            let state = citationInputs.get(context.sessionId);
+            if (!state) {
+                state = newNativeCitationInputs();
+                citationInputs.set(context.sessionId, state);
+            }
+            renderNativeCitations(body, sameKnowledgeBasis(snapshotBasis, context) ? snapshot?.citations : undefined, state, { writable: host.canEditSource?.() !== false, at: () => {
+                    const current = host.context();
+                    if (!current || !sameKnowledgeBasis(snapshotBasis, current))
+                        throw new UiError(uiMessage("knowledge.citationBasisChanged"));
+                    return citationInsertionByte(current.source, current.selection?.from ?? current.source.length);
+                }, perform: (title, intent) => perform(title, intent as KnowledgeIntent), select: range => host.selectSource?.(range.utf16From, range.utf16To), navigate, repaint: render });
+        }
+        else if (tab === "mentions")
+            renderMentions(body);
+        else if (tab === "annotations")
+            renderAnnotations(body);
+        else if (tab === "proofreading")
+            proofreading.render(body);
+        else if (tab === "files")
+            renderFiles(body);
+        else
+            renderTemplates(body);
+        body.scrollTop = scroll;
+        if (focusKey)
+            container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
+    }
+    async function refresh(strict = false): Promise<void> {
+        const context = host.context();
+        const generation = gate.begin();
+        if ((context?.sessionId ?? "") !== graphSession) {
+            graphSession = context?.sessionId ?? "";
+            graph.clear();
+            headings.clear();
+        }
+        if (!context) {
+            snapshot = null;
+            snapshotBasis = null;
+            clearOverlay();
+            render();
+            return;
+        }
+        if (!sameKnowledgeBasis(snapshotBasis, context)) {
+            rules.closePreviews();
+            snapshot = null;
+            snapshotBasis = null;
+            clearOverlay();
+            render();
+        }
+        setUiText(status, uiMessage("knowledge.readingAuthorizedKnowledge"));
+        loading = true;
+        if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")))
+            render();
+        try {
+            const next = await host.load(context);
+            if (disposed || !gate.accepts(generation, context, host.context()))
+                return;
+            snapshot = decodeKnowledgeSnapshot(next);
+            snapshotBasis = context;
+            loading = false;
+            setUiText(status, "");
+            if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+                deferredRender = true;
+            else
+                render();
+            drawOverlay();
+        }
+        catch (error) {
+            if (gate.accepts(generation, context, host.context())) {
+                loading = false;
+                snapshotBasis = null;
+                clearOverlay();
+                report(error);
+                setUiText(status, displayMessage("knowledge.scanFailedLastResultStale", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")) }));
+                if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+                    deferredRender = true;
+                else
+                    render();
+            }
+            if (strict) throw error;
+        }
+    }
+    render();
+    return {
+        backgroundEnabled: () => enabled || problemHints,
+        refresh,
+        selectTab(next) { tab = next; render(); },
+        attachSurface(next, nextMappings = []) {
+            clearOverlay();
+            surface = next;
+            mappings = nextMappings;
+            if (surface)
+                surface.classList.add("knowledge-surface");
+            drawOverlay();
+        },
+        dispose() { disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); disposeUiTree(container); container.replaceChildren(); },
+    };
 }

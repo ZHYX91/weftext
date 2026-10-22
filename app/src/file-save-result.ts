@@ -1,9 +1,12 @@
+import { decodeApiErrorBody, type ApiErrorBody } from "./api-error";
+import { decodeCoreError, type CoreError } from "./ui-diagnostics";
+import { UiError } from "./ui-locale";
 import type { OpenedDocument, Receipt } from "./types";
 
 export interface FileSaveReceipt extends Receipt {
   committedSource?: string;
   document?: OpenedDocument;
-  documentError?: { code: string; message: string };
+  documentError?: ApiErrorBody;
   documentSourceMatchesCommit?: boolean;
 }
 export interface FrozenFileSave { operationId: string; source: string; sourcePath: string; path?: string }
@@ -30,18 +33,26 @@ function document(value: unknown): value is OpenedDocument {
 /** One file-save delivery contract for the initial response and original-id
  * lookup. The generic operation envelope alone cannot acknowledge a writer. */
 export function fileSaveReceipt(value: unknown, frozen: FrozenFileSave): FileSaveReceipt {
-  const invalid = (): never => { throw new Error("文件保存回执不完整或不属于原请求；原编号和输入保留，请查询原结果。"); };
-  if (!object(value) || value.operationId !== frozen.operationId || typeof value.status !== "string" || !["saved", "committed"].includes(value.status)
-      || !text(value.baseId) || !text(value.path) || typeof value.message !== "string"
+  const invalid = (): never => { throw new UiError("文件保存回执不完整或不属于原请求；原编号和输入保留，请查询原结果。"); };
+  const allowed = new Set(["operationId", "status", "path", "baseId", "revisionId", "recoveryIssue", "committedSource", "document", "documentError", "documentSourceMatchesCommit"]);
+  if (!object(value) || Object.keys(value).some(key => !allowed.has(key)) || value.operationId !== frozen.operationId || typeof value.status !== "string" || !["saved", "committed"].includes(value.status)
+      || !text(value.baseId) || !text(value.path)
+      || Object.hasOwn(value,"revisionId") && !text(value.revisionId)
       || coordinate(value.path) !== coordinate(frozen.path ?? frozen.sourcePath)) return invalid();
-  if (value.recoveryIssue !== undefined && (!object(value.recoveryIssue) || !text(value.recoveryIssue.code) || !text(value.recoveryIssue.message))) return invalid();
-  if (value.documentError !== undefined) {
-    if (!object(value.documentError) || !text(value.documentError.code) || !text(value.documentError.message) || value.document !== undefined) return invalid();
+  let recoveryIssue: CoreError | undefined;
+  if (Object.hasOwn(value,"recoveryIssue")) {
+    recoveryIssue = decodeCoreError(value.recoveryIssue);
+    if (!recoveryIssue) return invalid();
+  }
+  let documentError: ApiErrorBody | undefined;
+  if (Object.hasOwn(value,"documentError")) {
+    documentError = decodeApiErrorBody(value.documentError);
+    if (!documentError || value.document !== undefined || Object.hasOwn(value,"documentSourceMatchesCommit") && typeof value.documentSourceMatchesCommit !== "boolean") return invalid();
     if (value.committedSource !== undefined && value.committedSource !== frozen.source) return invalid();
   } else {
     if (!document(value.document) || value.committedSource !== frozen.source || typeof value.documentSourceMatchesCommit !== "boolean"
         || value.documentSourceMatchesCommit !== (value.document.source === frozen.source)
         || frozen.path !== undefined && coordinate(value.document.path) !== coordinate(value.path)) return invalid();
   }
-  return value as unknown as FileSaveReceipt;
+  return { ...value, ...(recoveryIssue ? {recoveryIssue} : {}), ...(documentError ? {documentError} : {}) } as unknown as FileSaveReceipt;
 }
