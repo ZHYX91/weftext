@@ -1,3 +1,4 @@
+import { uiTextValue } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { addPlanFilter, queryPlanFields } from "./query-plan-controls";
@@ -23,11 +24,11 @@ test("row writers require a direct permanent field, and aggregate, computed and 
   const replaced = structuredClone(schema); replaced.fields[0].id = "money/new-amount"; assert.equal(directQueryField(plan(), replaced, "amount"), undefined);
 });
 test("personal board and calendar keep every row and distinguish absent, null, invalid and unprojected values", () => {
-  const cells: (Cell | undefined)[] = [{ state: "absent" }, { state: "null" }, { state: "invalid" }, undefined, { state: "value", value: { kind: "date", value: "2026-10-19" } }, { state: "value", value: { kind: "text", value: "2026-10-19" } }];
+  const cells: (Cell | undefined)[] = [{ state: "absent" }, { state: "null" }, { state: "invalid",value:null,diagnostics:[] }, undefined, { state: "value", value: { kind: "date", value: "2026-10-19" } }, { state: "value", value: { kind: "text", value: "2026-10-19" } }];
   const rows: QueryRow[] = cells.map((cell, i): QueryRow => ({ key: String(i), cells: cell ? { due: cell } : {}, readOnly: true }));
   assert.equal(occurrenceBuckets(rows, "due", false).length, 6);
   const calendar = occurrenceBuckets(rows, "due", true); assert.equal(calendar.find(group => group.key === "2026-10-19")!.rows.length, 1); assert.equal(calendar.reduce((count, group) => count + group.rows.length, 0), rows.length);
-  assert.match(decodeOccurrenceView("broken").warning!, /无效/);
+  assert.match(uiTextValue(decodeOccurrenceView("broken").warning!), /无效/);
 });
 test("Query arrangement accepts only the exact adjacent AST evidence and rejects an outside-source mutation", () => {
   const source = "前😀\r\n甲查询\r\n\r\n乙查询\n后";

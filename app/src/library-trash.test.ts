@@ -76,7 +76,7 @@ test("unknown commit retains original request, plan and confirmation; reopen rec
   await flow.prepare("D:/notes", entry, "D:/notes", "A");
   const original = flow.pending!.request;
   await assert.rejects(flow.confirmAndCommit());
-  assert.equal(flow.pending?.state, "unknown"); assert.equal(flow.pending?.confirmed, true); assert.equal(flow.pending?.plan, plan);
+  assert.equal(flow.pending?.state, "unknown"); assert.equal(flow.pending?.confirmed, true); assert.deepEqual(flow.pending?.plan, plan);
   await assert.rejects(flow.prepare("D:/notes", entry, "D:/other", "B"));
   assert.equal(flow.pending?.request, original); assert.equal(nextId, 1);
   await flow.reconcile(); await flow.reconcile();

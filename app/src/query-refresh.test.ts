@@ -1,10 +1,12 @@
+import { message } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { QueryPanel, defaultPreference, queryPlanRefreshInput, type QueryPlanInputs, type QueryResult } from "./query-panel";
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
-const result = (cutId: string): QueryResult => ({ cutId, rows: [], diagnostics: [], coverage: "complete", freshness: "current", totalKnown: 0, limited: false });
+import { localQueryResult } from "./query-result.test-support";
+const result=(cutId:string):QueryResult=>localQueryResult({cutId});
 
 /** Exercise the real panel's controller paths without mounting its rendering shell. */
 function panelHarness(request: (path: string, body: unknown) => Promise<unknown>) {
@@ -145,7 +147,7 @@ test("a saved definition keeps its frozen original through ordinary errors and d
     if (path === "/api/query/definition/save") throw Object.assign(new Error("owner unavailable"), { code: "permissionDenied" });
     const id = (body as { operationId: string }).operationId;
     assert.equal(path, "/api/operations/status");
-    return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable" } };
+    return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable", explanation: message("queryDefinition.saveReceiptUnavailable"), diagnostics: [], causes: [] } };
   });
   let delivered = 0;
   Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { delivered++; throw new Error("document delivery unavailable"); } });

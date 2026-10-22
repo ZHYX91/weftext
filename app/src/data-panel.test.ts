@@ -1,3 +1,4 @@
+import { uiTextValue } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeProjection, decodeSourcePatch, fieldsForTypes, moveOrderedValue, replaceNativeMember, scalarFromInput, switchUnionValue, typeConflicts, unionVariant, type DataSchema, type NativeValue, type Shape } from "./data-panel";
@@ -69,8 +70,8 @@ test("minimal patch joining preserves Chinese, emoji and untouched source bytes"
 });
 
 test("projection adapter unwraps only the real projection", () => {
-  const projection = { qualification: "qualified", types: [], fields: [], unknownFields: [], diagnostics: [] };
-  assert.equal(decodeProjection({ projection }), projection);
+  const projection = { qualification: "qualified", id:null, types: [], resolvedTypes:[], fields: [], unknownFields: [], diagnostics: [],budgetExhausted:false };
+  assert.deepEqual(decodeProjection({ projection }), projection);
   assert.equal(decodeProjection({ projection, readOnly: true }).readOnly, true);
 });
 
@@ -167,13 +168,13 @@ test("civil calendar grouping never coerces instant or partial dates", () => {
 
 test("partial, stale, complete empty and limited output have distinct states", () => {
   const complete: QueryResult = { rows: [], coverage: "complete", freshness: "current", diagnostics: [], totalKnown: 0, limited: false };
-  assert.equal(queryResultState(complete), "完整空结果");
-  assert.match(queryResultState({ ...complete, coverage: "partial" }), /部分/);
-  assert.match(queryResultState({ ...complete, freshness: "stale" }), /过期/);
-  assert.match(queryResultState({ ...complete, limited: true, totalKnown: 22 }), /显示 0/);
-  assert.match(queryResultState({ ...complete, snapshotMode: "admittedFrozen", freshness: "stale" }), /快照内完整空结果/);
-  assert.match(queryResultState({ ...complete, snapshotMode: "admittedFrozen", freshness: "stale" }), /当前性未持续确认/);
-  assert.match(queryResultState({ ...complete, snapshotMode: "admittedFrozen", superseded: true }), /先前读取/);
+  assert.equal(uiTextValue(queryResultState(complete)), "完整空结果");
+  assert.match(uiTextValue(queryResultState({ ...complete, coverage: "partial" })), /部分/);
+  assert.match(uiTextValue(queryResultState({ ...complete, freshness: "stale" })), /过期/);
+  assert.match(uiTextValue(queryResultState({ ...complete, limited: true, totalKnown: 22 })), /显示 0/);
+  assert.match(uiTextValue(queryResultState({ ...complete, snapshotMode: "admittedFrozen", freshness: "stale" })), /快照内完整空结果/);
+  assert.match(uiTextValue(queryResultState({ ...complete, snapshotMode: "admittedFrozen", freshness: "stale" })), /当前性未持续确认/);
+  assert.match(uiTextValue(queryResultState({ ...complete, snapshotMode: "admittedFrozen", superseded: true })), /先前读取/);
 });
 
 test("search and visual filters compose safely without altering typed date conditions", () => {

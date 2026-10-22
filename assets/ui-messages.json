@@ -51144,6 +51144,388 @@
       "zh-CN": "原生来源不唯一，或未在实际输出中显示。",
       "en-US": "The native origin is nonunique or is not displayed in the actual output.",
       "params": {}
+    },
+    "capture.createdDocumentDeliveryRequired": {
+      "zh-CN": "原记录已提交，当前界面缺少准确文档交付入口；原号继续保留。",
+      "en-US": "The original record is committed, but this view has no exact document-delivery entry. The original operation ID is retained.",
+      "params": {}
+    },
+    "history.finishDelivery": {
+      "zh-CN": "比较当前稿并结束本页原回执应用",
+      "en-US": "Compare the current draft and finish applying the original receipt on this page",
+      "params": {}
+    },
+    "history.deliveryFinished": {
+      "zh-CN": "原恢复事实继续保留；已按明确比较接纳当前稿，结束本页回执应用。",
+      "en-US": "The original restore fact is retained. The current draft was accepted through explicit comparison; receipt application on this page has ended.",
+      "params": {}
+    },
+    "history.recoveryIssuePrefix": {
+      "zh-CN": " 恢复草稿更新提示：",
+      "en-US": " Recovery draft update notice: ",
+      "params": {}
+    },
+    "historyState.finishCommittedDeliveryRequired": {
+      "zh-CN": "只有原提交已确定后才可结束本页交付。",
+      "en-US": "Delivery on this page can end only after the original commit is confirmed.",
+      "params": {}
+    },
+    "hostedHistoryState.committedReceiptMismatch": {
+      "zh-CN": "后续回执不对应原恢复；原提交事实与编号保留，交付资格等待重新核对。",
+      "en-US": "The later receipt does not match the original restore. The original commit fact and ID are retained; delivery eligibility must be checked again.",
+      "params": {}
+    },
+    "hostedHistoryState.committedStatusCannotRegress": {
+      "zh-CN": "原恢复已确认提交，后续状态不能解除原号或改成未提交。",
+      "en-US": "The original restore is confirmed committed. A later status cannot release its ID or change it to uncommitted.",
+      "params": {}
+    },
+    "hostedHistoryState.committedResultIncomplete": {
+      "zh-CN": "原恢复已提交，但准确结果或回执不完整；原事实和编号保留，请继续查询。",
+      "en-US": "The original restore is committed, but its exact result or receipt is incomplete. The original fact and ID are retained; continue checking the original operation.",
+      "params": {}
+    },
+    "hostedHistoryState.uncommittedResultRejected": {
+      "zh-CN": "未提交状态不能携带恢复结果，原记录保留。",
+      "en-US": "An uncommitted status cannot carry a restore result. The original record is retained.",
+      "params": {}
+    },
+    "hostedHistory.recoveryIssuePrefix": {
+      "zh-CN": " 原恢复已保存；恢复草稿更新提示：",
+      "en-US": " The original restore is saved. Recovery draft update notice: ",
+      "params": {}
+    },
+    "knowledge.committedDeliveryPending": {
+      "zh-CN": "原操作已提交，交付仍待完成：",
+      "en-US": "The original operation is committed; delivery remains incomplete: ",
+      "params": {}
+    },
+    "knowledge.committedStatusMismatch": {
+      "zh-CN": "原操作已确认提交，后续状态不一致；原回执与编号保留。",
+      "en-US": "The original operation is confirmed committed, but the later status disagrees. The original receipt and ID are retained.",
+      "params": {}
+    },
+    "libraryTrash.committedStatusCannotRegress": {
+      "zh-CN": "原恢复已确认提交，后续状态不能降低原事实或释放原编号。",
+      "en-US": "The original restore is confirmed committed. A later status cannot downgrade that fact or release the original ID.",
+      "params": {}
+    },
+    "libraryTrash.statusContractMismatch": {
+      "zh-CN": "恢复状态不符合原操作合同；原请求、已知事实与编号保留。",
+      "en-US": "The restore status does not match the original operation contract. The original request, known facts and ID are retained.",
+      "params": {}
+    },
+    "libraryTrash.originalEnded": {
+      "zh-CN": "原恢复已明确结束，原笔记与原件保留。",
+      "en-US": "The original restore has explicitly ended. The original note and files are retained.",
+      "params": {}
+    },
+    "shell.originalCommittedReceiptRequired": {
+      "zh-CN": "原操作尚无已提交回执，原请求与输入保留。",
+      "en-US": "The original operation has no committed receipt. The original request and input are retained.",
+      "params": {}
+    },
+    "shell.committedBodyChanged": {
+      "zh-CN": "原操作已提交，当前正文已变化。",
+      "en-US": "The original operation is committed, and the current body has changed.",
+      "params": {}
+    },
+    "shell.createdDocumentNotDelivered": {
+      "zh-CN": "原节点已创建，但准确文档尚未交付。",
+      "en-US": "The original node was created, but the exact document has not been delivered.",
+      "params": {}
+    },
+    "shell.restoreCommittedCurrentSessionChanged": {
+      "zh-CN": "原恢复已提交，当前准确文件或会话已变化；原回执、输入与撤销记录保留，请比较当前磁盘版本或继续查询原交付。",
+      "en-US": "The original restore is committed, but the exact current file or session has changed. The original receipt, input and Undo history are retained; compare the current disk version or continue checking the original delivery.",
+      "params": {}
+    },
+    "shell.deliverySessionChanged": {
+      "zh-CN": "交付期间笔记会话又变化，原回执和全部输入保留，请继续核对。",
+      "en-US": "The note session changed again during delivery. The original receipt and all input are retained; continue checking the original operation.",
+      "params": {}
+    },
+    "shell.compareOriginalBuffer": {
+      "zh-CN": "请返回原缓冲区和原笔记后比较，原恢复事实继续保留。",
+      "en-US": "Return to the original buffer and note to compare. The original restore fact remains retained.",
+      "params": {}
+    },
+    "shell.originalCurrentObjectUnreadable": {
+      "zh-CN": "原保存事实已保留，但准确当前对象尚不可读，不能结束这份交付。",
+      "en-US": "The original save fact is retained, but the exact current object is unreadable. This delivery cannot end yet.",
+      "params": {}
+    },
+    "shell.createdNodeIdentityRequired": {
+      "zh-CN": "原创建结果缺少已证明的实际节点身份，原操作继续保留。",
+      "en-US": "The original creation result lacks a proven actual node identity. The original operation is retained.",
+      "params": {}
+    },
+    "shell.createdNodeAlreadyOpenPending": {
+      "zh-CN": "原节点已经打开，但保存或当前磁盘版本仍待核对；输入和撤销记录保留，原创建继续等待交付。",
+      "en-US": "The original node is already open, but its save or current disk version still needs checking. Input and Undo history are retained; the original creation still awaits delivery.",
+      "params": {}
+    },
+    "shell.saveAwaitingConfirmationEllipsis": {
+      "zh-CN": "保存待确认…",
+      "en-US": "Save awaiting confirmation…",
+      "params": {}
+    },
+    "shell.originalHistoryRestorePending": {
+      "zh-CN": "原历史恢复待核对",
+      "en-US": "Original history restore awaiting review",
+      "params": {}
+    },
+    "shell.saveAsDeliveryEndedState": {
+      "zh-CN": "本次界面交付等待已结束，当前稿继续使用当前文件会话。",
+      "en-US": "The delivery wait in this view has ended. The current draft continues using the current file session.",
+      "params": {}
+    },
+    "shell.saveAsDeliveryPendingState": {
+      "zh-CN": "原效果已提交，准确结果尚待交付。",
+      "en-US": "The original effect is committed; its exact result still awaits delivery.",
+      "params": {}
+    },
+    "shell.inspectOriginalSaveAs": {
+      "zh-CN": "查询这次另存为原结果",
+      "en-US": "Check the original result of this Save As",
+      "params": {}
+    },
+    "shell.endSaveAsDelivery": {
+      "zh-CN": "结束这次交付等待，继续当前稿",
+      "en-US": "End this delivery wait and continue the current draft",
+      "params": {}
+    },
+    "shell.originalNoteCreationPending": {
+      "zh-CN": "上一次笔记创建结果仍待确认，请先重试原创建操作。",
+      "en-US": "The previous note creation result is still unconfirmed. Retry the original creation operation first.",
+      "params": {}
+    },
+    "shell.libraryExactDeliveryPending": {
+      "zh-CN": "资料库已提交，原库或根笔记的准确交付尚未完成；原请求与回执保留。",
+      "en-US": "The library is committed, but exact delivery of the original library or root note is incomplete. The original request and receipt are retained.",
+      "params": {}
+    },
+    "shell.noteOriginalDeliveryPending": {
+      "zh-CN": "笔记原结果尚未完成准确交付：",
+      "en-US": "Exact delivery of the original note result is incomplete: ",
+      "params": {}
+    },
+    "shell.checkOriginalOperationSentence": {
+      "zh-CN": "请查询原操作。",
+      "en-US": "Check the original operation.",
+      "params": {}
+    },
+    "shell.originalFileSessionUnavailable": {
+      "zh-CN": "原文件会话当前不能重新资格化。原稿、文件会话和撤销记录保留，可另存当前稿。",
+      "en-US": "The original file session cannot currently be requalified. The original draft, file session and Undo history are retained; the current draft can be saved as a new file.",
+      "params": {}
+    },
+    "shell.historyRestoreBeforeSave": {
+      "zh-CN": "请先查询或交付这份笔记的原历史恢复，原编号与输入继续保留。",
+      "en-US": "Check or deliver this note's original history restore before saving. The original ID and input are retained.",
+      "params": {}
+    },
+    "shell.saveAsOriginalPhysicalDeliveryPending": {
+      "zh-CN": "另存为已提交，但原物理文件的准确交付尚未完成；原操作、原文件会话、后续输入和撤销记录保留。",
+      "en-US": "Save As is committed, but exact delivery of the original physical file is incomplete. The original operation, original file session, later input and Undo history are retained.",
+      "params": {}
+    },
+    "shell.saveAsDeliverySessionChanged": {
+      "zh-CN": "另存为交付期间原会话变化，原操作与输入保留，请继续核对。",
+      "en-US": "The original session changed during Save As delivery. The original operation and input are retained; continue checking the original operation.",
+      "params": {}
+    },
+    "shell.laterDeliverySessionChanged": {
+      "zh-CN": "后续交付期间会话变化，原操作与当前输入保留，请继续核对。",
+      "en-US": "The session changed during later delivery. The original operation and current input are retained; continue checking the original operation.",
+      "params": {}
+    },
+    "shell.originalCommitReadUnavailable": {
+      "zh-CN": "原提交的读取暂不可用；已确认事实和编号保留。",
+      "en-US": "The original commit cannot currently be read. Confirmed facts and the original ID are retained.",
+      "params": {}
+    },
+    "shell.originalSaveAsFactTitle": {
+      "zh-CN": "另存为原提交事实",
+      "en-US": "Original Save As commit fact",
+      "params": {}
+    },
+    "shell.originalSaveAsFactHelp": {
+      "zh-CN": "原文件提交事实及当前交付状态。",
+      "en-US": "The original file commit fact and current delivery state.",
+      "params": {}
+    },
+    "shell.confirmedSaveAsRequiredToEnd": {
+      "zh-CN": "只有已确认提交的原另存为操作可以结束界面交付等待。",
+      "en-US": "Only an original Save As operation confirmed committed can end its delivery wait in this view.",
+      "params": {}
+    },
+    "shell.saveStateChangedOriginalRetained": {
+      "zh-CN": "保存状态已变化，原请求和输入保留。",
+      "en-US": "The save state changed. The original request and input are retained.",
+      "params": {}
+    },
+    "shell.saveAsDeliveryEndedNotice": {
+      "zh-CN": "这次另存为的界面交付等待已结束；原提交和编号继续保留，当前稿与撤销记录保持原样。",
+      "en-US": "This Save As delivery wait in the view has ended. The original commit and ID remain retained; the current draft and Undo history are unchanged.",
+      "params": {}
+    },
+    "queryDefinition.periodCommittedReceiptRequired": {
+      "zh-CN": "原周期创建尚无适用的已提交回执，原请求保留。",
+      "en-US": "The original period creation has no applicable committed receipt. The original request is retained.",
+      "params": {}
+    },
+    "queryDefinition.periodDocumentDeliveryRequired": {
+      "zh-CN": "原周期已提交，当前界面缺少准确文档交付入口；原号继续保留。",
+      "en-US": "The original period is committed, but this view has no exact document-delivery entry. The original operation ID is retained.",
+      "params": {}
+    },
+    "originalOperation.deliveryErrorInvalid": {
+      "zh-CN": "原结果交付错误不符合完整协议，原回执、编号和输入保留。",
+      "en-US": "The original result delivery error does not match the complete protocol. The original receipt, ID and input are retained.",
+      "params": {}
+    },
+    "originalOperation.applicableCommittedReceiptRequired": {
+      "zh-CN": "原请求尚无适用的已提交回执，保留原编号查询。",
+      "en-US": "The original request has no applicable committed receipt. Retain the original ID and check the original operation.",
+      "params": {}
+    },
+    "fileSave.invalidOriginalReceipt": {
+      "zh-CN": "文件保存回执不完整或不属于原请求；原编号和输入保留，请查询原结果。",
+      "en-US": "The file-save receipt is incomplete or does not belong to the original request. The original ID and input are retained; check the original result.",
+      "params": {}
+    },
+    "libraryCreation.originalReceiptInvalid": {
+      "zh-CN": "资料库原创建回执不符合完整协议，原操作和输入保留。",
+      "en-US": "The original library-creation receipt does not match the complete protocol. The original operation and input are retained.",
+      "params": {}
+    },
+    "libraryCreation.deliveryErrorInvalid": {
+      "zh-CN": "资料库原交付错误不符合完整协议，原回执、编号和输入保留。",
+      "en-US": "The original library delivery error does not match the complete protocol. The original receipt, ID and input are retained.",
+      "params": {}
+    },
+    "libraryCreation.committedDeliveryPendingPrefix": {
+      "zh-CN": "资料库已提交，交付尚未完成：",
+      "en-US": "The library is committed; delivery is incomplete: ",
+      "params": {}
+    },
+    "libraryCreation.committedStatusMismatch": {
+      "zh-CN": "原资料库已确认提交，后续状态不一致；原回执与请求保留。",
+      "en-US": "The original library is confirmed committed, but the later status disagrees. The original receipt and request are retained.",
+      "params": {}
+    },
+    "libraryCreation.recoveryProtocolInvalid": {
+      "zh-CN": "资料库原恢复结果不符合完整协议，原操作与输入保留。",
+      "en-US": "The original library recovery result does not match the complete protocol. The original operation and input are retained.",
+      "params": {}
+    },
+    "workspaceTools.importCommittedStatusMismatch": {
+      "zh-CN": "原导入已确认提交，后续状态不一致；原回执与编号保留。",
+      "en-US": "The original import is confirmed committed, but the later status disagrees. The original receipt and ID are retained.",
+      "params": {}
+    },
+    "workspaceTools.resourceImportDeliveryPending": {
+      "zh-CN": "原资源导入已提交，交付尚未完成。",
+      "en-US": "The original resource import is committed; delivery is incomplete.",
+      "params": {}
+    },
+    "workspaceTools.originalImportEnded": {
+      "zh-CN": "原导入已明确终结，原文件仍保留。请重新选择后准备。",
+      "en-US": "The original import has explicitly ended. The original file is retained; select it again before preparing another import.",
+      "params": {}
+    },
+    "workspaceTools.originalImportPending": {
+      "zh-CN": "原导入尚未完成，请继续查询原操作或处理其恢复状态。",
+      "en-US": "The original import is incomplete. Continue checking the original operation or address its recovery state.",
+      "params": {}
+    },
+    "workspaceTools.originalImportResultPending": {
+      "zh-CN": "原导入结果仍待核对。",
+      "en-US": "The original import result still needs checking.",
+      "params": {}
+    },
+    "shell.createdReturnForOriginalDelivery": {
+      "zh-CN": "已创建 {name}；请返回原笔记查询并交付原结果。",
+      "en-US": "Created {name}; return to the original note to check and deliver the original result.",
+      "params": {
+        "name": "text"
+      }
+    },
+    "shell.originalSaveAsCommit": {
+      "zh-CN": "另存为原提交 {operationId}；",
+      "en-US": "Original Save As commit {operationId}; ",
+      "params": {
+        "operationId": "text"
+      }
+    },
+    "error.export.docx.math.spacingWidthApproximate": {
+      "zh-CN": "数学间距 {width} 输出为普通数学空格；精确宽度未保留。",
+      "en-US": "Math spacing {width} is exported as an ordinary math space; its exact width is not retained.",
+      "params": {
+        "width": "text"
+      }
+    },
+    "error.export.docx.math.spacingWidthUnspecified": {
+      "zh-CN": "数学间距输出为普通数学空格；精确宽度未保留。",
+      "en-US": "Math spacing is exported as an ordinary math space; its exact width is not retained.",
+      "params": {}
+    },
+    "error.export.docx.math.argumentMissing": {
+      "zh-CN": "公式元素 {element} 的参数不足。",
+      "en-US": "Math element {element} has too few arguments.",
+      "params": {
+        "element": "text"
+      }
+    },
+    "error.export.docx.math.fractionLineWidthUnsupported": {
+      "zh-CN": "自定义分数线宽尚不能准确转换为 Office Math；原源保留。",
+      "en-US": "Custom fraction-line width cannot yet be converted exactly to Office Math; the original source is retained.",
+      "params": {}
+    },
+    "error.export.docx.math.accentLimitUnsupported": {
+      "zh-CN": "数学重音需要专用 Office Math 映射，未降格成极限标记。",
+      "en-US": "Math accents require a dedicated Office Math mapping; they are not reduced to limit scripts.",
+      "params": {}
+    },
+    "error.export.docx.math.accentLowerUpperUnsupported": {
+      "zh-CN": "数学重音需要专用 Office Math 映射，未降格成极限上下标。",
+      "en-US": "Math accents require a dedicated Office Math mapping; they are not reduced to lower and upper limit scripts.",
+      "params": {}
+    },
+    "error.export.docx.math.multipleSeparatorsUnsupported": {
+      "zh-CN": "多分隔符公式暂不支持。",
+      "en-US": "Equations with multiple separators are not yet supported.",
+      "params": {}
+    },
+    "error.export.docx.math.matrixRowUnsupported": {
+      "zh-CN": "公式矩阵行类型暂不支持。",
+      "en-US": "This equation matrix row type is not yet supported.",
+      "params": {}
+    },
+    "error.export.docx.math.matrixCellUnsupported": {
+      "zh-CN": "公式矩阵单元格类型暂不支持。",
+      "en-US": "This equation matrix cell type is not yet supported.",
+      "params": {}
+    },
+    "error.export.docx.math.structureUnsupported": {
+      "zh-CN": "公式结构 {element} 暂不能转换为可编辑 Office Math。",
+      "en-US": "Math structure {element} cannot yet be converted to editable Office Math.",
+      "params": {
+        "element": "text"
+      }
+    },
+    "error.export.docx.math.variantUnsupported": {
+      "zh-CN": "公式 mathvariant {variant} 暂不支持。",
+      "en-US": "Equation mathvariant {variant} is not yet supported.",
+      "params": {
+        "variant": "text"
+      }
+    },
+    "error.export.xlsx.relationshipPartNameInvalid": {
+      "zh-CN": "关系部件名称缺少必需的 .rels 后缀。",
+      "en-US": "The relationship part name lacks the required .rels suffix.",
+      "params": {}
     }
   }
 }
