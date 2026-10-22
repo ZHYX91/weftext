@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The test owner's permission must not become an isolated worker permission. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <service android:name="org.weftext.android.host.ProbeFrozenWorkerService"
+            android:isolatedProcess="true" android:exported="false" />
+    </application>
+</manifest>
