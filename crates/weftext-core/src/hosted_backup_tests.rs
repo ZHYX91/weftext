@@ -199,7 +199,7 @@ fn owner_backup_preplan_loss_restart_settle_and_category_fence_do_not_regenerate
                 "cancelled"
             );
             assert!(core.actor_feature_status("library", &operation).is_err());
-            assert!(core.actor_save_status(&operation).is_err());
+            assert!(core.actor_save_status("library", &operation).is_err());
             Ok(())
         })
         .unwrap();

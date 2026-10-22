@@ -1,5 +1,5 @@
-import {parseUiMessage} from "./ui-locale";
-import {decodeRawDiagnostics,decodeErrorCauses,descriptionUiText} from "./ui-diagnostics";
+import { parseUiMessage } from "./ui-locale";
+import { decodeRawDiagnostics, decodeErrorCauses, descriptionUiText } from "./ui-diagnostics";
 import { ApiError, decodeApiError } from "./api-error";
 import { joinUiText } from "./ui-locale";
 import { InterfaceLocaleControl, hostedLocalePreferences, publicLocalePreferences } from "./ui-locale-settings";
@@ -126,8 +126,10 @@ function mountInterfaceLocale(audience?: {
 mountInterfaceLocale();
 document.documentElement.lang = locale.current;
 locale.subscribe(value => { document.documentElement.lang = value; });
-window.addEventListener("pagehide", event => { if (!event.persisted)
-    interfaceLocale?.dispose(); });
+window.addEventListener("pagehide", event => {
+    if (!event.persisted)
+        interfaceLocale?.dispose();
+});
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const everydayNavigation = new EverydayNavigation();
 let navigatingHistory = false;
@@ -908,19 +910,29 @@ function clearDisplay(message: UiText, clearToken = false) {
 }
 async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget"): Promise<T> {
     const epoch = requestEpoch, credential = token;
-    const target = data as { sessionId?: string } | undefined, installed = doc;
+    const target = data as {
+        sessionId?: string;
+    } | undefined, installed = doc;
     if (path === "draft" && installed && installed.sessionId === target?.sessionId && recoveryContinuations.has(installed)) {
         let pending = recoveryContinuations.get(installed);
         if (!pending) {
             pending = request("draft/resume", { sessionId: installed.sessionId, recordWitness: installed.recoveredDraftWitness, recoveredSource: installed.recoveredDraft }).then(() => undefined).catch(error => {
-                if (!(error instanceof HostedError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+                if (!(error instanceof HostedError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code))
+                    throw error;
             });
             recoveryContinuations.set(installed, pending);
         }
-        try { await pending; recoveryContinuations.delete(installed); }
-        catch (error) { recoveryContinuations.set(installed, null); throw error; }
+        try {
+            await pending;
+            recoveryContinuations.delete(installed);
+        }
+        catch (error) {
+            recoveryContinuations.set(installed, null);
+            throw error;
+        }
     }
-    if (epoch !== requestEpoch || credential !== token) throw new UiError(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
+    if (epoch !== requestEpoch || credential !== token)
+        throw new UiError(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
     const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
     const response = await fetch(`/api/hosted/${path}`, { method: data === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: data === undefined ? undefined : JSON.stringify(data), cache: "no-store", signal });
     if (!response.ok) {
@@ -1078,7 +1090,7 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     record = personalInputs.current(audience, record);
     if (!record.pending || record.owner.kind !== "body")
         throw new Error("此记录没有正文原保存编号。");
-    let outcome = await request<SaveStatus>("operation", { operationId: record.pending.operationId });
+    let outcome = await request<SaveStatus>("operation", { resource: record.owner.resource, operationId: record.pending.operationId });
     if (authorizationEpoch !== epoch || personalAudience() !== audience)
         return;
     checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
@@ -1256,15 +1268,16 @@ async function open(resource: string) {
             }
         }
         if (targetDraft.pending) {
-            let outcome = await request<SaveStatus>("operation", { operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget");
+            const originalResource = targetDraft.pending.resource;
+            let outcome = await request<SaveStatus>("operation", { resource: originalResource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget");
             if (!current())
                 return;
-            checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
+            checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
             if (["notRegistered", "notCommitted"].includes(outcome.status))
-                outcome = await request<SaveStatus>("operation/settle", { resource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget");
+                outcome = await request<SaveStatus>("operation/settle", { resource: originalResource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget");
             if (!current())
                 return;
-            checkedSaveStatus(outcome, targetDraft.pending.operationId, resource);
+            checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
             if (outcome.status === "committed") {
                 finishPersonalOperation(targetDraft.pending.operationId, "committed");
                 targetDraft = applySaveResult(targetDraft, targetDraft.pending.source);
@@ -1275,6 +1288,8 @@ async function open(resource: string) {
                 delete targetDraft.pending;
             }
         }
+        if (alias && targetDraft.pending)
+            throw new Error("原别名保存尚未终结；原编号、resource、输入和 Undo 保留，没有将待核对提案重绑到新别名。");
         if (!await authority() || !current())
             return;
         retain();
@@ -1310,7 +1325,8 @@ function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave 
     draft = stagedCache ? retainedDraft : hostedOpenedDraft(opened.source, retainedDraft);
     const epoch = requestEpoch;
     installingDocument = true;
-    if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft) recoveryContinuations.set(opened, null);
+    if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft)
+        recoveryContinuations.set(opened, null);
     try {
         source.open(opened.sessionId, opened.resource, draft.source);
         source.disabled = !opened.rights.write;
@@ -1370,7 +1386,7 @@ async function save() {
         return;
     }
     draft.source = source.value;
-    draft.pending = { operationId: op, source: sent, request: exactRequest };
+    draft.pending = { resource: selected.resource, operationId: op, source: sent, request: exactRequest };
     retain();
     controls();
     queries.authorChanged();
@@ -1401,7 +1417,7 @@ async function save() {
             throw error;
         // Network/unknown failure keeps the exact original ID until status lookup.
         if (error instanceof HostedError && error.http === 409) {
-            let result = await request<SaveStatus>("operation", { operationId: op });
+            let result = await request<SaveStatus>("operation", { resource: selected.resource, operationId: op });
             if (epoch !== requestEpoch || doc !== selected || !draft)
                 throw error;
             checkedSaveStatus(result, op, selected.resource);
@@ -1502,10 +1518,10 @@ el("preview").onclick = () => void run(async () => {
     const renderedSource = source.value;
     const rendered = await request<{
         ok: boolean;
-        html: string|null;
-        explanation:unknown;
-        diagnostics:unknown;
-        causes:unknown;
+        html: string | null;
+        explanation: unknown;
+        diagnostics: unknown;
+        causes: unknown;
     }>("preview", { sessionId: doc!.sessionId, source: renderedSource });
     if (epoch !== requestEpoch)
         return;
@@ -1513,11 +1529,11 @@ el("preview").onclick = () => void run(async () => {
         status(uiMessage("hostedShell.draftChangedRegeneratePreview"));
         return;
     }
-    const explanation=rendered.explanation===null ? null : parseUiMessage(rendered.explanation), diagnostics=decodeRawDiagnostics(rendered.diagnostics), causes=decodeErrorCauses(rendered.causes);
-    if(typeof rendered.ok!=="boolean" || !diagnostics || !causes || (rendered.ok ? explanation!==null || typeof rendered.html!=="string" : !explanation))
+    const explanation = rendered.explanation === null ? null : parseUiMessage(rendered.explanation), diagnostics = decodeRawDiagnostics(rendered.diagnostics), causes = decodeErrorCauses(rendered.causes);
+    if (typeof rendered.ok !== "boolean" || !diagnostics || !causes || (rendered.ok ? explanation !== null || typeof rendered.html !== "string" : !explanation))
         throw new UiError(uiMessage("error.invalidResponse"));
     if (!rendered.ok) {
-        status(descriptionUiText({explanation:explanation!,diagnostics,causes}));
+        status(descriptionUiText({ explanation: explanation!, diagnostics, causes }));
         return;
     }
     // A fresh browsing context avoids reusing a hidden empty srcdoc document,

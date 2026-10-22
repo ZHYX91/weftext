@@ -353,7 +353,7 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
     f.restore(request.clone()).unwrap();
     assert_eq!(
         f.core
-            .with_actor(ALICE, |c| c.actor_save_status(&operation))
+            .with_actor(ALICE, |c| c.actor_save_status("Note", &operation))
             .unwrap_err()
             .code,
         "operationConflict"

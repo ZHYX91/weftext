@@ -280,8 +280,8 @@ class RetainedHTTP(unittest.TestCase):
         reopened = self.view(server, root, token=token)
         self.assertEqual(reopened['source'], source)
         if hosted:
-            self.assertEqual(self.call(server, '/api/hosted/operation', {'operationId': request['operationId']}, token=token), receipt)
-            self.assertEqual(self.call(server, '/api/hosted/operation', {'operationId': request['operationId']}, token=tokens['bob'])['status'], 'notRegistered')
+            self.assertEqual(self.call(server, '/api/hosted/operation', {'resource': doc['resource'], 'operationId': request['operationId']}, token=token), receipt)
+            self.assertEqual(self.call(server, '/api/hosted/operation', {'resource': doc['resource'], 'operationId': request['operationId']}, token=tokens['bob'])['status'], 'notRegistered')
         else:
             self.assertEqual(reopened['nodeId'], doc['nodeId'])
             self.assertEqual(reopened['workspaceId'], doc['workspaceId'])

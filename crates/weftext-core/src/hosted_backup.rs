@@ -34,23 +34,11 @@ impl Core {
         operation: &str,
     ) -> Result<Option<ActorOperation>> {
         feature::valid_resource(resource)?;
-        let file = match File::open(self.actor_record(operation)?) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+        let Some(record) =
+            self.read_actor_operation(operation, resource, MAX_SOURCE_BYTES + 4096)?
+        else {
+            return Ok(None);
         };
-        let mut bytes = Vec::new();
-        file.take((MAX_SOURCE_BYTES + 4097) as u64)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_SOURCE_BYTES + 4096 {
-            return Err(CoreError::new(
-                "budget",
-                "Owner backup record exceeds its budget",
-            ));
-        }
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.validate_actor_input_record(&record)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.owner_backup.is_none()

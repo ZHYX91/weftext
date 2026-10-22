@@ -8,11 +8,12 @@ import vm from "node:vm";
 import ts from "typescript";
 import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
+import { applySaveResult, hostedOpenedDraft } from "./hosted-state";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "persistPersonalInputs"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "persistPersonalInputs", "open", "checkedSaveStatus"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -140,4 +141,40 @@ test("a late lease-expiry response cannot pause a newer document or actor", asyn
   await pending;
   assert.equal(f.context.compareRequired, false); assert.equal(f.context.expiredSessionId, undefined);
   assert.equal(f.context.lastStatus, undefined); assert.equal(f.storage.size, 0);
+});
+
+
+test("alias recovery queries only the frozen resource, retains unknown input and adopts only after the original receipt", async () => {
+  for (const terminal of [false, true]) {
+    const f = fixture(), c = f.context, originalDoc = c.doc;
+    const operation = "original-save", reference = "weftext-node://workspace/node";
+    const retained = { source: "later input Y", baseSource: "base B", reference, pending: { resource: "Shared", operationId: operation, source: "submitted X", request: { sessionId: "alice-original", baseId: "original-base", operationId: operation, source: "submitted X" } } };
+    c.draft = retained;
+    c.source.value = retained.source; c.source.pausedSession = true;
+    c.source.checkNavigationCapacity = () => {}; c.source.flush = async () => {};
+    let rebound = 0, installed = 0, acknowledged = 0;
+    c.source.rebindResourceAlias = (resource: string) => { assert.equal(resource, "Alias"); rebound++; };
+    c.nodeAudience = () => ({ ...c.sessionAudience(), epoch: c.requestEpoch, sessionId: c.doc.sessionId, source: c.source.value, serial: 1 });
+    c.sameHostedNodeAudience = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+    c.cached = () => undefined; c.hostedOpenedDraft = hostedOpenedDraft; c.applySaveResult = applySaveResult;
+    c.finishPersonalOperation = (id: string, state: string) => { assert.equal(id, operation); assert.equal(state, "committed"); acknowledged++; };
+    c.scheduleCurrentDraft = () => {};
+    c.installDocument = (opened: any, draft: any, recovered: boolean) => { assert.equal(recovered, true); assert.equal(draft.source, "later input Y"); assert.equal(draft.baseSource, "submitted X"); assert.equal(draft.pending, undefined); c.doc = opened; c.draft = draft; installed++; };
+    const requests: { path: string; data: any }[] = [];
+    c.request = async (path: string, data?: any) => {
+      requests.push({ path, data });
+      if (path === "me") return c.identity;
+      if (path === "open") return { resource: "Alias", sessionId: "new-alias-session", source: terminal ? "submitted X" : "base B", rights: { read: true, write: true } };
+      if (path === "navigation/ref") return { resource: "Alias", reference };
+      if (path === "operation") { assert.deepEqual(JSON.parse(JSON.stringify(data)), { resource: "Shared", operationId: operation }); return { resource: "Shared", operationId: operation, status: terminal ? "committed" : "recoveryPending", baseId: "save-base" }; }
+      throw new Error("unexpected author request: " + path);
+    };
+    if (terminal) await c.open("Alias");
+    else { await assert.rejects(c.open("Alias"), /原别名保存尚未终结/); assert.equal(c.doc, originalDoc); assert.equal(c.draft, retained); assert.equal(retained.pending.resource, "Shared"); }
+    assert.equal(installed, terminal ? 1 : 0); assert.equal(rebound, terminal ? 1 : 0); assert.equal(acknowledged, terminal ? 1 : 0);
+    assert.equal(c.source.value, "later input Y");
+    assert.equal(requests.filter(call => call.path === "operation").length, 1);
+    assert.equal(requests.some(call => ["save", "operation/settle"].includes(call.path)), false);
+    assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, terminal ? "alice-original" : "new-alias-session");
+  }
 });

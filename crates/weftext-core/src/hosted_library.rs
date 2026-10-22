@@ -4,6 +4,7 @@ use std::io::{Seek, SeekFrom};
 
 const MAX_LIBRARY_HEADER: usize = 2048;
 const MAX_HEADER_PREFIX: usize = 4096;
+pub(crate) type MetadataFields = Vec<(String, Vec<u8>)>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -39,12 +40,25 @@ pub(crate) fn read_first_metadata(
     file: &mut (impl Read + Seek),
     expected_key: &str,
 ) -> Result<Option<Vec<u8>>> {
+    Ok(
+        read_metadata_prefix(file, &[(expected_key, false)], MAX_HEADER_PREFIX)?
+            .map(|mut fields| fields.remove(0).1),
+    )
+}
+
+/// Read only the declared ordered metadata fields. No payload value is skipped
+/// or buffered, and the same handle is restored before qualified body reading.
+pub(crate) fn read_metadata_prefix(
+    file: &mut (impl Read + Seek),
+    fields: &[(&str, bool)],
+    maximum: usize,
+) -> Result<Option<MetadataFields>> {
     let original = file.stream_position()?;
     file.seek(SeekFrom::Start(0))?;
     let result = (|| {
         let mut count = 0usize;
         let mut byte = || -> Result<u8> {
-            if count == MAX_HEADER_PREFIX {
+            if count == maximum {
                 return Err(CoreError::new(
                     "budget",
                     "Actor library header exceeds its budget",
@@ -56,80 +70,121 @@ pub(crate) fn read_first_metadata(
                 .map_err(|_| CoreError::new("privateEvidence", "Truncated actor metadata"))?;
             Ok(b[0])
         };
-        let first = next_nonspace(&mut byte)?;
-        if first != b'{' || next_nonspace(&mut byte)? != b'"' {
+        if next_nonspace(&mut byte)? != b'{' {
             return Err(CoreError::new(
                 "privateEvidence",
                 "Invalid actor metadata header",
             ));
         }
-        let mut key = vec![b'"'];
-        let mut escaped = false;
-        loop {
-            let b = byte()?;
-            key.push(b);
+        let mut found = Vec::new();
+        let mut pending_key = None;
+        for (expected, optional) in fields {
+            let key = match pending_key.take() {
+                Some(key) => key,
+                None => {
+                    if !found.is_empty() && next_nonspace(&mut byte)? != b',' {
+                        return Err(CoreError::new(
+                            "privateEvidence",
+                            "Incomplete private metadata prefix",
+                        ));
+                    }
+                    let raw = metadata_value(&mut byte)?;
+                    let key: String = serde_json::from_slice(&raw)?;
+                    if next_nonspace(&mut byte)? != b':' {
+                        return Err(CoreError::new(
+                            "privateEvidence",
+                            "Invalid private metadata separator",
+                        ));
+                    }
+                    key
+                }
+            };
+            if key != *expected {
+                if *optional {
+                    pending_key = Some(key);
+                    continue;
+                }
+                if found.is_empty() {
+                    return Ok(None);
+                }
+                return Err(CoreError::new(
+                    "unsupportedInputScope",
+                    "Private record lacks the required ordered original metadata; original bytes remain unchanged",
+                ));
+            }
+            found.push((key, metadata_value(&mut byte)?));
+        }
+        Ok(Some(found))
+    })();
+    file.seek(SeekFrom::Start(original))?;
+    result
+}
+
+fn metadata_value(next: &mut impl FnMut() -> Result<u8>) -> Result<Vec<u8>> {
+    let first = next_nonspace(next)?;
+    if !matches!(first, b'{' | b'[' | b'"') {
+        return Err(CoreError::new(
+            "privateEvidence",
+            "Invalid private metadata value",
+        ));
+    }
+    let string = first == b'"';
+    let mut value = vec![first];
+    let mut depth = usize::from(!string);
+    let mut quoted = string;
+    let mut escaped = false;
+    loop {
+        let b = next()?;
+        value.push(b);
+        if value.len() > MAX_LIBRARY_HEADER {
+            return Err(CoreError::new(
+                "budget",
+                "Private metadata value exceeds its budget",
+            ));
+        }
+        if quoted {
             if b == b'"' && !escaped {
-                break;
+                quoted = false;
+                if string {
+                    break;
+                }
             }
             escaped = b == b'\\' && !escaped;
             if b != b'\\' {
                 escaped = false;
             }
-        }
-        let key: String = serde_json::from_slice(&key)?;
-        if next_nonspace(&mut byte)? != b':' {
-            return Err(CoreError::new(
-                "privateEvidence",
-                "Invalid actor metadata separator",
-            ));
-        }
-        if key != expected_key {
-            return Ok(None);
-        }
-        let first = next_nonspace(&mut byte)?;
-        if first != b'{' {
-            return Err(CoreError::new(
-                "privateEvidence",
-                "Invalid scoped actor metadata",
-            ));
-        }
-        let mut value = vec![first];
-        let mut depth = 1usize;
-        let mut quoted = false;
-        let mut escaped = false;
-        while depth != 0 {
-            let b = byte()?;
-            value.push(b);
-            if value.len() > MAX_LIBRARY_HEADER {
-                return Err(CoreError::new(
-                    "budget",
-                    "Actor library metadata exceeds its budget",
-                ));
-            }
-            if quoted {
-                if b == b'"' && !escaped {
-                    quoted = false;
-                }
-                escaped = b == b'\\' && !escaped;
-                if b != b'\\' {
+        } else {
+            match b {
+                b'"' => {
+                    quoted = true;
                     escaped = false;
                 }
-            } else {
-                match b {
-                    b'"' => {
-                        quoted = true;
-                        escaped = false;
+                b'{' | b'[' => depth += 1,
+                b'}' | b']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
                     }
-                    b'{' | b'[' => depth += 1,
-                    b'}' | b']' => depth -= 1,
-                    _ => {}
                 }
+                _ => {}
             }
         }
-        Ok(Some(value))
-    })();
-    file.seek(SeekFrom::Start(original))?;
-    result
+    }
+    Ok(value)
+}
+
+pub(crate) fn decode_metadata<T: serde::de::DeserializeOwned>(fields: MetadataFields) -> Result<T> {
+    let mut bytes = vec![b'{'];
+    for (index, (key, value)) in fields.into_iter().enumerate() {
+        if index != 0 {
+            bytes.push(b',');
+        }
+        bytes.extend(serde_json::to_vec(&key)?);
+        bytes.push(b':');
+        bytes.extend(value);
+    }
+    bytes.push(b'}');
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 fn next_nonspace(next: &mut impl FnMut() -> Result<u8>) -> Result<u8> {
@@ -141,8 +196,29 @@ fn next_nonspace(next: &mut impl FnMut() -> Result<u8>) -> Result<u8> {
     }
 }
 
+/// A foreign classification or qualification error returns before any body
+/// read. Production callers retain namespace/read guards around this handle.
+pub(crate) fn read_qualified_private_record<R: Read + Seek, T>(
+    file: &mut R,
+    qualify: impl FnOnce(&mut R) -> Result<Option<(T, usize)>>,
+) -> Result<Option<(T, Vec<u8>)>> {
+    let Some((metadata, maximum)) = qualify(file)? else {
+        return Ok(None);
+    };
+    file.seek(SeekFrom::Start(0))?;
+    let mut bytes = Vec::new();
+    file.take(maximum as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > maximum {
+        return Err(CoreError::new(
+            "budget",
+            "Qualified private record exceeds its body budget",
+        ));
+    }
+    Ok(Some((metadata, bytes)))
+}
+
 impl ActorLibraryBinding {
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
         if !Path::new(&self.root).is_absolute()
             || self
                 .workspace_id
@@ -421,6 +497,13 @@ impl Core {
     pub(super) fn actor_operation_bytes(&self, record: &ActorOperation) -> Result<Vec<u8>> {
         self.validate_actor_input_record(record)?;
         let bytes = serde_json::to_vec(record)?;
+        let metadata = read_actor_operation_metadata(&mut std::io::Cursor::new(&bytes))?;
+        if metadata != ActorOperationMetadata::from(record) {
+            return Err(CoreError::new(
+                "privateEvidence",
+                "Actor producer metadata differs",
+            ));
+        }
         let maximum = if record.history.is_some() {
             16 * 1024 * 1024
         } else if record.definition.is_some() {

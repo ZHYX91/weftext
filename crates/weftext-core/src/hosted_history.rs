@@ -102,23 +102,9 @@ impl Core {
                 "A canonical history operation UUID is required",
             ));
         }
-        let file = match File::open(self.actor_record(operation)?) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+        let Some(record) = self.read_actor_operation(operation, resource, MAX_RECORD_BYTES)? else {
+            return Ok(None);
         };
-        let mut bytes = vec![];
-        file.take((MAX_RECORD_BYTES + 1) as u64)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_RECORD_BYTES {
-            return Err(CoreError::new(
-                "budget",
-                "The retained history request exceeds 16 MiB",
-            ));
-        }
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.validate_actor_input_record(&record)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.history.is_none()

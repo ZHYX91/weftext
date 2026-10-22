@@ -3,6 +3,245 @@ use super::*;
 const ACTOR: &str = "deployment:alice";
 const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
+struct MetadataOnlyReader {
+    bytes: std::io::Cursor<Vec<u8>>,
+    body: u64,
+}
+impl Read for MetadataOnlyReader {
+    fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        if output.is_empty() {
+            return Ok(0);
+        }
+        assert!(
+            self.bytes.position() < self.body,
+            "private body was read before qualification"
+        );
+        let count = output
+            .len()
+            .min((self.body - self.bytes.position()) as usize);
+        self.bytes.read(&mut output[..count])
+    }
+}
+impl std::io::Seek for MetadataOnlyReader {
+    fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.bytes.seek(position)
+    }
+}
+
+#[test]
+fn qualified_private_reader_never_touches_foreign_body_and_rewinds_strict_metadata() {
+    let (_temp, mut core, root) = scope_fixture();
+    let operation = fresh();
+    core.with_actor_for_root(ACTOR, &root, |core| core.actor_settle("Note", &operation))
+        .unwrap();
+    let original = fs::read(operation_file(&core, &operation)).unwrap();
+    let marker = b",\"cancelled\":";
+    let body = original
+        .windows(marker.len())
+        .position(|part| part == marker)
+        .unwrap() as u64;
+    let mut reader = MetadataOnlyReader {
+        bytes: std::io::Cursor::new(original),
+        body,
+    };
+    reader.bytes.set_position(1);
+    let result = read_qualified_private_record(&mut reader, |reader| {
+        let metadata = read_actor_operation_metadata(reader)?;
+        core.validate_actor_operation_metadata(&metadata)?;
+        assert_eq!(metadata.resource, "Note");
+        Ok(None::<(ActorOperationMetadata, usize)>)
+    })
+    .unwrap();
+    assert!(result.is_none());
+    assert_eq!(reader.bytes.position(), 1);
+    let rejected =
+        read_qualified_private_record(&mut reader, |reader| -> Result<Option<((), usize)>> {
+            let metadata = read_actor_operation_metadata(reader)?;
+            core.validate_actor_operation_metadata(&metadata)?;
+            Err(CoreError::new(
+                "operationConflict",
+                "Exact original resource differs",
+            ))
+        });
+    assert_eq!(rejected.err().unwrap().code, "operationConflict");
+    assert_eq!(reader.bytes.position(), 1);
+}
+
+fn scoped_status(
+    core: &mut Core,
+    root: &Path,
+    category: &str,
+    resource: &str,
+    operation: &str,
+) -> Result<String> {
+    core.with_actor_for_root(ACTOR, root, |core| {
+        Ok(match category {
+            "save" => core.actor_save_status(resource, operation)?.unwrap().status,
+            "field" => {
+                core.actor_field_status(resource, "field", operation)?
+                    .unwrap()
+                    .status
+            }
+            "feature" => {
+                core.actor_feature_status(resource, operation)?
+                    .unwrap()
+                    .status
+            }
+            "definition" => {
+                core.actor_definition_status(resource, operation)?
+                    .unwrap()
+                    .status
+            }
+            "history" => {
+                core.actor_history_restore_status(resource, operation)?
+                    .unwrap()
+                    .status
+            }
+            _ => {
+                core.actor_owner_backup_status(resource, operation)?
+                    .unwrap()
+                    .status
+            }
+        })
+    })
+}
+
+#[test]
+fn every_actor_reader_qualifies_scope_resource_and_original_tuple_before_private_body() {
+    let (temp, mut core, root) = scope_fixture();
+    let foreign = temp.path().join("Foreign");
+    core.create_library(&foreign).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    for category in [
+        "save",
+        "field",
+        "feature",
+        "definition",
+        "history",
+        "backup",
+    ] {
+        let operation = fresh();
+        core.with_actor_for_root(ACTOR, &root, |core| {
+            match category {
+                "save" | "field" => {
+                    let doc = core.open(&note.path, Some(root.clone()))?;
+                    let request = HostedSaveRequest {
+                        session_id: doc.session_id,
+                        base_id: doc.base_id,
+                        source: doc.source + "\nActual private author input",
+                        operation_id: operation.clone(),
+                    };
+                    if category == "save" {
+                        core.actor_save("Note", request)?;
+                    } else {
+                        core.actor_field_save(
+                            "Note",
+                            "field",
+                            FP,
+                            serde_json::json!("private field value"),
+                            request,
+                        )?;
+                    }
+                }
+                "feature" => {
+                    core.actor_feature_settle("Note", &operation)?;
+                }
+                "definition" => {
+                    core.actor_definition_settle("Note", &operation)?;
+                }
+                "history" => {
+                    core.actor_history_restore_settle("Note", &operation)?;
+                }
+                _ => {
+                    core.actor_owner_backup_settle("Note", &operation)?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        let path = operation_file(&core, &operation);
+        let original = fs::read(&path).unwrap();
+        let before = scoped_status(&mut core, &root, category, "Note", &operation).unwrap();
+        let source_bytes = fs::read(&note.path).unwrap();
+        let count = core.operations.len();
+        let metadata: ActorOperation = serde_json::from_slice(&original).unwrap();
+        let journal = core.operations.get(&metadata.core_operation_id).map(|_| {
+            (
+                fs::read(core.journal_path(&metadata.core_operation_id, "plan")).unwrap(),
+                fs::read(core.journal_path(&metadata.core_operation_id, "commit")).unwrap(),
+            )
+        });
+        let marker = b",\"cancelled\":";
+        let body = original
+            .windows(marker.len())
+            .position(|part| part == marker)
+            .unwrap();
+        let mut damaged = original[..body].to_vec();
+        damaged.extend_from_slice(b",\"cancelled\":BROKEN_PRIVATE_BODY");
+        fs::write(&path, &damaged).unwrap();
+        assert_eq!(
+            scoped_status(&mut core, &foreign, category, "Note", &operation)
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Other", &operation)
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Note", &operation)
+                .unwrap_err()
+                .code,
+            "invalidState"
+        );
+        assert_eq!(fs::read(&path).unwrap(), damaged);
+        let mut wrong_tuple = metadata;
+        let ActorInputScope::Qualified {
+            scope: QualifiedInputScope::Library { binding },
+        } = &mut wrong_tuple.scope
+        else {
+            panic!("original library scope");
+        };
+        binding.root = display(&temp.path().join("contradictory-original-locator"));
+        let wrong = serde_json::to_vec(&wrong_tuple).unwrap();
+        let body = wrong
+            .windows(marker.len())
+            .position(|part| part == marker)
+            .unwrap();
+        let mut wrong = wrong[..body].to_vec();
+        wrong.extend_from_slice(b",\"cancelled\":BROKEN_PRIVATE_BODY");
+        fs::write(&path, &wrong).unwrap();
+        assert_eq!(
+            scoped_status(&mut core, &foreign, category, "Other", &operation)
+                .unwrap_err()
+                .code,
+            "privateEvidence"
+        );
+        assert_eq!(fs::read(&path).unwrap(), wrong);
+        fs::write(&path, &original).unwrap();
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Note", &operation).unwrap(),
+            before
+        );
+        assert_eq!(core.operations.len(), count);
+        if let Some((plan, commit)) = journal {
+            assert_eq!(
+                fs::read(core.journal_path(&wrong_tuple.core_operation_id, "plan")).unwrap(),
+                plan
+            );
+            assert_eq!(
+                fs::read(core.journal_path(&wrong_tuple.core_operation_id, "commit")).unwrap(),
+                commit
+            );
+        }
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(fs::read(&note.path).unwrap(), source_bytes);
+    }
+}
+
 fn scope_fixture() -> (tempfile::TempDir, Core, PathBuf) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("Library");
@@ -16,6 +255,89 @@ fn operation_file(core: &Core, operation: &str) -> PathBuf {
         .join(hash(ACTOR.as_bytes()))
         .join("operations")
         .join(format!("{operation}.json"))
+}
+
+#[test]
+fn unbound_original_actor_input_is_not_read_in_another_bound_library() {
+    let (temp, mut core, root) = scope_fixture();
+    let foreign = temp.path().join("Foreign");
+    core.create_library(&foreign).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    for field in [false, true] {
+        let operation = fresh();
+        core.with_actor(ACTOR, |core| {
+            let doc = core.open(&note.path, Some(root.clone()))?;
+            let request = HostedSaveRequest {
+                session_id: doc.session_id,
+                base_id: doc.base_id,
+                source: doc.source + "\nactual unbound private input",
+                operation_id: operation.clone(),
+            };
+            if field {
+                core.actor_field_save(
+                    "Note",
+                    "field",
+                    FP,
+                    serde_json::json!("private cell"),
+                    request,
+                )?;
+            } else {
+                core.actor_save("Note", request)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        let category = if field { "field" } else { "save" };
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Note", &operation).unwrap(),
+            "committed"
+        );
+        let path = operation_file(&core, &operation);
+        let original = fs::read(&path).unwrap();
+        let record: ActorOperation = serde_json::from_slice(&original).unwrap();
+        assert!(record.library.is_none());
+        let plan = fs::read(core.journal_path(&record.core_operation_id, "plan")).unwrap();
+        let commit = fs::read(core.journal_path(&record.core_operation_id, "commit")).unwrap();
+        let source = fs::read(&note.path).unwrap();
+        let count = core.operations.len();
+        let marker = b",\"cancelled\":";
+        let body = original
+            .windows(marker.len())
+            .position(|part| part == marker)
+            .unwrap();
+        let mut damaged = original[..body].to_vec();
+        damaged.extend_from_slice(b",\"cancelled\":BROKEN_PRIVATE_BODY");
+        fs::write(&path, &damaged).unwrap();
+        assert_eq!(
+            scoped_status(&mut core, &foreign, category, "Note", &operation)
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Note", &operation)
+                .unwrap_err()
+                .code,
+            "invalidState"
+        );
+        assert_eq!(fs::read(&path).unwrap(), damaged);
+        fs::write(&path, &original).unwrap();
+        assert_eq!(
+            scoped_status(&mut core, &root, category, "Note", &operation).unwrap(),
+            "committed"
+        );
+        assert_eq!(core.operations.len(), count);
+        assert_eq!(
+            fs::read(core.journal_path(&record.core_operation_id, "plan")).unwrap(),
+            plan
+        );
+        assert_eq!(
+            fs::read(core.journal_path(&record.core_operation_id, "commit")).unwrap(),
+            commit
+        );
+        assert_eq!(fs::read(&note.path).unwrap(), source);
+        assert_eq!(fs::read(path).unwrap(), original);
+    }
 }
 
 #[test]
@@ -101,7 +423,7 @@ fn actor_library_scope_rejects_cross_root_session_records_and_restores_after_err
         "operationConflict"
     );
     assert_eq!(
-        core.with_actor_for_root(ACTOR, &other, |core| core.actor_save_status(&id))
+        core.with_actor_for_root(ACTOR, &other, |core| core.actor_save_status("Note", &id))
             .unwrap_err()
             .code,
         "operationConflict"
@@ -165,7 +487,7 @@ fn actor_library_legacy_records_and_recovered_draft_are_not_backfilled() {
     let original = fs::read(operation_file(&core, &operation)).unwrap();
     core.with_actor_for_root(ACTOR, &root, |core| {
         assert_eq!(
-            core.actor_save_status(&operation)?.unwrap().status,
+            core.actor_save_status("Note", &operation)?.unwrap().status,
             "cancelled"
         );
         assert!(!core.actor_output_claim(&output, FP)?);
@@ -347,7 +669,7 @@ fn no_input_actor_readers_reject_author_payload_and_never_hide_an_existing_commi
     damaged.fingerprint.clear();
     fs::write(&saved_path, serde_json::to_vec(&damaged).unwrap()).unwrap();
     assert!(
-        core.with_actor(ACTOR, |core| core.actor_save_status(&saved))
+        core.with_actor(ACTOR, |core| core.actor_save_status("Note", &saved))
             .is_err()
     );
     assert!(
@@ -362,7 +684,7 @@ fn no_input_actor_readers_reject_author_payload_and_never_hide_an_existing_commi
     );
     fs::write(&saved_path, &saved_original).unwrap();
     assert_eq!(
-        core.with_actor(ACTOR, |core| core.actor_save_status(&saved))
+        core.with_actor(ACTOR, |core| core.actor_save_status("Note", &saved))
             .unwrap()
             .unwrap()
             .status,

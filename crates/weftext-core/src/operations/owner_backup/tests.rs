@@ -944,15 +944,30 @@ fn original_qualified_scope_rejects_damaged_stable_locator_before_foreign_routin
         .join("operations")
         .join(format!("{external}.json"));
     let original = fs::read(&path).unwrap();
-    let mut changed: serde_json::Value = serde_json::from_slice(&original).unwrap();
-    changed["scope"]["scope"]["binding"]["root"] =
-        serde_json::json!(display(&f.temp.path().join("wrong-original-root")));
-    let bytes = serde_json::to_vec(&changed).unwrap();
+    let mut changed =
+        hosted::read_actor_input_header(&mut std::io::Cursor::new(&original)).unwrap();
+    let original_scope = serde_json::to_vec(&changed).unwrap();
+    let hosted::ActorInputScope::Qualified {
+        scope: QualifiedInputScope::Library { binding },
+    } = &mut changed
+    else {
+        panic!("library input scope")
+    };
+    binding.root = display(&f.temp.path().join("wrong-original-root"));
+    let prefix = b"{\"scope\":";
+    assert!(original.starts_with(prefix));
+    assert_eq!(
+        &original[prefix.len()..prefix.len() + original_scope.len()],
+        original_scope
+    );
+    let mut bytes = prefix.to_vec();
+    bytes.extend(serde_json::to_vec(&changed).unwrap());
+    bytes.extend_from_slice(&original[prefix.len() + original_scope.len()..]);
     fs::write(&path, &bytes).unwrap();
     f.core
         .with_actor_for_root("tuple-owner", &root, |core| {
             assert_eq!(
-                core.actor_save_status(&external).unwrap_err().code,
+                core.actor_save_status("Note", &external).unwrap_err().code,
                 "privateEvidence"
             );
             assert_eq!(
@@ -978,7 +993,7 @@ fn original_qualified_scope_rejects_damaged_stable_locator_before_foreign_routin
     fs::write(&path, &original).unwrap();
     f.core
         .with_actor_for_root("tuple-owner", &root, |core| {
-            assert!(core.actor_save_status(&external)?.is_some());
+            assert!(core.actor_save_status("Note", &external)?.is_some());
             Ok(())
         })
         .unwrap();

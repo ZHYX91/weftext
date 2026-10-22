@@ -231,6 +231,7 @@ struct SourceSaveRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OperationStatus {
+    resource: String,
     operation_id: String,
 }
 #[derive(Deserialize)]
@@ -878,14 +879,14 @@ async fn status(
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
+            inner.rights(&actor, &req.resource)?;
             let status = inner
                 .core
                 .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
-                    c.actor_save_status(&req.operation_id)
+                    c.actor_save_status(&req.resource, &req.operation_id)
                 })
                 .map_err(HostedInner::core_error)?;
             if let Some(status) = status {
-                inner.rights(&actor, &status.resource)?;
                 value(status)
             } else {
                 Ok(json!({"operationId":req.operation_id,"status":"notRegistered"}))

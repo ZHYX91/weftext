@@ -15,6 +15,7 @@ export interface HostedDraft {
     reference?: string;
     definitionReservations?: string[];
     pending?: {
+        resource: string;
         operationId: string;
         source: string;
         request?: HostedSaveRequest;
