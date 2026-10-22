@@ -8,15 +8,20 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import plistlib
 import re
+import shutil
 import signal
 import subprocess
 import sys
 import time
 import uuid
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "platforms" / "apple"
+SIMULATOR_RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-18-5"
+SIMULATOR_DEVICE_TYPE = "com.apple.CoreSimulator.SimDeviceType.iPhone-16"
 
 
 def sources() -> dict[str, str]:
@@ -32,14 +37,17 @@ def static_check() -> None:
                 "Sources/WeftextAppleHost/BundledAssets.swift",
                 "Sources/WeftextAppleHost/NativeWebSurface.swift",
                 "Tests/WeftextAppleHostTests/SurfaceGateTests.swift",
-                "Tests/WeftextAppleHostTests/NativeWebSurfaceTests.swift"]
+                "Tests/WeftextAppleHostTests/NativeWebSurfaceTests.swift",
+                "HarnessTests/test_simulator.py"]
     for relative in required:
         if not (PACKAGE / relative).is_file():
             raise ValueError(f"Missing Apple host source: {relative}")
     # Source inventory only. Swift and WebKit semantics require the actual Mac build below.
     for p in PACKAGE.rglob("*.swift"):
         p.read_text(encoding="utf-8", errors="strict")
-    print("Apple source inventory is complete; Swift/SDK/runtime validation was not run.")
+    subprocess.run([sys.executable, str(PACKAGE / "HarnessTests" / "test_simulator.py")],
+                   cwd=ROOT, check=True, timeout=30)
+    print("Apple source inventory and pure ownership guards passed; Swift/SDK/runtime validation was not run.")
 
 
 def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], timeout: int,
@@ -111,6 +119,195 @@ def save(run: Path, record: dict) -> None:
                                      encoding="utf-8")
 
 
+def strict_inventory(text: str) -> dict:
+    def unique(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate key in original simulator inventory")
+            result[key] = value
+        return result
+    value = json.loads(text, object_pairs_hook=unique)
+    if not isinstance(value, dict):
+        raise ValueError("Expected a simulator inventory object")
+    return value
+
+
+def simulator_udid(value: str) -> str:
+    if not isinstance(value, str) or str(uuid.UUID(value)) != value.lower():
+        raise ValueError("Expected an exact canonical simulator UDID")
+    return value.upper()
+
+
+def inventory_devices(inventory: dict) -> list[tuple[str, dict]]:
+    groups = inventory.get("devices")
+    if not isinstance(groups, dict) or not all(isinstance(items, list) for items in groups.values()):
+        raise ValueError("Expected devices grouped by actual runtime identifier")
+    rows = [(runtime, item) for runtime, items in groups.items() for item in items]
+    if not all(isinstance(runtime, str) and isinstance(item, dict) for runtime, item in rows):
+        raise ValueError("Malformed original simulator device inventory")
+    return rows
+
+
+def owned_device(inventory: dict, udid: str, name: str) -> dict:
+    matching = [(runtime, item) for runtime, item in inventory_devices(inventory)
+                if isinstance(item.get("udid"), str) and item["udid"].upper() == udid]
+    if len(matching) != 1:
+        raise ValueError("Original simulator UDID is missing or ambiguous")
+    runtime, item = matching[0]
+    if (runtime != SIMULATOR_RUNTIME or item.get("name") != name or
+            item.get("deviceTypeIdentifier") != SIMULATOR_DEVICE_TYPE or
+            item.get("isAvailable") is not True or simulator_udid(item["udid"]) != udid):
+        raise ValueError("Original simulator ownership tuple changed")
+    return item
+
+
+def reconcile_created_device(inventory: dict, before: dict, name: str) -> str:
+    matches = [(runtime, item) for runtime, item in inventory_devices(inventory) if item.get("name") == name]
+    if len(matches) != 1 or matches[0][0] != SIMULATOR_RUNTIME:
+        raise ValueError("Unknown create outcome: exact original name/runtime is not unique")
+    udid = simulator_udid(matches[0][1].get("udid"))
+    if any(isinstance(item.get("udid"), str) and item["udid"].upper() == udid
+           for _, item in inventory_devices(before)):
+        raise ValueError("Create outcome refers to a device that existed before this attempt")
+    owned_device(inventory, udid, name)
+    return udid
+
+
+def archive_test_result(run: Path, record: dict) -> None:
+    source = run / "ios-simulator.xcresult"
+    if not source.is_dir():
+        if record["simulator"]["testsPassed"]:
+            raise ValueError("Successful simulator tests have no original xcresult bundle")
+        return
+    target = run / "ios-simulator.xcresult.zip"
+    files = sorted(p for p in source.rglob("*") if p.is_file() or p.is_symlink())
+    if not files or len(files) > 100_000 or any(p.is_symlink() for p in files):
+        raise ValueError("Unsupported original xcresult archive shape; original retained")
+    total = sum(p.stat().st_size for p in files)
+    if total > 512 * 1024 * 1024:
+        raise ValueError("Original xcresult exceeds archive budget; original retained")
+    with zipfile.ZipFile(target, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in files:
+            if not path.resolve().is_relative_to(source):
+                raise ValueError("xcresult member escaped the original result bundle")
+            before = path.stat()
+            archive.write(path, path.relative_to(run).as_posix())
+            after = path.stat()
+            if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+                raise ValueError("Original xcresult changed during archival")
+    record["simulator"]["resultBundleArchive"] = {"source": source.relative_to(run).as_posix(),
+        "archive": target.relative_to(run).as_posix(), "bytes": target.stat().st_size,
+        "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "originalLogicalBytes": total}
+
+
+def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, str], record: dict) -> None:
+    """One new, exactly qualified UDID; only its observed Shutdown settles cleanup."""
+    original = {"name": "Weftext-" + str(uuid.uuid4()), "runtime": SIMULATOR_RUNTIME,
+        "deviceType": SIMULATOR_DEVICE_TYPE, "createAttempted": False, "udid": None,
+        "cleanupUnknown": False, "testsPassed": False}
+    record["simulator"] = original
+    save(run, record)
+    base = ["/usr/bin/xcrun", "simctl"]
+    for command in ("create", "bootstatus", "shutdown"):
+        run_command(base + ["help", command], run, "simulator-help-" + command, env, 30, record, package)
+    runtimes = strict_inventory(run_command(base + ["list", "runtimes", "--json"], run,
+                               "simulator-runtimes", env, 30, record, package))
+    matches = [item for item in runtimes.get("runtimes", [])
+               if isinstance(item, dict) and item.get("identifier") == SIMULATOR_RUNTIME]
+    if (len(matches) != 1 or matches[0].get("isAvailable") is not True or
+            matches[0].get("version") != "18.5" or not isinstance(matches[0].get("buildversion"), str) or
+            not isinstance(matches[0].get("supportedArchitectures"), list) or
+            "arm64" not in matches[0].get("supportedArchitectures", []) or
+            not any(item.get("identifier") == SIMULATOR_DEVICE_TYPE
+                    for item in matches[0].get("supportedDeviceTypes", []) if isinstance(item, dict))):
+        raise ValueError("The installed iOS18.5 runtime/device/architecture is not qualified")
+    original["runtimeBuild"] = matches[0]["buildversion"]
+    types = strict_inventory(run_command(base + ["list", "devicetypes", "--json"], run,
+                            "simulator-device-types", env, 30, record, package))
+    if sum(isinstance(item, dict) and item.get("identifier") == SIMULATOR_DEVICE_TYPE
+           for item in types.get("devicetypes", [])) != 1:
+        raise ValueError("Expected one installed iPhone16 device type")
+    def devices(label):
+        return strict_inventory(run_command(base + ["list", "devices", "--json"], run,
+                                label, env, 30, record, package))
+    before = devices("simulator-before-create")
+    if any(item.get("name") == original["name"] for _, item in inventory_devices(before)):
+        raise ValueError("Unique owned simulator name already exists; no replacement")
+    primary_failure = None
+    try:
+        original.update(createAttempted=True, cleanupUnknown=True)
+        save(run, record)
+        # The raw log is saved before parsing. This create call is never automatically repeated.
+        reply = run_command(base + ["create", original["name"], SIMULATOR_DEVICE_TYPE, SIMULATOR_RUNTIME],
+                            run, "simulator-create", env, 60, record, package)
+        udid = simulator_udid(reply.strip())
+        original["udid"] = udid
+        created = devices("simulator-after-create")
+        if reconcile_created_device(created, before, original["name"]) != udid:
+            raise ValueError("Create receipt and original simulator tuple disagree")
+        if owned_device(created, udid, original["name"]).get("state") != "Shutdown":
+            raise ValueError("New owned simulator was not observed Shutdown before boot")
+        save(run, record)
+        run_command(base + ["boot", udid], run, "simulator-boot", env, 60, record, package)
+        run_command(base + ["bootstatus", udid, "-b"], run, "simulator-boot-status", env, 180, record, package)
+        if owned_device(devices("simulator-after-boot"), udid, original["name"]).get("state") != "Booted":
+            raise ValueError("Original simulator did not produce a Booted observation")
+        output = run_command(["/usr/bin/xcodebuild", "-jobs", "2", "-scheme", scheme, "-sdk", "iphonesimulator",
+            "-destination", "platform=iOS Simulator,id=" + udid, "-destination-timeout", "60",
+            "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
+            "-derivedDataPath", str(run / "ios-tests"), "-resultBundlePath", str(run / "ios-simulator.xcresult"),
+            "-clonedSourcePackagesDirPath", str(run / "packages"), "CODE_SIGNING_ALLOWED=NO", "test"],
+            run, "ios-simulator-tests", env, 600, record, package)
+        planned = [name for source in sorted((package / "Tests").rglob("*.swift"))
+                   for name in re.findall(r"\bfunc\s+(test[A-Za-z0-9_]+)\(", source.read_text(encoding="utf-8"))]
+        if not planned or len(planned) != len(set(planned)) or not all(
+                re.search(r"Test Case .*" + re.escape(name) + r"[^\n]* passed", output) for name in planned):
+            raise ValueError("The actual planned iOS XCTest cases did not all execute and pass")
+        original.update(testsPassed=True, actualPassedCases=planned)
+        record["mechanismValidation"]["iOSSimulatorRuntime"] = {"udid": udid, "passedCases": planned}
+    except BaseException as error:
+        primary_failure = error
+        original["failure"] = f"{type(error).__name__}: {error}"
+        raise
+    finally:
+        if original["createAttempted"]:
+            try:
+                current = devices("simulator-before-cleanup")
+                udid = original["udid"]
+                if udid is None:
+                    udid = reconcile_created_device(current, before, original["name"])
+                    original.update(udid=udid, createOutcomeReconciled=True)
+                device = owned_device(current, udid, original["name"])
+                shutdown_failure = None
+                if device.get("state") != "Shutdown":
+                    try:
+                        run_command(base + ["shutdown", udid], run, "simulator-shutdown", env, 60, record, package)
+                    except BaseException as error:
+                        shutdown_failure = error
+                        original["shutdownCommandFailure"] = f"{type(error).__name__}: {error}"
+                final = owned_device(devices("simulator-after-cleanup"), udid, original["name"])
+                if final.get("state") != "Shutdown":
+                    raise ValueError("Original simulator cleanup has no observed Shutdown receipt")
+                original.update(cleanupUnknown=False, finalState="Shutdown")
+                if shutdown_failure:
+                    raise shutdown_failure
+            except BaseException as error:
+                original["cleanupFailure"] = f"{type(error).__name__}: {error}"
+                if primary_failure is None:
+                    raise
+            finally:
+                save(run, record)
+                try:
+                    archive_test_result(run, record)
+                except BaseException as error:
+                    original["resultArchiveFailure"] = f"{type(error).__name__}: {error}"
+                    if primary_failure is None and "cleanupFailure" not in original:
+                        raise
+                finally:
+                    save(run, record)
+
+
 def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
                  require_complete: bool) -> None:
     """Fix actual executable/relocatable bytes, not a count of compiler intermediates."""
@@ -126,6 +323,17 @@ def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
             "WeftextAppleHost.build/" + source.name + ".o")), {"OBJECT"}, None))
     selections.append(("ios-simulator-host.o", [run / "ios" / "Build" / "Products" /
                        "Debug-iphonesimulator" / "WeftextAppleHost.o"], {"OBJECT"}, {"arm64", "x86_64"}))
+    if record.get("simulatorTestsRequested"):
+        test_executables = []
+        for bundle in (run / "ios-tests" / "Build" / "Products").rglob("*.xctest"):
+            info = bundle / "Info.plist"
+            if not info.is_file() or info.stat().st_size > 64 * 1024:
+                continue
+            executable = plistlib.loads(info.read_bytes()).get("CFBundleExecutable")
+            if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", executable) or executable in {".", ".."}:
+                raise ValueError("Unsupported original iOS test-bundle executable metadata")
+            test_executables.append(bundle / executable)
+        selections.append(("ios-simulator-test-bundle", test_executables, {"BUNDLE", "EXECUTE"}, {"arm64"}))
     magic_values = {"feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca",
                     "cafebabf", "bfbafeca"}
     for name, candidates, file_types, required_architectures in selections:
@@ -157,11 +365,22 @@ def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
             "sha256": hashlib.sha256(data).hexdigest(), "machOMagic": data[:4].hex(),
             "architectures": sorted(architectures), "fileDescription": description,
             "headersLog": "role-" + name + "-headers.log"}
+    result_bundle = record.get("simulator", {}).get("resultBundleArchive")
+    if result_bundle is not None:
+        source = run / result_bundle["archive"]
+        destination = role_directory / source.name
+        if not source.resolve().is_relative_to(run) or destination.exists():
+            raise ValueError("Invalid fixed simulator result archive role")
+        shutil.copyfile(source, destination)
+        if (destination.stat().st_size != result_bundle["bytes"] or
+                hashlib.sha256(destination.read_bytes()).hexdigest() != result_bundle["sha256"]):
+            raise ValueError("Simulator result archive changed before role freeze")
+        result_bundle["artifact"] = destination.relative_to(run).as_posix()
     if require_complete and record["unavailableRoles"]:
         raise ValueError("A required actual Apple artifact role is missing or ambiguous")
 
 
-def build(state_root: Path, developer_dir: Path) -> int:
+def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) -> int:
     if sys.platform != "darwin":
         raise ValueError("Apple SDK compilation requires an actual macOS host; no cross-platform pass")
     if not state_root.is_absolute() or not developer_dir.is_absolute():
@@ -195,7 +414,8 @@ def build(state_root: Path, developer_dir: Path) -> int:
     record = {"schemaVersion": 1, "kind": "appleHostLibraryBuild", "startedUtc":
               datetime.datetime.now(datetime.timezone.utc).isoformat(), "state": "running",
               "sources": before, "sourceSnapshot": str(package_input), "developerDirectory": str(developer_dir),
-              "commands": [], "runtimeValidated": False, "productValidated": False}
+              "commands": [], "runtimeValidated": False, "productValidated": False,
+              "simulatorTestsRequested": simulator_tests}
     save(run, record)
     print(run, flush=True)
     try:
@@ -230,6 +450,8 @@ def build(state_root: Path, developer_dir: Path) -> int:
                      "-destination", "generic/platform=iOS Simulator", "-derivedDataPath", str(run / "ios"),
                      "-clonedSourcePackagesDirPath", str(run / "packages"),
                      "CODE_SIGNING_ALLOWED=NO", "build"], run, "ios-sdk-build", env, 600, record, package_input)
+        if simulator_tests:
+            run_simulator_tests(run, package_input, actual[0], env, record)
         record["sourcesUnchanged"] = sources() == before
         if not record["sourcesUnchanged"]:
             raise ValueError("Apple source changed during compilation")
@@ -257,6 +479,8 @@ def main() -> int:
     compile_parser = commands.add_parser("build")
     compile_parser.add_argument("--state-root", type=Path, required=True)
     compile_parser.add_argument("--developer-dir", type=Path, required=True)
+    compile_parser.add_argument("--run-simulator-tests", action="store_true",
+                                help="Create one owned installed-iOS18.5 Simulator and run the same actual XCTest cases")
     args = parser.parse_args()
     static_check()
     if args.command == "check":
@@ -271,7 +495,7 @@ def main() -> int:
             value = getattr(signal, name, None)
             if value is not None:
                 previous[value] = signal.signal(value, terminate)
-        return build(args.state_root, args.developer_dir)
+        return build(args.state_root, args.developer_dir, args.run_simulator_tests)
     finally:
         for value, handler in previous.items():
             signal.signal(value, handler)

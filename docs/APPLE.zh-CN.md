@@ -23,11 +23,18 @@ translation_status: source
 ```text
 python scripts/apple.py check
 python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_16.4.app/Contents/Developer
+python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_16.4.app/Contents/Developer --run-simulator-tests
 ```
 
-`check` 只核源库存。`build` 必须在真实 macOS 上使用已安装的明确 Xcode；保存系统、架构、Xcode／SDK／Swift／Simulator 清单，然后实际执行 macOS Swift／WebKit 单测和 iOS Simulator SDK 编译。源码冻结到本次输入目录，SwiftPM 的 `.swiftpm` 状态不写回检出。入口不下载 SDK、不接受许可、不改全局 Xcode 选择、不启动已有 Simulator，也不签名或发布。每个子命令有期限，仅停止本次独占 process group，保存原日志、源与产物摘要。构建和单测不表示 Simulator 产品运行或安装验收。
+`check` 核源库存并运行纯 ownership guard 单测，不执行 Apple 工具。`build` 必须在真实 macOS 上使用已安装的明确 Xcode；保存系统、架构、Xcode／SDK／Swift／Simulator 清单，然后实际执行 macOS Swift／WebKit 单测和 iOS Simulator SDK 编译。源码冻结到本次输入目录，SwiftPM 的 `.swiftpm` 状态不写回检出。默认构建不下载 SDK、不接受许可、不改全局 Xcode 选择、不启动已有 Simulator，也不签名或发布。每个子命令有期限，仅停止本次独占 process group，保存原日志、源与产物摘要。构建和单测不表示 Simulator 产品运行或安装验收。
 
 产物角色单独固定在本次 `roles/`：实际 macOS XCTest bundle 的 Mach-O 可执行文件、宿主可重定位对象和通用 iOS Simulator 宿主对象。各角色记录原路径、长度、SHA-256、magic、实际 `file`／`lipo`／`otool` 观察；缺失或歧义拒绝完成构建。编译失败也保留已存在的角色和原失败。测试 bundle 单个二进制只用于独立字节核验，不冒充可独立安装的应用或完整测试包；编译中间文件数量不证明产品角色。
+
+`--run-simulator-tests` 是默认关闭的额外 OS 机制步骤。它重新核已安装 iOS 18.5 runtime、iPhone 16 类型和实际工具帮助，使用本次唯一 UUID 名称创建一次设备；原清单中已有的 UDID 不能接管。创建原回执先保存，再校原 UDID／名称／类型／runtime，全部 boot、测试和 shutdown 只用这个 UDID。创建结果未知时仅沿原唯一 tuple 查询，不重新创建或猜现有设备。
+
+启动完成最多等 180 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。当前这套 Simulator 步骤尚未执行；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
+
+普通跨平台 ownership guard 单测可独立运行：`python platforms/apple/HarnessTests/test_simulator.py`；这些纯 JSON／原 tuple 反例不启动 Apple 工具，也不代替 OS 回执。
 
 正式 Core 的 Darwin／iOS 存储资格、共同 Host C ABI、系统文件能力、macOS sandbox XPC frozen worker、iOS WebContent／Wasm Engine、应用生命周期与输入保全、通知及安装流程仍未接齐。外部 picker／bookmark 只能授予具体文件能力，不能冒充 Core 的物理文件身份或事务后端；原件必须保留，导入／导出需原操作记录。未交付能力不显示为可用。
 

@@ -3,6 +3,8 @@ import WebKit
 import XCTest
 #if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
 #endif
 @testable import WeftextAppleHost
 
@@ -42,6 +44,9 @@ final class NativeWebSurfaceTests: XCTestCase {
     private func makeSurface(_ host: RecordingHost) throws -> NativeWebSurface {
         #if os(macOS)
         _ = NSApplication.shared
+        #elseif os(iOS)
+        // xcodebuild must provide the actual UIKit XCTest runner; do not substitute AppKit or skip.
+        _ = UIApplication.shared
         #endif
         let html = Data("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>Bridge fixture</body></html>".utf8)
         let assets = try BundledAssets(files: ["index.html": AppleAsset(bytes: html, mimeType: "text/html")])
@@ -196,18 +201,26 @@ final class NativeWebSurfaceTests: XCTestCase {
         defer { host.finishPending(); surface.retire() }
         try await ready(surface)
         _ = try await javascript("""
+            window.documentWitness = witness;
             window.oldDelivery = 'waiting';
             window.weftextNative.call('e30=').then(
               value => { window.oldDelivery = value; },
               error => { window.oldDelivery = String(error); });
             return true;
-            """, in: surface)
+            """, arguments: ["witness": UUID().uuidString], in: surface)
         try await until("original host admission") { host.calls.count == 1 && host.pending.count == 1 }
         let originalSurface = host.calls[0].surface
         surface.retire()
         // This fixture has no author input; the production caller still needs its actual close proof.
         try surface.loadTrustedDocument()
-        try await ready(surface)
+        // load() is asynchronous. The old complete document also has weftextNative until commit.
+        // Require observable replacement of its JS global before using the new document as an oracle.
+        try await until("replacement document commit") {
+            try await self.javascript("""
+                return typeof window.documentWitness === 'undefined' &&
+                  document.readyState === 'complete' && typeof window.weftextNative === 'object';
+                """, in: surface) as? Bool == true
+        }
         let beforeCompletion = try await javascript("return typeof window.oldDelivery;", in: surface) as? String
         XCTAssertEqual(beforeCompletion, "undefined")
         host.finishPending()
