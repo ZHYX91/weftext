@@ -133,7 +133,7 @@ class OwnedClient:
         os.close(self.pidfd)
 
 
-def collect_client(pid, result_read, deadline, reserve):
+def collect_client(pid, result_read, deadline, reserve, *, expected_exit_code=0, expected_error=None):
     """Reserve the final slice of the same case budget for exact kill/reap."""
     try:
         owned = OwnedClient(pid)
@@ -183,6 +183,17 @@ def collect_client(pid, result_read, deadline, reserve):
                        caseDeadlineMonotonic=deadline.end)
         if status is None:
             outcome.update(error="owned helper cleanup unknown after case deadline", cleanupUnknown=True)
+        outcome["rawResultHex"] = raw.hex()
+        outcome["expectedClientExitCode"] = expected_exit_code
+        outcome["clientExitCode"] = os.waitstatus_to_exitcode(status) if status is not None else None
+        accepted = status is not None and os.WIFEXITED(status) and os.WEXITSTATUS(status) == expected_exit_code
+        if expected_error is not None:
+            accepted = accepted and all(outcome.get(key) == value for key, value in expected_error.items())
+        outcome["clientExitAccepted"] = accepted
+        if not accepted:
+            if "error" in outcome:
+                outcome["priorError"] = outcome["error"]
+            outcome["error"] = f"owned helper terminal status rejected: actual={outcome['clientExitCode']}, expected={expected_exit_code}"
         return outcome
     finally:
         os.close(result_read)
@@ -226,6 +237,28 @@ def unique(pairs):
     return result
 
 
+def decode_started(raw, outcome):
+    # Capture the actual packet even if UTF-8/JSON/type validation fails.
+    outcome["rawStartedHex"] = raw.hex()
+    if not raw:
+        return None
+    started = json.loads(raw, object_pairs_hook=unique)
+    require(isinstance(started, dict), "started reply must be an object")
+    return started
+
+
+def stop_daemon(daemon, timeout=45):
+    """Reaping and a clean exit are separate obligations; preserve both facts."""
+    try:
+        daemon.send_signal(signal.SIGTERM)
+        code = daemon.wait(timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as error:
+        return error
+    if code != 0:
+        return RuntimeError(f"daemon terminal status rejected: {code}")
+    return None
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -243,7 +276,7 @@ def in_directory(path, directory):
 
 
 def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit", cancel=False,
-                control=None, disconnect=False):
+                control=None, disconnect=False, expected_exit_code=0, expected_error=None):
     """Run the socket client in an independently dropped OS identity."""
     require(signal.getsignal(signal.SIGCHLD) == signal.SIG_DFL, "owned client requires default SIGCHLD/reaping")
     deadline = Deadline.after(CASE_SECONDS)
@@ -291,14 +324,15 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
             for fd in set([pipe_in, pipe_out, pipe_err] + passed):
                 close_fd(fd)
             try:
+                outcome["phase"] = "started reply"
                 connection.settimeout(io_deadline.remaining("started reply"))
                 reply = connection.recv(4097)
             except ConnectionResetError:
                 reply = b""
-            if not reply:
+            started = decode_started(reply, outcome)
+            if started is None:
                 outcome["rejected"] = True
             else:
-                started = json.loads(reply, object_pairs_hook=unique)
                 outcome.update(started=started, phase="input")
                 payload = json.dumps({"action": action, "core": config["core"], "key": config["key"]}).encode()
                 write_all(input_writer, payload, io_deadline, "worker stdin")
@@ -325,6 +359,7 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
                 outcome.update(probe=json.loads(stdout), stderr=stderr.decode(errors="replace"))
         except BaseException as error:
             outcome.update(error=repr(error), caseTimedOut=isinstance(error, TimeoutError),
+                           clientErrorType=type(error).__name__, clientErrno=getattr(error, "errno", None),
                            stdoutHex=stdout.hex(), stderrHex=stderr.hex())
             exit_code = 1
         finally:
@@ -339,7 +374,8 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
         os.close(result_write)
         os._exit(exit_code)
     os.close(result_write)
-    return collect_client(pid, result_read, deadline, reserve)
+    return collect_client(pid, result_read, deadline, reserve,
+                          expected_exit_code=expected_exit_code, expected_error=expected_error)
 
 
 def main():
@@ -437,6 +473,7 @@ def main():
                 cases.append({"case": name, "result": result})
                 (args.evidence / "cases.json").write_text(json.dumps(cases, indent=2), encoding="utf-8")
                 require(result.get("clientReaped"), f"owned client cleanup unknown: {name}")
+                require(result.get("clientExitAccepted"), f"owned client terminal status rejected: {name}")
                 require(not result.get("forcedClientCleanup") and not result.get("caseTimedOut"),
                         f"case deadline/forced helper cleanup is failure: {name}")
                 credentials = result.get("clientCredentials", {})
@@ -465,8 +502,9 @@ def main():
             for fds in ["regular", "samePipe", "none", "extra"]:
                 assert test(f"fd-{fds}", good, descriptors=fds).get("rejected"), fds
             assert test("rootPeerConfusion", good, uid=0, gid=0).get("rejected")
-            ordinary = test("ordinaryPeer", good, uid=1000, gid=1000)
-            assert ordinary.get("rejected") or "PermissionError" in ordinary.get("error", "")
+            ordinary = test("ordinaryPeer", good, uid=1000, gid=1000, expected_exit_code=1,
+                            expected_error={"clientErrorType": "PermissionError", "clientErrno": errno.EACCES, "phase": "connect"})
+            assert ordinary["clientExitCode"] == 1
             for action, timeout, cancel in [("exit", 2000, False), ("orphan", 2000, False),
                                             ("timeout", 200, False), ("cancel", 2000, True),
                                             ("clone-orphan", 2000, False), ("orphan", 2000, False), ("orphan", 2000, False)]:
@@ -515,12 +553,7 @@ def main():
         finally:
             shutdown_error = None
             try:
-                daemon.send_signal(signal.SIGTERM)
-                daemon.wait(timeout=45)
-            except (subprocess.TimeoutExpired, OSError) as error:
-                # Retain a daemon still owning a possibly stuck cgroup; report
-                # unknown cleanup rather than killing its authority or passing.
-                shutdown_error = error
+                shutdown_error = stop_daemon(daemon)
             finally:
                 os.close(sentinel_fd)
                 (args.evidence / "identities.json").write_text(json.dumps({
@@ -528,10 +561,11 @@ def main():
                     "policySha256": digest(args.policy), "enrollmentSha256": digest(enrollment_path),
                     "kernel": os.uname().release, "daemonPid": daemon.pid, "daemonExit": daemon.returncode,
                     "daemonReaped": daemon.returncode is not None,
+                    "daemonExitAccepted": shutdown_error is None and daemon.returncode == 0,
                     "cleanupUnknown": daemon.returncode is None, "shutdownError": repr(shutdown_error),
                 }, indent=2), encoding="utf-8")
             if shutdown_error is not None:
-                raise RuntimeError("daemon cleanup not proven; retain identities.json and owned deployment") from shutdown_error
+                raise RuntimeError("daemon did not exit cleanly; retain identities.json and owned deployment") from shutdown_error
 
 
 if __name__ == "__main__":
