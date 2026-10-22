@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicInteger
 
 enum class FrozenWorkKind { RENDER, NOTES }
 /** PID/UID are read in the owner's Binder callback. Start time is a worker observation. */
@@ -133,7 +134,10 @@ abstract class FrozenWorkerService : Service() {
 
 class FrozenWorkerJob internal constructor(val result: CompletableFuture<WorkerResult>,
     /** Completed only by this exact Binder's death, never merely by unbind or result delivery. */
-    val terminated: CompletableFuture<Unit>, private val cancelAction: () -> Unit) {
+    val terminated: CompletableFuture<Unit>,
+    /** Kernel PID/UID from the nonce-bound worker callback; unobserved identity remains unknown. */
+    val identity: CompletableFuture<WorkerIdentity>, private val cancelAction: () -> Unit) {
+    /** Requests cancellation; returning does not establish termination or a successful worker result. */
     fun cancel() = cancelAction()
 }
 
@@ -160,7 +164,10 @@ class FrozenWorkerClient(private val context: Context, private val component: Co
         val unbound = AtomicBoolean()
         val remote = AtomicReference<IBinder?>()
         val activeReader = AtomicReference<ParcelFileDescriptor?>()
+        // 0: no pipeline submitted; 1: original pipeline owns result; 2: disconnected before submission.
+        val pipeline = AtomicInteger()
         val observedIdentity = AtomicReference<WorkerIdentity?>()
+        val identityObserved = CompletableFuture<WorkerIdentity>()
         val slotReleased = AtomicBoolean()
         fun releaseSlot() { if (slotReleased.compareAndSet(false, true)) slots.release() }
         val observer = object : Binder() {
@@ -173,6 +180,7 @@ class FrozenWorkerClient(private val context: Context, private val component: Co
                 require(identity.pid > 0 && identity.uid != context.applicationInfo.uid &&
                     identity.startedElapsedRealtime >= 0 && data.dataAvail() == 0) { "workerIdentity" }
                 check(observedIdentity.compareAndSet(null, identity)) { "workerIdentityRepeated" }
+                identityObserved.complete(identity)
                 reply.writeNoException(); return true
             }
         }
@@ -212,6 +220,7 @@ class FrozenWorkerClient(private val context: Context, private val component: Co
                     result.completeExceptionally(IllegalStateException("workerDisconnected")); unbind(); return
                 }
                 if (cancelled.get()) { sendCancel(binder); return }
+                if (!pipeline.compareAndSet(0, 1)) { unbind(); return }
                 try { io.execute {
                     var memory: SharedMemory? = null
                     var readEnd: ParcelFileDescriptor? = null
@@ -264,14 +273,22 @@ class FrozenWorkerClient(private val context: Context, private val component: Co
                 }
             }
             override fun onServiceDisconnected(name: ComponentName) {
-                result.completeExceptionally(IllegalStateException("workerDisconnected"))
+                // A complete frame can remain in the pipe after the worker's intentional one-shot death.
+                if (pipeline.compareAndSet(0, 2))
+                    result.completeExceptionally(IllegalStateException("workerDisconnected"))
+                unbind() // Prevent framework rebind/restart; never treat this as OS death or replay the job.
             }
             override fun onNullBinding(name: ComponentName) {
-                result.completeExceptionally(IllegalStateException("workerNotIsolated")); unbind()
-                dead.completeExceptionally(IllegalStateException("workerDeathUnobserved"))
+                if (pipeline.compareAndSet(0, 2)) {
+                    result.completeExceptionally(IllegalStateException("workerNotIsolated"))
+                    dead.completeExceptionally(IllegalStateException("workerDeathUnobserved"))
+                }
+                unbind()
             }
             override fun onBindingDied(name: ComponentName) {
-                result.completeExceptionally(IllegalStateException("workerBindingDied")); unbind()
+                if (pipeline.compareAndSet(0, 2))
+                    result.completeExceptionally(IllegalStateException("workerBindingDied"))
+                unbind()
             }
         }
         val bound = try {
@@ -282,16 +299,22 @@ class FrozenWorkerClient(private val context: Context, private val component: Co
             result.completeExceptionally(IllegalStateException("workerBindRejected")); unbound.set(true)
             dead.completeExceptionally(IllegalStateException("workerNotBound"))
         }
-        clock.schedule({
-            if (!dead.isDone) cancel()
+        val deadline = clock.schedule({
+            if (!result.isDone || !dead.isDone) cancel()
             // A timeout cannot complete an OS-death observation; late Binder death still releases its slot.
             clock.shutdown()
         }, budgetMillis + 10_000, TimeUnit.MILLISECONDS)
+        fun finishResources() {
+            if (result.isDone && dead.isDone) {
+                deadline.cancel(false); clock.shutdown(); io.shutdown()
+            }
+        }
         dead.whenComplete { _, _ ->
             // An unconfirmed death does not free an OS-isolation slot for a replacement process.
             if (!bound) releaseSlot()
-            clock.shutdown(); io.shutdown()
+            finishResources()
         }
-        return FrozenWorkerJob(result, dead, ::cancel)
+        result.whenComplete { _, _ -> finishResources() }
+        return FrozenWorkerJob(result, dead, identityObserved, ::cancel)
     }
 }

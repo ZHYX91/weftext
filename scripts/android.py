@@ -14,11 +14,13 @@ import sys
 import uuid
 import time
 import xml.etree.ElementTree as ET
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "platforms" / "android"
 GRADLE_VERSION = "8.13"
-TASKS = [":host:assembleDebug", ":host:lintDebug", ":host:testDebugUnitTest", ":host:compileDebugAndroidTestKotlin"]
+TASKS = [":host:assembleDebug", ":host:lintDebug", ":host:testDebugUnitTest", ":host:compileDebugAndroidTestKotlin",
+         ":host:assembleDebugAndroidTest"]
 
 
 def run_owned_windows_tree(command: list[str], environment: dict[str, str], output, record: dict, report: Path) -> int:
@@ -131,8 +133,16 @@ def run_owned_windows_tree(command: list[str], environment: dict[str, str], outp
             if not memory_status(ctypes.byref(available)): raise ctypes.WinError(ctypes.get_last_error())
             minimum_free = available.freePhysical if minimum_free is None else min(minimum_free, available.freePhysical)
             if accounting.active == 0: break
-            if reason is None and (time.monotonic() - start >= 1500 or available.freePhysical <= 4 * 1024**3):
-                reason = "deadline" if time.monotonic() - start >= 1500 else "hostMemoryGuard"
+            launcher_failed = False
+            if wait(process.process, 0) == 0:
+                observed_exit = wintypes.DWORD()
+                if not exit_code(process.process, ctypes.byref(observed_exit)):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                record["launcherExitCode"] = observed_exit.value
+                launcher_failed = observed_exit.value != 0
+            if reason is None and (launcher_failed or time.monotonic() - start >= 1500 or available.freePhysical <= 4 * 1024**3):
+                reason = ("launcherFailedWithChildren" if launcher_failed else
+                          "deadline" if time.monotonic() - start >= 1500 else "hostMemoryGuard")
                 if not terminate_job(job, 125): raise ctypes.WinError(ctypes.get_last_error())
             time.sleep(1)
         code = wintypes.DWORD()
@@ -145,12 +155,32 @@ def run_owned_windows_tree(command: list[str], environment: dict[str, str], outp
     finally:
         if process.process:
             if assigned:
-                terminate_job(job, 125)
+                # An observation error must not escape and release the caller's SDK
+                # read-only guards while an owned SDK process may still be alive.
+                # Retain this exact Job/handles until the OS confirms ActiveProcesses=0.
+                # No deadline or failed query substitutes for that observation.
+                drain_errors = 0
                 while True:
+                    terminated = bool(terminate_job(job, 125))
+                    termination_error = None if terminated else ctypes.get_last_error()
                     accounting = Accounting()
                     if not query_job(job, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None):
-                        raise ctypes.WinError(ctypes.get_last_error())
-                    if accounting.active == 0: break
+                        query_error = ctypes.get_last_error()
+                    else:
+                        query_error = None
+                        if accounting.active == 0:
+                            record["ownedTreeActiveProcesses"] = 0
+                            record["ownedTreeDrained"] = True
+                            break
+                    if termination_error is not None or query_error is not None:
+                        drain_errors += 1
+                        record.update(ownedTreeDrained=False, ownedTreeDrainObservation="unknown",
+                                      ownedTreeDrainErrors=drain_errors,
+                                      ownedTreeDrainLastWin32={"terminate": termination_error, "query": query_error})
+                        try:
+                            report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+                        except OSError:
+                            pass  # Keep the ownership/guard lifetime even if reporting fails.
                     time.sleep(0.1)
             else:  # Still suspended, therefore has never been able to spawn a child.
                 terminate_process(process.process, 125); wait(process.process, 0xffffffff)
@@ -252,7 +282,8 @@ def build(arguments: argparse.Namespace) -> int:
     environment.update(TEMP=str(temporary), TMP=str(temporary),
                        PATH=os.pathsep.join((str(java / "bin"), str(system / "System32"), str(system))))
     # Do not inherit JVM/Gradle injection from an unrelated developer environment.
-    for key in ("GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "GRADLE_RO_DEP_CACHE"):
+    for key in ("GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "GRADLE_RO_DEP_CACHE",
+                "ANDROID_SDK_HOME", "ANDROID_PREFS_ROOT", "ANDROID_AVD_HOME", "ADB_VENDOR_KEYS", "ANDROID_SERIAL"):
         environment.pop(key, None)
     record = {**checked, "kind": "androidHostBuild", "argv": command, "javaHome": str(java),
               "sdk": str(sdk), "gradleHome": str(gradle), "runDirectory": str(run), "tasks": TASKS,
@@ -268,16 +299,113 @@ def build(arguments: argparse.Namespace) -> int:
             report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
             raise
     record.update(state="passed" if code == 0 else "failed", exitCode=code, compiled=code == 0)
-    record["sourcesUnchanged"] = checked["sources"] == check()["sources"] and record["entrySha256"] == digest(Path(__file__).resolve())
-    if not record["sourcesUnchanged"]:
-        code = 2
-        record.update(state="failed", exitCode=code, compiled=False, failure="sourceChangedDuringBuild")
-    record["artifacts"] = {path.relative_to(run).as_posix(): digest(path)
-                           for path in (run / "build").rglob("*.aar")}
-    record["logSha256"] = digest(run / "gradle.log")
+    try:
+        record["sourcesUnchanged"] = checked["sources"] == check()["sources"] and record["entrySha256"] == digest(Path(__file__).resolve())
+        if not record["sourcesUnchanged"]:
+            code = 2
+            record.update(state="failed", exitCode=code, compiled=False, failure="sourceChangedDuringBuild")
+        # Only final task outputs: recursively scanning AGP dex transforms can hit Windows path limits.
+        outputs = run / "build" / "host" / "outputs"
+        built = list((outputs / "aar").glob("*.aar"))
+        apks = []
+        for metadata in outputs.rglob("output-metadata.json"):
+            actual = json.loads(metadata.read_text(encoding="utf-8"))
+            if actual.get("artifactType", {}).get("type") != "APK": continue
+            for element in actual.get("elements", []):
+                name = element.get("outputFile", "")
+                if not isinstance(name, str) or Path(name).name != name or Path(name).suffix != ".apk":
+                    raise ValueError("Invalid actual Gradle APK output metadata")
+                apk = metadata.parent / name
+                if not apk.is_file(): raise ValueError("Declared Gradle APK is absent")
+                apks.append(apk)
+        built.extend(apks)
+        record["artifacts"] = {path.relative_to(run).as_posix(): digest(path) for path in sorted(built)}
+        if code == 0 and len(apks) != 1:
+            code = 2
+            record.update(state="failed", exitCode=code, compiled=False, failure="ambiguousOsInstrumentationArtifact")
+        record["artifactRoles"] = {} if len(apks) != 1 else {
+            "osInstrumentation": {"path": apks[0].relative_to(run).as_posix(), "sha256": digest(apks[0])}}
+        record["logSha256"] = digest(run / "gradle.log")
+    except BaseException as error:
+        record.update(state="failed", exitCode=2, compiled=False, failure="postBuildCollection",
+                      errorType=type(error).__name__, error=str(error))
+        report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        raise
     report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"schemaVersion": 1, "kind": "androidHostBuild", "exitCode": code,
                       "report": str(report), "runtimeValidated": False}, ensure_ascii=False))
+    return code
+
+
+def device_module():
+    source = ANDROID / "tools" / "device_runner.py"
+    spec = importlib.util.spec_from_file_location("weftext_android_device_runner", source)
+    if spec is None or spec.loader is None:
+        raise ValueError("Android device runner source is absent")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    original_bytecode = sys.dont_write_bytecode
+    try:
+        sys.dont_write_bytecode = True
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = original_bytecode
+    return module
+
+
+def prepare_device(arguments: argparse.Namespace) -> int:
+    build_result = Path(arguments.build_result)
+    if not build_result.is_absolute() or not build_result.is_file():
+        raise ValueError("Explicit actual build result required")
+    built = json.loads(build_result.read_text(encoding="utf-8"))
+    if built.get("state") != "passed" or not built.get("sourcesUnchanged"):
+        raise ValueError("Device plan requires a passed immutable-source build")
+    if built.get("sources") != check()["sources"] or built.get("entrySha256") != digest(Path(__file__).resolve()):
+        raise ValueError("Current source does not match the selected build")
+    role = built["artifactRoles"]["osInstrumentation"]
+    apk = (build_result.parent / role["path"]).resolve()
+    if not apk.is_relative_to(build_result.parent.resolve()) or digest(apk) != role["sha256"]:
+        raise ValueError("Instrumentation role does not match its actual artifact")
+    plan = device_module().prepare_plan(workspace=workspace(), repository=ROOT,
+        sdk=absolute_directory(arguments.sdk), java_home=absolute_directory(arguments.java_home),
+        state_root=Path(arguments.state_root), apk=apk, build_result=build_result,
+        test_class="org.weftext.android.host.FrozenWorkerBoundaryTest", expected_test_count=6)
+    print(json.dumps(plan, ensure_ascii=False, indent=2))
+    return 0
+
+
+def run_device(arguments: argparse.Namespace) -> int:
+    plan_path = Path(arguments.plan)
+    if not plan_path.is_absolute() or not plan_path.is_file() or digest(plan_path) != arguments.plan_sha256:
+        raise ValueError("Explicit reviewed plan and exact SHA256 required")
+    module = device_module()
+    plan = module.validate_plan(plan_path)
+    if not plan_path.resolve().is_relative_to(workspace() / ".workspace" / "build"):
+        raise ValueError("Device plan is outside this workspace's owned build tree")
+    run = plan_path.parent
+    report = run / "owned-tree-result.json"
+    with report.open("x", encoding="utf-8") as output:
+        json.dump({"kind": "androidOsOwnedTree", "state": "starting", "planSha256": arguments.plan_sha256}, output)
+    command = [sys.executable, str(Path(__file__).resolve()), "_device-driver", "--plan", str(plan_path)]
+    environment = os.environ.copy()
+    record = {"schemaVersion": 1, "kind": "androidOsOwnedTree", "scope": "hostOsProbe",
+              "state": "starting", "planSha256": arguments.plan_sha256, "argv": command,
+              "productCoreValidated": False}
+    try:
+        with module.SdkReadOnlyFiles() as sdk_files:
+            sdk_files.verify(plan["sdkReadOnlyFiles"])
+            with (run / "owned-tree.log").open("xb") as output:
+                code = run_owned_windows_tree(command, environment, output, record, report)
+            record["sdkReadOnlyFilesUnchanged"] = sdk_files.verify(plan["sdkReadOnlyFiles"]) == plan["sdkReadOnlyFiles"]
+    except BaseException as error:
+        record.update(state="failed", productCoreValidated=False, failureType=type(error).__name__,
+                      failure=str(error))
+        report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        raise
+    record.update(state="passed" if code == 0 else "failed", exitCode=code)
+    report.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"kind": "androidOsOwnedTree", "exitCode": code, "report": str(report),
+                      "productCoreValidated": False}, ensure_ascii=False))
     return code
 
 
@@ -289,12 +417,22 @@ def main() -> int:
     for name in ("gradle-home", "sdk", "java-home", "state-root"):
         compiler.add_argument("--" + name, required=True)
     compiler.add_argument("--allow-dependency-downloads", action="store_true")
+    planner = commands.add_parser("device-plan", help="Prepare exact isolated OS-probe commands without starting a device")
+    for name in ("sdk", "java-home", "state-root", "build-result"):
+        planner.add_argument("--" + name, required=True)
+    device = commands.add_parser("device-run", help="Run a reviewed exact OS-probe plan inside an owned Windows Job")
+    device.add_argument("--plan", required=True); device.add_argument("--plan-sha256", required=True)
+    driver = commands.add_parser("_device-driver", help=argparse.SUPPRESS)
+    driver.add_argument("--plan", required=True)
     arguments = parser.parse_args()
     try:
         if arguments.command == "check":
             print(json.dumps(check(), ensure_ascii=False, indent=2))
             return 0
-        return build(arguments)
+        if arguments.command == "build": return build(arguments)
+        if arguments.command == "device-plan": return prepare_device(arguments)
+        if arguments.command == "device-run": return run_device(arguments)
+        return device_module().run_driver(Path(arguments.plan))
     except (ValueError, OSError, ET.ParseError) as error:
         print(json.dumps({"schemaVersion": 1, "kind": "androidEntryError", "message": str(error)}), file=sys.stderr)
         return 2
