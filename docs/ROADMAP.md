@@ -8,6 +8,8 @@ translation_status: synced
 
 # Implementation roadmap
 
+The current development tree integrates the existing v0.7 slices: GUI/CLI entry points, Capture and reminder consumers, interface language and platform-host foundations, with unified save/original-operation delivery and Draft-baseline recovery. Validation of a merged development slice follows WORKFLOW and does not establish whole-version v0.7 completion. Native Windows window/install delivery, complete Linux/Android/Apple products, real IME/assistive technology and the performance/recognition platform matrix retain separate ROADMAP acceptance; original v0.6.3 gaps remain.
+
 Updated 2026-10-16: plan the current scope as **an initial MVP and subsequent milestones, including v0.6.1/v0.6.2 enhancements and v0.6.3 everyday usability**. Version numbers divide the work and may become multiple smaller releases after testing. They are neither delivery dates nor claims of implementation. [REQUIREMENTS](REQUIREMENTS.md) remains the scope authority; research candidates are not automatically included.
 
 The **established v0.6 scope is complete for 0.6.0 on Windows/NTFS and has passed acceptance on the final optimized executable; it is not formally published**. Server / WebUI, multiuser authorization and same-owner synchronization cover complex structures, resource-retirement preservation and native semantic revalidation. Complete HTTP, affected browsers and real NAS HTTPS passed on that same optimized executable. IME, complete assistive technology, actual power loss, other OS/NAS browsers and new enhancements retain their separate original scope; see the [candidate guide](MVP.md).

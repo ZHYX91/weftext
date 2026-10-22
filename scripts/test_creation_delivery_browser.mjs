@@ -5,7 +5,8 @@
 // distinct from acceptance of the executable's embedded frontend.
 // Browser abort/500 below are controlled delivery failures, not internal Core IO.
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from "./_cli_serve.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdir, readFile, writeFile, readdir, rename, stat } from "node:fs/promises";
@@ -36,7 +37,7 @@ const result = { executable: exe, executableSha256: sha(await readFile(exe)),
   sourceHashes: Object.fromEntries(await Promise.all(sourceFiles.map(async name => [name, sha(await readFile(path.join(repo, name)))]))),
   cases: [], http: [], uiRequests: [], controlledFailures: [], pageErrors: [], routeErrors: [], processes: [], completed: false,
   limits: ["Controlled browser transport/read failures are not internal Core failures.", "History uses equal bytes S to exercise the real navigation Session rebind path.",
-    "Owned TEST data/headless Chrome only; no system IME, accessibility, power-loss or graceful shutdown acceptance.",
+    "Owned TEST data/headless Chrome only; no system IME, accessibility or power-loss acceptance.",
     "This evidence belongs to the existing task acceptance record; not a second completion authority."] };
 const state = path.join(out, "private-state");
 let child, base, token, context, page, caseName = "", logs = { stdout: "", stderr: "" }, observed = [];
@@ -55,25 +56,24 @@ async function intercept(pattern, handler) {
 }
 async function start(opened) {
   assert.equal(child, undefined); logs = { stdout: "", stderr: "" }; base = undefined; token = undefined;
-  const args = ["--no-browser", "--data-dir", state];
+  const args = ["--data-dir", state];
   if (frontendUrl) args.push("--port", String(apiPort));
   if (opened) args.push("--open", opened.path, "--root", opened.root);
-  child = spawn(exe, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-  result.processes.push({ pid: child.pid, exe, args, startedAt: new Date().toISOString() });
+  child = spawnServe(exe, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  result.processes.push({ pid: child.pid, exe, args: child.spawnargs.slice(1), startedAt: new Date().toISOString() });
   child.stdout.on("data", value => logs.stdout += value); child.stderr.on("data", value => logs.stderr += value);
-  await until(() => { if (child.exitCode !== null) throw Error(logs.stderr);
-    const match = logs.stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (!match) return false; base = match[1]; token = match[2]; return true; }, "Owned backend startup");
+  await until(() => {
+    const ready = serveReady(child);
+    if (!ready) return false;
+    base = ready.base; token = ready.token; return true;
+  }, "Owned backend startup");
 }
 async function stop() {
   if (!child) return;
   const owned = child, record = result.processes.at(-1);
-  if (owned.exitCode === null && owned.signalCode === null) {
-    const ended = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(Error("Owned child termination timeout")), 20000);
-      owned.once("exit", () => { clearTimeout(timer); resolve(); }); });
-    owned.kill(); await ended;
-  }
-  record.exitCode = owned.exitCode; record.signalCode = owned.signalCode; record.shutdown = "controlled handle termination, not graceful shutdown";
+  record.ownerStop = await stopServe(owned);
+  record.exitCode = owned.exitCode; record.signalCode = owned.signalCode;
+  record.shutdown = "exact owner-stop receipt and actual owner exit zero";
   record.listenerClosed = !base ? null : await new Promise(resolve => {
     const socket = net.createConnection({ host: "127.0.0.1", port: Number(new URL(base).port) });
     socket.once("connect", () => { socket.destroy(); resolve(false); });
@@ -428,7 +428,7 @@ try {
       const proof = name === "note" ? await noteCase() : name === "library" ? await libraryCase() : name === "save-as-tab-identity" ? await tabIdentityCase(fixture) : name === "save-malformed" ? await malformedSaveCase() : name.startsWith("save-as-") ? await saveAsCase(fixture, name.slice("save-as-".length))
         : await historyCase(fixture, name.slice("history-".length));
       result.cases.push({ name, proof }); await page.screenshot({ path: path.join(out, name + "-passed.png"), fullPage: true });
-      await writeFile(path.join(out, "progress.json"), JSON.stringify(result, null, 2));
+      await writeFile(path.join(out, "progress.json"), stringifyServeJson(result, 2));
     } finally { await closeBrowser(); await stop(); }
   }
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.routeErrors, []); result.completed = true;
@@ -440,7 +440,7 @@ try {
   try { await closeBrowser(); } catch (error) { result.browserCloseError = String(error); process.exitCode = 1; }
   try { await stop(); } catch (error) { result.processCloseError = String(error); process.exitCode = 1; }
   result.ownedResourcesClosed = !child && !context && result.processes.every(item => item.listenerClosed === true);
-  await writeFile(path.join(out, "result.json"), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, "result.json"), stringifyServeJson(result, 2));
   await writeFile(path.join(out, "http.jsonl"), result.http.map(item => JSON.stringify(item)).join("\n") + "\n");
 }
 process.stdout.write(JSON.stringify({ completed: result.completed, ownedResourcesClosed: result.ownedResourcesClosed,
