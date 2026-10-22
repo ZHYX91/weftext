@@ -4398,13 +4398,14 @@ mod tests {
         let parsed =
             serde_json::from_slice::<UniqueJson>(br#"{"templates":{"entries":[],"entries":[]}}"#)
                 .unwrap();
+        assert_eq!(parsed.0, json!({"templates":{"entries":[]}}));
         assert_eq!(parsed.1.len(), 1);
         assert_eq!(
             parsed.1[0].explanation,
             UiMessage::error_api_knowledge_template_member_duplicate(
                 weftext_messages::params::ErrorApiKnowledgeTemplateMemberDuplicate {
-                    member: "entries".into()
-                }
+                    member: "entries".into(),
+                },
             )
         );
         let value = parse_template_value(
