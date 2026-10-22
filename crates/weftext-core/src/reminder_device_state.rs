@@ -15,6 +15,10 @@ use weftext_data::{
 };
 use weftext_knowledge::NodeRef;
 
+#[path = "reminder_permit_inputs.rs"]
+mod permit_inputs;
+use permit_inputs::{ReminderJournalFence, ReminderPermitInputs};
+
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_RECORDS: usize = 32_768;
 const MAX_LIBRARIES: usize = 128;
@@ -571,6 +575,7 @@ pub struct ReminderDeliveryPermit {
     expires_at: String,
     issued: std::time::Instant,
     admitted: std::sync::atomic::AtomicBool,
+    inputs: Option<Box<ReminderPermitInputs>>,
 }
 impl ReminderDeliveryPermit {
     pub fn execution_key(&self) -> &str {
@@ -1431,20 +1436,31 @@ impl Core {
         expected: &TaskReminderCandidate,
         options: ReminderNotificationOptions,
     ) -> Result<ReminderDeliveryStart> {
-        self.begin_reminder_delivery_at(expected, options, now()?)
+        self.begin_reminder_delivery_with_clock(expected, options, now)
     }
+    #[cfg(all(test, windows))]
     fn begin_reminder_delivery_at(
         &mut self,
         expected: &TaskReminderCandidate,
         options: ReminderNotificationOptions,
         at: ExactInstant,
     ) -> Result<ReminderDeliveryStart> {
+        self.begin_reminder_delivery_with_clock(expected, options, || Ok(at.clone()))
+    }
+    fn begin_reminder_delivery_with_clock(
+        &mut self,
+        expected: &TaskReminderCandidate,
+        options: ReminderNotificationOptions,
+        mut clock: impl FnMut() -> Result<ExactInstant>,
+    ) -> Result<ReminderDeliveryStart> {
         let (mut state, digest) = self.read_reminders()?;
+        let journal = ReminderJournalFence::capture(self)?;
         let (candidate, witnesses) =
             self.capture_reminder_task(Path::new(&expected.root), &expected.owner)?;
         same_candidate(expected, &candidate)?;
         check_enabled(&state, &candidate)?;
         let (id, definition, trigger) = ready(&candidate)?;
+        let at = clock()?;
         let instant = ExactInstant::parse(trigger).map_err(temporal_error)?;
         if at.compare(&instant).is_lt() {
             return Err(CoreError::new(
@@ -1479,22 +1495,42 @@ impl Core {
         } else {
             1
         };
-        let attempt = make_attempt(&key, options, &at, attempts)?;
-        let permit = permit(&key, &attempt);
-        state.records.insert(
-            key,
-            Record {
-                owner: candidate.owner.clone(),
-                reminder_id: id.into(),
-                definition_digest: definition.into(),
-                trigger_instant: trigger.into(),
-                delivery: Delivery::Individual { attempt },
-                handled: false,
-                invalidated: None,
-            },
-        );
-        self.with_reminder_inputs(Path::new(&candidate.root), &witnesses, |core| {
-            core.write_reminders(state, digest.as_deref())
+        let permit = self.with_reminder_inputs(Path::new(&candidate.root), &witnesses, |core| {
+            core.revalidate_reminder_locations(std::iter::once(&candidate))?;
+            let inputs = ReminderPermitInputs::new(
+                core,
+                journal,
+                [(key.as_str(), &candidate, witnesses.as_slice())],
+            )?;
+            let admitted_at = clock()?;
+            if admitted_at.compare(&at).is_lt() {
+                return Err(CoreError::new(
+                    "reminderPermitExpired",
+                    UiMessage::error_reminder_permit_expired(),
+                ));
+            }
+            if missed(&candidate, &admitted_at)? {
+                return Err(CoreError::new(
+                    "reminderMissed",
+                    UiMessage::error_reminder_minute_ended_before_call(),
+                ));
+            }
+            let attempt = make_attempt(&key, options, &admitted_at, attempts)?;
+            let permit = permit(&key, &attempt, Some(inputs));
+            state.records.insert(
+                key,
+                Record {
+                    owner: candidate.owner.clone(),
+                    reminder_id: id.into(),
+                    definition_digest: definition.into(),
+                    trigger_instant: trigger.into(),
+                    delivery: Delivery::Individual { attempt },
+                    handled: false,
+                    invalidated: None,
+                },
+            );
+            core.write_reminders(state, digest.as_deref())?;
+            Ok(permit)
         })?;
         Ok(ReminderDeliveryStart::Started(permit))
     }
@@ -1516,6 +1552,7 @@ impl Core {
         if let Some(until) = summary_cooling_down(&state, &scan_at)? {
             return Ok(ReminderSummaryPreparation::CoolingDown { until });
         }
+        let journal = ReminderJournalFence::capture(self)?;
         let mut captured = BTreeMap::new();
         let mut inventories = ReminderCaptureInventory::default();
         let mut budget = InputBudget::default();
@@ -1652,6 +1689,16 @@ impl Core {
             core.revalidate_reminder_locations(
                 captured.values().map(|(candidate, _, _)| candidate),
             )?;
+            let inputs = ReminderPermitInputs::new(
+                core,
+                journal,
+                captured
+                    .iter()
+                    .take(member_count)
+                    .map(|(key, (candidate, witnesses, _))| {
+                        (key.as_str(), candidate, witnesses.as_slice())
+                    }),
+            )?;
             // Full scan and all input guards precede the short-lived permit.
             // A large qualified set must not consume its permit while scanning.
             let admitted_at = clock()?;
@@ -1666,7 +1713,7 @@ impl Core {
                 .canonical()
                 .map_err(temporal_error)?;
             let attempt = make_attempt(&key, options, &admitted_at, 1)?;
-            let permit = permit(&key, &attempt);
+            let permit = permit(&key, &attempt, Some(inputs));
             for (index, (execution, (candidate, _, prior_failed_attempt))) in
                 captured.iter().enumerate()
             {
@@ -1753,6 +1800,7 @@ impl Core {
                 UiMessage::error_reminder_summary_clock_rollback(),
             ));
         }
+        let journal = ReminderJournalFence::capture(self)?;
         let mut captured = vec![];
         let mut inventories = ReminderCaptureInventory::default();
         let mut ordered_members = original.members.clone();
@@ -1801,6 +1849,16 @@ impl Core {
             .collect::<Vec<_>>();
         let permit = self.with_reminder_input_groups(&groups, |core| {
             core.revalidate_reminder_locations(captured.iter().map(|(candidate, _)| candidate))?;
+            let inputs = ReminderPermitInputs::new(
+                core,
+                journal,
+                ordered_members
+                    .iter()
+                    .zip(&captured)
+                    .map(|(key, (candidate, witnesses))| {
+                        (key.as_str(), candidate, witnesses.as_slice())
+                    }),
+            )?;
             let admitted_at = clock()?;
             if admitted_at.compare(&checked_at).is_lt() {
                 return Err(CoreError::new(
@@ -1820,7 +1878,7 @@ impl Core {
                 .and_then(|instant| instant.canonical())
                 .map_err(temporal_error)?;
             attempt.delivery = ReminderDeliveryState::Submitting;
-            let permit = permit(key, &attempt);
+            let permit = permit(key, &attempt, Some(inputs));
             state.summaries.get_mut(key).unwrap().attempt = attempt;
             permit_age(&permit, &state.summaries[key].attempt, &clock()?)?;
             core.write_reminders(state, digest.as_deref())?;
@@ -1853,12 +1911,21 @@ impl Core {
             return Err(err(UiMessage::error_reminder_permit_changed()));
         }
         permit_age(permit, attempt, &clock()?)?;
+        let inputs = permit
+            .inputs
+            .as_ref()
+            .ok_or_else(|| err(UiMessage::error_reminder_permit_changed()))?;
         let summary = state.summaries.contains_key(&permit.key);
         let mut members = if let Some(summary) = state.summaries.get(&permit.key) {
             summary.members.clone()
         } else {
             vec![permit.key.clone()]
         };
+        if members.len() != inputs.members.len()
+            || members.iter().any(|key| !inputs.members.contains_key(key))
+        {
+            return Err(err(UiMessage::error_reminder_permit_changed()));
+        }
         members.sort_by(|a, b| {
             state.records[a]
                 .owner
@@ -1866,7 +1933,6 @@ impl Core {
                 .cmp(&state.records[b].owner.workspace_id)
         });
         let mut captured = vec![];
-        let mut inventories = ReminderCaptureInventory::default();
         for key in members {
             let record = &state.records[&key];
             if record.handled || record.invalidated.is_some() {
@@ -1876,27 +1942,31 @@ impl Core {
                 .libraries
                 .get(&record.owner.workspace_id)
                 .ok_or_else(|| err(UiMessage::error_reminder_original_selection_missing()))?;
-            let (candidate, witnesses) =
-                inventories.capture(self, Path::new(&library.root), &record.owner)?;
-            check_enabled(&state, &candidate)?;
-            if !summary && missed(&candidate, &clock()?)? {
+            let candidate = &inputs.members[&key];
+            if candidate.owner != record.owner || candidate.root != library.root {
+                return Err(err(UiMessage::error_reminder_permit_changed()));
+            }
+            self.reminder_task_context(Path::new(&candidate.root), &candidate.owner)?;
+            check_enabled(&state, candidate)?;
+            if !summary && missed(candidate, &clock()?)? {
                 return Err(CoreError::new(
                     "reminderMissed",
                     UiMessage::error_reminder_minute_ended_before_call(),
                 ));
             }
-            let (id, definition, trigger) = ready(&candidate)?;
+            let (id, definition, trigger) = ready(candidate)?;
             if execution_key(&state.device_id, &candidate.owner, id, definition, trigger)? != key {
                 return Err(CoreError::new(
                     "staleBase",
                     UiMessage::error_reminder_definition_changed(),
                 ));
             }
-            captured.push((candidate, witnesses));
+            captured.push(candidate);
         }
-        let groups = captured
+        let groups = inputs
+            .roots
             .iter()
-            .map(|(candidate, witnesses)| (Path::new(&candidate.root), witnesses.as_slice()))
+            .map(|(root, witnesses)| (Path::new(root), witnesses.as_slice()))
             .collect::<Vec<_>>();
         // Prove one current input closure, including absent default-config
         // slots, before consuming the one-use permission. These guards do not
@@ -1904,7 +1974,7 @@ impl Core {
         let mut check_time = || {
             let at = clock()?;
             permit_age(permit, attempt, &at)?;
-            if !summary && missed(&captured[0].0, &at)? {
+            if !summary && missed(captured[0], &at)? {
                 return Err(CoreError::new(
                     "reminderMissed",
                     UiMessage::error_reminder_minute_ended_before_call(),
@@ -1913,7 +1983,8 @@ impl Core {
             Ok(())
         };
         self.with_reminder_input_groups(&groups, |core| {
-            core.revalidate_reminder_locations(captured.iter().map(|(candidate, _)| candidate))?;
+            core.revalidate_reminder_locations(captured.iter().copied())?;
+            inputs.validate_journal(core)?;
             check_time()
         })?;
         check_time()?;
@@ -2421,7 +2492,11 @@ fn make_attempt(
     validate_attempt(&attempt, key)?;
     Ok(attempt)
 }
-fn permit(key: &str, attempt: &Attempt) -> ReminderDeliveryPermit {
+fn permit(
+    key: &str,
+    attempt: &Attempt,
+    inputs: Option<ReminderPermitInputs>,
+) -> ReminderDeliveryPermit {
     ReminderDeliveryPermit {
         key: key.into(),
         permit_id: attempt.permit_id.clone(),
@@ -2429,6 +2504,7 @@ fn permit(key: &str, attempt: &Attempt) -> ReminderDeliveryPermit {
         expires_at: attempt.expires_at.clone(),
         issued: std::time::Instant::now(),
         admitted: std::sync::atomic::AtomicBool::new(false),
+        inputs: inputs.map(Box::new),
     }
 }
 fn permit_age(
@@ -2892,7 +2968,7 @@ mod tests {
         let (state, key) = fixture();
         let attempt = lookup_attempt(&state, &key).unwrap();
         assert_eq!(attempt.expires_at, "2026-10-23T01:00:18.123456789123Z");
-        let mut permit = permit(&key, attempt);
+        let mut permit = permit(&key, attempt, None);
         assert!(
             permit_age(
                 &permit,

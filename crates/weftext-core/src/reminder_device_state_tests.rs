@@ -556,6 +556,110 @@ fn reminder_permit_is_single_use_and_normal_admission_cannot_cross_target_minute
     );
 }
 #[test]
+fn reminder_permit_original_inputs_reject_changed_body_without_recapture() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    assert!(!format!("{permit:?}").contains("正文😀"));
+    f.append_body();
+    let changed = fs::read(&f.path).unwrap();
+    assert_eq!(
+        f.core()
+            .check_reminder_permit_with_clock(&permit, || Ok(instant(AT)))
+            .unwrap_err()
+            .code,
+        "staleBase"
+    );
+    assert!(!permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+    assert_eq!(fs::read(&f.path).unwrap(), changed);
+}
+#[test]
+fn reminder_begin_uses_a_fresh_clock_after_original_input_proof() {
+    for (after, error) in [
+        ("2026-10-23T09:00:06Z", None),
+        ("2026-10-23T09:01:00Z", Some("reminderMissed")),
+        ("2026-10-23T09:00:00Z", Some("reminderPermitExpired")),
+    ] {
+        let mut f = Fixture::new("absolute");
+        let candidate = f.candidate();
+        let ledger = f.core().device_record_path(DeviceRecordKind::Reminders);
+        let original = fs::read(&ledger).unwrap();
+        let mut reads = 0;
+        let result = f
+            .core()
+            .begin_reminder_delivery_with_clock(&candidate, options(), || {
+                reads += 1;
+                Ok(instant(if reads == 1 { AT } else { after }))
+            });
+        if let Some(error) = error {
+            assert_eq!(result.unwrap_err().code, error);
+            assert_eq!(fs::read(&ledger).unwrap(), original);
+        } else {
+            let ReminderDeliveryStart::Started(permit) = result.unwrap() else {
+                panic!("Expected the original fresh attempt")
+            };
+            assert_eq!(permit.expires_at(), "2026-10-23T09:00:11Z");
+            f.core()
+                .check_reminder_permit_with_clock(&permit, || Ok(instant(after)))
+                .unwrap();
+        }
+    }
+}
+#[test]
+fn reminder_permit_original_inputs_protect_records_and_reject_new_observation_names() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let owner = f.owner.node_id.clone();
+    let operation = f
+        .core()
+        .operations
+        .values()
+        .find(|plan| {
+            plan.node_id.as_deref() == Some(&owner)
+                || plan.transaction.as_ref().is_some_and(|transaction| {
+                    transaction
+                        .births()
+                        .iter()
+                        .any(|birth| birth.node_id == owner)
+                })
+        })
+        .unwrap()
+        .operation_id
+        .clone();
+    let record = f.core().journal_path(&operation, "observations");
+    let original = fs::read(&record).unwrap();
+    let error = fs::write(&record, b"{invalid original record").unwrap_err();
+    assert!(matches!(error.raw_os_error(), Some(5 | 32 | 33)));
+    assert_eq!(fs::read(&record).unwrap(), original);
+    let late = record.parent().unwrap().join(format!(
+        "{operation}.recovery-observations-{}.json",
+        fresh()
+    ));
+    fs::write(&late, b"[]").unwrap();
+    assert_eq!(
+        f.core()
+            .check_reminder_permit_with_clock(&permit, || Ok(instant(AT)))
+            .unwrap_err()
+            .code,
+        "staleBase"
+    );
+    assert!(!permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+    assert_eq!(fs::read(late).unwrap(), b"[]");
+}
+#[test]
+fn reminder_permit_original_inputs_still_reject_a_late_duplicate_node() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let duplicate = f.root.join("Duplicate");
+    fs::create_dir(&duplicate).unwrap();
+    fs::copy(&f.path, duplicate.join("Duplicate.typ")).unwrap();
+    assert!(
+        f.core()
+            .check_reminder_permit_with_clock(&permit, || Ok(instant(AT)))
+            .is_err()
+    );
+    assert!(!permit.admitted.load(std::sync::atomic::Ordering::Acquire));
+}
+#[test]
 fn reminder_final_input_proof_cannot_extend_a_normal_permit_past_its_civil_minute() {
     let mut f = Fixture::new("absolute");
     let permit = f.begin("2026-10-23T09:00:58Z");
@@ -1247,7 +1351,7 @@ fn reminder_complete_65_set_is_atomic_overflow_and_restart_never_drains_another_
             .retry_reminder_summary_with_clock(overflow_key, || Ok(instant("2026-10-23T10:20:00Z")))
             .is_err()
     );
-    let mut forged = permit(summary_key, &summary.attempt);
+    let mut forged = permit(summary_key, &summary.attempt, None);
     forged.key = overflow_key.clone();
     assert!(
         f.core()
@@ -1386,20 +1490,34 @@ fn reminder_64_member_permit_checks_within_its_real_monotonic_lifetime() {
     for index in 1..MAX_SUMMARY_MEMBERS {
         f.add_task(&format!("Task{index:03}"));
     }
-    let permit = f.summary("2026-10-23T10:00:00Z");
+    let origin = instant("2026-10-23T10:00:00Z");
+    let clock_start = std::time::Instant::now();
+    // Civil time is offset into the fixture's due period, but advances with
+    // actual elapsed time. Neither the wall nor monotonic lifetime is frozen.
+    let mut clock = || {
+        origin
+            .shifted_seconds(i64::try_from(clock_start.elapsed().as_secs()).unwrap())
+            .map_err(temporal_error)
+    };
+    let permit = match f
+        .core()
+        .prepare_reminder_summary_with_clock(options(), &mut clock)
+        .unwrap()
+    {
+        ReminderSummaryPreparation::Started { permit, .. } => *permit,
+        other => panic!("Expected a complete original summary: {other:?}"),
+    };
     let (state, _) = f.core().read_reminders().unwrap();
     assert_eq!(state.summaries.len(), 1);
     assert_eq!(state.summaries[permit.execution_key()].members.len(), 64);
-    // This seam controls only the wall clock. The production issued Instant,
-    // five-second monotonic deadline and complete pre-call check stay real.
     f.core()
-        .check_reminder_permit_with_clock(&permit, || Ok(instant("2026-10-23T10:00:01Z")))
+        .check_reminder_permit_with_clock(&permit, &mut clock)
         .unwrap();
     eprintln!("64-member permit real age: {:?}", permit.issued.elapsed());
     assert!(permit.admitted.load(std::sync::atomic::Ordering::Acquire));
     assert_eq!(
         f.core()
-            .check_reminder_permit_with_clock(&permit, || Ok(instant("2026-10-23T10:00:01Z")))
+            .check_reminder_permit_with_clock(&permit, &mut clock)
             .unwrap_err()
             .code,
         "reminderPermitUsed"

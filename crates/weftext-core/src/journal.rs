@@ -911,6 +911,30 @@ impl Core {
             Err(e) if e.code == "missing" => {}
             Err(e) => return Err(e),
         }
+        self.validate_original_births(id, births, || self.committed(id))
+    }
+    pub(crate) fn decode_committed_births_in_cut(
+        &self,
+        id: &str,
+        single: Option<&[u8]>,
+        multiple: Option<&[u8]>,
+    ) -> Result<Vec<Birth>> {
+        let mut births = single
+            .map(serde_json::from_slice::<Birth>)
+            .transpose()?
+            .into_iter()
+            .collect::<Vec<_>>();
+        if let Some(bytes) = multiple {
+            births.extend(serde_json::from_slice::<Vec<Birth>>(bytes)?);
+        }
+        self.validate_original_births(id, births, || Ok(true))
+    }
+    fn validate_original_births(
+        &self,
+        id: &str,
+        births: Vec<Birth>,
+        committed: impl FnOnce() -> Result<bool>,
+    ) -> Result<Vec<Birth>> {
         if let Some(plan) = self.operations.get(id) {
             let mut expected = std::collections::BTreeSet::new();
             if plan.kind == "newNode" {
@@ -931,7 +955,7 @@ impl Core {
                         .map(|birth| birth.node_id.clone()),
                 );
             }
-            if !expected.is_empty() && self.committed(id)? {
+            if !expected.is_empty() && committed()? {
                 let actual: std::collections::BTreeSet<_> =
                     births.iter().map(|birth| birth.node_id.clone()).collect();
                 if actual != expected

@@ -1,7 +1,7 @@
 //! A read-only projection of the existing commit, admission and exact-byte
 //! journal. Restoring is an ordinary guarded save, never a chain rewind.
 use super::*;
-use operations::{CapturedFile, Mutation, RevisionFact};
+use operations::{CapturedFile, FrozenOperation, Mutation, RevisionFact};
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
 
@@ -224,6 +224,13 @@ impl Core {
 
     pub(crate) fn check_history_placement(&self, birth: &Birth, current: &Path) -> Result<()> {
         let places = self.node_placement_paths(birth)?;
+        self.check_history_placement_paths(current, &places)
+    }
+    pub(crate) fn check_history_placement_paths(
+        &self,
+        current: &Path,
+        places: &BTreeSet<String>,
+    ) -> Result<()> {
         if places.len() != 1
             || !places
                 .iter()
@@ -246,27 +253,67 @@ impl Core {
         birth: &Birth,
         through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
-        let mut places = BTreeSet::<String>::new();
-        let mut birth_sequence = None;
-        for p in self.committed_plans()?.into_iter() {
-            if self.read_births(&p.operation_id)?.iter().any(|b| {
-                b.node_id == birth.node_id
-                    && b.workspace_id == birth.workspace_id
-                    && b.identity == birth.identity
-            }) {
-                let sequence = self.history_commit_time(p)?.1;
-                if let Some(limit) = through {
-                    let sequence = sequence.ok_or_else(|| {
-                        CoreError::new(
-                            "historyUnavailable",
-                            UiMessage::error_core_history_original_placement_ordering_unavailable(),
-                        )
-                    })?;
-                    if sequence > limit {
-                        continue;
-                    }
+        let plans = self.committed_plans()?;
+        Ok(self
+            .node_placement_paths_in_cut(&plans, std::slice::from_ref(birth), through, None)?
+            .pop()
+            .unwrap())
+    }
+    pub(crate) fn node_placement_paths_in_cut(
+        &self,
+        plans: &[&journal::Plan],
+        births: &[Birth],
+        through: Option<u64>,
+        original_births: Option<&std::collections::BTreeMap<String, Vec<Birth>>>,
+    ) -> Result<Vec<BTreeSet<String>>> {
+        let mut states = births
+            .iter()
+            .map(|_| (BTreeSet::<String>::new(), None))
+            .collect::<Vec<_>>();
+        for p in plans {
+            let current_births;
+            let plan_births = if let Some(original_births) = original_births {
+                original_births.get(&p.operation_id).ok_or_else(|| {
+                    CoreError::new(
+                        "identityPending",
+                        UiMessage::error_core_backend_committed_birth_incomplete(),
+                    )
+                })?
+            } else {
+                current_births = self.read_births(&p.operation_id)?;
+                &current_births
+            };
+            let matching = births
+                .iter()
+                .enumerate()
+                .filter(|(_, birth)| {
+                    plan_births.iter().any(|b| {
+                        b.node_id == birth.node_id
+                            && b.workspace_id == birth.workspace_id
+                            && b.identity == birth.identity
+                    })
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if matching.is_empty() {
+                continue;
+            }
+            let sequence = self.history_commit_time(p)?.1;
+            if let Some(limit) = through {
+                let sequence = sequence.ok_or_else(|| {
+                    CoreError::new(
+                        "historyUnavailable",
+                        UiMessage::error_core_history_original_placement_ordering_unavailable(),
+                    )
+                })?;
+                if sequence > limit {
+                    continue;
                 }
-                birth_sequence = sequence;
+            }
+            for index in matching {
+                let birth = &births[index];
+                let (places, birth_sequence) = &mut states[index];
+                *birth_sequence = sequence;
                 if p.kind == "createNote" {
                     places.insert(p.path.clone());
                 }
@@ -280,14 +327,21 @@ impl Core {
                 }
             }
         }
-        self.replay_placements_at(
-            places,
-            birth_sequence,
-            &birth.identity,
-            Some(&birth.node_id),
-            None,
-            through,
-        )
+        let edges = self.placement_edges_in_cut(plans, through)?;
+        Ok(states
+            .into_iter()
+            .zip(births)
+            .map(|((places, born), birth)| {
+                Self::replay_placement_edges(
+                    places,
+                    born,
+                    &birth.identity,
+                    Some(&birth.node_id),
+                    None,
+                    &edges,
+                )
+            })
+            .collect())
     }
     pub(crate) fn replay_placements(
         &self,
@@ -301,15 +355,26 @@ impl Core {
     }
     fn replay_placements_at(
         &self,
-        mut places: BTreeSet<String>,
+        places: BTreeSet<String>,
         born: Option<u64>,
         identity: &FileIdentity,
         node: Option<&str>,
         directory: Option<&str>,
         through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
+        let plans = self.committed_plans()?;
+        let edges = self.placement_edges_in_cut(&plans, through)?;
+        Ok(Self::replay_placement_edges(
+            places, born, identity, node, directory, &edges,
+        ))
+    }
+    fn placement_edges_in_cut<'a>(
+        &self,
+        plans: &[&'a journal::Plan],
+        through: Option<u64>,
+    ) -> Result<Vec<(Option<u64>, &'a FrozenOperation)>> {
         let mut edges = Vec::new();
-        for p in self.committed_plans()?.into_iter() {
+        for p in plans {
             if let Some(t) = &p.transaction
                 && matches!(
                     t.mutation,
@@ -328,13 +393,24 @@ impl Core {
                         continue;
                     }
                 }
-                if !matches!((born,sequence),(Some(a),Some(b)) if b<=a) {
-                    edges.push((sequence, t));
-                }
+                edges.push((sequence, t));
             }
         }
         edges.sort_by_key(|e| e.0);
-        for (_, t) in edges {
+        Ok(edges)
+    }
+    fn replay_placement_edges(
+        mut places: BTreeSet<String>,
+        born: Option<u64>,
+        identity: &FileIdentity,
+        node: Option<&str>,
+        directory: Option<&str>,
+        edges: &[(Option<u64>, &FrozenOperation)],
+    ) -> BTreeSet<String> {
+        for (sequence, t) in edges {
+            if matches!((born, *sequence), (Some(a), Some(b)) if b <= a) {
+                continue;
+            }
             // Each original step maps its own before coordinates once. A
             // final location is never fed through another step in the same Plan.
             let original_places = places.clone();
@@ -409,7 +485,7 @@ impl Core {
                 }
             }
         }
-        Ok(places)
+        places
     }
     pub(crate) fn history_commit_time(
         &self,

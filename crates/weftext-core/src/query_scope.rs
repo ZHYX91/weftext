@@ -235,27 +235,8 @@ impl Core {
                 UiMessage::error_core_query_scope_current_owner_declaration_and_original_admission_differ(),
             ));
         }
-        let root_coordinate =
-            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
-                .directory_coordinates()?;
-        let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
-            CoreError::new(
-                "outsideRoot",
-                UiMessage::error_core_query_scope_source_outside_selected_physical_root(),
-            )
-        })?;
         let places = self.node_placement_paths(&birth)?;
-        if places.len() != 1
-            || !places.iter().any(|p| {
-                crate::history::history_relative_path(Path::new(p), &root)
-                    .is_some_and(|p| query_same_relative(&p, relative))
-            })
-        {
-            return Err(CoreError::new(
-                "identityPending",
-                UiMessage::error_core_query_scope_no_committed_node_placement_proves_exact_object(),
-            ));
-        }
+        self.check_query_node_placement_paths(&root, &coordinate, &places)?;
         let captured = CapturedFile {
             path: display(&path),
             bytes,
@@ -313,6 +294,34 @@ impl Core {
             return Err(CoreError::new(
                 "staleBase",
                 UiMessage::error_core_query_scope_selected_scope_object_changed(),
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn check_query_node_placement_paths(
+        &self,
+        root: &Path,
+        coordinate: &Path,
+        places: &BTreeSet<String>,
+    ) -> Result<()> {
+        let root_coordinate =
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
+                .directory_coordinates()?;
+        let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_query_scope_source_outside_selected_physical_root(),
+            )
+        })?;
+        if places.len() != 1
+            || !places.iter().any(|path| {
+                crate::history::history_relative_path(Path::new(path), root)
+                    .is_some_and(|path| query_same_relative(&path, relative))
+            })
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                UiMessage::error_core_query_scope_no_committed_node_placement_proves_exact_object(),
             ));
         }
         Ok(())

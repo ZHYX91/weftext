@@ -26,7 +26,7 @@ struct ObservationRecordPaths {
     _directory: backend::ScopedDirectoryEntries,
     paths: Vec<PathBuf>,
 }
-fn observation_record_name_matches(name: &str, operation_id: &str) -> bool {
+pub(crate) fn observation_record_name_matches(name: &str, operation_id: &str) -> bool {
     name.strip_prefix(operation_id).is_some_and(|suffix| {
         suffix == ".observations.json"
             || (suffix.starts_with(".recovery-observations-") && suffix.ends_with(".json"))
@@ -1118,16 +1118,29 @@ impl Core {
         operation_id: &str,
         records: &ObservationRecordPaths,
     ) -> Result<Vec<RevisionFact>> {
+        let paths = records.paths.iter().filter(|path| {
+            observation_record_name_matches(
+                &path.file_name().unwrap_or_default().to_string_lossy(),
+                operation_id,
+            )
+        });
+        self.decode_original_observation_records(
+            operation_id,
+            paths.map(|path| self.backend.read_bytes(path)),
+            || self.committed(operation_id),
+        )
+    }
+    pub(crate) fn decode_original_observation_records(
+        &self,
+        operation_id: &str,
+        records: impl IntoIterator<Item = Result<Vec<u8>>>,
+        committed: impl FnOnce() -> Result<bool>,
+    ) -> Result<Vec<RevisionFact>> {
         let mut facts = Vec::new();
         let mut record_found = false;
-        for path in &records.paths {
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if observation_record_name_matches(&name, operation_id) {
-                record_found = true;
-                facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(
-                    &self.backend.read_bytes(path)?,
-                )?);
-            }
+        for bytes in records {
+            record_found = true;
+            facts.extend(serde_json::from_slice::<Vec<RevisionFact>>(&bytes?)?);
         }
         if !record_found
             && self.operations.get(operation_id).is_some_and(|plan| {
@@ -1137,7 +1150,7 @@ impl Core {
                         .as_ref()
                         .is_some_and(|t| !t.preview.revisions.is_empty())
             })
-            && self.committed(operation_id)?
+            && committed()?
         {
             return Err(CoreError::new(
                 "identityPending",
@@ -2963,34 +2976,63 @@ impl Core {
     }
 
     pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
-        let digest = hash(&captured.bytes);
-        let mut candidates = Vec::new();
         let plans = self.committed_plans()?;
         let records = self.observation_record_paths()?;
-        for plan in &plans {
-            if let Some(fact) = self
-                .read_observation_facts_from_paths(&plan.operation_id, &records)?
-                .into_iter()
-                .find(|fact| fact.stamp == captured.stamp && fact.hash == digest)
-            {
-                candidates.push((self.commit_sequence(&plan.operation_id)?, fact.revision));
+        let mut revisions = self.accepted_revisions_with_facts(&plans, &[captured], |id| {
+            self.read_observation_facts_from_paths(id, &records)
+        })?;
+        self.check_observation_record_paths(&records, &plans)?;
+        Ok(revisions.pop().unwrap())
+    }
+    pub(crate) fn accepted_revisions_with_facts(
+        &self,
+        plans: &[&journal::Plan],
+        files: &[&CapturedFile],
+        mut read_facts: impl FnMut(&str) -> Result<Vec<RevisionFact>>,
+    ) -> Result<Vec<Option<String>>> {
+        let digests = files
+            .iter()
+            .map(|file| hash(&file.bytes))
+            .collect::<Vec<_>>();
+        let mut all_candidates = files.iter().map(|_| Vec::new()).collect::<Vec<_>>();
+        for plan in plans {
+            let facts = read_facts(&plan.operation_id)?;
+            let mut sequence = None;
+            for (index, captured) in files.iter().enumerate() {
+                if let Some(fact) = facts
+                    .iter()
+                    .find(|fact| fact.stamp == captured.stamp && fact.hash == digests[index])
+                {
+                    let sequence = if let Some(sequence) = sequence {
+                        sequence
+                    } else {
+                        let current = self.commit_sequence(&plan.operation_id)?;
+                        sequence = Some(current);
+                        current
+                    };
+                    all_candidates[index].push((sequence, fact.revision.clone()));
+                }
             }
         }
-        self.check_observation_record_paths(&records, &plans)?;
-        candidates.sort_by_key(|value| value.0);
-        let Some((sequence, revision)) = candidates.last() else {
-            return Ok(None);
-        };
-        if candidates
-            .iter()
-            .any(|(s, r)| s == sequence && r != revision)
-        {
-            return Err(CoreError::new(
-                "identityPending",
-                UiMessage::error_core_backend_ambiguous_revision_facts(),
-            ));
-        }
-        Ok(Some(revision.clone()))
+        all_candidates
+            .into_iter()
+            .map(|mut candidates| {
+                candidates.sort_by_key(|value| value.0);
+                let Some((sequence, revision)) = candidates.last() else {
+                    return Ok(None);
+                };
+                if candidates
+                    .iter()
+                    .any(|(s, r)| s == sequence && r != revision)
+                {
+                    return Err(CoreError::new(
+                        "identityPending",
+                        UiMessage::error_core_backend_ambiguous_revision_facts(),
+                    ));
+                }
+                Ok(Some(revision.clone()))
+            })
+            .collect()
     }
     pub fn reserve_source_revision(
         &mut self,

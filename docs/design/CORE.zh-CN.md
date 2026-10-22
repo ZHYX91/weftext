@@ -428,7 +428,11 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 设备记录使用 schema version 2。`failedBeforeCall` 与 `unknown` 保存类型化 `CoreDescription`，在原记录预算内保留实际因果链、原诊断来源及完整并列事实。单条投递说明另有 16 KiB 序列化预算，超过时明确拒绝，不截断。调度问题连同 owner 与 reminder 身份保留完整原始类型化 Core 错误。状态／版本／重复校验使用显式事实，不解析诊断文案。v1 与旧字符串诊断记录明确拒绝，原始字节保留。原 OS 请求中的标题／正文、执行键域及系统通知 group 属于独立外部事实，保持原值。
 
-一次多成员检查按库收集，仅在本次调用内复用该库的完整库存定位观察，切换库即释放；准备、原批次重试、调用前许可检查和原通知重新核权共用同一捕获路径。逐源的原物理准入、当前位置、字节、Schema 与控制见证不省略；发生决定前，在原输入 guards 持有期间按库重新完整扫描，核对固定 NodeRef 到原 source path 的唯一映射，不刷新旧候选来接纳变更。单条订阅与有界内部批次共用一条设置写入路径：原 mutation 重取先于重新捕获，重复成员拒绝，完整资格后一次 CAS，失败不写前缀。对外仍为原单条命令，原单条 fingerprint 和禁用语义保持。
+一次多成员捕获按库收集，仅在本次调用内复用该库的完整库存定位观察，切换库即释放；准备、原批次重试和原通知重新核权共用完整捕获路径。逐源的原物理准入、当前位置、字节、Schema 与控制见证不省略；发生决定前，在原输入 guards 持有期间按库重新完整扫描，核对固定 NodeRef 到原 source path 的唯一映射。单条订阅与有界内部批次共用一条设置写入路径：原 mutation 重取先于重新捕获，重复成员拒绝，完整资格后一次 CAS，失败不写前缀。对外仍为原单条命令，原单条 fingerprint 和禁用语义保持。
+
+不可克隆、不可由 wire 构造的交付许可只携带原 members（至多64项），源码／控制见证先按准确路径去重再克隆。私有 journal cut 持有原 commit、Birth、observation 记录的受保护读取句柄，只纳入初始已存在且经原解码器确认的 commit。签发与调用前接纳均用一次批量检查复用普通 Core reader 的同一物理准入、placement 重放和已接纳 revision 算法，读取固定 cut 的原记录，不接纳临时新增 commit／observation。完整已知 operation、相关名称、parent／FI、stamp 与 hash 围栏仍须一致。journal 枚举沿用5000成员上限并守64MiB实读预算；原作者输入1024路径／64MiB预算保持。Debug 只报计数，不输出捕获正文。
+
+调用前在原作者 guards 内复核当前设备／账本、原成员、选库／订阅同意及 effect key，准确原正／负作者见证、fresh 完整库存映射与该固定 journal 证明。仅正文变化、Schema／控制或 journal 证据变化也拒绝旧许可，不静默重新捕获。确认 failed-before-call 后，才按原效果号通过完整 fresh 捕获重试。完整输入资格先于新 attempt 时钟及原五秒墙钟／单调时限；最终 postcheck、目标分钟检查与一次性消费仍先于外部调用。
 
 执行键为 `weftext.reminder-effect.v1` 与 device、NodeRef、reminderId、实际语义摘要和精确 trigger 的 canonical SHA256。先持久原键的 submitting、完整 OS request 和 attempt，才返回不可反序列化／克隆的 permit。每次系统调用前必须 `check_reminder_permit`：重验当前源、库、设备、任务和授权，复核共同源／配置正负见证闭包及全部后置检查，并最终核对目标分钟、单调 5 秒时限和墙钟未回拨；全部通过后才准入一次并消费许可。普通投递不能因资格核查耗时越过目标分钟。Native 在 Core 锁外调用 OS，再以原 permit 写回结果；最后检查不声称与之后的作者编辑或 OS 调用全局原子。Server 没有 toast producer 或投递 HTTP 接口。
 
