@@ -43,10 +43,14 @@ pub(crate) fn original_failure(kind: Kind) -> ApiError {
     original.details = Some(Box::new(ApiErrorDetails::CurrentSource {
         current_source: PRIVATE.into(),
     }));
-    original.causes.push(
-        ErrorDescription::new(UiMessage::error_compiler_output_invalid())
-            .diagnostic(DiagnosticOrigin::Json, PRIVATE),
-    );
+    original.causes = ErrorDescription::new(original.explanation.clone())
+        .try_caused_by(
+            "privateOriginalCause",
+            ErrorDescription::new(UiMessage::error_compiler_output_invalid())
+                .diagnostic(DiagnosticOrigin::Json, PRIVATE),
+        )
+        .unwrap()
+        .causes;
     original
 }
 
