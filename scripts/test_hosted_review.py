@@ -5,6 +5,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from test_hosted import uid, digest
 from test_hosted_fields import HostedFields
 
@@ -205,14 +206,45 @@ class HostedReview(HostedFields):
         b = self.review(actor='bob')
         self.call('review/proofread', dict(resource='Shared', basis=b['basis'], options=options), 'bob', 404)
         # An in-flight compilation may not deliver its old text after revocation.
-        doc = self.open(); self.save(doc, doc['source']+'\n#for i in range(20000) [delayed paragraph #parbreak()]')
+        doc = self.open()
+        included = '#include "../Secret/Secret.typ"'
+        self.assertEqual(doc['source'].count(included), 1)
+        # Retain the real frozen dependency as text: a whole managed note's
+        # document set rule cannot execute inside the compiled content container.
+        source = doc['source'].replace(included, '#read("../Secret/Secret.typ")', 1)
+        # Construct 20,000 native paragraph contents, but project only their
+        # count and a sample: this is a delivery race, not an output-capacity test.
+        # The full projection exceeds the unchanged tree/worker-output budgets.
+        workload = ('\n#let inflight-paragraphs = range(20000).map(i => [delayed paragraph#parbreak()])\n'
+                    '#text(str(inflight-paragraphs.len()))\ndelayed paragraph')
+        self.save(doc, source+workload)
         profile = self.review()
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/review/proofread', dict(resource='Shared', basis=profile['basis'], options=options), self.tokens['alice'])
-            time.sleep(.2)
-            self.policy(lambda users: users['alice']['grants']['Shared']['annotations'].update(proofread=False))
-            code, response, _ = pending.result(timeout=40)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/review/proofread', dict(resource='Shared', basis=profile['basis'], options=options), self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.policy(lambda users: users['alice']['grants']['Shared']['annotations'].update(proofread=False))
+                changed = event_time_ns()
+                (code, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': response.get('error', {}).get('code'),
+                 'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'proofread-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
         self.assertIn(code, [404, 409], response)
+        self.assertEqual(code, 404, response)
+        self.assertEqual(response['error']['code'], 'unavailable')
+        self.assertEqual(response['error']['explanation']['key'],
+                         'error.api.hosted.contentUnavailable')
         self.assertNotIn('findings', response)
 
 

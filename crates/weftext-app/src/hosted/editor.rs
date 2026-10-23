@@ -401,6 +401,14 @@ pub(super) fn validate_inputs(
     }
     Ok(())
 }
+fn preview_worker_failure(original: ApiError) -> ApiError {
+    ApiError::new(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "previewUnavailable",
+        UiMessage::error_api_hosted_editor_authorized_preview_unavailable(),
+    )
+    .inherit_worker_failure_from(&original)
+}
 pub(super) async fn compile_frozen(
     state: &HostedState,
     input: WorkerRequest,
@@ -412,18 +420,41 @@ pub(super) async fn compile_frozen(
             UiMessage::error_api_hosted_editor_preview_busy(),
         )
     })?;
-    render_worker(input).await.map_err(|_| {
-        ApiError::new(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "previewUnavailable",
-            UiMessage::error_api_hosted_editor_authorized_preview_unavailable(),
-        )
-    })
+    worker_failure::observe_hosted_result(
+        worker_failure::HostedContext::Editor,
+        render_worker(input).await,
+    )
+    .map_err(preview_worker_failure)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn authorized_preview_preserves_only_the_original_private_worker_facts() {
+        use crate::worker_failure::{
+            Kind,
+            diagnostics_tests::{assert_safe_wrapper, original_failure},
+        };
+        for kind in [
+            Kind::Deadline,
+            Kind::NonzeroExit,
+            Kind::OutputRejected,
+            Kind::SupervisionLost,
+        ] {
+            let original = original_failure(kind);
+            let retained = original.private_worker_failure.as_ref().unwrap().clone();
+            assert_safe_wrapper(
+                preview_worker_failure(original),
+                &retained,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "previewUnavailable",
+                UiMessage::error_api_hosted_editor_authorized_preview_unavailable(),
+            )
+            .await;
+        }
+    }
 
     #[cfg(windows)]
     #[test]

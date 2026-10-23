@@ -982,6 +982,14 @@ async fn search(
         Ok(json!({"rows":rows,"complete":complete,"coverage":"configuredAuthorizedSources","queryKind":"literalSourceText"}))
     }).await?))
 }
+fn preview_worker_failure(original: ApiError) -> ApiError {
+    ApiError::new(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "previewUnavailable",
+        UiMessage::error_api_hosted_preview_incomplete(),
+    )
+    .inherit_worker_failure_from(&original)
+}
 async fn preview(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
@@ -1015,13 +1023,16 @@ async fn preview(
             UiMessage::error_api_hosted_preview_busy(),
         )
     })?;
-    let output = render_worker(input).await;
+    let output = worker_failure::observe_hosted_result(
+        worker_failure::HostedContext::Preview,
+        render_worker(input).await,
+    );
     locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&auth, &req.session_id)?;
         if inner.actor_generation(&actor) != generation { return Err(unavailable()); }
         editor::validate_inputs(inner, &actor, &session.resource, &dependencies)?;
         environment.recheck(inner, &actor)?;
-        let output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "previewUnavailable", UiMessage::error_api_hosted_preview_incomplete()))?;
+        let output = output.map_err(preview_worker_failure)?;
         // Return rendered content only. Compiler paths, origins and ambient
         // metadata are not part of this bounded hosted presentation API.
         Ok(Json(json!({"ok":output["ok"],"html":output["html"],
@@ -1494,5 +1505,35 @@ async fn close_hosted_jobs(state: &HostedState) {
     .is_err()
     {
         crate::work::fault();
+    }
+}
+
+#[cfg(test)]
+mod worker_diagnostic_contract_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ordinary_preview_keeps_its_distinct_safe_public_contract_and_original_worker() {
+        use crate::worker_failure::{
+            Kind,
+            diagnostics_tests::{assert_safe_wrapper, original_failure},
+        };
+        for kind in [
+            Kind::Deadline,
+            Kind::NonzeroExit,
+            Kind::OutputRejected,
+            Kind::SupervisionLost,
+        ] {
+            let original = original_failure(kind);
+            let retained = original.private_worker_failure.as_ref().unwrap().clone();
+            assert_safe_wrapper(
+                preview_worker_failure(original),
+                &retained,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "previewUnavailable",
+                UiMessage::error_api_hosted_preview_incomplete(),
+            )
+            .await;
+        }
     }
 }

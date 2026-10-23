@@ -9,6 +9,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from test_hosted import uid
 from test_hosted_definition import HostedDefinition
 from test_hosted_query import HostedQuery
@@ -296,14 +297,33 @@ class HostedProviders(HostedQuery):
         found = self.call('query/embedded/discover', basis)
         self.assertTrue(self.call('editor/render', basis)['ok'])
         occurrence = next(item for item in found['occurrences'] if item['key'] == definition['definition']['key'])
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/query/embedded/run',
-                {**basis, 'occurrenceId': occurrence['id'], **choice}, self.tokens['alice'])
-            time.sleep(.2)
-            self.grant_providers([], actor='alice')
-            code, result, _ = pending.result(timeout=40)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/query/embedded/run', {**basis, 'occurrenceId': occurrence['id'], **choice}, self.tokens['alice'])
+                # The whole input set is captured before its first worker.
+                # This does not identify a particular row or all workers.
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.grant_providers([], actor='alice')
+                changed = event_time_ns()
+                (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': result.get('error', {}).get('code'),
+                 'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'provider-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
         self.assertEqual(code, 401, result)
         self.assertEqual(result['error']['code'], 'authentication')
+        self.assertEqual(result['error']['explanation']['key'],
+                         'error.api.hosted.authenticationExpired')
         self.assertNotIn('queryId', result)
 
     def test_provider_named_parameter_shapes_do_not_probe_private_schema_definitions(self):

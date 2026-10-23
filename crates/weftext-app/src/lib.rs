@@ -297,6 +297,10 @@ impl ApiError {
         }));
         self
     }
+    fn inherit_worker_failure_from(mut self, original: &Self) -> Self {
+        self.private_worker_failure = original.private_worker_failure.clone();
+        self
+    }
     fn worker_failure(failure: worker_failure::WorkerFailure) -> Self {
         let mut error = Self::worker_failure_summary(&failure);
         error.private_worker_failure = Some(Arc::new(failure));

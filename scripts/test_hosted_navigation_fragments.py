@@ -4,6 +4,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from urllib.parse import quote
 
 from test_hosted import digest, uid
@@ -126,13 +127,31 @@ class HostedNavigationFragments(HostedHistory):
         doc, reference = self.labelled()
         source = doc['source'] + '\n#for i in range(20000) [delayed paragraph #parbreak()]'
         request = self.fragment_request(doc, reference + '#target', source, serial=21)
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/navigation/fragment', request, self.tokens['alice'])
-            time.sleep(.2)
-            self.policy(lambda users: users['alice']['grants']['Shared'].update(read=False, write=False, history=False, download=False))
-            status, response, _ = pending.result(timeout=40)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/navigation/fragment', request, self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.policy(lambda users: users['alice']['grants']['Shared'].update(read=False, write=False, history=False, download=False))
+                changed = event_time_ns()
+                (status, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': status, 'errorCode': response.get('error', {}).get('code'),
+                 'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'fragment-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
         self.assertEqual(status, 401, response)
         self.assertEqual(response['error']['code'], 'authentication')
+        self.assertEqual(response['error']['explanation']['key'],
+                         'error.api.hosted.authenticationExpired')
         self.assertNotIn('fragment', response)
         self.assertNotIn('Target heading', json.dumps(response))
 
