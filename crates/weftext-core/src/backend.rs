@@ -139,32 +139,6 @@ pub struct BackendContext {
     root: std::sync::Arc<platform::ControlledRoot>,
 }
 impl BackendContext {
-    /// Convert an address to the coordinate system reported by retained native
-    /// handles. Only the independently qualified volume root is opened here;
-    /// descendant qualification still belongs to its original namespace guard.
-    pub(crate) fn namespace_coordinate(&self, path: &Path) -> Result<PathBuf> {
-        let path = crate::absolute_path(path)?;
-        self.check_path(&path)?;
-        #[cfg(windows)]
-        {
-            let drive = path.ancestors().last().ok_or_else(|| {
-                CoreError::new(
-                    "invalidPath",
-                    weftext_messages::UiMessage::error_core_backend_invalid_volume_path(),
-                )
-            })?;
-            let guard = ParentGuard::acquire(self, &drive.join(".coordinate-prospective"))?;
-            let relative = path.strip_prefix(drive).map_err(|_| {
-                CoreError::new(
-                    "invalidPath",
-                    weftext_messages::UiMessage::error_core_backend_path_outside_protected_volume(),
-                )
-            })?;
-            Ok(guard.directory_coordinates()?.join(relative))
-        }
-        #[cfg(not(windows))]
-        Ok(path)
-    }
     pub(crate) fn ancestors<'a>(&self, path: &'a Path) -> Result<Vec<&'a Path>> {
         self.check_path(path)?;
         Ok(path
@@ -1307,6 +1281,7 @@ mod platform {
         inner: NamespaceGuard,
         sources: Vec<PathBuf>,
         parents: Vec<PathBuf>,
+        original_coordinates: std::collections::BTreeMap<PathBuf, PathBuf>,
     }
     impl MultiNamespaceGuard {
         pub(crate) fn acquire(
@@ -1497,6 +1472,10 @@ mod platform {
                     current = next;
                 }
             }
+            let original_coordinates = dirs
+                .iter()
+                .map(|(path, file)| Ok((path.clone(), file_coordinates(file)?)))
+                .collect::<Result<_>>()?;
             Ok(Self {
                 inner: NamespaceGuard {
                     dirs,
@@ -1512,6 +1491,25 @@ mod platform {
                 },
                 sources,
                 parents,
+                original_coordinates,
+            })
+        }
+        pub(super) fn original_coordinate(&self, path: &Path) -> Result<PathBuf> {
+            let mut selected = None;
+            let mut depth = 0;
+            for (original, coordinate) in &self.original_coordinates {
+                if let Some(relative) = super::namespace_relative_path(path, original)?
+                    && original.components().count() > depth
+                {
+                    depth = original.components().count();
+                    selected = Some(coordinate.join(relative));
+                }
+            }
+            selected.ok_or_else(|| {
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_backend_path_outside_protected_volume(),
+                )
             })
         }
         pub(crate) fn select(&mut self, index: usize) -> Result<&mut NamespaceGuard> {
@@ -1885,6 +1883,75 @@ mod platform {
         use super::*;
         use std::fs;
         use std::os::windows::fs::OpenOptionsExt;
+
+        #[test]
+        fn namespace_coordinates_expand_original_dos_aliases_without_following_later_moves() {
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn SetFileShortNameW(handle: Handle, name: *const u16) -> i32;
+            }
+            let alias = |path: &Path, name: &str| {
+                let file = fs::OpenOptions::new()
+                    .access_mode(DELETE)
+                    .share_mode(7)
+                    .custom_flags(0x02000000)
+                    .open(path)
+                    .unwrap();
+                let name = name.encode_utf16().chain([0]).collect::<Vec<_>>();
+                assert_ne!(
+                    unsafe { SetFileShortNameW(file.as_raw_handle(), name.as_ptr()) },
+                    0,
+                    "{}",
+                    std::io::Error::last_os_error()
+                );
+            };
+            let temp = tempfile::tempdir().unwrap();
+            let original_parent = temp.path().join("Original Namespace Parent");
+            let original_source = original_parent.join("Original Moving Source");
+            let final_parent = original_parent.join("Final Parent");
+            fs::create_dir(&original_parent).unwrap();
+            fs::create_dir(&original_source).unwrap();
+            fs::create_dir(&final_parent).unwrap();
+            alias(&original_parent, "PARENT~1");
+            alias(&original_source, "SOURCE~1");
+            let parent_alias = temp.path().join("PARENT~1");
+            let source_alias = parent_alias.join("SOURCE~1");
+            let final_parent_alias = parent_alias.join("Final Parent");
+            let backend = BackendContext::local().unwrap();
+            let original_coordinate =
+                ParentGuard::acquire(&backend, &original_source.join(".original-coordinate"))
+                    .unwrap()
+                    .directory_coordinates()
+                    .unwrap();
+            let mut union =
+                MultiNamespaceGuard::acquire(&backend, &[(&source_alias, &final_parent_alias)])
+                    .unwrap();
+            let identity = union.select(0).unwrap().source_identity().unwrap();
+            assert_eq!(
+                union.namespace_coordinate(&backend, &source_alias).unwrap(),
+                original_coordinate
+            );
+            assert_eq!(
+                union
+                    .namespace_coordinate(&backend, &source_alias.join("Absent.typ"))
+                    .unwrap(),
+                original_coordinate.join("Absent.typ")
+            );
+            let moved = final_parent_alias.join("Moved Source");
+            let expected_final = union.namespace_coordinate(&backend, &moved).unwrap();
+            union.move_source_to(0, &moved).unwrap();
+            let source = union.select(0).unwrap();
+            assert_eq!(source.source_identity().unwrap(), identity);
+            let actual_final = source.source_coordinates().unwrap();
+            assert_eq!(actual_final, expected_final);
+            // A stale Before phase must still compare against the old address,
+            // even though the same original source handle has lawfully moved.
+            assert_eq!(
+                union.namespace_coordinate(&backend, &source_alias).unwrap(),
+                original_coordinate
+            );
+            assert_ne!(actual_final, original_coordinate);
+        }
 
         #[test]
         fn selected_presence_does_not_charge_unrelated_siblings_to_private_budget() {
@@ -2461,6 +2528,25 @@ pub(crate) use platform::{
     MultiNamespaceGuard, NamespaceGuard, ParentGuard, attributes, file_coordinates,
     publish_private_create, publish_private_replace, stamp,
 };
+impl MultiNamespaceGuard {
+    /// Translate only an address through this acquisition's original retained
+    /// names. A moved handle's new location must never redefine the expected
+    /// phase; source identity and current placement are still checked separately.
+    pub(crate) fn namespace_coordinate(
+        &self,
+        backend: &BackendContext,
+        path: &Path,
+    ) -> Result<PathBuf> {
+        let path = crate::absolute_path(path)?;
+        backend.check_path(&path)?;
+        #[cfg(windows)]
+        {
+            self.original_coordinate(&path)
+        }
+        #[cfg(not(windows))]
+        Ok(path)
+    }
+}
 /// Presence is qualified from the complete retained parent inventory. Unrelated
 /// sibling entries do not become authority for this selected entry.
 fn qualified_entry_exists(

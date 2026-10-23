@@ -352,13 +352,16 @@ fn qualified_roots(
         .zip(phases)
         .enumerate()
         .map(|(index, (step, phase))| {
+            let expected = union.namespace_coordinate(
+                backend,
+                &current_coordinate(steps, phases, step, *phase),
+            )?;
             let namespace = union.select(index)?;
             let coordinate = namespace.source_coordinates()?;
             if namespace.source_identity()? != step.source_identity
                 || crate::backend::namespace_path_compare(
                     &coordinate,
-                    &backend
-                        .namespace_coordinate(&current_coordinate(steps, phases, step, *phase))?,
+                    &expected,
                 )? != std::cmp::Ordering::Equal
             {
                 return Err(CoreError::new(
@@ -393,7 +396,7 @@ pub(super) fn entry_parent(
     phases: &[StepPhase],
     path: &Path,
 ) -> Result<(FileIdentity, Option<ParentGuard>)> {
-    let coordinate = backend.namespace_coordinate(path)?;
+    let coordinate = union.namespace_coordinate(backend, path)?;
     let roots = qualified_roots(backend, union, steps, phases)?;
     let result = if let Some((index, relative)) = containing_source(&roots, &coordinate)? {
         (
@@ -417,7 +420,7 @@ pub(super) fn ensure_absent(
     phases: &[StepPhase],
     path: &Path,
 ) -> Result<()> {
-    let coordinate = backend.namespace_coordinate(path)?;
+    let coordinate = union.namespace_coordinate(backend, path)?;
     let roots = qualified_roots(backend, union, steps, phases)?;
     let mut is_root = false;
     for root in &roots {
@@ -450,7 +453,7 @@ pub(super) fn verify_vacancies(
 ) -> Result<()> {
     let roots = qualified_roots(backend, union, steps, phases)?;
     for path in phase_slots(steps, phases) {
-        let coordinate = backend.namespace_coordinate(&path)?;
+        let coordinate = union.namespace_coordinate(backend, &path)?;
         let mut owned = false;
         for root in &roots {
             if crate::backend::namespace_path_compare(&coordinate, root)?

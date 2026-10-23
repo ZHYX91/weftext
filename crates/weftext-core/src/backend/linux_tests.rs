@@ -86,7 +86,9 @@ fn administrator_revocation_fences_existing_private_reads_and_operation_status()
     );
     assert_eq!(namespace.source_coordinates().unwrap(), guard_source);
     assert_eq!(
-        core.backend.namespace_coordinate(&guarded_path).unwrap(),
+        union
+            .namespace_coordinate(&core.backend, &guarded_path)
+            .unwrap(),
         guarded_path
     );
     assert!(
@@ -133,8 +135,8 @@ fn administrator_revocation_fences_existing_private_reads_and_operation_status()
         file_coordinates(&retained_file).err().unwrap(),
         namespace.source_identity().err().unwrap(),
         namespace.source_coordinates().err().unwrap(),
-        core.backend
-            .namespace_coordinate(&guarded_path)
+        union
+            .namespace_coordinate(&core.backend, &guarded_path)
             .err()
             .unwrap(),
         namespace.parent_identity().err().unwrap(),
