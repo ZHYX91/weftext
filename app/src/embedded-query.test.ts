@@ -129,3 +129,22 @@ test("disposing an actor/query session clears discovered writers and rejects lat
   const late = controller.discover(basis); controller.dispose(); assert.equal(controller.hasQueries, false); assert.deepEqual(controller.outputSelections(), []);
   finish({ serial: basis.serial, source: basis.source, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }); assert.equal(await late, false); assert.equal(controller.hasQueries, false);
 });
+
+test("native close cannot retire an embedded arrangement waiting for its author preparation", async () => {
+  let rejectPreparation!: (error: Error) => void;
+  const controller = new EmbeddedQueryController({ queryResultScope: "local", basis: () => basis, mode: () => "write", editable: () => true,
+    request: async <T>() => ({ serial: basis.serial, source: basis.source, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }) as T,
+    prepareEdit: () => new Promise<void>((_resolve, reject) => { rejectPreparation = reject; }),
+    apply: async () => { throw new Error("unqualified write must not run"); }, reveal: () => false, closeReveal() {}, openRow: async () => {}, openOwner: async () => {}, notify() {},
+  });
+  assert.equal(await controller.discover(basis), true);
+  const pending = (controller as any).arrange({ occurrence: occurrence(), unique: true }, "remove") as Promise<void>;
+  assert.equal(controller.hasUnappliedAuthorInputs, true);
+  assert.equal(controller.freezeForClose(), false);
+  rejectPreparation(new Error("preparation cancelled"));
+  await assert.rejects(pending, /cancelled/);
+  assert.equal(controller.hasUnappliedAuthorInputs, false);
+  assert.equal(controller.freezeForClose(), true);
+  await assert.rejects((controller as any).arrange({ occurrence: occurrence(), unique: true }, "remove"));
+  controller.thawAfterClose(); controller.dispose();
+});

@@ -48,6 +48,7 @@ export class CaptureForm<R extends CaptureMutableRecord> {
   private active = true;
   private busy = false;
   private renderedInputRevision: number;
+  get pendingAction(): boolean { return this.busy; }
   constructor(private readonly host: CaptureFormHost<R>) {
     this.element.className = "capture-surface";
     const state = host.controller.state;

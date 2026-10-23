@@ -21,3 +21,29 @@ test("local and hosted module adapters pass exact session/owner selectors and ne
     assert.equal((await adapter.install()).resourceRef, "new-module"); assert.equal(changed, 1); assert.ok(calls.every(call => !/save|source-edit|write-file/.test(call.path))); assert.ok([...stored.keys()].every(key => key.includes(encodeURIComponent("deployment:alice"))));
   }
 });
+
+test("unknown module preparation blocks close until the original Core operation is settled", async () => {
+  const source = "// fixed module", sha256 = createHash("sha256").update(source).digest("hex");
+  const identity = { scope: "actor-scope", owner: "weftext-node://w/n", binding: "collection", modulePath: "weftext-endnotes.typ" };
+  const stored = new Map<string, string>();
+  let original = "";
+  const adapter = new AuthoringAssetsAdapter({ prefix: "/module", context: () => ({ sessionId: "session", audience: "local:author" }), changed() {}, storage: { getItem: key => stored.get(key) ?? null, setItem: (key, value) => { stored.set(key, value); } }, request: async <T>(path: string, body?: unknown): Promise<T> => {
+    const value = body as Record<string, unknown>;
+    if (path === "/module") return { name: identity.modulePath, source, sha256, version: "1" } as T;
+    if (path.endsWith("/catalog")) return { identity, coverage: "complete", owner: identity.owner, resources: [] } as T;
+    if (path.endsWith("/prepare")) { original = String(value.operationId); throw new Error("original response was lost"); }
+    if (path.endsWith("/status")) { assert.equal(value.operationId, original); return { operationId: original, status: "cancelled", commitAllowed: false } as T; }
+    throw new Error(path);
+  } });
+  await assert.rejects(adapter.install(), /lost/);
+  assert.throws(() => adapter.assertCloseReady());
+  assert.equal(adapter.freezeForClose(), false);
+  adapter.invalidate();
+  assert.throws(() => adapter.assertCloseReady(), "retiring display cannot settle the original operation");
+  assert.equal((await adapter.recover())?.status, "cancelled");
+  adapter.assertCloseReady();
+  assert.equal(adapter.freezeForClose(), true);
+  await assert.rejects(adapter.install());
+  adapter.thawAfterClose();
+  adapter.assertCloseReady();
+});

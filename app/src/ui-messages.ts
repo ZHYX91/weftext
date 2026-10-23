@@ -10176,7 +10176,10 @@ export const zhCN = {
   "error.core.posix.createdParentRequired": "新建目录缺少父目录。",
   "error.core.posix.enrollmentUuidRequired": "注册身份需要规范的随机 UUID。",
   "error.core.posix.outputBasenameRequired": "输出路径缺少文件名。",
-  "error.core.posix.ordinaryEntryRequired": "不支持符号链接和特殊文件系统条目。"
+  "error.core.posix.ordinaryEntryRequired": "不支持符号链接和特殊文件系统条目。",
+  "dataPanel.discardAllFormChanges": "放弃所有笔记及资料库的表单修改",
+  "queryEdit.discardAllFieldInputs": "放弃所有结果行的字段修改",
+  "desktop.residentEnabled": "已开启“关闭窗口后继续常驻”。关闭资料库或碎片窗口后，Weftext 会继续在托盘运行；本设备已启用且可用的任务提醒会继续调度。要停止后台运行和提醒调度，请从托盘选择“退出 Weftext”。登录时启动、启动时打开界面仍分别设置，本次操作不会更改它们。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -20358,6 +20361,9 @@ export interface MessageParamsMap {
   "error.core.posix.enrollmentUuidRequired": {  };
   "error.core.posix.outputBasenameRequired": {  };
   "error.core.posix.ordinaryEntryRequired": {  };
+  "dataPanel.discardAllFormChanges": {  };
+  "queryEdit.discardAllFieldInputs": {  };
+  "desktop.residentEnabled": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -32372,7 +32378,10 @@ export const messageParamTypes = {
   "error.core.posix.createdParentRequired": {},
   "error.core.posix.enrollmentUuidRequired": {},
   "error.core.posix.outputBasenameRequired": {},
-  "error.core.posix.ordinaryEntryRequired": {}
+  "error.core.posix.ordinaryEntryRequired": {},
+  "dataPanel.discardAllFormChanges": {},
+  "queryEdit.discardAllFieldInputs": {},
+  "desktop.residentEnabled": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -42552,5 +42561,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.createdParentRequired": "Created directory has no parent",
   "error.core.posix.enrollmentUuidRequired": "Enrollment identity requires a canonical random UUID",
   "error.core.posix.outputBasenameRequired": "Output has no basename",
-  "error.core.posix.ordinaryEntryRequired": "Symbolic links and special filesystem entries are unsupported"
+  "error.core.posix.ordinaryEntryRequired": "Symbolic links and special filesystem entries are unsupported",
+  "dataPanel.discardAllFormChanges": "Discard form changes for all notes and libraries",
+  "queryEdit.discardAllFieldInputs": "Discard field changes for all result rows",
+  "desktop.residentEnabled": "“Keep running after closing windows” is now enabled. Closing Library or Capture leaves Weftext running in the tray and scheduling task reminders that are enabled and available on this device. Choose “Exit Weftext” from the tray to stop background work and reminder scheduling. Starting at login and opening the interface at startup remain separate settings; this action does not change them."
 };

@@ -32,7 +32,7 @@ StartupTask 默认关闭，登录入口只传 `--login-startup`；通知 COM 使
 
 [`offline-materials.json`](../packaging/windows/offline-materials.json) 只接纳已核定的准确原件：类别、载荷架构、版本、官方来源／最终 URL、字节长度／SHA-256、实际微软签名者与原许可。安装器自身的 PE 架构不等于内部 payload 架构。校验持有同一只读文件句柄、禁止并发写／删除，采用 cache-only WinVerifyTrust，不声称检查了最新在线吊销状态；缓存链无法确认时拒绝完整候选。调用者不能靠 JSON 自报或把 Bootstrapper 改名为 Standalone。
 
-当前锁已包含真实 VC 14.51.36247.0，尚无取得资格的 WebView2 x64 Standalone 原安装材料；完整离线 Windows 候选因此明确拒绝生成。主机已装 Runtime、差分安装器、普通 Edge 或另一工作区的材料都不能补空。原始许可与再分发条件保留，不据下载／签名通过推定公开分发资格。WebView2 的 `ExternalDependency` 只在 App Installer 路径生效，PowerShell 等安装会忽略，不能替代这里的离线资格。识别仍按现有独立 runtime／模型锁显式配置，包不冒称已包含它。
+当前锁已包含真实 VC 14.51.36247.0 与 WebView2 156.0.4314.42 x64 Evergreen Standalone 原安装材料。WebView2 的版本和架构来自原件中与离线清单摘要相符的签名载荷及实际 x64 Runtime，不能用外层更新器版本或 PE 架构代替。每次打包仍须核对准确原件、离线签名和全部材料锁；主机已装 Runtime、差分安装器、普通 Edge 或另一工作区的材料不能替代。原始许可与再分发条件保留，不据下载／签名通过推定公开分发资格。WebView2 的 `ExternalDependency` 只在 App Installer 路径生效，PowerShell 等安装会忽略，不能替代这里的离线资格。识别仍按现有独立 runtime／模型锁显式配置，包不冒称已包含它。
 
 ## 产物与实际验收
 

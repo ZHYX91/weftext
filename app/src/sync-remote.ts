@@ -1,3 +1,4 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { api, operationId } from "./api";
@@ -19,8 +20,13 @@ interface Host {
 const storageKey = "weftext-remote-sync-job-v1";
 export function mountRemoteSync(container: HTMLElement, host: Host): {
     render(): void;
+    assertCloseReady(): void;
+    freezeForClose(): boolean;
+    thawAfterClose(): void;
     dispose(): void;
 } {
+    const closeGuard = new ProposalCloseGuard();
+    closeGuard.bind(container);
     const title = document.createElement("h3");
     setUiText(title, uiMessage("remoteSync.title"));
     const help = document.createElement("p");
@@ -44,23 +50,27 @@ export function mountRemoteSync(container: HTMLElement, host: Host): {
     container.append(actions, progress, list);
     let busy = false, disposed = false, job: RemoteSyncProgress | PendingProgress | null = null, timer: ReturnType<typeof setTimeout> | undefined, selected = new Set<string>(), remote: SyncStatus | null = null;
     let lastDelivered = "";
+    const unresolved = (): boolean => busy || job?.status === "running" || job?.status === "complete" && lastDelivered !== job.requestId;
+    const assertCloseReady = (): void => { closeGuard.assertReady(unresolved()); };
     const connection = () => ({ endpoint: endpoint.value, token: credential.value, identity: host.identity() });
     const showError = (e: unknown) => { if (!disposed) setUiText(progress, errorUiText(e)); };
     async function run(f: () => Promise<void>): Promise<void> {
-        if (busy || disposed)
-            return;
-        busy = true;
-        render();
-        try {
-            await f();
-        }
-        catch (e) {
-            showError(e);
-        }
-        finally {
-            busy = false;
+        return closeGuard.run(async () => {
+            if (busy || disposed)
+                return;
+            busy = true;
             render();
-        }
+            try {
+                await f();
+            }
+            catch (e) {
+                showError(e);
+            }
+            finally {
+                busy = false;
+                render();
+            }
+        });
     }
     function button(text: UiText, action: () => Promise<void>): HTMLButtonElement {
         const b = document.createElement("button");
@@ -87,18 +97,20 @@ export function mountRemoteSync(container: HTMLElement, host: Host): {
         render();
     }
     async function poll(): Promise<void> {
-        if (disposed || !job)
-            return;
-        try {
-            const requestId = job.requestId, value = await api<unknown>("/api/sync/remote/job", { requestId });
-            if (disposed || job?.requestId !== requestId) return;
-            await receive(value);
-        }
-        catch (e) {
-            showError(e);
-            if (!disposed)
-                timer = setTimeout(() => { void poll(); }, 2000);
-        }
+        return closeGuard.run(async () => {
+            if (disposed || !job)
+                return;
+            try {
+                const requestId = job.requestId, value = await api<unknown>("/api/sync/remote/job", { requestId });
+                if (disposed || job?.requestId !== requestId) return;
+                await receive(value);
+            }
+            catch (e) {
+                showError(e);
+                if (!disposed)
+                    timer = setTimeout(() => { void poll(); }, 2000);
+            }
+        });
     }
     async function start(direction: "push" | "pull"): Promise<void> {
         if (host.blocked() || job?.status === "running")
@@ -177,5 +189,5 @@ export function mountRemoteSync(container: HTMLElement, host: Host): {
         void poll();
     }
     render();
-    return { render, dispose: () => { disposed = true; clearTimeout(timer); credential.value = ""; job = null; remote = null; selected.clear(); disposeUiTree(container); } };
+    return { render, assertCloseReady, freezeForClose: () => closeGuard.freeze(unresolved()), thawAfterClose: () => closeGuard.thaw(), dispose: () => { assertCloseReady(); disposed = true; clearTimeout(timer); credential.value = ""; job = null; remote = null; selected.clear(); disposeUiTree(container); } };
 }

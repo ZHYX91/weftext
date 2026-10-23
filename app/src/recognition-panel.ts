@@ -1,4 +1,5 @@
 import { replaceUiChildren, disposeUiTree } from "./ui-locale";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { officeLossUiText } from "./office-wire";
 import { joinUiText } from "./ui-locale";
 import { uiDisplayParameter } from "./ui-locale";
@@ -83,6 +84,42 @@ function bytes(value: string): Uint8Array<ArrayBuffer> { const raw = atob(value)
 const sha = async (value: Uint8Array<ArrayBuffer>): Promise<string> => [...new Uint8Array(await crypto.subtle.digest("SHA-256", value))].map(b => b.toString(16).padStart(2, "0")).join("");
 /** One shared consumer for desktop and self-hosted WebUI. No private text is persisted. */
 export class RecognitionPanel {
+    private readonly closeGuard = new ProposalCloseGuard();
+    private inputEdited = false;
+    private readonly composingTargets = new Set<EventTarget>();
+    // Revocation scrubs private display state; opaque identities keep unresolved work
+    // from becoming close proof merely because its old UI was retired.
+    private readonly retiredOperations = new Map<string, { operationId?: string; jobId?: string; slot?: string; unreadable: boolean }>();
+    private readonly retiredProposals = new Set<string>();
+    private get unresolved(): boolean {
+        const terminal = !this.controller.uncertain && !!this.controller.receipt && ["committed", "resolved", "cancelled"].includes(this.controller.receipt.status);
+        return this.retiredOperations.size !== 0 || this.retiredProposals.size !== 0 || this.unreadable || this.reading || this.controller.busy || this.controller.uncertain ||
+            !terminal && (!!this.controller.locator || !!this.controller.pendingJobId || !!this.file || !!this.review || this.inputEdited);
+    }
+    assertCloseReady(): void {
+        try { this.closeGuard.assertReady(this.unresolved); }
+        catch (error) {
+            if (this.identity && this.identity === this.host.identity() && !this.element.open) this.element.showModal();
+            throw error;
+        }
+    }
+    freezeForClose(): boolean {
+        if (!this.closeGuard.freeze(this.unresolved)) return false;
+        this.stopPoll();
+        return true;
+    }
+    thawAfterClose(): void { this.closeGuard.thaw(); this.schedule(); }
+    private discardProposal(): void {
+        try {
+            this.closeGuard.assertMutable();
+            const terminal = !this.controller.uncertain && !!this.controller.receipt && ["committed", "resolved", "cancelled"].includes(this.controller.receipt.status);
+            this.reconcileRetiredOperation();
+            this.closeGuard.assertReady(this.retiredOperations.has(this.identity) || this.unreadable || this.controller.busy || this.controller.uncertain || !!this.controller.locator && !terminal || !!this.controller.pendingJobId && !recognitionTerminal(this.controller.job));
+            if (this.controller.locator) this.controller.finish();
+            this.retiredProposals.delete(this.identity);
+            this.retirePrivate(false, true);
+        } catch (error) { this.host.notify?.(errorUiText(error), true); }
+    }
     readonly element = ui("dialog", "modal recognition-panel");
     private readonly controller: RecognitionController;
     private identity = "";
@@ -141,6 +178,8 @@ export class RecognitionPanel {
     private readonly downloadButton = action(uiMessage("recognition.downloadExtractedText"), () => { void this.run(() => this.download()); });
     private readonly downloadEvidenceButton = action(uiMessage("recognition.downloadProvenanceAndLosses"), () => { void this.run(() => this.download(true)); });
     constructor(private readonly host: RecognitionPanelHost, mount: HTMLElement = document.body) {
+        this.element.addEventListener("compositionstart", event => { if (event.target) this.composingTargets.add(event.target); }, true);
+        this.element.addEventListener("compositionend", event => { if (event.target) this.composingTargets.delete(event.target); }, true);
         this.controller = new RecognitionController({ request: (path, body) => host.request(path, body), identity: () => host.identity(), target: () => host.target(), committed: identity => host.committed?.(identity), id: () => crypto.randomUUID(), persist: locator => this.persist(locator), remove: () => {
                 if (this.cacheKey)
                     sessionStorage.removeItem(this.cacheKey);
@@ -160,6 +199,8 @@ export class RecognitionPanel {
         this.results.append(compare);
         this.element.append(ui("h2", "", uiMessage("recognition.title")), ui("p", "data-help", uiMessage("recognition.reviewOriginalHelp")), this.runtime, this.controls, this.regionEditor, this.selection, actions, ui("p", "data-help", uiMessage("recognition.downloadVersusReviewHelp")), this.status, this.results, this.prepareButton, this.recovery, action(uiMessage("recognition.closeRetainingReview"), () => this.element.close()));
         mount.append(this.element);
+        this.closeGuard.bind(this.element);
+        this.element.append(action(uiMessage("common.cancel"), () => this.discardProposal()));
         this.status.setAttribute("role", "status");
         this.status.setAttribute("aria-live", "polite");
         for (const control of [this.purpose, this.format, this.model, this.scheme, this.language, this.script, this.region, this.mode, this.rotation, this.segmentation, this.slot])
@@ -200,7 +241,23 @@ export class RecognitionPanel {
         this.previewUrl = undefined;
         replaceUiChildren(this.original, );
     }
-    private retirePrivate(preserveLocator: boolean): void {
+    private retirePrivate(preserveLocator: boolean, discardProposal = false): void {
+        if (!discardProposal) {
+            const terminal = !this.controller.uncertain && !!this.controller.receipt && ["committed", "resolved", "cancelled"].includes(this.controller.receipt.status);
+            if (!terminal && (this.file || this.review || this.inputEdited || this.composingTargets.size !== 0)) this.retiredProposals.add(this.identity);
+            if (!terminal && (this.controller.locator || this.controller.pendingJobId && !recognitionTerminal(this.controller.job) || this.unreadable)) {
+                this.retiredOperations.set(this.identity, {
+                    operationId: this.controller.locator?.operationId,
+                    jobId: this.controller.pendingJobId,
+                    slot: this.controller.locator && "slot" in this.controller.locator.target ? this.controller.locator.target.slot : undefined,
+                    unreadable: this.unreadable,
+                });
+            }
+        }
+        // Opaque proposal/operation markers above survive destruction of these inputs.
+        // Retire only nodes actually observed by this owner, never infer completion from DOM loss.
+        for (const target of this.composingTargets) this.closeGuard.retireComposition(target);
+        this.composingTargets.clear();
         const keptIdentity = this.identity, keptKey = this.cacheKey;
         this.epoch++;
         this.fieldGeneration++;
@@ -220,6 +277,7 @@ export class RecognitionPanel {
             warning = uiMessage("recognition.recoveryIdRemovalRejected");
         }
         this.file = undefined;
+        this.inputEdited = false;
         this.upload = this.uploadDigest = undefined;
         this.fileInput.value = "";
         this.purpose.value = "resource";
@@ -260,78 +318,93 @@ export class RecognitionPanel {
     revoke(): void { this.clear(); }
     retireDisplay(preserveLocator = true): void { this.retirePrivate(preserveLocator); }
     async open(): Promise<void> {
-        const identity = this.host.identity();
-        if (!identity) {
-            this.host.notify?.(uiMessage("recognition.authorizedContextRequired"), true);
-            return;
-        }
-        if (identity !== this.identity) {
-            this.retireDisplay(true);
-            this.controller.detach();
-            this.identity = identity;
-            this.cacheKey = `weftext-recognition-operation:${encodeURIComponent(identity)}`;
-            try {
-                const raw = sessionStorage.getItem(this.cacheKey);
-                if (raw)
-                    this.controller.restore(decodeRecognitionLocator(raw, identity));
-            }
-            catch (error) {
-                this.unreadable = true;
-                setUiText(this.status, errorUiText(error));
-            }
-        }
-        if (!this.element.open)
-            this.element.showModal();
-        const epoch = this.epoch;
-        this.draw();
-        await this.run(async () => {
-            const raw = await this.host.request<unknown>("/capabilities");
-            if (epoch !== this.epoch || identity !== this.host.identity())
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const identity = this.host.identity();
+            if (!identity) {
+                this.host.notify?.(uiMessage("recognition.authorizedContextRequired"), true);
                 return;
-            const value = decodeRecognitionCapabilities(raw);
-            this.capabilities = value;
-            const selectedModel = this.model.value, selectedScheme = this.scheme.value;
-            replaceUiChildren(this.model, ...value.models.map(model => { const option = ui("option", "", `${model.id} · ${model.languages.join(" + ")}`); option.value = model.id; return option; }));
-            if (value.models.some(m => m.id === selectedModel))
-                this.model.value = selectedModel;
-            if (!value.models.length) {
-                const option = ui("option", "", uiMessage("recognition.noInstalledModels"));
-                option.value = "";
-                this.model.append(option);
             }
-            replaceUiChildren(this.scheme, ...([["none", uiMessage("recognition.noSpecializedScheme")], ...value.schemes.map(s => [s.id, s.title] as [
+            if (identity !== this.identity) {
+                this.retireDisplay(true);
+                this.controller.detach();
+                this.identity = identity;
+                this.cacheKey = `weftext-recognition-operation:${encodeURIComponent(identity)}`;
+                try {
+                    const raw = sessionStorage.getItem(this.cacheKey);
+                    if (raw)
+                        this.controller.restore(decodeRecognitionLocator(raw, identity));
+                }
+                catch (error) {
+                    this.unreadable = true;
+                    setUiText(this.status, errorUiText(error));
+                }
+            }
+            const retired = this.retiredOperations.get(identity);
+            if (retired && !this.controller.locator && !this.unreadable) {
+                if (retired.operationId) {
+                    const currentTarget = this.host.target();
+                    // Operation status/settle is scoped by the authorized library or
+                    // slot. Restoring only that scope cannot recreate a commit binding.
+                    const target = retired.slot ? { slot: retired.slot } : currentTarget && "sessionId" in currentTarget ? { sessionId: currentTarget.sessionId } : null;
+                    if (target) this.controller.restore({ version: 1, identity, operationId: retired.operationId, target });
+                } else if (retired.jobId) this.controller.pendingJobId = retired.jobId;
+            }
+            if (!this.element.open)
+                this.element.showModal();
+            const epoch = this.epoch;
+            this.draw();
+            await this.run(async () => {
+                const raw = await this.host.request<unknown>("/capabilities");
+                if (epoch !== this.epoch || identity !== this.host.identity())
+                    return;
+                const value = decodeRecognitionCapabilities(raw);
+                this.capabilities = value;
+                const selectedModel = this.model.value, selectedScheme = this.scheme.value;
+                replaceUiChildren(this.model, ...value.models.map(model => { const option = ui("option", "", `${model.id} · ${model.languages.join(" + ")}`); option.value = model.id; return option; }));
+                if (value.models.some(m => m.id === selectedModel))
+                    this.model.value = selectedModel;
+                if (!value.models.length) {
+                    const option = ui("option", "", uiMessage("recognition.noInstalledModels"));
+                    option.value = "";
+                    this.model.append(option);
+                }
+                replaceUiChildren(this.scheme, ...([["none", uiMessage("recognition.noSpecializedScheme")], ...value.schemes.map(s => [s.id, s.title] as [
+                        string,
+                        UiText
+                    ])] as [
                     string,
                     UiText
-                ])] as [
-                string,
-                UiText
-            ][]).map(([id, title]) => { const option = ui("option", "", title); option.value = id; return option; }));
-            this.scheme.value = value.schemes.some(s => s.id === selectedScheme) ? selectedScheme : "none";
-            const target = this.host.target();
-            const hosted = !!target && "slot" in target || value.executor === "selfHosted";
-            this.parent.parentElement!.hidden = hosted;
-            this.slot.parentElement!.hidden = !hosted;
-            const slotChoices: [
-                string,
-                UiText
-            ][] = [["", uiMessage("recognition.chooseAuthorizedEmptySlot")], ...(value.targets ?? []).map(t => [t.id, () => t.title + uiTextValue(t.available ? "" : uiMessage("recognition.slotCannotCreateSuffix"))] as [
+                ][]).map(([id, title]) => { const option = ui("option", "", title); option.value = id; return option; }));
+                this.scheme.value = value.schemes.some(s => s.id === selectedScheme) ? selectedScheme : "none";
+                const target = this.host.target();
+                const hosted = !!target && "slot" in target || value.executor === "selfHosted";
+                this.parent.parentElement!.hidden = hosted;
+                this.slot.parentElement!.hidden = !hosted;
+                const slotChoices: [
                     string,
                     UiText
-                ])];
-            replaceUiChildren(this.slot, ...slotChoices.map(([id, title]) => { const option = ui("option", "", title); option.value = id; const found = value.targets?.find(t => t.id === id); option.disabled = !!found && !found.available; return option; }));
-            if (target && "slot" in target)
-                this.slot.value = target.slot;
-            else if (target) {
-                this.parent.value ||= target.parent ?? "";
-                if (target.name)
-                    this.name.value = target.name;
-            }
-            await this.loadFields();
-            if (this.controller.locator && !this.unreadable)
-                await this.controller.lookup();
-            this.adopt();
-        });
-        this.schedule();
+                ][] = [["", uiMessage("recognition.chooseAuthorizedEmptySlot")], ...(value.targets ?? []).map(t => [t.id, () => t.title + uiTextValue(t.available ? "" : uiMessage("recognition.slotCannotCreateSuffix"))] as [
+                        string,
+                        UiText
+                    ])];
+                replaceUiChildren(this.slot, ...slotChoices.map(([id, title]) => { const option = ui("option", "", title); option.value = id; const found = value.targets?.find(t => t.id === id); option.disabled = !!found && !found.available; return option; }));
+                if (target && "slot" in target)
+                    this.slot.value = target.slot;
+                else if (target) {
+                    this.parent.value ||= target.parent ?? "";
+                    if (target.name)
+                        this.name.value = target.name;
+                }
+                await this.loadFields();
+                if (this.controller.locator && !this.unreadable)
+                    await this.controller.lookup();
+                else if (this.controller.pendingJobId)
+                    await this.controller.status();
+                this.adopt();
+            });
+            this.schedule();
+        } finally { endCloseWork(); }
     }
     private target(): RecognitionTarget {
         const current = this.host.target();
@@ -345,20 +418,23 @@ export class RecognitionPanel {
         return { sessionId: current.sessionId, parent: this.parent.value, name: this.name.value };
     }
     private async loadFields(): Promise<void> {
-        const generation = ++this.fieldGeneration, identity = this.identity;
-        this.fields = [];
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const target = this.target();
-            const value = await this.host.request<{
-                fields: Field[];
-            }>("/fields", { target });
-            if (generation !== this.fieldGeneration || identity !== this.host.identity())
-                return;
-            this.fields = value.fields.filter(f => f.id && f.typeId && f.shape?.kind === "scalar");
-            if (this.review)
-                this.drawReview();
-        }
-        catch { /* Missing scope offers no mappings; body-only remains explicit. */ }
+            const generation = ++this.fieldGeneration, identity = this.identity;
+            this.fields = [];
+            try {
+                const target = this.target();
+                const value = await this.host.request<{
+                    fields: Field[];
+                }>("/fields", { target });
+                if (generation !== this.fieldGeneration || identity !== this.host.identity())
+                    return;
+                this.fields = value.fields.filter(f => f.id && f.typeId && f.shape?.kind === "scalar");
+                if (this.review)
+                    this.drawReview();
+            }
+            catch { /* Missing scope offers no mappings; body-only remains explicit. */ }
+        } finally { endCloseWork(); }
     }
     private drawRegions(): void {
         replaceUiChildren(this.regionList, );
@@ -414,6 +490,8 @@ export class RecognitionPanel {
         return selections;
     }
     private changed(): void {
+        this.closeGuard.assertMutable();
+        this.inputEdited = true;
         if (this.controller.locator)
             return;
         this.epoch++;
@@ -430,38 +508,41 @@ export class RecognitionPanel {
         this.draw();
     }
     private async choose(file: File): Promise<void> {
-        this.regionRows = [];
-        replaceUiChildren(this.regionList, );
-        this.rect.value = "";
-        this.pages.value = "1";
-        this.changed();
-        this.file = file;
-        this.upload = this.uploadDigest = undefined;
-        this.reading = true;
-        const epoch = this.epoch;
-        const extension = file.name.split(".").at(-1)?.toLowerCase();
-        this.format.value = extension === "jpg" ? "jpeg" : extension ?? "";
-        this.draw();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            if (!this.format.value || file.size > 16 * 1024 * 1024 || !file.size)
-                throw new UiError(uiMessage("recognition.originalFileInvalid"));
-            const raw = new Uint8Array(await file.arrayBuffer()), digest = await sha(raw);
-            if (epoch !== this.epoch || this.file !== file || this.identity !== this.host.identity())
-                return;
-            this.upload = base64(raw);
-            this.uploadDigest = digest;
-            setUiText(this.status, displayMessage("recognition.originalReadSummary", { p0: uiDisplayParameter(file.name), p1: file.size, p2: uiDisplayParameter(digest) }));
-        }
-        catch (error) {
-            if (epoch === this.epoch)
-                setUiText(this.status, errorUiText(error));
-        }
-        finally {
-            if (epoch === this.epoch) {
-                this.reading = false;
-                this.draw();
+            this.regionRows = [];
+            replaceUiChildren(this.regionList, );
+            this.rect.value = "";
+            this.pages.value = "1";
+            this.changed();
+            this.file = file;
+            this.upload = this.uploadDigest = undefined;
+            this.reading = true;
+            const epoch = this.epoch;
+            const extension = file.name.split(".").at(-1)?.toLowerCase();
+            this.format.value = extension === "jpg" ? "jpeg" : extension ?? "";
+            this.draw();
+            try {
+                if (!this.format.value || file.size > 16 * 1024 * 1024 || !file.size)
+                    throw new UiError(uiMessage("recognition.originalFileInvalid"));
+                const raw = new Uint8Array(await file.arrayBuffer()), digest = await sha(raw);
+                if (epoch !== this.epoch || this.file !== file || this.identity !== this.host.identity())
+                    return;
+                this.upload = base64(raw);
+                this.uploadDigest = digest;
+                setUiText(this.status, displayMessage("recognition.originalReadSummary", { p0: uiDisplayParameter(file.name), p1: file.size, p2: uiDisplayParameter(digest) }));
             }
-        }
+            catch (error) {
+                if (epoch === this.epoch)
+                    setUiText(this.status, errorUiText(error));
+            }
+            finally {
+                if (epoch === this.epoch) {
+                    this.reading = false;
+                    this.draw();
+                }
+            }
+        } finally { endCloseWork(); }
     }
     private options(inspect: boolean): RecognitionOptions {
         const pages = parseRecognitionPages(this.pages.value), rect = parseRecognitionRect(this.rect.value), dpi = Number(this.dpi.value), model = this.capabilities?.models.find(m => m.id === this.model.value);
@@ -476,40 +557,55 @@ export class RecognitionPanel {
         return { purpose: this.purpose.value as RecognitionPurpose, ...(inspect ? { operation: "inspect" as const } : {}), languages: model?.languages ?? ["eng"], pages: this.selectedPages(pages, rect), dpi, scheme: this.scheme.value, language: this.language.value || undefined, script: this.script.value || undefined, region: this.region.value || undefined, numbering: "keep" };
     }
     private async run(work: () => Promise<void>): Promise<void> {
-        const epoch = this.epoch, identity = this.identity;
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const promise = work();
-            this.draw();
-            await promise;
-        }
-        catch (error) {
-            if (epoch === this.epoch && identity === this.host.identity()) {
-                setUiText(this.status, errorUiText(error));
-                this.status.classList.add("data-warning");
-            }
-        }
-        finally {
-            if (epoch === this.epoch && identity === this.host.identity())
+            const epoch = this.epoch, identity = this.identity;
+            try {
+                const promise = work();
                 this.draw();
-        }
+                await promise;
+            }
+            catch (error) {
+                if (epoch === this.epoch && identity === this.host.identity()) {
+                    setUiText(this.status, errorUiText(error));
+                    this.status.classList.add("data-warning");
+                }
+            }
+            finally {
+                this.reconcileRetiredOperation();
+                if (epoch === this.epoch && identity === this.host.identity())
+                    this.draw();
+            }
+        } finally { endCloseWork(); }
+    }
+    private reconcileRetiredOperation(): void {
+        const retired = this.retiredOperations.get(this.identity);
+        if (!retired || this.identity !== this.host.identity() || retired.unreadable) return;
+        if (retired.operationId) {
+            if (this.controller.receipt?.operationId !== retired.operationId || this.controller.uncertain || !["committed", "resolved", "cancelled"].includes(this.controller.receipt.status)) return;
+        } else if (retired.jobId && (this.controller.job?.jobId !== retired.jobId || !recognitionTerminal(this.controller.job))) return;
+        this.retiredOperations.delete(this.identity);
     }
     private async start(inspect = false): Promise<void> {
-        if (!this.upload || this.reading)
-            throw new UiError(uiMessage("recognition.originalReadRequired"));
-        const options = this.options(inspect), target = this.target();
-        this.review = undefined;
-        this.reviewDigest = undefined;
-        this.clearPreview();
-        replaceUiChildren(this.proposals, );
-        this.optionsSnapshot = structuredClone(options);
-        setUiText(this.status, inspect ? uiMessage("recognition.inspectingOriginal") : uiMessage("recognition.backgroundRequested"));
-        await this.controller.start(target, this.format.value, this.upload, options);
-        this.adopt();
-        this.schedule();
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            if (!this.upload || this.reading)
+                throw new UiError(uiMessage("recognition.originalReadRequired"));
+            const options = this.options(inspect), target = this.target();
+            this.review = undefined;
+            this.reviewDigest = undefined;
+            this.clearPreview();
+            replaceUiChildren(this.proposals, );
+            this.optionsSnapshot = structuredClone(options);
+            setUiText(this.status, inspect ? uiMessage("recognition.inspectingOriginal") : uiMessage("recognition.backgroundRequested"));
+            await this.controller.start(target, this.format.value, this.upload, options);
+            this.adopt();
+            this.schedule();
+        } finally { endCloseWork(); }
     }
     private schedule(): void {
         this.stopPoll();
-        if (!this.element.open || this.controller.busy || !this.controller.pendingJobId || recognitionTerminal(this.controller.job))
+        if (this.closeGuard.frozen || !this.element.open || this.controller.busy || !this.controller.pendingJobId || recognitionTerminal(this.controller.job))
             return;
         const epoch = this.epoch;
         this.poll = setTimeout(() => {
@@ -585,51 +681,54 @@ export class RecognitionPanel {
             this.proposals.append(ui("p", "data-warning", issueLabel(loss)));
     }
     private async showOriginal(page: RecognitionPage, rect?: RecognitionRect): Promise<void> {
-        const job = this.controller.job;
-        if (!job || !recognitionActionable(job) || this.identity !== this.host.identity())
-            throw new UiError(uiMessage("recognition.readOnlyJobNoPreview"));
-        this.clearPreview();
-        const stamp = this.previewEpoch, epoch = this.epoch;
-        setUiText(this.original, displayMessage("recognition.loadingOriginalPage", { p0: page.page }));
-        const value = await this.host.request<{
-            jobId: string;
-            page: number;
-            mediaType: string;
-            dataBase64: string;
-            width: number;
-            height: number;
-        }>("/preview", { jobId: job.jobId, page: page.page });
-        if (stamp !== this.previewEpoch || epoch !== this.epoch || this.identity !== this.host.identity())
-            return;
-        if (value.jobId !== job.jobId || value.page !== page.page || value.mediaType !== "image/png" || value.width * value.height > 40000000 || value.width <= 0 || value.height <= 0)
-            throw new UiError(uiMessage("recognition.originalPreviewIdentityUnconfirmed"));
-        const image = new Image(), url = URL.createObjectURL(new Blob([bytes(value.dataBase64)], { type: "image/png" }));
-        this.previewUrl = url;
-        image.src = url;
-        await image.decode();
-        if (stamp !== this.previewEpoch || epoch !== this.epoch)
-            return;
-        if (image.naturalWidth !== value.width || image.naturalHeight !== value.height)
-            throw new UiError(uiMessage("recognition.originalPreviewDimensionsMismatch"));
-        const canvas = ui("canvas");
-        canvas.width = value.width;
-        canvas.height = value.height;
-        setUiAttr(canvas, "aria-label", displayMessage("recognition.originalPageAlt", { p0: page.page }));
-        const context = canvas.getContext("2d");
-        if (!context)
-            throw new UiError(uiMessage("recognition.canvasUnavailable"));
-        context.drawImage(image, 0, 0);
-        if (rect) {
-            if (!page.width || !page.height || page.coordinateSpace !== "visible-page-top-left" || rect[0] < 0 || rect[1] < 0 || rect[2] > page.width + .01 || rect[3] > page.height + .01)
-                throw new UiError(uiMessage("recognition.originalRegionMappingUnproven"));
-            const sx = value.width / page.width, sy = value.height / page.height;
-            context.fillStyle = "rgba(255,180,40,.22)";
-            context.strokeStyle = "#bd6100";
-            context.lineWidth = 3;
-            context.fillRect(rect[0] * sx, rect[1] * sy, (rect[2] - rect[0]) * sx, (rect[3] - rect[1]) * sy);
-            context.strokeRect(rect[0] * sx, rect[1] * sy, (rect[2] - rect[0]) * sx, (rect[3] - rect[1]) * sy);
-        }
-        replaceUiChildren(this.original, ui("h3", "", displayMessage("recognition.originalPageTitle", { p0: page.page })), canvas, ui("p", "data-help", displayMessage("recognition.originalDigestAndAnnotations", { p0: uiDisplayParameter(job.inputSha256) })));
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const job = this.controller.job;
+            if (!job || !recognitionActionable(job) || this.identity !== this.host.identity())
+                throw new UiError(uiMessage("recognition.readOnlyJobNoPreview"));
+            this.clearPreview();
+            const stamp = this.previewEpoch, epoch = this.epoch;
+            setUiText(this.original, displayMessage("recognition.loadingOriginalPage", { p0: page.page }));
+            const value = await this.host.request<{
+                jobId: string;
+                page: number;
+                mediaType: string;
+                dataBase64: string;
+                width: number;
+                height: number;
+            }>("/preview", { jobId: job.jobId, page: page.page });
+            if (stamp !== this.previewEpoch || epoch !== this.epoch || this.identity !== this.host.identity())
+                return;
+            if (value.jobId !== job.jobId || value.page !== page.page || value.mediaType !== "image/png" || value.width * value.height > 40000000 || value.width <= 0 || value.height <= 0)
+                throw new UiError(uiMessage("recognition.originalPreviewIdentityUnconfirmed"));
+            const image = new Image(), url = URL.createObjectURL(new Blob([bytes(value.dataBase64)], { type: "image/png" }));
+            this.previewUrl = url;
+            image.src = url;
+            await image.decode();
+            if (stamp !== this.previewEpoch || epoch !== this.epoch)
+                return;
+            if (image.naturalWidth !== value.width || image.naturalHeight !== value.height)
+                throw new UiError(uiMessage("recognition.originalPreviewDimensionsMismatch"));
+            const canvas = ui("canvas");
+            canvas.width = value.width;
+            canvas.height = value.height;
+            setUiAttr(canvas, "aria-label", displayMessage("recognition.originalPageAlt", { p0: page.page }));
+            const context = canvas.getContext("2d");
+            if (!context)
+                throw new UiError(uiMessage("recognition.canvasUnavailable"));
+            context.drawImage(image, 0, 0);
+            if (rect) {
+                if (!page.width || !page.height || page.coordinateSpace !== "visible-page-top-left" || rect[0] < 0 || rect[1] < 0 || rect[2] > page.width + .01 || rect[3] > page.height + .01)
+                    throw new UiError(uiMessage("recognition.originalRegionMappingUnproven"));
+                const sx = value.width / page.width, sy = value.height / page.height;
+                context.fillStyle = "rgba(255,180,40,.22)";
+                context.strokeStyle = "#bd6100";
+                context.lineWidth = 3;
+                context.fillRect(rect[0] * sx, rect[1] * sy, (rect[2] - rect[0]) * sx, (rect[3] - rect[1]) * sy);
+                context.strokeRect(rect[0] * sx, rect[1] * sy, (rect[2] - rect[0]) * sx, (rect[3] - rect[1]) * sy);
+            }
+            replaceUiChildren(this.original, ui("h3", "", displayMessage("recognition.originalPageTitle", { p0: page.page })), canvas, ui("p", "data-help", displayMessage("recognition.originalDigestAndAnnotations", { p0: uiDisplayParameter(job.inputSha256) })));
+        } finally { endCloseWork(); }
     }
     private drawReview(): void {
         replaceUiChildren(this.proposals, );
@@ -800,7 +899,12 @@ export class RecognitionPanel {
         }
         return { purpose, title: this.name.value, blocks, fields: review.fields.filter(f => f.confirmed).map(f => { const mapping = this.fields.find(field => mappingIdentity(field) === this.mappings.get(f.key)); return { key: f.key, value: f.value, confirmed: true, ...(f.candidate >= 0 ? { candidateIndex: f.candidate } : {}), manualCorrection: !!f.manualCorrection, ...(mapping ? { targetField: mapping.id, targetType: mapping.typeId } : {}) }; }), acceptPartial: review.acceptPartial, numbering: review.numbering, selectedStructureIds: review.structures };
     }
-    private async prepare(): Promise<void> { const review = this.authorReview(); await this.controller.prepare(this.target(), review); this.acceptedPlan = false; this.drawReview(); this.drawRecovery(); }
+    private async prepare(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const review = this.authorReview(); await this.controller.prepare(this.target(), review); this.acceptedPlan = false; this.drawReview(); this.drawRecovery();
+        } finally { endCloseWork(); }
+    }
     private drawRecovery(): void {
         replaceUiChildren(this.recovery, );
         const locator = this.controller.locator, receipt = this.controller.receipt;
@@ -866,50 +970,53 @@ export class RecognitionPanel {
         }
     }
     private async download(provenance = false): Promise<void> {
-        const job = this.controller.job;
-        if (!job || !recognitionActionable(job) || this.optionsSnapshot?.purpose !== "text" || this.optionsSnapshot.operation === "inspect")
-            throw new UiError(uiMessage("recognition.textDeliveryUnavailable"));
-        const epoch = this.epoch, value = await this.host.request<{
-            jobId: string;
-            fileName: string;
-            mediaType: string;
-            dataBase64: string;
-            sha256: string;
-            provenance?: {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const job = this.controller.job;
+            if (!job || !recognitionActionable(job) || this.optionsSnapshot?.purpose !== "text" || this.optionsSnapshot.operation === "inspect")
+                throw new UiError(uiMessage("recognition.textDeliveryUnavailable"));
+            const epoch = this.epoch, value = await this.host.request<{
+                jobId: string;
                 fileName: string;
                 mediaType: string;
                 dataBase64: string;
                 sha256: string;
-            };
-        }>("/download", { jobId: job.jobId });
-        if (epoch !== this.epoch || this.identity !== this.host.identity())
-            return;
-        if (value.jobId !== job.jobId)
-            throw new UiError(uiMessage("recognition.downloadJobMismatch"));
-        const artifact = provenance ? value.provenance : value;
-        if (!artifact || artifact.mediaType !== (provenance ? "application/json" : "text/plain") || typeof artifact.fileName !== "string")
-            throw new UiError(provenance ? uiMessage("recognition.provenanceUnverifiable") : uiMessage("recognition.extractedTextFormatUnconfirmed"));
-        const raw = bytes(artifact.dataBase64);
-        if (raw.length > 32 * 1024 * 1024 || await sha(raw) !== artifact.sha256)
-            throw new UiError(uiMessage("recognition.deliveryDigestMismatch"));
-        if (provenance) {
-            const description = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)) as {
-                version?: number;
-                inputSha256?: string;
-                textSha256?: string;
-            };
-            if (description.version !== 1 || description.inputSha256 !== job.inputSha256 || description.textSha256 !== value.sha256)
-                throw new UiError(uiMessage("recognition.provenanceOriginalMismatch"));
-        }
-        if (epoch !== this.epoch || this.identity !== this.host.identity())
-            return;
-        const url = URL.createObjectURL(new Blob([raw], { type: artifact.mediaType }));
-        this.downloadUrls.add(url);
-        const anchor = ui("a");
-        anchor.href = url;
-        anchor.download = artifact.fileName.replace(/[/\\]/g, "_");
-        anchor.click();
-        setTimeout(() => { URL.revokeObjectURL(url); this.downloadUrls.delete(url); }, 1000);
+                provenance?: {
+                    fileName: string;
+                    mediaType: string;
+                    dataBase64: string;
+                    sha256: string;
+                };
+            }>("/download", { jobId: job.jobId });
+            if (epoch !== this.epoch || this.identity !== this.host.identity())
+                return;
+            if (value.jobId !== job.jobId)
+                throw new UiError(uiMessage("recognition.downloadJobMismatch"));
+            const artifact = provenance ? value.provenance : value;
+            if (!artifact || artifact.mediaType !== (provenance ? "application/json" : "text/plain") || typeof artifact.fileName !== "string")
+                throw new UiError(provenance ? uiMessage("recognition.provenanceUnverifiable") : uiMessage("recognition.extractedTextFormatUnconfirmed"));
+            const raw = bytes(artifact.dataBase64);
+            if (raw.length > 32 * 1024 * 1024 || await sha(raw) !== artifact.sha256)
+                throw new UiError(uiMessage("recognition.deliveryDigestMismatch"));
+            if (provenance) {
+                const description = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)) as {
+                    version?: number;
+                    inputSha256?: string;
+                    textSha256?: string;
+                };
+                if (description.version !== 1 || description.inputSha256 !== job.inputSha256 || description.textSha256 !== value.sha256)
+                    throw new UiError(uiMessage("recognition.provenanceOriginalMismatch"));
+            }
+            if (epoch !== this.epoch || this.identity !== this.host.identity())
+                return;
+            const url = URL.createObjectURL(new Blob([raw], { type: artifact.mediaType }));
+            this.downloadUrls.add(url);
+            const anchor = ui("a");
+            anchor.href = url;
+            anchor.download = artifact.fileName.replace(/[/\\]/g, "_");
+            anchor.click();
+            setTimeout(() => { URL.revokeObjectURL(url); this.downloadUrls.delete(url); }, 1000);
+        } finally { endCloseWork(); }
     }
     private draw(): void {
         const job = this.controller.job, locked = !!this.controller.locator || this.controller.busy || this.reading || this.unreadable;

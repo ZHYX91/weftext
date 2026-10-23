@@ -4,6 +4,8 @@ import "./history-panel.css";
 import { coreDescriptionUiText } from "./ui-diagnostics";
 import { HistoryController, historyOwnerKey, historyRecoveryIssueUiText, historySourceDiff, historyTimeLabel, type HistoryComparison, type HistoryContext, type HistoryRestoreBasis, type HistoryRestoreResult, type HistorySource, } from "./history-state";
 import { apiErrorUiText } from "./api-error";
+import { ProposalCloseGuard } from "./proposal-close-guard";
+import { registerNativeProposalOwner } from "./native-proposal-owners";
 export interface HistoryPanelHost {
     getDocument(): HistoryContext | null;
     request<T>(path: string, body?: unknown): Promise<T>;
@@ -44,6 +46,14 @@ function sourcePane(label: UiText, source: string): HTMLElement {
 }
 const availability: Record<string, UiText> = { available: uiMessage("history.availableSource"), missing: uiMessage("history.missingSource"), unreadable: uiMessage("history.unreadableSource"), invalid: uiMessage("history.invalidRecord") };
 class HistoryDialog {
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly unregisterClose = registerNativeProposalOwner(this);
+    assertCloseReady(): void {
+        try { this.closeGuard.assertReady(this.pending || this.controller.review !== null || this.controller.uncertain || this.controller.busy); }
+        catch (error) { if (!this.dialog.open) this.dialog.showModal(); throw error; }
+    }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.pending || this.controller.review !== null || this.controller.uncertain || this.controller.busy); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
     readonly dialog = element("dialog", "history-panel");
     private readonly controller: HistoryController;
     private readonly listHost = element("ol", "history-versions");
@@ -118,15 +128,19 @@ class HistoryDialog {
         this.status.setAttribute("aria-live", "polite");
         this.dialog.append(header, this.pathLabel, intro, body);
         document.body.append(this.dialog);
+        this.closeGuard.bind(this.dialog);
         this.draw();
     }
     async open(): Promise<void> {
-        if (!this.dialog.open)
-            this.dialog.showModal();
-        if (!this.controller.list || this.host.getDocument()?.sessionId !== this.controller.note.sessionId)
-            await this.refresh();
-        else
-            this.draw();
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            if (!this.dialog.open)
+                this.dialog.showModal();
+            if (!this.controller.list || this.host.getDocument()?.sessionId !== this.controller.note.sessionId)
+                await this.refresh();
+            else
+                this.draw();
+        } finally { endCloseWork(); }
     }
     private report(error: unknown, prefix: UiText = ""): void {
         const message = joinUiText([prefix, errorUiText(error)]);
@@ -135,50 +149,64 @@ class HistoryDialog {
         this.host.notify(message, true);
     }
     private async read(action: () => Promise<unknown>): Promise<void> {
-        const generation = ++this.readGeneration;
-        this.readBusy = true;
-        this.status.classList.remove("history-error");
-        setUiText(this.status, uiMessage("history.reading"));
-        this.drawControls();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            await action();
-            if (generation === this.readGeneration)
-                setUiText(this.status, "");
-        }
-        catch (error) {
-            if (generation === this.readGeneration)
-                this.report(error);
-        }
-        finally {
-            if (generation === this.readGeneration) {
-                this.readBusy = false;
-                this.draw();
-            }
-        }
-    }
-    private async refresh(): Promise<void> { await this.read(async () => { await this.controller.refresh(); }); }
-    private async select(versionId: string): Promise<void> {
-        this.chosenVersionId = versionId;
-        await this.read(async () => { await this.controller.select(versionId); });
-    }
-    private async compare(): Promise<void> {
-        if (!this.savedChoice.checked && !this.draftChoice.checked) {
-            this.report(new UiError(uiMessage("history.comparisonChoiceRequired")));
-            return;
-        }
-        if (this.draftChoice.checked) {
+            const generation = ++this.readGeneration;
+            this.readBusy = true;
+            this.status.classList.remove("history-error");
+            setUiText(this.status, uiMessage("history.reading"));
+            this.drawControls();
             try {
-                this.controller.compareDraft();
-                setUiText(this.status, uiMessage("history.draftSnapshotFixed"));
-                this.status.classList.remove("history-error");
-                this.draw();
+                await action();
+                if (generation === this.readGeneration)
+                    setUiText(this.status, "");
             }
             catch (error) {
-                this.report(error);
+                if (generation === this.readGeneration)
+                    this.report(error);
             }
-        }
-        else
-            await this.read(async () => { await this.controller.compareSaved(); });
+            finally {
+                if (generation === this.readGeneration) {
+                    this.readBusy = false;
+                    this.draw();
+                }
+            }
+        } finally { endCloseWork(); }
+    }
+    private async refresh(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            await this.read(async () => { await this.controller.refresh(); });
+        } finally { endCloseWork(); }
+    }
+    private async select(versionId: string): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            this.chosenVersionId = versionId;
+            await this.read(async () => { await this.controller.select(versionId); });
+        } finally { endCloseWork(); }
+    }
+    private async compare(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            if (!this.savedChoice.checked && !this.draftChoice.checked) {
+                this.report(new UiError(uiMessage("history.comparisonChoiceRequired")));
+                return;
+            }
+            if (this.draftChoice.checked) {
+                try {
+                    this.controller.compareDraft();
+                    setUiText(this.status, uiMessage("history.draftSnapshotFixed"));
+                    this.status.classList.remove("history-error");
+                    this.draw();
+                }
+                catch (error) {
+                    this.report(error);
+                }
+            }
+            else
+                await this.read(async () => { await this.controller.compareSaved(); });
+        } finally { endCloseWork(); }
     }
     private draw(): void {
         const list = this.controller.list;
@@ -275,6 +303,15 @@ class HistoryDialog {
         disposeUiTree(this.operationHost);
         this.operationHost.replaceChildren();
         const pending = this.controller.pendingBasis;
+        if (this.controller.review && !this.controller.operationId) {
+            this.operationHost.append(button(uiMessage("history.cancelRestoreDialog"), () => {
+                this.closeGuard.assertMutable();
+                this.controller.cancelRestore();
+                this.restoreDialog?.close();
+                this.drawControls();
+                this.drawOperation();
+            }));
+        }
         if (pending) {
             const state = this.controller.operationState;
             const message = state === "committed" ? uiMessage("history.committedResultUnavailable") : state === "missing" ? uiMessage("history.originalNotRegistered") : state === "recoveryPending" ? uiMessage("history.originalRecoveryPending") : uiMessage("history.originalResultUnknown");
@@ -298,6 +335,7 @@ class HistoryDialog {
             const finish = button(uiMessage("history.finishDelivery"), async () => {
                 if (this.acknowledging)
                     return;
+                const endCloseWork = this.closeGuard.begin();
                 this.acknowledging = true;
                 this.dialog.close();
                 try {
@@ -309,179 +347,213 @@ class HistoryDialog {
                     }
                 }
                 catch (error) { this.report(error); }
-                finally { this.acknowledging = false; this.drawControls(); this.drawOperation(); }
+                finally { try { this.acknowledging = false; this.drawControls(); this.drawOperation(); } finally { endCloseWork(); } }
             });
             finish.disabled = this.controller.busy || this.acknowledging;
             this.operationHost.append(finish);
         }
     }
     private async prepareRestore(): Promise<void> {
-        await this.read(async () => {
-            await this.host.prepareRestore?.();
-            const review = await this.controller.prepareRestore();
-            const dialog = element("dialog", "history-restore");
-            setUiAttr(dialog, "aria-label", uiMessage("history.restoreDialogTitle"));
-            const heading = element("h2", "", uiMessage("history.restoreDialogTitle"));
-            const description = element("p", "history-help", uiMessage("history.restoreScopeHelp"));
-            const metadata = element("p", "history-help", displayMessage("history.restoreBasisSummary", { p0: uiDisplayParameter(review.basis.selectedVersionId), p1: uiDisplayParameter(review.basis.baseId) }));
-            const sourceDetails = element("details", "history-draft");
-            sourceDetails.append(element("summary", "", uiMessage("history.restoreComparisonDisclosure")), sourcePane(uiMessage("history.restoreSourceHeading"), review.basis.selectedSource), sourcePane(uiMessage("history.currentSavedSourceHeading"), review.comparison.current.source));
-            const protect = element("input");
-            protect.type = "checkbox";
-            setUiAttr(protect, "aria-label", uiMessage("history.protectDraftLabel"));
-            const choice = element("label", "history-protection");
-            choice.append(protect, uiTextNode(uiMessage("history.protectDraftChoice")));
-            const draftInfo = element("p", "history-help", review.basis.dirty ? uiMessage("history.dirtyDraftProtectionRequired") : uiMessage("history.cleanDraftProtectionHelp"));
-            const note = element("p", "history-status");
-            note.setAttribute("role", "status");
-            const confirm = button(uiMessage("history.confirmRestore"), async () => {
-                if (!protect.checked)
-                    return;
-                const basis = review.basis;
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            await this.read(async () => {
+                await this.host.prepareRestore?.();
+                const review = await this.controller.prepareRestore();
+                const dialog = element("dialog", "history-restore");
+                this.closeGuard.bind(dialog);
+                setUiAttr(dialog, "aria-label", uiMessage("history.restoreDialogTitle"));
+                const heading = element("h2", "", uiMessage("history.restoreDialogTitle"));
+                const description = element("p", "history-help", uiMessage("history.restoreScopeHelp"));
+                const metadata = element("p", "history-help", displayMessage("history.restoreBasisSummary", { p0: uiDisplayParameter(review.basis.selectedVersionId), p1: uiDisplayParameter(review.basis.baseId) }));
+                const sourceDetails = element("details", "history-draft");
+                sourceDetails.append(element("summary", "", uiMessage("history.restoreComparisonDisclosure")), sourcePane(uiMessage("history.restoreSourceHeading"), review.basis.selectedSource), sourcePane(uiMessage("history.currentSavedSourceHeading"), review.comparison.current.source));
+                const protect = element("input");
+                protect.type = "checkbox";
+                setUiAttr(protect, "aria-label", uiMessage("history.protectDraftLabel"));
+                const choice = element("label", "history-protection");
+                choice.append(protect, uiTextNode(uiMessage("history.protectDraftChoice")));
+                const draftInfo = element("p", "history-help", review.basis.dirty ? uiMessage("history.dirtyDraftProtectionRequired") : uiMessage("history.cleanDraftProtectionHelp"));
+                const note = element("p", "history-status");
+                note.setAttribute("role", "status");
+                const confirm = button(uiMessage("history.confirmRestore"), async () => {
+                    if (!protect.checked)
+                        return;
+                    const endCloseWork = this.closeGuard.begin();
+                    const basis = review.basis;
+                    confirm.disabled = true;
+                    cancel.disabled = true;
+                    protect.disabled = true;
+                    try {
+                        const result = await this.controller.restore("retain");
+                        this.unacknowledged = { result, basis };
+                        await this.acknowledge();
+                        dialog.close();
+                    }
+                    catch (error) {
+                        this.report(error);
+                        setUiText(note, errorUiText(error));
+                        dialog.close();
+                    }
+                    finally {
+                        try {
+                            this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
+                            this.drawControls();
+                            this.drawOperation();
+                        } finally { endCloseWork(); }
+                    }
+                }, true);
                 confirm.disabled = true;
-                cancel.disabled = true;
-                protect.disabled = true;
-                try {
-                    const result = await this.controller.restore("retain");
-                    this.unacknowledged = { result, basis };
-                    await this.acknowledge();
-                    dialog.close();
-                }
-                catch (error) {
-                    this.report(error);
-                    setUiText(note, errorUiText(error));
-                    dialog.close();
-                }
-                finally {
-                    this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
-                    this.drawControls();
-                    this.drawOperation();
-                }
-            }, true);
-            confirm.disabled = true;
-            protect.onchange = () => { confirm.disabled = !protect.checked; };
-            const cancel = button(uiMessage("history.cancelRestoreDialog"), () => dialog.close());
-            cancel.autofocus = true;
-            const actions = element("div", "history-actions");
-            actions.append(cancel, confirm);
-            dialog.append(heading, description, metadata, sourceDetails, choice, draftInfo, note, actions);
-            dialog.oncancel = event => {
-                if (this.controller.busy)
-                    event.preventDefault();
-            };
-            dialog.onclose = () => {
-                if (!this.controller.operationId && this.controller.review)
+                protect.onchange = () => { confirm.disabled = !protect.checked; };
+                const cancel = button(uiMessage("history.cancelRestoreDialog"), () => {
+                    this.closeGuard.assertMutable();
                     this.controller.cancelRestore();
-                disposeUiTree(dialog);
-                dialog.remove();
-                this.restoreDialog = null;
-            };
-            document.body.append(dialog);
-            this.restoreDialog = dialog;
-            dialog.showModal();
-        });
+                    dialog.close();
+                });
+                cancel.autofocus = true;
+                const actions = element("div", "history-actions");
+                actions.append(cancel, confirm);
+                dialog.append(heading, description, metadata, sourceDetails, choice, draftInfo, note, actions);
+                dialog.oncancel = event => {
+                    if (this.closeGuard.frozen || this.controller.busy)
+                        event.preventDefault();
+                    else if (!this.controller.operationId)
+                        this.controller.cancelRestore();
+                };
+                dialog.onclose = () => {
+                    disposeUiTree(dialog);
+                    dialog.remove();
+                    this.restoreDialog = null;
+                };
+                document.body.append(dialog);
+                this.restoreDialog = dialog;
+                dialog.showModal();
+            });
+        } finally { endCloseWork(); }
     }
     private async acknowledge(): Promise<void> {
-        const pending = this.unacknowledged;
-        if (!pending || this.acknowledging)
-            return;
-        this.acknowledging = true;
-        this.drawControls();
-        this.drawOperation();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            await this.host.restored(pending.result, pending.basis);
-            this.unacknowledged = null;
-            this.host.restorePending?.(pending.basis, false);
-            const savedMessage = joinUiText([uiMessage("history.restoreSaved"), ...(pending.result.recoveryIssue ? [uiMessage("history.recoveryIssuePrefix"), historyRecoveryIssueUiText(pending.result.recoveryIssue)] : [])]);
-            setUiText(this.status, savedMessage);
-            this.status.classList.remove("history-error");
-            this.host.notify(savedMessage);
+            const pending = this.unacknowledged;
+            if (!pending || this.acknowledging)
+                return;
+            this.acknowledging = true;
+            this.drawControls();
+            this.drawOperation();
             try {
-                await this.controller.refresh();
+                await this.host.restored(pending.result, pending.basis);
+                this.unacknowledged = null;
+                this.host.restorePending?.(pending.basis, false);
+                const savedMessage = joinUiText([uiMessage("history.restoreSaved"), ...(pending.result.recoveryIssue ? [uiMessage("history.recoveryIssuePrefix"), historyRecoveryIssueUiText(pending.result.recoveryIssue)] : [])]);
+                setUiText(this.status, savedMessage);
+                this.status.classList.remove("history-error");
+                this.host.notify(savedMessage);
+                try {
+                    await this.controller.refresh();
+                }
+                catch (error) {
+                    this.report(error, uiMessage("history.savedRefreshFailedPrefix"));
+                }
+                this.draw();
             }
             catch (error) {
-                this.report(error, uiMessage("history.savedRefreshFailedPrefix"));
+                this.report(error, uiMessage("history.savedDeliveryFailedPrefix"));
+                throw error;
             }
-            this.draw();
-        }
-        catch (error) {
-            this.report(error, uiMessage("history.savedDeliveryFailedPrefix"));
-            throw error;
-        }
-        finally {
-            this.acknowledging = false;
-            this.drawControls();
-            this.drawOperation();
-        }
+            finally {
+                this.acknowledging = false;
+                this.drawControls();
+                this.drawOperation();
+            }
+        } finally { endCloseWork(); }
     }
     private async inspect(): Promise<void> {
-        const basis = this.controller.pendingBasis;
-        if (!basis)
-            return;
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const attempt = this.controller.inspectOriginal();
-            this.drawControls();
-            this.drawOperation();
-            const result = await attempt;
-            if (result) {
+            const basis = this.controller.pendingBasis;
+            if (!basis)
+                return;
+            try {
+                const attempt = this.controller.inspectOriginal();
+                this.drawControls();
+                this.drawOperation();
+                const result = await attempt;
+                if (result) {
+                    this.unacknowledged = { result, basis };
+                    await this.acknowledge();
+                }
+                else
+                    setUiText(this.status, this.controller.operationState === "committed" ? uiMessage("history.committedResultPending") : this.controller.operationState === "resolved" ? uiMessage("history.originalResolved") : this.controller.operationId === null ? uiMessage("history.rejectedOriginalEnded") : uiMessage("history.originalReceiptPending"));
+            }
+            catch (error) {
+                this.report(error);
+            }
+            finally {
+                this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
+                this.drawControls();
+                this.drawOperation();
+            }
+        } finally { endCloseWork(); }
+    }
+    private async retry(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const basis = this.controller.pendingBasis;
+            if (!basis)
+                return;
+            try {
+                const attempt = this.controller.retryOriginal();
+                this.drawControls();
+                this.drawOperation();
+                const result = await attempt;
                 this.unacknowledged = { result, basis };
                 await this.acknowledge();
             }
-            else
-                setUiText(this.status, this.controller.operationState === "committed" ? uiMessage("history.committedResultPending") : this.controller.operationState === "resolved" ? uiMessage("history.originalResolved") : this.controller.operationId === null ? uiMessage("history.rejectedOriginalEnded") : uiMessage("history.originalReceiptPending"));
-        }
-        catch (error) {
-            this.report(error);
-        }
-        finally {
-            this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
-            this.drawControls();
-            this.drawOperation();
-        }
+            catch (error) {
+                this.report(error);
+            }
+            finally {
+                this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
+                this.drawControls();
+                this.drawOperation();
+            }
+        } finally { endCloseWork(); }
     }
-    private async retry(): Promise<void> {
-        const basis = this.controller.pendingBasis;
-        if (!basis)
-            return;
-        try {
-            const attempt = this.controller.retryOriginal();
-            this.drawControls();
-            this.drawOperation();
-            const result = await attempt;
-            this.unacknowledged = { result, basis };
-            await this.acknowledge();
-        }
-        catch (error) {
-            this.report(error);
-        }
-        finally {
-            this.host.restorePending?.(basis, this.controller.operationId !== null || this.unacknowledged !== null);
-            this.drawControls();
-            this.drawOperation();
-        }
-    }
-    dispose(): void { this.readGeneration++; if (this.restoreDialog) disposeUiTree(this.restoreDialog); disposeUiTree(this.dialog); this.restoreDialog?.remove(); this.dialog.remove(); }
+    dispose(): void { this.assertCloseReady(); this.closeGuard.assertMutable(); this.closeGuard.freeze(false); this.unregisterClose(); this.readGeneration++; if (this.restoreDialog) disposeUiTree(this.restoreDialog); disposeUiTree(this.dialog); this.restoreDialog?.remove(); this.dialog.remove(); }
 }
 /** Closing/reopening preserves an uncertain operation and its immutable request. */
 export class HistoryPanel {
+    private readonly closeGuard = new ProposalCloseGuard();
     private readonly dialogs = new Map<string, HistoryDialog>();
     constructor(private readonly host: HistoryPanelHost) { }
+    assertCloseReady(): void { this.closeGuard.assertReady(false); for (const dialog of this.dialogs.values()) dialog.assertCloseReady(); }
+    freezeForClose(): boolean {
+        try { this.assertCloseReady(); } catch { return false; }
+        if (!this.closeGuard.freeze(false)) return false;
+        for (const dialog of this.dialogs.values()) if (!dialog.freezeForClose()) { this.thawAfterClose(); return false; }
+        return true;
+    }
+    thawAfterClose(): void { this.closeGuard.thaw(); for (const dialog of this.dialogs.values()) dialog.thawAfterClose(); }
     hasPending(context: HistoryContext | null): boolean { return !!context && this.dialogs.get(historyOwnerKey(context))?.pending === true; }
     async open(): Promise<void> {
-        const context = this.host.getDocument();
-        if (!context?.nodeId || !context.workspaceId) {
-            this.host.notify(uiMessage("history.admittedLocalNoteRequired"), true);
-            return;
-        }
-        const key = historyOwnerKey(context);
-        let dialog = this.dialogs.get(key);
-        if (!dialog) {
-            dialog = new HistoryDialog(this.host, context);
-            this.dialogs.set(key, dialog);
-        }
-        await dialog.open();
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const context = this.host.getDocument();
+            if (!context?.nodeId || !context.workspaceId) {
+                this.host.notify(uiMessage("history.admittedLocalNoteRequired"), true);
+                return;
+            }
+            const key = historyOwnerKey(context);
+            let dialog = this.dialogs.get(key);
+            if (!dialog) {
+                dialog = new HistoryDialog(this.host, context);
+                this.dialogs.set(key, dialog);
+            }
+            await dialog.open();
+        } finally { endCloseWork(); }
     }
     dispose(): void {
+        this.assertCloseReady();
+        this.closeGuard.assertMutable();
         for (const dialog of this.dialogs.values())
             dialog.dispose();
         this.dialogs.clear();

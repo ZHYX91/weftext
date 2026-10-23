@@ -60,6 +60,50 @@ function harness(source: string, request?: WritingHost["request"]) {
   return { editor, controller, calls, recoveries, serial: () => serial };
 }
 
+test("native close includes pending table gestures and complete deferred caller delivery", async () => {
+  const { controller } = harness("原稿");
+  let gesture = true;
+  const element = { addEventListener() {}, removeEventListener() {} } as unknown as HTMLElement;
+  const stop = controller.observeSurface(element, () => undefined, { basis: () => controller.snapshot, active: () => gesture });
+  assert.throws(() => controller.assertCloseReady());
+  assert.equal(controller.freezeForClose(), false);
+  gesture = false;
+  let finish!: () => void;
+  const action = controller.deferUntilCompositionEnds(() => new Promise<void>(resolve => { finish = resolve; }));
+  await Promise.resolve();
+  assert.throws(() => controller.assertCloseReady());
+  finish(); await action;
+  assert.equal(controller.freezeForClose(), true);
+  await assert.rejects(controller.deferUntilCompositionEnds(() => { throw new Error("late callback ran"); }));
+  controller.thawAfterClose();
+  controller.assertCloseReady();
+  stop(); controller.dispose();
+});
+
+test("native close rejects literal input staged after settlement before the debounce updates source", async () => {
+  const { controller, editor, calls, serial } = harness("原稿");
+  try {
+    await controller.settleForSessionChange();
+    const snapshot = controller.snapshot;
+    controller.assertCloseReady();
+    controller.stageLiteral(writingRange("原稿", 0, 2), "原稿", "原稿后续");
+    assert.equal(controller.state.pending, true);
+    assert.equal(controller.state.busy, false);
+    assert.equal(editor.source, snapshot.source);
+    assert.equal(editor.generation, snapshot.generation);
+    assert.equal(serial(), snapshot.serial);
+    assert.equal(calls.length, 0, "the debounce has not delivered this input to source");
+    assert.throws(() => controller.assertCloseReady());
+    assert.equal(controller.freezeForClose(), false);
+    assert.equal(controller.pendingText, "原稿后续");
+    controller.assertCloseReady({ allowPendingLiteral: true });
+    await controller.settleForSessionChange();
+    assert.equal(editor.source, "原稿后续");
+    assert.equal(controller.freezeForClose(), true);
+    assert.throws(() => controller.stageLiteral(writingRange(editor.source, 0, editor.source.length), editor.source, "冻结后输入"));
+  } finally { controller.dispose(); }
+});
+
 test("a command waiting for its map cannot open an old object's proposal after navigation",async()=>{
   const editor=new Buffer("原稿😀");let active=true,finish!:(map:WritingMap)=>void;
   const controller=new WritingController({editor,basis:()=>({sessionId:"old",source:editor.source,serial:editor.generation}),editable:()=>true,actionAvailable:()=>active,refreshMap:()=>new Promise(resolve=>{finish=resolve;}),request:async()=>{throw Error("No edit is authorized");}});

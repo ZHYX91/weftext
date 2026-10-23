@@ -1,3 +1,5 @@
+import { registerNativeProposalOwner } from "./native-proposal-owners";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { disposeUiTree, joinUiText, replaceUiChildren, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { api, operationId } from "./api";
@@ -33,7 +35,9 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
             else
                 localStorage.removeItem(savedKey);
         } }, restored);
+    const closeGuard = new ProposalCloseGuard();
     const dialog = el("dialog");
+    closeGuard.bind(dialog);
     dialog.className = "sync-panel";
     setUiAttr(dialog, "aria-label", uiMessage("syncPanel.title"));
     const rootField = field(uiMessage("syncPanel.rootLabel"), restored?.request.root ?? root);
@@ -48,11 +52,24 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     statusLine.setAttribute("role", "status");
     const info = el("p"), objectsHost = el("section"), pendingHost = el("section"), controls = el("div"), historyHost = el("section"), inspectHost = el("section"), revalidationHost = el("section");
     setUiAttr(historyHost, "aria-label", uiMessage("syncPanel.receivedHistoryLabel"));
-    let binding: SyncBinding | null = null, status: SyncStatus | null = null, busy = false;
+    let binding: SyncBinding | null = null, status: SyncStatus | null = null, busy = false, closed = false, draftEdited = false;
+    const retainedEnable = localStorage.getItem(`weftext-sync-enable:${rootField.input.value}`);
+    let enablePending: { root: string; operationId: string } | null = retainedEnable ? { root: rootField.input.value, operationId: retainedEnable } : null;
     const selected = new Set<string>();
     let selectedInitialized = false;
     let remoteControls: ReturnType<typeof mountRemoteSync> | undefined;
     let revalidation: ReturnType<typeof mountSyncRevalidation> | undefined, reviewGeneration = 0;
+    const unresolved = (): boolean => busy || !!flow.pending || enablePending !== null || !!revalidation || draftEdited;
+    const assertCloseReady = (): void => { closeGuard.assertReady(unresolved()); remoteControls?.assertCloseReady(); };
+    const releaseCloseOwner = registerNativeProposalOwner({
+        assertCloseReady,
+        freezeForClose: () => {
+            if (!closeGuard.freeze(unresolved())) return false;
+            if (remoteControls && !remoteControls.freezeForClose()) { closeGuard.thaw(); return false; }
+            return true;
+        },
+        thawAfterClose: () => { closeGuard.thaw(); remoteControls?.thawAfterClose(); },
+    });
     function clearReview(): void { reviewGeneration++; revalidation?.dispose(); revalidation = undefined; replaceUiChildren(revalidationHost); }
     const identity = (): SyncIdentity => {
         return decodeSyncIdentity(JSON.parse(pair.value));
@@ -63,22 +80,25 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         return rootField.input.value;
     };
     const run = async (action: () => void | Promise<void>): Promise<void> => {
-        if (busy)
-            return;
-        busy = true;
-        lock();
-        setUiText(statusLine, uiMessage("syncPanel.working"));
-        try {
-            await action();
-            setUiText(statusLine, uiMessage("syncPanel.actionComplete"));
-        }
-        catch (error) {
-            setUiText(statusLine, joinUiText([errorUiText(error), flow.pending ? uiMessage("syncPanel.originalRetainedSuffix") : ""]));
-        }
-        finally {
-            busy = false;
-            render();
-        }
+        if (closed) return;
+        return closeGuard.run(async () => {
+            if (busy)
+                return;
+            busy = true;
+            lock();
+            setUiText(statusLine, uiMessage("syncPanel.working"));
+            try {
+                await action();
+                setUiText(statusLine, uiMessage("syncPanel.actionComplete"));
+            }
+            catch (error) {
+                setUiText(statusLine, joinUiText([errorUiText(error), flow.pending ? uiMessage("syncPanel.originalRetainedSuffix") : ""]));
+            }
+            finally {
+                busy = false;
+                render();
+            }
+        });
     };
     function button(label: UiText, action: () => void | Promise<void>): HTMLButtonElement {
         const b = el("button", label);
@@ -190,18 +210,21 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         replaceUiChildren(inspectHost);
     }
     function render(): void {
+        if (closed) return;
         dialog.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLTextAreaElement | HTMLSelectElement>("input,button,textarea,select").forEach(e => { e.disabled = false; });
-        rootField.input.disabled = !!flow.pending;
-        pair.readOnly = !!binding || !!flow.pending;
+        rootField.input.disabled = !!flow.pending || enablePending !== null;
+        pair.readOnly = !!binding || !!flow.pending || enablePending !== null;
         setUiText(info, binding ? displayMessage("syncPanel.replicaSummary", { p0: uiDisplayParameter(binding.replicaId), p1: uiDisplayParameter(binding.partial ? uiMessage("syncPanel.partialReplica") : uiMessage("syncPanel.completeReplica")), p2: binding.installedObjects.length, p3: binding.pendingPublications }) : uiMessage("syncPanel.notEnabledHelp"));
         replaceUiChildren(controls, button(uiMessage("syncPanel.readLocalStatus"), load), button(uiMessage("syncPanel.enable"), async () => {
-            const path = targetRoot(), key = `weftext-sync-enable:${path}`;
-            const id = localStorage.getItem(key) ?? operationId();
+            const path = enablePending?.root ?? targetRoot(), key = `weftext-sync-enable:${path}`;
+            const id = enablePending?.operationId ?? localStorage.getItem(key) ?? operationId();
             localStorage.setItem(key, id);
+            enablePending = { root: path, operationId: id };
             binding = decodeSyncBinding(await api<unknown>("/api/sync/enable", { root: path, operationId: id }));
             pair.value = JSON.stringify(binding.identity);
             await published();
             localStorage.removeItem(key);
+            enablePending = null;
         }), button(uiMessage("syncPanel.refreshSavedVersions"), published), button(uiMessage("syncPanel.receiveDirectory"), async () => {
             clearReview();
             status = decodeSyncStatus(await api<unknown>("/api/sync/receive", { identity: identity(), directory: transport.input.value }));
@@ -222,6 +245,7 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         buttons[3].disabled = !!flow.pending;
         buttons[7].disabled = !binding || !status || !!flow.pending;
         buttons[8].disabled = !binding || !status || !!flow.pending;
+        if (enablePending) buttons.forEach((button, index) => { button.disabled = index !== 1; });
         replaceUiChildren(objectsHost);
         if (status) {
             if (!selectedInitialized) {
@@ -339,17 +363,28 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     }
     const close = el("button", uiMessage("syncPanel.close"));
     close.type = "button";
-    close.onclick = () => { clearReview(); remoteControls?.dispose(); disposeUiTree(dialog); dialog.close(); dialog.remove(); };
-    dialog.oncancel = event => {
-        if (busy)
-            event.preventDefault();
-        else {
+    function dismiss(): void {
+        try {
+            // Closing cancels only local review input; original operations and transfers must settle first.
+            closeGuard.assertReady(busy || !!flow.pending || enablePending !== null);
+            remoteControls?.assertCloseReady();
             clearReview();
+            draftEdited = false;
             remoteControls?.dispose();
+            assertCloseReady();
+            closed = true;
+            closeGuard.freeze(false);
+            releaseCloseOwner();
             disposeUiTree(dialog);
+            dialog.close();
             dialog.remove();
         }
-    };
+        catch (error) { setUiText(statusLine, errorUiText(error)); }
+    }
+    close.onclick = dismiss;
+    dialog.oncancel = event => { event.preventDefault(); dismiss(); };
+    dialog.addEventListener("input", () => { draftEdited = true; });
+    dialog.addEventListener("change", () => { draftEdited = true; });
     rootField.input.oninput = () => { clearReview(); binding = null; status = null; replaceUiChildren(historyHost); replaceUiChildren(inspectHost); render(); };
     pair.oninput = () => { clearReview(); status = null; replaceUiChildren(historyHost); replaceUiChildren(inspectHost); render(); };
     dialog.append(el("h2", uiMessage("syncPanel.title")), el("p", uiMessage("syncPanel.replicaIsolationHelp")), rootField.label, pairLabel, transport.label, info, controls, statusLine, pendingHost, objectsHost, historyHost, inspectHost, revalidationHost, original.label, button(uiMessage("syncPanel.readOriginalOperation"), async () => {
@@ -364,7 +399,7 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     const remoteHost = el("section");
     dialog.insertBefore(remoteHost, original.label);
     remoteControls = mountRemoteSync(remoteHost, {
-        identity, root: targetRoot, objects: () => picked().map(o => o.object), blocked: () => busy || !!flow.pending,
+        identity, root: targetRoot, objects: () => picked().map(o => o.object), blocked: () => closed || closeGuard.frozen || busy || !!flow.pending || enablePending !== null,
         received: async (paired) => {
             if (binding && !sameSyncIdentity(binding.identity, paired))
                 return;

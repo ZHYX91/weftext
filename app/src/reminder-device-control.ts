@@ -2,9 +2,10 @@ import type { DocumentBasis, PanelHost } from "./data-panel";
 import { LocaleScope, errorUiText, message, type MessageKey, type UiText } from "./ui-locale";
 import type { ReminderOwner as Owner, ReminderInspection as Inspection } from "./reminder-types";
 import { openReminderOverview } from "./reminder-overview";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 
 type LabelKey = Exclude<Extract<MessageKey, `reminder.${string}`>, "reminder.missed">;
-interface Pending { route: string; request: Record<string, unknown> }
+interface Pending { route: string; request: Record<string, unknown>; basis: DocumentBasis }
 const ownerEqual = (a: Owner, b: Owner): boolean => a.workspaceId === b.workspaceId && a.nodeId === b.nodeId;
 const sameBasis = (a: DocumentBasis | null, b: DocumentBasis): boolean => !!a && a.sessionId === b.sessionId && a.source === b.source && a.serial === b.serial && a.baseId === b.baseId && a.path === b.path && a.root === b.root && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId && !!a.dirty === !!b.dirty;
 
@@ -12,15 +13,21 @@ const sameBasis = (a: DocumentBasis | null, b: DocumentBasis): boolean => !!a &&
  * device, never to a copied field, an unsaved Draft or a browser timezone. */
 export class ReminderDeviceControl {
   readonly element = document.createElement("section");
+  private readonly pendingElement = document.createElement("section");
   private scope = new LocaleScope();
   private generation = 0;
   private activeBasis: DocumentBasis | null = null;
   private readonly pending = new Map<string, Pending>();
   private readonly inFlight = new Set<Pending>();
+  private readonly closeGuard = new ProposalCloseGuard();
 
-  constructor(private readonly host: PanelHost) { this.element.className = "reminder-device-control"; }
-  retire(): void { this.generation++; this.activeBasis = null; this.scope.dispose(); this.scope = new LocaleScope(); this.element.replaceChildren(); }
-  private current(generation: number, basis: DocumentBasis): boolean { return generation === this.generation && sameBasis(this.host.getDocument(), basis); }
+  constructor(private readonly host: PanelHost) { this.element.className = "reminder-device-control"; this.closeGuard.bind(this.element); }
+  assertCloseReady(): void { this.closeGuard.assertReady(this.pending.size > 0 || this.inFlight.size > 0); }
+  freezeForClose(): boolean { return this.closeGuard.freeze(this.pending.size > 0 || this.inFlight.size > 0); }
+  thawAfterClose(): void { this.closeGuard.thaw(); }
+  hasPending(): boolean { return this.pending.size > 0; }
+  retire(): void { if (this.closeGuard.frozen) return; this.generation++; this.activeBasis = null; this.scope.dispose(); this.scope = new LocaleScope(); this.element.replaceChildren(); this.renderPending(); }
+  private current(generation: number, basis: DocumentBasis): boolean { return !this.closeGuard.frozen && generation === this.generation && sameBasis(this.host.getDocument(), basis); }
   private text(tag: "p" | "h3" | "span", key: LabelKey, className = ""): HTMLElement {
     const element = document.createElement(tag); element.className = className; this.scope.bindText(element, message(key)); return element;
   }
@@ -29,17 +36,39 @@ export class ReminderDeviceControl {
   }
   private button(key: LabelKey, basis: DocumentBasis, action: () => Promise<void>, requiresBasis = true): HTMLButtonElement {
     const generation = this.generation, button = document.createElement("button");
-    const current = (): boolean => generation === this.generation && (!requiresBasis || sameBasis(this.host.getDocument(), basis)) && button.isConnected && this.element.contains(button);
+    const current = (): boolean => !this.closeGuard.frozen && generation === this.generation && (!requiresBasis || sameBasis(this.host.getDocument(), basis)) && button.isConnected && this.element.contains(button);
     button.type = "button"; button.className = "data-button"; this.scope.bindText(button, message(key));
     button.onclick = () => {
       if (!current() || button.matches(":disabled")) return;
       button.disabled = true;
-      void action().catch(error => { if (current()) this.detail(errorUiText(error), "data-warning"); })
-        .finally(() => { if (current()) button.disabled = false; });
+      void this.closeGuard.run(async () => {
+        try { await action(); }
+        catch (error) { if (current()) this.detail(errorUiText(error), "data-warning"); }
+        finally { if (current()) button.disabled = false; }
+      });
     };
     return button;
   }
+  private renderPending(): void {
+    if (this.closeGuard.frozen) return;
+    this.pendingElement.replaceChildren();
+    for (const [target, pending] of this.pending) {
+      const name = document.createElement("p"); name.textContent = pending.basis.path;
+      const retry = this.button("reminder.retryOriginal", pending.basis, () => this.submit(target, pending, pending.basis), false);
+      const discard = this.button("reminder.discardPending", pending.basis, async () => {
+        if (this.inFlight.has(pending) || this.pending.get(target) !== pending) return;
+        this.pending.delete(target); this.renderPending();
+      }, false);
+      retry.disabled = discard.disabled = this.inFlight.has(pending);
+      this.pendingElement.append(name, this.text("p", "reminder.settingsPending", "data-warning"), retry, this.text("p", "reminder.pendingDiscardHelp", "data-help"), discard);
+    }
+    if (this.pending.size && !this.element.contains(this.pendingElement)) this.element.append(this.pendingElement);
+  }
   async refresh(input: DocumentBasis): Promise<void> {
+    if (this.closeGuard.frozen) return;
+    return this.closeGuard.run(() => this.refreshOwned(input));
+  }
+  private async refreshOwned(input: DocumentBasis): Promise<void> {
     const basis = structuredClone(input), generation = ++this.generation;
     this.activeBasis = basis;
     if (!this.current(generation, basis)) return;
@@ -52,6 +81,7 @@ export class ReminderDeviceControl {
       this.scope.dispose(); this.scope = new LocaleScope();
       this.element.replaceChildren(this.text("h3", "reminder.enabledDevice"), this.button("reminder.overview", basis, async () => { openReminderOverview(this.host); }, false), this.text("p", "reminder.unavailable", "data-warning"));
       this.detail(errorUiText(error)); this.element.append(this.refreshButton(basis));
+      this.renderPending();
     }
   }
   private render(result: Inspection, basis: DocumentBasis): void {
@@ -63,15 +93,11 @@ export class ReminderDeviceControl {
     const subscription = settings.subscriptions.find(item => ownerEqual(item.owner, candidate.owner) && item.reminderId === candidate.resolution.reminderId);
     const pending = this.pending.get(target);
     const run = async (route: string, request: Record<string, unknown>): Promise<void> => {
-      const original = this.pending.get(target) ?? { route, request: structuredClone(request) };
+      const original = this.pending.get(target) ?? { route, request: structuredClone(request), basis: structuredClone(basis) };
       this.pending.set(target, original); await this.submit(target, original, basis);
     };
     if (pending) {
-      const retry = this.button("reminder.retryOriginal", basis, () => this.submit(target, pending, basis)); retry.disabled = this.inFlight.has(pending);
-      this.element.append(this.text("p", "reminder.settingsPending", "data-warning"), retry, this.text("p", "reminder.pendingDiscardHelp", "data-help"), this.button("reminder.discardPending", basis, async () => {
-        if (this.pending.get(target) !== pending) return;
-        this.pending.delete(target); await this.refresh(basis);
-      })); return;
+      this.renderPending(); return;
     }
     const libraryButton = this.button(library?.enabled ? "reminder.disable" : "reminder.enable", basis, () => run("/api/reminders/library", {
       ...(library?.enabled ? { action: "disable", workspaceId: candidate.owner.workspaceId } : { action: "enable", root: candidate.root }), expectedRevision: settings.settingsRevision, mutationId: crypto.randomUUID(),
@@ -107,6 +133,7 @@ export class ReminderDeviceControl {
     if (result.issue && result.issue.code !== "reminderDisabled") this.detail(result.issue.message, "data-warning");
     for (const diagnostic of candidate.resolution.diagnostics) this.detail(diagnostic, "data-warning");
     this.element.append(this.refreshButton(basis));
+    this.renderPending();
   }
   private refreshButton(basis: DocumentBasis): HTMLButtonElement {
     return this.button("reminder.refresh", basis, async () => { const current = this.host.getDocument(); if (current) await this.refresh(current); }, false);
@@ -114,6 +141,7 @@ export class ReminderDeviceControl {
   private async submit(target: string, pending: Pending, basis: DocumentBasis): Promise<void> {
     if (this.inFlight.has(pending) || this.pending.get(target) !== pending) return;
     this.inFlight.add(pending);
+    this.renderPending();
     let failure: UiText | undefined;
     let original = false;
     try {
@@ -121,7 +149,7 @@ export class ReminderDeviceControl {
       original = this.pending.get(target) === pending;
       if (original) this.pending.delete(target);
     } catch (error) { original = this.pending.get(target) === pending; failure = errorUiText(error); }
-    finally { this.inFlight.delete(pending); }
+    finally { this.inFlight.delete(pending); this.renderPending(); }
     if (!original || !sameBasis(this.activeBasis, basis) || !sameBasis(this.host.getDocument(), basis)) return;
     const generation = this.generation;
     await this.refresh(basis);

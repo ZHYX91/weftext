@@ -1,6 +1,6 @@
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { EndnoteModuleInstaller, type EndnoteDistribution, type EndnoteModuleCatalog, type EndnoteModuleHost, type EndnoteModuleIdentity, type EndnoteModuleReady, type EndnoteModuleReceipt, type EndnoteModuleState } from "./endnote-module";
+import { EndnoteModuleInstaller, decodeEndnoteModuleState, type EndnoteDistribution, type EndnoteModuleCatalog, type EndnoteModuleHost, type EndnoteModuleIdentity, type EndnoteModuleReady, type EndnoteModuleReceipt, type EndnoteModuleState } from "./endnote-module";
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
 export interface AuthoringAssetsContext {
     sessionId: string;
@@ -22,7 +22,21 @@ interface Catalog extends EndnoteModuleCatalog {
 export class AuthoringAssetsAdapter {
     private installers = new Set<EndnoteModuleInstaller>();
     private epoch = 0;
+    private closeFrozen = false;
+    private closeWork = 0;
+    private unresolved = new Set<string>();
     constructor(private options: AuthoringAssetsOptions) { }
+    assertCloseReady(): void {
+        if (this.closeWork || this.installers.size || this.unresolved.size)
+            throw new UiError(uiMessage("endnoteModule.originalInstallUnconfirmed"));
+    }
+    freezeForClose(): boolean {
+        if (this.closeFrozen) return false;
+        try { this.assertCloseReady(); } catch { return false; }
+        this.closeFrozen = true;
+        return true;
+    }
+    thawAfterClose(): void { this.closeFrozen = false; }
     invalidate(): void {
         this.epoch++;
         for (const installer of this.installers)
@@ -30,6 +44,9 @@ export class AuthoringAssetsAdapter {
         this.installers.clear();
     }
     private async use<T>(run: (installer: EndnoteModuleInstaller) => Promise<T>): Promise<T> {
+        if (this.closeFrozen) throw new UiError(uiMessage("endnoteModule.originalInstallUnconfirmed"));
+        this.closeWork++;
+        try {
         const context = this.options.context(), epoch = this.epoch;
         if (!context?.sessionId || !context.audience)
             throw new UiError(uiMessage("authoringAssets.moduleWriteNotPermitted"));
@@ -65,11 +82,25 @@ export class AuthoringAssetsAdapter {
             importStatus: request => this.options.request(`${this.options.prefix}/status`, { sessionId: context.sessionId, ...request }),
             settleImport: request => this.options.request(`${this.options.prefix}/settle`, { sessionId: context.sessionId, ...request }),
             committed: () => this.options.committed?.(context),
-            load: () => storage.getItem(key),
+            load: () => {
+                const raw = storage.getItem(key);
+                if (raw) {
+                    this.unresolved.add(key);
+                    decodeEndnoteModuleState(raw);
+                    // A loaded record is only a locator for checking the original
+                    // operation. It is never a new native close acknowledgement.
+                }
+                return raw;
+            },
             persist: (state: EndnoteModuleState) => {
                 if (state.request.identity.scope !== selected.scope || state.request.identity.owner !== selected.owner)
                     throw new UiError(uiMessage("authoringAssets.moduleRecoveryOwnerMismatch"));
+                this.unresolved.add(key);
                 storage.setItem(key, JSON.stringify(state));
+            },
+            observed: receipt => {
+                if (["committed", "cancelled", "resolved"].includes(receipt.status)) this.unresolved.delete(key);
+                else this.unresolved.add(key);
             },
         };
         const installer = new EndnoteModuleInstaller(host);
@@ -82,10 +113,17 @@ export class AuthoringAssetsAdapter {
         finally {
             this.installers.delete(installer);
         }
+        } finally { this.closeWork--; }
     }
-    async install(): Promise<EndnoteModuleReady> { const ready = await this.use(installer => installer.install()); await this.options.changed(ready); return ready; }
-    async retryOriginal(): Promise<EndnoteModuleReady> { const ready = await this.use(installer => installer.retryOriginal()); await this.options.changed(ready); return ready; }
-    async restartAfterCancelled(): Promise<EndnoteModuleReady> { const ready = await this.use(installer => installer.restartAfterCancelled()); await this.options.changed(ready); return ready; }
+    private async deliver(run: (installer: EndnoteModuleInstaller) => Promise<EndnoteModuleReady>): Promise<EndnoteModuleReady> {
+        if (this.closeFrozen) throw new UiError(uiMessage("endnoteModule.originalInstallUnconfirmed"));
+        this.closeWork++;
+        try { const ready = await this.use(run); await this.options.changed(ready); return ready; }
+        finally { this.closeWork--; }
+    }
+    install(): Promise<EndnoteModuleReady> { return this.deliver(installer => installer.install()); }
+    retryOriginal(): Promise<EndnoteModuleReady> { return this.deliver(installer => installer.retryOriginal()); }
+    restartAfterCancelled(): Promise<EndnoteModuleReady> { return this.deliver(installer => installer.restartAfterCancelled()); }
     recover(): Promise<EndnoteModuleReceipt | null> { return this.use(installer => installer.recover()); }
     settleOriginal(): Promise<EndnoteModuleReceipt> { return this.use(installer => installer.settleOriginal()); }
 }

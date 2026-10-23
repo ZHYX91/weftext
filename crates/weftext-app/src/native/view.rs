@@ -110,6 +110,20 @@ pub(super) struct View {
     queue: Queue,
     pub policy: NavigationPolicy,
 }
+
+// An OpenedDocument contains a 2 MiB source (up to 12 MiB after JSON escaping)
+// plus the selected recovery record, whose Core serialization is bounded at
+// 16 MiB, and path/identity/message metadata. A 512 KiB envelope rejected valid
+// ordinary documents; keep an explicit complete-message budget instead.
+const MAX_HOST_MESSAGE_BYTES: usize = 32 * 1024 * 1024;
+fn post_json(message: &serde_json::Value) -> Result<String> {
+    let text = serde_json::to_string(message).map_err(|_| Error::from(E_INVALIDARG))?;
+    if text.len() > MAX_HOST_MESSAGE_BYTES {
+        return Err(Error::from(E_INVALIDARG));
+    }
+    Ok(text)
+}
+
 impl View {
     /// Runs only in the outer STA reducer. The guard exists before any fallible
     /// settings/registration/navigation call can leave a controller behind.
@@ -245,10 +259,7 @@ impl View {
         Ok(view)
     }
     pub fn post(&self, message: &serde_json::Value) -> Result<()> {
-        let text = serde_json::to_string(message).map_err(|_| Error::from(E_INVALIDARG))?;
-        if text.len() > 512 * 1024 {
-            return Err(Error::from(E_INVALIDARG));
-        }
+        let text = post_json(message)?;
         unsafe { self.webview.PostWebMessageAsJson(&HSTRING::from(text)) }
     }
     pub fn show(&self) -> Result<()> {
@@ -306,5 +317,36 @@ impl Drop for View {
         if self.close_inner().is_err() {
             self.queue.fault();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn complete_large_opened_document_includes_escaped_source_and_recovery() {
+        let maximum_source = 2 * 1024 * 1024;
+        let document = serde_json::json!({
+            "type": "open-document",
+            "deliveryId": "00000000-0000-4000-8000-000000000001",
+            "document": {
+                "sessionId": "00000000-0000-4000-8000-000000000002",
+                "source": "\u{0000}".repeat(maximum_source),
+                "recoveredDraft": "a".repeat(maximum_source),
+                "recoveredDraftBaseSource": "\u{0000}".repeat(maximum_source),
+                "recoveredDraftVariants": [],
+                "path": "C:/notes/original.typ", "root": "C:/notes"
+            }
+        });
+        let encoded = post_json(&document).unwrap();
+        assert!(encoded.len() > 26 * 1024 * 1024);
+        assert!(encoded.len() < MAX_HOST_MESSAGE_BYTES);
+    }
+
+    #[test]
+    fn oversized_host_envelopes_still_fail_without_truncating_document_data() {
+        let oversized = serde_json::json!({ "source": "a".repeat(MAX_HOST_MESSAGE_BYTES) });
+        assert!(post_json(&oversized).is_err());
     }
 }

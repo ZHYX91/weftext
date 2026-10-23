@@ -1,3 +1,4 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { disposeUiTree, replaceUiChildren, joinUiText, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 /** Library style UI. Native module bytes and Core transactions own persistence. */
@@ -30,6 +31,13 @@ function resultUnknown(error: unknown): boolean {
 }
 /** Keeps an uncertain request immutable and retries it with its original ID. */
 export class NativeStyleController {
+    private readonly closeGuard = new ProposalCloseGuard();
+    assertCloseReady(): void { this.closeGuard.assertReady(this.dirty || this.locked || this.committedPendingRead); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.dirty || this.locked || this.committedPendingRead); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    bindCloseGuard(element: HTMLElement): void { this.closeGuard.bind(element); }
+    runCloseTracked<T>(operation: () => Promise<T>): Promise<T> { return this.closeGuard.run(operation); }
+
     state: LibraryStyleState | null = null;
     source = "";
     enabled = true;
@@ -47,9 +55,11 @@ export class NativeStyleController {
     }
     get locked(): boolean { return this.busy || this.uncertain !== null; }
     async load(): Promise<void> {
-        if (this.dirty || this.locked)
-            throw new UiError(uiMessage("stylePanel.unresolvedDraftCannotReread"));
-        this.install(await this.host.read());
+        return this.closeGuard.run(async () => {
+            if (this.dirty || this.locked)
+                throw new UiError(uiMessage("stylePanel.unresolvedDraftCannotReread"));
+            this.install(await this.host.read());
+        });
     }
     setSource(source: string): void { this.assertEditable(); this.source = source; this.plan = null; this.request = null; }
     setEnabled(enabled: boolean): void { this.assertEditable(); this.enabled = enabled; this.plan = null; this.request = null; }
@@ -71,81 +81,85 @@ export class NativeStyleController {
         this.request = null;
     }
     async prepare(): Promise<LibraryStylePlan> {
-        if (!this.state || this.busy || this.uncertain === "apply")
-            throw new UiError(uiMessage("stylePanel.cannotPrepare"));
-        if (!this.request) {
-            if (!this.dirty)
-                throw new UiError(uiMessage("stylePanel.noChanges"));
-            this.request = {
-                operationId: this.host.operationId?.() ?? crypto.randomUUID(),
-                baseId: this.state.baseId,
-                ...(this.advanced ? { source: this.source } : Object.keys(this.changes).length ? { changes: { ...this.changes } } : {}),
-                ...(this.enabled !== this.state.enabled ? { enabled: this.enabled } : {}),
-            };
-        }
-        this.busy = true;
-        try {
-            const plan = decodeLibraryStylePlan(await this.host.prepare({ ...this.request, ...(this.request.changes ? { changes: { ...this.request.changes } } : {}) }));
-            if (plan.operationId !== this.request.operationId || !plan.planId || plan.beforeSource !== this.state.source || (this.request.source !== undefined && plan.afterSource !== this.request.source)) {
-                this.request = null;
-                this.plan = null;
-                this.uncertain = null;
-                throw Object.assign(new UiError(uiMessage("stylePanel.prepareBasisMismatch")), { code: "stylePlanMismatch" });
+        return this.closeGuard.run(async () => {
+            if (!this.state || this.busy || this.uncertain === "apply")
+                throw new UiError(uiMessage("stylePanel.cannotPrepare"));
+            if (!this.request) {
+                if (!this.dirty)
+                    throw new UiError(uiMessage("stylePanel.noChanges"));
+                this.request = {
+                    operationId: this.host.operationId?.() ?? crypto.randomUUID(),
+                    baseId: this.state.baseId,
+                    ...(this.advanced ? { source: this.source } : Object.keys(this.changes).length ? { changes: { ...this.changes } } : {}),
+                    ...(this.enabled !== this.state.enabled ? { enabled: this.enabled } : {}),
+                };
             }
-            this.plan = plan;
-            this.uncertain = null;
-            return plan;
-        }
-        catch (error) {
-            if (resultUnknown(error))
-                this.uncertain = "prepare";
-            else {
-                this.request = null;
-                this.plan = null;
+            this.busy = true;
+            try {
+                const plan = decodeLibraryStylePlan(await this.host.prepare({ ...this.request, ...(this.request.changes ? { changes: { ...this.request.changes } } : {}) }));
+                if (plan.operationId !== this.request.operationId || !plan.planId || plan.beforeSource !== this.state.source || (this.request.source !== undefined && plan.afterSource !== this.request.source)) {
+                    this.request = null;
+                    this.plan = null;
+                    this.uncertain = null;
+                    throw Object.assign(new UiError(uiMessage("stylePanel.prepareBasisMismatch")), { code: "stylePlanMismatch" });
+                }
+                this.plan = plan;
                 this.uncertain = null;
+                return plan;
             }
-            throw error;
-        }
-        finally {
-            this.busy = false;
-        }
+            catch (error) {
+                if (resultUnknown(error))
+                    this.uncertain = "prepare";
+                else {
+                    this.request = null;
+                    this.plan = null;
+                    this.uncertain = null;
+                }
+                throw error;
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async apply(): Promise<LibraryStyleState> {
-        if (!this.plan || this.busy || this.uncertain === "prepare")
-            throw new UiError(uiMessage("stylePanel.viewPreparedSourceFirst"));
-        const plan = this.plan;
-        let confirmed = false;
-        this.busy = true;
-        try {
-            const state = decodeAppliedLibraryStyle(await this.host.apply({ operationId: plan.operationId, planId: plan.planId }));
-            if (!this.originalCommit(state.operationReceipt, plan))
-                throw Object.assign(new UiError(uiMessage("stylePanel.saveReceiptPlanMismatch")), { code: "resultUnknown" });
-            confirmed = true;
-            const { operationReceipt, ...current } = state;
-            this.install(current);
-            this.notifyCommitted(plan);
-            return this.state!;
-        }
-        catch (error) {
-            if (confirmed)
-                throw error;
-            if (this.committedPendingRead || resultUnknown(error)) {
-                this.uncertain = "apply";
-                if (error instanceof ApiError && error.code === "style_state_unavailable" && error.details?.kind === "committedReceipt" && this.originalCommit(error.details.receipt, plan)) {
-                    this.committedPendingRead = true;
-                    this.notifyCommitted(plan);
+        return this.closeGuard.run(async () => {
+            if (!this.plan || this.busy || this.uncertain === "prepare")
+                throw new UiError(uiMessage("stylePanel.viewPreparedSourceFirst"));
+            const plan = this.plan;
+            let confirmed = false;
+            this.busy = true;
+            try {
+                const state = decodeAppliedLibraryStyle(await this.host.apply({ operationId: plan.operationId, planId: plan.planId }));
+                if (!this.originalCommit(state.operationReceipt, plan))
+                    throw Object.assign(new UiError(uiMessage("stylePanel.saveReceiptPlanMismatch")), { code: "resultUnknown" });
+                confirmed = true;
+                const { operationReceipt, ...current } = state;
+                this.install(current);
+                this.notifyCommitted(plan);
+                return this.state!;
+            }
+            catch (error) {
+                if (confirmed)
+                    throw error;
+                if (this.committedPendingRead || resultUnknown(error)) {
+                    this.uncertain = "apply";
+                    if (error instanceof ApiError && error.code === "style_state_unavailable" && error.details?.kind === "committedReceipt" && this.originalCommit(error.details.receipt, plan)) {
+                        this.committedPendingRead = true;
+                        this.notifyCommitted(plan);
+                    }
                 }
+                else {
+                    this.request = null;
+                    this.plan = null;
+                    this.uncertain = null;
+                }
+                throw error;
             }
-            else {
-                this.request = null;
-                this.plan = null;
-                this.uncertain = null;
+            finally {
+                this.busy = false;
             }
-            throw error;
-        }
-        finally {
-            this.busy = false;
-        }
+        });
     }
     private originalCommit(value: unknown, plan: LibraryStylePlan): boolean {
         try { const receipt = decodeStyleOperationReceipt(value); return receipt.operationId === plan.operationId && receipt.planId === plan.planId && receipt.status === "committed"; }
@@ -158,6 +172,7 @@ export class NativeStyleController {
         this.host.committed?.();
     }
     private assertEditable(): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (!this.state || this.locked)
             throw new UiError(uiMessage("stylePanel.operationPending"));
     }
@@ -228,6 +243,7 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
     if (!controller.state)
         await controller.load();
     const dialog = element("dialog", "modal library-style-panel");
+    controller.bindCloseGuard(dialog);
     let closed = false;
     const header = element("div", "modal-heading");
     const heading = element("h2", "", uiMessage("stylePanel.title"));
@@ -259,7 +275,7 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
     if (host.openSource) {
         const sourceEntry = element("button", "text-button", uiMessage("stylePanel.openStyleFileSource"));
         sourceEntry.type = "button";
-        sourceEntry.onclick = () => { void Promise.resolve(host.openSource!(controller.state!.path)).catch(showError); };
+        sourceEntry.onclick = () => { void controller.runCloseTracked(async () => { await host.openSource!(controller.state!.path); }).catch(showError); };
         advanced.append(sourceEntry);
     }
     const preview = element("div", "style-plan");
@@ -403,7 +419,7 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
         })();
     };
     apply.onclick = () => {
-        void (async () => {
+        void controller.runCloseTracked(async () => {
             const request = controller.apply();
             refresh();
             try {
@@ -423,7 +439,7 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
             catch (error) {
                 showError(error);
             }
-        })();
+        }).catch(showError);
     };
     form.onsubmit = event => { event.preventDefault(); prepare.click(); };
     document.body.append(dialog);
@@ -432,10 +448,8 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
     await new Promise<void>(resolve => {
         function dismiss(): void {
             if (closed) return;
-            if (controller.busy) {
-                setUiText(status, uiMessage("stylePanel.stillProcessingDraftRetained"));
-                return;
-            }
+            try { controller.assertCloseReady(); }
+            catch (error) { showError(error); return; }
             closed = true;
             dialog.close();
             disposeUiTree(dialog);

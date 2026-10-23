@@ -81,6 +81,8 @@ export interface EndnoteModuleHost {
     /** Storage is scoped by state.request.identity, never by a later active tab. */
     load(identity: EndnoteModuleIdentity): unknown;
     persist(state: EndnoteModuleState): void;
+    /** A validated original Core reply, never a browser persistence acknowledgement. */
+    observed?(receipt: EndnoteModuleReceipt): void;
     committed?(identity: EndnoteModuleIdentity): void;
     newOperationId?(): string;
 }
@@ -214,6 +216,7 @@ export class EndnoteModuleInstaller {
             state.phase = "checking";
         try {
             this.save(state);
+            this.host.observed?.(structuredClone(receipt));
         }
         finally {
             if (committed)

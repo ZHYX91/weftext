@@ -724,11 +724,21 @@ export class WritingController {
     private bindings = new Set<InputBinding>();
     private focusSelection = false;
     private closeGuards = new Set<() => boolean>();
+    private closeFrozen = false;
+    private closeWork = 0;
     registerCloseGuard(guard: () => boolean): () => void { this.closeGuards.add(guard); return () => { this.closeGuards.delete(guard); }; }
-    assertCloseReady(): void {
-        if (this.state.composing || [...this.closeGuards].some(guard => guard()))
+    assertCloseReady({ allowPendingLiteral = false }: { allowPendingLiteral?: boolean } = {}): void {
+        const state = this.state;
+        if (!allowPendingLiteral && state.pending || state.composing || state.busy || this.closeWork || this.afterInput.length || [...this.closeGuards].some(guard => guard()) || [...this.surfaces].some(surface => surface.lease?.active()))
             throw new UiError(uiMessage("writingState.inputPersistenceUnconfirmed"));
     }
+    freezeForClose(): boolean {
+        if (this.closeFrozen) return false;
+        try { this.assertCloseReady(); } catch { return false; }
+        this.closeFrozen = true;
+        return true;
+    }
+    thawAfterClose(): void { this.closeFrozen = false; }
     private surfaces = new Set<{
         element: HTMLElement;
         update(transition?: WritingTransition): void;
@@ -769,6 +779,9 @@ export class WritingController {
     get sourceSelection(): SourceSelection { return this.host.editor.selection; }
     restoreNavigationFocus(): void { this.focusSelection = true; }
     async prepareCommand(): Promise<void> {
+        if (this.closeFrozen) throw new UiError(uiMessage("writingState.inputPersistenceUnconfirmed"));
+        this.closeWork++;
+        try {
         await this.flush();
         if (this.host.actionAvailable?.() === false)
             throw new UiError(uiMessage("writingState.noteChangedOldOperationNotOpened"));
@@ -782,6 +795,7 @@ export class WritingController {
             throw new UiError(uiMessage("writingState.noteChangedDuringPreparation"));
         if (!this.installMap(map, basis.source, basis.serial))
             throw new UiError(uiMessage("writingState.newInputDuringPreparation"));
+        } finally { this.closeWork--; }
     }
     get snapshot(): WritingSnapshot { return { ...this.host.basis(), generation: this.host.editor.generation }; }
     authorInputs(): AuthorInputSession | undefined { return this.host.authorInputs?.(); }
@@ -987,11 +1001,15 @@ export class WritingController {
         });
     }
     deferUntilCompositionEnds(run: () => void | Promise<void>): Promise<void> {
-        if (this.disposed)
+        if (this.disposed || this.closeFrozen)
             return Promise.reject(new UiError(uiMessage("writingState.sessionClosed")));
-        if (!this.state.composing)
-            return Promise.resolve().then(run);
-        return new Promise((resolve, reject) => { this.afterInput.push({ run, resolve, reject }); });
+        this.closeWork++;
+        const invoke = () => {
+            if (this.disposed || this.closeFrozen) throw new UiError(uiMessage("writingState.sessionClosed"));
+            return run();
+        };
+        const result = !this.state.composing ? Promise.resolve().then(invoke) : new Promise<void>((resolve, reject) => { this.afterInput.push({ run: invoke, resolve, reject }); });
+        return result.finally(() => { this.closeWork--; });
     }
     private async drainDeferred(): Promise<void> {
         if (this.state.composing || this.disposed)
@@ -1009,6 +1027,7 @@ export class WritingController {
     }
     /** Stage native preedit without replacing its DOM or stealing composition. */
     stageLiteral(range: WritingRange, initialText: string, text: string, selection: SourceSelection = { from: text.length, to: text.length }, input?: HTMLTextAreaElement, append = false): void {
+        if (this.closeFrozen) throw new UiError(uiMessage("writingState.inputPersistenceUnconfirmed"));
         if (!this.active) {
             const basis = this.requireMap();
             const insertion = basis.map.bodyInsertion;

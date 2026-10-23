@@ -20,12 +20,20 @@ export interface MountedLocalCapture {
   readonly session:LocalCaptureSession;
   readonly form:CaptureForm<import("./capture-draft-state").CaptureDraftRecord>;
   readonly guard:CaptureCloseGuard<import("./capture-draft-state").CaptureDraftRecord>;
+  assertCloseReady():void;
   dispose():void;
 }
 /** Presentation/transport composition. Native lifecycle is injected only after
  * the real host installs this participant; mounting never announces ready. */
 export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts):Promise<MountedLocalCapture> {
   let live=true,form:MountedLocalCapture["form"]|undefined,fields:CaptureFields<import("./capture-draft-state").CaptureDraftRecord>|undefined;
+  let closeFrozen=false,pendingActions=0;
+  const activity=async<T>(run:()=>Promise<T>):Promise<T>=>{
+    if(!live||closeFrozen)throw new UiError(message("desktop.unsavedClose"));
+    pendingActions++;
+    try{return await run();}finally{pendingActions--;}
+  };
+  const assertCloseReady=()=>{if(!live||pendingActions||form?.pendingAction)throw new UiError(message("desktop.unsavedClose"));};
   const recovery=ports.options?.recovery??new PersonalInputRecovery();
   const session=await LocalCaptureSession.open(ports.request,{...ports.options,recovery,changed:state=>{form?.update(state);ports.options?.changed?.(state);}});
   const draftId=session.controller.state.draft.draftId;
@@ -43,7 +51,7 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
   const collectTarget=()=>{const next=session.controller.state.input;let changed=false;for(const [slot,control]of [["rootInput",root],["parentInput",parent]]as const){if(captureString(next[slot])!==control.value){next[slot]=captureText(control.value);changed=true;}}if(changed)session.controller.edit(next);};
   target.append(ui("h2","",message("capture.target")),root,ui("p","",message("capture.parent")),parent,targetStatus);
   let schemaVersion=0;
-  async function loadFields(container:HTMLElement):Promise<void> {
+  async function loadFields(container:HTMLElement):Promise<void> {return activity(async()=>{
     const version=++schemaVersion;fields?.collectOwnedRaw();fields?.dispose();fields=undefined;replaceUiChildren(container);
     const target=session.controller.state.draft.target;if(!target){container.append(ui("p","data-help",message("capture.targetRequired")));return;}
     try {
@@ -52,9 +60,9 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
       if(!result.roleRef){container.append(ui("p","data-help",message("schemaSettings.noExecutablePlan")));return;}
       fields=new CaptureFields(container,session.controller,authorInputs,{schema:result.schema,schemaRef:result.roleRef,semanticDigest:result.semanticDigest} satisfies CaptureSchemaView);
     }catch(error){if(live&&version===schemaVersion)container.append(ui("p","data-warning",errorUiText(error)));}
-  }
+  });}
   let advancedHost:HTMLElement|undefined;
-  target.append(action(message("capture.selectTarget"),async()=>{try{collectTarget();await session.controller.drain();const current=session.controller.state.draft;const nextRoot=root.value||current.target?.rootHint;if(!nextRoot)throw new UiError(message("capture.targetRequired"));await session.selectTarget({root:nextRoot,parent:parent.value||nextRoot});root.placeholder=nextRoot;setUiText(targetStatus,nextRoot);if(advancedHost)await loadFields(advancedHost);}catch(error){form?.showError(error);}}));
+  target.append(action(message("capture.selectTarget"),async()=>{try{await activity(async()=>{collectTarget();await session.controller.drain();const current=session.controller.state.draft;const nextRoot=root.value||current.target?.rootHint;if(!nextRoot)throw new UiError(message("capture.targetRequired"));await session.selectTarget({root:nextRoot,parent:parent.value||nextRoot});root.placeholder=nextRoot;setUiText(targetStatus,nextRoot);if(advancedHost)await loadFields(advancedHost);});}catch(error){form?.showError(error);}}));
   const assertSubmittable=()=>{session.assertRecovered();fields?.assertSubmittable();const input=session.controller.state.input;if(!fields&&(input.fields.length||input.typeIds.length))throw new UiError(message("capture.rawRetained"));};
   let guard!:MountedLocalCapture["guard"];
   const requestClose=async()=>{
@@ -70,7 +78,7 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
     canOpen:()=>!!ports.deliverCommitted,
     submit:async mode=>{if(!session.controller.state.draft.pending)assertSubmittable();await session.save(mode,async original=>{if(!ports.deliverCommitted)throw new UiError(message("capture.pending"));await ports.deliverCommitted(original);},requestClose);},
     confirmOriginal:async()=>{const fact=await session.confirmOriginal();if(fact)setUiText(targetStatus,()=>`${fact.operationId} · ${fact.status}`);},requestClose});
-  guard=new CaptureCloseGuard(session.controller,inputs,{assertResolved:()=>session.assertRecovered(),collectOwnedRaw:()=>form!.collectOwnedRaw(),freeze:()=>form!.freeze(),thaw:()=>form!.thaw()});
+  guard=new CaptureCloseGuard(session.controller,inputs,{assertResolved:()=>session.assertRecovered(),collectOwnedRaw:()=>form!.collectOwnedRaw(),freeze:()=>{if(pendingActions)throw new UiError(message("desktop.unsavedClose"));closeFrozen=true;form!.freeze();},thaw:()=>{closeFrozen=false;form!.thaw();}});
   replaceUiChildren(host,form.element);
   await loadFields(advancedHost!);
   const retained=ui("section","capture-recovery");
@@ -78,10 +86,10 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
     replaceUiChildren(retained);
     const input=session.controller.state.input;
     if(session.controller.state.draft.inputCut==="authorOnly")for(const [slot,proofs]of Object.entries(input.authorTexts))for(const proof of proofs){const copy=ui("textarea","data-input");copy.readOnly=true;copy.value=captureString(proof.text);retained.append(ui("p","",slot),copy);}
-    for(const proposal of session.unconfirmed){const section=ui("section");section.append(ui("p","",message("capture.rawRetained")));if(proposal.pending)section.append(ui("code","",proposal.pending.command.mutationId));for(const proofs of Object.values(proposal.input.texts))for(const proof of proofs){const copy=ui("textarea","data-input");copy.readOnly=true;copy.value=proof.text;section.append(copy);}section.append(action(message("common.cancel"),async()=>{try{await session.discardUnconfirmed(proposal);renderOwnRecovery();}catch(error){form?.showError(error);}}));retained.append(section);}
+    for(const proposal of session.unconfirmed){const section=ui("section");section.append(ui("p","",message("capture.rawRetained")));if(proposal.pending)section.append(ui("code","",proposal.pending.command.mutationId));for(const proofs of Object.values(proposal.input.texts))for(const proof of proofs){const copy=ui("textarea","data-input");copy.readOnly=true;copy.value=proof.text;section.append(copy);}section.append(action(message("common.cancel"),async()=>{try{await activity(async()=>{await session.discardUnconfirmed(proposal);renderOwnRecovery();});}catch(error){form?.showError(error);}}));retained.append(section);}
   }
   renderOwnRecovery();form.element.append(retained);
   const unloading=(event:BeforeUnloadEvent)=>{const current=session.controller.state;if(current.persisting||current.blocked||inputs.inspect().producers.some(producer=>producer.nativePending||producer.pendingDeliveries||producer.unapplied))event.preventDefault();};
   host.ownerDocument.defaultView?.addEventListener("beforeunload",unloading);
-  return {session,form,guard,dispose(){live=false;schemaVersion++;form?.dispose();targetSession.retire();fields?.dispose();host.ownerDocument.defaultView?.removeEventListener("beforeunload",unloading);disposeUiTree(host);}};
+  return {session,form,guard,assertCloseReady,dispose(){live=false;schemaVersion++;form?.dispose();targetSession.retire();fields?.dispose();host.ownerDocument.defaultView?.removeEventListener("beforeunload",unloading);disposeUiTree(host);}};
 }

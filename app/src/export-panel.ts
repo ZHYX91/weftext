@@ -1,4 +1,6 @@
 import { contentLanguageControl } from "./content-language";
+import { ProposalCloseGuard } from "./proposal-close-guard";
+import { registerNativeProposalOwner } from "./native-proposal-owners";
 import { joinUiText } from "./ui-locale";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
@@ -105,6 +107,35 @@ export interface OutputPanelHost extends PanelHost {
     imported?(receipt: ExchangeReceipt & { root: string }): Promise<void>;
 }
 class OutputDialog {
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly unregisterClose = registerNativeProposalOwner(this);
+    private outputEdited = false;
+    private importEdited = false;
+    private deliveredImport = false;
+    private discarded = false;
+    private get unresolved(): boolean {
+        return !this.discarded && (this.output.busy || this.exchange.busy || this.output.uncertain !== null || this.exchange.uncertain !== null ||
+            (this.outputEdited || this.output.prepared !== null) && !this.output.received ||
+            (this.importEdited || this.uploadedImport !== null || this.exchange.input !== null) && !this.deliveredImport);
+    }
+    assertCloseReady(): void {
+        try { this.closeGuard.assertReady(this.unresolved); }
+        catch (error) { if (this.unresolved && !this.dialog.open) this.dialog.showModal(); throw error; }
+    }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.unresolved); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    private discard(): void {
+        try {
+            this.closeGuard.assertMutable();
+            this.closeGuard.assertReady(this.output.busy || this.exchange.busy || this.output.uncertain !== null || this.exchange.uncertain !== null || !!this.exchange.receipt && !this.deliveredImport);
+            this.discarded = true;
+            this.dialog.close();
+            this.dialog.remove();
+            this.closeGuard.freeze(false);
+            this.unregisterClose();
+            this.onDiscard();
+        } catch (error) { this.report(error, this.outputStatus); }
+    }
     readonly dialog = ui("dialog", "modal output-panel");
     private readonly output: OutputController;
     private readonly exchange: ExchangeController;
@@ -168,7 +199,7 @@ class OutputDialog {
     private capabilityError: UiText = "";
     private cancellingOutput = false;
     private cancellingImport = false;
-    constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery, embedded: EmbeddedQuerySelection[] = []) {
+    constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery, embedded: EmbeddedQuerySelection[] = [], private readonly onDiscard: () => void = () => {}) {
         this.output = new OutputController({ id: () => crypto.randomUUID(), prepare: request => host.request("/api/export/prepare", request), confirm: request => host.request("/api/export/confirm", request), cancel: request => host.request("/api/export/legacy-cancel", request), download: request => {
                 if (!host.requestBlob)
                     throw new UiError(uiMessage("export.binaryDownloadUnavailable"));
@@ -180,6 +211,7 @@ class OutputDialog {
         this.dialog.setAttribute("aria-labelledby", heading.id);
         const header = ui("header", "output-header");
         header.append(heading, action(uiMessage("common.close"), () => this.dialog.close(), "data-button compact"));
+        header.append(action(uiMessage("common.cancel"), () => this.discard(), "data-button compact"));
         const basisInfo = ui("p", "data-help", displayMessage("export.noteInputFrozen", { p0: uiDisplayParameter(basis.path), p1: basis.serial }));
         const sourceDetails = ui("details", "output-detail");
         sourceDetails.append(ui("summary", "", uiMessage("export.viewCurrentNativeSource")), ui("pre", "output-source", basis.source));
@@ -231,6 +263,8 @@ class OutputDialog {
         for (const input of [this.parent, this.name])
             input.oninput = () => this.refreshImportInput();
         this.importFormat.onchange = () => {
+            this.closeGuard.assertMutable();
+            this.importEdited = true;
             if (this.exchange.locked) {
                 this.importFormat.value = this.exchange.input?.format ?? "native";
                 return;
@@ -258,15 +292,19 @@ class OutputDialog {
         this.dialog.append(header, basisInfo, sourceDetails, outputSection, importSection);
         this.dialog.oncancel = event => { event.preventDefault(); this.dialog.close(); };
         document.body.append(this.dialog);
+        this.closeGuard.bind(this.dialog);
         this.drawState();
         void this.loadFields();
         void this.loadLegacyCapabilities();
     }
     open(): void {
+        this.closeGuard.assertMutable();
         if (!this.dialog.open)
             this.dialog.showModal();
     }
     private change(run: () => void): void {
+        this.closeGuard.assertMutable();
+        this.outputEdited = true;
         try {
             run();
             setUiText(this.outputStatus, uiMessage("export.selectionChangedGenerateNewFrozenFile"));
@@ -309,136 +347,149 @@ class OutputDialog {
         return lines.length ? joinUiText(lines, "；") : uiMessage("export.legacyBackendNotReported");
     }
     private async loadLegacyCapabilities(): Promise<void> {
-        if (this.output.locked || this.exchange.locked)
-            return;
-        const generation = this.capabilityGate.begin();
-        this.checkingCapabilities = true;
-        this.capabilityError = "";
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const incoming = await this.host.request<unknown>("/api/export/legacy-capabilities", {});
-            if (!this.capabilityGate.accepts(generation))
+            if (this.output.locked || this.exchange.locked)
                 return;
-            const result = decodeLegacyCapabilities(incoming, "local");
-            this.capabilities = result;
-            if (!this.output.locked) {
-                this.fillBackends(this.outputBackend, this.output.draft.format, false, this.output.draft.legacyBackend);
-                if (isLegacy(this.output.draft.format) && !this.output.draft.legacyBackend && this.outputBackend.value)
-                    this.output.setDraft({ legacyBackend: this.outputBackend.value });
+            const generation = this.capabilityGate.begin();
+            this.checkingCapabilities = true;
+            this.capabilityError = "";
+            this.drawState();
+            try {
+                const incoming = await this.host.request<unknown>("/api/export/legacy-capabilities", {});
+                if (!this.capabilityGate.accepts(generation))
+                    return;
+                const result = decodeLegacyCapabilities(incoming, "local");
+                this.capabilities = result;
+                if (!this.output.locked) {
+                    this.fillBackends(this.outputBackend, this.output.draft.format, false, this.output.draft.legacyBackend);
+                    if (isLegacy(this.output.draft.format) && !this.output.draft.legacyBackend && this.outputBackend.value)
+                        this.output.setDraft({ legacyBackend: this.outputBackend.value });
+                }
+                if (!this.exchange.locked) {
+                    this.fillBackends(this.importBackend, this.importFormat.value, true);
+                    if (isLegacy(this.importFormat.value))
+                        this.refreshImportInput();
+                }
             }
-            if (!this.exchange.locked) {
-                this.fillBackends(this.importBackend, this.importFormat.value, true);
-                if (isLegacy(this.importFormat.value))
-                    this.refreshImportInput();
+            catch (error) {
+                if (this.capabilityGate.accepts(generation)) {
+                    this.capabilities = null;
+                    this.capabilityError = error instanceof Error ? errorUiText(error) : String(error);
+                }
             }
-        }
-        catch (error) {
-            if (this.capabilityGate.accepts(generation)) {
-                this.capabilities = null;
-                this.capabilityError = error instanceof Error ? errorUiText(error) : String(error);
+            finally {
+                if (this.capabilityGate.accepts(generation)) {
+                    this.checkingCapabilities = false;
+                    this.drawState();
+                }
             }
-        }
-        finally {
-            if (this.capabilityGate.accepts(generation)) {
-                this.checkingCapabilities = false;
-                this.drawState();
-            }
-        }
+        } finally { endCloseWork(); }
     }
     private async cancelLegacy(importing: boolean): Promise<void> {
-        const controller = importing ? this.exchange : this.output;
-        const status = importing ? this.importStatus : this.outputStatus;
-        if (importing ? this.cancellingImport : this.cancellingOutput)
-            return;
-        if (importing)
-            this.cancellingImport = true;
-        else
-            this.cancellingOutput = true;
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            await controller.cancel();
-            if (controller.busy || controller.uncertain === "prepare") {
-                status.classList.remove("data-warning");
-                setUiText(status, uiMessage("export.externalCancellationRequested"));
-            }
-        }
-        catch (error) {
-            this.report(error, status);
-        }
-        finally {
+            const controller = importing ? this.exchange : this.output;
+            const status = importing ? this.importStatus : this.outputStatus;
+            if (importing ? this.cancellingImport : this.cancellingOutput)
+                return;
             if (importing)
-                this.cancellingImport = false;
+                this.cancellingImport = true;
             else
-                this.cancellingOutput = false;
+                this.cancellingOutput = true;
             this.drawState();
-        }
-    }
-    private async loadFields(): Promise<void> {
-        try {
-            const basis = this.output.basis;
-            const result = await this.host.request<NoteProjection | {
-                projection: NoteProjection;
-            }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial });
-            this.fields = decodeProjection(result).fields.map(field => ({ key: field.key, label: () => `${uiTextValue(fieldNames[field.key] ?? field.key)}（${uiTextValue(field.key)}）` }));
-            this.drawBindings();
-        }
-        catch {
-            setUiText(this.templateNote, uiMessage("export.notePropertiesUnreadable"));
-        }
-    }
-    private async inspectTemplate(): Promise<void> {
-        const file = this.template.files?.[0];
-        const retained = this.output.draft.template;
-        if (!file && !retained)
-            return;
-        if (this.output.locked)
-            return;
-        const generation = this.gate.begin();
-        const selectedFormat = this.output.draft.format;
-        if (!["docx", "doc", "wps", "xlsx"].includes(selectedFormat))
-            return;
-        const format = templateInspectionFormat(selectedFormat);
-        this.output.setDraft({ bindings: {} });
-        this.outputPreview.replaceChildren();
-        this.acceptOutput.checked = false;
-        this.outputStatus.classList.remove("data-warning");
-        setUiText(this.outputStatus, uiMessage("export.checkingTemplateNoNewOutput"));
-        this.readingTemplate = true;
-        this.templateNote.classList.remove("data-warning");
-        setUiText(this.templateNote, uiMessage("export.readingTemplateSlots"));
-        this.drawState();
-        try {
-            const uploaded = file ? await fileBytes(file) : retained!;
-            if (!this.gate.accepts(generation))
-                return;
-            this.output.setDraft({ template: uploaded, bindings: {} });
-            this.inspection = null;
-            this.outputPreview.replaceChildren();
-            this.acceptOutput.checked = false;
-            const incoming = await this.host.request<unknown>("/api/export/template", { format, bytesBase64: uploaded.bytesBase64 });
-            if (!this.gate.accepts(generation))
-                return;
-            const result = decodeTemplateInspection(incoming, format);
-            this.inspection = result;
-            this.templateError = false;
-            setUiText(this.templateNote, uiMessage("export.templateStandardSlotsChecked"));
-            setUiText(this.outputStatus, uiMessage("export.templateCheckedChooseContent"));
-        }
-        catch (error) {
-            if (this.gate.accepts(generation)) {
-                this.templateError = true;
-                this.report(error, this.templateNote);
-                this.outputStatus.classList.add("data-warning");
-                setUiText(this.outputStatus, uiMessage("export.templateCheckFailedNoOutput"));
+            try {
+                await controller.cancel();
+                if (controller.busy || controller.uncertain === "prepare") {
+                    status.classList.remove("data-warning");
+                    setUiText(status, uiMessage("export.externalCancellationRequested"));
+                }
             }
-        }
-        finally {
-            if (this.gate.accepts(generation)) {
-                this.readingTemplate = false;
-                this.drawBindings();
+            catch (error) {
+                this.report(error, status);
+            }
+            finally {
+                if (importing)
+                    this.cancellingImport = false;
+                else
+                    this.cancellingOutput = false;
                 this.drawState();
             }
-        }
+        } finally { endCloseWork(); }
+    }
+    private async loadFields(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            try {
+                const basis = this.output.basis;
+                const result = await this.host.request<NoteProjection | {
+                    projection: NoteProjection;
+                }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial });
+                this.fields = decodeProjection(result).fields.map(field => ({ key: field.key, label: () => `${uiTextValue(fieldNames[field.key] ?? field.key)}（${uiTextValue(field.key)}）` }));
+                this.drawBindings();
+            }
+            catch {
+                setUiText(this.templateNote, uiMessage("export.notePropertiesUnreadable"));
+            }
+        } finally { endCloseWork(); }
+    }
+    private async inspectTemplate(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            this.outputEdited = true;
+            const file = this.template.files?.[0];
+            const retained = this.output.draft.template;
+            if (!file && !retained)
+                return;
+            if (this.output.locked)
+                return;
+            const generation = this.gate.begin();
+            const selectedFormat = this.output.draft.format;
+            if (!["docx", "doc", "wps", "xlsx"].includes(selectedFormat))
+                return;
+            const format = templateInspectionFormat(selectedFormat);
+            this.output.setDraft({ bindings: {} });
+            this.outputPreview.replaceChildren();
+            this.acceptOutput.checked = false;
+            this.outputStatus.classList.remove("data-warning");
+            setUiText(this.outputStatus, uiMessage("export.checkingTemplateNoNewOutput"));
+            this.readingTemplate = true;
+            this.templateNote.classList.remove("data-warning");
+            setUiText(this.templateNote, uiMessage("export.readingTemplateSlots"));
+            this.drawState();
+            try {
+                const uploaded = file ? await fileBytes(file) : retained!;
+                if (!this.gate.accepts(generation))
+                    return;
+                this.output.setDraft({ template: uploaded, bindings: {} });
+                this.inspection = null;
+                this.outputPreview.replaceChildren();
+                this.acceptOutput.checked = false;
+                const incoming = await this.host.request<unknown>("/api/export/template", { format, bytesBase64: uploaded.bytesBase64 });
+                if (!this.gate.accepts(generation))
+                    return;
+                const result = decodeTemplateInspection(incoming, format);
+                this.inspection = result;
+                this.templateError = false;
+                setUiText(this.templateNote, uiMessage("export.templateStandardSlotsChecked"));
+                setUiText(this.outputStatus, uiMessage("export.templateCheckedChooseContent"));
+            }
+            catch (error) {
+                if (this.gate.accepts(generation)) {
+                    this.templateError = true;
+                    this.report(error, this.templateNote);
+                    this.outputStatus.classList.add("data-warning");
+                    setUiText(this.outputStatus, uiMessage("export.templateCheckFailedNoOutput"));
+                }
+            }
+            finally {
+                if (this.gate.accepts(generation)) {
+                    this.readingTemplate = false;
+                    this.drawBindings();
+                    this.drawState();
+                }
+            }
+        } finally { endCloseWork(); }
     }
     private drawBindings(): void {
         this.bindingHost.replaceChildren();
@@ -508,169 +559,187 @@ class OutputDialog {
         this.drawState();
     }
     private async prepare(): Promise<void> {
-        if (!this.output.uncertain && !this.output.prepared && !this.legacyAvailable(this.output.draft.format, this.output.draft.legacyBackend, false)) {
-            this.report(new UiError(uiMessage("export.externalBackendUnavailable")), this.outputStatus);
-            return;
-        }
-        this.outputStatus.classList.remove("data-warning");
-        setUiText(this.outputStatus, this.output.uncertain ? uiMessage("export.checkingOriginalOutput") : uiMessage("export.generatingVerifyingFrozenFile"));
-        const promise = this.output.prepare();
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const result = await promise;
-            this.outputPreview.replaceChildren(ui("p", "output-summary", result.summary), ui("p", "data-help", displayMessage("export.generatedFileSize", { p0: uiDisplayParameter(result.filename), p1: uiDisplayParameter(result.length.toLocaleString("zh-CN")) })), lossList(result.losses));
-            if (result.preview !== undefined)
-                this.outputPreview.append(productPreview(result.preview));
-            const identity = ui("details", "output-detail");
-            identity.append(ui("summary", "", uiMessage("export.fileInformation")), ui("p", "data-help", displayMessage("export.fileId", { p0: uiDisplayParameter(result.id) })), ui("p", "data-help", `SHA-256 ${result.digest}`));
-            this.outputPreview.append(identity);
-            this.acceptOutput.checked = false;
-            setUiText(this.outputStatus, this.output.confirmed ? uiMessage("export.fileConfirmedSameBytes") : uiMessage("export.exactFileGeneratedAwaitingConfirmation"));
-        }
-        catch (error) {
-            this.report(error, this.outputStatus);
-        }
-        finally {
-            this.drawState();
-        }
-    }
-    private async confirm(): Promise<void> {
-        const promise = this.output.confirm(this.acceptOutput.checked);
-        setUiText(this.outputStatus, uiMessage("export.confirmingSamePreviewedFile"));
-        this.drawState();
-        try {
-            await promise;
-            this.outputStatus.classList.remove("data-warning");
-            setUiText(this.outputStatus, uiMessage("export.fileConfirmedDownloadable"));
-        }
-        catch (error) {
-            this.report(error, this.outputStatus);
-        }
-        finally {
-            this.drawState();
-        }
-    }
-    private async download(): Promise<void> {
-        const promise = this.output.download();
-        setUiText(this.outputStatus, uiMessage("export.receivingVerifyingConfirmedFile"));
-        this.drawState();
-        try {
-            const blob = await promise;
-            const url = URL.createObjectURL(blob);
-            const link = ui("a");
-            link.href = url;
-            link.download = this.output.prepared!.filename;
-            document.body.append(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
-            this.outputStatus.classList.remove("data-warning");
-            setUiText(this.outputStatus, uiMessage("export.confirmedBytesHandedToBrowser"));
-        }
-        catch (error) {
-            this.report(error, this.outputStatus);
-        }
-        finally {
-            this.drawState();
-        }
-    }
-    private async readImport(): Promise<void> {
-        const file = this.importFile.files?.[0];
-        if (!file || this.exchange.locked)
-            return;
-        const generation = this.importReadGate.begin();
-        this.importGate.invalidate();
-        this.readingMapping = false;
-        this.resetImportAnalysis();
-        this.readingImport = true;
-        this.importPreview.replaceChildren();
-        this.drawState();
-        try {
-            const uploaded = await fileBytes(file);
-            if (!this.importReadGate.accepts(generation))
+            this.outputEdited = true;
+            if (!this.output.uncertain && !this.output.prepared && !this.legacyAvailable(this.output.draft.format, this.output.draft.legacyBackend, false)) {
+                this.report(new UiError(uiMessage("export.externalBackendUnavailable")), this.outputStatus);
                 return;
-            this.uploadedImport = uploaded;
-            this.importReadError = false;
-            setUiText(this.importFileNote, displayMessage("export.uploadedOriginalRetained", { p0: uiDisplayParameter(uploaded.name), p1: uiDisplayParameter(file.size.toLocaleString("zh-CN")) }));
-            this.refreshImportInput();
-        }
-        catch (error) {
-            if (this.importReadGate.accepts(generation)) {
-                this.importReadError = true;
-                this.report(error, this.importStatus);
             }
-        }
-        finally {
-            if (this.importReadGate.accepts(generation)) {
-                this.readingImport = false;
+            this.outputStatus.classList.remove("data-warning");
+            setUiText(this.outputStatus, this.output.uncertain ? uiMessage("export.checkingOriginalOutput") : uiMessage("export.generatingVerifyingFrozenFile"));
+            const promise = this.output.prepare();
+            this.drawState();
+            try {
+                const result = await promise;
+                this.outputPreview.replaceChildren(ui("p", "output-summary", result.summary), ui("p", "data-help", displayMessage("export.generatedFileSize", { p0: uiDisplayParameter(result.filename), p1: uiDisplayParameter(result.length.toLocaleString("zh-CN")) })), lossList(result.losses));
+                if (result.preview !== undefined)
+                    this.outputPreview.append(productPreview(result.preview));
+                const identity = ui("details", "output-detail");
+                identity.append(ui("summary", "", uiMessage("export.fileInformation")), ui("p", "data-help", displayMessage("export.fileId", { p0: uiDisplayParameter(result.id) })), ui("p", "data-help", `SHA-256 ${result.digest}`));
+                this.outputPreview.append(identity);
+                this.acceptOutput.checked = false;
+                setUiText(this.outputStatus, this.output.confirmed ? uiMessage("export.fileConfirmedSameBytes") : uiMessage("export.exactFileGeneratedAwaitingConfirmation"));
+            }
+            catch (error) {
+                this.report(error, this.outputStatus);
+            }
+            finally {
                 this.drawState();
             }
-        }
-        if (!this.importReadError && this.importReadGate.accepts(generation))
-            await this.inspectImport();
+        } finally { endCloseWork(); }
+    }
+    private async confirm(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const promise = this.output.confirm(this.acceptOutput.checked);
+            setUiText(this.outputStatus, uiMessage("export.confirmingSamePreviewedFile"));
+            this.drawState();
+            try {
+                await promise;
+                this.outputStatus.classList.remove("data-warning");
+                setUiText(this.outputStatus, uiMessage("export.fileConfirmedDownloadable"));
+            }
+            catch (error) {
+                this.report(error, this.outputStatus);
+            }
+            finally {
+                this.drawState();
+            }
+        } finally { endCloseWork(); }
+    }
+    private async download(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const promise = this.output.download();
+            setUiText(this.outputStatus, uiMessage("export.receivingVerifyingConfirmedFile"));
+            this.drawState();
+            try {
+                const blob = await promise;
+                const url = URL.createObjectURL(blob);
+                const link = ui("a");
+                link.href = url;
+                link.download = this.output.prepared!.filename;
+                document.body.append(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+                this.outputStatus.classList.remove("data-warning");
+                setUiText(this.outputStatus, uiMessage("export.confirmedBytesHandedToBrowser"));
+            }
+            catch (error) {
+                this.report(error, this.outputStatus);
+            }
+            finally {
+                this.drawState();
+            }
+        } finally { endCloseWork(); }
+    }
+    private async readImport(): Promise<void> {
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            this.importEdited = true;
+            this.deliveredImport = false;
+            const file = this.importFile.files?.[0];
+            if (!file || this.exchange.locked)
+                return;
+            const generation = this.importReadGate.begin();
+            this.importGate.invalidate();
+            this.readingMapping = false;
+            this.resetImportAnalysis();
+            this.readingImport = true;
+            this.importPreview.replaceChildren();
+            this.drawState();
+            try {
+                const uploaded = await fileBytes(file);
+                if (!this.importReadGate.accepts(generation))
+                    return;
+                this.uploadedImport = uploaded;
+                this.importReadError = false;
+                setUiText(this.importFileNote, displayMessage("export.uploadedOriginalRetained", { p0: uiDisplayParameter(uploaded.name), p1: uiDisplayParameter(file.size.toLocaleString("zh-CN")) }));
+                this.refreshImportInput();
+            }
+            catch (error) {
+                if (this.importReadGate.accepts(generation)) {
+                    this.importReadError = true;
+                    this.report(error, this.importStatus);
+                }
+            }
+            finally {
+                if (this.importReadGate.accepts(generation)) {
+                    this.readingImport = false;
+                    this.drawState();
+                }
+            }
+            if (!this.importReadError && this.importReadGate.accepts(generation))
+                await this.inspectImport();
+        } finally { endCloseWork(); }
     }
     private resetImportAnalysis(): void { this.mapping = null; this.mappingError = false; this.docxAnalysis = null; this.captionChoices = []; this.captionError = false; this.importMapping.replaceChildren(); }
     private async inspectImport(): Promise<void> {
-        if (this.exchange.locked || this.readingImport)
-            return;
-        const generation = this.importGate.begin();
-        this.resetImportAnalysis();
-        this.readingMapping = false;
-        const format = this.importFormat.value;
-        const uploaded = this.uploadedImport;
-        if (uploaded && !this.importReadError)
-            this.refreshImportInput();
-        if (format === "native" || isLegacy(format) || !uploaded || this.importReadError) {
-            this.drawState();
-            return;
-        }
-        this.readingMapping = true;
-        setUiText(this.importStatus, format === "docx" ? uiMessage("export.checkingWordCaptionsObjects") : uiMessage("export.checkingBibliographyRecordsMapping"));
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            if (format === "docx") {
-                const analysis = await this.host.request<DocxImportAnalysis>("/api/exchange/inspect", { format, bytesBase64: uploaded.bytesBase64 });
+            if (this.exchange.locked || this.readingImport)
+                return;
+            const generation = this.importGate.begin();
+            this.resetImportAnalysis();
+            this.readingMapping = false;
+            const format = this.importFormat.value;
+            const uploaded = this.uploadedImport;
+            if (uploaded && !this.importReadError)
+                this.refreshImportInput();
+            if (format === "native" || isLegacy(format) || !uploaded || this.importReadError) {
+                this.drawState();
+                return;
+            }
+            this.readingMapping = true;
+            setUiText(this.importStatus, format === "docx" ? uiMessage("export.checkingWordCaptionsObjects") : uiMessage("export.checkingBibliographyRecordsMapping"));
+            this.drawState();
+            try {
+                if (format === "docx") {
+                    const analysis = await this.host.request<DocxImportAnalysis>("/api/exchange/inspect", { format, bytesBase64: uploaded.bytesBase64 });
+                    if (!this.importGate.accepts(generation))
+                        return;
+                    if (!/^[a-f0-9]{64}$/i.test(analysis.contentHash) || !Array.isArray(analysis.captions) || !Array.isArray(analysis.objects) || analysis.captions.some(item => !Number.isSafeInteger(item.blockIndex) || item.blockIndex < 0 || typeof item.text !== "string" || typeof item.suggestedText !== "string") || analysis.objects.some(item => !Number.isSafeInteger(item.blockIndex) || item.blockIndex < 0 || !captionKinds.some(kind => kind[0] === item.kind)))
+                        throw new UiError(uiMessage("export.wordCaptionAnalysisIncomplete"));
+                    this.docxAnalysis = analysis;
+                    this.captionChoices = analysis.captions.map(caption => ({ enabled: false, captionBlock: caption.blockIndex, objectBlock: "", kind: "", captionText: caption.suggestedText, position: "" }));
+                    this.drawCaptionPairings();
+                    this.refreshImportInput();
+                    this.importStatus.classList.remove("data-warning");
+                    setUiText(this.importStatus, uiMessage("export.wordOriginalCheckedCaptionDescription"));
+                    return;
+                }
+                const incoming = await this.host.request<unknown>("/api/exchange/inspect", { format, bytesBase64: uploaded.bytesBase64 });
                 if (!this.importGate.accepts(generation))
                     return;
-                if (!/^[a-f0-9]{64}$/i.test(analysis.contentHash) || !Array.isArray(analysis.captions) || !Array.isArray(analysis.objects) || analysis.captions.some(item => !Number.isSafeInteger(item.blockIndex) || item.blockIndex < 0 || typeof item.text !== "string" || typeof item.suggestedText !== "string") || analysis.objects.some(item => !Number.isSafeInteger(item.blockIndex) || item.blockIndex < 0 || !captionKinds.some(kind => kind[0] === item.kind)))
-                    throw new UiError(uiMessage("export.wordCaptionAnalysisIncomplete"));
-                this.docxAnalysis = analysis;
-                this.captionChoices = analysis.captions.map(caption => ({ enabled: false, captionBlock: caption.blockIndex, objectBlock: "", kind: "", captionText: caption.suggestedText, position: "" }));
-                this.drawCaptionPairings();
-                this.refreshImportInput();
-                this.importStatus.classList.remove("data-warning");
-                setUiText(this.importStatus, uiMessage("export.wordOriginalCheckedCaptionDescription"));
-                return;
+                const result = decodeBibliographyInspection(incoming);
+                const conflicts = bibliographyConflictCount(result);
+                this.mapping = result;
+                this.importMapping.replaceChildren(ui("p", "output-summary", displayMessage("export.bibliographyRecordCount", { p0: result.records.length })), lossList(result.losses), previewContent(result.records, uiMessage("export.viewBibliographyRecordsProvenanceConflicts")));
+                if (conflicts) {
+                    this.importMapping.prepend(ui("p", "data-warning", displayMessage("export.bibliographyConflictCount", { p0: conflicts })));
+                    setUiText(this.importStatus, uiMessage("export.bibliographyConflictsRetained"));
+                }
+                else {
+                    this.importStatus.classList.remove("data-warning");
+                    setUiText(this.importStatus, uiMessage("export.bibliographyMappingChecked"));
+                }
             }
-            const incoming = await this.host.request<unknown>("/api/exchange/inspect", { format, bytesBase64: uploaded.bytesBase64 });
-            if (!this.importGate.accepts(generation))
-                return;
-            const result = decodeBibliographyInspection(incoming);
-            const conflicts = bibliographyConflictCount(result);
-            this.mapping = result;
-            this.importMapping.replaceChildren(ui("p", "output-summary", displayMessage("export.bibliographyRecordCount", { p0: result.records.length })), lossList(result.losses), previewContent(result.records, uiMessage("export.viewBibliographyRecordsProvenanceConflicts")));
-            if (conflicts) {
-                this.importMapping.prepend(ui("p", "data-warning", displayMessage("export.bibliographyConflictCount", { p0: conflicts })));
-                setUiText(this.importStatus, uiMessage("export.bibliographyConflictsRetained"));
+            catch (error) {
+                if (this.importGate.accepts(generation)) {
+                    this.mappingError = format !== "docx";
+                    this.report(error, this.importStatus);
+                    this.importMapping.replaceChildren(ui("p", "data-warning", format === "docx" ? uiMessage("export.captionProposalUnavailable") : uiMessage("export.completeConflictFreeMappingRequired")), action(format === "docx" ? uiMessage("export.recheckWordCaptions") : uiMessage("export.recheckBibliographyOriginal"), () => this.inspectImport(), "data-button compact"));
+                }
             }
-            else {
-                this.importStatus.classList.remove("data-warning");
-                setUiText(this.importStatus, uiMessage("export.bibliographyMappingChecked"));
+            finally {
+                if (this.importGate.accepts(generation)) {
+                    this.readingMapping = false;
+                    this.drawState();
+                }
             }
-        }
-        catch (error) {
-            if (this.importGate.accepts(generation)) {
-                this.mappingError = format !== "docx";
-                this.report(error, this.importStatus);
-                this.importMapping.replaceChildren(ui("p", "data-warning", format === "docx" ? uiMessage("export.captionProposalUnavailable") : uiMessage("export.completeConflictFreeMappingRequired")), action(format === "docx" ? uiMessage("export.recheckWordCaptions") : uiMessage("export.recheckBibliographyOriginal"), () => this.inspectImport(), "data-button compact"));
-            }
-        }
-        finally {
-            if (this.importGate.accepts(generation)) {
-                this.readingMapping = false;
-                this.drawState();
-            }
-        }
+        } finally { endCloseWork(); }
     }
     private drawCaptionPairings(): void {
         const analysis = this.docxAnalysis;
@@ -716,6 +785,9 @@ class OutputDialog {
         });
     }
     private refreshImportInput(): void {
+        this.closeGuard.assertMutable();
+        this.importEdited = true;
+        this.deliveredImport = false;
         if (!this.uploadedImport || this.exchange.locked)
             return;
         try {
@@ -738,76 +810,86 @@ class OutputDialog {
         this.drawState();
     }
     private async prepareImport(): Promise<void> {
-        if (!this.exchange.uncertain && (this.importReadError || this.mappingError || this.captionError || this.readingImport || this.readingMapping || isBibliography(this.importFormat.value) && (!this.mapping || bibliographyConflictCount(this.mapping)))) {
-            this.report(new UiError(uiMessage("export.finishOriginalInspectionBeforePrepare")), this.importStatus);
-            return;
-        }
-        if (!this.exchange.uncertain && !this.exchange.plan && !this.legacyAvailable(this.importFormat.value, this.importBackend.value, true)) {
-            this.report(new UiError(uiMessage("export.externalBackendUnavailable")), this.importStatus);
-            return;
-        }
-        if (!this.parent.value || !this.name.value) {
-            this.report(new UiError(uiMessage("export.importLocationAndNameRequired")), this.importStatus);
-            return;
-        }
-        if (!this.exchange.locked && !this.exchange.plan) {
-            this.refreshImportInput();
-            if (this.captionError)
-                return;
-        }
-        const promise = this.exchange.prepare();
-        setUiText(this.importStatus, uiMessage("export.checkingOriginalPreparingImport"));
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const plan = await promise;
-            this.importPreview.replaceChildren(lossList(plan.losses));
-            if (plan.contentPreview) {
-                const p = plan.contentPreview;
-                this.importPreview.append(ui("h4", "", displayMessage("export.wordImportReviewCounts", { p0: p.comments, p1: p.revisions })), ui("p", "data-help", uiMessage("export.wordRevisionsBaselineDescription")), ui("pre", "output-source-preview", p.source.replace(/^#metadata[^\n]*\n/, "")));
-                if (p.truncated)
-                    this.importPreview.append(ui("p", "data-help", uiMessage("export.bodyPreviewTruncated")));
-                for (const a of p.annotations)
-                    this.importPreview.append(ui("p", "", () => `${uiTextValue(a.author)}：${uiTextValue(a.body)}（${uiTextValue(a.unlocated ? uiMessage("export.unlocatedRetainedOnOriginal") : a.excerpt || uiMessage("export.insertionPointOrReply"))}）`));
+            if (!this.exchange.uncertain && (this.importReadError || this.mappingError || this.captionError || this.readingImport || this.readingMapping || isBibliography(this.importFormat.value) && (!this.mapping || bibliographyConflictCount(this.mapping)))) {
+                this.report(new UiError(uiMessage("export.finishOriginalInspectionBeforePrepare")), this.importStatus);
+                return;
             }
-            if (plan.changes)
-                this.importPreview.append(previewContent(plan.changes));
-            if (plan.legacyConversion !== undefined)
-                this.importPreview.append(conversionPreview(plan.legacyConversion));
-            this.acceptImport.checked = false;
-            this.importStatus.classList.remove("data-warning");
-            setUiText(this.importStatus, uiMessage("export.importPlanPrepared"));
-        }
-        catch (error) {
-            this.report(error, this.importStatus);
-        }
-        finally {
+            if (!this.exchange.uncertain && !this.exchange.plan && !this.legacyAvailable(this.importFormat.value, this.importBackend.value, true)) {
+                this.report(new UiError(uiMessage("export.externalBackendUnavailable")), this.importStatus);
+                return;
+            }
+            if (!this.parent.value || !this.name.value) {
+                this.report(new UiError(uiMessage("export.importLocationAndNameRequired")), this.importStatus);
+                return;
+            }
+            if (!this.exchange.locked && !this.exchange.plan) {
+                this.refreshImportInput();
+                if (this.captionError)
+                    return;
+            }
+            const promise = this.exchange.prepare();
+            setUiText(this.importStatus, uiMessage("export.checkingOriginalPreparingImport"));
             this.drawState();
-        }
+            try {
+                const plan = await promise;
+                this.importPreview.replaceChildren(lossList(plan.losses));
+                if (plan.contentPreview) {
+                    const p = plan.contentPreview;
+                    this.importPreview.append(ui("h4", "", displayMessage("export.wordImportReviewCounts", { p0: p.comments, p1: p.revisions })), ui("p", "data-help", uiMessage("export.wordRevisionsBaselineDescription")), ui("pre", "output-source-preview", p.source.replace(/^#metadata[^\n]*\n/, "")));
+                    if (p.truncated)
+                        this.importPreview.append(ui("p", "data-help", uiMessage("export.bodyPreviewTruncated")));
+                    for (const a of p.annotations)
+                        this.importPreview.append(ui("p", "", () => `${uiTextValue(a.author)}：${uiTextValue(a.body)}（${uiTextValue(a.unlocated ? uiMessage("export.unlocatedRetainedOnOriginal") : a.excerpt || uiMessage("export.insertionPointOrReply"))}）`));
+                }
+                if (plan.changes)
+                    this.importPreview.append(previewContent(plan.changes));
+                if (plan.legacyConversion !== undefined)
+                    this.importPreview.append(conversionPreview(plan.legacyConversion));
+                this.acceptImport.checked = false;
+                this.importStatus.classList.remove("data-warning");
+                setUiText(this.importStatus, uiMessage("export.importPlanPrepared"));
+            }
+            catch (error) {
+                this.report(error, this.importStatus);
+            }
+            finally {
+                this.drawState();
+            }
+        } finally { endCloseWork(); }
     }
     private async commitImport(): Promise<void> {
-        const promise = this.exchange.commit(this.acceptImport.checked);
-        setUiText(this.importStatus, uiMessage("export.committingSameImportPlan"));
-        this.drawState();
+        const endCloseWork = this.closeGuard.begin();
         try {
-            const receipt = await promise;
-            const opened = await this.deliverReceipt(receipt);
-            this.importStatus.classList.remove("data-warning");
-            setUiText(this.importStatus, opened ? uiMessage("export.importCommittedOpenedActualNote") : displayMessage("export.importCommittedActualCopyDirectory", { p0: uiDisplayParameter(receipt.path) }));
-        }
-        catch (error) {
-            this.report(error, this.importStatus);
-        }
-        finally {
+            const promise = this.exchange.commit(this.acceptImport.checked);
+            setUiText(this.importStatus, uiMessage("export.committingSameImportPlan"));
             this.drawState();
-        }
+            try {
+                const receipt = await promise;
+                const opened = await this.deliverReceipt(receipt);
+                this.importStatus.classList.remove("data-warning");
+                setUiText(this.importStatus, opened ? uiMessage("export.importCommittedOpenedActualNote") : displayMessage("export.importCommittedActualCopyDirectory", { p0: uiDisplayParameter(receipt.path) }));
+            }
+            catch (error) {
+                this.report(error, this.importStatus);
+            }
+            finally {
+                this.drawState();
+            }
+        } finally { endCloseWork(); }
     }
     private async deliverReceipt(receipt: ExchangeReceipt): Promise<boolean> {
-        const root = this.exchange.input?.root ?? this.output.basis.root;
-        this.host.environmentChanged?.(root);
-        if (!receipt.path)
-            throw Object.assign(new UiError(uiMessage("export.importCommittedReceiptLocationMissing")), { code: "receiptOpenUnavailable" });
-        await this.host.imported?.({ ...receipt, root });
-        return false;
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            const root = this.exchange.input?.root ?? this.output.basis.root;
+            this.host.environmentChanged?.(root);
+            if (!receipt.path)
+                throw Object.assign(new UiError(uiMessage("export.importCommittedReceiptLocationMissing")), { code: "receiptOpenUnavailable" });
+            await this.host.imported?.({ ...receipt, root });
+            this.deliveredImport = true;
+            return false;
+        } finally { endCloseWork(); }
     }
     private drawState(): void {
         const outputFormat = this.output.draft.format;
@@ -874,22 +956,34 @@ class OutputDialog {
 }
 /** A closed dialog retains frozen inputs, received receipts and uncertain IDs. */
 export class OutputPanel {
+    private readonly closeGuard = new ProposalCloseGuard();
     private readonly dialogs = new Map<string, OutputDialog>();
     constructor(private readonly host: OutputPanelHost) { }
+    assertCloseReady(): void { this.closeGuard.assertReady(false); for (const dialog of this.dialogs.values()) dialog.assertCloseReady(); }
+    freezeForClose(): boolean {
+        try { this.assertCloseReady(); } catch { return false; }
+        if (!this.closeGuard.freeze(false)) return false;
+        for (const dialog of this.dialogs.values()) if (!dialog.freezeForClose()) { this.thawAfterClose(); return false; }
+        return true;
+    }
+    thawAfterClose(): void { this.closeGuard.thaw(); for (const dialog of this.dialogs.values()) dialog.thawAfterClose(); }
     async open(query?: FrozenQuery): Promise<void> {
-        await this.host.prepareAction?.();
-        const basis = this.host.getDocument();
-        if (!basis) {
-            this.host.notify(uiMessage("export.openNoteBeforeOutputImport"), true);
-            return;
-        }
-        const embedded = this.host.embeddedQueries?.() ?? [];
-        const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}/${query?.queryId ?? "note"}/${JSON.stringify(embedded)}`;
-        let dialog = this.dialogs.get(key);
-        if (!dialog) {
-            dialog = new OutputDialog(this.host, basis, query, embedded);
-            this.dialogs.set(key, dialog);
-        }
-        dialog.open();
+        const endCloseWork = this.closeGuard.begin();
+        try {
+            await this.host.prepareAction?.();
+            const basis = this.host.getDocument();
+            if (!basis) {
+                this.host.notify(uiMessage("export.openNoteBeforeOutputImport"), true);
+                return;
+            }
+            const embedded = this.host.embeddedQueries?.() ?? [];
+            const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}/${query?.queryId ?? "note"}/${JSON.stringify(embedded)}`;
+            let dialog = this.dialogs.get(key);
+            if (!dialog) {
+                dialog = new OutputDialog(this.host, basis, query, embedded, () => this.dialogs.delete(key));
+                this.dialogs.set(key, dialog);
+            }
+            dialog.open();
+        } finally { endCloseWork(); }
     }
 }

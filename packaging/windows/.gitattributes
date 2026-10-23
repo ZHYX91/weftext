@@ -2,3 +2,4 @@
 licenses/vc-runtime/** -text -whitespace
 licenses/webview2-rust/** -text -whitespace
 licenses/webview2-sdk/** -text -whitespace
+licenses/webview2-runtime/** -text -whitespace
