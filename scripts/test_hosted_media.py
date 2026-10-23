@@ -23,6 +23,7 @@ from test_hosted_office import HostedOffice
 from test_hosted_scopes import HostedScopes
 from test_hosted_library import visible_html_text
 from test_local_features import tiny_png
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 
 
 class HostedMedia(HostedQuery):
@@ -296,14 +297,50 @@ class HostedMedia(HostedQuery):
         self.server.close(); self.config['files']['Shared']['inputs'] = ['aux']; self.start()
         doc = self.open()
         source = doc['source']+'\n#include "supplement.typ"\n#for i in range(12000) [slow paragraph #parbreak()]'
+        leaf = self.root/self.config['resources']['aux']['path']
+        deadline = time.monotonic() + 40
         with ThreadPoolExecutor(max_workers=1) as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/preview',
-                {'sessionId': doc['sessionId'], 'source': source}, self.tokens['alice'])
-            time.sleep(0.2)
-            (self.root/self.config['resources']['aux']['path']).write_text('CHANGED_DURING_COMPILE', 'utf-8')
-            status, response, _ = pending.result(timeout=40)
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original preview/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/preview',
+                    {'sessionId': doc['sessionId'], 'source': source}, self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                while True:
+                    self.assertFalse(pending.done(), 'Preview finished before the actual input mutation')
+                    self.assertLess(time.monotonic(), deadline, 'Original preview/mutation budget exhausted')
+                    observation.assert_inflight(pending)
+                    try:
+                        output = leaf.open('w', encoding='utf-8')
+                    except PermissionError as error:
+                        # Retry only a failed open, within the original request
+                        # budget. A write or close failure is never replayed.
+                        if pending.done() or time.monotonic() >= deadline:
+                            raise AssertionError('Input remained unavailable during the original preview') from error
+                        time.sleep(0.01)
+                        continue
+                    with output:
+                        observation.assert_inflight(pending)
+                        self.assertLess(time.monotonic(), deadline, 'Original preview/mutation budget exhausted before write')
+                        output.write('CHANGED_DURING_COMPILE')
+                    changed = event_time_ns()
+                    break
+                (status, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'previewCompletedMonotonicNs': completed,
+                 'status': status, 'errorCode': response.get('error', {}).get('code'),
+                 'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'media-input-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Actual input mutation must complete before preview delivery')
         self.assertEqual(status, 409, str(response)[:1000])
+        self.assertEqual(response['error']['code'], 'staleEnvironment')
+        self.assertEqual(response['error']['explanation']['key'],
+                         'error.api.hostedEditor.authorizedDependenciesChanged')
         self.assertNotIn('html', response)
+        self.assertEqual(leaf.read_text('utf-8'), 'CHANGED_DURING_COMPILE')
 
     def test_media_proofread_original_dependencies_survive_restart(self):
         self.prepare_media()

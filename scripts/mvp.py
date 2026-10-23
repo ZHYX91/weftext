@@ -155,6 +155,7 @@ def check(artifacts):
     checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
     checked(sys.executable, 'scripts/test_windows_package.py')
     checked(sys.executable, 'scripts/test_cli_serve.py')
+    checked(sys.executable, 'scripts/test_owned_worker_observer.py')
     checked(NODE, '--test', 'scripts/test_cli_serve.mjs')
     checked(sys.executable, 'scripts/recognition/test_schemes.py')
     checked(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
