@@ -10,6 +10,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from pathlib import Path
 
 from test_hosted import uid
@@ -253,14 +254,32 @@ class HostedResourceCollections(HostedMedia):
         doc = self.open(); self.save(doc, doc['source']+'\n错别字\n#include "supplement.typ"\n')
         self.enable_inputs()
         doc = self.open()
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/editor/render',
-                {'sessionId': doc['sessionId'], 'source': doc['source']+
-                 '\n#for i in range(20000) [delayed paragraph #parbreak()]', 'serial': 1}, self.tokens['alice'])
-            time.sleep(.2)
-            self.import_asset('during-render.bin', b'EXPLICIT_NEW_MEMBER')
-            code, response, _ = pending.result(timeout=40)
-            self.assertEqual(code, 409, response)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render', {'sessionId': doc['sessionId'], 'source': doc['source']+'\n#for i in range(20000) [delayed paragraph #parbreak()]', 'serial': 1}, self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.import_asset('during-render.bin', b'EXPLICIT_NEW_MEMBER')
+                changed = event_time_ns()
+                (code, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': response.get('error', {}).get('code'),
+                 'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'collection-membership-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        self.assertEqual(code, 409, response)
+        self.assertEqual(response['error']['code'], 'staleEnvironment')
+        self.assertEqual(response['error']['explanation']['key'],
+                         'error.api.hostedEditor.authorizedDependenciesChanged')
+        self.assertNotIn('tree', response)
         options = dict(characters=True, typos=True, pairs=True, sensitive=True,
             allowlist=[], selection=None, rules=[dict(id='collection.plan', version='1',
             category='typo', text='错别字', message='请核对', replacement='正确字', scope={'universal': True})])

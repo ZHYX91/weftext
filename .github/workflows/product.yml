@@ -22,14 +22,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24.19.0'
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - run: npm --prefix app ci --ignore-scripts
-      - run: npm --prefix app test
-      - run: npm --prefix app run build
+      - run: python scripts/mvp.py check --group frontend
       - run: git diff --exit-code
 
   windows-product:
@@ -62,6 +63,118 @@ jobs:
             target
           key: windows-cargo-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml') }}
           restore-keys: windows-cargo-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Build once and run the existing product checks
-        run: python scripts/mvp.py check
+      - name: Build once through the product entry and retain its exact batch
+        id: build
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          sys.path.insert(0, str(Path.cwd() / 'scripts'))
+          import mvp
+          from package_inputs import is_reparse
+
+          artifacts = mvp.main(['build'])
+          if not isinstance(artifacts, mvp.QualifiedArtifacts) or artifacts.receipt_path is None:
+              raise RuntimeError('Windows CI requires the newly built qualified batch')
+          evidence = artifacts.target_directory / 'weftext-ci-evidence' / (
+              os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'])
+          evidence.mkdir(parents=True, exist_ok=False)
+          test_temp = evidence / 'temp'
+          test_temp.mkdir()
+          check_roots = artifacts.target_directory / 'weftext-checks'
+          fixed_root = artifacts.source_root / 'target/test-fixtures/hierarchical-tags'
+          if fixed_root.exists() and any(is_reparse(path.lstat()) for path in
+                  (fixed_root, fixed_root.parent, fixed_root.parent.parent)):
+              raise ValueError('CI fixed process evidence parent is a reparse point')
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          provenance = {
+              'schemaVersion': 1, 'scope': 'CI identities, never cached check results',
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'githubSha': os.environ['GITHUB_SHA'],
+              'checkoutCommit': git('rev-parse', 'HEAD'),
+              'checkoutTree': git('rev-parse', 'HEAD^{tree}'),
+              'receipt': str(artifacts.receipt_path),
+              'targetRoot': str(artifacts.target_directory),
+              'checkRootsBefore': sorted(path.name for path in check_roots.iterdir()) if check_roots.exists() else [],
+              'fixedControlRootsBefore': {
+                  str(fixed_root): sorted(path.name for path in fixed_root.iterdir()) if fixed_root.exists() else []},
+          }
+          (evidence / 'provenance.json').write_text(json.dumps(provenance, indent=2) + '\n', encoding='utf-8')
+          (evidence / 'cargo-metadata.json').write_text(json.dumps(artifacts.metadata, indent=2) + '\n', encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8', newline='\n') as output:
+              output.write(f'receipt={artifacts.receipt_path}\n')
+              output.write(f'batch={artifacts.receipt_path.parent}\n')
+              output.write(f'evidence={evidence}\n')
+              output.write(f'temp={test_temp}\n')
+      - name: Run all product checks in a separate process on that batch
+        env:
+          WEFTEXT_BUILD_RECEIPT: ${{ steps.build.outputs.receipt }}
+          TEMP: ${{ steps.build.outputs.temp }}
+          TMP: ${{ steps.build.outputs.temp }}
+        run: python scripts/mvp.py check --artifacts "$env:WEFTEXT_BUILD_RECEIPT"
       - run: git diff --exit-code
+      - name: Retain original process controls and CLI results from this check
+        if: always() && steps.build.outputs.batch != ''
+        shell: python
+        env:
+          WEFTEXT_CI_EVIDENCE: ${{ steps.build.outputs.evidence }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import sys
+          import zipfile
+
+          sys.path.insert(0, str(Path.cwd() / 'scripts'))
+          from package_inputs import is_reparse
+
+          evidence = Path(os.environ['WEFTEXT_CI_EVIDENCE'])
+          provenance = json.loads((evidence / 'provenance.json').read_text(encoding='utf-8'))
+          check_roots = Path(provenance['targetRoot']) / 'weftext-checks'
+          before = set(provenance['checkRootsBefore'])
+          new_roots = sorted(path for path in check_roots.iterdir() if path.name not in before) if check_roots.exists() else []
+          roots = [('http-temp', evidence / 'temp'), *[(path.name, path) for path in new_roots]]
+          for fixed, previous in provenance['fixedControlRootsBefore'].items():
+              fixed_root = Path(fixed)
+              if fixed_root.exists():
+                  if any(is_reparse(path.lstat()) for path in (fixed_root, fixed_root.parent, fixed_root.parent.parent)):
+                      raise ValueError('CI fixed process evidence parent is a reparse point')
+                  roots.extend(('hierarchical-tags-' + path.name, path) for path in sorted(fixed_root.iterdir())
+                               if path.name not in previous)
+          def traversal_failed(error):
+              raise error
+          with zipfile.ZipFile(evidence / 'process-controls.zip', 'x', zipfile.ZIP_DEFLATED) as archive:
+              for label, root in roots:
+                  if is_reparse(root.lstat()):
+                      raise ValueError('CI process evidence root is a reparse point')
+                  for directory, children, names in os.walk(root, followlinks=False, onerror=traversal_failed):
+                      folder = Path(directory)
+                      children[:] = [name for name in children if not is_reparse((folder / name).lstat())]
+                      relative = folder.relative_to(root)
+                      if not any(part.startswith(('server-control-', 'owner-control-')) or part == 'cli-results' for part in relative.parts):
+                          continue
+                      for name in sorted(names):
+                          path = folder / name
+                          if is_reparse(path.lstat()):
+                              raise ValueError('CI process evidence file is a reparse point')
+                          archive.write(path, str(Path(label) / relative / name))
+          (evidence / 'process-roots.json').write_text(json.dumps(
+              {'temporaryRoot': str(evidence / 'temp'), 'newCheckRoots': [str(path) for path in new_roots],
+               'selectedRoots': [{'label': label, 'path': str(root)} for label, root in roots]}, indent=2) + '\n', encoding='utf-8')
+      - name: Retain only this attempt's batch and CI identities
+        if: always() && steps.build.outputs.batch != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-qualified-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.build.outputs.batch }}
+            ${{ steps.build.outputs.evidence }}/*.json
+            ${{ steps.build.outputs.evidence }}/process-controls.zip
+          if-no-files-found: error
+          retention-days: 7

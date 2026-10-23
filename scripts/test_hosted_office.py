@@ -9,6 +9,7 @@ import unittest
 import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from test_hosted import uid
 from test_hosted_review import HostedReview
 
@@ -157,13 +158,37 @@ class HostedOffice(HostedReview):
         self.assertEqual(self.call('office/export/status', {'requestId': bad['requestId']})['status'], 'failed')
         self.assertEqual(self.output(bad)[0]['status'], 'failed')
         self.call('office/export/prepare', {**bad, 'source': request['source']}, status=409)
-        slow = {**request, 'requestId': uid(), 'source': request['source']+'\n#for i in range(20000) [paragraph #parbreak()]'}
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/office/export/prepare', slow, self.tokens['alice'])
-            time.sleep(.2)
-            self.policy(lambda users: users['alice']['grants']['Secret']['office'].update(export=False))
-            code, response, _ = pending.result(timeout=45)
+        # Construct 20,000 native paragraph contents with bounded projection.
+        # Fully expanding them would test capacity instead of late authorization.
+        workload = ('\n#let inflight-paragraphs = range(20000).map(i => [paragraph#parbreak()])\n'
+                    '#text(str(inflight-paragraphs.len()))\nparagraph')
+        slow = {**request, 'requestId': uid(), 'source': request['source']+workload}
+        deadline = time.monotonic() + 45
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/office/export/prepare', slow, self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.policy(lambda users: users['alice']['grants']['Secret']['office'].update(export=False))
+                changed = event_time_ns()
+                (code, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': response.get('error', {}).get('code'),
+                 'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'office-input-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
         self.assertIn(code, [404, 409, 422]); self.assertNotIn('digest', response)
+        self.assertEqual(code, 409, response)
+        self.assertEqual(response['error']['code'], 'officeUnavailable')
+        self.assertEqual(response['error']['explanation']['key'],
+                         'error.api.hostedOffice.outputBasisChanged')
 
     def test_office_template_slots_exact_upload_and_route_budget(self):
         self.prepare_office()

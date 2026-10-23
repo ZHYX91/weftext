@@ -10,6 +10,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from test_hosted import Server, digest, uid
 from test_hosted_fields import HostedFields
 from test_hosted_office import HostedOffice
@@ -302,22 +303,62 @@ class HostedQuery(HostedFields):
         self.assertTrue(self.call('editor/render', basis)['ok'])
         occurrence = next(item for item in found['occurrences'] if item['key'] == definition['definition']['key'])
         request = {**basis, 'occurrenceId': occurrence['id']}
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/query/embedded/run', request, self.tokens['alice'])
-            time.sleep(.2)
-            self.call('editor/map', {**basis, 'source': slow+'\nNEWER_DRAFT', 'serial': 2})
-            code, result, _ = pending.result(timeout=40)
-            self.assertEqual(code, 409, result)
-            self.assertNotIn('queryId', result)
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/query/embedded/run',
-                                  {**request, 'serial': 3}, self.tokens['alice'])
-            time.sleep(.2)
-            self.policy(lambda users: users['alice']['grants']['Other']['query']['products'].update(body=False))
-            code, result, _ = pending.result(timeout=40)
-            self.assertEqual(code, 401, result)
-            self.assertEqual(result['error']['code'], 'authentication')
-            self.assertNotIn('queryId', result)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/query/embedded/run', request, self.tokens['alice'])
+                # The whole input set is captured before its first worker.
+                # This does not identify a particular row or all workers.
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.call('editor/map', {**basis, 'source': slow+'\nNEWER_DRAFT', 'serial': 2})
+                changed = event_time_ns()
+                (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': result.get('error', {}).get('code'),
+                 'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'query-serial-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        self.assertEqual(code, 409, result)
+        self.assertEqual(result['error']['code'], 'stale_draft')
+        self.assertEqual(result['error']['explanation']['key'],
+                         'error.api.writing.editorBasisExpired')
+        self.assertNotIn('queryId', result)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/query/embedded/run', {**request, 'serial': 3}, self.tokens['alice'])
+                # The whole input set is captured before its first worker.
+                # This does not identify a particular row or all workers.
+                worker = observation.wait(pending, deadline=deadline)
+                observation.assert_inflight(pending)
+                self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
+                self.policy(lambda users: users['alice']['grants']['Other']['query']['products'].update(body=False))
+                changed = event_time_ns()
+                (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': result.get('error', {}).get('code'),
+                 'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'query-authority-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        self.assertEqual(code, 401, result)
+        self.assertEqual(result['error']['code'], 'authentication')
+        self.assertEqual(result['error']['explanation']['key'],
+                         'error.api.hosted.authenticationExpired')
+        self.assertNotIn('queryId', result)
 
     def test_query_frozen_semantic_output_and_every_consumer_revocation(self):
         documents = self.prepare_query()

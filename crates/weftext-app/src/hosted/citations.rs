@@ -56,6 +56,16 @@ fn changed() -> ApiError {
         UiMessage::error_api_hosted_citations_citation_basis_changed(),
     )
 }
+fn changed_after_worker(original: ApiError) -> ApiError {
+    changed().inherit_worker_failure_from(&original)
+}
+fn reference_number_unavailable(original: Option<&ApiError>) -> ApiError {
+    let safe = ApiError::bad(UiMessage::error_api_hosted_citations_reference_number_unavailable());
+    match original {
+        Some(original) => safe.inherit_worker_failure_from(original),
+        None => safe,
+    }
+}
 fn access(
     inner: &HostedInner,
     actor: &str,
@@ -850,7 +860,14 @@ async fn read_editor(
                 UiMessage::error_api_hosted_citations_citation_preview_busy(),
             )
         })?;
-        Some((render_worker(input).await, dependencies, environment))
+        Some((
+            worker_failure::observe_hosted_result(
+                worker_failure::HostedContext::CitationRead,
+                render_worker(input).await,
+            ),
+            dependencies,
+            environment,
+        ))
     } else {
         None
     };
@@ -897,7 +914,14 @@ async fn edit_native(
                 UiMessage::error_api_hosted_citations_citation_compile_busy(),
             )
         })?;
-        Some((render_worker(frozen.0).await, frozen.1, frozen.2))
+        Some((
+            worker_failure::observe_hosted_result(
+                worker_failure::HostedContext::CitationEdit,
+                render_worker(frozen.0).await,
+            ),
+            frozen.1,
+            frozen.2,
+        ))
     } else {
         None
     };
@@ -911,7 +935,7 @@ async fn edit_native(
         if req.intent["form"]=="normal" && matches!(s("kind")?,"nativeReferenceInsert"|"nativeReferenceInsertWithLabel") {
             let from=if s("kind")?=="nativeReferenceInsertWithLabel"{req.intent["target"]["from"].as_u64().unwrap_or(u64::MAX) as usize}else{weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|Some(target.label.as_str())==req.intent["label"].as_str()).map_or(usize::MAX,|target|target.range.from)};
             let numbered=compiled.as_ref().and_then(|(output,_,_)|output.as_ref().ok()).and_then(|output|serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).ok()).and_then(|tree|crate::citation_api::reference_numbered_at(&tree,from)).unwrap_or(false);
-            if !numbered{return Err(ApiError::bad(UiMessage::error_api_hosted_citations_reference_number_unavailable()));}
+            if !numbered{return Err(reference_number_unavailable(compiled.as_ref().and_then(|(output,_,_)|output.as_ref().err())));}
         }
         if s("kind")?=="nativeReferenceInsert" && !weftext_engine::inspect_native_citation_editor(&basis.source).targets.iter().any(|target|Some(target.label.as_str())==req.intent["label"].as_str()&&matches!(target.kind.as_str(),"heading"|"figure"|"table"|"equation"|"footnote")){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_native_reference_target_unavailable()));}
         let edited=match s("kind")?{
@@ -921,9 +945,9 @@ async fn edit_native(
             "nativeCitationRename"=>weftext_engine::rename_native_citation_key(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
             "nativeCitationLink"=>{let target=s("target")?;let choice=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==target)).ok_or_else(unavailable)?;weftext_engine::insert_native_link(&basis.source,&basis.source_hash,at()?,target,req.intent["text"].as_str().filter(|text|!text.is_empty()).unwrap_or(choice["title"].as_str().unwrap_or(""))).map_err(fail)?},
             "nativeCitationLinkText"=>{let range=range()?;let link=weftext_knowledge::native_links(&basis.source).into_iter().find(|link|link.from==range.from && link.to==range.to && link.kind=="native").ok_or_else(changed)?;let reference=link.target.split('#').next().unwrap_or("");let title=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==reference)).and_then(|choice|choice["title"].as_str()).ok_or_else(unavailable)?;weftext_engine::update_native_link_text(&basis.source,&basis.source_hash,&range,title).map_err(fail)?},
-            "nativeReferenceInsert"=>{let label=s("label")?;let target=weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|target.label==label && target.unique).ok_or_else(unavailable)?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(|_|changed())?;let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();if output["ok"]!=true || !labels.iter().any(|entry|entry.label==label && entry.count==1 && entry.origins.iter().any(|origin|origin.is_main && origin.from==target.range.from)){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_execution_origin_required()));}
+            "nativeReferenceInsert"=>{let label=s("label")?;let target=weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|target.label==label && target.unique).ok_or_else(unavailable)?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(changed_after_worker)?;let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();if output["ok"]!=true || !labels.iter().any(|entry|entry.label==label && entry.count==1 && entry.origins.iter().any(|origin|origin.is_main && origin.from==target.range.from)){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_execution_origin_required()));}
             if s("form")?=="text"{weftext_engine::insert_native_cross_link(&basis.source,&basis.source_hash,at()?,label,s("text")?).map_err(fail)?}else{if !matches!(s("form")?,"normal"|"page"){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unknown_cross_reference_form()));}weftext_engine::insert_native_cross_reference(&basis.source,&basis.source_hash,at()?,label,s("form")?=="page").map_err(fail)?}},
-            "nativeReferenceInsertWithLabel"=>{let target=serde_json::from_value::<weftext_engine::SourceRange>(req.intent["target"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_citations_object_range_required()))?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(|_|changed())?;let tree=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).map_err(|_|changed())?;if output["ok"]!=true||!crate::citation_api::unlabelled_reference_targets(&basis.source,&tree).iter().any(|candidate|candidate["range"]==req.intent["target"]){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_native_object_required()));}let form=s("form")?;if !matches!(form,"normal"|"page"){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_labelled_reference_form_unsupported()));}weftext_engine::insert_native_cross_reference_with_label(&basis.source,&basis.source_hash,at()?,&target,s("label")?,form=="page").map_err(fail)?},
+            "nativeReferenceInsertWithLabel"=>{let target=serde_json::from_value::<weftext_engine::SourceRange>(req.intent["target"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_citations_object_range_required()))?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(changed_after_worker)?;let tree=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).map_err(|_|changed())?;if output["ok"]!=true||!crate::citation_api::unlabelled_reference_targets(&basis.source,&tree).iter().any(|candidate|candidate["range"]==req.intent["target"]){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_native_object_required()));}let form=s("form")?;if !matches!(form,"normal"|"page"){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_labelled_reference_form_unsupported()));}weftext_engine::insert_native_cross_reference_with_label(&basis.source,&basis.source_hash,at()?,&target,s("label")?,form=="page").map_err(fail)?},
             "nativeReferenceRename"=>weftext_engine::rename_native_label(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
             _=>return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unknown_citation_operation())),
         };
@@ -1558,6 +1582,74 @@ mod tests {
                     .is_err()
             );
             assert_eq!(std::fs::read(path).unwrap(), before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod worker_diagnostic_contract_tests {
+    use super::*;
+    use crate::worker_failure::{
+        Kind,
+        diagnostics_tests::{assert_public_response, assert_safe_wrapper, original_failure},
+    };
+
+    #[tokio::test]
+    async fn normal_reference_early_bad_keeps_original_worker_and_its_exact_public_contract() {
+        for kind in [
+            Kind::Deadline,
+            Kind::NonzeroExit,
+            Kind::OutputRejected,
+            Kind::SupervisionLost,
+        ] {
+            let original = original_failure(kind);
+            let retained = original.private_worker_failure.as_ref().unwrap().clone();
+            assert_safe_wrapper(
+                reference_number_unavailable(Some(&original)),
+                &retained,
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                UiMessage::error_api_hosted_citations_reference_number_unavailable(),
+            )
+            .await;
+        }
+    }
+    #[tokio::test]
+    async fn both_reference_insertions_share_the_safe_changed_wrapper_without_losing_facts() {
+        for kind in [
+            Kind::Deadline,
+            Kind::NonzeroExit,
+            Kind::OutputRejected,
+            Kind::SupervisionLost,
+        ] {
+            let original = original_failure(kind);
+            let retained = original.private_worker_failure.as_ref().unwrap().clone();
+            assert_safe_wrapper(
+                changed_after_worker(original),
+                &retained,
+                StatusCode::CONFLICT,
+                "citationBasisChanged",
+                UiMessage::error_api_hosted_citations_citation_basis_changed(),
+            )
+            .await;
+        }
+    }
+    #[tokio::test]
+    async fn missing_number_without_a_private_failure_never_invents_worker_evidence() {
+        let ordinary = ApiError::bad(UiMessage::error_compiler_output_invalid());
+        for error in [
+            reference_number_unavailable(None),
+            reference_number_unavailable(Some(&ordinary)),
+        ] {
+            assert!(error.private_worker_failure.is_none());
+            assert!(std::error::Error::source(&error).is_none());
+            assert_public_response(
+                error,
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                UiMessage::error_api_hosted_citations_reference_number_unavailable(),
+            )
+            .await;
         }
     }
 }

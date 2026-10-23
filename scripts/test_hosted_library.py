@@ -10,6 +10,7 @@ import time
 import unittest
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
 from html.parser import HTMLParser
 from test_hosted import uid
 from test_hosted_query import HostedQuery
@@ -312,13 +313,47 @@ class HostedLibrary(HostedQuery):
         module = self.root/'Styles/library-style.typ'
         before = module.read_bytes()
         (self.folder/'original-style.typ').write_bytes(before)
-        with ThreadPoolExecutor() as pool:
-            pending = pool.submit(self.server.call, '/api/hosted/editor/render',
-                dict(sessionId=doc['sessionId'], source=source, serial=1), self.tokens['alice'])
-            time.sleep(.2)
-            module.write_bytes(before+b'\n// external style change\n')
-            code, result, _ = pending.result(timeout=40)
+        deadline = time.monotonic() + 40
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                self.assertLess(time.monotonic(), deadline, 'Original render/mutation budget exhausted')
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render',
+                    dict(sessionId=doc['sessionId'], source=source, serial=1), self.tokens['alice'])
+                worker = observation.wait(pending, deadline=deadline)
+                while True:
+                    self.assertFalse(pending.done(), 'Render finished before the actual style mutation')
+                    self.assertLess(time.monotonic(), deadline, 'Original render/mutation budget exhausted')
+                    observation.assert_inflight(pending)
+                    try:
+                        output = module.open('wb')
+                    except PermissionError as error:
+                        # Retry only a failed open within the original budget.
+                        # A write or close failure must never replay the write.
+                        if pending.done() or time.monotonic() >= deadline:
+                            raise AssertionError('Style remained unavailable during the original render') from error
+                        time.sleep(0.01)
+                        continue
+                    with output:
+                        observation.assert_inflight(pending)
+                        self.assertLess(time.monotonic(), deadline, 'Original render/mutation budget exhausted before write')
+                        output.write(before+b'\n// external style change\n')
+                    changed = event_time_ns()
+                    break
+                (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        trace = {'submittedMonotonicNs': submitted, 'worker': worker,
+                 'changeCompletedMonotonicNs': changed, 'renderCompletedMonotonicNs': completed,
+                 'status': code, 'errorCode': result.get('error', {}).get('code'),
+                 'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
+        with (self.folder/'library-style-inflight.json').open('x', encoding='utf-8') as evidence:
+            evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
+        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
+        self.assertLess(worker['observedMonotonicNs'], changed)
+        self.assertLess(changed, completed, 'Actual style mutation must complete before render delivery')
         self.assertEqual(code, 409, result)
+        self.assertEqual(result['error']['code'], 'staleBase')
+        self.assertEqual(result['error']['explanation']['key'],
+                         'error.api.hostedLibrary.originalOperationUnavailable')
         self.assertNotIn('tree', result)
         self.assertEqual((self.root/'Shared/Shared.typ').read_bytes(), original)
         self.assertEqual(module.read_bytes(), before+b'\n// external style change\n')
