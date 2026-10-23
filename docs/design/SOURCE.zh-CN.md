@@ -133,6 +133,8 @@ Union discriminator闭合为null、member(keys)、tag(key)、record_presence(key
 
 局部validator的读取闭包仅本record/Field；Type validator显式列出跨Field。读取/动作/窄写按闭包获权；不能只检查目标Field再偷偷读另一个隐藏Field。本次操作必要类型/shape/use/constraint依赖不完整就unavailable，不当空成功。字节保存与typed操作状态仍分离。
 
+窄写通过同一静态闭包检查接入现有纯Field的`event`和`task-reminder` Type validator。编辑due或reminder必须在读取作者值前同时取得两个Field的授权，即使当前reminder缺失或其分支不用due。候选源码由共用Type validator重新校验；context selector和其他operation仍为unavailable。
+
 ```text
 Scalar {kind:"scalar", semantic:closed-codec-name}
 Enum {kind:"enum", values:[string...], open:bool}

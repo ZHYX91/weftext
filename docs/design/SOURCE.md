@@ -134,6 +134,8 @@ Path is an ordered array of `{kind:"member",key}` or `{kind:"each"}`, applied to
 
 Local validators read only their record/Field. Type validators explicitly name cross-Field inputs. Reads/actions/narrow writes authorize that entire closure rather than silently inspecting another hidden Field. Missing required type/shape/constraint dependencies for the operation produce unavailable, not empty success. Saving bytes and publishing typed results remain separate.
 
+Narrow writes admit the existing field-only `event` and `task-reminder` Type validators through one static closure check. Due and reminder edits require both Field grants before reading authored values, even when the current reminder is absent or its branch does not use due. The proposed source is revalidated by the shared Type validator; context selectors and other operations remain unavailable.
+
 ```text
 Scalar {kind:"scalar", semantic:closed-codec-name}
 Enum {kind:"enum", values:[string...], open:bool}

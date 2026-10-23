@@ -45,6 +45,27 @@ fn unavailable() -> DataError {
     )
 }
 
+/// Only these Type validators have a complete, context-free Field closure.
+/// Keep discovery and write preflight on the same rule, before reading values.
+fn write_constraint_fields(schema: &Schema, constraint: &Constraint) -> Result<BTreeSet<String>> {
+    if schema
+        .validators
+        .iter()
+        .find(|v| v.id == constraint.validator)
+        .is_none_or(|v| !matches!(v.operation.as_str(), "event" | "task-reminder"))
+    {
+        return Err(unavailable());
+    }
+    constraint
+        .inputs
+        .values()
+        .map(|selector| match selector {
+            Selector::Field { id, .. } => Ok(id.clone()),
+            _ => Err(unavailable()),
+        })
+        .collect()
+}
+
 /// Determines write dependencies from control/schema syntax, before reading
 /// author field values. The caller must authorize every returned FieldId.
 pub fn narrow_write_fields(
@@ -75,20 +96,7 @@ pub fn narrow_write_fields(
                 .any(|s| matches!(s, Selector::Field { id, .. } if id == field_id))
         })
     {
-        if schema
-            .validators
-            .iter()
-            .find(|v| v.id == c.validator)
-            .is_none_or(|v| v.operation != "event")
-        {
-            return Err(unavailable());
-        }
-        for selector in c.inputs.values() {
-            let Selector::Field { id, .. } = selector else {
-                return Err(unavailable());
-            };
-            result.insert(id.clone());
-        }
+        result.extend(write_constraint_fields(schema, c)?);
     }
     Ok(result)
 }
@@ -252,15 +260,7 @@ pub fn narrow_profile(
                     .any(|s| matches!(s, Selector::Field { id, .. } if id == selected))
             })
         {
-            if c.inputs
-                .values()
-                .any(|s| !matches!(s, Selector::Field { id, .. } if field_ids.contains(id)))
-                || schema
-                    .validators
-                    .iter()
-                    .find(|v| v.id == c.validator)
-                    .is_none_or(|v| v.operation != "event")
-            {
+            if !write_constraint_fields(schema, c)?.is_subset(field_ids) {
                 return Err(unavailable());
             }
             constraints.push(c);
