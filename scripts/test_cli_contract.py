@@ -1449,8 +1449,9 @@ class Harness:
             # Keep the varied content in bounded paragraphs: a single enormous
             # Typst paragraph tests layout cost rather than chunk transport.
             # The real compressed DOCX must still exceed one 64-KiB chunk.
+            tokens = [hashlib.sha256(str(index).encode('ascii')).hexdigest() for index in range(2048)]
             source = basis['result']['source'] + '\n\n' + '\n\n'.join(
-                hashlib.sha256(str(index).encode('ascii')).hexdigest() for index in range(6000)) + '\n中文😀\n'
+                ' '.join(tokens[index:index + 16]) for index in range(0, len(tokens), 16)) + '\n中文😀\n'
             source_file = self.artifact('remote-source.typ', source.encode('utf-8'))
             request = self.output / 'remote-save.weftext-request.json'
             saved = remote('remote-save', ['note', 'write', '--basis', basis_file, '--source', source_file,
@@ -1489,7 +1490,7 @@ class Harness:
                     'Remote chunk delivery changed the frozen artifact or original request')
             with zipfile.ZipFile(target) as archive:
                 text = ''.join(ET.fromstring(archive.read('word/document.xml')).itertext())
-            require(all(hashlib.sha256(str(index).encode('ascii')).hexdigest() in text for index in range(6000))
+            require(all(token in text for token in tokens)
                     and '中文😀' in text, 'Downloaded Office content lost the frozen author text')
             chunks = [entry['chunk'] for entry in relay.requests if 'chunk' in entry]
             offset = 0
@@ -1531,6 +1532,7 @@ class Harness:
                     and lost_writes[0]['requestSha256'] == lost['wireSha256']
                     and not relay.errors, 'Remote client retried an author effect or relay failed')
             proof.update(target=cap['target'], artifactSha256=output['digest'], chunks=chunks,
+                         expectedTextTokenCount=len(tokens), maximumParagraphTokens=16,
                          acceptedLostOperationId=lost['operationId'], acceptedLostEffectCount=1,
                          blockedOriginalStatusRequests=blocked,
                          reconciledStatus=original['result']['status'], originalRequestSha256=digest(original_lost))
