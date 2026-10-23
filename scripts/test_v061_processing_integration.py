@@ -176,7 +176,7 @@ class SharedProcessingIntegration(HostedLibrary):
 
     def request(self, profile, result, options):
         return {'resource': 'Shared', 'basis': profile['basis'],
-            'operationId': hosted_harness.uid(), 'intent': {'kind': 'annotationProofread',
+            'operationId': hosted_harness.uid(), 'intent': {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread',
                 'scanId': result['scanId'], 'options': options,
                 'findings': [finding['id'] for finding in result['findings']
                              if finding['ruleId'] == 'owned.shared.dictionary'], 'ignore': False}}

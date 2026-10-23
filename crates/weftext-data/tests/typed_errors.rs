@@ -75,7 +75,7 @@ fn native_decoder_budget_is_a_fact_and_preserves_the_exact_author_input() {
 fn actual_capture_validation_preserves_more_than_one_cause_chain_of_parallel_diagnostics() {
     let schema = Schema::bundled().unwrap();
     let fields = BTreeMap::from([(
-        "aliases".into(),
+        "core/aliases".into(),
         NativeValue::Array(vec![NativeValue::Int("7".into()); 96]),
     )]);
     let before = serde_json::to_vec(&fields).unwrap();

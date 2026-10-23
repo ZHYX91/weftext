@@ -135,6 +135,8 @@ Union discriminator闭合为null、member(keys)、tag(key)、record_presence(key
 
 窄写通过同一静态闭包检查接入现有纯Field的`event`和`task-reminder` Type validator。编辑due或reminder必须在读取作者值前同时取得两个Field的授权，即使当前reminder缺失或其分支不用due。候选源码由共用Type validator重新校验；context selector和其他operation仍为unavailable。
 
+创建模板在共享写入器、本地及托管入口全程只接收准确FieldId，native key仅为源码输出地址。合法的跨FieldId/key碰撞不能重定向、重复或代填另一个Field的值或授权。每个必填或有native default的Field仍须在默认值/字段值校验前独立获得原授权。仅用native key提交的创建输入被拒绝。
+
 ```text
 Scalar {kind:"scalar", semantic:closed-codec-name}
 Enum {kind:"enum", values:[string...], open:bool}

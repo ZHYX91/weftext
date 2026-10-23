@@ -157,7 +157,7 @@ def run(executable, evidence):
         changed_restore = call('/api/history/restore', {**restore, 'versionId': test_hosted.uid()}, 409)
         assert changed_restore['error']['code'] == 'operationConflict'
 
-        capture = {'root': str(root), 'parent': str(root), 'name': 'Capture', 'types': ['task'], 'title': None, 'fields': {'status': {'kind': 'text', 'value': 'open'}}, 'body': 'TEST capture', 'operationId': test_hosted.uid()}
+        capture = {'root': str(root), 'parent': str(root), 'name': 'Capture', 'types': ['task'], 'title': None, 'fields': {'tasks/status': {'kind': 'text', 'value': 'open'}}, 'body': 'TEST capture', 'operationId': test_hosted.uid()}
         capture_first = call('/api/data/capture', capture)
         period = {'root': str(root), 'parent': str(root), 'name': 'Period', 'seriesKey': 'work-log', 'kind': 'week', 'key': '2020-W53', 'title': None, 'body': 'TEST period', 'operationId': test_hosted.uid()}
         period_first = call('/api/data/period/create', period)
@@ -200,7 +200,8 @@ def run(executable, evidence):
         y = created_document(call('/api/note/create', {**original_request, 'operationId': test_hosted.uid()}))
         for route, payload in [('/api/operations/status', {'operationId': original_request['operationId']}), ('/api/note/create', original_request)]:
             delivered = call(route, payload)
-            assert all(delivered[key] == original_receipt[key] for key in ('operationId', 'planId', 'path', 'nodeIds', 'status', 'message'))
+            assert all(delivered[key] == original_receipt[key] for key in ('operationId', 'planId', 'path', 'nodeIds', 'status'))
+            assert 'message' not in delivered and 'message' not in original_receipt
             assert delivered['document']['nodeId'] == original_x['nodeId'] != y['nodeId']
             assert identity(delivered['document']['path']) == x_identity != identity(y['path'])
             assert Path(delivered['document']['path']).read_bytes() == x_bytes

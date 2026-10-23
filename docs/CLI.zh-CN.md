@@ -63,8 +63,8 @@ weftext-cli operation inspect --request save.weftext-request.json
 | 原结果 | `operation inspect --request FILE` 只查原号；`operation settle --request FILE --request-file NEW` 先查原结果，再由原服务终止未提交请求。已提交事实优先，待恢复 Plan 不被当作无效果。 |
 | 本机恢复 | `operation recoveries`、`recovery --operation-id ID`、`resolve --operation-id ID --action ACTION --request-file PATH` 使用现有恢复入口，不直接改日志。 |
 | 历史 | `history list/read/compare --basis FILE`，read/compare 另给 `--version`；`history restore --input FILE --request-file PATH` 消费当前完整恢复 DTO，保留草稿与原操作边界。 |
-| 输出 | `export prepare --basis FILE --kind docx/pdf/doc/wps`；本机还支持 source。其后 `export status/confirm/download --request FILE` 使用同一原请求，confirm 明确给 `--digest` 和必要的 `--accept-losses`。 |
-| 完整输出参数 | `export prepare --input FILE --request-file PATH` 消费固定 ExportPrepare DTO，可用真实 Query/字段 XLSX、native、文献、模板和嵌入 Query 参数。本机另需 `--basis FILE` 验证 session/base 与作者库边界。 |
+| 输出 | `export prepare --basis FILE --kind docx/pdf/doc/wps`；本机还支持 source。`--output-locale zh-CN/en-US` 冻结内容语言，默认 zh-CN，与展示语言 `--locale` 独立。其后 `export status/confirm/download --request FILE` 使用同一原请求，confirm 明确给 `--digest` 和必要的 `--accept-losses`。 |
+| 完整输出参数 | `export prepare --input FILE --request-file PATH` 消费含必填 `outputLocale` 的固定 ExportPrepare DTO，可用真实 Query/字段 XLSX、native、文献、模板和嵌入 Query 参数。`--output-locale` 不能覆盖这份原输入。本机另需 `--basis FILE` 验证 session/base 与作者库边界。 |
 | 导入 | `import inspect/prepare --file FILE --kind FORMAT`；本机 prepare 需 `--basis FILE --name NAME`，可选 `--parent`。远端原生／文献用 `--slot`，Office 用 `--resource`。commit/status/settle 只接受对应导入族的原请求文件。 |
 | 同步 | `sync binding/enable/publish` 选择本机 root；`status/receive/export/history/adoption-cut/revalidation-cut/revalidation-review` 使用各自真实同步 DTO。`sync operation` 查原 Plan，`sync cancel` 用原 operationId/planId 取消准备；语义 review 不写作者事实。 |
 

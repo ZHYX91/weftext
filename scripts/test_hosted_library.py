@@ -241,8 +241,8 @@ class HostedLibrary(HostedQuery):
         bob = self.open(actor='bob')
         self.assertTrue(self.call('preview', {'sessionId': bob['sessionId'], 'source': bob['source']}, 'bob')['ok'])
         self.call('library/read', {'role': 'style'}, 'bob', 404)
-        req = dict(requestId=uid(), resource='Shared', source=doc['source'], format='docx',
-                   reviewMode='none', includeResolved=False, stylePolicy='source', bindings={})
+        req = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': doc['source'], 'format': 'docx',
+                   'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'source', 'bindings': {}}
         artifact = self.call('office/export/prepare', req)
         self.install_style(size='20pt', marker='NEW_STYLE_MARKER')
         output = HostedOffice.deliver(self, artifact)
@@ -338,8 +338,8 @@ class HostedLibrary(HostedQuery):
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)
         request = dict(resource='Shared', basis=profile['basis'], operationId=uid(),
-            intent=dict(kind='annotationProofread', options=options, findings=findings,
-                        scanId=scan['scanId'], ignore=False))
+            intent={'annotationLocale': 'zh-CN', 'kind': 'annotationProofread', 'options': options, 'findings': findings,
+                        'scanId': scan['scanId'], 'ignore': False})
         plan = self.call('review/prepare', request)
         sidecar = self.root/'Shared/weftext.annotations.json'
         original = sidecar.read_bytes() if sidecar.exists() else None

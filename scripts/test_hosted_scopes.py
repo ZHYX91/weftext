@@ -236,7 +236,7 @@ class HostedScopes(HostedQuery):
         self.policy(lambda users: [users['fields']['grants'][resource].update(
             office={'export': True, 'download': True}) for resource in ('Shared', 'Child', 'Other')])
         output = self.query(self.scope_plan('shared'))
-        request = {'requestId': uid(), 'queryId': output['queryId'], 'format': 'xlsx',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'queryId': output['queryId'], 'format': 'xlsx',
                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}}
         prepared = self.call('office/export/prepare', request, 'fields')
         original = HostedOffice.deliver(self, prepared, 'fields')
@@ -321,7 +321,7 @@ class HostedScopes(HostedQuery):
         self.policy(lambda users: [users['fields']['grants'][resource].update(
             office={'export': True, 'download': True}) for resource in ('Shared', 'Child')])
         result = self.query(self.scope_plan('shared', lifecycle='trash'))
-        request = {'requestId': uid(), 'queryId': result['queryId'], 'format': 'xlsx',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'queryId': result['queryId'], 'format': 'xlsx',
                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}}
         output = self.call('office/export/prepare', request, 'fields')
         artifact = HostedOffice.deliver(self, output, 'fields')

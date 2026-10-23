@@ -629,7 +629,7 @@ fn real_set_title_product_retains_metadata_names_and_exact_field_writes() {
 }
 #[test]
 fn capture_is_identity_free_validated_and_defaults_never_added_on_read() {
-    let fields = BTreeMap::from([("status".into(), NativeValue::Text("open".into()))]);
+    let fields = BTreeMap::from([("tasks/status".into(), NativeValue::Text("open".into()))]);
     let template = capture_template(&["task".into()], &fields, "正文", &schema()).unwrap();
     assert!(!template.contains("id:"));
     assert!(template.contains("types:"));

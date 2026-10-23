@@ -136,6 +136,8 @@ Local validators read only their record/Field. Type validators explicitly name c
 
 Narrow writes admit the existing field-only `event` and `task-reminder` Type validators through one static closure check. Due and reminder edits require both Field grants before reading authored values, even when the current reminder is absent or its branch does not use due. The proposed source is revalidated by the shared Type validator; context selectors and other operations remain unavailable.
 
+Creation templates consume exact FieldIds throughout the shared writer and local/hosted boundaries; native keys are only source output addresses. A legal cross FieldId/key collision cannot redirect, duplicate or supply another Field's value or grant. Each required or native-default Field independently requires its original authorization before default/value validation. Native-key-only creation inputs are rejected.
+
 ```text
 Scalar {kind:"scalar", semantic:closed-codec-name}
 Enum {kind:"enum", values:[string...], open:bool}

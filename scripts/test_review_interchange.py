@@ -34,7 +34,7 @@ class ReviewInterchange(outputs.Outputs):
 
     def batch(self, context, options, findings, **extra):
         request = {'operationId': features.uid(), 'context': context,
-                   'intent': {'kind': 'annotationProofread', 'options': options, 'findings': findings, **extra}}
+                   'intent': {'kind': 'annotationProofread', 'annotationLocale': 'zh-CN', 'options': options, 'findings': findings, **extra}}
         preview = self.api('/api/knowledge/prepare', request)
         self.commit(preview, context)
         return request, preview
@@ -113,7 +113,7 @@ class ReviewInterchange(outputs.Outputs):
         self.assertFalse(hits[0]['executable'])
         changed = self.saved(doc, doc['source'] + '\n\n新的正文', root)
         self.api('/api/knowledge/prepare', {'operationId': features.uid(), 'context': context,
-                 'intent': {'kind': 'annotationProofread', 'options': options, 'findings': [hits[0]['id']]}}, status=(409, 400))
+                 'intent': {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread', 'options': options, 'findings': [hits[0]['id']]}}, status=(409, 400))
         self.assertEqual(Path(changed['path']).read_text('utf-8'), changed['source'])
 
     def test_03_word_import_and_tracked_export_preserve_pending(self):

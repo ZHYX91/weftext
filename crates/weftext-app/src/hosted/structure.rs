@@ -734,6 +734,39 @@ fn capture_body(c: &Capture) -> Result<String, ApiError> {
         body
     })
 }
+fn authorize_capture_fields(
+    schema: &Schema,
+    resolved: &BTreeSet<String>,
+    fields: &BTreeMap<String, NativeValue>,
+    grants: &super::Rights,
+) -> Result<(), ApiError> {
+    for id in fields.keys() {
+        if !schema.fields.iter().any(|field| field.id == *id) {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_exact_created_field_id_required(),
+            ));
+        }
+        if !grants.fields.get(id).is_some_and(|f| f.read && f.write) {
+            return Err(unavailable());
+        }
+    }
+    for (field, required) in schema.applicable_fields(resolved) {
+        if (required
+            || field
+                .default
+                .as_ref()
+                .is_some_and(|d| d["kind"] == "native"))
+            && !grants
+                .fields
+                .get(&field.id)
+                .is_some_and(|f| f.read && f.write)
+        {
+            return Err(unavailable());
+        }
+    }
+    Ok(())
+}
+
 fn capture_source(
     inner: &mut HostedInner,
     actor: &str,
@@ -792,20 +825,7 @@ fn capture_source(
             UiMessage::error_api_hosted_structure_type_combination_unavailable(),
         ));
     }
-    for (f, required) in schema.applicable_fields(&resolved) {
-        if (required
-            || c.fields.contains_key(&f.id)
-            || f.default.as_ref().is_some_and(|d| d["kind"] == "native"))
-            && !grants.fields.get(&f.id).is_some_and(|f| f.read && f.write)
-        {
-            return Err(unavailable());
-        }
-        if c.fields.keys().any(|id| id == &f.key && id != &f.id) {
-            return Err(ApiError::bad(
-                UiMessage::error_api_hosted_structure_exact_created_field_id_required(),
-            ));
-        }
-    }
+    authorize_capture_fields(&schema, &resolved, &c.fields, &grants)?;
     // Provider capability remains separate even when complete schema read is
     // authorized: only granted registries can execute field validation.
     let providers = &inner.policy.users[actor].query_providers;
@@ -1974,6 +1994,73 @@ mod tests {
                 .native(),
             Some(&NativeValue::Text("open".into()))
         );
+    }
+
+    #[test]
+    fn capture_colliding_native_key_never_borrows_a_field_grant_or_default() {
+        let mut schema = Schema::bundled().unwrap();
+        schema.fields.insert(
+            0,
+            weftext_data::Field {
+                id: "private/config".into(),
+                key: "tasks/status".into(),
+                shape: weftext_data::Shape::Scalar {
+                    semantic: "text".into(),
+                },
+                nullable: false,
+                default: Some(json!({"kind":"absent"})),
+            },
+        );
+        schema
+            .types
+            .iter_mut()
+            .find(|t| t.id == "tasks/task")
+            .unwrap()
+            .fields
+            .push(weftext_data::FieldContribution {
+                id: "private/config".into(),
+                required: false,
+            });
+        let mut schema =
+            Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+        let (resolved, validation) = schema.expand_types(&["tasks/task".into()]);
+        assert!(validation.is_valid());
+        let mut grants = super::super::Rights::default();
+        grants.fields.insert(
+            "tasks/status".into(),
+            FieldRights {
+                read: true,
+                write: true,
+            },
+        );
+        let mut fields =
+            BTreeMap::from([("tasks/status".into(), NativeValue::Text("open".into()))]);
+        authorize_capture_fields(&schema, &resolved, &fields, &grants).unwrap();
+        fields.insert(
+            "private/config".into(),
+            NativeValue::Text("independent".into()),
+        );
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
+        grants.fields.insert(
+            "private/config".into(),
+            FieldRights {
+                read: true,
+                write: true,
+            },
+        );
+        authorize_capture_fields(&schema, &resolved, &fields, &grants).unwrap();
+        fields.remove("private/config");
+        grants.fields.remove("private/config");
+        schema
+            .fields
+            .iter_mut()
+            .find(|f| f.id == "private/config")
+            .unwrap()
+            .default = Some(json!({"kind":"native","source":"\"private default\""}));
+        let schema = Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
+        fields = BTreeMap::from([("status".into(), NativeValue::Text("open".into()))]);
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
     }
     #[test]
     fn future_resource_collection_uses_original_structure_slot_and_independent_grants() {

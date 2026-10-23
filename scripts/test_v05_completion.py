@@ -55,7 +55,13 @@ class V05Completion(features.LocalFeatures):
             self.assertEqual(Path(doc['path']).read_bytes(), source.encode())
             versions.append({'id': receipt['operationId'], 'revision': receipt['baseId'],
                              'source': source, 'start': start, 'end': end})
-            doc = self.reopen(doc, root)
+            self.assertNotIn('documentError', receipt)
+            self.assertTrue(receipt['documentSourceMatchesCommit'])
+            current = receipt['document']
+            self.assertEqual(current['sessionId'], doc['sessionId'])
+            self.assertEqual(current['source'], source)
+            self.assertEqual(current['baseId'], receipt['baseId'])
+            doc = current
         return root, library, doc, versions
 
     def restore_request(self, doc, version_id, draft_source=None, action='none'):
@@ -88,8 +94,8 @@ class V05Completion(features.LocalFeatures):
     def query_fixture(self, multiple=False):
         root, library = self.library()
         self.install_schema(root)
-        task, _ = self.capture(root, '任务🌿', ['task'], {'status': features.text('open')})
-        self.capture(root, '已完成任务', ['task'], {'status': features.text('done')})
+        task, _ = self.capture(root, '任务🌿', ['task'], {'tasks/status': features.text('open')})
+        self.capture(root, '已完成任务', ['task'], {'tasks/status': features.text('done')})
         owner = self.note(root, '查询正文', '= 查询🌿\n\n前文不可丢。\n')
         first = self.definition(owner, self.status_plan(), 'weftext-query-first')
         owner = first['document']
@@ -699,7 +705,7 @@ class V05Completion(features.LocalFeatures):
         draft = doc['source'] + '\n输出所用的未保存正文🌿。\n'
         discovery = self.discover(doc, draft, serial=6)
         self.assertEqual(len(discovery['occurrences']), 2)
-        request = {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+        request = {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'],
                    'baseId': doc['baseId'], 'source': draft, 'serial': 6,
                    'format': 'docx', 'stylePolicy': 'template'}
         output = self.api('/api/export/prepare', request)
@@ -740,7 +746,7 @@ class V05Completion(features.LocalFeatures):
         return root, doc, source, selections
 
     def materialized_export(self, doc, source, selections, fmt, name, **options):
-        request = {'requestId': features.uid(), 'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
+        request = {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
                    'source': source, 'serial': 10, 'format': fmt, 'embeddedQueries': selections, **options}
         output = self.api('/api/export/prepare', request)
         self.assertEqual(output['status'], 'prepared', output)
@@ -756,7 +762,7 @@ class V05Completion(features.LocalFeatures):
 
     def test_15_docx_embedded_results_keep_body_order_and_frozen_rows(self):
         root, doc, source, selections = self.materialized_fixture()
-        self.capture(root, '查询之后新增，不应混入结果', ['task'], {'status': features.text('open')})
+        self.capture(root, '查询之后新增，不应混入结果', ['task'], {'tasks/status': features.text('open')})
         output, payload = self.materialized_export(doc, source, selections, 'docx', 'embedded-frozen-body')
         self.assertFalse(any(l['code'] == 'embedded_query_results_not_materialized' for l in output['losses']))
         self.assertEqual([q['rowCount'] for q in output['preview']['embeddedQueries']], [1, 1])
@@ -791,7 +797,7 @@ class V05Completion(features.LocalFeatures):
 
     def test_17_body_output_rejects_cross_query_duplicate_and_old_draft_results(self):
         _, doc, source, selections = self.materialized_fixture()
-        request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': source,
+        request = {'outputLocale': 'zh-CN', 'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': source,
                    'serial': 10, 'format': 'docx', 'embeddedQueries': selections}
         swapped = copy.deepcopy(selections); swapped[0]['queryId'] = selections[1]['queryId']
         for bad in [swapped, [selections[0], selections[0]]]:
@@ -812,7 +818,7 @@ class V05Completion(features.LocalFeatures):
         result = self.run_embedded(doc, edited['source'], chosen['id'], serial=11)['result']
         self.assertEqual(result['coverage'], 'partial'); self.assertTrue(result['diagnostics'])
         for fmt in ['docx', 'pdf']:
-            output = self.api('/api/export/prepare', {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+            output = self.api('/api/export/prepare', {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'],
                 'baseId': doc['baseId'], 'source': edited['source'], 'serial': 11, 'format': fmt,
                 'embeddedQueries': [{'occurrenceId': chosen['id'], 'queryId': result['queryId']}]})
             self.assertEqual(output['status'], 'prepared', output)
@@ -851,7 +857,7 @@ class V05Completion(features.LocalFeatures):
             if serial == 10:
                 result = self.run_embedded(doc, source, current['id'], serial=serial)['result']
                 selections = [{'occurrenceId': current['id'], 'queryId': result['queryId']}]
-            output = self.api('/api/export/prepare', {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+            output = self.api('/api/export/prepare', {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'],
                 'baseId': doc['baseId'], 'source': source, 'serial': serial, 'format': fmt,
                 'embeddedQueries': selections})
             self.assertEqual(output['status'], expected, output)

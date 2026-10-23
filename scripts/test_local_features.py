@@ -130,7 +130,13 @@ class LocalFeatures(unittest.TestCase):
                                          'operationId': uid(), 'source': source})
         self.assertEqual(receipt['status'], 'saved')
         self.assertEqual(Path(doc['path']).read_bytes(), source.encode())
-        return self.api('/api/open', {'path': doc['path'], **({'root': str(root)} if root else {})})
+        self.assertNotIn('documentError', receipt)
+        self.assertTrue(receipt['documentSourceMatchesCommit'])
+        current = receipt['document']
+        self.assertEqual(current['sessionId'], doc['sessionId'])
+        self.assertEqual(current['source'], source)
+        self.assertEqual(current['baseId'], receipt['baseId'])
+        return current
 
     def ordinary(self, source):
         folder = self.root / uid()
@@ -422,7 +428,7 @@ class LocalFeatures(unittest.TestCase):
         amount = {'kind': 'decimal', 'value': '9007199254740993.01'}
         due = {'kind': 'date', 'value': '2026-10-13'}
         doc, request = self.capture(root, '精确任务', ['task'],
-                                    {'status': text('open'), 'amount': amount, 'due': due})
+                                    {'tasks/status': text('open'), 'acceptance/amount': amount, 'tasks/due': due})
         retry = created_document(self.api('/api/data/capture', request))
         self.assertEqual(retry['nodeId'], doc['nodeId'])
         self.assertEqual(retry['path'], doc['path'])
@@ -452,15 +458,16 @@ class LocalFeatures(unittest.TestCase):
         self.assertFalse(query['access']['resultGrantsWriteAccess'])
         self.api('/api/query/run', {'root': str(root), 'plan': {
                  'where': 'amount > 9007199254740993.0'}}, status=400)
-        self.api('/api/data/capture', {**request, 'operationId': uid(), 'name': '缺少状态',
-                 'fields': {'amount': amount}}, status=409)
+        refusal = self.api('/api/data/capture', {**request, 'operationId': uid(), 'name': '缺少状态',
+                 'fields': {'acceptance/amount': amount}}, status=409)
+        self.assertEqual(refusal['error']['explanation'], {'key': 'error.data.projection.requiredCaptureFieldMissing', 'params': {'fieldKey': 'status'}})
         self.assertFalse((root / '缺少状态').exists())
         good = array(record(number=text('001-010'), label=text('work'), note=text('first')),
                      record(number=text('001-010'), label=text('work'), note=text('duplicate')))
         bad = array(record(number=text('001-010'), label=text('personal')),
                     record(number=text('999'), label=text('work')))
-        person, _ = self.capture(root, '同项匹配', ['person'], {'phones': good})
-        self.capture(root, '跨项不匹配', ['person'], {'phones': bad})
+        person, _ = self.capture(root, '同项匹配', ['person'], {'contacts/phones': good})
+        self.capture(root, '跨项不匹配', ['person'], {'contacts/phones': bad})
         projection = self.api('/api/data/project', self.snapshot(person))['projection']
         phones = next(f for f in projection['fields'] if f['key'] == 'phones')
         self.assertEqual(phones['cell']['value'], good)

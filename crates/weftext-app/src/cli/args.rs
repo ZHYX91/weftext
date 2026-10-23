@@ -233,6 +233,9 @@ pub enum ExportCommand {
         source: Option<PathBuf>,
         #[arg(long, required_unless_present = "input", requires = "basis")]
         kind: Option<String>,
+        // Language frozen into exported content, independent of --locale (default: zh-CN).
+        #[arg(long, value_parser = ["zh-CN", "en-US"], conflicts_with = "input")]
+        output_locale: Option<String>,
         #[arg(long, default_value = "none")]
         review_mode: String,
         #[arg(long)]

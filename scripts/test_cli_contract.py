@@ -699,10 +699,19 @@ class Harness:
         basis = self.json_file('export-basis.json', self.cli('export-note-read',
             ['note', 'read', '--path', self.note_path, '--root', self.library], profile=self.profile))
         request = self.output / 'export-source.weftext-request.json'
-        prepared = self.cli('export-source-prepare', ['export', 'prepare', '--basis', basis,
-            '--kind', 'source', '--request-file', request], profile=self.profile)
+        prepared = self.cli('export-source-prepare', ['--locale', 'en-US', 'export', 'prepare', '--basis', basis,
+            '--kind', 'source', '--output-locale', 'zh-CN', '--request-file', request], profile=self.profile)
         result = prepared['result']
         require(result['status'] == 'prepared' and result['length'] > 0, 'No actual prepared source artifact')
+        frozen_bytes = request.read_bytes()
+        frozen = unique_json(frozen_bytes)
+        original = unique_json(base64.b64decode(frozen['wireBase64'], validate=True))
+        require(original['outputLocale'] == 'zh-CN' and original['source'] == self.saved_source,
+                'Export content language/source borrowed the presentation locale')
+        status = self.cli('export-status-other-presentation', ['--locale', 'zh-CN', 'export', 'status',
+            '--request', request], profile=self.profile)
+        require(status['result']['digest'] == result['digest'] and request.read_bytes() == frozen_bytes,
+                'Presentation change rewrote the original export request or artifact')
         confirmed = self.cli('export-source-confirm', ['export', 'confirm', '--request', request,
             '--digest', result['digest'], '--request-file', self.output / 'export-confirm.weftext-request.json'],
             profile=self.profile)

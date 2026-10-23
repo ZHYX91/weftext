@@ -280,7 +280,7 @@ class HostedMedia(HostedQuery):
         self.assertTrue(rendered['ok'], rendered)
         self.assertIn('AUX_NATIVE_MEDIA_MARKER', visible_html_text(rendered['html']))
         HostedOffice.prepare_office(self)
-        request = {'requestId': uid(), 'resource': 'Shared', 'source': doc['source'], 'format': 'docx',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': doc['source'], 'format': 'docx',
                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}}
         output = self.call('office/export/prepare', request)
         leaf = self.root/self.config['resources']['aux']['path']
@@ -317,8 +317,8 @@ class HostedMedia(HostedQuery):
         scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)
-        plan, request = self.prepare_annotation(profile, dict(kind='annotationProofread',
-            options=options, findings=findings, scanId=scan['scanId'], ignore=False))
+        plan, request = self.prepare_annotation(profile, {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread',
+            'options': options, 'findings': findings, 'scanId': scan['scanId'], 'ignore': False})
         source = (self.root/'Shared/Shared.typ').read_bytes()
         self.server.close(); self.start()
         self.assertEqual(self.call('review/operation', {'resource': 'Shared',

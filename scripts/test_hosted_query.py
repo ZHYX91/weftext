@@ -323,7 +323,7 @@ class HostedQuery(HostedFields):
         self.policy(lambda users: [grant.update(office={'export': True, 'download': True})
                                   for grant in users['fields']['grants'].values()])
         result = self.query({'select': [self.column('body', 'body')]}, fields=[], products=['body'])
-        request = {'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'queryId': result['queryId']}
         doc = self.open()
         self.save(doc, doc['source'].replace('正文Shared🌿', 'NEWER_BODY_AFTER_QUERY'))
@@ -347,7 +347,7 @@ class HostedQuery(HostedFields):
                                   for grant in users[actor]['grants'].values()])
         reader = self.query({'select': [self.column()]}, actor='fieldreader')
         first = self.query({'where': 'status == "open"', 'select': [self.column()]})
-        request = {'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {},
                    'queryId': first['queryId']}
         frozen, _ = HostedOffice.output(self, request, 'fields')
@@ -412,7 +412,7 @@ class HostedQuery(HostedFields):
         tag_action('moveTag', reference=leaf, parentRef=root)
         displayed = self.query(structural, resources=['Shared'])
         tag_action('moveTag', reference=leaf, parentRef=None)
-        request = {'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {},
                    'queryId': displayed['queryId']}
         output, _ = HostedOffice.output(self, request, 'fields')

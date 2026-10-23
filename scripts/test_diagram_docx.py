@@ -60,7 +60,7 @@ class DiagramDocx(features.LocalFeatures):
         return result
 
     def generate(self, doc, source, fmt, name, serial=1):
-        request = {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+        request = {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'],
                    'baseId': doc['baseId'], 'source': source, 'serial': serial,
                    'format': fmt, 'stylePolicy': 'template', 'bindings': {}}
         result = self.api('/api/export/prepare', request)

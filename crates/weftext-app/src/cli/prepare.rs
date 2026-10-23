@@ -369,6 +369,7 @@ pub(crate) fn prepare(command: Command, remote: bool) -> io::Result<Prepared> {
                 input: payload,
                 source,
                 kind,
+                output_locale,
                 review_mode,
                 include_resolved,
                 style_policy,
@@ -377,6 +378,7 @@ pub(crate) fn prepare(command: Command, remote: bool) -> io::Result<Prepared> {
                 if let Some(payload) = payload {
                     if source.is_some()
                         || kind.is_some()
+                        || output_locale.is_some()
                         || review_mode != "none"
                         || include_resolved
                         || style_policy != "source"
@@ -422,7 +424,7 @@ pub(crate) fn prepare(command: Command, remote: bool) -> io::Result<Prepared> {
                 {
                     return Err(invalid("exportPayloadRequired"));
                 }
-                let mut body = json!({"source":match source {Some(path)=>input::read_source(&path)?,None=>document["source"].as_str().ok_or_else(||invalid("basisField"))?.to_owned()},"format":kind,"reviewMode":review_mode,"includeResolved":include_resolved,"stylePolicy":style_policy,"bindings":{}});
+                let mut body = json!({"source":match source {Some(path)=>input::read_source(&path)?,None=>document["source"].as_str().ok_or_else(||invalid("basisField"))?.to_owned()},"format":kind,"outputLocale":output_locale.as_deref().unwrap_or("zh-CN"),"reviewMode":review_mode,"includeResolved":include_resolved,"stylePolicy":style_policy,"bindings":{}});
                 if remote {
                     body["resource"] = json!(text(&document, "resource")?);
                     if kind == "pdf" {
@@ -1145,6 +1147,7 @@ mod tests {
                         input: None,
                         source: None,
                         kind: Some("docx".into()),
+                        output_locale: None,
                         review_mode: "none".into(),
                         include_resolved: false,
                         style_policy: "source".into(),
@@ -1158,6 +1161,63 @@ mod tests {
         assert_eq!(call.body["source"], "");
         assert_eq!(call.body["sessionId"], "session");
         assert_eq!(call.body["serial"], 0);
+        assert_eq!(call.body["outputLocale"], "zh-CN");
+    }
+    #[test]
+    fn export_content_locale_is_independent_of_presentation_and_full_input() {
+        let temp = tempfile::tempdir().unwrap();
+        let basis = local_basis(temp.path(), "作者原文😀");
+        for (presentation, content) in [("en-US", "zh-CN"), ("zh-CN", "en-US")] {
+            let command = command(&[
+                "--locale",
+                presentation,
+                "export",
+                "prepare",
+                "--basis",
+                basis.to_str().unwrap(),
+                "--kind",
+                "source",
+                "--output-locale",
+                content,
+                "--request-file",
+                "result.weftext-request.json",
+            ]);
+            let call = call(prepare(command, false).unwrap());
+            assert_eq!(call.body["outputLocale"], content);
+            assert_eq!(call.body["source"], "作者原文😀");
+        }
+        for content in ["en", ""] {
+            assert!(
+                Args::try_parse_from([
+                    "weftext-cli",
+                    "export",
+                    "prepare",
+                    "--basis",
+                    "basis.json",
+                    "--kind",
+                    "source",
+                    "--output-locale",
+                    content,
+                    "--request-file",
+                    "result.weftext-request.json"
+                ])
+                .is_err()
+            );
+        }
+        assert!(
+            Args::try_parse_from([
+                "weftext-cli",
+                "export",
+                "prepare",
+                "--input",
+                "input.json",
+                "--output-locale",
+                "zh-CN",
+                "--request-file",
+                "result.weftext-request.json"
+            ])
+            .is_err()
+        );
     }
     #[test]
     fn remote_import_never_promotes_a_local_path_into_a_server_capability() {
@@ -1218,7 +1278,7 @@ mod tests {
     fn remote_native_export_needs_no_additional_readable_document() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("export.json");
-        std::fs::write(&path,br#"{"format":"native","reviewMode":"none","includeResolved":false,"stylePolicy":"source","bindings":{}}"#).unwrap();
+        std::fs::write(&path,br#"{"format":"native","outputLocale":"en-US","reviewMode":"none","includeResolved":false,"stylePolicy":"source","bindings":{}}"#).unwrap();
         let prepared = prepare(
             Command::Export {
                 command: ExportCommand::Prepare {
@@ -1226,6 +1286,7 @@ mod tests {
                     input: Some(path),
                     source: None,
                     kind: None,
+                    output_locale: None,
                     review_mode: "none".into(),
                     include_resolved: false,
                     style_policy: "source".into(),
@@ -1238,6 +1299,7 @@ mod tests {
         assert!(prepared.prerequisites.is_empty());
         let call = call(prepared);
         assert_eq!(call.body["format"], "native");
+        assert_eq!(call.body["outputLocale"], "en-US");
         assert!(call.body.get("resource").is_none());
         assert!(call.body.get("source").is_none());
     }

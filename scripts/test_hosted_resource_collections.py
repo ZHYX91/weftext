@@ -235,8 +235,8 @@ class HostedResourceCollections(HostedMedia):
         def freeze():
             query = self.query({'select': [self.column('body')]}, fields=[], products=['body'], resources=['Shared'])
             self.assertIn('XLSX_COLLECTION_ORIGINAL', json.dumps(query))
-            return dict(requestId=uid(), format='xlsx', reviewMode='none', includeResolved=False,
-                        stylePolicy='template', bindings={}, queryId=query['queryId'])
+            return {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none', 'includeResolved': False,
+                        'stylePolicy': 'template', 'bindings': {}, 'queryId': query['queryId']}
         self.call('office/export/prepare', freeze(), 'fields', 404)
         self.policy(lambda users: users['fields']['resourceCollections']['attachments'].update(download=True))
         output = self.call('office/export/prepare', freeze(), 'fields')
@@ -268,8 +268,8 @@ class HostedResourceCollections(HostedMedia):
         scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)
-        plan, request = self.prepare_annotation(profile, dict(kind='annotationProofread',
-            options=options, findings=findings, scanId=scan['scanId'], ignore=False))
+        plan, request = self.prepare_annotation(profile, {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread',
+            'options': options, 'findings': findings, 'scanId': scan['scanId'], 'ignore': False})
         self.server.close(); self.start()
         self.assertEqual(self.call('review/operation', {'resource': 'Shared',
             'operationId': request['operationId']})['planId'], plan['planId'])

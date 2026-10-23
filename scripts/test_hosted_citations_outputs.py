@@ -52,8 +52,8 @@ class HostedCitationsOutputs(HostedOffice, HostedQuery):
 
     @staticmethod
     def request(format, **extra):
-        return dict(requestId=uid(), format=format, reviewMode='none',
-                    includeResolved=False, stylePolicy='template', bindings={}, **extra)
+        return {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': format, 'reviewMode': 'none',
+                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, **extra}
 
     def prepare_output(self, req, actor='alice', status=200):
         return self.call('export/prepare', req, actor, status)

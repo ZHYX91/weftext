@@ -1751,6 +1751,7 @@ fn ref_walk(
 }
 /// Build explicit creation source with Core-supplied identity. No default is
 /// fabricated on read, and this function cannot allocate/admit an identity.
+/// Inputs are exact FieldIds; native keys are only output addresses.
 pub fn capture_source(
     id: &str,
     types: &[String],
@@ -1779,10 +1780,7 @@ pub fn capture_source(
         ),
     ];
     for key in fields.keys() {
-        if !applicable
-            .iter()
-            .any(|(f, _)| f.key == *key || f.id == *key)
-        {
+        if !applicable.iter().any(|(f, _)| f.id == *key) {
             return Err(DataError::new(
                 weftext_messages::UiMessage::error_data_projection_capture_field_unbound(
                     weftext_messages::params::ErrorDataProjectionCaptureFieldUnbound {
@@ -1793,16 +1791,6 @@ pub fn capture_source(
         }
     }
     for (field, required) in applicable {
-        if field.key != field.id
-            && fields.contains_key(&field.key)
-            && fields.contains_key(&field.id)
-        {
-            return Err(DataError::new(
-                weftext_messages::UiMessage::error_data_projection_capture_field_supplied_by_key_and_id(weftext_messages::params::ErrorDataProjectionCaptureFieldSuppliedByKeyAndId {
-                    field_id: (field.id).to_string(),
-                }),
-            ));
-        }
         let default = field
             .default
             .as_ref()
@@ -1815,10 +1803,7 @@ pub fn capture_source(
                 )
             })
             .transpose()?;
-        let value = fields
-            .get(&field.key)
-            .or_else(|| fields.get(&field.id))
-            .or(default.as_ref());
+        let value = fields.get(&field.id).or(default.as_ref());
         if let Some(v) = value {
             let check = schema.validate(&field.shape, v);
             if !check.is_valid() && !(field.nullable && matches!(v, NativeValue::None)) {

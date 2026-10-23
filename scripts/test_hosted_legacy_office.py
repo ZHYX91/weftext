@@ -158,8 +158,8 @@ class HostedLegacyOffice(HostedOffice):
             users['alice']['grants']['ImportedDoc'] = {'read': True, 'write': True, 'office': {'doc': {'import': True}}}
         self.policy(grants)
         source = self.open()['source'] + '\n\nREAL_HOSTED_DOC_BODY 中文 English 20261018\n'
-        request = dict(requestId=uid(), resource='Shared', source=source, format='doc',
-                       reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, legacyBackend='libreoffice')
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': source, 'format': 'doc',
+                       'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'legacyBackend': 'libreoffice'}
         self.call('office/export/prepare', request, status=404)
         self.call('office/export/prepare', request, 'bob', 404)
         # Ordinary DOCX remains usable without any old-format grant.
@@ -290,8 +290,8 @@ class HostedLegacyOffice(HostedOffice):
         self.policy(lambda users: users['alice']['grants']['Shared'].update(
             office={'export': True, 'download': True, 'doc': {'export': True, 'download': True}}))
         source = self.open()['source'] + '\nLONG_PATH_EXACT_ORIGINAL\n'
-        request = dict(requestId=uid(), resource='Shared', source=source, format='doc',
-                       reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, legacyBackend='libreoffice')
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': source, 'format': 'doc',
+                       'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'legacyBackend': 'libreoffice'}
         refused = self.call('office/export/prepare', request)
         self.assertEqual(refused['status'], 'failed', refused)
         conversion = refused['preview']['legacy']

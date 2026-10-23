@@ -745,14 +745,11 @@ fn capture_template(
     req: &CaptureRequest,
     resolved: &Schema,
 ) -> Result<String, weftext_data::DataError> {
-    let mut seen = BTreeSet::new();
     for key in req.fields.keys() {
-        let field = resolved.field(key).ok_or_else(|| {
-            weftext_data::DataError::new(UiMessage::error_api_data_capture_field_unknown(
-                weftext_messages::params::ErrorApiDataCaptureFieldUnknown { field: key.clone() },
-            ))
-        })?;
-        if field.id != *key {
+        if resolved.fields.iter().any(|field| field.id == *key) {
+            continue;
+        }
+        if let Some(field) = resolved.fields.iter().find(|field| field.key == *key) {
             return Err(weftext_data::DataError::new(
                 UiMessage::error_capture_field_identity_required(
                     weftext_messages::params::ErrorCaptureFieldIdentityRequired {
@@ -761,15 +758,11 @@ fn capture_template(
                 ),
             ));
         }
-        if !seen.insert(&field.id) {
-            return Err(weftext_data::DataError::new(
-                UiMessage::error_api_data_capture_field_supplied_twice(
-                    weftext_messages::params::ErrorApiDataCaptureFieldSuppliedTwice {
-                        field: field.id.clone(),
-                    },
-                ),
-            ));
-        }
+        return Err(weftext_data::DataError::new(
+            UiMessage::error_api_data_capture_field_unknown(
+                weftext_messages::params::ErrorApiDataCaptureFieldUnknown { field: key.clone() },
+            ),
+        ));
     }
     let body = capture_body(req)?;
     weftext_data::capture_template(&req.types, &req.fields, &body, resolved)
@@ -3303,6 +3296,51 @@ async fn run_definition(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn capture_exact_id_preflight_ignores_an_earlier_matching_native_key() {
+        let mut schema = Schema::bundled().unwrap();
+        schema.fields.insert(
+            0,
+            weftext_data::Field {
+                id: "private/config".into(),
+                key: "tasks/status".into(),
+                shape: weftext_data::Shape::Scalar {
+                    semantic: "text".into(),
+                },
+                nullable: false,
+                default: Some(json!({"kind":"absent"})),
+            },
+        );
+        let schema = Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+        let mut request: CaptureRequest = serde_json::from_value(json!({"root":"owned","parent":"owned","name":"Task","types":["task"],"title":null,"fields":{"tasks/status":{"kind":"text","value":"open"}},"body":"原文","formBasis":null,"operationId":uuid::Uuid::new_v4().to_string()})).unwrap();
+        assert!(
+            capture_template(&request, &schema)
+                .unwrap()
+                .contains("\"status\": \"open\"")
+        );
+        request.fields = BTreeMap::from([("status".into(), NativeValue::Text("open".into()))]);
+        let error = capture_template(&request, &schema).unwrap_err();
+        assert_eq!(
+            error.description().explanation,
+            UiMessage::error_capture_field_identity_required(
+                weftext_messages::params::ErrorCaptureFieldIdentityRequired {
+                    field: "tasks/status".into()
+                }
+            )
+        );
+        request.fields =
+            BTreeMap::from([("unknown/field".into(), NativeValue::Text("open".into()))]);
+        let error = capture_template(&request, &schema).unwrap_err();
+        assert_eq!(
+            error.description().explanation,
+            UiMessage::error_api_data_capture_field_unknown(
+                weftext_messages::params::ErrorApiDataCaptureFieldUnknown {
+                    field: "unknown/field".into()
+                }
+            )
+        );
+    }
 
     #[test]
     fn data_bridge_keeps_semantic_kind_and_all_parallel_diagnostics() {

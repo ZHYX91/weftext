@@ -213,7 +213,7 @@ class HostedProviders(HostedQuery):
         plan = {'select': [self.column('compareTemporal(' + json.dumps(self.private_date()) +
                                       ',date("2026-01-01"))', 'originalOrder')]}
         frozen = self.query(plan, **choice)
-        request = {'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'queryId': frozen['queryId']}
         output, _ = HostedOffice.output(self, request, 'fields')
         before = HostedOffice.deliver(self, output, 'fields')

@@ -19,8 +19,8 @@ class HostedOffice(HostedReview):
                                   for grant in users['alice']['grants'].values()])
 
     def output_request(self, **extra):
-        return dict(requestId=uid(), resource='Shared', source=self.open()['source'], format='docx',
-                    reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, **extra)
+        return {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': self.open()['source'], 'format': 'docx',
+                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, **extra}
 
     def output(self, request=None, actor='alice'):
         request = request or self.output_request()
@@ -103,7 +103,7 @@ class HostedOffice(HostedReview):
         self.policy(lambda users: [g.update(office={'export': True, 'download': True}) for g in users['fields']['grants'].values()])
         query = self.call('query', {'fields': ['tasks/status'], 'plan': {'select': [{'name': '状态', 'expr': 'status'}, {'name': '序号', 'expr': '1'}]}}, 'fields')
         self.assertEqual(query['columns'], ['状态', '序号'])
-        request = dict(requestId=uid(), format='xlsx', reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, queryId=query['queryId'])
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'queryId': query['queryId']}
         self.call('fields/write', self.proposal(self.field(), 'done'), 'fields')
         result, _ = self.output(request, 'fields'); workbook = self.deliver(result, 'fields'); parts = self.parts(workbook)
         xml = '\n'.join(parts.values())
