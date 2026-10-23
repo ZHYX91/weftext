@@ -42,6 +42,8 @@ Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/prod
 
 原提交／结果交付修订沿同一 journal、Core 事务和受权消费者验证：`scripts/test_commit_delivery.py EXE [NEW_EVIDENCE_DIRECTORY]` 使用自有 TEST 库与真实 HTTP，保全部原件、请求／响应及程序对应，核原号重试、旧会话丢失、新输入后的保存依据、当前磁盘改版、坏 schema 下 capture／period 重试、实际提交后打开失败、持久取消与备份、无效 Unicode 的冻结字节摘要终结、UUID 别名及未知安装证据。该脚本接入 `scripts/mvp.py check`；Core 的确定失败注入另核提交后 Draft 更新，不把受控响应替换称为内部 Core 故障。测试专用 creation helper 严格解包新回执，不为产品保留旧响应格式。
 
+开发 profile 仅将 `sha2` 依赖以 `opt-level = 3` 编译，测试 profile 继承此设置，避免每条 CLI 命令对大型调试程序做完整身份校验时执行未优化的哈希内环。其余开发代码仍沿用原设置；SHA-256 算法、原文件句柄上的完整读取、owner 资格和所有期限均不变，不缓存或省略校验。发布 profile 独立保持原设置。
+
 ## 按影响选择验证环境
 
 常规改动优先使用纯引擎、HTTP 和可用的无头／后台浏览器，避免占用宿主焦点。按本轮改动和实际消费者选择下表中的最小范围；仅有窄屏视口不算 Mobile，HTTP 或 DOM 赋值也不算真实输入法、触屏或辅助技术操作。
