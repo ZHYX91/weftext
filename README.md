@@ -8,38 +8,43 @@ translation_status: synced
 
 # Weftext
 
-The current development tree integrates the existing v0.7 slices: GUI/CLI entry points, Capture and reminder consumers, interface language and platform-host foundations, with unified save/original-operation delivery and Draft-baseline recovery. Validation of a merged development slice follows WORKFLOW and does not establish whole-version v0.7 completion. Native Windows window/install delivery, complete Linux/Android/Apple products, real IME/assistive technology and the performance/recognition platform matrix retain separate ROADMAP acceptance; original v0.6.3 gaps remain.
+Weftext is a knowledge and writing tool built around **native Typst (`.typ`) author files**. It organizes notes, structured properties, queries and exports while preserving original files, note identities and save/recovery boundaries. The project **is still in development and has not been formally published**. Implemented source code is not proof of whole-version or cross-platform acceptance.
 
-A file-based knowledge and writing tool built around native Typst. The **established v0.6 scope is complete for 0.6.0 on Windows/NTFS and has passed acceptance on the final optimized executable; it is not formally published**. Local and controlled Server / WebUI, multiuser authorization and same-owner synchronization include partial replicas, complex structural combinations, native semantic revalidation and resource-retirement preservation. Archived prototypes are not current build dependencies.
+## What you can do
 
-The same final optimized executable passed the complete HTTP matrix, affected browser suites and real NAS HTTPS acceptance, retaining original physical identities, personal Draft/Undo, separate authorization and original-operation recovery boundaries. See [MVP](docs/MVP.md) for supported scope and unverified platform conditions. Windows/NTFS and NAS client results do not establish other OS, real system IME, complete assistive-technology or actual power-loss acceptance.
+- Work with local notes and folders, navigation, ordinary editing, properties and Query while retaining the native `.typ` file as author content.
+- Use controlled Server / WebUI paths with separate multiuser authorization and same-owner synchronization; indexes, caches and exports must not grant access to unauthorized content.
+- Inspect links and structure, hierarchical tags, relationship graphs, read-only heading structure and media thumbnails within the separately verified candidate scope; newer capabilities still need whole-candidate checks.
+- Preview and confirm save, structural and Office output operations with original-request recovery. Initial material recognition needs a separately installed local runtime, and uncertain results must not be presented as complete.
 
-The previous delivery is a **0.6.2 local delivery candidate with the initial Windows local/self-hosted recognition scope complete**: PDF text layers, PNG/JPEG OCR, initial mainland official-document and digital ordinary-invoice schemes connect original-page review, field confirmation and atomic Core import. Recognition requires an explicitly installed separate runtime. Uncertain image results and complex layouts retain partial status and losses; see [MVP](docs/MVP.md) for support and acceptance boundaries. The 0.6.1 final-candidate real system IME check and one earlier Undo anomaly retain their evidence limits. Obsidian/reference plugins serve only as independent interaction references, without a Weftext runtime dependency or vault integration.
+## Current scope and maturity
 
-Whole-version acceptance of the preceding **0.6.3-rc.4 release candidate remains incomplete**. It retains the first three stages of navigation/writing, properties/Query, ordinary root presets, link diagnostics and stable-fragment candidates, and connects hierarchical tags, a two-dimensional relationship graph, a separate read-only heading structure, authored sibling order and on-demand media thumbnails. See [MVP](docs/MVP.md) for scope and limits. Implementation and targeted checks establish neither whole-version 0.6.3 completion nor public release.
+| Stage | Evidence and boundary |
+| --- | --- |
+| **0.6.0 Windows/NTFS** | The established v0.6 scope passed HTTP, affected browser and real NAS HTTPS acceptance on the same optimized executable, **but was not formally published**. That result does not qualify other platforms. |
+| **0.6.2 local delivery candidate** | Initial Windows local/self-hosted recognition covers PDF text layers, PNG/JPEG OCR and selected official-document and ordinary digital-invoice schemes; the independent runtime, partial results and complex-layout limits still apply. |
+| **0.6.3-rc.4 candidate** | Navigation, properties/Query, tags, relationship graph and read-only heading structure were integrated; **whole-version acceptance remains incomplete**. |
+| **v0.7 development branch** | GUI/CLI, Capture, reminders, language/host foundations and save recovery are being integrated. These are development slices, **not an accepted v0.7 product or installer**. |
 
-This iteration isolates hosted panel connection failures: each failed panel is reported while later independently authorized panels continue initialization; identity or authorization changes still retire the old connection. Historical IME, Undo and whole-version comparison/performance limits remain. Failure isolation does not establish the original timeout's cause.
+See the [local-candidate scope](docs/MVP.md), [roadmap](docs/ROADMAP.md) and [acceptance workflow](docs/WORKFLOW.md) for actual evidence, supported environments and open gates. Passing checks on an earlier candidate does not qualify the current commit.
 
-The [hierarchical-tag design](docs/REQUIREMENTS.md#511-hierarchical-tags), fixed on 2026-10-20, now connects Core v2 forests, exact/descendant Query, independent move authorization, common selectors and synchronization/native-package consumers. Alpha.3's flat-tag conclusion remains a fact of that earlier candidate. TAG01–10/UX01–12 still require actual acceptance on the same final candidate; implementation does not close real retained-data conversion or historical IME/Undo limits automatically.
+## Explore and check locally
 
-- [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
-- [Server / WebUI guide](docs/SERVER.md): separate authorization for multiuser five-view writing, fields/Query, annotations, resources, structures and outputs, plus same-owner hosted synchronization; MVP records tested scope and remaining conditions.
-- [Version roadmap](docs/ROADMAP.md): implementation scope and completion gates, including v0.6.1/v0.6.2 enhancements, v0.6.3 everyday usability/knowledge organization and subsequent platform acceptance.
+1. Read the [local use and limitations](docs/MVP.md) and [Server / WebUI guide](docs/SERVER.md) before choosing a test environment or filesystem. Do not use an irreplaceable library as a test fixture.
+2. For documentation, link and model contracts, run `python scripts/check.py` with Python 3.11 or newer. Add `--models` only when changing the bounded design models; **this is not product acceptance**.
+3. On a development-ready Windows host, `python scripts/mvp.py check` builds and runs the existing local product checks without publishing software. The actual prerequisites, commands and evidence boundaries are in the [workflow](docs/WORKFLOW.md).
+4. For the separate command-line entry, consult the [CLI and original-request recovery guide](docs/CLI.md). It shares the same Core as the desktop entry; uncertain effects must be investigated under the original request, not retried with a new ID.
 
-- [Requirements](docs/REQUIREMENTS.md): the single current inventory of 27 groups, including navigation, rich types, library styles, five views and Chinese defaults.
-- [Technical design](docs/design/README.md): authoring, Core, editor and features, with necessary schemas, examples and bounded experiments.
-- [Implementation order](docs/design/INTEGRATION.md): vertical integration, current v0.6 progress and subsequent versions.
-- [Final design acceptance](docs/design/REVIEW.md): fixed technical baseline, disposition and evidence limits.
-- [Acceptance and release](docs/WORKFLOW.md): concise development entry points separating design checks from product tests.
+## Still unqualified
 
-## Local check
+- Native Windows window/installer delivery, real OS IME, full assistive-technology support, physical power-loss behavior and the original historical Undo anomaly retain separate acceptance boundaries.
+- Complete Linux, Android and Apple products, file backends, input methods and performance are not qualified by Windows/browser checks or component simulations.
+- Obsidian plugins are independent interaction references only: **Weftext neither depends on them at runtime nor integrates or synchronizes with an Obsidian Vault**.
 
-Python 3.11 or newer; no additional Python packages:
+## Technical reference
 
-```text
-python scripts/check.py --models
-```
+- [Requirements and scope](docs/REQUIREMENTS.md) · [technical design](docs/design/README.md) · [implementation order](docs/design/INTEGRATION.md)
+- [Design review](docs/design/REVIEW.md) · [local candidate](docs/MVP.md) · [Server / WebUI](docs/SERVER.md)
+- [CLI](docs/CLI.md) · [roadmap](docs/ROADMAP.md) · [development, acceptance and release](docs/WORKFLOW.md)
 
-The default checks local file links, bilingual pairs, JSON and requirement inventory. `--models` runs bounded models in temporary copies without changing recorded evidence. Reproduce official Typst compilation and platform probes using their READMEs when relevant; do not rebuild them for every prose change.
-
-Historical prototypes, designs and full reviews remain recoverable but are not build dependencies. Contract changes update affected consumers and both languages. Passing documentation checks does not establish product availability.
+Design checks, observed product acceptance and publication are separate conclusions. Passing the document check does not establish a releasable product.
