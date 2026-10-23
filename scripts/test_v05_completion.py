@@ -79,11 +79,14 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(result['status'], 'committed')
         return self.api('/api/data/schema', {'root': str(root)})
 
-    def definition(self, doc, plan, label, key=None, serial=1):
+    def definition(self, doc, plan, label, key=None, *, serial, next_serial):
+        self.assertGreater(next_serial, serial)
         result = self.api('/api/query/definition/save', {
             **self.snapshot(doc, serial=serial), 'baseId': doc['baseId'],
             'operationId': features.uid(), 'key': key, 'label': label, 'plan': plan})
         self.assertEqual(Path(doc['path']).read_bytes(), result['document']['source'].encode())
+        self.assertEqual(result['document']['sessionId'], doc['sessionId'])
+        self.map_source(result['document'], result['document']['source'], serial=next_serial)
         return result
 
     @staticmethod
@@ -97,14 +100,14 @@ class V05Completion(features.LocalFeatures):
         task, _ = self.capture(root, '任务🌿', ['task'], {'tasks/status': features.text('open')})
         self.capture(root, '已完成任务', ['task'], {'tasks/status': features.text('done')})
         owner = self.note(root, '查询正文', '= 查询🌿\n\n前文不可丢。\n')
-        first = self.definition(owner, self.status_plan(), 'weftext-query-first')
+        first = self.definition(owner, self.status_plan(), 'weftext-query-first', serial=0, next_serial=1)
         owner = first['document']
         if multiple:
-            second = self.definition(owner, self.status_plan('done'), 'weftext-query-second')
+            second = self.definition(owner, self.status_plan('done'), 'weftext-query-second', serial=1, next_serial=2)
             owner = second['document']
         return root, library, task, owner, first
 
-    def discover(self, doc, source=None, serial=1):
+    def discover(self, doc, source=None, *, serial):
         result = self.api('/api/query/embedded/discover', self.snapshot(doc, source, serial))
         self.assertEqual(result['sourceHash'], features.sha(result['source']))
         self.assertEqual(result['serial'], serial)
@@ -112,11 +115,11 @@ class V05Completion(features.LocalFeatures):
             self.assert_range(result['source'], occurrence['range'])
         return result
 
-    def run_embedded(self, doc, source, occurrence_id, serial=1, status=200):
+    def run_embedded(self, doc, source, occurrence_id, serial, status=200):
         return self.api('/api/query/embedded/run', {
             **self.snapshot(doc, source, serial), 'occurrenceId': occurrence_id}, status=status)
 
-    def edit_embedded(self, doc, source, occurrence_id, serial=1, status=200, **change):
+    def edit_embedded(self, doc, source, occurrence_id, serial, status=200, **change):
         return self.api('/api/query/embedded/edit', {
             **self.snapshot(doc, source, serial), 'occurrenceId': occurrence_id, **change},
             status=status)
@@ -373,14 +376,21 @@ class V05Completion(features.LocalFeatures):
             self.assertEqual({row['versionId']: row['commitSequence'] for row in rows},
                              {version['id']: sequence for version, sequence in zip(versions, sequences)})
             records[0].pop('savedAtUnixMs')
+            commits[0].write_text(json.dumps(records[0]), encoding='utf-8')
+            unknown_time = next(item for item in self.timeline(doc)['versions']
+                          if item['versionId'] == versions[0]['id'])
+            self.assertEqual(unknown_time['timeBasis'], 'unknown')
+            self.assertIsNone(unknown_time['savedAtUnixMs'])
+            self.assertEqual(unknown_time['commitSequence'], sequences[0])
+            self.assertEqual(self.history_read(doc, versions[0]['id'])['source'], versions[0]['source'])
             records[0].pop('commitSequence')
             commits[0].write_text(json.dumps(records[0]), encoding='utf-8')
-            legacy = next(item for item in self.timeline(doc)['versions']
-                          if item['versionId'] == versions[0]['id'])
-            self.assertEqual(legacy['timeBasis'], 'unknown')
-            self.assertIsNone(legacy['savedAtUnixMs'])
-            self.assertIsNone(legacy['commitSequence'])
-            self.assertEqual(self.history_read(doc, versions[0]['id'])['source'], versions[0]['source'])
+            invalid = self.api('/api/history/list', {'sessionId': doc['sessionId']}, status=409)
+            self.assertEqual(invalid['error']['code'], 'invalidState')
+            self.assertEqual(invalid['error']['explanation'], {
+                'key': 'error.core.journal.originalCommitEvidenceInvalid', 'params': {}})
+            self.assertEqual(self.history_read(doc, versions[0]['id'], status=409)['error']['code'],
+                             'invalidState')
         finally:
             for path, value in zip(commits, exact_commits):
                 path.write_bytes(value)
@@ -419,7 +429,8 @@ class V05Completion(features.LocalFeatures):
         draft = doc['source'] + '\n需要保护的准确草稿🌿。\n'
         self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
         source_identity = physical_identity(Path(doc['path']))
-        expected_identity = dict(zip(('volume', 'index', 'created'), source_identity))
+        expected_identity = {'platform': 'windows',
+                             **dict(zip(('volume', 'index', 'created'), source_identity))}
         candidates = []
         for path in (self.data_dir / 'drafts').glob('*.json'):
             original = path.read_bytes()
@@ -488,12 +499,12 @@ class V05Completion(features.LocalFeatures):
         _, _, _, doc, _ = self.query_fixture(multiple=True)
         original = Path(doc['path']).read_bytes()
         source = doc['source'] + '\n输入缓冲区🌿。\n'
-        discovery = self.discover(doc, source, serial=2)
+        discovery = self.discover(doc, source, serial=3)
         first = self.occurrence(discovery, 'weftext-query-first')
         second = self.occurrence(discovery, 'weftext-query-second')
         plan = copy.deepcopy(first['plan'])
         plan['where'] = "status == 'done'"
-        output = self.edit_embedded(doc, source, first['id'], serial=2, plan=plan)
+        output = self.edit_embedded(doc, source, first['id'], serial=3, plan=plan)
         self.assert_patches(source, output, data=True)
         self.assertEqual(len(output['patches']), 1)
         patch = output['patches'][0]
@@ -503,23 +514,23 @@ class V05Completion(features.LocalFeatures):
         self.assertTrue(output['source'].endswith(source.encode()[patch['byteTo']:].decode()))
         self.assertIn(second['range']['raw'], output['source'])
         self.assertEqual(output['source'].count(second['range']['raw']), 1)
-        next_discovery = self.discover(doc, output['source'], serial=3)
+        next_discovery = self.discover(doc, output['source'], serial=4)
         changed = self.occurrence(next_discovery, first['label'])
         unchanged = self.occurrence(next_discovery, second['label'])
         self.assertEqual(changed['plan']['where'], "status == 'done'")
         self.assertEqual(changed['key'], first['key'])
         self.assertEqual(changed['binding'], first['binding'])
         self.assertEqual(unchanged['plan'], second['plan'])
-        stale = self.edit_embedded(doc, source, first['id'], serial=2, plan=plan, status=409)
+        stale = self.edit_embedded(doc, source, first['id'], serial=3, plan=plan, status=409)
         self.assertEqual(stale['error']['code'], 'stale_draft')
-        expired = self.edit_embedded(doc, output['source'], first['id'], serial=3, plan=plan, status=409)
+        expired = self.edit_embedded(doc, output['source'], first['id'], serial=4, plan=plan, status=409)
         self.assertEqual(expired['error']['code'], 'embeddedQueryUnavailable')
         wrong_hash = self.api('/api/query/embedded/discover', {
-            **self.snapshot(doc, output['source'], serial=4), 'sourceHash': features.sha(source)}, status=409)
+            **self.snapshot(doc, output['source'], serial=5), 'sourceHash': features.sha(source)}, status=409)
         self.assertEqual(wrong_hash['error']['code'], 'source_hash_mismatch')
         # Temporarily invalid direct source input is an exact Draft proposal.
         replacement = changed['range']['raw'] + '\n#metadata(('
-        invalid = self.edit_embedded(doc, output['source'], changed['id'], serial=3, replacement=replacement)
+        invalid = self.edit_embedded(doc, output['source'], changed['id'], serial=4, replacement=replacement)
         self.assert_patches(output['source'], invalid, data=True)
         self.assertIn(replacement, invalid['source'])
         self.assertEqual(Path(doc['path']).read_bytes(), original)
@@ -529,59 +540,59 @@ class V05Completion(features.LocalFeatures):
         grouped_plan = {'types': ['task'], 'group': {
             'keys': [{'name': 'status', 'expr': 'status'}],
             'aggregates': [{'name': 'count', 'op': 'count'}]}}
-        grouped = self.definition(doc, grouped_plan, 'weftext-query-grouped')
+        grouped = self.definition(doc, grouped_plan, 'weftext-query-grouped', serial=1, next_serial=2)
         doc = grouped['document']
-        grouped_query = self.occurrence(self.discover(doc), 'weftext-query-grouped')
+        grouped_query = self.occurrence(self.discover(doc, serial=2), 'weftext-query-grouped')
         self.assertTrue(grouped_query['builderSupported'])
         grouped_edit = self.edit_embedded(doc, doc['source'], grouped_query['id'],
-            plan={**grouped_query['plan'], 'take': 10})
+            plan={**grouped_query['plan'], 'take': 10}, serial=2)
         self.assert_patches(doc['source'], grouped_edit, data=True)
         self.assertEqual(Path(doc['path']).read_bytes(), doc['source'].encode())
         # Simple grouping is now supported. A distinct producer remains an
         # advanced source-only plan, preserving this negative boundary.
         complex_plan = {**self.status_plan(), 'advanced': {
             'distinct': [{'name': 'status', 'expr': 'status'}]}}
-        saved = self.definition(doc, complex_plan, 'weftext-query-complex')
+        saved = self.definition(doc, complex_plan, 'weftext-query-complex', serial=2, next_serial=3)
         doc = saved['document']
         original = Path(doc['path']).read_bytes()
-        discovery = self.discover(doc, serial=1)
+        discovery = self.discover(doc, serial=3)
         complex_query = self.occurrence(discovery, 'weftext-query-complex')
         self.assertFalse(complex_query['builderSupported'])
         self.assertTrue(complex_query['runnable'])
         self.assertTrue(complex_query['controlReason'])
-        actual = self.run_embedded(doc, doc['source'], complex_query['id'])
+        actual = self.run_embedded(doc, doc['source'], complex_query['id'], serial=3)
         direct = self.api('/api/query/run', {'root': str(root), 'plan': complex_query['plan']})
         self.assert_result_parity(actual['result'], direct)
         refusal = self.edit_embedded(doc, doc['source'], complex_query['id'],
-                                     plan=self.status_plan(), status=409)
+                                     plan=self.status_plan(), status=409, serial=3)
         self.assertEqual(refusal['error']['code'], 'embeddedQueryBuilderUnsupported')
         # Duplicate native keys with different labels do not create a guessed
         # source target or silently rewrite either occurrence.
         simple = self.occurrence(discovery, 'weftext-query-first')
         duplicate = simple['range']['raw'].replace('weftext-query-first', 'weftext-query-duplicate')
         duplicate_source = doc['source'] + '\n' + duplicate + '\n'
-        duplicated = self.discover(doc, duplicate_source, serial=2)
+        duplicated = self.discover(doc, duplicate_source, serial=4)
         targets = [item for item in duplicated['occurrences'] if item['key'] == simple['key']]
         self.assertEqual(len(targets), 2)
         self.assertTrue(all(not item['writable'] and not item['runnable'] for item in targets))
-        refusal = self.edit_embedded(doc, duplicate_source, targets[0]['id'], serial=2,
+        refusal = self.edit_embedded(doc, duplicate_source, targets[0]['id'], serial=4,
                                      replacement=targets[0]['range']['raw'], status=409)
         self.assertEqual(refusal['error']['code'], 'embeddedQueryUnavailable')
         invalid_source = doc['source'] + '\n#let incomplete = ('
-        invalid = self.discover(doc, invalid_source, serial=3)
+        invalid = self.discover(doc, invalid_source, serial=5)
         self.assertFalse(invalid['syntaxValid'])
         self.assertTrue(all(not item['writable'] for item in invalid['occurrences']))
         self.assertEqual(invalid['source'], invalid_source)
         invalid_target = self.occurrence(invalid, 'weftext-query-first')
-        failure = self.run_embedded(doc, invalid_source, invalid_target['id'], serial=3, status=409)
+        failure = self.run_embedded(doc, invalid_source, invalid_target['id'], serial=5, status=409)
         self.assertEqual(failure['error']['code'], 'embeddedQueryUnavailable')
         ordinary = self.ordinary(doc['source'])
-        plain = self.discover(ordinary)
+        plain = self.discover(ordinary, serial=1)
         first = self.occurrence(plain, 'weftext-query-first')
-        failure = self.run_embedded(ordinary, ordinary['source'], first['id'], status=409)
+        failure = self.run_embedded(ordinary, ordinary['source'], first['id'], status=409, serial=1)
         self.assertEqual(failure['error']['code'], 'queryUnavailable')
         failure = self.edit_embedded(ordinary, ordinary['source'], first['id'],
-                                     plan=first['plan'], status=409)
+                                     plan=first['plan'], status=409, serial=1)
         self.assertEqual(failure['error']['code'], 'queryUnavailable')
         self.assertEqual(Path(ordinary['path']).read_bytes(), ordinary['source'].encode())
         self.assertEqual(Path(doc['path']).read_bytes(), original)
@@ -590,23 +601,23 @@ class V05Completion(features.LocalFeatures):
         root, library, task, owner, first = self.query_fixture()
         key = first['definition']['key']
         revision = first['definitionRevision']
-        second = self.definition(owner, self.status_plan('done'), 'weftext-query-first', key=key)
+        second = self.definition(owner, self.status_plan('done'), 'weftext-query-first', key=key, serial=1, next_serial=2)
         owner = second['document']
         owner_ref = f"weftext-node://{library['workspaceId']}/{owner['nodeId']}"
         caller = self.note(root, '调用者', '调用者前后文🌿。\n')
         call_plan = {'advanced': {'call': {'owner': owner_ref,
             'selection': {'mode': 'pinned', 'key': key, 'revision': revision}}}}
-        called = self.definition(caller, call_plan, 'weftext-query-call')
+        called = self.definition(caller, call_plan, 'weftext-query-call', serial=0, next_serial=1)
         caller = called['document']
         owner_before = Path(owner['path']).read_bytes()
         caller_before = Path(caller['path']).read_bytes()
-        discovery = self.discover(caller)
+        discovery = self.discover(caller, serial=1)
         occurrence = self.occurrence(discovery, 'weftext-query-call')
         self.assertEqual(occurrence['kind'], 'call')
         self.assertEqual(occurrence['call']['owner'], owner_ref)
         self.assertEqual(occurrence['call']['selection']['revision'], revision)
         self.assertTrue(occurrence['builderSupported'])
-        result = self.run_embedded(caller, caller['source'], occurrence['id'])['result']
+        result = self.run_embedded(caller, caller['source'], occurrence['id'], serial=1)['result']
         self.assertEqual([row['path'] for row in result['rows']], [task['path']])
         self.assertFalse(result['access']['resultGrantsWriteAccess'])
         definitions = [item for item in result['inputVersions']
@@ -619,21 +630,21 @@ class V05Completion(features.LocalFeatures):
         current_plan = json.loads(json.dumps(occurrence['plan']))
         current_plan['advanced']['call']['selection'] = {'mode': 'current', 'key': key}
         current_edit = self.edit_embedded(caller, caller['source'], occurrence['id'],
-                                         plan=current_plan)
+                                         plan=current_plan, serial=1)
         self.assert_patches(caller['source'], current_edit, data=True)
         self.assertRegex(current_edit['source'], r'(?:"mode"|mode):\s*"current"')
         self.assertIn(owner_ref, current_edit['source'])
         self.assertEqual(Path(owner['path']).read_bytes(), owner_before)
         self.assertEqual(Path(caller['path']).read_bytes(), caller_before)
-        owner_discovery = self.discover(owner)
+        owner_discovery = self.discover(owner, serial=2)
         owner_occurrence = self.occurrence(owner_discovery, 'weftext-query-first')
         borrowed_range = self.edit_embedded(caller, caller['source'], owner_occurrence['id'],
-            replacement=owner_occurrence['range']['raw'], status=409)
+            replacement=owner_occurrence['range']['raw'], status=409, serial=1)
         self.assertEqual(borrowed_range['error']['code'], 'embeddedQueryUnavailable')
         # Even explicit source editing is an exact caller Draft range. It may
         # alter the invocation, and cannot mutate the owner's retained source.
         edited = self.edit_embedded(caller, caller['source'], occurrence['id'],
-            replacement=occurrence['range']['raw'] + ' /* 调用处草稿🌿 */')
+            replacement=occurrence['range']['raw'] + ' /* 调用处草稿🌿 */', serial=1)
         self.assert_patches(caller['source'], edited, data=True)
         self.assertEqual(Path(owner['path']).read_bytes(), owner_before)
         self.assertEqual(Path(caller['path']).read_bytes(), caller_before)
@@ -643,8 +654,9 @@ class V05Completion(features.LocalFeatures):
         # Pinned definition history still queries newly saved current data.
         changed = self.api('/api/data/edit', {**self.snapshot(task, serial=2),
             'key': 'status', 'value': features.text('done')})
+        self.map_source(task, changed['source'], serial=3)
         task = self.saved(task, changed['source'], root)
-        actual = self.run_embedded(caller, caller['source'], occurrence['id'])['result']
+        actual = self.run_embedded(caller, caller['source'], occurrence['id'], serial=1)['result']
         self.assertEqual(actual['rows'], [])
         self.assertEqual(actual['coverage'], 'complete')
         self.assertEqual(Path(owner['path']).read_bytes(), owner_before)
@@ -652,11 +664,11 @@ class V05Completion(features.LocalFeatures):
     def test_13_embedded_empty_partial_error_and_external_pending_are_distinct(self):
         root, _, _, doc, _ = self.query_fixture()
         original = Path(doc['path']).read_bytes()
-        discovery = self.discover(doc)
+        discovery = self.discover(doc, serial=1)
         occurrence = self.occurrence(discovery, 'weftext-query-first')
         empty_plan = copy.deepcopy(occurrence['plan'])
         empty_plan['where'] = 'false'
-        empty_edit = self.edit_embedded(doc, doc['source'], occurrence['id'], plan=empty_plan)
+        empty_edit = self.edit_embedded(doc, doc['source'], occurrence['id'], plan=empty_plan, serial=1)
         empty_discovery = self.discover(doc, empty_edit['source'], serial=2)
         empty_occurrence = self.occurrence(empty_discovery, occurrence['label'])
         empty = self.run_embedded(doc, empty_edit['source'], empty_occurrence['id'], serial=2)['result']
@@ -733,7 +745,7 @@ class V05Completion(features.LocalFeatures):
 
     def materialized_fixture(self):
         root, _, _, doc, _ = self.query_fixture(multiple=True)
-        occurrences = self.discover(doc)['occurrences']
+        occurrences = self.discover(doc, serial=2)['occurrences']
         source = doc['source']
         for item in occurrences:
             source = source.replace(item['range']['raw'], '')
@@ -839,7 +851,7 @@ class V05Completion(features.LocalFeatures):
 
     def test_19_inline_query_boundaries_and_pdf_binding_guard(self):
         _, _, _, doc, _ = self.query_fixture()
-        occurrence = self.discover(doc)['occurrences'][0]
+        occurrence = self.discover(doc, serial=1)['occurrences'][0]
         raw = occurrence['range']['raw']
         base = doc['source'].replace(raw, '')
         for serial, fmt, prefix, expected in [

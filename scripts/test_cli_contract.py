@@ -23,11 +23,15 @@ import ctypes
 from ctypes import wintypes
 import datetime as dt
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.client import HTTPConnection
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
+import socket
 import struct
 import subprocess
 import sys
@@ -35,6 +39,13 @@ import threading
 import time
 import traceback
 import uuid
+import zipfile
+import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
+from urllib.request import ProxyHandler, Request, build_opener
+
+from _cli_serve import launch_serve
+from _creation_result import created_document
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
@@ -366,7 +377,16 @@ class Pseudoconsole:
             while True:
                 if self.read_error:
                     raise AssertionError(self.read_error)
-                clean = strip_vt(bytes(self.data))
+                # ConPTY can move to the next prompt with an absolute cursor
+                # command instead of CRLF. Preserve boundaries only around
+                # this exact result marker; JSON wrapping remains untouched.
+                observed = bytes(self.data)
+                marker_bytes = re.escape(marker.encode('ascii'))
+                observed = re.sub(rb'\x1b\[[0-9]+;1[Hf](?=' + marker_bytes + rb':[0-9]+)',
+                                  b'\n', observed)
+                observed = re.sub(rb'(' + marker_bytes + rb':[0-9]+\r*)\x1b\[[0-9]+;1[Hf]',
+                                  rb'\1\n', observed)
+                clean = strip_vt(observed)
                 found = pattern.search(clean)
                 if found:
                     return clean, found
@@ -416,6 +436,136 @@ def strip_vt(data):
     return data.replace(b'\x1b=', b'').replace(b'\x1b>', b'')
 
 
+class HostedRelay(ThreadingHTTPServer):
+    """Owned loopback transport fault; never invent a product operation reply."""
+    daemon_threads = False
+    block_on_close = True
+
+    def __init__(self, upstream):
+        target = urlsplit(upstream)
+        require(target.scheme == 'http' and target.hostname == '127.0.0.1'
+                and target.path in ('', '/') and target.port is not None, 'Relay target is not owned loopback')
+        self.upstream = (target.hostname, target.port)
+        self.requests, self.errors = [], []
+        self.drop_next_save = self.block_status = False
+        self.accepted_loss = None
+        self.socket_lock = threading.Lock()
+        self.incoming, self.upstream_handles = set(), set()
+        self.closing = False
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = 'HTTP/1.0'
+
+            def log_message(self, *_args):
+                pass  # Authorization headers and credentials are never logged.
+
+            def do_GET(self):
+                self.forward()
+
+            def do_POST(self):
+                self.forward()
+
+            def forward(self):
+                relay = self.server
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 <= length <= 2 * 1024 * 1024:
+                    self.send_error(413)
+                    return
+                body = self.rfile.read(length)
+                entry = {'method': self.command, 'path': self.path,
+                         'requestLength': len(body), 'requestSha256': digest(body), 'forwarded': False}
+                relay.requests.append(entry)
+                if self.path == '/api/hosted/operation' and relay.block_status:
+                    selector = unique_json(body)
+                    entry['operationId'], entry['resource'] = selector.get('operationId'), selector.get('resource')
+                    if selector == {'operationId': relay.accepted_loss['operationId'],
+                                    'resource': relay.accepted_loss['resource']}:
+                        entry['relayFault'] = 'Withheld original-status response after accepted save'
+                        self.send_response(503)
+                        self.send_header('Content-Length', '0')
+                        self.end_headers()
+                        return
+                connection, shutdown_handle = HTTPConnection(*relay.upstream, timeout=60), None
+                try:
+                    connection.connect()
+                    shutdown_handle = connection.sock.dup()
+                    with relay.socket_lock:
+                        if relay.closing:
+                            raise ConnectionAbortedError('Owned relay is closing')
+                        relay.upstream_handles.add(shutdown_handle)
+                    entry['forwarded'] = True
+                    connection.request(self.command, self.path,
+                        body=body if self.command == 'POST' else None,
+                        headers={'Content-Type': 'application/json',
+                                 'Authorization': self.headers.get('Authorization', '')})
+                    response = connection.getresponse()
+                    with response:
+                        raw = response.read(MAX_LOG_READ + 1)
+                        require(len(raw) <= MAX_LOG_READ, 'Relay reply exceeded its bounded read')
+                        code = response.status
+                        content_type = response.headers.get('Content-Type', 'application/octet-stream')
+                    entry.update(status=code, responseLength=len(raw), responseSha256=digest(raw))
+                    value = unique_json(raw) if raw and 'application/json' in content_type else None
+                    if self.path == '/api/hosted/save':
+                        entry['operationId'] = unique_json(body)['operationId']
+                    if self.path == '/api/hosted/export/chunk' and code == 200:
+                        entry['chunk'] = {key: value[key] for key in
+                                          ('requestId', 'offset', 'length', 'total', 'sha256', 'done')}
+                    if (self.path == '/api/hosted/save' and relay.drop_next_save
+                            and code == 200 and value.get('status') == 'committed'):
+                        relay.drop_next_save = False
+                        relay.block_status = True
+                        relay.accepted_loss = value
+                        entry['relayFault'] = 'Dropped real accepted save response'
+                        self.close_connection = True
+                        try:
+                            self.connection.shutdown(socket.SHUT_RDWR)
+                        except OSError:
+                            pass
+                        return
+                    self.send_response(code)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                except Exception as error:
+                    relay.errors.append({'path': self.path, 'errorType': type(error).__name__})
+                    self.close_connection = True
+                finally:
+                    connection.close()
+                    if shutdown_handle is not None:
+                        with relay.socket_lock:
+                            relay.upstream_handles.discard(shutdown_handle)
+                        shutdown_handle.close()
+
+        super().__init__(('127.0.0.1', 0), Handler)
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(65)
+        with self.socket_lock:
+            self.incoming.add(connection)
+        return connection, address
+
+    def close_request(self, connection):
+        try:
+            super().close_request(connection)
+        finally:
+            with self.socket_lock:
+                self.incoming.discard(connection)
+
+    def close_owned_connections(self):
+        with self.socket_lock:
+            self.closing = True
+            owned = [*self.incoming, *self.upstream_handles]
+        for connection in owned:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            connection.close()
+
+
 class Harness:
     def __init__(self, args):
         self.args = args
@@ -430,7 +580,7 @@ class Harness:
                        'unknownEvidenceScope': {
                            'neverSubmittedOriginal': 'unknown with no registered Plan, durable fence, then late prepare rejected',
                            'committedOutputLoss': 'closed stdout, exit 7, then exact original commit lookup',
-                           'acceptedTransportReplyLoss': 'NONRUN: no product transport fault case integrated'},
+                           'acceptedTransportReplyLoss': {'status': 'NONRUN', 'reason': 'Not yet executed'}},
                        'cases': [{'name': name, 'status': 'NONRUN', 'reason': 'Not reached'}
                                  for name in CASES], 'processes': [], 'ownerShutdown': [],
                        'workerObservations': [{'role': role, 'worker': worker, 'status': 'NONRUN'}
@@ -823,8 +973,8 @@ class Harness:
         a = self.json_file('conflict-basis-a.json', self.cli('conflict-read-a', args, profile=self.profile))
         b_value = self.cli('conflict-read-b', args, profile=self.profile)
         b = self.json_file('conflict-basis-b.json', b_value)
-        first = b_value['result']['source'] + '\nFIRST_COMMITTED_中文😀'
-        second = b_value['result']['source'] + '\nSECOND_MUST_NOT_OVERWRITE'
+        first = b_value['result']['source'] + '\nFIRST COMMITTED 中文😀'
+        second = b_value['result']['source'] + '\nSECOND MUST NOT OVERWRITE'
         a_source = self.artifact('conflict-first.typ', first.encode('utf-8'))
         b_source = self.artifact('conflict-second.typ', second.encode('utf-8'))
         self.cli('conflict-first-save', ['note', 'write', '--basis', a, '--source', a_source,
@@ -899,7 +1049,7 @@ class Harness:
         read = self.cli('broken-pipe-note-read', ['note', 'read', '--path', self.note_path,
                         '--root', self.library], profile=self.profile)
         basis = self.json_file('broken-pipe-basis.json', read)
-        source = read['result']['source'] + '\nAFTER_BROKEN_OUTPUT_中文😀\n'
+        source = read['result']['source'] + '\nAFTER BROKEN OUTPUT 中文😀\n'
         path = self.artifact('broken-pipe-source.typ', source.encode('utf-8'))
         request = self.output / 'broken-pipe.weftext-request.json'
         self.cli('real-closed-stdout', ['note', 'write', '--basis', basis, '--source', path,
@@ -1079,8 +1229,12 @@ class Harness:
         environment = dict(os.environ)
         shell_home = self.test / ('interactive-' + kind + '-profile')
         shell_home.mkdir()
-        for variable in ('APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOME'):
-            environment[variable] = str(shell_home)
+        local_app_data = shell_home / 'AppData' / 'Local'
+        roaming_app_data = shell_home / 'AppData' / 'Roaming'
+        local_app_data.mkdir(parents=True)
+        roaming_app_data.mkdir()
+        environment.update(USERPROFILE=str(shell_home), HOME=str(shell_home),
+                           LOCALAPPDATA=str(local_app_data), APPDATA=str(roaming_app_data))
         environment.update(POWERSHELL_UPDATECHECK='Off', POWERSHELL_TELEMETRY_OPTOUT='1')
         initialization = ("Import-Module PSReadLine -ErrorAction SilentlyContinue;"
                           "if(Get-Module PSReadLine){Set-PSReadLineOption -HistorySaveStyle SaveNothing "
@@ -1146,12 +1300,179 @@ class Harness:
         return receipt
 
     def remote(self):
-        # Do not start an accepted Core without a real shutdown contract. The
-        # existing test_hosted.Server uses terminate(), which cannot qualify this
-        # requested graceful-owner test. N1's role dispatcher/hosted control must
-        # be integrated before adding an exact startup/control invocation here.
-        raise Nonrun('Actual hosted HTTP CLI chain has no integrated typed graceful hosted-stop '
-                     'contract in this harness; no hosted process or author operation was started')
+        state = self.test / 'hosted-state'
+        library = self.test / 'TEST-hosted-library'
+        proof = {'owners': [], 'transportFault': 'Only the accepted save reply and its immediate status are withheld'}
+        self.report['hostedHttp'] = proof
+        opener = build_opener(ProxyHandler({}))
+
+        def local_call(owner, path, body):
+            request = Request(owner.ready['base'] + path, data=wire(body),
+                headers={'Content-Type': 'application/json', 'X-Weftext-Token': owner.ready['token']})
+            with opener.open(request, timeout=60) as response:
+                require(response.status == 200, 'Owned local setup failed')
+                return unique_json(response.read(MAX_LOG_READ))
+
+        local = launch_serve(self.args.cli_executable, ['--data-dir', str(state)],
+                             log_prefix=self.output / 'hosted-setup')
+        try:
+            local_call(local, '/api/library/create', {'path': str(library), 'operationId': uid()})
+            note = created_document(local_call(local, '/api/note/create', {
+                'root': str(library), 'parent': str(library), 'name': 'Remote', 'operationId': uid()}))
+        finally:
+            proof['owners'].append(local.stop())
+            require(local.process.poll() == 0, 'Exact local setup owner did not exit zero')
+        secret, wrong_secret = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        config = self.json_file('hosted-config.json', {
+            'deployment': 'TEST-cli-contract', 'bind': '127.0.0.1:0', 'root': str(library),
+            'adminTokenSha256': digest(secrets.token_bytes(32)),
+            'files': {'Shared': {'path': 'Remote/Remote.typ', 'title': 'Remote', 'editable': True}},
+            'users': {'alice': {'enabled': True, 'tokenSha256': digest(secret.encode('ascii')),
+                'grants': {'Shared': {'read': True, 'write': True, 'history': True, 'download': True,
+                                      'office': {'export': True, 'download': True}}}}}})
+        hosted = launch_serve(self.args.cli_executable,
+            ['--data-dir', str(state), '--server-config', str(config)], hosted=True,
+            log_prefix=self.output / 'hosted-owner')
+        relay, thread = None, None
+        try:
+            relay = HostedRelay(hosted.ready['base'])
+            thread = threading.Thread(target=relay.serve_forever, name='owned-cli-http-relay')
+            thread.start()
+            endpoint = f'http://127.0.0.1:{relay.server_port}'
+            variable = 'WEFTEXT_TEST_REMOTE_CREDENTIAL'
+            environment = {**os.environ, variable: secret}
+            prefix = ['--endpoint', endpoint, '--credential-env', variable, '--allow-loopback-http']
+
+            def remote(label, args, **options):
+                return self.cli(label, [*prefix, *args], env=environment, **options)
+
+            cap = remote('remote-capabilities', ['capabilities'])
+            require(cap['target'] == {'mode': 'remote', 'origin': endpoint + '/',
+                    'actor': 'alice', 'deployment': 'TEST-cli-contract'}, 'Remote actor/deployment/origin differs')
+            self.cli('remote-bad-credential', [*prefix, 'capabilities'], expected=4,
+                     env={**environment, variable: wrong_secret})
+            listed = remote('remote-documents', ['library', 'list'])
+            require([doc['resource'] for doc in listed['result']['documents']] == ['Shared'],
+                    'Remote documents do not follow the actual grant')
+            basis = remote('remote-read', ['note', 'read', '--resource', 'Shared'])
+            require(basis['result']['resource'] == 'Shared' and basis['result']['source'] == note['source'],
+                    'Hosted read did not return the configured original note')
+            basis_file = self.json_file('remote-basis.json', basis)
+            # Deterministic varied text makes the real compressed DOCX exceed
+            # one 64-KiB chunk while remaining well inside the input budget.
+            source = basis['result']['source'] + '\n\n' + '\n'.join(
+                hashlib.sha256(str(index).encode('ascii')).hexdigest() for index in range(6000)) + '\n中文😀\n'
+            source_file = self.artifact('remote-source.typ', source.encode('utf-8'))
+            request = self.output / 'remote-save.weftext-request.json'
+            saved = remote('remote-save', ['note', 'write', '--basis', basis_file, '--source', source_file,
+                '--request-file', request])
+            frozen = unique_json(request.read_bytes())
+            require(saved['result']['status'] == 'committed'
+                    and saved['result']['operationId'] == frozen['operationId']
+                    and Path(note['path']).read_bytes() == source.encode('utf-8'),
+                    'Remote save did not commit the exact original source')
+            current = {**basis, 'result': {**basis['result'], 'source': source,
+                                         'baseId': saved['result']['baseId']}}
+            require(current['result']['sessionId'] == basis['result']['sessionId']
+                    and isinstance(current['result']['baseId'], str), 'No live original hosted save basis')
+            current_file = self.json_file('remote-current-basis.json', current)
+            export = self.output / 'remote-export.weftext-request.json'
+            prepared = remote('remote-export-prepare', ['--locale', 'en-US', 'export', 'prepare',
+                '--basis', current_file, '--kind', 'docx', '--output-locale', 'zh-CN', '--request-file', export])
+            output = prepared['result']
+            require(output['status'] == 'prepared' and output['length'] > 65536,
+                    'Remote fixture did not produce an actual multi-chunk Office artifact')
+            original_export = export.read_bytes()
+            original_body = unique_json(base64.b64decode(unique_json(original_export)['wireBase64'], validate=True))
+            require(original_body['outputLocale'] == 'zh-CN' and original_body['source'] == source,
+                    'Remote export did not freeze its explicit content language/source')
+            target = self.output / 'remote-downloaded.docx'
+            remote('remote-export-unconfirmed', ['export', 'download', '--request', export,
+                '--destination', target], expected=5)
+            require(not target.exists(), 'Unconfirmed remote output was installed')
+            remote('remote-export-confirm', ['export', 'confirm', '--request', export,
+                '--digest', output['digest'], '--accept-losses',
+                '--request-file', self.output / 'remote-export-confirm.weftext-request.json'])
+            delivered = remote('remote-export-download', ['export', 'download', '--request', export,
+                '--destination', target])
+            require(file_digest(target) == output['digest'] == delivered['result']['sha256']
+                    and target.stat().st_size == output['length'] and export.read_bytes() == original_export,
+                    'Remote chunk delivery changed the frozen artifact or original request')
+            with zipfile.ZipFile(target) as archive:
+                text = ''.join(ET.fromstring(archive.read('word/document.xml')).itertext())
+            require(all(hashlib.sha256(str(index).encode('ascii')).hexdigest() in text for index in (0, 5999))
+                    and '中文😀' in text, 'Downloaded Office content lost the frozen author text')
+            chunks = [entry['chunk'] for entry in relay.requests if 'chunk' in entry]
+            offset = 0
+            for index, chunk in enumerate(chunks):
+                require(chunk['offset'] == offset and 0 < chunk['length'] <= 65536
+                        and chunk['total'] == output['length'] and chunk['sha256'] == output['digest']
+                        and chunk['done'] == (index == len(chunks)-1), 'Real chunk sequence is invalid')
+                offset += chunk['length']
+            require(len(chunks) > 1 and offset == output['length'], 'No complete multi-chunk remote delivery')
+            lost_source = source + '\nAccepted reply is deliberately lost 中文😀\n'
+            lost_file = self.artifact('remote-lost-source.typ', lost_source.encode('utf-8'))
+            lost_request = self.output / 'remote-lost-save.weftext-request.json'
+            relay.drop_next_save = True
+            remote('remote-accepted-reply-lost', ['note', 'write', '--basis', current_file,
+                '--source', lost_file, '--request-file', lost_request], expected=6)
+            original_lost = lost_request.read_bytes()
+            lost = unique_json(original_lost)
+            lost_body = unique_json(base64.b64decode(lost['wireBase64'], validate=True))
+            require(relay.accepted_loss is not None
+                    and relay.accepted_loss['operationId'] == lost['operationId']
+                    and lost_body['sessionId'] == basis['result']['sessionId']
+                    and lost_body['source'] == lost_source
+                    and Path(note['path']).read_bytes() == lost_source.encode('utf-8'),
+                    'Response-loss fixture did not retain the actual accepted original')
+            blocked = [entry for entry in relay.requests if entry.get('relayFault') ==
+                       'Withheld original-status response after accepted save']
+            require(blocked and all(entry['operationId'] == lost['operationId']
+                    and entry['resource'] == 'Shared' for entry in blocked),
+                    'No real immediate lookup of the lost original was withheld')
+            relay.block_status = False
+            original = remote('remote-lost-original-status', ['operation', 'inspect', '--request', lost_request])
+            require(original['result']['status'] == 'committed'
+                    and original['result']['operationId'] == lost['operationId']
+                    and original['result']['baseId'] == relay.accepted_loss['baseId']
+                    and lost_request.read_bytes() == original_lost, 'Reconciliation replaced the original operation')
+            writes = [entry for entry in relay.requests if entry['path'] == '/api/hosted/save' and entry['forwarded']]
+            lost_writes = [entry for entry in writes if entry['operationId'] == lost['operationId']]
+            require(len(writes) == 2 and len(lost_writes) == 1
+                    and lost_writes[0]['requestSha256'] == lost['wireSha256']
+                    and not relay.errors, 'Remote client retried an author effect or relay failed')
+            proof.update(target=cap['target'], artifactSha256=output['digest'], chunks=chunks,
+                         acceptedLostOperationId=lost['operationId'], acceptedLostEffectCount=1,
+                         blockedOriginalStatusRequests=blocked,
+                         reconciledStatus=original['result']['status'], originalRequestSha256=digest(original_lost))
+            self.report['unknownEvidenceScope']['acceptedTransportReplyLoss'] = {
+                'status': 'PASS', 'operationId': lost['operationId'], 'forwardedAuthorEffects': 1,
+                'recovery': 'Only original operation inspection after reply and immediate status loss'}
+        finally:
+            try:
+                if relay is not None:
+                    if thread is not None and thread.is_alive():
+                        relay.shutdown()
+                    relay.close_owned_connections()
+                    relay.server_close()
+                    if thread is not None:
+                        thread.join(timeout=5)
+                    proof['relayDrained'] = thread is None or not thread.is_alive()
+                    proof['relayRequests'] = relay.requests
+                    with relay.socket_lock:
+                        proof['relayOwnedConnectionsRemaining'] = len(relay.incoming) + len(relay.upstream_handles)
+                    proof['relayListenerClosed'] = relay.socket.fileno() == -1
+                    require(proof['relayDrained'] and proof['relayOwnedConnectionsRemaining'] == 0
+                            and proof['relayListenerClosed'], 'Owned HTTP relay did not fully drain')
+            finally:
+                proof['owners'].append(hosted.stop())
+                require(hosted.process.poll() == 0, 'Exact hosted console owner did not exit zero')
+        for path in self.output.iterdir():
+            if path.is_file():
+                raw = path.read_bytes()
+                require(secret.encode('ascii') not in raw and wrong_secret.encode('ascii') not in raw,
+                        'Remote credential appeared in retained output or command evidence')
+        return proof
 
     def stop_owner(self, key, label):
         # Remove this owned incarnation before sending shutdown. An unknown

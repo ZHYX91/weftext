@@ -307,10 +307,11 @@ class Outputs(features.LocalFeatures):
         root, doc, plan, query, decimal = self.query_fixture()
         changed = self.api('/api/data/edit', {**self.snapshot(doc, serial=2), 'key': 'amount',
                           'value': {'kind': 'decimal', 'value': '10.0'}})
+        self.map_source(doc, changed['source'], serial=3)
         current = self.saved(doc, changed['source'], root)
         fresh = self.api('/api/query/run', {'root': str(root), 'plan': plan})
         self.assertNotEqual(fresh['rows'][0]['cells']['amount']['value'], decimal)
-        _, output = self.prepare_output(current, 'xlsx', queryId=query['queryId'])
+        _, output = self.prepare_output(current, 'xlsx', serial=3, queryId=query['queryId'])
         self.assertEqual(output['preview']['query']['queryId'], query['queryId'])
         parts = unpack(self.download_output(output, 'frozen-query-exact.xlsx'))
         structure = xlsx_structure(parts)['sheet:0']

@@ -64,6 +64,7 @@ class HostedDefinition(HostedQuery):
         self.call('query/definition/prepare', changed, status=409)
         result, save = self.definition_save(doc, prepared['source'], [request['operationId']])
         self.assertEqual(result['status'], 'committed')
+        current_doc = self.committed_document(doc, prepared['source'], result, save)
         self.assertEqual([item['key'] for item in self.definitions()], [key])
         self.assertEqual(self.receipt('Shared', request['operationId'])['status'], 'admitted')
         self.assertEqual(self.call('save', save)['status'], 'committed')
@@ -72,9 +73,9 @@ class HostedDefinition(HostedQuery):
         self.assertEqual(current, prepared['source'])
         # Admission is historical identity, so later ordinary Undo/save/Redo
         # does not need the allocation ID again or mint another key.
-        self.save(self.open(), personal)
+        current_doc = self.save_current(current_doc, personal)
         self.assertEqual(self.definitions(), [])
-        self.save(self.open(), prepared['source'])
+        self.save_current(current_doc, prepared['source'])
         self.assertEqual([item['key'] for item in self.definitions()], [key])
         self.assertEqual(self.receipt('Shared', request['operationId'])['status'], 'admitted')
 
@@ -120,15 +121,15 @@ class HostedDefinition(HostedQuery):
         key = prepared['definition']['key']
         # Valid author source can be retained without a definition admission.
         # Neither the exposed UUID nor a manually invented UUID is evidence.
-        self.save(doc, prepared['source'])
+        current = self.save_current(doc, prepared['source'])
         self.assertEqual(self.definitions(), [])
         self.assertEqual(self.receipt('Shared', proposal['operationId'])['status'], 'reserved')
-        current = self.open()
-        self.definition_save(current, prepared['source'] + '\nEXPLICIT_ADMISSION', [proposal['operationId']])
+        admitted_source = prepared['source'] + '\nEXPLICIT_ADMISSION'
+        saved, original = self.definition_save(current, admitted_source, [proposal['operationId']])
+        current = self.committed_document(current, admitted_source, saved, original)
         self.assertEqual([item['key'] for item in self.definitions()], [key])
-        current = self.open()
-        unbound, _ = self.proposal(current, label='weftext-query-not-admitted')
-        self.save(current, unbound['source'])
+        unbound, _ = self.proposal(current, serial=2, label='weftext-query-not-admitted')
+        self.save_current(current, unbound['source'])
         partial = self.call('query/definitions', {'resource': 'Shared'})
         self.assertEqual(partial['coverage'], 'partial')
         self.assertEqual([item['key'] for item in partial['definitions']], [key])

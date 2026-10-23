@@ -33,6 +33,8 @@ translation_status: source
 
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业按锁文件安装前端依赖，运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
+Windows 作业总预算为 150 分钟，容纳顺序执行的完整 Rust、CLI 与 40 个 HTTP 脚本；产品操作和各用例本身的截止时间保持不变。
+
 0.6.3-rc.2 的外部 HTML 表格互操作使用 `node scripts/test_external_html_paste_browser.mjs EXE NEW_OUTPUT`，加 `--hosted` 验托管客户端。脚本在独立 HTML 页用浏览器原生复制，经实际剪贴板及可信粘贴事件进入本产品，核取消、合并格／换行／空值、未选内容和单步 Undo／Redo；不派发合成 ClipboardEvent，也不声明 Word／Excel 生产者已通过。`--dev` 只用于开发预检，候选验收消费 EXE 内嵌前端。
 
 托管连接的独立面板故障由 `scripts/test_hosted_content_import_browser.mjs` 注入库配置目录 503 验证：准确报告该面板失败，资料导入和普通文档仍可使用；原 12 组导入／恢复／撤权用例继续执行。连接生命周期单测另核旧身份的迟到成功／失败不继续初始化或报告到新连接。此回归不自动关闭历史重启超时的根因问题。

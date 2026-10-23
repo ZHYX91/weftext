@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -323,12 +324,18 @@ class LocalProcessing(local_harness.LocalFeatures):
                     self.api('/api/processing/read', {'root': str(root)}, 400)
                 else:
                     before = self.processing_read(root)
-                    self.assertIsInstance(before['warning'], str)
+                    self.assertEqual(before['warning'], {
+                        'code': 'invalid_request',
+                        'explanation': {'key': 'error.api.processing.settingsObjectVersion', 'params': {}},
+                        'diagnostics': [], 'causes': []})
                     self.api('/api/processing/prepare', self.processing_request(root, before=before), 400)
                 self.assertEqual(path.read_text('utf-8'), source)
         retained_json(path, {'version': 1, 'custom': {'keep': '未知成员'}, 'processing': {'futureVersion': 999}})
         before = self.processing_read(root)
-        self.assertIsInstance(before['warning'], str)
+        self.assertEqual(before['warning'], {
+            'code': 'invalid_request',
+            'explanation': {'key': 'error.api.processing.invalidDefaultsOrVocabulary', 'params': {}},
+            'diagnostics': [], 'causes': []})
         self.assertEqual(before['processing'], {'futureVersion': 999})
         invalid = processing()
         invalid['defaults']['languages'][0]['region'] = 'not-a-region'
@@ -353,7 +360,8 @@ class LocalProcessing(local_harness.LocalFeatures):
             'source': doc['source'], 'serial': 1})['ok'])
         legacy = self.api('/api/knowledge/proofread', {'context': context, 'options': options})
         self.assertEqual(legacy['coverage'], 'partial')
-        self.assertTrue(any('确认' in warning for warning in legacy['warnings']))
+        self.assertIn({'key': 'error.knowledge.proofreading.legacyLanguageScopeUnconfirmed', 'params': {}},
+                      legacy['warnings'])
         self.assertFalse(any(item['ruleId'] == 'owned.legacy.unscoped' for item in legacy['findings']))
         self.assertTrue(any(['owned.legacy.unscoped', 'unknown'] in item['skippedRules']
                             for item in legacy['fragments']))

@@ -25,9 +25,8 @@ class HostedHistory(Hosted):
         sources = []
         for letter in 'ABC':
             source = metadata + f'\r\n\r\n= 版本 {letter}🌿\r\n准确正文 {letter}。\r\n'
-            self.save(doc, source)
+            doc = self.save_current(doc, source)
             sources.append(source)
-            doc = self.open(resource)
         timeline = self.timeline(doc)
         # Hosted operation IDs are actor scoped. Locate the actual version by
         # its exact bytes, never by wall-clock order or the external request ID.
@@ -210,9 +209,10 @@ class HostedHistory(Hosted):
         self.assertEqual(self.call('history/restore', request)['status'], 'cancelled')
         self.assertEqual(self.open()['source'], versions[2]['source'])
         fresh = self.open()
-        saved, save_request = self.save(fresh, fresh['source'] + '\nCATEGORY_SAVE')
+        category_source = fresh['source'] + '\nCATEGORY_SAVE'
+        saved, save_request = self.save(fresh, category_source)
         self.assertEqual(saved['status'], 'committed')
-        fresh = self.open()
+        fresh = self.committed_document(fresh, category_source, saved, save_request)
         collide = self.restore_request(fresh, versions[0]['id'], operation=save_request['operationId'])
         self.call('history/restore', collide, status=409)
         # Category exclusivity also applies in the other direction; settling a
@@ -226,17 +226,24 @@ class HostedHistory(Hosted):
         original = self.call('history/restore', request)
         self.assertEqual(original['status'], 'committed')
         self.assertEqual(original['resultBasis'], 'current')
-        self.save(self.open(), versions[0]['source'])
+        restored = original['result']
+        self.assertEqual(restored['receipt']['operationId'], request['operationId'])
+        self.assertEqual(restored['source'], versions[0]['source'])
+        self.assertIsInstance(restored['receipt']['baseId'], str)
+        self.assertTrue(restored['receipt']['baseId'])
+        self.assertEqual((self.root / self.config['files'][doc['resource']]['path']).read_bytes(),
+                         restored['source'].encode('utf-8'))
+        fresh = {**doc, 'source': restored['source'], 'baseId': restored['receipt']['baseId']}
+        fresh = self.save_current(fresh, versions[0]['source'])
         self.assertEqual(self.restore_status(request['operationId'])['resultBasis'], 'superseded')
-        fresh = self.open()
-        self.save(fresh, fresh['source'] + '\nLATER_SAVED_F')
+        fresh = self.save_current(fresh, fresh['source'] + '\nLATER_SAVED_F')
         superseded = self.restore_status(request['operationId'])
         self.assertEqual(superseded['status'], 'committed')
         self.assertEqual(superseded['resultBasis'], 'superseded')
         self.assertEqual(superseded['result']['source'], versions[0]['source'])
         # Identical author bytes in a distinct committed revision do not revive
         # the original restore receipt as the current basis.
-        self.save(self.open(), versions[0]['source'])
+        self.save_current(fresh, versions[0]['source'])
         self.assertEqual(self.restore_status(request['operationId'])['resultBasis'], 'superseded')
         self.server.close()
         original_path = self.config['files']['Shared']['path']

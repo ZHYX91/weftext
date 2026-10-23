@@ -893,7 +893,8 @@ fn status_call(original: &FrozenRequest, remote: bool) -> Result<BusinessCall, F
     if remote
         && matches!(
             kind,
-            CallKind::ImportStatus
+            CallKind::OperationStatus
+                | CallKind::ImportStatus
                 | CallKind::OfficeImportStatus
                 | CallKind::StructureStatus
                 | CallKind::HistoryStatus
@@ -1550,6 +1551,45 @@ mod tests {
         assert_eq!(status.body["resource"], "root");
         assert_eq!(fence.kind, CallKind::StructureSettle);
         assert_eq!(fence.body["resource"], "root");
+    }
+    #[test]
+    fn remote_save_status_and_settlement_keep_the_original_out_of_wire_selector() {
+        let mut request = FrozenRequest::new(
+            Target::Remote {
+                origin: "https://notes.test/".into(),
+                actor: "alice".into(),
+                deployment: "server".into(),
+            },
+            BusinessCall {
+                kind: CallKind::Save,
+                body: json!({"operationId":uuid::Uuid::new_v4().to_string(),
+                    "sessionId":"original-session","baseId":"original-base",
+                    "source":"original authored text","definitionReservations":[]}),
+            },
+        )
+        .unwrap();
+        request.resource = Some("Shared".into());
+        let wire = request.wire().unwrap();
+        let record = serde_json::to_value(&request).unwrap();
+        assert!(request.body().unwrap().get("resource").is_none());
+        let status = status_call(&request, true).ok().unwrap();
+        let fence = settle_call(&request, true).ok().unwrap();
+        assert_eq!(status.kind, CallKind::OperationStatus);
+        assert_eq!(fence.kind, CallKind::OperationSettle);
+        let selector = json!({"resource":"Shared","operationId":request.operation_id});
+        assert_eq!(status.body, selector);
+        assert_eq!(fence.body, selector);
+        assert_eq!(request.wire().unwrap(), wire);
+        assert_eq!(serde_json::to_value(&request).unwrap(), record);
+        request.resource = None;
+        for failure in [
+            status_call(&request, true).err().unwrap(),
+            settle_call(&request, true).err().unwrap(),
+        ] {
+            assert_eq!(failure.code, "originalSelector");
+            assert_eq!(failure.exit, UNKNOWN);
+        }
+        assert_eq!(request.wire().unwrap(), wire);
     }
     #[test]
     fn localized_help_keeps_machine_names_and_uses_the_canonical_catalog() {

@@ -18,6 +18,7 @@ from test_hosted_office import HostedOffice
 class HostedQuery(HostedFields):
     def prepare_query(self):
         self.prepare_fields()
+        documents = {}
         for name, status in [('Shared', 'open'), ('Other', 'done'), ('Secret', 'open')]:
             doc = self.open(name)
             node = self.docs[name]['nodeId']
@@ -25,7 +26,8 @@ class HostedQuery(HostedFields):
                       f'private: "PRIVATE_{name}_UNREADABLE")) <weftext>\n'
                       f'#set document(title: [文档{name}])\n#title()\n'
                       f'= 标题{name}😀\n\n正文{name}🌿\n')
-            self.save(doc, source)
+            documents[name] = self.save_current(doc, source)
+        return documents
 
     def local(self, action):
         self.server.close()
@@ -318,15 +320,15 @@ class HostedQuery(HostedFields):
             self.assertNotIn('queryId', result)
 
     def test_query_frozen_semantic_output_and_every_consumer_revocation(self):
-        self.prepare_query()
+        documents = self.prepare_query()
         self.grant_query(products=['body'])
         self.policy(lambda users: [grant.update(office={'export': True, 'download': True})
                                   for grant in users['fields']['grants'].values()])
         result = self.query({'select': [self.column('body', 'body')]}, fields=[], products=['body'])
         request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'format': 'xlsx', 'reviewMode': 'none',
                    'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'queryId': result['queryId']}
-        doc = self.open()
-        self.save(doc, doc['source'].replace('正文Shared🌿', 'NEWER_BODY_AFTER_QUERY'))
+        doc = documents['Shared']
+        self.save_current(doc, doc['source'].replace('正文Shared🌿', 'NEWER_BODY_AFTER_QUERY'))
         output, _ = HostedOffice.output(self, request, 'fields')
         workbook = HostedOffice.deliver(self, output, 'fields')
         xml = '\n'.join(HostedOffice.parts(workbook).values())

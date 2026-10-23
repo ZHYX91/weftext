@@ -49,7 +49,7 @@ def native_nested_parent(schema):
         'NewParent/assets/icons/nested.png': {'role': 'resource', 'ownerNodeId': node, 'resourceId': resource},
         'NewParent/weftext.resources.json': {'role': 'resourceManifest', 'ownerNodeId': node},
     }
-    manifest = {'format': 'weftext.native-package', 'version': 1, 'packageId': uid(),
+    manifest = {'format': 'weftext.native-package', 'version': 2, 'packageId': uid(),
                 'workspaceId': workspace, 'scope': 'library', 'schemaPath': '.weftext-schema.json',
                 'losses': [], 'entries': {path: {**roles[path], 'bytes': len(data),
                     'sha256': hashlib.sha256(data).hexdigest()} for path, data in files.items()}}

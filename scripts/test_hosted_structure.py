@@ -252,6 +252,10 @@ class HostedStructure(HostedHistory):
         self.prepare(request, status=404)
         self.policy(lambda users: users['alice']['grants']['Created'].update(
             fields={'tasks/status': {'read': True, 'write': True}}))
+        catalog = self.call('structure')
+        form = next(slot for slot in catalog['slots'] if slot['resource'] == 'Created')['capture']
+        request['capture']['formBasis'] = {
+            'schemaRef': form['roleRef'], 'semanticDigest': form['semanticDigest']}
         result = self.execute(request)
         self.assertTrue(result['result']['canOpen'])
         profile = self.call('fields/read', {'resource': 'Created', 'fieldId': 'tasks/status'})

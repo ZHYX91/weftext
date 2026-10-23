@@ -115,6 +115,24 @@ class Hosted(unittest.TestCase):
     def save(self,doc,source,actor='alice',status=200,op=None):
         req={'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':source,'operationId':op or uid()}
         return self.call('save',req,actor,status),req
+    def save_current(self, doc, source):
+        status, original = self.save(doc, source)
+        return self.committed_document(doc, source, status, original)
+
+    def committed_document(self, doc, source, status, original):
+        self.assertEqual(original['sessionId'], doc['sessionId'])
+        self.assertEqual(original['baseId'], doc['baseId'])
+        self.assertEqual(original['source'], source)
+        self.assertEqual(status['status'], 'committed')
+        self.assertEqual(status['operationId'], original['operationId'])
+        self.assertEqual(status['resource'], doc['resource'])
+        self.assertIsInstance(status['baseId'], str)
+        self.assertTrue(status['baseId'])
+        self.assertNotIn('recoveryIssue', status)
+        path = self.root / self.config['files'][status['resource']]['path']
+        self.assertEqual(path.read_bytes(), source.encode('utf-8'))
+        return {**doc, 'source': source, 'baseId': status['baseId']}
+
     def policy(self, transform):
         old=self.call('admin/policy',actor='admin')
         users=copy.deepcopy(old['users']);transform(users)

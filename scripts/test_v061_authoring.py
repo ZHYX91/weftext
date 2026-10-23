@@ -608,7 +608,11 @@ class RetainedHTTP(unittest.TestCase):
         b = self.server('receiver', self.folder / 'state-b')
         root_b = self.folder / 'replica'
         source = note['source'] + TABLE_BODY
-        self.save_exact(a, note, source)
+        initial, _ = self.save_exact(a, note, source)
+        sender = initial['document']
+        self.assertEqual(sender['sessionId'], note['sessionId'])
+        self.assertEqual(sender['source'], source)
+        self.assertEqual(sender['baseId'], initial['baseId'])
         key = {'kind': 'node', 'id': note['nodeId']}
         binding = self.call(a, '/api/sync/enable', {'root': str(root_a), 'operationId': uid()})
         identity = binding['identity']
@@ -639,11 +643,11 @@ class RetainedHTTP(unittest.TestCase):
         raw = path.parent / 'personal.raw'
         raw.write_bytes(b'owned private raw')
         raw_identity = physical_identity(raw)
-        sender = self.view(a, root_a)
         sender_basis, sender_map = self.observe(a, sender, source, 1)
         updated = self.propose(a, sender_basis, sender_map, {'kind': 'tableEdit', 'range': self.table(sender_map)['range'],
                                'action': {'kind': 'moveRow', 'from': 0, 'to': 1}})['source']
         updated = updated.replace('\n#table(', '\nSynchronized prefix moves the exact source range\n\n#table(', 1)
+        self.observe(a, sender, updated, 2)
         self.save_exact(a, sender, updated)
         before_receive = tree_state(root_b)
         transfer()

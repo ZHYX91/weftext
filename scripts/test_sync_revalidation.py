@@ -806,8 +806,20 @@ class SyncRevalidation(SyncCompound):
         self.assertEqual(len(losses), 1)
         self.assertEqual(losses[0]['path'],
                          f'weftext-node://{self.identity["workspaceId"]}/{self.key["id"]}')
-        self.assertIn(self.annotation_id, losses[0]['detail'])
-        self.assertIn('preserved-target-not-in-authorized-read-cut', losses[0]['detail'])
+        self.assertEqual(losses[0], {
+            'path': f'weftext-node://{self.identity["workspaceId"]}/{self.key["id"]}',
+            'code': 'annotationTargetUnavailable',
+            'explanation': {
+                'key': 'error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection',
+                'params': {'annotationId': self.annotation_id}},
+            'diagnostics': [],
+            'causes': [{
+                'code': 'preserved-target-not-in-authorized-read-cut',
+                'explanation': {
+                    'key': 'error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable',
+                    'params': {}},
+                'diagnostics': []}],
+            'productDiagnostics': []})
         self.commit(self.b, self.plan)
         self.assert_applied()
         self.assertEqual((self.rb / 'Note/weftext.annotations.json').read_bytes(), self.annotation_bytes)

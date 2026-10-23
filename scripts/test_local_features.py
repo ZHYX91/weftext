@@ -154,6 +154,12 @@ class LocalFeatures(unittest.TestCase):
         return {'sessionId': doc['sessionId'], 'source': doc['source'] if source is None else source,
                 'serial': serial, 'baseId': doc['baseId'], 'dirty': dirty}
 
+    def map_source(self, doc, source, *, serial):
+        mapping = self.api('/api/editor-map', self.snapshot(doc, source, serial))
+        self.assertEqual(mapping['serial'], serial)
+        self.assertEqual(mapping['sourceHash'], sha(source))
+        return mapping
+
     def assert_range(self, source, address):
         raw = source.encode()[address['from']:address['to']].decode()
         self.assertEqual(raw, address['raw'])
@@ -507,8 +513,9 @@ class LocalFeatures(unittest.TestCase):
         self.assertEqual(Path(doc['path']).read_text(encoding='utf-8'), doc['source'])
         self.api('/api/knowledge/prepare', {'context': context, 'operationId': uid(),
                  'intent': {**intent, 'target': {'workspaceId': lib['workspaceId'], 'nodeId': uid()}}}, status=409)
+        self.map_source(doc, preview['source'], serial=2)
         doc = self.saved(doc, preview['source'], root)
-        context = self.context(doc)
+        context = self.context(doc, serial=2)
         current = self.api('/api/knowledge/read', {'context': context})
         edge = current['links']['outgoing'][0]
         self.assertEqual(edge['resolution']['target']['nodeId'], second['nodeId'])
@@ -894,8 +901,9 @@ class LocalFeatures(unittest.TestCase):
         self.assertEqual(len(resource['metadata']['pages']), 2)
         self.assertIsNotNone(resource['revision'])
         source = doc['source'] + f'\n#link("{resource["resource"]}#page=2")[准确第二页]\n'
+        self.map_source(doc, source, serial=2)
         doc = self.saved(doc, source, root)
-        context = self.context(doc)
+        context = self.context(doc, serial=2)
         graph = self.api('/api/knowledge/read', {'context': context})
         occurrence = graph['links']['outgoing'][0]['occurrence']
         addresses = {}

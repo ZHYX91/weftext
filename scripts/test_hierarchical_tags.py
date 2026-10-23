@@ -45,7 +45,7 @@ def native_tags(schema, count=3, mutate=None):
     roles = {'.weftext-schema.json': {'role': 'schema'},
              '.weftext-tags.json': {'role': 'tags'},
              'Imported/Imported.typ': {'role': 'source', 'nodeId': node}}
-    manifest = dict(format='weftext.native-package', version=1, packageId=uid(),
+    manifest = dict(format='weftext.native-package', version=2, packageId=uid(),
         workspaceId=workspace, scope='library', schemaPath='.weftext-schema.json', losses=[],
         entries={name: {**roles[name], 'bytes': len(value),
                        'sha256': hashlib.sha256(value).hexdigest()} for name, value in files.items()})
