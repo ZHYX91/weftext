@@ -142,9 +142,32 @@ fn exact_writer_compiles_in_real_typst() {
 #[test]
 fn full_central_catalog_installs_and_duplicate_json_or_signature_override_reject() {
     let s = schema();
-    assert_eq!(s.fields.len(), 55);
+    assert_eq!(s.fields.len(), 56);
     assert_eq!(s.types.len(), 8);
     assert_eq!(s.relations.len(), 28);
+    assert_eq!(
+        s.fields
+            .iter()
+            .find(|f| f.id == "tasks/reminder")
+            .unwrap()
+            .key,
+        "reminder"
+    );
+    let constraint = s
+        .types
+        .iter()
+        .find(|t| t.id == "tasks/task")
+        .unwrap()
+        .constraints
+        .iter()
+        .find(|c| c.validator == "temporal/task-reminder")
+        .unwrap();
+    assert_eq!(constraint.inputs.len(), 2);
+    for (slot, field) in [("due", "tasks/due"), ("reminder", "tasks/reminder")] {
+        assert!(
+            matches!(constraint.inputs.get(slot), Some(Selector::Field { id, path }) if id == field && path.is_empty())
+        );
+    }
     let json = serde_json::to_string(&s).unwrap();
     assert!(Schema::from_author_json(&json).is_ok());
     assert!(

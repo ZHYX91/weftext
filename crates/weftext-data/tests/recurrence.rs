@@ -700,11 +700,24 @@ fn table_bounds_noncanonical_keys_versions_missing_pack_and_coverage_reject_expl
         DataErrorKind::Unavailable,
         UiMessage::error_data_temporal_period_provider_versions_unavailable_under_policy(),
     );
-    assert_data_error(
-        &period_step(&p, -1, &s).unwrap_err(),
-        DataErrorKind::Coverage,
-        UiMessage::error_data_temporal_period_step_coverage_unavailable(),
-    );
+    // Civil arithmetic reaches a date outside the finite calendar table.
+    for kind in ["day", "week"] {
+        let first = period_for_date("table", kind, &date("2026-01-05"), &s).unwrap();
+        assert_data_error(
+            &period_step(&first, -1, &s).unwrap_err(),
+            DataErrorKind::Coverage,
+            UiMessage::error_data_temporal_calendar_table_coverage_unavailable(),
+        );
+    }
+    // Ordinal arithmetic instead fails to select an installed table period.
+    for kind in ["month", "quarter", "year"] {
+        let first = period_for_date("table", kind, &date("2026-01-05"), &s).unwrap();
+        assert_data_error(
+            &period_step(&first, -1, &s).unwrap_err(),
+            DataErrorKind::Coverage,
+            UiMessage::error_data_temporal_period_step_coverage_unavailable(),
+        );
+    }
     assert_data_error(
         &period_for_date("table", "day", &date("2026-01-04"), &s).unwrap_err(),
         DataErrorKind::Coverage,
