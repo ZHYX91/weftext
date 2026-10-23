@@ -134,7 +134,9 @@ def build(release, *, package_input=False, linker=None, windows_sdk=None):
                              'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER', 'WEFTEXT_WINDOWS_SDK_BIN') if key in environment},
                             catalog_path, catalog)
     for role, path in paths.items():
-        print(f'Built {role}: {path} (SHA-256 {sha256(binaries[role])})')
+        print(f'Built {role}: {path} (SHA-256 {sha256(binaries[role])})', flush=True)
+    if catalog_path is not None:
+        print(f'Artifact catalog: {catalog_path}', flush=True)
     if package_input:
         print(f'Frozen package source: {source_root}')
     return result
@@ -149,6 +151,7 @@ def check(artifacts):
     checked(sys.executable, 'scripts/check.py', '--models')
     check_root = artifacts.target_directory / 'weftext-checks' / str(uuid.uuid4())
     check_root.mkdir(parents=True, exist_ok=False)
+    print(f'Product check root: {check_root}', flush=True)
     checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
     checked(sys.executable, 'scripts/test_windows_package.py')
     checked(sys.executable, 'scripts/test_cli_serve.py')
@@ -158,13 +161,13 @@ def check(artifacts):
     checked(sys.executable, 'resources/fonts/verify.py')
     checked(NPM, '--prefix', 'app', 'test')
     checked('cargo', 'fmt', '--all', '--', '--check')
+    checked(sys.executable, 'scripts/test_cli_contract.py',
+            '--gui-executable', artifacts.paths['desktop'], '--cli-executable', artifacts.paths['cli'],
+            '--test-root', check_root / 'cli', '--output-dir', check_root / 'cli-results')
     with CargoCache(root, artifacts.target_directory, environment) as cache:
         cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
                    '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
         cache.run(['cargo', 'test', '--locked', '--workspace', '--message-format=json-render-diagnostics'])
-    checked(sys.executable, 'scripts/test_cli_contract.py',
-            '--gui-executable', artifacts.paths['desktop'], '--cli-executable', artifacts.paths['cli'],
-            '--test-root', check_root / 'cli', '--output-dir', check_root / 'cli-results')
     for script in CHECK_SCRIPTS:
         checked(sys.executable, 'scripts/' + script, exe)
     artifacts.verify_inputs(root)

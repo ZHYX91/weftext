@@ -573,6 +573,7 @@ class Harness:
         self.api = None
         self.owners, self.pending, self.attempted_profiles = {}, [], set()
         self.shutdown_attempted = set()
+        self.redactions = set()
         self.sequence = 0
         self.report = {'schemaVersion': 1, 'startedAt': utc(), 'passed': False,
                        'testRoot': str(self.test), 'outputDir': str(self.output),
@@ -600,6 +601,7 @@ class Harness:
 
     def case(self, name, function, requires=()):
         item = next(item for item in self.report['cases'] if item['name'] == name)
+        process_start = len(self.report['processes'])
         item.update(startedAt=utc(), status='NONRUN')
         item.pop('reason', None)
         try:
@@ -614,6 +616,76 @@ class Harness:
             item.update(status='FAIL', error=traceback.format_exc())
         item['completedAt'] = utc()
         print(f"{item['status']} {name}", flush=True)
+        if item['status'] != 'PASS':
+            self.failure_diagnostic(item, process_start)
+
+    def diagnostic_text(self, value, limit):
+        # Redact complete values before truncating, so a boundary cannot expose
+        # a credential prefix. Original local evidence remains untouched.
+        for secret in self.redactions:
+            value = value.replace(secret, '[REDACTED]')
+        raw = value.encode('utf-8', errors='replace')
+        return {'text': raw[-limit:].decode('utf-8', errors='replace'),
+                'truncated': len(raw) > limit}
+
+    def failure_diagnostic(self, item, process_start):
+        # Emit only this case's existing evidence. CI caches may contain older
+        # check roots; neither select those results nor dump argv/env/Ready.
+        try:
+            processes = []
+            for process in self.report['processes'][process_start:][-4:]:
+                recent = {key: process[key] for key in (
+                    'label', 'exitCode', 'expectedExitCodes', 'timedOut',
+                    'elapsedSeconds', 'stdout', 'stderr') if key in process}
+                try:
+                    raw = read_small(self.output / process['stderr'])
+                    records, unparsed = [], 0
+                    for line in raw.splitlines():
+                        if not line.strip():
+                            continue
+                        try:
+                            if len(line) > 16384:
+                                raise ValueError('Diagnostic line exceeds the bounded parse')
+                            value = unique_json(line)
+                            error = value.get('error') if isinstance(value, dict) else None
+                            if value.get('schemaVersion') != 1 or not isinstance(error, dict):
+                                raise ValueError('Not a versioned machine error')
+                            record = {key: error[key] for key in ('code', 'exitCode')
+                                      if type(error.get(key)) in (str, int)}
+                            description = error.get('description')
+                            if isinstance(description, dict) and isinstance(description.get('key'), str):
+                                record['descriptionKey'] = description['key']
+                            records.append(self.diagnostic_text(json.dumps(record, ensure_ascii=True), 1024))
+                        except (ValueError, AttributeError, UnicodeError):
+                            unparsed += 1
+                    recent['stderrDiagnostic'] = {'length': len(raw), 'sha256': digest(raw),
+                        'machineErrorCount': len(records), 'recentMachineErrors': records[-4:],
+                        'unparsedLines': unparsed}
+                except (OSError, AssertionError) as error:
+                    recent['stderrUnavailable'] = type(error).__name__
+                processes.append(recent)
+            diagnostic = {'case': item['name'], 'status': item['status'],
+                'resultPath': str(self.output / 'result.json'),
+                'cliDriverSha256': file_digest(Path(__file__)),
+                'python': sys.version, 'checkoutCommit': os.environ.get('GITHUB_SHA'),
+                'reason': self.diagnostic_text(item.get('error', item.get('reason', '')), 8192),
+                'processes': processes}
+            if item['name'] == 'actual-hosted-http-cli':
+                proof = self.report.get('hostedHttp', {})
+                diagnostic['relay'] = {key: proof[key] for key in (
+                    'relayDrained', 'relayOwnedConnectionsRemaining',
+                    'relayListenerClosed', 'relayErrors') if key in proof}
+                diagnostic['relay']['recentRequests'] = proof.get('relayRequests', [])[-4:]
+            item['failureDiagnostic'] = diagnostic
+            print('CLI failure diagnostic: ' + json.dumps(diagnostic, ensure_ascii=True),
+                  file=sys.stderr, flush=True)
+        except Exception as error:
+            # Observability must not replace the original failure or cleanup.
+            try:
+                print('CLI failure diagnostic unavailable: ' + type(error).__name__,
+                      file=sys.stderr, flush=True)
+            except Exception:
+                pass  # The diagnostic sink itself may be broken.
 
     def run_process(self, label, command, *, input_bytes=None, expected=0,
                     env=None, timeout=120, worker=False, broken_stdout=False,
@@ -623,7 +695,9 @@ class Harness:
         out, err = self.artifact(stem + '.stdout.bin'), self.artifact(stem + '.stderr.bin')
         if input_bytes is not None:
             self.artifact(stem + '.stdin.bin', input_bytes)
+        allowed = (expected,) if isinstance(expected, int) else tuple(expected)
         metadata = {'label': label, 'command': command, 'startedAt': utc(),
+                    'expectedExitCodes': list(allowed),
                     'inputLength': len(input_bytes) if input_bytes is not None else None,
                     'inputSha256': digest(input_bytes) if input_bytes is not None else None,
                     'stdout': out.name, 'stderr': err.name, 'brokenStdout': broken_stdout}
@@ -664,7 +738,6 @@ class Harness:
                 metadata['completedAt'] = utc()
                 keep_json(self.output / (stem + '.process.json'), metadata)
         data, errors = read_small(out), read_small(err)
-        allowed = (expected,) if isinstance(expected, int) else tuple(expected)
         require(process.returncode in allowed,
                 f'{label}: exit {process.returncode}, expected {allowed}; see {err.name}')
         return data, errors, metadata
@@ -1315,6 +1388,7 @@ class Harness:
 
         local = launch_serve(self.args.cli_executable, ['--data-dir', str(state)],
                              log_prefix=self.output / 'hosted-setup')
+        self.redactions.add(local.ready['token'])
         try:
             local_call(local, '/api/library/create', {'path': str(library), 'operationId': uid()})
             note = created_document(local_call(local, '/api/note/create', {
@@ -1323,6 +1397,7 @@ class Harness:
             proof['owners'].append(local.stop())
             require(local.process.poll() == 0, 'Exact local setup owner did not exit zero')
         secret, wrong_secret = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+        self.redactions.update((secret, wrong_secret))
         config = self.json_file('hosted-config.json', {
             'deployment': 'TEST-cli-contract', 'bind': '127.0.0.1:0', 'root': str(library),
             'adminTokenSha256': digest(secrets.token_bytes(32)),
@@ -1459,6 +1534,8 @@ class Harness:
                         thread.join(timeout=5)
                     proof['relayDrained'] = thread is None or not thread.is_alive()
                     proof['relayRequests'] = relay.requests
+                    proof['relayErrors'] = {'count': len(relay.errors),
+                                           'recent': relay.errors[-4:]}
                     with relay.socket_lock:
                         proof['relayOwnedConnectionsRemaining'] = len(relay.incoming) + len(relay.upstream_handles)
                     proof['relayListenerClosed'] = relay.socket.fileno() == -1

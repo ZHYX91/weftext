@@ -33,7 +33,7 @@ translation_status: source
 
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业按锁文件安装前端依赖，运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
-Windows 作业总预算为 150 分钟，容纳顺序执行的完整 Rust、CLI 与 40 个 HTTP 脚本；产品操作和各用例本身的截止时间保持不变。
+Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
 
 0.6.3-rc.2 的外部 HTML 表格互操作使用 `node scripts/test_external_html_paste_browser.mjs EXE NEW_OUTPUT`，加 `--hosted` 验托管客户端。脚本在独立 HTML 页用浏览器原生复制，经实际剪贴板及可信粘贴事件进入本产品，核取消、合并格／换行／空值、未选内容和单步 Undo／Redo；不派发合成 ClipboardEvent，也不声明 Word／Excel 生产者已通过。`--dev` 只用于开发预检，候选验收消费 EXE 内嵌前端。
 
