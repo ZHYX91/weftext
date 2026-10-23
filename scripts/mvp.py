@@ -311,6 +311,7 @@ def main(argv=None):
             raise ValueError('Offline material lock changed after package preflight')
         version = tomllib.loads(artifacts.source['crates/weftext-app/Cargo.toml'].decode('utf-8'))['package']['version']
         package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT)
+    return artifacts
 
 
 if __name__ == '__main__':

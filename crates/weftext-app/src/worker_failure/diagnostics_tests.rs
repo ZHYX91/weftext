@@ -301,7 +301,10 @@ fn observer_emits_only_for_original_private_failure_and_leaves_result_unchanged(
     ] {
         let result: Result<_, ApiError> = Ok(value.clone());
         observe_with(HostedContext::Editor, &result, |line| events.push(line));
-        assert_eq!(result.unwrap(), value);
+        let Ok(actual) = result else {
+            panic!("Observer changed the successful result")
+        };
+        assert_eq!(actual, value);
     }
     for error in [
         ApiError::bad(UiMessage::error_compiler_output_invalid()),
@@ -313,13 +316,10 @@ fn observer_emits_only_for_original_private_failure_and_leaves_result_unchanged(
     ] {
         let result: Result<Value, _> = Err(error);
         observe_with(HostedContext::Preview, &result, |line| events.push(line));
-        assert!(
-            result
-                .as_ref()
-                .unwrap_err()
-                .private_worker_failure
-                .is_none()
-        );
+        let Err(original) = result else {
+            panic!("Observer changed the error result")
+        };
+        assert!(original.private_worker_failure.is_none());
     }
     assert!(events.is_empty());
     let error = original_failure(Kind::Deadline);
@@ -329,8 +329,11 @@ fn observer_emits_only_for_original_private_failure_and_leaves_result_unchanged(
         events.push(line)
     });
     assert_eq!(events.len(), 1);
+    let Err(original) = result else {
+        panic!("Observer changed the worker error result")
+    };
     assert!(Arc::ptr_eq(
-        result.unwrap_err().private_worker_failure.as_ref().unwrap(),
+        original.private_worker_failure.as_ref().unwrap(),
         &retained
     ));
 }
@@ -345,7 +348,9 @@ async fn observed_busy_keeps_its_actual_public_response_without_a_fake_worker() 
     observe_with(HostedContext::Preview, &result, |_| {
         panic!("No worker was started")
     });
-    let error = result.unwrap_err();
+    let Err(error) = result else {
+        panic!("Observer changed the busy error result")
+    };
     assert!(error.private_worker_failure.is_none());
     assert_public_response(
         error,
@@ -393,7 +398,9 @@ async fn broken_write_and_flush_cannot_replace_original_worker_or_safe_response(
         writer.join().unwrap();
         assert_eq!(calls.0.load(Ordering::SeqCst), 1);
         assert_eq!(calls.1.load(Ordering::SeqCst), usize::from(!fail_write));
-        let original = result.unwrap_err();
+        let Err(original) = result else {
+            panic!("Observer changed the worker error result")
+        };
         let safe = ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "previewUnavailable",
@@ -456,10 +463,10 @@ fn a_blocked_sink_never_makes_the_caller_wait_and_pending_records_stay_bounded()
                 accepted += usize::from(caller_queue.try_submit(line));
             });
         }
-        let same = Arc::ptr_eq(
-            result.unwrap_err().private_worker_failure.as_ref().unwrap(),
-            &retained,
-        );
+        let Err(original) = result else {
+            panic!("Observer changed the worker error result")
+        };
+        let same = Arc::ptr_eq(original.private_worker_failure.as_ref().unwrap(), &retained);
         let _ = done.try_send((accepted, same));
     });
     let observed = completion.recv_timeout(Duration::from_secs(2));

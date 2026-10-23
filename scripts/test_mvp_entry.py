@@ -65,7 +65,8 @@ class EntrySelection(unittest.TestCase):
     def test_default_check_builds_once_and_requests_all_original_groups(self):
         artifact = object()
         with patch.object(mvp, 'build', return_value=artifact) as build, patch.object(mvp, 'check') as check:
-            mvp.main(['check'])
+            result = mvp.main(['check'])
+        self.assertIs(result, artifact)
         build.assert_called_once_with(False, package_input=False, linker=None, windows_sdk=None)
         check.assert_called_once_with(artifact, GROUPS)
 
